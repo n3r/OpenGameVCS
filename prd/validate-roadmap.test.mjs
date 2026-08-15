@@ -32,15 +32,32 @@ function runValidator(root) {
   return { ...result, output: `${result.stdout}${result.stderr}` };
 }
 
-function findPrd(root, id, folder = 'todo') {
-  const directory = path.join(root, 'prd', folder);
-  const filename = fs.readdirSync(directory).find((name) => name.startsWith(`${id}-`));
-  assert.ok(filename, `fixture contains ${id}`);
-  return path.join(directory, filename);
+function findPrd(root, id, folder) {
+  const folders = folder ? [folder] : ['todo', 'done'];
+  const matches = folders.flatMap((candidateFolder) => {
+    const directory = path.join(root, 'prd', candidateFolder);
+    return fs.readdirSync(directory)
+      .filter((name) => name.startsWith(`${id}-`))
+      .map((name) => path.join(directory, name));
+  });
+  assert.equal(matches.length, 1, `fixture contains exactly one ${id}`);
+  return matches[0];
 }
 
 function rewrite(filePath, transform) {
   fs.writeFileSync(filePath, transform(fs.readFileSync(filePath, 'utf8')));
+}
+
+function placePrd(root, id, folder, status) {
+  const source = findPrd(root, id);
+  const destination = path.join(root, 'prd', folder, path.basename(source));
+  rewrite(source, (body) => body.replace(/^\*\*Status:\*\* .+$/m, `**Status:** ${status}`));
+  if (source !== destination) fs.renameSync(source, destination);
+  rewrite(path.join(root, 'prd', 'ROADMAP.md'), (body) => body.replace(
+    new RegExp(`(?:todo|done)/${path.basename(source)}`),
+    `${folder}/${path.basename(source)}`,
+  ));
+  return destination;
 }
 
 test('current roadmap is valid', (t) => {
@@ -63,14 +80,8 @@ test('rejects a dependency placed in a later release', (t) => {
 
 test('rejects done PRD whose dependency remains todo', (t) => {
   const root = makeFixture(t);
-  const source = findPrd(root, 'OGVCS-002');
-  const destination = path.join(root, 'prd', 'done', path.basename(source));
-  rewrite(source, (body) => body.replace('**Status:** Todo', '**Status:** Done'));
-  fs.renameSync(source, destination);
-  rewrite(path.join(root, 'prd', 'ROADMAP.md'), (body) => body.replace(
-    `todo/${path.basename(source)}`,
-    `done/${path.basename(source)}`,
-  ));
+  placePrd(root, 'OGVCS-001', 'todo', 'Todo');
+  placePrd(root, 'OGVCS-002', 'done', 'Done');
   const result = runValidator(root);
   assert.notEqual(result.status, 0);
   assert.match(result.output, /done PRD depends on unfinished OGVCS-001/);
@@ -86,8 +97,7 @@ test('rejects duplicate required headings even outside their normal section', (t
 
 test('rejects placeholder completion evidence and requires criterion links', (t) => {
   const root = makeFixture(t);
-  const source = findPrd(root, 'OGVCS-001');
-  const destination = path.join(root, 'prd', 'done', path.basename(source));
+  const source = findPrd(root, 'OGVCS-001', 'done');
   rewrite(source, (body) => {
     const acceptanceIds = [...body.matchAll(/OGVCS-001-AC-\d{2}/g)]
       .map((match) => match[0])
@@ -103,16 +113,8 @@ test('rejects placeholder completion evidence and requires criterion links', (t)
       ...acceptanceIds.slice(0, -1).map((id) => `- ${id}: [proof](../../architecture.md)`),
       '',
     ].join('\n');
-    return body
-      .replace('**Status:** Todo', '**Status:** Done')
-      .replace('**Owner:** Unassigned', '**Owner:** Test owner')
-      .replace(/^## Completion evidence[\s\S]*$/m, evidence);
+    return body.replace(/^## Completion evidence[\s\S]*$/m, evidence);
   });
-  fs.renameSync(source, destination);
-  rewrite(path.join(root, 'prd', 'ROADMAP.md'), (body) => body.replace(
-    `todo/${path.basename(source)}`,
-    `done/${path.basename(source)}`,
-  ));
   const result = runValidator(root);
   assert.notEqual(result.status, 0);
   assert.match(result.output, /completion evidence is blank for Implementation changes/);

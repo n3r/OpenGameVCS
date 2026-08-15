@@ -1,0 +1,82 @@
+{
+  "artifacts": [
+    {
+      "archiveDigest": "sha256:27273a48f7aa9e55ca4eecb36584e2e1e6b1c0d503840c1d0ca49eadad6ec8f4",
+      "expiresAt": "2026-11-13T04:14:36Z",
+      "id": 9241469033,
+      "name": "golden-Windows"
+    },
+    {
+      "archiveDigest": "sha256:9151bac78ac3c42e50c67faa80cae40813f18ed39ffea17d456cc26ef962afe4",
+      "expiresAt": "2026-11-13T04:14:36Z",
+      "id": 9241445396,
+      "name": "golden-Linux"
+    },
+    {
+      "archiveDigest": "sha256:c15c3cac26889658e589ccf709ed886504010cb00b1c6f706a9d925e867cbd0b",
+      "expiresAt": "2026-11-13T04:14:36Z",
+      "id": 9241440926,
+      "name": "golden-macOS"
+    }
+  ],
+  "conclusion": "success",
+  "event": "push",
+  "headSha": "d145faf1ed32d8bf6d3cfcd4e6433dc3384c9823",
+  "jobs": [
+    {
+      "completedAt": "2026-08-15T04:18:50Z",
+      "conclusion": "success",
+      "id": 94961819044,
+      "name": "Golden conformance (windows-latest)",
+      "requiredSteps": {
+        "fullSuite": "success",
+        "goldenSummary": "success",
+        "portablePathAndJunction": "success",
+        "upload": "success"
+      },
+      "startedAt": "2026-08-15T04:14:40Z"
+    },
+    {
+      "completedAt": "2026-08-15T04:16:54Z",
+      "conclusion": "success",
+      "id": 94961819067,
+      "name": "Golden conformance (ubuntu-latest)",
+      "requiredSteps": {
+        "fullSuite": "success",
+        "goldenSummary": "success",
+        "upload": "success"
+      },
+      "startedAt": "2026-08-15T04:14:40Z"
+    },
+    {
+      "completedAt": "2026-08-15T04:16:35Z",
+      "conclusion": "success",
+      "id": 94961819068,
+      "name": "Golden conformance (macos-latest)",
+      "requiredSteps": {
+        "fullSuite": "success",
+        "goldenSummary": "success",
+        "upload": "success"
+      },
+      "startedAt": "2026-08-15T04:14:40Z"
+    },
+    {
+      "completedAt": "2026-08-15T04:18:57Z",
+      "conclusion": "success",
+      "id": 94962284447,
+      "name": "Compare golden summaries",
+      "requiredSteps": {
+        "linuxEqualsMacos": "success",
+        "linuxEqualsWindows": "success"
+      },
+      "startedAt": "2026-08-15T04:18:53Z"
+    }
+  ],
+  "recordedAt": "2026-08-15T04:19:00Z",
+  "repository": "n3r/OpenGameVCS",
+  "runId": 31863924721,
+  "runNumber": 4,
+  "schemaVersion": "ogvcs.evidence/github-actions-run/v1",
+  "url": "https://github.com/n3r/OpenGameVCS/actions/runs/31863924721",
+  "workflow": "Fixture generator conformance"
+}

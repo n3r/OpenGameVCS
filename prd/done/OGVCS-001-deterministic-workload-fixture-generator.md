@@ -1,6 +1,6 @@
 # OGVCS-001 — Deterministic workload fixture generator
 
-**Status:** Validation
+**Status:** Done
 **Release:** R0 — Engineering Foundation  
 **Priority:** P0  
 **Owner:** Codex / OpenGameVCS maintainers
@@ -115,8 +115,14 @@ Publish an experimental schema/CLI with one small profile, then add profiles and
 
 ## Completion evidence
 
-- Implementation changes: frozen source under [`foundation/fixture-generator/`](../../foundation/fixture-generator/) implements the CLI/library, profile v2 semantics, nine public schemas, deterministic generation/verification, recovery/publication safety, resource planning, examples, and packaging.
-- Test and benchmark results: [`docs/evidence/OGVCS-001/README.md`](../../docs/evidence/OGVCS-001/README.md) records 127/127 passing ordinary tests on macOS and network-disabled/read-only Linux, byte-identical golden summaries, and the passing million-path/100-GiB streamed reference-scale run. Actual Windows execution remains pending.
-- Security/reliability review: [`docs/reviews/OGVCS-001-critical-review.md`](../../docs/reviews/OGVCS-001-critical-review.md) records the independent finding that no P0/P1/P2 source defect remains and identifies Windows acceptance evidence as the sole Done blocker.
-- Documentation/runbooks: [`foundation/fixture-generator/README.md`](../../foundation/fixture-generator/README.md), [ADR-0007](../../adr/0007-fixture-profile-v2.md), the evidence packet, packaged schemas, and black-box examples document operation, semantics, threat boundaries, recovery, and scale interpretation.
-- Rollout result: source is frozen and merge-ready, but this PRD deliberately remains in `prd/todo`; do not claim completion or move it to `prd/done` until the configured Windows suite, junction case, golden summary, and three-platform comparison pass and are recorded.
+- Implementation changes: the frozen [`d145faf1` source candidate](https://github.com/n3r/OpenGameVCS/commit/d145faf1ed32d8bf6d3cfcd4e6433dc3384c9823) and [detailed changelog](../../docs/changelog/OGVCS-001.md) deliver the public CLI/library, five profile-v2 workloads, nine schemas, deterministic generators/verifiers, recovery and publication safety, resource planning, examples, and packaging.
+- Test and benchmark results: the [validation evidence packet](../../docs/evidence/OGVCS-001/README.md) records the exact local suite, network-disabled Linux suite, three-platform hosted suite and golden comparison, offline installation, and million-path/100-GiB fully streamed scale result.
+- Security/reliability review: the [independent critical review](../../docs/reviews/OGVCS-001-critical-review.md) records the adversarial findings, their remediation, the final requirement-by-requirement verdict, and no residual P0/P1/P2 implementation or CI defect.
+- Documentation/runbooks: the [operator and public-contract guide](../../foundation/fixture-generator/README.md), [ADR-0007](../../adr/0007-fixture-profile-v2.md), packaged schemas, examples, evidence packet, and [changelog](../../docs/changelog/OGVCS-001.md) document operation, recovery, threat boundaries, compatibility, scale semantics, and rollback.
+- Rollout result: [GitHub Actions run 31863924721](https://github.com/n3r/OpenGameVCS/actions/runs/31863924721) passed at the exact frozen source SHA on Windows, macOS, and Ubuntu, including the Windows junction case and byte-for-byte three-platform golden comparison.
+- OGVCS-001-AC-01: [Presubmit and package evidence](../../docs/evidence/OGVCS-001/README.md#presubmit-and-package-results) covers clean documented generation/verification of all five profiles and offline installed consumers without a service dependency.
+- OGVCS-001-AC-02: [Hosted conformance evidence](../../docs/evidence/OGVCS-001/README.md#acceptance-map) and the [run record](../../docs/evidence/OGVCS-001/github-actions-run-31863924721.json) bind byte-identical Windows, macOS, and Linux summaries to the frozen commit.
+- OGVCS-001-AC-03: [Reference-scale evidence](../../docs/evidence/OGVCS-001/README.md#reference-scale-result) records one million logical paths, three fully streamed 100-GiB versions, approved time/disk bounds, and 705,937,408-byte high-water RSS.
+- OGVCS-001-AC-04: [Recovery evidence and review](../../docs/reviews/OGVCS-001-critical-review.md#resolution-and-re-review) cover interruption during initialization, every checkpoint, publication, corruption, and deterministic retry to the baseline manifest.
+- OGVCS-001-AC-05: [Safety evidence](../../docs/evidence/OGVCS-001/README.md#acceptance-map) covers traversal, unsafe destinations, symlink/junction escape, overflow, resource faults, concurrency, and no-overwrite/manifest-last behavior on all required platforms.
+- OGVCS-001-AC-06: [Installed-consumer evidence](../../docs/evidence/OGVCS-001/README.md#acceptance-map) covers both bundled black-box examples against every profile using only the installed CLI and public artifacts.
