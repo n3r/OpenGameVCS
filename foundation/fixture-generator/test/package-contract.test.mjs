@@ -7,6 +7,7 @@ import * as publicApi from '../src/index.mjs';
 import {
   jsonOutput,
   packageDirectory,
+  resolveProcessInvocation,
   runProcess,
   temporaryDirectory,
 } from './test-helpers.mjs';
@@ -48,6 +49,22 @@ test('public index is the complete supported reusable-library boundary', () => {
     UNSAFE_DESTINATION: 4,
     USAGE: 2,
   });
+});
+
+test('Windows npm subprocesses use the npm JavaScript entry point without shell quoting', () => {
+  const npmEntryPoint = 'C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npm-cli.js';
+  assert.deepEqual(
+    resolveProcessInvocation('npm', ['pack', '--json'], { npmEntryPoint, platform: 'win32' }),
+    {
+      args: [npmEntryPoint, 'pack', '--json'],
+      executable: process.execPath,
+      shell: false,
+    },
+  );
+  assert.deepEqual(
+    resolveProcessInvocation('npm', ['pack'], { npmEntryPoint: null, platform: 'win32' }),
+    { args: ['pack'], executable: 'npm.cmd', shell: true },
+  );
 });
 
 test('packed tarball installs offline with CLI, schemas, examples, and protected internals', async (t) => {

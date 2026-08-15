@@ -18,12 +18,31 @@ export async function temporaryDirectory(t, prefix = 'ogvcs-fixture-test-') {
   return directory;
 }
 
+export function resolveProcessInvocation(command, args, options = {}) {
+  const platform = options.platform ?? process.platform;
+  const isWindowsNpm = platform === 'win32' && command === 'npm';
+  const npmEntryPoint = Object.hasOwn(options, 'npmEntryPoint')
+    ? options.npmEntryPoint
+    : process.env.npm_execpath;
+  return {
+    args: isWindowsNpm && npmEntryPoint ? [npmEntryPoint, ...args] : args,
+    executable: isWindowsNpm && npmEntryPoint
+      ? process.execPath
+      : isWindowsNpm ? 'npm.cmd' : command,
+    shell: isWindowsNpm && !npmEntryPoint,
+  };
+}
+
 export function runProcess(command, args, options = {}) {
   return new Promise((resolve, reject) => {
-    const executable = process.platform === 'win32' && command === 'npm' ? 'npm.cmd' : command;
-    const child = spawn(executable, args, {
+    // Windows cannot execute a .cmd shim directly through CreateProcess. npm
+    // exposes its JavaScript entry point to npm-run children, so prefer the
+    // current Node executable and avoid shell quoting entirely in CI.
+    const invocation = resolveProcessInvocation(command, args);
+    const child = spawn(invocation.executable, invocation.args, {
       cwd: options.cwd,
       env: { ...process.env, ...options.env },
+      shell: invocation.shell,
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     });
