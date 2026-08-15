@@ -1,0 +1,34 @@
+{
+  "name": "@opengamevcs/fixture-generator",
+  "version": "1.0.0",
+  "description": "Deterministic, synthetic game-repository workload fixture generator",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "ogvcs-fixture": "bin/ogvcs-fixture.mjs"
+  },
+  "exports": {
+    ".": "./src/index.mjs",
+    "./schemas/*": "./schemas/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "bin",
+    "src",
+    "schemas",
+    "goldens",
+    "examples",
+    "scripts",
+    "test",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test --test-concurrency=1 test/*.test.mjs",
+    "test:scale": "node scripts/run-scale-test.mjs",
+    "check": "node bin/ogvcs-fixture.mjs --help"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

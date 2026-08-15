@@ -10,4 +10,4 @@ This directory records accepted cross-cutting decisions behind the normative beh
 | [0004](0004-dr-authority-security-epochs.md) | Accepted | DR authority epochs and lost-acknowledgement reconciliation |
 | [0005](0005-early-public-protocol-baseline.md) | Accepted | Freeze a minimal public protocol before R1 service work |
 | [0006](0006-local-agent-security-boundary.md) | Accepted | Early local agent and explicit same-user threat boundary |
-
+| [0007](0007-fixture-profile-v2.md) | Accepted | Replace the deficient fixture profile v1 draft with v2 |

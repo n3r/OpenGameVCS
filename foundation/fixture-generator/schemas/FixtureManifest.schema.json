@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opengamevcs.org/fixture/v1/FixtureManifest.schema.json",
+  "title": "FixtureManifest",
+  "description": "Canonical, manifest-last description of a completed synthetic fixture.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "tool", "request", "requestDigest", "profile", "counts", "logicalBytes", "digests", "inventory", "operationScenario", "groups", "history", "schemaVersions", "provenance", "manifestDigest", "extensions"],
+  "properties": {
+    "schemaVersion": { "const": "ogvcs.fixture/manifest/v1" },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": { "name": { "const": "ogvcs-fixture" }, "version": { "const": "1.0.0" } }
+    },
+    "request": { "$ref": "FixtureRequest.schema.json" },
+    "requestDigest": { "$ref": "#/$defs/sha256" },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "resolvedDigest"],
+      "properties": {
+        "id": { "enum": ["code-heavy", "unreal-like", "unity-like", "large-binary", "global-studio"] },
+        "version": { "const": "2.0.0" },
+        "resolvedDigest": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["paths", "files", "directories", "operations", "groups"],
+      "properties": {
+        "paths": { "type": "integer", "minimum": 1, "maximum": 10000000 },
+        "files": { "type": "integer", "minimum": 1, "maximum": 10000000 },
+        "directories": { "$ref": "#/$defs/nonNegativeInteger" },
+        "operations": { "type": "integer", "minimum": 0, "maximum": 10000000 },
+        "groups": { "type": "integer", "minimum": 0, "maximum": 10000 }
+      }
+    },
+    "logicalBytes": { "$ref": "#/$defs/nonNegativeInteger" },
+    "digests": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["paths", "content", "tree", "operations"],
+      "properties": {
+        "paths": { "$ref": "#/$defs/sha256" },
+        "content": { "$ref": "#/$defs/sha256" },
+        "tree": { "$ref": "#/$defs/sha256" },
+        "operations": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "inventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "path", "digest"],
+      "properties": {
+        "format": { "enum": ["canonical-json-lines-v1"] },
+        "path": { "const": "inventory.ndjson" },
+        "digest": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "operationScenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "digest"],
+      "properties": {
+        "path": { "const": "scenario.json" },
+        "digest": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "groups": { "$ref": "https://schemas.opengamevcs.org/fixture/v2/GroupRelationships.schema.json" },
+    "history": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rootCount", "branchCount", "mergeCount", "maximumDepth"],
+      "properties": {
+        "rootCount": { "description": "Distinct roots in the replayed emitted change/revision lineage.", "$ref": "#/$defs/nonNegativeInteger" },
+        "branchCount": { "description": "Distinct initial or successfully created/updated branch identities.", "$ref": "#/$defs/nonNegativeInteger" },
+        "mergeCount": { "description": "Successfully emitted merge operations.", "$ref": "#/$defs/nonNegativeInteger" },
+        "maximumDepth": { "description": "Maximum replayed ancestry depth across emitted changes and revisions, with a root at depth 1.", "type": "integer", "minimum": 0, "maximum": 10000000 }
+      }
+    },
+    "schemaVersions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checkpoint", "groupRelationships", "inventoryRecord", "largeFileDescriptor", "manifest", "profile", "request", "scenario", "verification"],
+      "properties": {
+        "checkpoint": { "const": "ogvcs.fixture/checkpoint/v1" },
+        "groupRelationships": { "const": "ogvcs.fixture/group-relationships/v2" },
+        "inventoryRecord": { "const": "ogvcs.fixture/inventory-record/v2" },
+        "largeFileDescriptor": { "const": "ogvcs.fixture/large-file-descriptor/v2" },
+        "manifest": { "const": "ogvcs.fixture/manifest/v1" },
+        "profile": { "const": "ogvcs.fixture/workload-profile/v1" },
+        "request": { "const": "ogvcs.fixture/request/v1" },
+        "scenario": { "const": "ogvcs.fixture/operation-scenario/v2" },
+        "verification": { "const": "ogvcs.fixture/verification-result/v1" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["classification", "license", "generatedArtifactsContainExternalIdentifiers", "generatorAlgorithm", "requestMetadata"],
+      "properties": {
+        "classification": { "const": "fully-synthetic" },
+        "license": { "const": "NOASSERTION" },
+        "generatedArtifactsContainExternalIdentifiers": { "description": "Attests only generator-derived paths, bytes, identities, groups, and operations; it excludes embedded caller request metadata.", "const": false },
+        "generatorAlgorithm": { "const": "ogvcs-fixture-generator-v1" },
+        "requestMetadata": { "description": "Seed and destination are embedded verbatim for reproducibility and are not classified by the generator.", "const": "caller-supplied-unattested" }
+      }
+    },
+    "manifestDigest": { "$ref": "#/$defs/sha256" },
+    "extensions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "algorithms.canonical",
+        "algorithms.content",
+        "algorithms.paths",
+        "artifacts.groups",
+        "artifacts.large-file",
+        "groups.digest",
+        "large-file.descriptor-digest",
+        "representation.large-file",
+        "representation.paths",
+        "scenario.envelope-digest"
+      ],
+      "properties": {
+        "algorithms.canonical": { "const": "ogvcs-canonical-json-v1" },
+        "algorithms.content": { "const": "ogvcs.fixture/content-aes-256-ctr/v2" },
+        "algorithms.paths": { "const": "ogvcs-logical-path-v1" },
+        "artifacts.groups": { "const": "groups.json" },
+        "artifacts.large-file": { "enum": [null, "large-file.json"] },
+        "groups.digest": { "$ref": "#/$defs/sha256" },
+        "large-file.descriptor-digest": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "representation.large-file": { "enum": ["full", "sparse", "stream-verified", "virtual"] },
+        "representation.paths": { "enum": ["full", "sampled", "index-only"] },
+        "scenario.envelope-digest": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  },
+  "$defs": {
+    "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,127}$" },
+    "nonNegativeInteger": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "logicalPath": {
+      "type": "string",
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*[\\u0000-\\u001F\\u007F])(?!.*/$)(?!.*//)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^/]+(?:/[^/]+)*$",
+      "maxLength": 4096,
+      "x-ogvcs-normalization": "NFC",
+      "x-ogvcs-portable-relative-path": true
+    }
+  }
+}

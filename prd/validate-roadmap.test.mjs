@@ -13,6 +13,8 @@ function makeFixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ogvcs-roadmap-validator-'));
   fs.cpSync(sourcePrdRoot, path.join(root, 'prd'), { recursive: true });
   fs.cpSync(path.join(sourceRoot, 'adr'), path.join(root, 'adr'), { recursive: true });
+  fs.cpSync(path.join(sourceRoot, 'docs'), path.join(root, 'docs'), { recursive: true });
+  fs.cpSync(path.join(sourceRoot, 'foundation'), path.join(root, 'foundation'), { recursive: true });
   fs.copyFileSync(path.join(sourceRoot, 'architecture.md'), path.join(root, 'architecture.md'));
   fs.copyFileSync(
     path.join(sourceRoot, 'GAME_DEV_VCS_ANALYSIS.md'),

@@ -1,0 +1,545 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opengamevcs.org/fixture/v2/OperationScenario.schema.json",
+  "title": "OperationScenario",
+  "description": "Neutral ordered operation stream with explicit path, FileID, authorization, outcome, lock, and network state.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "scenarioId", "profile", "seed", "participants", "networkConditions", "operations", "digest", "extensions"],
+  "properties": {
+    "schemaVersion": { "const": "ogvcs.fixture/operation-scenario/v2" },
+    "scenarioId": { "$ref": "#/$defs/name" },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version"],
+      "properties": {
+        "id": { "enum": ["code-heavy", "unreal-like", "unity-like", "large-binary", "global-studio"] },
+        "version": { "const": "2.0.0" }
+      }
+    },
+    "seed": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^[^\\u0000-\\u001F\\u007F]+$",
+      "x-ogvcs-normalization": "NFC"
+    },
+    "participants": {
+      "type": "array",
+      "maxItems": 10000,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "site", "role"],
+        "properties": {
+          "id": { "$ref": "#/$defs/name" },
+          "site": { "$ref": "#/$defs/name" },
+          "role": { "enum": ["artist", "developer", "automation"] }
+        }
+      }
+    },
+    "networkConditions": {
+      "type": "array",
+      "maxItems": 1024,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "latencyMilliseconds", "jitterMilliseconds", "bandwidthBytesPerSecond", "lossPartsPerMillion"],
+        "properties": {
+          "id": { "$ref": "#/$defs/name" },
+          "latencyMilliseconds": { "$ref": "#/$defs/nonNegativeInteger" },
+          "jitterMilliseconds": { "$ref": "#/$defs/nonNegativeInteger" },
+          "bandwidthBytesPerSecond": { "$ref": "#/$defs/nonNegativeInteger" },
+          "lossPartsPerMillion": { "type": "integer", "minimum": 0, "maximum": 1000000 }
+        }
+      }
+    },
+    "operations": {
+      "type": "array",
+      "maxItems": 10000000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sequence", "kind", "actor", "authorization", "expectedOutcome", "fileId", "target", "parameters"],
+        "properties": {
+          "sequence": { "type": "integer", "minimum": 0, "maximum": 9999999 },
+          "kind": { "enum": ["create", "edit", "copy", "move", "rename", "delete", "branch", "merge", "selective-sync", "lock-acquire", "lock-conflict", "lock-loss", "submit", "branch-update", "review", "ci-materialize", "interrupt", "network-condition"] },
+          "actor": { "$ref": "#/$defs/name" },
+          "authorization": { "$ref": "#/$defs/authorization" },
+          "expectedOutcome": { "$ref": "#/$defs/expectedOutcome" },
+          "fileId": { "$ref": "#/$defs/fileIdEffect" },
+          "target": { "$ref": "#/$defs/logicalPath" },
+          "relatedTarget": { "$ref": "#/$defs/logicalPath" },
+          "networkCondition": { "$ref": "#/$defs/name" },
+          "parameters": { "type": "object" }
+        },
+        "oneOf": [
+          { "$ref": "#/$defs/createOperation" },
+          { "$ref": "#/$defs/editOperation" },
+          { "$ref": "#/$defs/copyOperation" },
+          { "$ref": "#/$defs/moveOperation" },
+          { "$ref": "#/$defs/renameOperation" },
+          { "$ref": "#/$defs/deleteOperation" },
+          { "$ref": "#/$defs/branchOperation" },
+          { "$ref": "#/$defs/mergeOperation" },
+          { "$ref": "#/$defs/selectiveSyncOperation" },
+          { "$ref": "#/$defs/lockAcquireOperation" },
+          { "$ref": "#/$defs/lockConflictOperation" },
+          { "$ref": "#/$defs/lockLossOperation" },
+          { "$ref": "#/$defs/submitOperation" },
+          { "$ref": "#/$defs/branchUpdateOperation" },
+          { "$ref": "#/$defs/reviewOperation" },
+          { "$ref": "#/$defs/ciMaterializeOperation" },
+          { "$ref": "#/$defs/interruptOperation" },
+          { "$ref": "#/$defs/networkConditionOperation" }
+        ],
+        "allOf": [
+          {
+            "if": { "properties": { "kind": { "enum": ["copy", "move", "rename", "branch", "merge", "branch-update"] } } },
+            "then": { "required": ["relatedTarget"] },
+            "else": { "properties": { "relatedTarget": false } }
+          },
+          {
+            "if": { "properties": { "kind": { "const": "network-condition" } } },
+            "then": { "required": ["networkCondition"] },
+            "else": { "properties": { "networkCondition": false } }
+          }
+        ]
+      }
+    },
+    "digest": { "$ref": "#/$defs/sha256" },
+    "extensions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["acl-model", "identity-model", "state-model"],
+      "properties": {
+        "acl-model": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["algorithm", "default", "rules"],
+          "properties": {
+            "algorithm": { "const": "ordered-prefix-acl-v1" },
+            "default": { "const": "deny" },
+            "rules": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 64,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["actions", "effect", "pathPrefix", "principal"],
+                "properties": {
+                  "actions": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 16,
+                    "uniqueItems": true,
+                    "items": { "enum": ["read", "write", "lock", "branch", "merge", "materialize"] }
+                  },
+                  "effect": { "const": "allow" },
+                  "pathPrefix": {
+                    "type": "string",
+                    "maxLength": 4096,
+                    "pattern": "^[^\\\\\\u0000-\\u001F\\u007F]*$",
+                    "x-ogvcs-normalization": "NFC"
+                  },
+                  "principal": { "$ref": "#/$defs/name" }
+                }
+              }
+            }
+          }
+        },
+        "identity-model": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["algorithm", "identities"],
+          "properties": {
+            "algorithm": { "const": "synthetic-principal-v1" },
+            "identities": {
+              "type": "array",
+              "minItems": 8,
+              "maxItems": 8,
+              "uniqueItems": true,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["groups", "id", "site"],
+                "properties": {
+                  "groups": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 16,
+                    "uniqueItems": true,
+                    "items": { "$ref": "#/$defs/name" }
+                  },
+                  "id": { "$ref": "#/$defs/name" },
+                  "site": { "$ref": "#/$defs/name" }
+                }
+              }
+            }
+          }
+        },
+        "state-model": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["algorithm", "branches", "changes", "files", "locks", "revisions"],
+          "properties": {
+            "algorithm": { "const": "path-file-id-revision-branch-state-v2" },
+            "branches": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 10000000,
+              "uniqueItems": true,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["head", "name"],
+                "properties": {
+                  "head": {
+                    "oneOf": [
+                      { "$ref": "#/$defs/revision" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "name": { "$ref": "#/$defs/branchName" }
+                }
+              }
+            },
+            "changes": {
+              "type": "array",
+              "maxItems": 10000000,
+              "uniqueItems": true,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id", "parent", "status"],
+                "properties": {
+                  "id": { "$ref": "#/$defs/changeId" },
+                  "parent": { "type": "string", "pattern": "^(?:root|change-[0-9]{8})$" },
+                  "status": { "const": "committed" }
+                }
+              }
+            },
+            "files": {
+              "type": "array",
+              "maxItems": 10000000,
+              "uniqueItems": true,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["fileId", "logicalPath", "revision"],
+                "properties": {
+                  "fileId": { "$ref": "#/$defs/hex128" },
+                  "logicalPath": { "$ref": "#/$defs/logicalPath" },
+                  "revision": { "$ref": "#/$defs/revision" }
+                }
+              }
+            },
+            "locks": {
+              "type": "array",
+              "maxItems": 10000000,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["actor", "fileId", "lockId"],
+                "properties": {
+                  "actor": { "$ref": "#/$defs/name" },
+                  "fileId": { "$ref": "#/$defs/hex128" },
+                  "lockId": { "$ref": "#/$defs/hex128" }
+                }
+              }
+            },
+            "revisions": {
+              "type": "array",
+              "maxItems": 10000000,
+              "uniqueItems": true,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["changeId", "revision"],
+                "properties": {
+                  "changeId": { "$ref": "#/$defs/changeId" },
+                  "revision": { "$ref": "#/$defs/revision" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+    "nonNegativeInteger": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+    "positiveInteger": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "hex128": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+    "revision": { "type": "string", "pattern": "^change-[0-9]{8}-r[0-9]+$" },
+    "changeId": { "type": "string", "pattern": "^change-[0-9]{8}$" },
+    "branchName": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+    "stringList": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 4096 }
+    },
+    "authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "decision", "matchedPathPrefix", "matchedPrincipal"],
+      "properties": {
+        "action": { "enum": ["read", "write", "lock", "branch", "merge", "materialize"] },
+        "decision": { "const": "allow" },
+        "matchedPathPrefix": { "type": "string", "maxLength": 4096 },
+        "matchedPrincipal": { "$ref": "#/$defs/name" }
+      }
+    },
+    "expectedOutcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "status"],
+      "properties": {
+        "code": { "enum": ["created", "edited", "copied", "moved", "renamed", "deleted", "branch-created", "merged", "sync-completed", "lock-acquired", "lock-held", "lock-lost", "submitted", "lock-not-held", "branch-updated", "review-recorded", "materialized", "interrupted-resumable", "network-profile-applied"] },
+        "status": { "enum": ["succeeded", "rejected"] }
+      }
+    },
+    "fileIdEffect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "result", "semantics"],
+      "properties": {
+        "source": { "type": ["string", "null"], "pattern": "^[0-9a-f]{32}$" },
+        "result": { "type": ["string", "null"], "pattern": "^[0-9a-f]{32}$" },
+        "semantics": { "enum": ["created", "modified", "copied", "moved", "renamed", "deleted", "observed", "tombstone-observed"] }
+      }
+    },
+    "observedFileIdEffect": {
+      "properties": {
+        "result": { "$ref": "#/$defs/hex128" },
+        "semantics": { "const": "observed" },
+        "source": { "$ref": "#/$defs/hex128" }
+      }
+    },
+    "tombstoneObservedFileIdEffect": {
+      "properties": {
+        "result": { "const": null },
+        "semantics": { "const": "tombstone-observed" },
+        "source": { "$ref": "#/$defs/hex128" }
+      }
+    },
+    "createParameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["change-id", "retry-key", "result-revision"],
+      "properties": {
+        "change-id": { "$ref": "#/$defs/changeId" },
+        "retry-key": { "$ref": "#/$defs/hex128" },
+        "result-revision": { "$ref": "#/$defs/revision" }
+      }
+    },
+    "editParameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["change-id", "retry-key", "base-revision", "delta-kind", "result-revision"],
+      "properties": {
+        "change-id": { "$ref": "#/$defs/changeId" },
+        "retry-key": { "$ref": "#/$defs/hex128" },
+        "base-revision": { "$ref": "#/$defs/revision" },
+        "delta-kind": { "const": "semantic-v2" },
+        "result-revision": { "$ref": "#/$defs/revision" }
+      }
+    },
+    "identityTransferParameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["change-id", "retry-key", "preserve-file-id"],
+      "properties": {
+        "change-id": { "$ref": "#/$defs/changeId" },
+        "retry-key": { "$ref": "#/$defs/hex128" },
+        "preserve-file-id": { "type": "boolean" }
+      }
+    },
+    "deleteParameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["change-id", "retry-key", "base-revision", "tombstone"],
+      "properties": {
+        "change-id": { "$ref": "#/$defs/changeId" },
+        "retry-key": { "$ref": "#/$defs/hex128" },
+        "base-revision": { "$ref": "#/$defs/revision" },
+        "tombstone": { "const": true }
+      }
+    },
+    "branchParameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["change-id", "retry-key", "from-revision", "source-branch", "target-branch"],
+      "properties": {
+        "change-id": { "$ref": "#/$defs/changeId" },
+        "retry-key": { "$ref": "#/$defs/hex128" },
+        "from-revision": { "$ref": "#/$defs/revision" },
+        "source-branch": { "$ref": "#/$defs/branchName" },
+        "target-branch": { "$ref": "#/$defs/branchName" }
+      }
+    },
+    "mergeParameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["change-id", "retry-key", "common-base", "source-branch", "strategy", "target-branch"],
+      "properties": {
+        "change-id": { "$ref": "#/$defs/changeId" },
+        "retry-key": { "$ref": "#/$defs/hex128" },
+        "common-base": { "$ref": "#/$defs/revision" },
+        "source-branch": { "$ref": "#/$defs/branchName" },
+        "strategy": { "const": "three-way" },
+        "target-branch": { "$ref": "#/$defs/branchName" }
+      }
+    },
+    "selectiveSyncParameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["change-id", "retry-key", "excludes", "includes", "revision-selector"],
+      "properties": {
+        "change-id": { "$ref": "#/$defs/changeId" },
+        "retry-key": { "$ref": "#/$defs/hex128" },
+        "excludes": { "$ref": "#/$defs/stringList" },
+        "includes": { "$ref": "#/$defs/stringList" },
+        "revision-selector": { "$ref": "#/$defs/revision" }
+      }
+    },
+    "lockAcquireParameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["change-id", "retry-key", "lease-seconds", "lock-id"],
+      "properties": {
+        "change-id": { "$ref": "#/$defs/changeId" },
+        "retry-key": { "$ref": "#/$defs/hex128" },
+        "lease-seconds": { "$ref": "#/$defs/positiveInteger" },
+        "lock-id": { "$ref": "#/$defs/hex128" }
+      }
+    },
+    "lockConflictParameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["change-id", "retry-key", "contender", "holder", "lock-id", "outcome"],
+      "properties": {
+        "change-id": { "$ref": "#/$defs/changeId" },
+        "retry-key": { "$ref": "#/$defs/hex128" },
+        "contender": { "$ref": "#/$defs/name" },
+        "holder": { "$ref": "#/$defs/name" },
+        "lock-id": { "$ref": "#/$defs/hex128" },
+        "outcome": { "const": "denied" }
+      }
+    },
+    "lockLossParameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["change-id", "retry-key", "lock-id", "reason", "recovery", "submit-policy"],
+      "properties": {
+        "change-id": { "$ref": "#/$defs/changeId" },
+        "retry-key": { "$ref": "#/$defs/hex128" },
+        "lock-id": { "$ref": "#/$defs/hex128" },
+        "reason": { "const": "lease-expired" },
+        "recovery": { "const": "shelve-local-work" },
+        "submit-policy": { "const": "reject-until-reacquired" }
+      }
+    },
+    "submitParameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["change-id", "retry-key", "atomic", "parent-change"],
+      "properties": {
+        "change-id": { "$ref": "#/$defs/changeId" },
+        "retry-key": { "$ref": "#/$defs/hex128" },
+        "atomic": { "const": true },
+        "parent-change": { "type": "string", "pattern": "^(?:root|change-[0-9]{8})$" }
+      }
+    },
+    "branchUpdateParameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["change-id", "retry-key", "expected-head", "source-branch", "target-branch"],
+      "properties": {
+        "change-id": { "$ref": "#/$defs/changeId" },
+        "retry-key": { "$ref": "#/$defs/hex128" },
+        "expected-head": { "$ref": "#/$defs/revision" },
+        "source-branch": { "$ref": "#/$defs/branchName" },
+        "target-branch": { "$ref": "#/$defs/branchName" }
+      }
+    },
+    "reviewParameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["change-id", "retry-key", "decision", "reviewers"],
+      "properties": {
+        "change-id": { "$ref": "#/$defs/changeId" },
+        "retry-key": { "$ref": "#/$defs/hex128" },
+        "decision": { "enum": ["approved", "changes-requested"] },
+        "reviewers": { "$ref": "#/$defs/stringList" }
+      }
+    },
+    "ciMaterializeParameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["change-id", "retry-key", "clean-workspace", "platform", "revision"],
+      "properties": {
+        "change-id": { "$ref": "#/$defs/changeId" },
+        "retry-key": { "$ref": "#/$defs/hex128" },
+        "clean-workspace": { "const": true },
+        "platform": { "enum": ["linux", "macos", "windows"] },
+        "revision": { "$ref": "#/$defs/revision" }
+      }
+    },
+    "interruptParameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["change-id", "retry-key", "after-bytes", "phase", "recovery"],
+      "properties": {
+        "change-id": { "$ref": "#/$defs/changeId" },
+        "retry-key": { "$ref": "#/$defs/hex128" },
+        "after-bytes": { "$ref": "#/$defs/positiveInteger" },
+        "phase": { "enum": ["transfer", "apply", "submit"] },
+        "recovery": { "const": "resume-with-retry-key" }
+      }
+    },
+    "networkConditionParameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["change-id", "retry-key", "duration-seconds", "transition"],
+      "properties": {
+        "change-id": { "$ref": "#/$defs/changeId" },
+        "retry-key": { "$ref": "#/$defs/hex128" },
+        "duration-seconds": { "$ref": "#/$defs/positiveInteger" },
+        "transition": { "const": "apply-link-profile" }
+      }
+    },
+    "createOperation": { "properties": { "kind": { "const": "create" }, "authorization": { "properties": { "action": { "const": "write" } } }, "expectedOutcome": { "properties": { "code": { "const": "created" }, "status": { "const": "succeeded" } } }, "fileId": { "properties": { "result": { "$ref": "#/$defs/hex128" }, "semantics": { "const": "created" }, "source": { "const": null } } }, "parameters": { "$ref": "#/$defs/createParameters" } } },
+    "editOperation": { "properties": { "kind": { "const": "edit" }, "authorization": { "properties": { "action": { "const": "write" } } }, "expectedOutcome": { "properties": { "code": { "const": "edited" }, "status": { "const": "succeeded" } } }, "fileId": { "properties": { "result": { "$ref": "#/$defs/hex128" }, "semantics": { "const": "modified" }, "source": { "$ref": "#/$defs/hex128" } } }, "parameters": { "$ref": "#/$defs/editParameters" } } },
+    "copyOperation": { "properties": { "kind": { "const": "copy" }, "authorization": { "properties": { "action": { "const": "write" } } }, "expectedOutcome": { "properties": { "code": { "const": "copied" }, "status": { "const": "succeeded" } } }, "fileId": { "properties": { "result": { "$ref": "#/$defs/hex128" }, "semantics": { "const": "copied" }, "source": { "$ref": "#/$defs/hex128" } } }, "parameters": { "$ref": "#/$defs/identityTransferParameters", "properties": { "preserve-file-id": { "const": false } } } } },
+    "moveOperation": { "properties": { "kind": { "const": "move" }, "authorization": { "properties": { "action": { "const": "write" } } }, "expectedOutcome": { "properties": { "code": { "const": "moved" }, "status": { "const": "succeeded" } } }, "fileId": { "properties": { "result": { "$ref": "#/$defs/hex128" }, "semantics": { "const": "moved" }, "source": { "$ref": "#/$defs/hex128" } } }, "parameters": { "$ref": "#/$defs/identityTransferParameters", "properties": { "preserve-file-id": { "const": true } } } } },
+    "renameOperation": { "properties": { "kind": { "const": "rename" }, "authorization": { "properties": { "action": { "const": "write" } } }, "expectedOutcome": { "properties": { "code": { "const": "renamed" }, "status": { "const": "succeeded" } } }, "fileId": { "properties": { "result": { "$ref": "#/$defs/hex128" }, "semantics": { "const": "renamed" }, "source": { "$ref": "#/$defs/hex128" } } }, "parameters": { "$ref": "#/$defs/identityTransferParameters", "properties": { "preserve-file-id": { "const": true } } } } },
+    "deleteOperation": { "properties": { "kind": { "const": "delete" }, "authorization": { "properties": { "action": { "const": "write" } } }, "expectedOutcome": { "properties": { "code": { "const": "deleted" }, "status": { "const": "succeeded" } } }, "fileId": { "properties": { "result": { "const": null }, "semantics": { "const": "deleted" }, "source": { "$ref": "#/$defs/hex128" } } }, "parameters": { "$ref": "#/$defs/deleteParameters" } } },
+    "branchOperation": { "properties": { "kind": { "const": "branch" }, "authorization": { "properties": { "action": { "const": "branch" } } }, "expectedOutcome": { "properties": { "code": { "const": "branch-created" }, "status": { "const": "succeeded" } } }, "fileId": { "$ref": "#/$defs/observedFileIdEffect" }, "parameters": { "$ref": "#/$defs/branchParameters" } } },
+    "mergeOperation": { "properties": { "kind": { "const": "merge" }, "authorization": { "properties": { "action": { "const": "merge" } } }, "expectedOutcome": { "properties": { "code": { "const": "merged" }, "status": { "const": "succeeded" } } }, "fileId": { "$ref": "#/$defs/observedFileIdEffect" }, "parameters": { "$ref": "#/$defs/mergeParameters" } } },
+    "selectiveSyncOperation": { "properties": { "kind": { "const": "selective-sync" }, "authorization": { "properties": { "action": { "const": "read" } } }, "expectedOutcome": { "properties": { "code": { "const": "sync-completed" }, "status": { "const": "succeeded" } } }, "fileId": { "$ref": "#/$defs/observedFileIdEffect" }, "parameters": { "$ref": "#/$defs/selectiveSyncParameters" } } },
+    "lockAcquireOperation": { "properties": { "kind": { "const": "lock-acquire" }, "authorization": { "properties": { "action": { "const": "lock" } } }, "expectedOutcome": { "properties": { "code": { "const": "lock-acquired" }, "status": { "const": "succeeded" } } }, "fileId": { "$ref": "#/$defs/observedFileIdEffect" }, "parameters": { "$ref": "#/$defs/lockAcquireParameters" } } },
+    "lockConflictOperation": { "properties": { "kind": { "const": "lock-conflict" }, "authorization": { "properties": { "action": { "const": "lock" } } }, "expectedOutcome": { "properties": { "code": { "const": "lock-held" }, "status": { "const": "rejected" } } }, "fileId": { "$ref": "#/$defs/observedFileIdEffect" }, "parameters": { "$ref": "#/$defs/lockConflictParameters" } } },
+    "lockLossOperation": { "properties": { "kind": { "const": "lock-loss" }, "authorization": { "properties": { "action": { "const": "lock" } } }, "expectedOutcome": { "properties": { "code": { "const": "lock-lost" }, "status": { "const": "succeeded" } } }, "fileId": { "$ref": "#/$defs/observedFileIdEffect" }, "parameters": { "$ref": "#/$defs/lockLossParameters" } } },
+    "submitOperation": { "properties": { "kind": { "const": "submit" }, "authorization": { "properties": { "action": { "const": "write" } } }, "expectedOutcome": { "oneOf": [{ "properties": { "code": { "const": "submitted" }, "status": { "const": "succeeded" } } }, { "properties": { "code": { "const": "lock-not-held" }, "status": { "const": "rejected" } } }] }, "fileId": { "oneOf": [{ "$ref": "#/$defs/observedFileIdEffect" }, { "$ref": "#/$defs/tombstoneObservedFileIdEffect" }] }, "parameters": { "$ref": "#/$defs/submitParameters" } } },
+    "branchUpdateOperation": { "properties": { "kind": { "const": "branch-update" }, "authorization": { "properties": { "action": { "const": "branch" } } }, "expectedOutcome": { "properties": { "code": { "const": "branch-updated" }, "status": { "const": "succeeded" } } }, "fileId": { "$ref": "#/$defs/observedFileIdEffect" }, "parameters": { "$ref": "#/$defs/branchUpdateParameters" } } },
+    "reviewOperation": { "properties": { "kind": { "const": "review" }, "authorization": { "properties": { "action": { "const": "read" } } }, "expectedOutcome": { "properties": { "code": { "const": "review-recorded" }, "status": { "const": "succeeded" } } }, "fileId": { "$ref": "#/$defs/observedFileIdEffect" }, "parameters": { "$ref": "#/$defs/reviewParameters" } } },
+    "ciMaterializeOperation": { "properties": { "kind": { "const": "ci-materialize" }, "authorization": { "properties": { "action": { "const": "materialize" } } }, "expectedOutcome": { "properties": { "code": { "const": "materialized" }, "status": { "const": "succeeded" } } }, "fileId": { "$ref": "#/$defs/observedFileIdEffect" }, "parameters": { "$ref": "#/$defs/ciMaterializeParameters" } } },
+    "interruptOperation": { "properties": { "kind": { "const": "interrupt" }, "authorization": { "properties": { "action": { "const": "write" } } }, "expectedOutcome": { "properties": { "code": { "const": "interrupted-resumable" }, "status": { "const": "succeeded" } } }, "fileId": { "$ref": "#/$defs/observedFileIdEffect" }, "parameters": { "$ref": "#/$defs/interruptParameters" } } },
+    "networkConditionOperation": { "properties": { "kind": { "const": "network-condition" }, "authorization": { "properties": { "action": { "const": "read" } } }, "expectedOutcome": { "properties": { "code": { "const": "network-profile-applied" }, "status": { "const": "succeeded" } } }, "fileId": { "$ref": "#/$defs/observedFileIdEffect" }, "parameters": { "$ref": "#/$defs/networkConditionParameters" } } },
+    "logicalPath": {
+      "type": "string",
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*[\\u0000-\\u001F\\u007F])(?!.*/$)(?!.*//)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^/]+(?:/[^/]+)*$",
+      "maxLength": 4096,
+      "x-ogvcs-normalization": "NFC",
+      "x-ogvcs-portable-relative-path": true
+    }
+  }
+}

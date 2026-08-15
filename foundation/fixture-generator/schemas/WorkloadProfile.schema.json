@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opengamevcs.org/fixture/v1/WorkloadProfile.schema.json",
+  "title": "WorkloadProfile",
+  "description": "Versioned synthetic workload profile definition.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "name", "version", "displayName", "description", "defaults", "limits", "features", "contentClasses", "operationKinds", "operationTypes", "groupKinds", "pathModel", "groupModel", "exclusions", "license", "provenance", "digest"],
+  "properties": {
+    "schemaVersion": { "const": "ogvcs.fixture/workload-profile/v1" },
+    "id": { "enum": ["code-heavy", "unreal-like", "unity-like", "large-binary", "global-studio"] },
+    "name": { "enum": ["code-heavy", "unreal-like", "unity-like", "large-binary", "global-studio"] },
+    "version": { "const": "2.0.0" },
+    "displayName": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "description": { "type": "string", "minLength": 1, "maxLength": 1024 },
+    "defaults": { "$ref": "#/$defs/scale" },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pathCount", "historyOperationCount", "largeFileBytes", "maxDepth"],
+      "properties": {
+        "pathCount": { "const": { "minimum": 1, "maximum": 10000000 } },
+        "historyOperationCount": { "const": { "minimum": 0, "maximum": 10000000 } },
+        "largeFileBytes": { "const": { "minimum": 0, "maximum": 1099511627776 } },
+        "maxDepth": { "const": { "minimum": 2, "maximum": 64 } }
+      }
+    },
+    "features": { "$ref": "#/$defs/names" },
+    "contentClasses": { "$ref": "#/$defs/names" },
+    "operationKinds": { "$ref": "#/$defs/names" },
+    "operationTypes": { "$ref": "#/$defs/names" },
+    "groupKinds": { "$ref": "#/$defs/names" },
+    "pathModel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "normalization", "maximumDepthParameter"],
+      "properties": {
+        "algorithm": { "const": "synthetic-posix-tree-v1" },
+        "normalization": { "const": "NFC" },
+        "maximumDepthParameter": { "const": "maxDepth" }
+      }
+    },
+    "groupModel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["types", "atomicByDefault"],
+      "properties": {
+        "types": { "$ref": "#/$defs/names" },
+        "atomicByDefault": { "type": "boolean" }
+      }
+    },
+    "exclusions": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1, "maxLength": 255 },
+      "maxItems": 1024,
+      "uniqueItems": true
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["classification", "externalSourceIdentifiersAllowed", "license"],
+      "properties": {
+        "classification": { "const": "fully-synthetic" },
+        "externalSourceIdentifiersAllowed": { "const": false },
+        "license": { "type": "string", "pattern": "^[A-Za-z0-9.+-]{1,64}$" }
+      }
+    },
+    "license": { "type": "string", "pattern": "^[A-Za-z0-9.+-]{1,64}$" },
+    "digest": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+    "names": { "type": "array", "items": { "$ref": "#/$defs/name" }, "maxItems": 256, "uniqueItems": true },
+    "nonNegativeInteger": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+    "scale": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pathCount", "historyOperationCount", "largeFileBytes", "maxDepth"],
+      "properties": {
+        "pathCount": { "type": "integer", "minimum": 1, "maximum": 10000000 },
+        "historyOperationCount": { "type": "integer", "minimum": 0, "maximum": 10000000 },
+        "largeFileBytes": { "type": "integer", "minimum": 0, "maximum": 1099511627776 },
+        "maxDepth": { "type": "integer", "minimum": 2, "maximum": 64 }
+      }
+    },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opengamevcs.org/fixture/v1/GenerationCheckpoint.schema.json",
+  "title": "GenerationCheckpoint",
+  "description": "Deterministic resumable-generation state; never evidence of fixture completion.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "tool", "requestDigest", "stageId", "state", "nextItemIndex", "completedItems", "completedLogicalBytes", "rollingDigests", "checkpointSequence", "checkpointDigest", "extensions"],
+  "properties": {
+    "schemaVersion": { "const": "ogvcs.fixture/checkpoint/v1" },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": { "name": { "const": "ogvcs-fixture" }, "version": { "const": "1.0.0" } }
+    },
+    "requestDigest": { "$ref": "#/$defs/sha256" },
+    "stageId": { "type": "string", "pattern": "^[0-9a-f]{32,64}$" },
+    "state": { "enum": ["generating", "verifying"] },
+    "nextItemIndex": { "type": "integer", "minimum": 0, "maximum": 10000000 },
+    "completedItems": { "type": "integer", "minimum": 0, "maximum": 20000000 },
+    "completedLogicalBytes": { "$ref": "#/$defs/nonNegativeInteger" },
+    "rollingDigests": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["paths", "content", "tree", "operations"],
+      "properties": {
+        "paths": { "$ref": "#/$defs/sha256State" },
+        "content": { "$ref": "#/$defs/sha256State" },
+        "tree": { "$ref": "#/$defs/sha256State" },
+        "operations": { "$ref": "#/$defs/sha256State" }
+      }
+    },
+    "checkpointSequence": { "$ref": "#/$defs/nonNegativeInteger" },
+    "checkpointDigest": { "$ref": "#/$defs/sha256" },
+    "extensions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["generation.phase"],
+      "properties": {
+        "generation.phase": { "enum": ["paths", "large-file", "operations", "finalize"] }
+      }
+    }
+  },
+  "$defs": {
+    "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,127}$" },
+    "nonNegativeInteger": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "sha256State": {
+      "type": "object", "additionalProperties": false, "required": ["algorithm", "digest", "records"],
+      "properties": {
+        "algorithm": { "const": "sha256-chain-v1" },
+        "digest": { "$ref": "#/$defs/sha256" },
+        "records": { "$ref": "#/$defs/nonNegativeInteger" }
+      }
+    }
+  }
+}

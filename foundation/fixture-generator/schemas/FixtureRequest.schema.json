@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opengamevcs.org/fixture/v1/FixtureRequest.schema.json",
+  "title": "FixtureRequest",
+  "description": "Canonical input binding every identity-affecting fixture generation choice. x-ogvcs-normalization and x-ogvcs-portable-relative-path are normative OpenGameVCS validation keywords. The portable path keyword enforces both UTF-16 and UTF-8 limits: 4096 per path and 255 per segment.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "generator", "profile", "seed", "scale", "featureFlags", "destination", "expectedSchemaVersions", "extensions"],
+  "properties": {
+    "schemaVersion": { "const": "ogvcs.fixture/request/v1" },
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "const": "ogvcs-fixture" },
+        "version": { "const": "1.0.0" }
+      }
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version"],
+      "properties": {
+        "id": { "$ref": "#/$defs/profileId" },
+        "version": { "const": "2.0.0" }
+      }
+    },
+    "seed": { "$ref": "#/$defs/seed" },
+    "scale": { "$ref": "#/$defs/scale" },
+    "featureFlags": { "type": "object" },
+    "destination": { "$ref": "#/$defs/portablePath" },
+    "expectedSchemaVersions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checkpoint", "groupRelationships", "inventoryRecord", "largeFileDescriptor", "manifest", "profile", "request", "scenario", "verification"],
+      "properties": {
+        "checkpoint": { "const": "ogvcs.fixture/checkpoint/v1" },
+        "groupRelationships": { "const": "ogvcs.fixture/group-relationships/v2" },
+        "inventoryRecord": { "const": "ogvcs.fixture/inventory-record/v2" },
+        "largeFileDescriptor": { "const": "ogvcs.fixture/large-file-descriptor/v2" },
+        "manifest": { "const": "ogvcs.fixture/manifest/v1" },
+        "profile": { "const": "ogvcs.fixture/workload-profile/v1" },
+        "request": { "const": "ogvcs.fixture/request/v1" },
+        "scenario": { "const": "ogvcs.fixture/operation-scenario/v2" },
+        "verification": { "const": "ogvcs.fixture/verification-result/v1" }
+      }
+    },
+    "resourceLimits": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "maximumPhysicalBytes": { "$ref": "#/$defs/nonNegativeInteger" },
+        "maximumDurationSeconds": { "type": "integer", "minimum": 1, "maximum": 604800 },
+        "maximumMemoryBytes": { "type": "integer", "minimum": 1048576, "maximum": 1099511627776 }
+      }
+    },
+    "extensions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generation.checkpoint-every",
+        "generation.compression-class",
+        "generation.duplication-permille",
+        "generation.edit-locality-permille",
+        "generation.large-file-mode",
+        "generation.materialization",
+        "generation.materialized-path-limit",
+        "generation.mutable-versions"
+      ],
+      "properties": {
+        "generation.checkpoint-every": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+        "generation.compression-class": { "enum": ["compressible", "mixed", "incompressible"] },
+        "generation.duplication-permille": { "type": "integer", "minimum": 0, "maximum": 1000 },
+        "generation.edit-locality-permille": { "type": "integer", "minimum": 0, "maximum": 1000 },
+        "generation.large-file-mode": { "enum": ["full", "sparse", "stream-verified", "virtual"] },
+        "generation.materialization": { "enum": ["full", "sampled", "index-only"] },
+        "generation.materialized-path-limit": { "type": "integer", "minimum": 0, "maximum": 100000 },
+        "generation.mutable-versions": { "type": "integer", "minimum": 1, "maximum": 64 }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "required": ["profile"], "properties": { "profile": { "required": ["id"], "properties": { "id": { "const": "code-heavy" } } } } },
+      "then": { "properties": { "featureFlags": { "$ref": "#/$defs/codeHeavyFlags" } } }
+    },
+    {
+      "if": { "required": ["profile"], "properties": { "profile": { "required": ["id"], "properties": { "id": { "const": "unreal-like" } } } } },
+      "then": { "properties": { "featureFlags": { "$ref": "#/$defs/unrealLikeFlags" } } }
+    },
+    {
+      "if": { "required": ["profile"], "properties": { "profile": { "required": ["id"], "properties": { "id": { "const": "unity-like" } } } } },
+      "then": { "properties": { "featureFlags": { "$ref": "#/$defs/unityLikeFlags" } } }
+    },
+    {
+      "if": { "required": ["profile"], "properties": { "profile": { "required": ["id"], "properties": { "id": { "const": "large-binary" } } } } },
+      "then": { "properties": { "featureFlags": { "$ref": "#/$defs/largeBinaryFlags" } } }
+    },
+    {
+      "if": { "required": ["profile"], "properties": { "profile": { "required": ["id"], "properties": { "id": { "const": "global-studio" } } } } },
+      "then": { "properties": { "featureFlags": { "$ref": "#/$defs/globalStudioFlags" } } }
+    }
+  ],
+  "$defs": {
+    "profileId": { "enum": ["code-heavy", "unreal-like", "unity-like", "large-binary", "global-studio"] },
+    "nonNegativeInteger": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+    "seed": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^[^\\u0000-\\u001F\\u007F]+$",
+      "x-ogvcs-normalization": "NFC"
+    },
+    "portablePath": {
+      "type": "string",
+      "description": "NFC relative POSIX spelling with at most 4096 UTF-16 code units and UTF-8 bytes total, and at most 255 UTF-16 code units and UTF-8 bytes per segment.",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*[<>:\"\\\\|?*])(?!.*[\\u0000-\\u001F\\u007F-\\u009F])(?!.*/$)(?!.*//)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*(?:^|/)[^/]*[. ](?:/|$))[^/]+(?:/[^/]+)*$",
+      "x-ogvcs-normalization": "NFC",
+      "x-ogvcs-portable-relative-path": true
+    },
+    "scale": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pathCount", "historyOperationCount", "largeFileBytes", "maxDepth"],
+      "properties": {
+        "pathCount": { "type": "integer", "minimum": 1, "maximum": 10000000 },
+        "historyOperationCount": { "type": "integer", "minimum": 0, "maximum": 10000000 },
+        "largeFileBytes": { "type": "integer", "minimum": 0, "maximum": 1099511627776 },
+        "maxDepth": { "type": "integer", "minimum": 2, "maximum": 64 }
+      }
+    },
+    "codeHeavyFlags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["branches", "copies", "deletes", "executables", "merges", "renames", "text-edits"],
+      "properties": {
+        "branches": { "type": "boolean" }, "copies": { "type": "boolean" }, "deletes": { "type": "boolean" },
+        "executables": { "type": "boolean" }, "merges": { "type": "boolean" },
+        "renames": { "type": "boolean" }, "text-edits": { "type": "boolean" }
+      }
+    },
+    "unrealLikeFlags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["external-actors", "large-file-churn", "lock-conflicts", "maps", "sidecars"],
+      "properties": {
+        "external-actors": { "type": "boolean" }, "large-file-churn": { "type": "boolean" },
+        "lock-conflicts": { "type": "boolean" }, "maps": { "type": "boolean" }, "sidecars": { "type": "boolean" }
+      }
+    },
+    "unityLikeFlags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["asset-meta-pairs", "binary-imports", "duplicate-sidecar-negative", "missing-sidecar-negative", "moves", "negative-cases"],
+      "properties": {
+        "asset-meta-pairs": { "type": "boolean" }, "binary-imports": { "type": "boolean" },
+        "duplicate-sidecar-negative": { "type": "boolean" }, "missing-sidecar-negative": { "type": "boolean" },
+        "moves": { "type": "boolean" }, "negative-cases": { "type": "boolean" }
+      }
+    },
+    "largeBinaryFlags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cross-version-reuse", "duplication", "edit-locality"],
+      "properties": {
+        "cross-version-reuse": { "type": "boolean" }, "duplication": { "type": "boolean" },
+        "edit-locality": { "type": "boolean" }
+      }
+    },
+    "globalStudioFlags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["branch-update", "ci-materialization", "interruptions", "lock-lifecycle", "network-conditions", "review", "selective-sync"],
+      "properties": {
+        "branch-update": { "type": "boolean" }, "ci-materialization": { "type": "boolean" },
+        "interruptions": { "type": "boolean" }, "lock-lifecycle": { "type": "boolean" },
+        "network-conditions": { "type": "boolean" },
+        "review": { "type": "boolean" }, "selective-sync": { "type": "boolean" }
+      }
+    }
+  }
+}

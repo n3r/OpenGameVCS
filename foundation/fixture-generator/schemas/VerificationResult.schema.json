@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opengamevcs.org/fixture/v1/VerificationResult.schema.json",
+  "title": "VerificationResult",
+  "description": "Machine-readable result from fixture inspection or verification.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "tool", "status", "verified", "mode", "manifestDigest", "requestDigest", "checks", "summary"],
+  "properties": {
+    "schemaVersion": { "const": "ogvcs.fixture/verification-result/v1" },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": { "name": { "const": "ogvcs-fixture" }, "version": { "const": "1.0.0" } }
+    },
+    "status": { "enum": ["valid", "invalid", "incomplete", "unsafe", "unsupported"] },
+    "verified": { "type": "boolean" },
+    "mode": { "enum": ["inspect", "metadata", "full"] },
+    "manifestDigest": { "$ref": "#/$defs/sha256" },
+    "requestDigest": { "$ref": "#/$defs/sha256" },
+    "checks": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "status"],
+        "properties": {
+          "code": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,63}$" },
+          "status": { "enum": ["pass", "fail", "skipped"] },
+          "logicalPath": { "$ref": "#/$defs/logicalPath" },
+          "expected": { "type": ["string", "integer", "boolean", "null"] },
+          "actual": { "type": ["string", "integer", "boolean", "null"] },
+          "message": { "type": "string", "maxLength": 2048 }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checks", "passed", "failed", "skipped", "verifiedItems", "verifiedBytes"],
+      "properties": {
+        "checks": { "$ref": "#/$defs/nonNegativeInteger" },
+        "passed": { "$ref": "#/$defs/nonNegativeInteger" },
+        "failed": { "$ref": "#/$defs/nonNegativeInteger" },
+        "skipped": { "$ref": "#/$defs/nonNegativeInteger" },
+        "verifiedItems": { "$ref": "#/$defs/nonNegativeInteger" },
+        "verifiedBytes": { "$ref": "#/$defs/nonNegativeInteger" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "verified": { "const": true } }, "required": ["verified"] },
+      "then": { "properties": { "status": { "const": "valid" } } }
+    },
+    {
+      "if": { "properties": { "status": { "const": "valid" } }, "required": ["status"] },
+      "then": { "properties": { "verified": { "const": true } } }
+    }
+  ],
+  "$defs": {
+    "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,127}$" },
+    "nonNegativeInteger": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "logicalPath": {
+      "type": "string",
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*[\\u0000-\\u001F\\u007F])(?!.*/$)(?!.*//)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^/]+(?:/[^/]+)*$",
+      "maxLength": 4096,
+      "x-ogvcs-normalization": "NFC",
+      "x-ogvcs-portable-relative-path": true
+    }
+  }
+}

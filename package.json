@@ -1,0 +1,18 @@
+{
+  "name": "opengamevcs",
+  "version": "0.0.0",
+  "private": true,
+  "description": "OpenGameVCS implementation workspace",
+  "type": "module",
+  "workspaces": [
+    "foundation/fixture-generator"
+  ],
+  "scripts": {
+    "test": "npm run test --workspace @opengamevcs/fixture-generator && node --test prd/validate-roadmap.test.mjs",
+    "test:roadmap": "node prd/validate-roadmap.mjs && node --test prd/validate-roadmap.test.mjs",
+    "test:fixture:scale": "npm run test:scale --workspace @opengamevcs/fixture-generator"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

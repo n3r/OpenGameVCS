@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.opengamevcs.org/fixture/v2/LargeFileDescriptor.schema.json",
+  "title": "LargeFileDescriptor",
+  "description": "Canonical semantic-v2 recipe and physical representation metadata for large-file.json.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["compressionClass", "contentAlgorithm", "descriptorDigest", "logicalBytes", "logicalPath", "physical", "recipeDigest", "representation", "stream", "versions"],
+  "properties": {
+    "compressionClass": { "enum": ["compressible", "mixed", "incompressible"] },
+    "contentAlgorithm": { "const": "ogvcs.fixture/content-aes-256-ctr/v2" },
+    "descriptorDigest": { "$ref": "#/$defs/sha256" },
+    "logicalBytes": { "$ref": "#/$defs/positiveLogicalBytes" },
+    "logicalPath": { "$ref": "#/$defs/logicalPath" },
+    "physical": {
+      "oneOf": [
+        { "$ref": "#/$defs/virtualPhysical" },
+        { "$ref": "#/$defs/streamVerifiedPhysical" },
+        { "$ref": "#/$defs/fullPhysical" },
+        { "$ref": "#/$defs/sparsePhysical" }
+      ]
+    },
+    "recipeDigest": { "$ref": "#/$defs/sha256" },
+    "representation": { "enum": ["full", "sparse", "stream-verified", "virtual"] },
+    "stream": { "$ref": "#/$defs/contentStream" },
+    "versions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": { "$ref": "#/$defs/versionRecipe" }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "required": ["representation"], "properties": { "representation": { "const": "virtual" } } },
+      "then": { "properties": { "physical": { "$ref": "#/$defs/virtualPhysical" } } }
+    },
+    {
+      "if": { "required": ["representation"], "properties": { "representation": { "const": "stream-verified" } } },
+      "then": { "properties": { "physical": { "$ref": "#/$defs/streamVerifiedPhysical" } } }
+    },
+    {
+      "if": { "required": ["representation"], "properties": { "representation": { "const": "full" } } },
+      "then": { "properties": { "physical": { "$ref": "#/$defs/fullPhysical" } } }
+    },
+    {
+      "if": { "required": ["representation"], "properties": { "representation": { "const": "sparse" } } },
+      "then": { "properties": { "physical": { "$ref": "#/$defs/sparsePhysical" } } }
+    }
+  ],
+  "$defs": {
+    "contentStream": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 512,
+      "pattern": "^[a-z][a-z0-9-]*(?:/[A-Za-z0-9._-]+)+$",
+      "x-ogvcs-normalization": "NFC"
+    },
+    "extent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["digest", "length", "offset"],
+      "properties": {
+        "digest": { "$ref": "#/$defs/sha256" },
+        "length": { "type": "integer", "minimum": 1, "maximum": 1048576 },
+        "offset": { "type": "integer", "minimum": 0, "maximum": 1099511627775 }
+      }
+    },
+    "fullPhysical": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["digest", "logicalFileSize", "mode", "physicalBytes", "versionDigests"],
+      "properties": {
+        "digest": { "$ref": "#/$defs/sha256" },
+        "logicalFileSize": { "$ref": "#/$defs/positiveLogicalBytes" },
+        "mode": { "const": "full" },
+        "physicalBytes": { "$ref": "#/$defs/positiveLogicalBytes" },
+        "versionDigests": { "$ref": "#/$defs/versionDigests" }
+      }
+    },
+    "logicalPath": {
+      "type": "string",
+      "maxLength": 4096,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*[\\u0000-\\u001F\\u007F])(?!.*/$)(?!.*//)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^/]+(?:/[^/]+)*$",
+      "x-ogvcs-normalization": "NFC",
+      "x-ogvcs-portable-relative-path": true
+    },
+    "patch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["digest", "length", "offset", "patch", "version"],
+      "properties": {
+        "digest": { "$ref": "#/$defs/sha256" },
+        "length": { "type": "integer", "minimum": 1, "maximum": 65536 },
+        "offset": { "type": "integer", "minimum": 0, "maximum": 1099511627775 },
+        "patch": { "type": "integer", "minimum": 0, "maximum": 15 },
+        "version": { "type": "integer", "minimum": 0, "maximum": 63 }
+      }
+    },
+    "positiveLogicalBytes": { "type": "integer", "minimum": 1, "maximum": 1099511627776 },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "sparsePhysical": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["extentPayloadBytes", "extents", "logicalFileSize", "maximumAllocatedBytes", "mode"],
+      "properties": {
+        "extentPayloadBytes": {
+          "description": "Deterministic bytes explicitly written into sampled extents; this is not a portable allocation measurement.",
+          "$ref": "#/$defs/positiveLogicalBytes"
+        },
+        "extents": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "items": { "$ref": "#/$defs/extent" }
+        },
+        "logicalFileSize": { "$ref": "#/$defs/positiveLogicalBytes" },
+        "maximumAllocatedBytes": {
+          "description": "Portable worst-case filesystem allocation reserved by plan and runtime; equal to logicalFileSize.",
+          "$ref": "#/$defs/positiveLogicalBytes"
+        },
+        "mode": { "const": "sparse" }
+      }
+    },
+    "streamVerifiedPhysical": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "physicalBytes", "streamedLogicalBytes", "versionDigests"],
+      "properties": {
+        "mode": { "const": "stream-verified" },
+        "physicalBytes": { "const": 0 },
+        "streamedLogicalBytes": { "type": "integer", "minimum": 1, "maximum": 70368744177664 },
+        "versionDigests": { "$ref": "#/$defs/versionDigests" }
+      }
+    },
+    "versionDigest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "bytes", "digest", "version"],
+      "properties": {
+        "algorithm": { "const": "sha256" },
+        "bytes": { "$ref": "#/$defs/positiveLogicalBytes" },
+        "digest": { "$ref": "#/$defs/sha256" },
+        "version": { "type": "integer", "minimum": 0, "maximum": 63 }
+      }
+    },
+    "versionDigests": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": { "$ref": "#/$defs/versionDigest" }
+    },
+    "versionRecipe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baseStream", "baseVersion", "editLocalityPermille", "patches", "recipeDigest", "reusePermille", "version"],
+      "properties": {
+        "baseStream": { "$ref": "#/$defs/contentStream" },
+        "baseVersion": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "maximum": 63
+        },
+        "editLocalityPermille": { "type": "integer", "minimum": 0, "maximum": 1000 },
+        "patches": {
+          "type": "array",
+          "maxItems": 16,
+          "items": { "$ref": "#/$defs/patch" }
+        },
+        "recipeDigest": { "$ref": "#/$defs/sha256" },
+        "reusePermille": { "type": "integer", "minimum": 0, "maximum": 1000 },
+        "version": { "type": "integer", "minimum": 0, "maximum": 63 }
+      }
+    },
+    "virtualPhysical": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "physicalBytes"],
+      "properties": {
+        "mode": { "const": "virtual" },
+        "physicalBytes": { "const": 0 }
+      }
+    }
+  }
+}
