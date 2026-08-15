@@ -44,7 +44,8 @@ jobs:
         if: runner.os == 'Windows'
         working-directory: foundation/fixture-generator
         run: node --test --test-concurrency=1 test/path-validation.test.mjs
-      - run: npm test --workspace @opengamevcs/fixture-generator
+      - name: Run fixture-generator test suite
+        run: npm run test:ci --workspace @opengamevcs/fixture-generator
       - run: node foundation/fixture-generator/scripts/golden-summary.mjs --output golden-summary-${{ runner.os }}.json
       - uses: actions/upload-artifact@v4
         with:

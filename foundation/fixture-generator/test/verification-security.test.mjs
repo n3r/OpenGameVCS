@@ -292,7 +292,9 @@ test('large descriptor binding and streamed byte accounting survive digest recom
 });
 
 test('scenario verification streams and rejects a substituted operation above 100k records', {
-  timeout: 120_000,
+  // Windows filesystem and process scanning can make this streaming integration
+  // test several times slower than macOS/Linux without changing its work bound.
+  timeout: 300_000,
 }, async (t) => {
   const cwd = await temporaryDirectory(t, 'ogvcs-verification-scenario-');
   await generateFixture(request('fixture', {

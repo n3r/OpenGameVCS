@@ -25,6 +25,7 @@
   ],
   "scripts": {
     "test": "node --test --test-concurrency=1 test/*.test.mjs",
+    "test:ci": "node scripts/run-ci-tests.mjs",
     "test:scale": "node scripts/run-scale-test.mjs",
     "check": "node bin/ogvcs-fixture.mjs --help"
   },

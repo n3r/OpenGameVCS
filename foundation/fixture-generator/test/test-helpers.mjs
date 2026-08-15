@@ -9,7 +9,12 @@ export const cliPath = path.join(packageDirectory, 'bin', 'ogvcs-fixture.mjs');
 
 export async function temporaryDirectory(t, prefix = 'ogvcs-fixture-test-') {
   const directory = await mkdtemp(path.join(os.tmpdir(), prefix));
-  t.after(() => rm(directory, { force: true, recursive: true }));
+  t.after(() => rm(directory, {
+    force: true,
+    maxRetries: process.platform === 'win32' ? 10 : 0,
+    recursive: true,
+    retryDelay: 100,
+  }));
   return directory;
 }
 
