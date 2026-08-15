@@ -11,12 +11,13 @@ const testFiles = (await readdir(testDirectory))
   .sort()
   .map((name) => path.join('test', name));
 
-const maximumDiagnosticBytes = 48 * 1024;
-let diagnosticTail = '';
+const maximumCapturedBytes = 2 * 1024 * 1024;
+const maximumAnnotationCharacters = 6 * 1024;
+let diagnosticOutput = '';
 
 function forwardAndCapture(chunk, destination) {
   destination.write(chunk);
-  diagnosticTail = `${diagnosticTail}${chunk.toString('utf8')}`.slice(-maximumDiagnosticBytes);
+  diagnosticOutput = `${diagnosticOutput}${chunk.toString('utf8')}`.slice(-maximumCapturedBytes);
 }
 
 function workflowCommandValue(value) {
@@ -25,6 +26,15 @@ function workflowCommandValue(value) {
     .replaceAll('%', '%25')
     .replaceAll('\r', '%0D')
     .replaceAll('\n', '%0A');
+}
+
+function failureSnippets(output) {
+  const failures = [...output.matchAll(/^not ok \d+ - [^\r\n]+/gmu)];
+  if (failures.length === 0) return [output.slice(-maximumAnnotationCharacters)];
+  return failures.map((failure) => output.slice(
+    failure.index,
+    Math.min(output.length, failure.index + maximumAnnotationCharacters),
+  ));
 }
 
 const child = spawn(
@@ -50,8 +60,10 @@ const result = await new Promise((resolve, reject) => {
 if (result.code !== 0) {
   const status = result.signal ? `signal ${result.signal}` : `exit code ${result.code ?? 1}`;
   if (process.env.GITHUB_ACTIONS === 'true') {
-    const details = workflowCommandValue(`Test process ended with ${status}.\n\n${diagnosticTail}`);
-    process.stderr.write(`::error title=Fixture generator tests failed::${details}\n`);
+    for (const [index, snippet] of failureSnippets(diagnosticOutput).entries()) {
+      const details = workflowCommandValue(`Test process ended with ${status}.\n\n${snippet}`);
+      process.stderr.write(`::error title=Fixture test failure ${index + 1}::${details}\n`);
+    }
   }
   process.exitCode = result.code ?? 1;
 }
