@@ -130,11 +130,13 @@ Format v1 remains draft while readers, writers, registries, and vectors are unde
 ## Completion evidence
 
 The implementation and ordinary conformance candidate is MIT-licensed and passes
-local source/packed checks. By maintainer decision on 2026-08-16, the exact
-one-million-entry tree and logical-1-TiB manifest jobs are deferred to the final
-R0 campaign. Status remains In development and the final evidence fields below
-remain intentionally open until those acceptance runs and hosted three-platform
-proof are retained.
+local source/packed checks plus clean hosted Linux, macOS, and Windows comparison
+at commit `6295cb54b29bc5a9ac6dadf34bc2c52a337eba49`; see
+[`docs/evidence/OGVCS-002/`](../../docs/evidence/OGVCS-002/). By maintainer
+decision on 2026-08-16, the exact one-million-entry tree and logical-1-TiB
+manifest jobs are deferred to the final R0 campaign and were not run. Status
+remains In development and the final evidence fields below remain intentionally
+open until those acceptance runs, final publication, and ratification complete.
 
 - Implementation changes:
 - Test and benchmark results:

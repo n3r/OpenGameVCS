@@ -4,7 +4,7 @@
 - **Reviewer:** Independent Codex subagent (`ogvcs002_final_critical_review`)
 - **Initial verdict:** Not acceptance-ready
 - **Settled implementation verdict:** No residual P0 codec or specification defect found
-- **Freeze verdict:** No-freeze until deferred exact scale, hosted three-platform evidence, and a clean frozen revision are complete
+- **Freeze verdict:** No-freeze until deferred exact scale, durable final publication, and ratification are complete
 
 ## Scope and method
 
@@ -49,26 +49,26 @@ The independent audit reports 1,236 artifacts, 148 obligations, 235 scenarios,
 58,520 mutations per language, 7,303 truncations per language, and 50 executable
 max/max-plus-one cases across 25 hard-limit families.
 
-The diagnostic packed run retains all four archives and produces shared
-conformance SHA-256
+Clean commit `6295cb54b29bc5a9ac6dadf34bc2c52a337eba49` passed
+[hosted run 31927048636](https://github.com/n3r/OpenGameVCS/actions/runs/31927048636).
+Linux, macOS, and Windows completed their ordinary JavaScript/Rust suites, and
+the six reports compared identically at shared conformance SHA-256
 `14b34af82edc216f2d406f66cb21fe877c6e9d1c0e33b62c807ff9fbe88a15a6`.
-Because it used `--allow-dirty`, its `sourceRevision` names the preceding commit;
-it is not release evidence and must be replaced by a clean frozen-commit run.
+The Linux packed gate retained and independently bound all four archives; the
+exact scale job was unscheduled and is recorded as skipped.
 
 ## Remaining blockers
 
 | Severity | Blocker | Required closure |
 |---|---|---|
 | P1 | The million-entry and logical-1-TiB cases are the only inventory rows. | Per the maintainer's 2026-08-16 decision, defer them to the final R0 campaign; then run the gated release-scale workflow and retain time, peak RSS, scratch, counts, identities, and the JS/Rust comparison. |
-| P1 | No hosted Linux/macOS/Windows result exists for the uncommitted candidate. | Commit/push the frozen candidate and retain all three reports plus their comparison. |
-| P1 | The worktree is not a durable frozen revision. | Rerun packed conformance without `--allow-dirty` from the candidate commit. |
-| P1 | Completion/changelog/status/ADR ratification cannot yet be honest. | Close all preceding gates, update this verdict, write final evidence/changelog, ratify ADR-0008/0009/0010, and only then move the PRD to `done`. |
+| P1 | Final publication and completion/changelog/status/ADR ratification cannot yet be honest. | Close the scale gate, publish the final versioned artifacts with durable retention, update this verdict and changelog, ratify ADR-0008/0009/0010, and only then move the PRD to `done`. |
 
 ## Acceptance verdict
 
 | AC | Current verdict | Basis |
 |---|---|---|
-| AC-01 | Local technical pass; durable proof pending | Source and packed goldens agree; clean hosted proof is outstanding. |
+| AC-01 | Hosted candidate pass | Source and packed goldens agree across Linux, macOS, and Windows at the clean candidate revision. |
 | AC-02 | **Incomplete** | Exact one-million-entry and below-1-GiB evidence has not run. |
 | AC-03 | Pass locally | Both implementations execute all 58,520 mutations. |
 | AC-04 | Pass locally | The installed adapter runs five corpora; native semantic cases run separately. |
@@ -79,11 +79,11 @@ it is not release evidence and must be replaced by a clean frozen-commit run.
 | AC-09 | **Incomplete** | Ordinary manifests pass; exact logical-1-TiB evidence has not run. |
 | AC-10 | Pass locally | Bundle ordering, identity, transcript, accounting, closure, and claim boundaries agree. |
 | AC-11 | Pass locally | Registry shape, immutability, lifecycle, and forward-preservation agree. |
-| AC-12 | Pass locally; hosted proof pending | OS-entropy, zero, collision, and exhaustion cases pass in both languages. |
+| AC-12 | Hosted candidate pass | OS-entropy, zero, collision, and exhaustion cases pass in both languages across Linux, macOS, and Windows. |
 
 ## Recommendation
 
-Do not freeze or move OGVCS-002 to `prd/done` yet. After a clean MIT-licensed commit
-passes the three-platform comparison and the final-R0 exact-scale campaign,
-update this record with immutable commit/run/artifact links. Only then is an
-Accepted/Done recommendation justified.
+Do not freeze or move OGVCS-002 to `prd/done` yet. The clean MIT-licensed ordinary
+candidate and three-platform comparison pass. Run the deliberately deferred
+final-R0 exact-scale campaign, publish the final artifacts durably, and complete
+the ratification records before an Accepted/Done recommendation.

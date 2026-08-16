@@ -6,14 +6,17 @@
 
 ## Evidence boundary
 
-This packet records the settled MIT-licensed local candidate before hosted
-release gates. It deliberately does not claim completion. The worktree is dirty
-and its diagnostic packed report used `--allow-dirty`, so `sourceRevision`
-(`2fc46273fb75a7cb08d38cfb5938434ee01f2cc3`) identifies the preceding
-commit rather than the bytes under test. The final packet must replace these
-diagnostic hashes with a clean-commit run and add hosted workflow/scale records.
-On 2026-08-16 the maintainer explicitly deferred both exact-scale rows to the
-final R0 campaign; neither workload was run for this candidate milestone.
+This packet records the settled MIT-licensed ordinary candidate at clean commit
+`6295cb54b29bc5a9ac6dadf34bc2c52a337eba49`. Local packed conformance and
+[hosted run 31927048636](https://github.com/n3r/OpenGameVCS/actions/runs/31927048636)
+passed; the hosted run retained clean packed artifacts and byte-identical shared
+JavaScript/Rust results from Linux, macOS, and Windows. It deliberately does not
+claim completion. On 2026-08-16 the maintainer explicitly deferred both
+exact-scale rows to the final R0 campaign; neither workload was run for this
+candidate milestone, and the hosted scale job is recorded as skipped.
+
+The machine-readable candidate record is
+[`candidate-2026-08-16.json`](candidate-2026-08-16.json).
 
 The independent review is
 [`docs/reviews/OGVCS-002-critical-review.md`](../../reviews/OGVCS-002-critical-review.md).
@@ -82,29 +85,41 @@ shared rows produce conformance SHA-256
 `14b34af82edc216f2d406f66cb21fe877c6e9d1c0e33b62c807ff9fbe88a15a6`.
 Every executed rejection matches its actual code, layer, and stage.
 
-## Diagnostic packed-artifact run
+## Clean packed-artifact and hosted run
 
 [`tools/run-packed-object-model-conformance.mjs`](../../../tools/run-packed-object-model-conformance.mjs)
 created fixture, JavaScript, and format tarballs; installed them offline in a
 clean consumer; packaged and ran Rust; executed both scenario sets; and retained
 the exact four archives beside both reports and their comparison.
 
-| Retained archive | Diagnostic SHA-256 |
+| Retained archive | Hosted SHA-256 |
 |---|---|
-| `opengamevcs-fixture-generator-1.0.0.tgz` | `7536287d8f60de35067fc49e5287448364f78c604ac52c41105b2ed6573ddd6a` |
-| `opengamevcs-object-model-0.1.0.tgz` | `c26396096d338fcc0a66e5d9fff6dc5e6629082b6b507374e5411d9780e1d480` |
-| `opengamevcs-repository-format-v1-0.1.0.tgz` | `5118226a28818fffda4469be3ffad8e0d8c0797655dc64ce8d3ebb426fc6af0d` |
-| `ogvcs-object-model-0.1.0.crate` | `5a187edb9ebc45547500de533ac87900d33a83828b7cf80dc4d061bbded8077f` |
+| `opengamevcs-fixture-generator-1.0.0.tgz` | `3096bb6418a774e8f0757377e4b0453adae5e53ad8c37a2a51563d4c77634b93` |
+| `opengamevcs-object-model-0.1.0.tgz` | `edc36039532160f338e1e668d12ed71ba608e00afec6259ee6aca37ed8207034` |
+| `opengamevcs-repository-format-v1-0.1.0.tgz` | `2f5876de7479c981c3bd014c0b2cce7b8688631a6c2f20fce45a635c745768cc` |
+| `ogvcs-object-model-0.1.0.crate` | `7d669e86d11be5aa0adaeca7bea2f9377327c24f4ad672b0cc12a6e3a0e88993` |
 
-The files were independently re-hashed and matched the comparison record. They
-remain diagnostic because the run was dirty; hosted release archives must be
-bound to the clean source commit.
+The hosted files were downloaded, independently re-hashed, and matched the
+packed comparison record. The ordinary platform jobs and comparison succeeded:
+
+| Hosted job | Job ID | Result |
+|---|---:|---|
+| macOS conformance | `95116145193` | Passed |
+| Windows conformance | `95116145203` | Passed |
+| Linux conformance and packed proof | `95116145212` | Passed |
+| Six-report cross-platform comparison | `95118086164` | Passed |
+| Exact bounded-scale evidence | `95118105085` | **Skipped by maintainer decision** |
+
+GitHub retained the platform reports, their comparison, the four-archive packed
+proof, the standalone format tarball, and the Rust offline distribution. Exact
+artifact IDs, GitHub archive digests, expiry times, and inner package hashes are
+recorded in the machine-readable candidate record.
 
 ## Acceptance map
 
 | Criterion | Candidate evidence | Status |
 |---|---|---|
-| OGVCS-002-AC-01 | Golden object/logical/bundle and typed-reference results agree across source and packed implementations. | Local pass; clean hosted proof pending |
+| OGVCS-002-AC-01 | Golden object/logical/bundle and typed-reference results agree across source and packed implementations on all three hosted platforms. | Hosted candidate pass |
 | OGVCS-002-AC-02 | Ordered and bounded-sort implementations plus packaged CLI smoke pass at reduced scale. | **Incomplete: exact one-million-entry run pending** |
 | OGVCS-002-AC-03 | 58,520 mutations execute independently in both languages. | Local pass |
 | OGVCS-002-AC-04 | Installed adapter processes all five profile-v2 corpora; native semantic cases run separately. | Local pass |
@@ -115,21 +130,17 @@ bound to the clean source commit.
 | OGVCS-002-AC-09 | Ordinary manifest and repeated-content streaming cases agree. | **Incomplete: exact logical-1-TiB run pending** |
 | OGVCS-002-AC-10 | Bundle ordering, identity, transcript, accounting, closure, and claim-boundary cases agree. | Local pass |
 | OGVCS-002-AC-11 | Registry shape, immutability, lifecycle, and forward-preservation cases agree. | Local pass |
-| OGVCS-002-AC-12 | OS-entropy allocation and collision/exhaustion cases pass in both languages. | Local pass; hosted platforms pending |
+| OGVCS-002-AC-12 | OS-entropy allocation and collision/exhaustion cases pass in both languages on Linux, macOS, and Windows. | Hosted candidate pass |
 
 ## Required final evidence
 
 Before this packet can be marked complete:
 
-1. create a clean frozen commit and rerun packed conformance without
-   `--allow-dirty`;
-2. retain passing JavaScript and Rust reports from Linux, macOS, and Windows and
-   the cross-platform comparison bound to that commit;
-3. during the final R0 campaign, run the maintainer-deferred million-entry/1-TiB
+1. during the final R0 campaign, run the maintainer-deferred million-entry/1-TiB
    Linux release-scale job and retain both language reports and their comparison;
-4. add the immutable GitHub run/job/artifact IDs, digests, source commit, and scale
-   measurements to a machine-readable record in this directory;
-5. update the PRD completion map, changelog, architecture/ADR statuses, and review
+2. publish the final versioned artifacts with durable retention and add the scale
+   measurements and final publication identities to the machine-readable record;
+3. update the PRD completion map, changelog, architecture/ADR statuses, and review
    verdict only after all preceding evidence passes.
 
 No repository path, payload, FileID, extension value, fixture seed, credential,

@@ -1,0 +1,158 @@
+{
+  "schema": "ogvcs.object-model.candidate-evidence/v1",
+  "evidenceDate": "2026-08-16",
+  "status": "candidate",
+  "license": "MIT",
+  "sourceRevision": "6295cb54b29bc5a9ac6dadf34bc2c52a337eba49",
+  "github": {
+    "repository": "n3r/OpenGameVCS",
+    "runId": 31927048636,
+    "runUrl": "https://github.com/n3r/OpenGameVCS/actions/runs/31927048636",
+    "conclusion": "success",
+    "createdAt": "2026-08-16T04:36:59Z",
+    "completedAt": "2026-08-16T04:57:29Z",
+    "jobs": [
+      {
+        "id": 95116145193,
+        "name": "Conformance (macos-latest)",
+        "conclusion": "success"
+      },
+      {
+        "id": 95116145203,
+        "name": "Conformance (windows-latest)",
+        "conclusion": "success"
+      },
+      {
+        "id": 95116145212,
+        "name": "Conformance (ubuntu-latest)",
+        "conclusion": "success"
+      },
+      {
+        "id": 95118086164,
+        "name": "Compare JavaScript and Rust on Linux, macOS, and Windows",
+        "conclusion": "success"
+      },
+      {
+        "id": 95118105085,
+        "name": "Bounded scale evidence (Linux)",
+        "conclusion": "skipped"
+      }
+    ],
+    "artifacts": [
+      {
+        "id": 9258371722,
+        "name": "object-model-conformance-comparison",
+        "sizeBytes": 703,
+        "githubArchiveDigest": "sha256:85baf91773f4c152097aad5d3bf73d803f5274d2d49a2612fcdaa38113abaddc",
+        "expiresAt": "2026-09-15T04:57:26Z"
+      },
+      {
+        "id": 9258369291,
+        "name": "object-model-conformance-Windows",
+        "sizeBytes": 11379,
+        "githubArchiveDigest": "sha256:89afb923f42b0f9ac1747add1834757a14015654f848358ee483adcdb6bc46f7",
+        "expiresAt": "2026-09-15T04:57:12Z"
+      },
+      {
+        "id": 9258233733,
+        "name": "object-model-packed-conformance-Linux",
+        "sizeBytes": 848830,
+        "githubArchiveDigest": "sha256:2ae081062a205dde8a17807101ec6d6c96323bb1adb1d0d84eb6630bd8364a96",
+        "expiresAt": "2026-09-15T04:44:58Z"
+      },
+      {
+        "id": 9258233475,
+        "name": "object-model-conformance-Linux",
+        "sizeBytes": 11372,
+        "githubArchiveDigest": "sha256:2910c4cc339a98b245d623a3287a894c16008ab10bf1c71e77baf504a179ddc0",
+        "expiresAt": "2026-09-15T04:44:57Z"
+      },
+      {
+        "id": 9258219994,
+        "name": "ogvcs-object-model-rust-offline-Linux",
+        "sizeBytes": 6003183,
+        "githubArchiveDigest": "sha256:aed502ea97fea1637cdce419cc7b97cc387b228b967afaf0effb0d924c7a6c5f",
+        "expiresAt": "2026-09-15T04:43:42Z"
+      },
+      {
+        "id": 9258219525,
+        "name": "ogvcs-repository-format-v1",
+        "sizeBytes": 368871,
+        "githubArchiveDigest": "sha256:e1b47c35f2e7c3d11ce1d2ad9975691439a60659208a000eddf36a773eb78300",
+        "expiresAt": "2026-09-15T04:43:41Z"
+      },
+      {
+        "id": 9258207647,
+        "name": "object-model-conformance-macOS",
+        "sizeBytes": 11372,
+        "githubArchiveDigest": "sha256:1250e6b61fdb07f0247e4fbb232a70561f1faadde30b4ec4fe241e9973d63d72",
+        "expiresAt": "2026-09-15T04:42:34Z"
+      }
+    ]
+  },
+  "conformance": {
+    "result": "identical",
+    "sharedScenarios": 230,
+    "sharedConformanceSha256": "14b34af82edc216f2d406f66cb21fe877c6e9d1c0e33b62c807ff9fbe88a15a6",
+    "javascript": {
+      "executed": 233,
+      "failed": 0,
+      "inventoryOnly": 2,
+      "notApplicable": 0,
+      "scenarioResultsSha256": "186274844e6ae6c88c08251fe60dfbd613c413f87795e5560a9813acc04b983a",
+      "implementationConformanceSha256": "dbee2094f21f0388732232db1642bb767801db2594423c38db82a54f14086382"
+    },
+    "rust": {
+      "executed": 228,
+      "failed": 0,
+      "inventoryOnly": 2,
+      "notApplicable": 5,
+      "scenarioResultsSha256": "bd60af109a1bd449b45b89cd21c005a225e40062d53800c6478a0e8cb54cec97",
+      "implementationConformanceSha256": "8964751c376279871265e172f233bf3310f66b604d6138b7886c6a071431cc32"
+    }
+  },
+  "packedConformance": {
+    "result": "identical",
+    "artifacts": [
+      {
+        "filename": "opengamevcs-fixture-generator-1.0.0.tgz",
+        "name": "@opengamevcs/fixture-generator",
+        "version": "1.0.0",
+        "sha256": "3096bb6418a774e8f0757377e4b0453adae5e53ad8c37a2a51563d4c77634b93"
+      },
+      {
+        "filename": "opengamevcs-object-model-0.1.0.tgz",
+        "name": "@opengamevcs/object-model",
+        "version": "0.1.0",
+        "sha256": "edc36039532160f338e1e668d12ed71ba608e00afec6259ee6aca37ed8207034"
+      },
+      {
+        "filename": "opengamevcs-repository-format-v1-0.1.0.tgz",
+        "name": "@opengamevcs/repository-format-v1",
+        "version": "0.1.0",
+        "sha256": "2f5876de7479c981c3bd014c0b2cce7b8688631a6c2f20fce45a635c745768cc"
+      },
+      {
+        "filename": "ogvcs-object-model-0.1.0.crate",
+        "name": "ogvcs-object-model",
+        "version": "0.1.0",
+        "sha256": "7d669e86d11be5aa0adaeca7bea2f9377327c24f4ad672b0cc12a6e3a0e88993"
+      }
+    ]
+  },
+  "exactScale": {
+    "decision": "deferred-to-final-r0-campaign",
+    "executed": false,
+    "jobId": 95118105085,
+    "jobConclusion": "skipped",
+    "scenarios": [
+      "tree-million-entries",
+      "manifest-one-tib"
+    ]
+  },
+  "remainingCompletionGates": [
+    "Run and retain the exact one-million-entry and logical-1-TiB campaign.",
+    "Publish the final versioned artifacts with durable retention.",
+    "Complete the PRD evidence map, changelog, architecture status, and ADR ratification."
+  ]
+}
