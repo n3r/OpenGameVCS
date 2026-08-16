@@ -71,7 +71,7 @@ The local packed artifacts were:
 | `@opengamevcs/protocol-types-v1` 1.0.0-rc.1 | `633aee67cbbeada7c17fd95ebecea7d0d6becaa9e90145d08f451beb540beca0` |
 
 The packed offline-source set SHA-256 is
-`9cfff64d3cae6c7cf7c658309e5235622cff4c20ea8712cebf9a8b8c2376f324`.
+`ac2c6da88486b4511c89bb9a968cae0a3892a190ea90e98bb41c1b0c3da6f456`.
 The reference and independent report files have SHA-256
 `f840ddcb89fbe42e9dfbb765a3da10df5614e420834b25ba4b076aca2ca39f0a`
 and `db250a85d5d335b38fbf3a163cd054d872800c2dca89814f04edf66c5b789915`.

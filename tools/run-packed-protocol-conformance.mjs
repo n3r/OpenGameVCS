@@ -124,7 +124,8 @@ function npm(args, options) {
 
 async function expectSuccess(result, label) {
   if (result.code !== 0 || result.signal !== null || result.overflow) {
-    throw new Error(`${label} failed: ${result.stderr.slice(0, 4096)}`);
+    const diagnostics = result.stderr.length > 0 ? result.stderr : result.stdout;
+    throw new Error(`${label} failed: ${diagnostics.slice(0, 4096)}`);
   }
   return result;
 }

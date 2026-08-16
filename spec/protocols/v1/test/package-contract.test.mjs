@@ -16,9 +16,10 @@ const BINDINGS_ROOT = path.join(REPOSITORY_ROOT, "foundation/protocol-baseline/b
 const GENERATOR = path.join(REPOSITORY_ROOT, "foundation/protocol-baseline/codegen/generate.mjs");
 
 function npmInvocation(arguments_) {
-  const npmCli = process.env.npm_execpath;
+  const npmCli = process.env.npm_execpath
+    ?? (process.platform === "win32" ? path.join(path.dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js") : undefined);
   if (typeof npmCli === "string" && npmCli.length > 0) return [process.execPath, [npmCli, ...arguments_]];
-  return [process.platform === "win32" ? "npm.cmd" : "npm", arguments_];
+  return ["npm", arguments_];
 }
 
 async function execNpm(arguments_, options) {
