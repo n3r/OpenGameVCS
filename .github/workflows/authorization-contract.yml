@@ -1,0 +1,127 @@
+name: Authorization contract conformance
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/authorization-contract.yml"
+      - "LICENSE*"
+      - "adr/0011-*.md"
+      - "adr/README.md"
+      - "architecture.md"
+      - "core/authz-contract/**"
+      - "docs/changelog/OGVCS-003.md"
+      - "docs/evidence/OGVCS-003/**"
+      - "docs/reviews/OGVCS-003-critical-review.md"
+      - "foundation/fixture-generator/**"
+      - "package.json"
+      - "package-lock.json"
+      - "prd/README.md"
+      - "prd/ROADMAP.md"
+      - "prd/TEMPLATE.md"
+      - "prd/validate-roadmap.mjs"
+      - "prd/validate-roadmap.test.mjs"
+      - "prd/todo/OGVCS-003-*.md"
+      - "prd/done/OGVCS-003-*.md"
+      - "spec/authorization/v1/**"
+      - "tools/authorization-contract-report.test.mjs"
+      - "tools/compare-authorization-contract-reports.mjs"
+      - "tools/run-packed-authorization-conformance.mjs"
+  push:
+    branches:
+      - main
+      - "ogvcs-003/**"
+    paths:
+      - ".github/workflows/authorization-contract.yml"
+      - "LICENSE*"
+      - "adr/0011-*.md"
+      - "adr/README.md"
+      - "architecture.md"
+      - "core/authz-contract/**"
+      - "docs/changelog/OGVCS-003.md"
+      - "docs/evidence/OGVCS-003/**"
+      - "docs/reviews/OGVCS-003-critical-review.md"
+      - "foundation/fixture-generator/**"
+      - "package.json"
+      - "package-lock.json"
+      - "prd/README.md"
+      - "prd/ROADMAP.md"
+      - "prd/TEMPLATE.md"
+      - "prd/validate-roadmap.mjs"
+      - "prd/validate-roadmap.test.mjs"
+      - "prd/todo/OGVCS-003-*.md"
+      - "prd/done/OGVCS-003-*.md"
+      - "spec/authorization/v1/**"
+      - "tools/authorization-contract-report.test.mjs"
+      - "tools/compare-authorization-contract-reports.mjs"
+      - "tools/run-packed-authorization-conformance.mjs"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: authorization-contract-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  conformance:
+    name: Packed conformance (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install exact workspace dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Validate and mutation-test the language-neutral contract
+        run: npm test --workspace @opengamevcs/authorization-contract-v1
+      - name: Test public JavaScript bindings and hostile adapter boundaries
+        run: npm test --workspace @opengamevcs/authorization-contract
+      - name: Build retained reports from offline-installed packed artifacts
+        run: node tools/run-packed-authorization-conformance.mjs --output artifacts/authorization-contract-${{ runner.os }}
+      - name: Validate roadmap lifecycle
+        if: runner.os == 'Linux'
+        run: npm run test:roadmap
+      - name: Test report tooling
+        if: runner.os == 'Linux'
+        run: node --test tools/authorization-contract-report.test.mjs
+      - name: Upload packed packages and conformance reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: authorization-contract-${{ runner.os }}
+          path: artifacts/authorization-contract-${{ runner.os }}
+          if-no-files-found: error
+          retention-days: 30
+
+  compare:
+    name: Compare Linux, macOS, and Windows reports
+    if: ${{ !cancelled() }}
+    needs: conformance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: authorization-contract-*
+          path: artifacts/downloaded
+      - name: Require exact decision parity across both adapters and all operating systems
+        run: >-
+          node tools/compare-authorization-contract-reports.mjs
+          artifacts/downloaded/authorization-contract-Linux/reference-report.json
+          artifacts/downloaded/authorization-contract-Linux/external-adapter-report.json
+          artifacts/downloaded/authorization-contract-macOS/reference-report.json
+          artifacts/downloaded/authorization-contract-macOS/external-adapter-report.json
+          artifacts/downloaded/authorization-contract-Windows/reference-report.json
+          artifacts/downloaded/authorization-contract-Windows/external-adapter-report.json

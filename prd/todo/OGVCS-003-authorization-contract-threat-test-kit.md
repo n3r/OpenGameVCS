@@ -1,13 +1,13 @@
 # OGVCS-003 — Authorization contract package and threat test kit
 
-**Status:** Todo  
+**Status:** In development
 **Release:** R0 — Engineering Foundation  
 **Priority:** P0  
-**Owner:** Unassigned  
+**Owner:** Codex and OpenGameVCS maintainers
 **Depends on:** OGVCS-001  
 **Blocks:** OGVCS-005, OGVCS-006, OGVCS-008, OGVCS-009, OGVCS-026, OGVCS-041, OGVCS-045  
-**Source:** [OpenGameVCS proposal](../../GAME_DEV_VCS_ANALYSIS.md)  
-**Last updated:** 2026-08-14
+**Source:** [ADR-0011 authorization contract v1](../../adr/0011-authorization-contract-v1.md)
+**Last updated:** 2026-08-16
 
 ## Outcome
 

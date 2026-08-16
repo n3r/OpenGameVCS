@@ -1,0 +1,36 @@
+{
+  "name": "@opengamevcs/authorization-contract",
+  "version": "1.0.0",
+  "description": "OpenGameVCS authorization-contract bindings and public threat-vector runner",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "ogvcs-authz": "bin/ogvcs-authz.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "default": "./src/index.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "bin",
+    "src",
+    "types",
+    "examples",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "generate": "node scripts/generate-bindings.mjs",
+    "check": "node scripts/generate-bindings.mjs --check && node bin/ogvcs-authz.mjs --help",
+    "test": "node scripts/generate-bindings.mjs --check && node --test --test-concurrency=1 test/*.test.mjs"
+  },
+  "dependencies": {
+    "@opengamevcs/authorization-contract-v1": "1.0.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

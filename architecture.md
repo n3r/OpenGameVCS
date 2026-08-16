@@ -552,9 +552,14 @@ The shared decision contract evaluates actor/session, tenant, repository, refere
 
 Every response is constructed from an authorized view. Post-filtering an already counted/ranked global result is insufficient for trees, search, reviews, events, facets, suggestions, or caches.
 
+[ADR-0011](adr/0011-authorization-contract-v1.md) and the versioned
+authorization-contract package freeze the R0 vocabulary, deny-overrides
+composition, privacy-safe decision surface, authorized-view ordering, threat
+catalog, revocation ceilings, audit classes, and sandbox requirements.
+
 ### 13.4 Content authorization
 
-The control plane authorizes content access before issuing a bounded transfer grant. Object stores and caches validate the grant audience, operation, expiry, tenant/repository and object/request bounds. A hash is never a bearer credential. Revocation bounds are the shorter of session policy and issued-grant maximum TTL.
+The control plane authorizes content access before issuing a bounded transfer grant. Object stores and caches validate the grant issuer and trusted key ID/generation, subject, audience, operation and permission, expiry, authority epoch, tenant/repository, replay state, and object/request bounds. A request-root grant commits to a canonical bounded object-ID plan; the verifier recomputes that root from its own authenticated plan state and checks current-object membership. Holder-supplied roots, membership assertions, or verification keys are never authority. A hash is never a bearer credential. Revocation bounds are the shorter of session policy and issued-grant maximum TTL.
 
 ### 13.5 Tenancy and encryption
 

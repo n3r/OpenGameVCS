@@ -7,10 +7,15 @@
   "type": "module",
   "workspaces": [
     "foundation/fixture-generator",
-    "core/object-model/js"
+    "core/object-model/js",
+    "core/authz-contract/js",
+    "spec/authorization/v1"
   ],
   "scripts": {
-    "test": "npm run test --workspace @opengamevcs/fixture-generator && npm run test --workspace @opengamevcs/object-model && npm run test:spec && npm run test:vectors && node --test prd/validate-roadmap.test.mjs && npm run test:object-model:ci-report",
+    "test": "npm run test --workspace @opengamevcs/fixture-generator && npm run test --workspace @opengamevcs/object-model && npm run test --workspace @opengamevcs/authorization-contract && npm run test:authz:spec && npm run test:authz:ci-report && npm run test:spec && npm run test:vectors && node --test prd/validate-roadmap.test.mjs && npm run test:object-model:ci-report",
+    "test:authz": "npm run test --workspace @opengamevcs/authorization-contract",
+    "test:authz:spec": "npm run test --workspace @opengamevcs/authorization-contract-v1",
+    "test:authz:ci-report": "node --test tools/authorization-contract-report.test.mjs",
     "test:object-model:js": "npm run test --workspace @opengamevcs/object-model",
     "test:object-model:report": "node tools/object-model-conformance-report.mjs --output artifacts/object-model-conformance.json",
     "test:object-model:packed-report": "node tools/run-packed-object-model-conformance.mjs --output artifacts/packed-object-model-conformance",

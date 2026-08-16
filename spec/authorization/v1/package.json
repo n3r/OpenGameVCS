@@ -1,0 +1,33 @@
+{
+  "name": "@opengamevcs/authorization-contract-v1",
+  "version": "1.0.0",
+  "description": "Language-neutral OpenGameVCS authorization contract, threat model, and conformance vectors",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    "./schemas/*": "./schemas/*",
+    "./registries/*": "./registries/*",
+    "./policies/*": "./policies/*",
+    "./vectors/*": "./vectors/*",
+    "./manifest.json": "./manifest.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "schemas",
+    "registries",
+    "policies",
+    "vectors",
+    "docs",
+    "manifest.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "generate": "node scripts/generate.mjs",
+    "check": "node scripts/generate.mjs --check && node validate-spec.mjs",
+    "test": "node scripts/generate.mjs --check && node validate-spec.mjs && node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
