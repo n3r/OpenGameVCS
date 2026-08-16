@@ -350,7 +350,10 @@ async function createConsumer(bundleRoot, metadata) {
 
 async function runConsumerSmoke(bundleRoot, cargo, scratchRoot) {
   const cargoHome = join(scratchRoot, 'empty-cargo-home');
-  const target = join(scratchRoot, 'consumer-target');
+  // Keep compiler/linker output outside the atomic bundle staging path.  The
+  // latter is intentionally descriptive and can exceed the legacy Windows
+  // linker path limit once Cargo appends build-script artifact names.
+  const target = await mkdtemp(join(tmpdir(), 'ogvcs-ct-'));
   await mkdir(cargoHome, { recursive: false });
   const environment = {
     ...process.env,
@@ -359,15 +362,19 @@ async function runConsumerSmoke(bundleRoot, cargo, scratchRoot) {
     CARGO_TARGET_DIR: target
   };
   const manifest = join(bundleRoot, 'smoke-consumer', 'Cargo.toml');
-  if (!(await fileExists(join(bundleRoot, 'smoke-consumer', 'Cargo.lock')))) {
-    await requireSuccess(cargo, [
-      'generate-lockfile', '--manifest-path', manifest, '--offline'
+  try {
+    if (!(await fileExists(join(bundleRoot, 'smoke-consumer', 'Cargo.lock')))) {
+      await requireSuccess(cargo, [
+        'generate-lockfile', '--manifest-path', manifest, '--offline'
+      ], { cwd: bundleRoot, env: environment });
+    }
+    const result = await requireSuccess(cargo, [
+      'run', '--manifest-path', manifest, '--locked', '--offline', '--quiet'
     ], { cwd: bundleRoot, env: environment });
+    if (result.stdout.trim() !== SMOKE_OUTPUT) fail('offline public API smoke returned unexpected output');
+  } finally {
+    await rm(target, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
   }
-  const result = await requireSuccess(cargo, [
-    'run', '--manifest-path', manifest, '--locked', '--offline', '--quiet'
-  ], { cwd: bundleRoot, env: environment });
-  if (result.stdout.trim() !== SMOKE_OUTPUT) fail('offline public API smoke returned unexpected output');
 }
 
 async function formatMetadata() {
