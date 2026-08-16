@@ -1,0 +1,118 @@
+{
+  "context": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 12,
+          "mediaType": "application/octet-stream",
+          "path": "objects/01-chunk.bin",
+          "sha256": "36fcc2e9442be1071c275604af6e41bd93875c743dc2fdaa6037662df74c5894"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5"
+      },
+      {
+        "artifact": {
+          "bytes": 183,
+          "mediaType": "application/cbor",
+          "path": "objects/02-content-manifest.cbor",
+          "sha256": "b635d76c8dd9f29c2862ae0e22077c70d157f68d4595861c09fb38bdf47c456b"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+      },
+      {
+        "artifact": {
+          "bytes": 274,
+          "mediaType": "application/cbor",
+          "path": "objects/06-repository-descriptor.cbor",
+          "sha256": "677905a883b1f4ddd87fea27b5afc0293cccd2d2ea29cc4884e758e4a071b6e9"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+      },
+      {
+        "artifact": {
+          "bytes": 481,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-all-entry-kinds-modes/tree.cbor",
+          "sha256": "dbd560e078aa8da76b423c5e2f83a5e795fa601416593802f79c172495859b2b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:9458b24239ce71b75b1c6ab857883d66a6eab3f0f6f4e9afab15371af1d4bf19"
+      },
+      {
+        "artifact": {
+          "bytes": 52,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-all-entry-kinds-modes/child-empty.cbor",
+          "sha256": "f0515d605a2c20abf9f321474bc861964b20faeaebbc41a2d8316ae4ffe2bb2b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a458f2bc72d5816dc3f7ee2cc8580eaaaed9a0208588ee66d18ea78f0c255c81"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registryVersion": 1
+    },
+    "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+    "requestedLayer": 3,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "expected": {
+    "highestLayer": 3,
+    "output": {
+      "artifact": {
+        "bytes": 303,
+        "mediaType": "application/json",
+        "path": "scenarios/outputs/tree-all-entry-kinds-modes.json",
+        "sha256": "5da1af14a337c019a78e7c30d2201e26d4e513f13c5886a4c8a33cf7f2a4a108"
+      },
+      "summarySha256": "8621cf1a73a895553c189df1c1b882d0e087c989ee7a1922cc2aca9696c57e29"
+    },
+    "result": "accept"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "inputs": [
+    {
+      "bytes": 481,
+      "mediaType": "application/cbor",
+      "path": "scenarios/objects/tree-all-entry-kinds-modes/tree.cbor",
+      "sha256": "dbd560e078aa8da76b423c5e2f83a5e795fa601416593802f79c172495859b2b"
+    },
+    {
+      "bytes": 3941,
+      "mediaType": "application/json",
+      "path": "scenarios/definitions/tree-all-entry-kinds-modes.json",
+      "sha256": "d86357b01aa16cc8b38e8017773b16bc367e8c98a340767ae211d8d43b835c42"
+    }
+  ],
+  "operation": "validate-object",
+  "requirementIds": [
+    "OGVCS-002-FR-09"
+  ],
+  "resources": {
+    "recipe": {
+      "generator": "ogvcs.repository-validation-scenario-constructor/v1",
+      "parameters": {
+        "definition": "scenarios/definitions/tree-all-entry-kinds-modes.json",
+        "definitionSha256": "d86357b01aa16cc8b38e8017773b16bc367e8c98a340767ae211d8d43b835c42",
+        "runtimeHighWaterMarks": "not-asserted"
+      },
+      "seed": "b7dfb138df265b1d15c111cdf01877440e7df99e4a6ee25f15b49d69f76ad69b"
+    },
+    "summary": {
+      "bytes": 4943,
+      "indexEntries": 0,
+      "items": 5,
+      "peakMemoryBytes": 0,
+      "scratchBytes": 0,
+      "summarySha256": "8621cf1a73a895553c189df1c1b882d0e087c989ee7a1922cc2aca9696c57e29",
+      "traversalEdges": 0
+    }
+  },
+  "scenarioId": "tree-all-entry-kinds-modes",
+  "schemaVersion": "ogvcs.repository-format/validation-scenario/v1"
+}

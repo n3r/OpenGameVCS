@@ -1,0 +1,157 @@
+{
+  "entries": [
+    {
+      "errorCode": "BUNDLE_BUDGET_EXCEEDED",
+      "name": "bundle-sequence-bytes",
+      "unit": "bytes",
+      "value": 2199023255552
+    },
+    {
+      "errorCode": "BUNDLE_BUDGET_EXCEEDED",
+      "name": "bundle-largest-item-bytes",
+      "unit": "bytes",
+      "value": 536871424
+    },
+    {
+      "errorCode": "BUNDLE_BUDGET_EXCEEDED",
+      "name": "bundle-objects",
+      "unit": "objects",
+      "value": 10000000
+    },
+    {
+      "errorCode": "BUNDLE_BUDGET_EXCEEDED",
+      "name": "bundle-logical-records",
+      "unit": "records",
+      "value": 10000000
+    },
+    {
+      "errorCode": "BUNDLE_BUDGET_EXCEEDED",
+      "name": "bundle-roots",
+      "unit": "roots",
+      "value": 20000000
+    },
+    {
+      "errorCode": "BUNDLE_BUDGET_EXCEEDED",
+      "name": "bundle-total-items",
+      "unit": "items",
+      "value": 40000002
+    },
+    {
+      "errorCode": "BUNDLE_BUDGET_EXCEEDED",
+      "name": "bundle-traversal-edges",
+      "unit": "edges",
+      "value": 100000000
+    },
+    {
+      "errorCode": "BUNDLE_BUDGET_EXCEEDED",
+      "name": "bundle-index-entries",
+      "unit": "entries",
+      "value": 20000000
+    },
+    {
+      "errorCode": "LIMIT_NESTING",
+      "name": "cbor-nesting-depth",
+      "unit": "levels",
+      "value": 32
+    },
+    {
+      "errorCode": "LIMIT_METADATA_BYTES",
+      "name": "metadata-payload-bytes",
+      "unit": "bytes",
+      "value": 536870912
+    },
+    {
+      "errorCode": "LIMIT_CHUNK_BYTES",
+      "name": "chunk-payload-bytes",
+      "unit": "bytes",
+      "value": 67108864
+    },
+    {
+      "errorCode": "LIMIT_VALUE_BYTES",
+      "name": "generic-text-or-byte-value-bytes",
+      "unit": "bytes",
+      "value": 16777216
+    },
+    {
+      "errorCode": "LIMIT_VALUE_BYTES",
+      "name": "snapshot-message-bytes",
+      "unit": "utf8-bytes",
+      "value": 1048576
+    },
+    {
+      "errorCode": "LIMIT_COUNT",
+      "name": "extensions-per-object",
+      "unit": "entries",
+      "value": 128
+    },
+    {
+      "errorCode": "LIMIT_EXTENSION_BYTES",
+      "name": "extension-aggregate-bytes-per-object",
+      "unit": "encoded-bytes",
+      "value": 16777216
+    },
+    {
+      "errorCode": "PATH_CORE_INVALID",
+      "name": "path-segment-bytes",
+      "unit": "utf8-bytes",
+      "value": 255
+    },
+    {
+      "errorCode": "PATH_CORE_INVALID",
+      "name": "path-bytes",
+      "unit": "utf8-bytes",
+      "value": 4096
+    },
+    {
+      "errorCode": "PATH_CORE_INVALID",
+      "name": "path-segments",
+      "unit": "segments",
+      "value": 256
+    },
+    {
+      "errorCode": "LIMIT_COUNT",
+      "name": "tree-entries",
+      "unit": "entries",
+      "value": 1000000
+    },
+    {
+      "errorCode": "SNAPSHOT_PARENT_COUNT_INVALID",
+      "name": "snapshot-parents",
+      "unit": "parents",
+      "value": 8
+    },
+    {
+      "errorCode": "LIMIT_COUNT",
+      "name": "change-set-operations",
+      "unit": "operations",
+      "value": 1000000
+    },
+    {
+      "errorCode": "LIMIT_COUNT",
+      "name": "asset-groups",
+      "unit": "groups",
+      "value": 10000
+    },
+    {
+      "errorCode": "LIMIT_COUNT",
+      "name": "asset-group-members",
+      "unit": "members-per-group",
+      "value": 64
+    },
+    {
+      "errorCode": "LIMIT_COUNT",
+      "name": "manifest-chunks",
+      "unit": "chunks",
+      "value": 1048576
+    },
+    {
+      "errorCode": "LIMIT_LOGICAL_BYTES",
+      "name": "logical-file-bytes",
+      "unit": "bytes",
+      "value": 1099511627776
+    }
+  ],
+  "formatVersion": 1,
+  "registry": "ogvcs.repository-format.hard-limits",
+  "registryVersion": 1
+}

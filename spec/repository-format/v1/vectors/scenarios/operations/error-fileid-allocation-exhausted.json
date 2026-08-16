@@ -1,0 +1,16 @@
+{
+  "candidateFileId": "21212121212121212121212121212121",
+  "entropyRecipe": {
+    "candidateFileIds": [
+      "21212121212121212121212121212121"
+    ],
+    "exhaustedBehavior": "repeat-last-candidate",
+    "isConsumed": [
+      "21212121212121212121212121212121"
+    ]
+  },
+  "operation": "allocate-file-id",
+  "phase": "generate",
+  "retryLimit": 16,
+  "schema": "ogvcs.repository-format.v1.fileid-operation-input.v1"
+}

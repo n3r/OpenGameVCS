@@ -2,7 +2,7 @@
 
 **Roadmap state:** Proposed baseline  
 **Planning horizon:** 42+ months  
-**Last updated:** 2026-08-14  
+**Last updated:** 2026-08-15
 **Authoritative status:** file location in [`todo/`](todo/) or [`done/`](done/)  
 **Architecture baseline:** [`architecture.md`](../architecture.md)
 
@@ -67,7 +67,7 @@ These activities are tracked by the program owner in gate evidence. They may val
 | OGVCS-001 | [Deterministic workload fixture generator](done/OGVCS-001-deterministic-workload-fixture-generator.md) | P0 | None |
 | OGVCS-002 | [Core object library and open repository format](todo/OGVCS-002-core-object-library-repository-format.md) | P0 | OGVCS-001 |
 | OGVCS-003 | [Authorization contract package and threat test kit](todo/OGVCS-003-authorization-contract-threat-test-kit.md) | P0 | OGVCS-001 |
-| OGVCS-004 | [Cross-platform path and workspace filesystem library](todo/OGVCS-004-cross-platform-path-filesystem-library.md) | P0 | OGVCS-001 |
+| OGVCS-004 | [Cross-platform path and workspace filesystem library](todo/OGVCS-004-cross-platform-path-filesystem-library.md) | P0 | OGVCS-001, OGVCS-002 |
 | OGVCS-041 | [Public protocol baseline and generated bindings](todo/OGVCS-041-public-protocol-baseline-generated-bindings.md) | P0 | OGVCS-002, OGVCS-003, OGVCS-004 |
 | OGVCS-005 | [Benchmark, conformance corpus, and fault harness](todo/OGVCS-005-benchmark-and-fault-harness.md) | P0 | OGVCS-001, OGVCS-002, OGVCS-003, OGVCS-004, OGVCS-041 |
 
@@ -122,7 +122,7 @@ These activities are tracked by the program owner in gate evidence. They may val
 |---|---|---|---|
 | OGVCS-031 | [Unity integration and semantic merge](todo/OGVCS-031-unity-integration-semantic-merge.md) | P0 | 013, 015, 016, 019, 022, 026, 042, 045 |
 | OGVCS-032 | [HA metadata, cross-region DR, and rolling upgrades](todo/OGVCS-032-ha-dr-rolling-upgrades.md) | P0 | 009, 010, 016, 018, 021, 027, 028, 030 |
-| OGVCS-033 | [Open export modes and independent verifier](todo/OGVCS-033-open-export-independent-verifier.md) | P0 | 002, 009, 017, 018, 020, 025, 029 |
+| OGVCS-033 | [Open export modes and independent verifier](todo/OGVCS-033-open-export-independent-verifier.md) | P0 | 002, 004, 007, 009, 017, 018, 020, 025, 029 |
 | OGVCS-034 | [Git bridge and one-way mirror](todo/OGVCS-034-git-bridge-one-way-mirror.md) | P1 | 015, 019, 020, 025, 033 |
 | OGVCS-035 | [Authorization-safe search and review scale](todo/OGVCS-035-authorization-safe-search-review-scale.md) | P0 | 009, 025, 026, 028 |
 | OGVCS-036 | [Protocol conformance, compatibility, and LTS](todo/OGVCS-036-protocol-conformance-compatibility-lts.md) | P0 | 002, 008, 009, 019, 030, 033, 041 |

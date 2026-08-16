@@ -1,0 +1,58 @@
+{
+  "algorithm": {
+    "id": "ogvcs.repository-validation-scenario-constructor",
+    "version": 1
+  },
+  "arithmetic": "mathematical nonnegative integers with explicit uint64 decode bounds; no host-width overflow is a semantic test oracle",
+  "detail": "zero logical length, empty chunks and SHA-256 of empty bytes",
+  "exactConstructorValues": {},
+  "expectedRootState": {
+    "resultFamily": "manifest",
+    "rootState": "accepted-exact-constructor-result",
+    "scenarioId": "manifest-empty",
+    "stableOutputIdentity": "ogvcs:v1:content-manifest:sha256:d44e4a2afad24a175c3a784d603ed482160a85601140c040010ba03e1f349102"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "normativeContext": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 90,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/manifest-empty/manifest.cbor",
+          "sha256": "fb4187242f69eba987c78e6af3697320445ec942e7c636c3ecc0e827c6274af4"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:d44e4a2afad24a175c3a784d603ed482160a85601140c040010ba03e1f349102"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registryVersion": 1
+    },
+    "requestedLayer": 3,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "operation": "validate-object",
+  "parameters": {},
+  "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+  "scenarioId": "manifest-empty",
+  "seedHex": "2bf810200146b39f86471f1fd211761ab07da476c3b5a902998aef97b00c357b",
+  "suppliedResourceCatalogue": {
+    "baseObjectArtifacts": [
+      "scenarios/objects/manifest-empty/manifest.cbor"
+    ],
+    "logicalRecordArtifacts": [],
+    "mutationRecipe": "none",
+    "virtualLimitRecipe": "none"
+  },
+  "validation": {
+    "mode": "conformance",
+    "requestedLayer": 3
+  }
+}

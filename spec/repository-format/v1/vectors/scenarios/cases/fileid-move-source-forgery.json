@@ -1,0 +1,205 @@
+{
+  "context": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "candidateSnapshot": "ogvcs:v1:snapshot:sha256:5ed5d995b70d8c1d8c9f8069904052cf1b808dd6e9bbcd891cfd8b947932b57a",
+    "designatedRoot": "ogvcs:v1:snapshot:sha256:ea6512682b6e586b010046f855d39a5867c15939c608f828d5317d894ce6a1f8",
+    "importMappings": [],
+    "lifetimeRecords": [
+      {
+        "fileId": "21212121212121212121212121212121",
+        "firstChangeSet": "ogvcs:v1:change-set:sha256:2a69fc0da93de7897f7e4b76208f5b8013f0c4620fdc7d9c6b677fc84eb9f7f8",
+        "firstOperation": 2,
+        "origin": "native-create"
+      },
+      {
+        "fileId": "31313131313131313131313131313131",
+        "firstChangeSet": "ogvcs:v1:change-set:sha256:2a69fc0da93de7897f7e4b76208f5b8013f0c4620fdc7d9c6b677fc84eb9f7f8",
+        "firstOperation": 0,
+        "origin": "native-create"
+      },
+      {
+        "fileId": "32323232323232323232323232323232",
+        "firstChangeSet": "ogvcs:v1:change-set:sha256:2a69fc0da93de7897f7e4b76208f5b8013f0c4620fdc7d9c6b677fc84eb9f7f8",
+        "firstOperation": 1,
+        "origin": "native-create"
+      }
+    ],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 333,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/fileid-move-source-forgery/candidate-change.cbor",
+          "sha256": "093a8449c21560cd9819f845e38d7c585d0bd79cb164566c2ca057a269662056"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:1a6aae23962c3c833eb5063b2b108bb948827e3b4547edf1150a9c23c6897b96"
+      },
+      {
+        "artifact": {
+          "bytes": 457,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/fileid-move-source-forgery/root-change.cbor",
+          "sha256": "02bd08b42ac38fd59d3f8bc933fa2d811c2ff08984ebefc4a60e700aac6733bf"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:2a69fc0da93de7897f7e4b76208f5b8013f0c4620fdc7d9c6b677fc84eb9f7f8"
+      },
+      {
+        "artifact": {
+          "bytes": 12,
+          "mediaType": "application/octet-stream",
+          "path": "objects/01-chunk.bin",
+          "sha256": "36fcc2e9442be1071c275604af6e41bd93875c743dc2fdaa6037662df74c5894"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5"
+      },
+      {
+        "artifact": {
+          "bytes": 183,
+          "mediaType": "application/cbor",
+          "path": "objects/02-content-manifest.cbor",
+          "sha256": "b635d76c8dd9f29c2862ae0e22077c70d157f68d4595861c09fb38bdf47c456b"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+      },
+      {
+        "artifact": {
+          "bytes": 274,
+          "mediaType": "application/cbor",
+          "path": "objects/06-repository-descriptor.cbor",
+          "sha256": "677905a883b1f4ddd87fea27b5afc0293cccd2d2ea29cc4884e758e4a071b6e9"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+      },
+      {
+        "artifact": {
+          "bytes": 377,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/fileid-move-source-forgery/candidate-snapshot.cbor",
+          "sha256": "45001f0580721aae02b3f6d570263b82578d88340e5968d65474d002b4a7769e"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:5ed5d995b70d8c1d8c9f8069904052cf1b808dd6e9bbcd891cfd8b947932b57a"
+      },
+      {
+        "artifact": {
+          "bytes": 321,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/fileid-move-source-forgery/root-snapshot.cbor",
+          "sha256": "eb25e52b2dc981440bcf093b219ed5074cbeaba1744a0e0deff1d7c0918307be"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:ea6512682b6e586b010046f855d39a5867c15939c608f828d5317d894ce6a1f8"
+      },
+      {
+        "artifact": {
+          "bytes": 267,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/fileid-move-source-forgery/base-tree-root.cbor",
+          "sha256": "d2cc597437b55538d9e4a724fbe685c31089a4eb92068f5e114598ff1d035c74"
+        },
+        "ref": "ogvcs:v1:tree:sha256:4215fc116665e35dd9a8c8d504d978873f9fa0f283ce27af413726155f7f1a2e"
+      },
+      {
+        "artifact": {
+          "bytes": 161,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/fileid-move-source-forgery/result-tree-right.cbor",
+          "sha256": "0d8269d27c80f16ff5d7be6a7910d323bb52ddbc379fc14e090dca93221e01db"
+        },
+        "ref": "ogvcs:v1:tree:sha256:51fc532db4b984be1ccb1b406cfdcc45d3da864e7cb56275a8ba3309e075ded3"
+      },
+      {
+        "artifact": {
+          "bytes": 52,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/fileid-move-source-forgery/base-tree-right.cbor",
+          "sha256": "f0515d605a2c20abf9f321474bc861964b20faeaebbc41a2d8316ae4ffe2bb2b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a458f2bc72d5816dc3f7ee2cc8580eaaaed9a0208588ee66d18ea78f0c255c81"
+      },
+      {
+        "artifact": {
+          "bytes": 52,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/fileid-move-source-forgery/result-tree-left.cbor",
+          "sha256": "f0515d605a2c20abf9f321474bc861964b20faeaebbc41a2d8316ae4ffe2bb2b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a458f2bc72d5816dc3f7ee2cc8580eaaaed9a0208588ee66d18ea78f0c255c81"
+      },
+      {
+        "artifact": {
+          "bytes": 267,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/fileid-move-source-forgery/result-tree-root.cbor",
+          "sha256": "a3b9e8a59f4568ab5edaa7503faa9dc0140b8a90fe79112f44816d47cb3af6ad"
+        },
+        "ref": "ogvcs:v1:tree:sha256:b3db65625b60995c2037ca13f0efb21bb56530b426ec268bace6c7fe8c99ca2e"
+      },
+      {
+        "artifact": {
+          "bytes": 161,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/fileid-move-source-forgery/base-tree-left.cbor",
+          "sha256": "218397b999252ca34fc3195a05c4229cb7654008559ec77be7941a4793a05428"
+        },
+        "ref": "ogvcs:v1:tree:sha256:cbd1dd98c1dc7b03787f870e0e38d78a44ff7253b67dfe5c692276e2d57a5225"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registryVersion": 1
+    },
+    "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+    "requestedLayer": 3,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "expected": {
+    "code": "FILEID_SOURCE_MISMATCH",
+    "layer": 3,
+    "result": "reject",
+    "stage": "repository-semantics"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "inputs": [
+    {
+      "bytes": 377,
+      "mediaType": "application/cbor",
+      "path": "scenarios/objects/fileid-move-source-forgery/candidate-snapshot.cbor",
+      "sha256": "45001f0580721aae02b3f6d570263b82578d88340e5968d65474d002b4a7769e"
+    },
+    {
+      "bytes": 8720,
+      "mediaType": "application/json",
+      "path": "scenarios/definitions/fileid-move-source-forgery.json",
+      "sha256": "fb370a8fb95e17953be02387aa1c52981275d9d7c730be46db325fd3501e219d"
+    }
+  ],
+  "operation": "replay-change-set",
+  "requirementIds": [
+    "OGVCS-002-AC-07",
+    "OGVCS-002-FR-11"
+  ],
+  "resources": {
+    "recipe": {
+      "generator": "ogvcs.repository-validation-scenario-constructor/v1",
+      "parameters": {
+        "definition": "scenarios/definitions/fileid-move-source-forgery.json",
+        "definitionSha256": "fb370a8fb95e17953be02387aa1c52981275d9d7c730be46db325fd3501e219d",
+        "runtimeHighWaterMarks": "not-asserted"
+      },
+      "seed": "a8bc7ce28f221765f4cd2bd5dc64ec73433a83749069efe25667cd8293708aa1"
+    },
+    "summary": {
+      "bytes": 11637,
+      "indexEntries": 0,
+      "items": 13,
+      "peakMemoryBytes": 0,
+      "scratchBytes": 0,
+      "summarySha256": "023ddf82efbf05cf72b1f760a0e104af0c3398097dc64807ae639afd667894d4",
+      "traversalEdges": 0
+    }
+  },
+  "scenarioId": "fileid-move-source-forgery",
+  "schemaVersion": "ogvcs.repository-format/validation-scenario/v1"
+}

@@ -1,0 +1,112 @@
+{
+  "context": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "candidateSnapshot": "ogvcs:v1:snapshot:sha256:0ac217a384f2ebb14dbe4400972d05ac5dd13e9b4272411d71e68448e27f18b5",
+    "designatedRoot": "ogvcs:v1:snapshot:sha256:0ac217a384f2ebb14dbe4400972d05ac5dd13e9b4272411d71e68448e27f18b5",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 52,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/history-zero-parent-root/root-change.cbor",
+          "sha256": "ef6e897742ff4d1220c8cd636f2a889a8f8746b2e97b2b7dad6fec4dc3747a6d"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:82cc41e5e86d1397579a8ebfc7ea6c7d9102552130f4da86ca592fc3c10a424c"
+      },
+      {
+        "artifact": {
+          "bytes": 274,
+          "mediaType": "application/cbor",
+          "path": "objects/06-repository-descriptor.cbor",
+          "sha256": "677905a883b1f4ddd87fea27b5afc0293cccd2d2ea29cc4884e758e4a071b6e9"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+      },
+      {
+        "artifact": {
+          "bytes": 312,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/history-zero-parent-root/designated-root.cbor",
+          "sha256": "9322fc70782819da97e88cb08cfb9b1493327f0bedd34e79dddfbb668e9424d1"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:0ac217a384f2ebb14dbe4400972d05ac5dd13e9b4272411d71e68448e27f18b5"
+      },
+      {
+        "artifact": {
+          "bytes": 52,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/history-zero-parent-root/empty-tree.cbor",
+          "sha256": "f0515d605a2c20abf9f321474bc861964b20faeaebbc41a2d8316ae4ffe2bb2b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a458f2bc72d5816dc3f7ee2cc8580eaaaed9a0208588ee66d18ea78f0c255c81"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registryVersion": 1
+    },
+    "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+    "requestedLayer": 3,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "expected": {
+    "highestLayer": 3,
+    "output": {
+      "artifact": {
+        "bytes": 311,
+        "mediaType": "application/json",
+        "path": "scenarios/outputs/history-zero-parent-root.json",
+        "sha256": "43444df5424899cde14cd21c2883216ec1558cbc0848f94be1d59032ebdbef0e"
+      },
+      "summarySha256": "e5e1c3d390b556aa517a232eb535f4621db4ec73388be0cdd0c48eea9035cc42"
+    },
+    "result": "accept"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "inputs": [
+    {
+      "bytes": 312,
+      "mediaType": "application/cbor",
+      "path": "scenarios/objects/history-zero-parent-root/designated-root.cbor",
+      "sha256": "9322fc70782819da97e88cb08cfb9b1493327f0bedd34e79dddfbb668e9424d1"
+    },
+    {
+      "bytes": 3879,
+      "mediaType": "application/json",
+      "path": "scenarios/definitions/history-zero-parent-root.json",
+      "sha256": "f50d1f451681cb430d6c71b6065fb82d5e257f441425aee1cf2745fe2a37f46f"
+    }
+  ],
+  "operation": "validate-repository",
+  "requirementIds": [
+    "OGVCS-002-AC-06",
+    "OGVCS-002-FR-09"
+  ],
+  "resources": {
+    "recipe": {
+      "generator": "ogvcs.repository-validation-scenario-constructor/v1",
+      "parameters": {
+        "definition": "scenarios/definitions/history-zero-parent-root.json",
+        "definitionSha256": "f50d1f451681cb430d6c71b6065fb82d5e257f441425aee1cf2745fe2a37f46f",
+        "runtimeHighWaterMarks": "not-asserted"
+      },
+      "seed": "e26be2914c76a24f130a35c3f08134461faf5de0c99b65e4ec1db845b0a2df91"
+    },
+    "summary": {
+      "bytes": 4569,
+      "indexEntries": 0,
+      "items": 4,
+      "peakMemoryBytes": 0,
+      "scratchBytes": 0,
+      "summarySha256": "e5e1c3d390b556aa517a232eb535f4621db4ec73388be0cdd0c48eea9035cc42",
+      "traversalEdges": 0
+    }
+  },
+  "scenarioId": "history-zero-parent-root",
+  "schemaVersion": "ogvcs.repository-format/validation-scenario/v1"
+}

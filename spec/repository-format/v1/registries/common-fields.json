@@ -1,0 +1,46 @@
+{
+  "entries": [
+    {
+      "code": 0,
+      "name": "format-version",
+      "required": true,
+      "state": "ratified",
+      "type": "uint"
+    },
+    {
+      "code": 1,
+      "name": "object-kind",
+      "required": true,
+      "state": "ratified",
+      "type": "uint"
+    },
+    {
+      "code": 2,
+      "name": "required-features",
+      "required": true,
+      "state": "ratified",
+      "type": "array<uint>"
+    },
+    {
+      "code": 3,
+      "name": "extensions",
+      "required": false,
+      "state": "ratified",
+      "type": "map<tstr,value>"
+    }
+  ],
+  "formatVersion": 1,
+  "kindFieldRange": {
+    "from": 16,
+    "to": 4095
+  },
+  "registry": "ogvcs.repository-format.common-fields",
+  "registryVersion": 1,
+  "reserved": [
+    {
+      "from": 4,
+      "reason": "future common fields require a new format version",
+      "to": 15
+    }
+  ]
+}

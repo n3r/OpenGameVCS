@@ -1,0 +1,266 @@
+name: Object model conformance
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/object-model.yml"
+      - ".gitattributes"
+      - ".gitignore"
+      - "adr/0008-*.md"
+      - "adr/0009-*.md"
+      - "adr/0010-*.md"
+      - "adr/README.md"
+      - "architecture.md"
+      - "LICENSE*"
+      - "core/object-model/**"
+      - "docs/changelog/OGVCS-002.md"
+      - "docs/evidence/OGVCS-002/**"
+      - "docs/reviews/OGVCS-002-critical-review.md"
+      - "foundation/fixture-generator/**"
+      - "package.json"
+      - "package-lock.json"
+      - "prd/README.md"
+      - "prd/ROADMAP.md"
+      - "prd/TEMPLATE.md"
+      - "prd/validate-roadmap.mjs"
+      - "prd/validate-roadmap.test.mjs"
+      - "prd/todo/OGVCS-002-*.md"
+      - "prd/done/OGVCS-002-*.md"
+      - "prd/todo/OGVCS-004-*.md"
+      - "prd/todo/OGVCS-007-*.md"
+      - "prd/todo/OGVCS-033-*.md"
+      - "spec/repository-format/v1/**"
+      - "tools/reference-vector-generator/**"
+      - "tools/verify-reference-vectors.mjs"
+      - "tools/verify-reference-vectors.test.mjs"
+      - "tools/object-model-conformance-report.mjs"
+      - "tools/object-model-conformance-report.test.mjs"
+      - "tools/object-model-scenario-report-*.mjs"
+      - "tools/run-packed-object-model-conformance.mjs"
+      - "tools/compare-object-model-conformance.mjs"
+      - "tools/compare-object-model-scale.mjs"
+      - "tools/compare-object-model-scale.test.mjs"
+  push:
+    branches:
+      - main
+      - "ogvcs-002/**"
+    tags:
+      - "ogvcs-002-scale-*"
+    paths:
+      - ".github/workflows/object-model.yml"
+      - ".gitattributes"
+      - ".gitignore"
+      - "adr/0008-*.md"
+      - "adr/0009-*.md"
+      - "adr/0010-*.md"
+      - "adr/README.md"
+      - "architecture.md"
+      - "LICENSE*"
+      - "core/object-model/**"
+      - "docs/changelog/OGVCS-002.md"
+      - "docs/evidence/OGVCS-002/**"
+      - "docs/reviews/OGVCS-002-critical-review.md"
+      - "foundation/fixture-generator/**"
+      - "package.json"
+      - "package-lock.json"
+      - "prd/README.md"
+      - "prd/ROADMAP.md"
+      - "prd/TEMPLATE.md"
+      - "prd/validate-roadmap.mjs"
+      - "prd/validate-roadmap.test.mjs"
+      - "prd/todo/OGVCS-002-*.md"
+      - "prd/done/OGVCS-002-*.md"
+      - "prd/todo/OGVCS-004-*.md"
+      - "prd/todo/OGVCS-007-*.md"
+      - "prd/todo/OGVCS-033-*.md"
+      - "spec/repository-format/v1/**"
+      - "tools/reference-vector-generator/**"
+      - "tools/verify-reference-vectors.mjs"
+      - "tools/verify-reference-vectors.test.mjs"
+      - "tools/object-model-conformance-report.mjs"
+      - "tools/object-model-conformance-report.test.mjs"
+      - "tools/object-model-scenario-report-*.mjs"
+      - "tools/run-packed-object-model-conformance.mjs"
+      - "tools/compare-object-model-conformance.mjs"
+      - "tools/compare-object-model-scale.mjs"
+      - "tools/compare-object-model-scale.test.mjs"
+  workflow_dispatch:
+    inputs:
+      run_scale:
+        description: "Run the real million-entry tree and logical 1-TiB streaming checks on Linux"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: object-model-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  conformance:
+    name: Conformance (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@7d11e79e1714f6b6da93cac39ad8435666f5c337 # 1.82.0
+        with:
+          components: clippy,rustfmt
+      - name: Install JavaScript workspaces
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Install the pinned normative CDDL compiler
+        if: runner.os == 'Linux'
+        run: cargo install cddl --version 0.10.7 --locked
+      - name: Check generated reference vectors
+        run: node tools/reference-vector-generator/generate.mjs --check
+      - name: Audit reference vectors independently of their generator
+        run: npm run test:vectors
+      - name: Validate format specification and registries
+        run: npm run test:spec
+      - name: Check JavaScript public package
+        run: npm run check --workspace @opengamevcs/object-model
+      - name: Require Windows junction scratch-confinement coverage
+        if: runner.os == 'Windows'
+        env:
+          OGVCS_REQUIRE_WINDOWS_JUNCTION: "1"
+        run: node --test --test-name-pattern="external sorter enforces scratch bounds" core/object-model/js/test/scale-stream.test.mjs
+      - name: Test JavaScript implementation and fixture adapter
+        run: npm run test --workspace @opengamevcs/object-model
+      - name: Smoke-test bounded JavaScript scale runner and packaged CLI path
+        run: npm run test:scale:smoke --workspace @opengamevcs/object-model
+      - name: Check Rust formatting
+        run: cargo fmt --manifest-path core/object-model/rust/Cargo.toml --check
+      - name: Test Rust implementation
+        run: cargo test --manifest-path core/object-model/rust/Cargo.toml --locked
+      - name: Lint Rust implementation
+        run: cargo clippy --manifest-path core/object-model/rust/Cargo.toml --locked --all-targets -- -D warnings
+      - name: Build Rust package
+        run: cargo package --manifest-path core/object-model/rust/Cargo.toml --locked --offline
+      - name: Test reproducible Rust offline distribution
+        run: node --test core/object-model/rust/scripts/offline-distribution.test.mjs
+      - name: Build and verify Rust offline distribution
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p artifacts
+          node core/object-model/rust/scripts/build-offline-distribution.mjs --output artifacts/ogvcs-object-model-offline-0.1.0
+          node core/object-model/rust/scripts/build-offline-distribution.mjs --verify artifacts/ogvcs-object-model-offline-0.1.0
+      - name: Pack the versioned format, registry, and vector artifact
+        if: runner.os == 'Linux'
+        run: npm pack ./spec/repository-format/v1 --pack-destination artifacts --ignore-scripts
+      - name: Upload packed format conformance artifact
+        if: always() && runner.os == 'Linux'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ogvcs-repository-format-v1
+          path: artifacts/opengamevcs-repository-format-v1-0.1.0.tgz
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Upload Rust offline distribution
+        if: always() && runner.os == 'Linux'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ogvcs-object-model-rust-offline-Linux
+          path: artifacts/ogvcs-object-model-offline-0.1.0
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Validate roadmap lifecycle
+        if: runner.os == 'Linux'
+        run: npm run test:roadmap
+      - name: Test conformance report tooling
+        if: runner.os == 'Linux'
+        run: npm run test:object-model:ci-report
+      - name: Write deterministic JavaScript conformance report
+        run: node tools/object-model-conformance-report.mjs --output artifacts/object-model-javascript-${{ runner.os }}.json
+      - name: Write deterministic Rust conformance report
+        run: cargo run --manifest-path core/object-model/rust/Cargo.toml --locked --offline --bin object_model_scenario_report -- --conformance --output artifacts/object-model-rust-${{ runner.os }}.json
+      - name: Run full conformance from packed JavaScript, Rust, and format artifacts
+        if: runner.os == 'Linux'
+        run: node tools/run-packed-object-model-conformance.mjs --output artifacts/packed-object-model-conformance
+      - name: Upload conformance reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: object-model-conformance-${{ runner.os }}
+          path: |
+            artifacts/object-model-javascript-${{ runner.os }}.json
+            artifacts/object-model-rust-${{ runner.os }}.json
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Upload packed-artifact conformance evidence
+        if: always() && runner.os == 'Linux'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: object-model-packed-conformance-Linux
+          path: artifacts/packed-object-model-conformance
+          if-no-files-found: warn
+          retention-days: 30
+
+  compare-conformance:
+    name: Compare JavaScript and Rust on Linux, macOS, and Windows
+    if: ${{ !cancelled() }}
+    needs: conformance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Download platform reports
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: object-model-conformance-*
+          path: artifacts/platforms
+      - name: Require byte-identical conformance results
+        run: node tools/compare-object-model-conformance.mjs --input artifacts/platforms --output artifacts/object-model-conformance-comparison.json
+      - name: Upload comparison
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: object-model-conformance-comparison
+          path: artifacts/object-model-conformance-comparison.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  scale:
+    name: Bounded scale evidence (Linux)
+    needs: [conformance, compare-conformance]
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.run_scale) ||
+      startsWith(github.ref, 'refs/tags/ogvcs-002-scale-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@7d11e79e1714f6b6da93cac39ad8435666f5c337 # 1.82.0
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Prepare evidence directory
+        run: mkdir -p artifacts
+      - name: Run JavaScript million-entry and logical-1-TiB checks
+        run: node core/object-model/js/scripts/run-scale.mjs > artifacts/javascript-scale.json
+      - name: Run Rust million-entry and logical-1-TiB checks
+        env:
+          OGVCS_SCALE_REPORT_PATH: artifacts/rust-scale.json
+        run: cargo test --manifest-path core/object-model/rust/Cargo.toml --locked --release --test scale release_scale_tree_and_one_tib_manifest -- --ignored --exact --nocapture
+      - name: Require byte-identical bounded scale results
+        run: node tools/compare-object-model-scale.mjs --javascript artifacts/javascript-scale.json --rust artifacts/rust-scale.json --output artifacts/scale-comparison.json
+      - name: Upload scale evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: object-model-scale-Linux
+          path: artifacts/*.json
+          if-no-files-found: error
+          retention-days: 30

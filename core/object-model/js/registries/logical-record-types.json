@@ -1,0 +1,82 @@
+{
+  "entries": [
+    {
+      "code": 1,
+      "name": "repository-root",
+      "state": "ratified"
+    },
+    {
+      "code": 2,
+      "name": "mutable-ref",
+      "state": "ratified"
+    },
+    {
+      "code": 3,
+      "name": "shelf-pointer",
+      "state": "ratified"
+    },
+    {
+      "code": 4,
+      "name": "file-id-lifetime",
+      "state": "ratified"
+    },
+    {
+      "code": 5,
+      "name": "import-mapping",
+      "state": "ratified"
+    },
+    {
+      "code": 6,
+      "name": "pending-change-reference",
+      "state": "ratified"
+    },
+    {
+      "code": 7,
+      "name": "lock-reference",
+      "state": "ratified"
+    },
+    {
+      "code": 8,
+      "name": "annotation",
+      "state": "ratified",
+      "wireShape": {
+        "0": "format-version",
+        "1": "logical-record-type",
+        "16": "subject-object-ref",
+        "17": "annotation-profile-ref",
+        "18": "profile-typed-payload-bytes"
+      }
+    },
+    {
+      "code": 9,
+      "name": "fixture-event",
+      "state": "conformance-only",
+      "wireShape": {
+        "0": "format-version",
+        "1": "logical-record-type",
+        "16": "scenario-digest",
+        "17": "sequence",
+        "18": "fixture-event-profile-ref",
+        "19": "canonical-public-event-digest",
+        "20": "fixture-operation-kind"
+      }
+    }
+  ],
+  "formatVersion": 1,
+  "identity": "not-an-object-id",
+  "registry": "ogvcs.repository-format.logical-record-types",
+  "registryVersion": 1,
+  "reserved": [
+    {
+      "from": 0,
+      "reason": "invalid sentinel",
+      "to": 0
+    }
+  ],
+  "unassigned": [
+    {
+      "from": 10,
+      "to": 65535
+    }
+  ]
+}

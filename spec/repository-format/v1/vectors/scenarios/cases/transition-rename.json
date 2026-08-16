@@ -1,0 +1,163 @@
+{
+  "context": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "candidateSnapshot": "ogvcs:v1:snapshot:sha256:76bbe1362bbb5fd887c043846e70699aba2b6cd6ad8d3bfac12549b0ec01124b",
+    "designatedRoot": "ogvcs:v1:snapshot:sha256:812b17a3fd9246a2eb231467de4bc0422034a16df2fceaec439aee48ba0368c9",
+    "importMappings": [],
+    "lifetimeRecords": [
+      {
+        "fileId": "21212121212121212121212121212121",
+        "firstChangeSet": "ogvcs:v1:change-set:sha256:b5e71418534c372755708cfd4c736e1daafb200bd328582cf8f566d31a0a1bbb",
+        "firstOperation": 0,
+        "origin": "native-create"
+      }
+    ],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 330,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-rename/candidate-change.cbor",
+          "sha256": "1d9b22e98f019f88193ec39ecc87bb3bde67a2cb2a47edd28005433d704e1aad"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:2f42056f7dba7e6c55143181985318c915f94ae972a8d005379556cd5e516ceb"
+      },
+      {
+        "artifact": {
+          "bytes": 215,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-rename/root-change.cbor",
+          "sha256": "b1facea0b60a5a24b022cc2847e618da6c00d409d211afce6167ba4158c7d100"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:b5e71418534c372755708cfd4c736e1daafb200bd328582cf8f566d31a0a1bbb"
+      },
+      {
+        "artifact": {
+          "bytes": 12,
+          "mediaType": "application/octet-stream",
+          "path": "objects/01-chunk.bin",
+          "sha256": "36fcc2e9442be1071c275604af6e41bd93875c743dc2fdaa6037662df74c5894"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5"
+      },
+      {
+        "artifact": {
+          "bytes": 183,
+          "mediaType": "application/cbor",
+          "path": "objects/02-content-manifest.cbor",
+          "sha256": "b635d76c8dd9f29c2862ae0e22077c70d157f68d4595861c09fb38bdf47c456b"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+      },
+      {
+        "artifact": {
+          "bytes": 274,
+          "mediaType": "application/cbor",
+          "path": "objects/06-repository-descriptor.cbor",
+          "sha256": "677905a883b1f4ddd87fea27b5afc0293cccd2d2ea29cc4884e758e4a071b6e9"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+      },
+      {
+        "artifact": {
+          "bytes": 367,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-rename/candidate-snapshot.cbor",
+          "sha256": "d79446584ffdb03b91fa499bb9980d75c78993a51f6541b83cf796dd98677771"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:76bbe1362bbb5fd887c043846e70699aba2b6cd6ad8d3bfac12549b0ec01124b"
+      },
+      {
+        "artifact": {
+          "bytes": 321,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-rename/root-snapshot.cbor",
+          "sha256": "a416f80a5392662babbb45a96697430120f485ff09b1bcdf232a9f5e0b91fbeb"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:812b17a3fd9246a2eb231467de4bc0422034a16df2fceaec439aee48ba0368c9"
+      },
+      {
+        "artifact": {
+          "bytes": 169,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-rename/result-tree-root.cbor",
+          "sha256": "b42a3a4ceb39815cf9f5a307903c216953fd5b3f9be90eeb1d760fdea3b2151d"
+        },
+        "ref": "ogvcs:v1:tree:sha256:9069ec3cc508a0b084588255681d2d016f82e66edbb4be2cd42c13dfb8be9f78"
+      },
+      {
+        "artifact": {
+          "bytes": 161,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-rename/base-tree-root.cbor",
+          "sha256": "218397b999252ca34fc3195a05c4229cb7654008559ec77be7941a4793a05428"
+        },
+        "ref": "ogvcs:v1:tree:sha256:cbd1dd98c1dc7b03787f870e0e38d78a44ff7253b67dfe5c692276e2d57a5225"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registryVersion": 1
+    },
+    "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+    "requestedLayer": 3,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "expected": {
+    "highestLayer": 3,
+    "output": {
+      "artifact": {
+        "bytes": 294,
+        "mediaType": "application/json",
+        "path": "scenarios/outputs/transition-rename.json",
+        "sha256": "4959dd9b4e7f275eb01fcf3be28f3206a608691e7f3a7319725c25cd4f2fcc7c"
+      },
+      "summarySha256": "df1b37c05bd259f3f2e872f343164f2ffe60da6c9e339ac114539001e7500f34"
+    },
+    "result": "accept"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "inputs": [
+    {
+      "bytes": 367,
+      "mediaType": "application/cbor",
+      "path": "scenarios/objects/transition-rename/candidate-snapshot.cbor",
+      "sha256": "d79446584ffdb03b91fa499bb9980d75c78993a51f6541b83cf796dd98677771"
+    },
+    {
+      "bytes": 10320,
+      "mediaType": "application/json",
+      "path": "scenarios/definitions/transition-rename.json",
+      "sha256": "d0e927df17061debec79c649cf55b8103c00535b53add20984fd115f696e4663"
+    }
+  ],
+  "operation": "replay-change-set",
+  "requirementIds": [
+    "OGVCS-002-FR-09"
+  ],
+  "resources": {
+    "recipe": {
+      "generator": "ogvcs.repository-validation-scenario-constructor/v1",
+      "parameters": {
+        "definition": "scenarios/definitions/transition-rename.json",
+        "definitionSha256": "d0e927df17061debec79c649cf55b8103c00535b53add20984fd115f696e4663",
+        "runtimeHighWaterMarks": "not-asserted"
+      },
+      "seed": "2423a467525bf685c566f72d2b04412f3e53b5f59bd9936163ed21928c287caf"
+    },
+    "summary": {
+      "bytes": 12352,
+      "indexEntries": 0,
+      "items": 9,
+      "peakMemoryBytes": 0,
+      "scratchBytes": 0,
+      "summarySha256": "df1b37c05bd259f3f2e872f343164f2ffe60da6c9e339ac114539001e7500f34",
+      "traversalEdges": 0
+    }
+  },
+  "scenarioId": "transition-rename",
+  "schemaVersion": "ogvcs.repository-format/validation-scenario/v1"
+}

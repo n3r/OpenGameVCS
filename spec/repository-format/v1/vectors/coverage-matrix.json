@@ -1,0 +1,1966 @@
+{
+  "obligations": [
+    {
+      "obligation": "attestation:signature-shape",
+      "scenarios": [
+        "attestation-signature-shape"
+      ]
+    },
+    {
+      "obligation": "attestation:signed",
+      "scenarios": [
+        "attestation-signed"
+      ]
+    },
+    {
+      "obligation": "attestation:unsigned",
+      "scenarios": [
+        "attestation-unsigned"
+      ]
+    },
+    {
+      "obligation": "bundle:budget",
+      "scenarios": [
+        "bundle-budget"
+      ]
+    },
+    {
+      "obligation": "bundle:closure-extra",
+      "scenarios": [
+        "bundle-closure-extra"
+      ]
+    },
+    {
+      "obligation": "bundle:closure-missing",
+      "scenarios": [
+        "bundle-closure-missing"
+      ]
+    },
+    {
+      "obligation": "bundle:count",
+      "scenarios": [
+        "bundle-count"
+      ]
+    },
+    {
+      "obligation": "bundle:declared-accounting",
+      "scenarios": [
+        "bundle-declared-accounting"
+      ]
+    },
+    {
+      "obligation": "bundle:duplicate",
+      "scenarios": [
+        "bundle-duplicate"
+      ]
+    },
+    {
+      "obligation": "bundle:edge-object-kind-1",
+      "scenarios": [
+        "bundle-object-kind-1"
+      ]
+    },
+    {
+      "obligation": "bundle:edge-object-kind-10",
+      "scenarios": [
+        "bundle-object-kind-10"
+      ]
+    },
+    {
+      "obligation": "bundle:edge-object-kind-11",
+      "scenarios": [
+        "bundle-object-kind-11"
+      ]
+    },
+    {
+      "obligation": "bundle:edge-object-kind-2",
+      "scenarios": [
+        "bundle-object-kind-2"
+      ]
+    },
+    {
+      "obligation": "bundle:edge-object-kind-3",
+      "scenarios": [
+        "bundle-object-kind-3"
+      ]
+    },
+    {
+      "obligation": "bundle:edge-object-kind-4",
+      "scenarios": [
+        "bundle-object-kind-4"
+      ]
+    },
+    {
+      "obligation": "bundle:edge-object-kind-5",
+      "scenarios": [
+        "bundle-object-kind-5"
+      ]
+    },
+    {
+      "obligation": "bundle:edge-object-kind-6",
+      "scenarios": [
+        "bundle-object-kind-6"
+      ]
+    },
+    {
+      "obligation": "bundle:edge-object-kind-7",
+      "scenarios": [
+        "bundle-object-kind-7"
+      ]
+    },
+    {
+      "obligation": "bundle:edge-object-kind-8",
+      "scenarios": [
+        "bundle-object-kind-8"
+      ]
+    },
+    {
+      "obligation": "bundle:edge-object-kind-9",
+      "scenarios": [
+        "bundle-object-kind-9"
+      ]
+    },
+    {
+      "obligation": "bundle:eof",
+      "scenarios": [
+        "bundle-eof"
+      ]
+    },
+    {
+      "obligation": "bundle:every-edge-family",
+      "scenarios": [
+        "bundle-edge-families"
+      ]
+    },
+    {
+      "obligation": "bundle:every-root-family",
+      "scenarios": [
+        "bundle-edge-families"
+      ]
+    },
+    {
+      "obligation": "bundle:forbidden-claim",
+      "scenarios": [
+        "bundle-export-claim"
+      ]
+    },
+    {
+      "obligation": "bundle:item-header",
+      "scenarios": [
+        "bundle-item-header"
+      ]
+    },
+    {
+      "obligation": "bundle:item-logical-record",
+      "scenarios": [
+        "bundle-item-logical-record"
+      ]
+    },
+    {
+      "obligation": "bundle:item-object",
+      "scenarios": [
+        "bundle-item-object"
+      ]
+    },
+    {
+      "obligation": "bundle:item-root",
+      "scenarios": [
+        "bundle-item-root"
+      ]
+    },
+    {
+      "obligation": "bundle:item-trailer",
+      "scenarios": [
+        "bundle-item-trailer"
+      ]
+    },
+    {
+      "obligation": "bundle:logical-preservation",
+      "scenarios": [
+        "bundle-logical-reference-preservation"
+      ]
+    },
+    {
+      "obligation": "bundle:logical-type-1",
+      "scenarios": [
+        "bundle-logical-type-1"
+      ]
+    },
+    {
+      "obligation": "bundle:logical-type-2",
+      "scenarios": [
+        "bundle-logical-type-2"
+      ]
+    },
+    {
+      "obligation": "bundle:logical-type-3",
+      "scenarios": [
+        "bundle-logical-type-3"
+      ]
+    },
+    {
+      "obligation": "bundle:logical-type-4",
+      "scenarios": [
+        "bundle-logical-type-4"
+      ]
+    },
+    {
+      "obligation": "bundle:logical-type-5",
+      "scenarios": [
+        "bundle-logical-type-5"
+      ]
+    },
+    {
+      "obligation": "bundle:logical-type-6",
+      "scenarios": [
+        "bundle-logical-type-6"
+      ]
+    },
+    {
+      "obligation": "bundle:logical-type-7",
+      "scenarios": [
+        "bundle-logical-type-7"
+      ]
+    },
+    {
+      "obligation": "bundle:logical-type-8",
+      "scenarios": [
+        "bundle-logical-type-8"
+      ]
+    },
+    {
+      "obligation": "bundle:logical-type-9",
+      "scenarios": [
+        "bundle-logical-type-9"
+      ]
+    },
+    {
+      "obligation": "bundle:mode",
+      "scenarios": [
+        "bundle-mode"
+      ]
+    },
+    {
+      "obligation": "bundle:multi-root-sort",
+      "scenarios": [
+        "bundle-multi-root-disambiguation"
+      ]
+    },
+    {
+      "obligation": "bundle:object-id",
+      "scenarios": [
+        "bundle-object-id"
+      ]
+    },
+    {
+      "obligation": "bundle:ordinal",
+      "scenarios": [
+        "bundle-ordinal"
+      ]
+    },
+    {
+      "obligation": "bundle:record-id",
+      "scenarios": [
+        "bundle-record-id"
+      ]
+    },
+    {
+      "obligation": "bundle:root-invalid",
+      "scenarios": [
+        "bundle-root-invalid"
+      ]
+    },
+    {
+      "obligation": "bundle:root-kind-logical-record",
+      "scenarios": [
+        "bundle-root-kind-logical-record"
+      ]
+    },
+    {
+      "obligation": "bundle:root-kind-object",
+      "scenarios": [
+        "bundle-root-kind-object"
+      ]
+    },
+    {
+      "obligation": "bundle:sort",
+      "scenarios": [
+        "bundle-sort-order"
+      ]
+    },
+    {
+      "obligation": "bundle:trailer",
+      "scenarios": [
+        "bundle-trailer"
+      ]
+    },
+    {
+      "obligation": "bundle:wrong-kind",
+      "scenarios": [
+        "bundle-wrong-kind"
+      ]
+    },
+    {
+      "obligation": "bundle:zero-sections",
+      "scenarios": [
+        "bundle-zero-sections"
+      ]
+    },
+    {
+      "obligation": "conflict:choice-base",
+      "scenarios": [
+        "conflict-choice-base"
+      ]
+    },
+    {
+      "obligation": "conflict:choice-custom",
+      "scenarios": [
+        "conflict-choice-custom"
+      ]
+    },
+    {
+      "obligation": "conflict:choice-delete",
+      "scenarios": [
+        "conflict-choice-delete"
+      ]
+    },
+    {
+      "obligation": "conflict:choice-left",
+      "scenarios": [
+        "conflict-choice-left"
+      ]
+    },
+    {
+      "obligation": "conflict:choice-right",
+      "scenarios": [
+        "conflict-choice-right"
+      ]
+    },
+    {
+      "obligation": "conflict:custom-driver",
+      "scenarios": [
+        "conflict-custom-driver"
+      ]
+    },
+    {
+      "obligation": "conflict:kind-content",
+      "scenarios": [
+        "conflict-content-resolved",
+        "conflict-content-unresolved-shelf"
+      ]
+    },
+    {
+      "obligation": "conflict:kind-delete-modify",
+      "scenarios": [
+        "conflict-delete-modify-resolved",
+        "conflict-delete-modify-unresolved-shelf"
+      ]
+    },
+    {
+      "obligation": "conflict:kind-divergent-move",
+      "scenarios": [
+        "conflict-divergent-move-resolved",
+        "conflict-divergent-move-unresolved-shelf"
+      ]
+    },
+    {
+      "obligation": "conflict:kind-group",
+      "scenarios": [
+        "conflict-group-resolved",
+        "conflict-group-unresolved-shelf"
+      ]
+    },
+    {
+      "obligation": "conflict:kind-mode",
+      "scenarios": [
+        "conflict-mode-resolved",
+        "conflict-mode-unresolved-shelf"
+      ]
+    },
+    {
+      "obligation": "conflict:kind-path-collision",
+      "scenarios": [
+        "conflict-path-collision-resolved",
+        "conflict-path-collision-unresolved-shelf"
+      ]
+    },
+    {
+      "obligation": "conflict:kind-policy",
+      "scenarios": [
+        "conflict-policy-resolved",
+        "conflict-policy-unresolved-shelf"
+      ]
+    },
+    {
+      "obligation": "conflict:kind-type",
+      "scenarios": [
+        "conflict-type-resolved",
+        "conflict-type-unresolved-shelf"
+      ]
+    },
+    {
+      "obligation": "conflict:resolved",
+      "scenarios": [
+        "conflict-choice-base",
+        "conflict-choice-custom",
+        "conflict-choice-delete",
+        "conflict-choice-left",
+        "conflict-choice-right",
+        "conflict-content-resolved",
+        "conflict-custom-driver",
+        "conflict-delete-modify-resolved",
+        "conflict-divergent-move-resolved",
+        "conflict-group-resolved",
+        "conflict-mode-resolved",
+        "conflict-path-collision-resolved",
+        "conflict-policy-resolved",
+        "conflict-type-resolved"
+      ]
+    },
+    {
+      "obligation": "conflict:unresolved",
+      "scenarios": [
+        "conflict-content-unresolved-shelf",
+        "conflict-delete-modify-unresolved-shelf",
+        "conflict-divergent-move-unresolved-shelf",
+        "conflict-group-unresolved-shelf",
+        "conflict-mode-unresolved-shelf",
+        "conflict-path-collision-unresolved-shelf",
+        "conflict-policy-unresolved-shelf",
+        "conflict-type-unresolved-shelf"
+      ]
+    },
+    {
+      "obligation": "fileid:concurrent-loser-state",
+      "scenarios": [
+        "fileid-concurrent-loser"
+      ]
+    },
+    {
+      "obligation": "fileid:copy",
+      "scenarios": [
+        "fileid-copy-fresh"
+      ]
+    },
+    {
+      "obligation": "fileid:copy-reuse",
+      "scenarios": [
+        "fileid-copy-reuse"
+      ]
+    },
+    {
+      "obligation": "fileid:create-reuse",
+      "scenarios": [
+        "fileid-create-reuse"
+      ]
+    },
+    {
+      "obligation": "fileid:cross-repository",
+      "scenarios": [
+        "fileid-cross-repository-proof"
+      ]
+    },
+    {
+      "obligation": "fileid:delete-recreate",
+      "scenarios": [
+        "fileid-delete-recreate-reuse"
+      ]
+    },
+    {
+      "obligation": "fileid:duplicate",
+      "scenarios": [
+        "fileid-duplicate-expanded-tree"
+      ]
+    },
+    {
+      "obligation": "fileid:import-conflict",
+      "scenarios": [
+        "fileid-import-conflict"
+      ]
+    },
+    {
+      "obligation": "fileid:import-native-collision",
+      "scenarios": [
+        "fileid-import-native-collision"
+      ]
+    },
+    {
+      "obligation": "fileid:import-retry",
+      "scenarios": [
+        "fileid-import-lost-ack-retry"
+      ]
+    },
+    {
+      "obligation": "fileid:move-rename",
+      "scenarios": [
+        "fileid-move-rename-preserves",
+        "fileid-move-source-forgery"
+      ]
+    },
+    {
+      "obligation": "fileid:restore-ancestry",
+      "scenarios": [
+        "fileid-ancestral-restore"
+      ]
+    },
+    {
+      "obligation": "fileid:restore-forgery",
+      "scenarios": [
+        "fileid-restore-source-forgery"
+      ]
+    },
+    {
+      "obligation": "fileid:restore-invalid-ancestry",
+      "scenarios": [
+        "fileid-restore-invalid-ancestry"
+      ]
+    },
+    {
+      "obligation": "fileid:source-forgery",
+      "scenarios": [
+        "fileid-move-source-forgery"
+      ]
+    },
+    {
+      "obligation": "fileid:zero",
+      "scenarios": [
+        "fileid-zero"
+      ]
+    },
+    {
+      "obligation": "group:cardinality",
+      "scenarios": [
+        "group-required-role-missing"
+      ]
+    },
+    {
+      "obligation": "group:create",
+      "scenarios": [
+        "group-create"
+      ]
+    },
+    {
+      "obligation": "group:delete",
+      "scenarios": [
+        "group-delete"
+      ]
+    },
+    {
+      "obligation": "group:external-key",
+      "scenarios": [
+        "group-external-key-duplicate"
+      ]
+    },
+    {
+      "obligation": "group:update",
+      "scenarios": [
+        "group-update"
+      ]
+    },
+    {
+      "obligation": "hash:tamper",
+      "scenarios": [
+        "hash-tampered-object",
+        "mutation-systematic-single-bit"
+      ]
+    },
+    {
+      "obligation": "history:cross-repository",
+      "scenarios": [
+        "history-cross-repository-parent"
+      ]
+    },
+    {
+      "obligation": "history:cycle",
+      "scenarios": [
+        "history-parent-cycle"
+      ]
+    },
+    {
+      "obligation": "history:duplicate-parent",
+      "scenarios": [
+        "history-duplicate-parent"
+      ]
+    },
+    {
+      "obligation": "history:missing-parent",
+      "scenarios": [
+        "history-missing-parent"
+      ]
+    },
+    {
+      "obligation": "history:parents-0",
+      "scenarios": [
+        "history-zero-parent-root"
+      ]
+    },
+    {
+      "obligation": "history:parents-1",
+      "scenarios": [
+        "history-one-parent"
+      ]
+    },
+    {
+      "obligation": "history:parents-2",
+      "scenarios": [
+        "history-two-parent"
+      ]
+    },
+    {
+      "obligation": "history:parents-8",
+      "scenarios": [
+        "history-eight-parent"
+      ]
+    },
+    {
+      "obligation": "history:parents-9",
+      "scenarios": [
+        "history-ninth-parent"
+      ]
+    },
+    {
+      "obligation": "history:second-root",
+      "scenarios": [
+        "history-second-root"
+      ]
+    },
+    {
+      "obligation": "limits:all",
+      "scenarios": [
+        "limit-asset-group-members-max",
+        "limit-asset-group-members-max-plus-one",
+        "limit-asset-groups-max",
+        "limit-asset-groups-max-plus-one",
+        "limit-bundle-index-entries-max",
+        "limit-bundle-index-entries-max-plus-one",
+        "limit-bundle-largest-item-bytes-max",
+        "limit-bundle-largest-item-bytes-max-plus-one",
+        "limit-bundle-logical-records-max",
+        "limit-bundle-logical-records-max-plus-one",
+        "limit-bundle-objects-max",
+        "limit-bundle-objects-max-plus-one",
+        "limit-bundle-roots-max",
+        "limit-bundle-roots-max-plus-one",
+        "limit-bundle-sequence-bytes-max",
+        "limit-bundle-sequence-bytes-max-plus-one",
+        "limit-bundle-total-items-max",
+        "limit-bundle-total-items-max-plus-one",
+        "limit-bundle-traversal-edges-max",
+        "limit-bundle-traversal-edges-max-plus-one",
+        "limit-cbor-nesting-depth-max",
+        "limit-cbor-nesting-depth-max-plus-one",
+        "limit-change-set-operations-max",
+        "limit-change-set-operations-max-plus-one",
+        "limit-chunk-payload-bytes-max",
+        "limit-chunk-payload-bytes-max-plus-one",
+        "limit-extension-aggregate-bytes-per-object-max",
+        "limit-extension-aggregate-bytes-per-object-max-plus-one",
+        "limit-extensions-per-object-max",
+        "limit-extensions-per-object-max-plus-one",
+        "limit-generic-text-or-byte-value-bytes-max",
+        "limit-generic-text-or-byte-value-bytes-max-plus-one",
+        "limit-logical-file-bytes-max",
+        "limit-logical-file-bytes-max-plus-one",
+        "limit-manifest-chunks-max",
+        "limit-manifest-chunks-max-plus-one",
+        "limit-metadata-payload-bytes-max",
+        "limit-metadata-payload-bytes-max-plus-one",
+        "limit-path-bytes-max",
+        "limit-path-bytes-max-plus-one",
+        "limit-path-segment-bytes-max",
+        "limit-path-segment-bytes-max-plus-one",
+        "limit-path-segments-max",
+        "limit-path-segments-max-plus-one",
+        "limit-snapshot-message-bytes-max",
+        "limit-snapshot-message-bytes-max-plus-one",
+        "limit-snapshot-parents-max",
+        "limit-snapshot-parents-max-plus-one",
+        "limit-tree-entries-max",
+        "limit-tree-entries-max-plus-one"
+      ]
+    },
+    {
+      "obligation": "malformed:complete",
+      "scenarios": [
+        "malformed-complete-corpus"
+      ]
+    },
+    {
+      "obligation": "manifest:annotation-invariance",
+      "scenarios": [
+        "manifest-annotation-invariance"
+      ]
+    },
+    {
+      "obligation": "manifest:chunk-length",
+      "scenarios": [
+        "manifest-chunk-length"
+      ]
+    },
+    {
+      "obligation": "manifest:corrupt-chunk",
+      "scenarios": [
+        "manifest-corrupt-chunk"
+      ]
+    },
+    {
+      "obligation": "manifest:empty",
+      "scenarios": [
+        "manifest-empty"
+      ]
+    },
+    {
+      "obligation": "manifest:length-sum-mismatch",
+      "scenarios": [
+        "manifest-length-sum-mismatch"
+      ]
+    },
+    {
+      "obligation": "manifest:logical-ceiling",
+      "scenarios": [
+        "manifest-logical-ceiling"
+      ]
+    },
+    {
+      "obligation": "manifest:multi-chunk",
+      "scenarios": [
+        "manifest-multi-chunk"
+      ]
+    },
+    {
+      "obligation": "manifest:one-tib",
+      "scenarios": [
+        "manifest-one-tib"
+      ]
+    },
+    {
+      "obligation": "manifest:repeated-chunk",
+      "scenarios": [
+        "manifest-repeated-chunk"
+      ]
+    },
+    {
+      "obligation": "manifest:unknown-profile",
+      "scenarios": [
+        "manifest-unknown-profile"
+      ]
+    },
+    {
+      "obligation": "mutation:single-bit",
+      "scenarios": [
+        "mutation-systematic-single-bit"
+      ]
+    },
+    {
+      "obligation": "provenance:acyclic",
+      "scenarios": [
+        "provenance-acyclic"
+      ]
+    },
+    {
+      "obligation": "provenance:cycle",
+      "scenarios": [
+        "provenance-cycle"
+      ]
+    },
+    {
+      "obligation": "provenance:snapshot-cycle",
+      "scenarios": [
+        "provenance-reaches-snapshot"
+      ]
+    },
+    {
+      "obligation": "registry:conformance",
+      "scenarios": [
+        "registry-conformance-mode"
+      ]
+    },
+    {
+      "obligation": "registry:conformance-production",
+      "scenarios": [
+        "registry-conformance-production"
+      ]
+    },
+    {
+      "obligation": "registry:deprecated-read",
+      "scenarios": [
+        "registry-deprecated-read"
+      ]
+    },
+    {
+      "obligation": "registry:deprecated-write",
+      "scenarios": [
+        "registry-deprecated-write"
+      ]
+    },
+    {
+      "obligation": "registry:duplicate",
+      "scenarios": [
+        "registry-duplicate"
+      ]
+    },
+    {
+      "obligation": "registry:invalid-entry",
+      "scenarios": [
+        "registry-invalid-entry"
+      ]
+    },
+    {
+      "obligation": "registry:ratified",
+      "scenarios": [
+        "registry-ratified-read-write"
+      ]
+    },
+    {
+      "obligation": "registry:reassigned",
+      "scenarios": [
+        "registry-reassigned"
+      ]
+    },
+    {
+      "obligation": "registry:reserved",
+      "scenarios": [
+        "registry-reserved"
+      ]
+    },
+    {
+      "obligation": "registry:unknown-extension-preserve",
+      "scenarios": [
+        "registry-unknown-extension-preserve"
+      ]
+    },
+    {
+      "obligation": "registry:unknown-feature",
+      "scenarios": [
+        "registry-unknown-feature"
+      ]
+    },
+    {
+      "obligation": "registry:unknown-feature-forward",
+      "scenarios": [
+        "registry-unknown-feature-forward"
+      ]
+    },
+    {
+      "obligation": "registry:unknown-profile",
+      "scenarios": [
+        "registry-unknown-profile"
+      ]
+    },
+    {
+      "obligation": "shelf:revision-chain",
+      "scenarios": [
+        "shelf-revision-chain"
+      ]
+    },
+    {
+      "obligation": "transition:copy",
+      "scenarios": [
+        "transition-copy"
+      ]
+    },
+    {
+      "obligation": "transition:create",
+      "scenarios": [
+        "transition-create"
+      ]
+    },
+    {
+      "obligation": "transition:delete",
+      "scenarios": [
+        "transition-delete"
+      ]
+    },
+    {
+      "obligation": "transition:exact-replay",
+      "scenarios": [
+        "transition-exact-result-mismatch"
+      ]
+    },
+    {
+      "obligation": "transition:group-create",
+      "scenarios": [
+        "transition-group-create"
+      ]
+    },
+    {
+      "obligation": "transition:group-delete",
+      "scenarios": [
+        "transition-group-delete"
+      ]
+    },
+    {
+      "obligation": "transition:group-update",
+      "scenarios": [
+        "transition-group-update"
+      ]
+    },
+    {
+      "obligation": "transition:merge-resolution",
+      "scenarios": [
+        "transition-merge-resolution"
+      ]
+    },
+    {
+      "obligation": "transition:modify",
+      "scenarios": [
+        "transition-modify"
+      ]
+    },
+    {
+      "obligation": "transition:move",
+      "scenarios": [
+        "transition-move"
+      ]
+    },
+    {
+      "obligation": "transition:rename",
+      "scenarios": [
+        "transition-rename"
+      ]
+    },
+    {
+      "obligation": "transition:restore",
+      "scenarios": [
+        "transition-restore"
+      ]
+    },
+    {
+      "obligation": "transition:result-mismatch",
+      "scenarios": [
+        "transition-exact-result-mismatch"
+      ]
+    },
+    {
+      "obligation": "tree:all-entry-kinds",
+      "scenarios": [
+        "tree-all-entry-kinds-modes"
+      ]
+    },
+    {
+      "obligation": "tree:all-modes",
+      "scenarios": [
+        "tree-all-entry-kinds-modes"
+      ]
+    },
+    {
+      "obligation": "tree:empty",
+      "scenarios": [
+        "tree-empty"
+      ]
+    },
+    {
+      "obligation": "tree:million-entries",
+      "scenarios": [
+        "tree-million-entries"
+      ]
+    },
+    {
+      "obligation": "tree:unicode",
+      "scenarios": [
+        "tree-unicode"
+      ]
+    },
+    {
+      "obligation": "truncation:every-prefix",
+      "scenarios": [
+        "truncation-every-prefix"
+      ]
+    }
+  ],
+  "requirementIds": [
+    {
+      "requirementId": "OGVCS-002-FR-09",
+      "scenarios": [
+        "attestation-signature-shape",
+        "attestation-signed",
+        "attestation-unsigned",
+        "bundle-budget",
+        "bundle-closure-extra",
+        "bundle-closure-missing",
+        "bundle-count",
+        "bundle-declared-accounting",
+        "bundle-duplicate",
+        "bundle-edge-families",
+        "bundle-eof",
+        "bundle-export-claim",
+        "bundle-item-header",
+        "bundle-item-logical-record",
+        "bundle-item-object",
+        "bundle-item-root",
+        "bundle-item-trailer",
+        "bundle-logical-reference-preservation",
+        "bundle-logical-type-1",
+        "bundle-logical-type-2",
+        "bundle-logical-type-3",
+        "bundle-logical-type-4",
+        "bundle-logical-type-5",
+        "bundle-logical-type-6",
+        "bundle-logical-type-7",
+        "bundle-logical-type-8",
+        "bundle-logical-type-9",
+        "bundle-mode",
+        "bundle-multi-root-disambiguation",
+        "bundle-object-id",
+        "bundle-object-kind-1",
+        "bundle-object-kind-10",
+        "bundle-object-kind-11",
+        "bundle-object-kind-2",
+        "bundle-object-kind-3",
+        "bundle-object-kind-4",
+        "bundle-object-kind-5",
+        "bundle-object-kind-6",
+        "bundle-object-kind-7",
+        "bundle-object-kind-8",
+        "bundle-object-kind-9",
+        "bundle-ordinal",
+        "bundle-record-id",
+        "bundle-root-invalid",
+        "bundle-root-kind-logical-record",
+        "bundle-root-kind-object",
+        "bundle-sort-order",
+        "bundle-trailer",
+        "bundle-wrong-kind",
+        "bundle-zero-sections",
+        "conflict-choice-base",
+        "conflict-choice-custom",
+        "conflict-choice-delete",
+        "conflict-choice-left",
+        "conflict-choice-right",
+        "conflict-content-resolved",
+        "conflict-content-unresolved-shelf",
+        "conflict-custom-driver",
+        "conflict-delete-modify-resolved",
+        "conflict-delete-modify-unresolved-shelf",
+        "conflict-divergent-move-resolved",
+        "conflict-divergent-move-unresolved-shelf",
+        "conflict-group-resolved",
+        "conflict-group-unresolved-shelf",
+        "conflict-id-mismatch",
+        "conflict-mode-resolved",
+        "conflict-mode-unresolved-shelf",
+        "conflict-path-collision-resolved",
+        "conflict-path-collision-unresolved-shelf",
+        "conflict-policy-resolved",
+        "conflict-policy-unresolved-shelf",
+        "conflict-resolution-mismatch",
+        "conflict-type-resolved",
+        "conflict-type-unresolved-shelf",
+        "conflict-unresolved-published",
+        "error-cbor-non-canonical",
+        "error-cbor-trailing-bytes",
+        "error-cbor-truncated",
+        "error-changeset-transition-invalid",
+        "error-conflict-subject-invalid",
+        "error-extension-key-invalid",
+        "error-fileid-allocation-exhausted",
+        "error-fileid-entropy-unavailable",
+        "error-fileid-lifetime-evidence-invalid",
+        "error-fixture-content-unavailable",
+        "error-fixture-mapping-missing",
+        "error-fixture-native-binding-missing",
+        "error-fixture-schema-unsupported",
+        "error-fixture-semantic-invalid",
+        "error-limit-memory",
+        "error-limit-scratch",
+        "error-limit-time",
+        "error-logical-record-type-unsupported",
+        "error-object-kind-unsupported",
+        "error-object-reference-format-unsupported",
+        "error-repository-descriptor-mismatch",
+        "error-schema-field-unknown",
+        "fileid-ancestral-restore",
+        "fileid-copy-fresh",
+        "fileid-import-lost-ack-retry",
+        "fileid-move-rename-preserves",
+        "fileid-zero",
+        "group-create",
+        "group-delete",
+        "group-external-key-duplicate",
+        "group-member-invalid",
+        "group-membership-overlap",
+        "group-required-role-missing",
+        "group-update",
+        "hash-tampered-object",
+        "history-base-mismatch",
+        "history-cross-repository-parent",
+        "history-duplicate-parent",
+        "history-eight-parent",
+        "history-missing-parent",
+        "history-ninth-parent",
+        "history-one-parent",
+        "history-parent-cycle",
+        "history-second-root",
+        "history-two-parent",
+        "history-zero-parent-root",
+        "limit-asset-group-members-max",
+        "limit-asset-group-members-max-plus-one",
+        "limit-asset-groups-max",
+        "limit-asset-groups-max-plus-one",
+        "limit-bundle-index-entries-max",
+        "limit-bundle-index-entries-max-plus-one",
+        "limit-bundle-largest-item-bytes-max",
+        "limit-bundle-largest-item-bytes-max-plus-one",
+        "limit-bundle-logical-records-max",
+        "limit-bundle-logical-records-max-plus-one",
+        "limit-bundle-objects-max",
+        "limit-bundle-objects-max-plus-one",
+        "limit-bundle-roots-max",
+        "limit-bundle-roots-max-plus-one",
+        "limit-bundle-sequence-bytes-max",
+        "limit-bundle-sequence-bytes-max-plus-one",
+        "limit-bundle-total-items-max",
+        "limit-bundle-total-items-max-plus-one",
+        "limit-bundle-traversal-edges-max",
+        "limit-bundle-traversal-edges-max-plus-one",
+        "limit-cbor-nesting-depth-max",
+        "limit-cbor-nesting-depth-max-plus-one",
+        "limit-change-set-operations-max",
+        "limit-change-set-operations-max-plus-one",
+        "limit-chunk-payload-bytes-max",
+        "limit-chunk-payload-bytes-max-plus-one",
+        "limit-extension-aggregate-bytes-per-object-max",
+        "limit-extension-aggregate-bytes-per-object-max-plus-one",
+        "limit-extensions-per-object-max",
+        "limit-extensions-per-object-max-plus-one",
+        "limit-generic-text-or-byte-value-bytes-max",
+        "limit-generic-text-or-byte-value-bytes-max-plus-one",
+        "limit-logical-file-bytes-max",
+        "limit-logical-file-bytes-max-plus-one",
+        "limit-manifest-chunks-max",
+        "limit-manifest-chunks-max-plus-one",
+        "limit-metadata-payload-bytes-max",
+        "limit-metadata-payload-bytes-max-plus-one",
+        "limit-path-bytes-max",
+        "limit-path-bytes-max-plus-one",
+        "limit-path-segment-bytes-max",
+        "limit-path-segment-bytes-max-plus-one",
+        "limit-path-segments-max",
+        "limit-path-segments-max-plus-one",
+        "limit-snapshot-message-bytes-max",
+        "limit-snapshot-message-bytes-max-plus-one",
+        "limit-snapshot-parents-max",
+        "limit-snapshot-parents-max-plus-one",
+        "limit-tree-entries-max",
+        "limit-tree-entries-max-plus-one",
+        "malformed-complete-corpus",
+        "manifest-annotation-invariance",
+        "manifest-chunk-length",
+        "manifest-corrupt-chunk",
+        "manifest-empty",
+        "manifest-length-sum-mismatch",
+        "manifest-logical-ceiling",
+        "manifest-multi-chunk",
+        "manifest-one-tib",
+        "manifest-repeated-chunk",
+        "manifest-unknown-profile",
+        "mutation-systematic-single-bit",
+        "provenance-acyclic",
+        "provenance-cycle",
+        "provenance-reaches-snapshot",
+        "registry-conformance-mode",
+        "registry-conformance-production",
+        "registry-deprecated-read",
+        "registry-deprecated-write",
+        "registry-duplicate",
+        "registry-invalid-entry",
+        "registry-ratified-read-write",
+        "registry-reassigned",
+        "registry-reserved",
+        "registry-unknown-extension-preserve",
+        "registry-unknown-feature",
+        "registry-unknown-feature-forward",
+        "registry-unknown-profile",
+        "shelf-chain-invalid",
+        "shelf-revision-chain",
+        "transition-copy",
+        "transition-create",
+        "transition-delete",
+        "transition-exact-result-mismatch",
+        "transition-group-create",
+        "transition-group-delete",
+        "transition-group-update",
+        "transition-merge-resolution",
+        "transition-modify",
+        "transition-move",
+        "transition-rename",
+        "transition-restore",
+        "transition-sequence-gap",
+        "tree-all-entry-kinds-modes",
+        "tree-empty",
+        "tree-entry-order",
+        "tree-entry-target",
+        "tree-manifest-length-mismatch",
+        "tree-million-entries",
+        "tree-path-core",
+        "tree-path-profile",
+        "tree-unicode",
+        "truncation-every-prefix"
+      ]
+    },
+    {
+      "requirementId": "OGVCS-002-FR-11",
+      "scenarios": [
+        "fileid-ancestral-restore",
+        "fileid-concurrent-loser",
+        "fileid-copy-reuse",
+        "fileid-create-reuse",
+        "fileid-cross-repository-proof",
+        "fileid-delete-recreate-reuse",
+        "fileid-duplicate-expanded-tree",
+        "fileid-import-conflict",
+        "fileid-import-lost-ack-retry",
+        "fileid-import-native-collision",
+        "fileid-move-source-forgery",
+        "fileid-restore-invalid-ancestry",
+        "fileid-restore-source-forgery",
+        "fileid-zero",
+        "group-external-key-duplicate",
+        "group-member-invalid",
+        "group-membership-overlap",
+        "group-required-role-missing",
+        "transition-exact-result-mismatch",
+        "transition-restore"
+      ]
+    },
+    {
+      "requirementId": "OGVCS-002-AC-03",
+      "scenarios": [
+        "hash-tampered-object",
+        "mutation-systematic-single-bit"
+      ]
+    },
+    {
+      "requirementId": "OGVCS-002-AC-04",
+      "scenarios": [
+        "error-fixture-content-unavailable",
+        "error-fixture-mapping-missing",
+        "error-fixture-native-binding-missing",
+        "error-fixture-schema-unsupported",
+        "error-fixture-semantic-invalid"
+      ]
+    },
+    {
+      "requirementId": "OGVCS-002-AC-06",
+      "scenarios": [
+        "history-cross-repository-parent",
+        "history-duplicate-parent",
+        "history-eight-parent",
+        "history-missing-parent",
+        "history-ninth-parent",
+        "history-one-parent",
+        "history-parent-cycle",
+        "history-second-root",
+        "history-two-parent",
+        "history-zero-parent-root"
+      ]
+    },
+    {
+      "requirementId": "OGVCS-002-AC-07",
+      "scenarios": [
+        "fileid-ancestral-restore",
+        "fileid-concurrent-loser",
+        "fileid-copy-fresh",
+        "fileid-copy-reuse",
+        "fileid-create-reuse",
+        "fileid-cross-repository-proof",
+        "fileid-delete-recreate-reuse",
+        "fileid-duplicate-expanded-tree",
+        "fileid-import-conflict",
+        "fileid-import-lost-ack-retry",
+        "fileid-import-native-collision",
+        "fileid-move-rename-preserves",
+        "fileid-move-source-forgery",
+        "fileid-restore-invalid-ancestry",
+        "fileid-restore-source-forgery",
+        "fileid-zero"
+      ]
+    },
+    {
+      "requirementId": "OGVCS-002-AC-08",
+      "scenarios": [
+        "bundle-declared-accounting",
+        "limit-asset-group-members-max",
+        "limit-asset-group-members-max-plus-one",
+        "limit-asset-groups-max",
+        "limit-asset-groups-max-plus-one",
+        "limit-bundle-index-entries-max",
+        "limit-bundle-index-entries-max-plus-one",
+        "limit-bundle-largest-item-bytes-max",
+        "limit-bundle-largest-item-bytes-max-plus-one",
+        "limit-bundle-logical-records-max",
+        "limit-bundle-logical-records-max-plus-one",
+        "limit-bundle-objects-max",
+        "limit-bundle-objects-max-plus-one",
+        "limit-bundle-roots-max",
+        "limit-bundle-roots-max-plus-one",
+        "limit-bundle-sequence-bytes-max",
+        "limit-bundle-sequence-bytes-max-plus-one",
+        "limit-bundle-total-items-max",
+        "limit-bundle-total-items-max-plus-one",
+        "limit-bundle-traversal-edges-max",
+        "limit-bundle-traversal-edges-max-plus-one",
+        "limit-cbor-nesting-depth-max",
+        "limit-cbor-nesting-depth-max-plus-one",
+        "limit-change-set-operations-max",
+        "limit-change-set-operations-max-plus-one",
+        "limit-chunk-payload-bytes-max",
+        "limit-chunk-payload-bytes-max-plus-one",
+        "limit-extension-aggregate-bytes-per-object-max",
+        "limit-extension-aggregate-bytes-per-object-max-plus-one",
+        "limit-extensions-per-object-max",
+        "limit-extensions-per-object-max-plus-one",
+        "limit-generic-text-or-byte-value-bytes-max",
+        "limit-generic-text-or-byte-value-bytes-max-plus-one",
+        "limit-logical-file-bytes-max",
+        "limit-logical-file-bytes-max-plus-one",
+        "limit-manifest-chunks-max",
+        "limit-manifest-chunks-max-plus-one",
+        "limit-metadata-payload-bytes-max",
+        "limit-metadata-payload-bytes-max-plus-one",
+        "limit-path-bytes-max",
+        "limit-path-bytes-max-plus-one",
+        "limit-path-segment-bytes-max",
+        "limit-path-segment-bytes-max-plus-one",
+        "limit-path-segments-max",
+        "limit-path-segments-max-plus-one",
+        "limit-snapshot-message-bytes-max",
+        "limit-snapshot-message-bytes-max-plus-one",
+        "limit-snapshot-parents-max",
+        "limit-snapshot-parents-max-plus-one",
+        "limit-tree-entries-max",
+        "limit-tree-entries-max-plus-one",
+        "malformed-complete-corpus",
+        "tree-manifest-length-mismatch",
+        "truncation-every-prefix"
+      ]
+    },
+    {
+      "requirementId": "OGVCS-002-AC-09",
+      "scenarios": [
+        "manifest-annotation-invariance",
+        "manifest-chunk-length",
+        "manifest-corrupt-chunk",
+        "manifest-empty",
+        "manifest-length-sum-mismatch",
+        "manifest-logical-ceiling",
+        "manifest-multi-chunk",
+        "manifest-one-tib",
+        "manifest-repeated-chunk",
+        "manifest-unknown-profile"
+      ]
+    },
+    {
+      "requirementId": "OGVCS-002-AC-10",
+      "scenarios": [
+        "bundle-budget",
+        "bundle-closure-extra",
+        "bundle-closure-missing",
+        "bundle-count",
+        "bundle-declared-accounting",
+        "bundle-duplicate",
+        "bundle-edge-families",
+        "bundle-eof",
+        "bundle-export-claim",
+        "bundle-item-header",
+        "bundle-item-logical-record",
+        "bundle-item-object",
+        "bundle-item-root",
+        "bundle-item-trailer",
+        "bundle-logical-reference-preservation",
+        "bundle-logical-type-1",
+        "bundle-logical-type-2",
+        "bundle-logical-type-3",
+        "bundle-logical-type-4",
+        "bundle-logical-type-5",
+        "bundle-logical-type-6",
+        "bundle-logical-type-7",
+        "bundle-logical-type-8",
+        "bundle-logical-type-9",
+        "bundle-mode",
+        "bundle-multi-root-disambiguation",
+        "bundle-object-id",
+        "bundle-object-kind-1",
+        "bundle-object-kind-10",
+        "bundle-object-kind-11",
+        "bundle-object-kind-2",
+        "bundle-object-kind-3",
+        "bundle-object-kind-4",
+        "bundle-object-kind-5",
+        "bundle-object-kind-6",
+        "bundle-object-kind-7",
+        "bundle-object-kind-8",
+        "bundle-object-kind-9",
+        "bundle-ordinal",
+        "bundle-record-id",
+        "bundle-root-invalid",
+        "bundle-root-kind-logical-record",
+        "bundle-root-kind-object",
+        "bundle-sort-order",
+        "bundle-trailer",
+        "bundle-wrong-kind",
+        "bundle-zero-sections"
+      ]
+    },
+    {
+      "requirementId": "OGVCS-002-AC-11",
+      "scenarios": [
+        "registry-conformance-mode",
+        "registry-conformance-production",
+        "registry-deprecated-read",
+        "registry-deprecated-write",
+        "registry-duplicate",
+        "registry-invalid-entry",
+        "registry-ratified-read-write",
+        "registry-reassigned",
+        "registry-reserved",
+        "registry-unknown-extension-preserve",
+        "registry-unknown-feature",
+        "registry-unknown-feature-forward",
+        "registry-unknown-profile"
+      ]
+    }
+  ],
+  "schema": "ogvcs.repository-format.v1.machine-coverage-matrix.v1",
+  "stableErrors": [
+    {
+      "code": "CBOR_TRUNCATED",
+      "scenarios": [
+        "error-cbor-truncated"
+      ]
+    },
+    {
+      "code": "CBOR_NON_CANONICAL",
+      "scenarios": [
+        "error-cbor-non-canonical"
+      ]
+    },
+    {
+      "code": "CBOR_TRAILING_BYTES",
+      "scenarios": [
+        "error-cbor-trailing-bytes"
+      ]
+    },
+    {
+      "code": "SCHEMA_FIELD_INVALID",
+      "scenarios": [
+        "conflict-mode-resolved",
+        "conflict-mode-unresolved-shelf"
+      ]
+    },
+    {
+      "code": "SCHEMA_FIELD_UNKNOWN",
+      "scenarios": [
+        "error-schema-field-unknown"
+      ]
+    },
+    {
+      "code": "LIMIT_METADATA_BYTES",
+      "scenarios": [
+        "limit-metadata-payload-bytes-max-plus-one"
+      ]
+    },
+    {
+      "code": "LIMIT_CHUNK_BYTES",
+      "scenarios": [
+        "limit-chunk-payload-bytes-max-plus-one"
+      ]
+    },
+    {
+      "code": "LIMIT_NESTING",
+      "scenarios": [
+        "limit-cbor-nesting-depth-max-plus-one"
+      ]
+    },
+    {
+      "code": "LIMIT_COUNT",
+      "scenarios": [
+        "limit-asset-group-members-max-plus-one",
+        "limit-asset-groups-max-plus-one",
+        "limit-change-set-operations-max-plus-one",
+        "limit-extensions-per-object-max-plus-one",
+        "limit-manifest-chunks-max-plus-one",
+        "limit-tree-entries-max-plus-one"
+      ]
+    },
+    {
+      "code": "LIMIT_MEMORY",
+      "scenarios": [
+        "error-limit-memory"
+      ]
+    },
+    {
+      "code": "LIMIT_SCRATCH",
+      "scenarios": [
+        "error-limit-scratch"
+      ]
+    },
+    {
+      "code": "LIMIT_TIME",
+      "scenarios": [
+        "error-limit-time"
+      ]
+    },
+    {
+      "code": "LIMIT_VALUE_BYTES",
+      "scenarios": [
+        "limit-generic-text-or-byte-value-bytes-max-plus-one",
+        "limit-snapshot-message-bytes-max-plus-one"
+      ]
+    },
+    {
+      "code": "LIMIT_EXTENSION_BYTES",
+      "scenarios": [
+        "limit-extension-aggregate-bytes-per-object-max-plus-one"
+      ]
+    },
+    {
+      "code": "LIMIT_LOGICAL_BYTES",
+      "scenarios": [
+        "limit-logical-file-bytes-max-plus-one",
+        "manifest-logical-ceiling"
+      ]
+    },
+    {
+      "code": "OBJECT_ID_MISMATCH",
+      "scenarios": [
+        "bundle-object-id",
+        "hash-tampered-object",
+        "provenance-reaches-snapshot"
+      ]
+    },
+    {
+      "code": "OBJECT_REFERENCE_FORMAT_UNSUPPORTED",
+      "scenarios": [
+        "error-object-reference-format-unsupported"
+      ]
+    },
+    {
+      "code": "OBJECT_REFERENCE_KIND_MISMATCH",
+      "scenarios": [
+        "bundle-wrong-kind"
+      ]
+    },
+    {
+      "code": "OBJECT_REFERENCE_MISSING",
+      "scenarios": [
+        "history-missing-parent"
+      ]
+    },
+    {
+      "code": "REQUIRED_FEATURE_UNSUPPORTED",
+      "scenarios": [
+        "registry-unknown-feature"
+      ]
+    },
+    {
+      "code": "PROFILE_UNKNOWN",
+      "scenarios": [
+        "manifest-unknown-profile",
+        "registry-unknown-profile"
+      ]
+    },
+    {
+      "code": "PROFILE_CONFORMANCE_ONLY",
+      "scenarios": [
+        "registry-conformance-production"
+      ]
+    },
+    {
+      "code": "REPOSITORY_DESCRIPTOR_MISMATCH",
+      "scenarios": [
+        "error-repository-descriptor-mismatch"
+      ]
+    },
+    {
+      "code": "OBJECT_KIND_UNSUPPORTED",
+      "scenarios": [
+        "error-object-kind-unsupported"
+      ]
+    },
+    {
+      "code": "PROFILE_STATE_FORBIDDEN",
+      "scenarios": [
+        "registry-deprecated-write",
+        "registry-reserved"
+      ]
+    },
+    {
+      "code": "REGISTRY_INVALID",
+      "scenarios": [
+        "registry-duplicate",
+        "registry-invalid-entry",
+        "registry-reassigned"
+      ]
+    },
+    {
+      "code": "EXTENSION_KEY_INVALID",
+      "scenarios": [
+        "error-extension-key-invalid"
+      ]
+    },
+    {
+      "code": "LOGICAL_RECORD_TYPE_UNSUPPORTED",
+      "scenarios": [
+        "error-logical-record-type-unsupported"
+      ]
+    },
+    {
+      "code": "MANIFEST_CHUNK_LENGTH_INVALID",
+      "scenarios": [
+        "manifest-chunk-length"
+      ]
+    },
+    {
+      "code": "MANIFEST_LENGTH_MISMATCH",
+      "scenarios": [
+        "manifest-length-sum-mismatch"
+      ]
+    },
+    {
+      "code": "MANIFEST_FILE_DIGEST_MISMATCH",
+      "scenarios": [
+        "manifest-corrupt-chunk"
+      ]
+    },
+    {
+      "code": "TREE_ENTRY_ORDER_INVALID",
+      "scenarios": [
+        "tree-entry-order"
+      ]
+    },
+    {
+      "code": "TREE_ENTRY_TARGET_INVALID",
+      "scenarios": [
+        "tree-entry-target",
+        "tree-manifest-length-mismatch"
+      ]
+    },
+    {
+      "code": "PATH_CORE_INVALID",
+      "scenarios": [
+        "limit-path-bytes-max-plus-one",
+        "limit-path-segment-bytes-max-plus-one",
+        "limit-path-segments-max-plus-one",
+        "tree-path-core"
+      ]
+    },
+    {
+      "code": "PATH_PROFILE_INVALID",
+      "scenarios": [
+        "tree-path-profile"
+      ]
+    },
+    {
+      "code": "SNAPSHOT_ROOT_INVALID",
+      "scenarios": [
+        "history-second-root"
+      ]
+    },
+    {
+      "code": "SNAPSHOT_PARENT_COUNT_INVALID",
+      "scenarios": [
+        "history-ninth-parent",
+        "limit-snapshot-parents-max-plus-one"
+      ]
+    },
+    {
+      "code": "SNAPSHOT_PARENT_DUPLICATE",
+      "scenarios": [
+        "history-duplicate-parent"
+      ]
+    },
+    {
+      "code": "SNAPSHOT_PARENT_CYCLE",
+      "scenarios": [
+        "history-parent-cycle"
+      ]
+    },
+    {
+      "code": "SNAPSHOT_PARENT_CROSS_REPOSITORY",
+      "scenarios": [
+        "history-cross-repository-parent"
+      ]
+    },
+    {
+      "code": "CHANGESET_BASE_MISMATCH",
+      "scenarios": [
+        "history-base-mismatch"
+      ]
+    },
+    {
+      "code": "CHANGESET_SEQUENCE_INVALID",
+      "scenarios": [
+        "transition-sequence-gap"
+      ]
+    },
+    {
+      "code": "CHANGESET_TRANSITION_INVALID",
+      "scenarios": [
+        "error-changeset-transition-invalid"
+      ]
+    },
+    {
+      "code": "CHANGESET_RESULT_MISMATCH",
+      "scenarios": [
+        "transition-exact-result-mismatch"
+      ]
+    },
+    {
+      "code": "FILEID_ZERO",
+      "scenarios": [
+        "fileid-zero"
+      ]
+    },
+    {
+      "code": "FILEID_DUPLICATE_IN_TREE",
+      "scenarios": [
+        "fileid-duplicate-expanded-tree"
+      ]
+    },
+    {
+      "code": "FILEID_ALREADY_CONSUMED",
+      "scenarios": [
+        "fileid-copy-reuse",
+        "fileid-create-reuse",
+        "fileid-delete-recreate-reuse"
+      ]
+    },
+    {
+      "code": "FILEID_SOURCE_MISMATCH",
+      "scenarios": [
+        "fileid-move-source-forgery"
+      ]
+    },
+    {
+      "code": "FILEID_RESTORE_PROOF_INVALID",
+      "scenarios": [
+        "fileid-restore-invalid-ancestry",
+        "fileid-restore-source-forgery"
+      ]
+    },
+    {
+      "code": "FILEID_CROSS_REPOSITORY_PROOF",
+      "scenarios": [
+        "fileid-cross-repository-proof"
+      ]
+    },
+    {
+      "code": "FILEID_IMPORT_MAPPING_CONFLICT",
+      "scenarios": [
+        "fileid-import-conflict",
+        "fileid-import-native-collision"
+      ]
+    },
+    {
+      "code": "FILEID_ALLOCATION_COLLISION",
+      "scenarios": [
+        "fileid-concurrent-loser"
+      ]
+    },
+    {
+      "code": "FILEID_ENTROPY_UNAVAILABLE",
+      "scenarios": [
+        "error-fileid-entropy-unavailable"
+      ]
+    },
+    {
+      "code": "FILEID_ALLOCATION_EXHAUSTED",
+      "scenarios": [
+        "error-fileid-allocation-exhausted"
+      ]
+    },
+    {
+      "code": "FILEID_LIFETIME_EVIDENCE_INVALID",
+      "scenarios": [
+        "error-fileid-lifetime-evidence-invalid"
+      ]
+    },
+    {
+      "code": "GROUP_MEMBER_INVALID",
+      "scenarios": [
+        "group-member-invalid"
+      ]
+    },
+    {
+      "code": "GROUP_MEMBERSHIP_OVERLAP",
+      "scenarios": [
+        "group-membership-overlap"
+      ]
+    },
+    {
+      "code": "GROUP_REQUIRED_ROLE_MISSING",
+      "scenarios": [
+        "group-required-role-missing"
+      ]
+    },
+    {
+      "code": "GROUP_EXTERNAL_KEY_DUPLICATE",
+      "scenarios": [
+        "group-external-key-duplicate"
+      ]
+    },
+    {
+      "code": "CONFLICT_ID_MISMATCH",
+      "scenarios": [
+        "conflict-id-mismatch"
+      ]
+    },
+    {
+      "code": "CONFLICT_UNRESOLVED_PUBLISHED",
+      "scenarios": [
+        "conflict-unresolved-published"
+      ]
+    },
+    {
+      "code": "CONFLICT_RESOLUTION_MISMATCH",
+      "scenarios": [
+        "conflict-resolution-mismatch"
+      ]
+    },
+    {
+      "code": "SHELF_CHAIN_INVALID",
+      "scenarios": [
+        "shelf-chain-invalid"
+      ]
+    },
+    {
+      "code": "PROVENANCE_CYCLE",
+      "scenarios": [
+        "provenance-cycle"
+      ]
+    },
+    {
+      "code": "ATTESTATION_SIGNATURE_SHAPE_INVALID",
+      "scenarios": [
+        "attestation-signature-shape"
+      ]
+    },
+    {
+      "code": "CONFLICT_SUBJECT_INVALID",
+      "scenarios": [
+        "error-conflict-subject-invalid"
+      ]
+    },
+    {
+      "code": "BUNDLE_SEQUENCE_INVALID",
+      "scenarios": [
+        "bundle-count",
+        "bundle-eof",
+        "bundle-ordinal",
+        "bundle-sort-order"
+      ]
+    },
+    {
+      "code": "BUNDLE_BUDGET_EXCEEDED",
+      "scenarios": [
+        "bundle-budget",
+        "bundle-declared-accounting",
+        "limit-bundle-index-entries-max-plus-one",
+        "limit-bundle-largest-item-bytes-max-plus-one",
+        "limit-bundle-logical-records-max-plus-one",
+        "limit-bundle-objects-max-plus-one",
+        "limit-bundle-roots-max-plus-one",
+        "limit-bundle-sequence-bytes-max-plus-one",
+        "limit-bundle-total-items-max-plus-one",
+        "limit-bundle-traversal-edges-max-plus-one"
+      ]
+    },
+    {
+      "code": "BUNDLE_RECORD_ID_MISMATCH",
+      "scenarios": [
+        "bundle-record-id"
+      ]
+    },
+    {
+      "code": "BUNDLE_TRAILER_MISMATCH",
+      "scenarios": [
+        "bundle-trailer"
+      ]
+    },
+    {
+      "code": "BUNDLE_DUPLICATE_IDENTITY",
+      "scenarios": [
+        "bundle-duplicate"
+      ]
+    },
+    {
+      "code": "BUNDLE_CLOSURE_MISSING",
+      "scenarios": [
+        "bundle-closure-missing"
+      ]
+    },
+    {
+      "code": "BUNDLE_CLOSURE_EXTRA",
+      "scenarios": [
+        "bundle-closure-extra"
+      ]
+    },
+    {
+      "code": "BUNDLE_ROOT_INVALID",
+      "scenarios": [
+        "bundle-root-invalid"
+      ]
+    },
+    {
+      "code": "BUNDLE_EXPORT_CLAIM_FORBIDDEN",
+      "scenarios": [
+        "bundle-export-claim"
+      ]
+    },
+    {
+      "code": "BUNDLE_MODE_UNSUPPORTED",
+      "scenarios": [
+        "bundle-mode"
+      ]
+    },
+    {
+      "code": "FIXTURE_SCHEMA_UNSUPPORTED",
+      "scenarios": [
+        "error-fixture-schema-unsupported"
+      ]
+    },
+    {
+      "code": "FIXTURE_SEMANTIC_INVALID",
+      "scenarios": [
+        "error-fixture-semantic-invalid"
+      ]
+    },
+    {
+      "code": "FIXTURE_MAPPING_MISSING",
+      "scenarios": [
+        "error-fixture-mapping-missing"
+      ]
+    },
+    {
+      "code": "FIXTURE_CONTENT_UNAVAILABLE",
+      "scenarios": [
+        "error-fixture-content-unavailable"
+      ]
+    },
+    {
+      "code": "FIXTURE_NATIVE_BINDING_MISSING",
+      "scenarios": [
+        "error-fixture-native-binding-missing"
+      ]
+    }
+  ],
+  "totals": {
+    "materialization": {
+      "byte-materialized-bundle-case-specific": 47,
+      "byte-materialized-direct-artifact": 5,
+      "byte-materialized-object-graph": 96,
+      "byte-materialized-operation-request": 7,
+      "byte-materialized-stable-error-artifact": 8,
+      "executable-configured-resource-constructor": 3,
+      "executable-enumerated-registry-recipe": 10,
+      "executable-fixture-adapter-constructor": 5,
+      "executable-virtual-limit-constructor": 50,
+      "prevalidated-abstract-graph": 2,
+      "virtual-constructor": 2
+    },
+    "obligations": 148,
+    "scenarios": 235,
+    "stableErrors": 81
+  }
+}

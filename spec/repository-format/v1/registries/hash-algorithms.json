@@ -1,0 +1,26 @@
+{
+  "entries": [
+    {
+      "code": 1,
+      "digestBytes": 32,
+      "name": "sha256",
+      "state": "ratified"
+    }
+  ],
+  "formatVersion": 1,
+  "registry": "ogvcs.repository-format.hash-algorithms",
+  "registryVersion": 1,
+  "reserved": [
+    {
+      "from": 0,
+      "reason": "invalid sentinel",
+      "to": 0
+    }
+  ],
+  "unassigned": [
+    {
+      "from": 2,
+      "to": 65535
+    }
+  ]
+}

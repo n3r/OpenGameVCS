@@ -1,0 +1,38 @@
+{
+  "name": "@opengamevcs/object-model",
+  "version": "0.1.0",
+  "description": "Clean-room JavaScript codec for OpenGameVCS repository format v1",
+  "type": "module",
+  "bin": {
+    "ogvcs-object": "bin/ogvcs-object.mjs"
+  },
+  "exports": "./src/index.js",
+  "files": [
+    "bin",
+    "examples",
+    "LICENSE",
+    "README.md",
+    "registries",
+    "scripts/run-scale.mjs",
+    "src"
+  ],
+  "scripts": {
+    "check": "node --check src/index.js && node --check src/cli.js && node --check src/fixture-adapter.js && node --check src/hard-limits.js && node --check src/scale-util.js && node --check src/tree-stream.js && node --check src/manifest-stream.js && node --check src/bundle-scratch.js && node --check src/bundle-spool.js && node --check bin/ogvcs-object.mjs && node --check scripts/run-scale.mjs && node --check test/codec.test.mjs && node --check test/scale-stream.test.mjs && node scripts/sync-registries.mjs --check",
+    "sync:registries": "node scripts/sync-registries.mjs",
+    "test": "node --test --test-concurrency=1 test/*.test.mjs",
+    "test:scale": "node scripts/run-scale.mjs",
+    "test:scale:smoke": "node scripts/run-scale.mjs --smoke"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "peerDependencies": {
+    "@opengamevcs/fixture-generator": "1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@opengamevcs/fixture-generator": {
+      "optional": true
+    }
+  },
+  "license": "MIT"
+}

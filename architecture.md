@@ -1,8 +1,8 @@
 # OpenGameVCS architecture
 
 **Status:** Proposed implementation baseline  
-**Architecture version:** 0.2  
-**Last updated:** 2026-08-14  
+**Architecture version:** 0.3
+**Last updated:** 2026-08-15
 **Applies to:** [OpenGameVCS delivery roadmap](prd/ROADMAP.md)  
 **Source:** [Game-development VCS analysis and proposal](GAME_DEV_VCS_ANALYSIS.md)
 
@@ -49,7 +49,7 @@ These invariants have priority over performance and convenience:
 1. **Content-complete acknowledgement.** A branch can reference a snapshot only after every required manifest and chunk is verified and marked durable. An acknowledged snapshot must never intentionally reference missing content.
 2. **One metadata authority.** All authoritative mutations for a repository—branch/tag heads, snapshots, locks, policy, audit, outbox, retention coordination—serialize through one fenced transactional authority.
 3. **Immutable published history.** Published snapshots, trees, manifests, and chunks are immutable. Correction creates new objects and new history; it never edits bytes under an existing ID.
-4. **Canonical identity.** Interoperable objects use canonical domain-separated serialization and SHA-256 IDs in format version 1. Physical database rows, pack files, compression, and backend keys do not define logical identity.
+4. **Canonical identity.** Format version 1 uses the deterministic-CBOR profile and domain-separated SHA-256 object IDs fixed by ADR-0008. Canonical framing scan, known-kind schema validation, and semantic feature/profile validation are distinct reported layers: readers may hash and byte-preserve canonical objects with unsupported required features but never interpret them semantically. No layer normalizes noncanonical input. Physical database rows, pack files, compression, and backend keys do not define logical identity.
 5. **Stable file identity.** Move and rename preserve an opaque repository-scoped `FileID`; copy creates a new `FileID`. Locks, history, reviews, and integrations follow `FileID`, not only a path string.
 6. **Canonical paths.** Paths are slash-separated relative UTF-8 NFC segments under an immutable repository case/platform profile. The server rejects collisions and unsafe materialization states before publication.
 7. **Authorization before disclosure.** Every list, tree, history, lock, event, search, review, preview, export, and object operation applies the same versioned policy contract. A denied actor must not learn protected existence or metadata through another surface.
@@ -221,15 +221,20 @@ A snapshot is an immutable canonical object containing:
 - zero or more ordered parent snapshot IDs;
 - root tree ID;
 - author/committer references and timestamps;
-- message and optional issue/review references;
+- message;
 - exact ordered path/FileID operations;
-- policy result and optional signatures/provenance.
+- policy result and optional provenance references.
+
+Issue and review associations are service-owned references to the completed
+snapshot; format v1 does not place issue or review fields in snapshot bytes.
 
 The snapshot graph alone is sufficient to reconstruct immutable history. Mutable branches, locks, live sessions, and search indexes are not required to interpret snapshot bytes.
 
+Attestations and signatures point to the completed snapshot ID and are discovered as inbound subject references; the snapshot does not point back to an attestation that signs it. Snapshot-reachable provenance is permitted only when it is created first and has no backlink, so canonical identity never contains a signature cycle.
+
 ### 6.3 Tree and tree entry
 
-A logical tree is immutable and streamable/paged. Its physical database representation may be sharded or indexed, but its canonical logical encoding remains stable. Each entry contains:
+A canonical tree represents exactly one directory as a definite entry array strictly ordered by NFC UTF-8 basename bytes. Encoding and verification operate over an ordered iterator and do not require materializing the array. A physical representation may be sharded or indexed only as a source for that iterator; page boundaries are never canonical bytes and cannot affect identity. Each named entry, including a directory, contains:
 
 - canonical name and entry kind;
 - stable `FileID`;
@@ -243,11 +248,13 @@ Format version 1 represents `FileID` as an opaque 128-bit value. Native clients 
 
 The server distinguishes create, copy, move, restore, and import operations. Create/copy must introduce a previously unused FileID; move/rename must prove the FileID exists at the expected base; restore may reuse a historical FileID only through the explicit restore rule. A repository-scoped unique registry and final-transaction checks reject duplicate, forged, cross-repository, or concurrently colliding IDs. Importers allocate IDs once, persist source-to-target mappings, and reuse those mappings on retry rather than derive identity from a mutable path.
 
+OGVCS-002 fixes lexical segment bytes and ordering plus the entry-kind and portable-mode codepoints used in canonical trees. It also fixes hard parser/object maxima, including the one-million-entry tree ceiling. OGVCS-004 consumes those bytes and owns joined-path validity, case folding and collision keys, supported-platform profiles, reserved names, symlink/materialization rules, and filesystem safety; its ratified profiles select operational segment/path/depth limits no greater than the core maxima. A case-only rename therefore changes canonical tree bytes while preserving FileID; the configured path profile decides whether that operation is admissible.
+
 ### 6.4 Content manifest, chunk, and pack
 
-A file version points to a canonical manifest containing the ordered chunk sequence, chunk lengths, file length, whole-file SHA-256, and chunker/profile version. Chunk boundaries are content-defined for configured large-file classes and are always versioned.
+A file version points to the OGVCS-002 `ContentManifestV1` envelope containing logical length, typed whole-file SHA-256, a registered chunk-profile reference, and an ordered sequence of typed chunk IDs and lengths. OGVCS-002 owns these canonical bytes and the object/chunk hash preimages. OGVCS-007 owns production content-defined boundary algorithms, fingerprint input and parameters, policy selection, streaming generation/reconstruction, and ratified chunk-profile entries; it cannot redefine the envelope or preimages.
 
-Chunks are logical content objects. Packs are a physical storage/transfer optimization that group chunks and provide an index for range reads. Repacking, recompression, cache placement, or backend migration cannot change a manifest, chunk ID, or file digest.
+Chunks are logical content objects. OGVCS-008 owns packs, compression, placement, and transfer framing as physical optimizations that group chunks and provide indexes for range reads. Repacking, recompression, cache placement, or backend migration cannot change a manifest, chunk ID, or file digest. A nonidentity hint is a non-object typed logical annotation record that references its subject ObjectID and a registered payload profile. It is excluded from the subject preimage but protected by bundle/export integrity.
 
 Deduplication is scoped to the configured security tenant by default. It is an optimization, not an authorization mechanism or guaranteed compression ratio.
 
@@ -270,6 +277,14 @@ A shelf revision is immutable and content-complete but does not advance a branch
 ### 6.9 Audit and outbox
 
 Privileged and security-relevant mutations append typed, access-controlled audit records. State changes that require external notification append an outbox record in the same metadata transaction. Outbox delivery is at least once; event IDs and consumer idempotency provide convergence.
+
+### 6.10 Core graph, profile registries, and logical exchange
+
+The format-v1 immutable graph and transition rules are fixed by ADR-0009. A repository has exactly one designated zero-parent root; every other snapshot has one to eight ordered, unique parents in the same repository and reaches that root. The first parent is the change-set base. Published snapshots are conflict-free, and replay of their ordered transitions must reproduce their declared tree and group roots. Canonical logical exchange/reference projections may carry branch/tag pointers, pending-change references, latest-shelf pointers, lock references, and lifetime/import facts, but they are not immutable snapshot dependencies and do not exhaust or constrain the authoritative mutable schemas and state machines owned by OGVCS-006, OGVCS-010, OGVCS-016, OGVCS-018, and OGVCS-025. Review, audit/outbox, and lifecycle-receipt state remain with those owners unless a later additive registry assignment defines a bounded exchange projection.
+
+Core schemas refer to additive path, chunking, content-policy, group, feature, extension, annotation-payload, and logical-record registries through immutable `ProfileRef` values. Registry IDs are never reassigned or redefined; new behavior receives a new ID or major version. Reserved entries cannot appear in data; conformance-only entries are limited to declared tests; ratified entries are readable/writable; deprecated entries remain readable but cannot be selected for new production writes. Unknown required entries fail semantic validation, while canonical framing can still hash/store/forward their bytes and promised lossless processing preserves unknown optional extensions.
+
+OGVCS-002 defines a deterministic, bounded CBOR-sequence logical bundle for a caller-supplied set of canonical objects and typed logical records, declared roots, and an integrity trailer. It validates the supplied set and root closure only. This exchange form is not a product export and makes no authorization, consistent-generation, repository-completeness, fidelity, projection, signature, volume, incremental, restoration, or import claim.
 
 ## 7. State ownership and consistency
 
@@ -698,10 +713,12 @@ The native code+asset snapshot remains authoritative. A configured authorized pa
 
 ### Open export
 
+Export profiles consume OGVCS-002 canonical object bytes and typed logical records without redefining their hash preimages. The OGVCS-002 logical bundle is not evidence that repository selection was authorized, generation-consistent, or complete.
+
 Export has two non-interchangeable modes:
 
 - **Repository-complete fidelity export** requires the exporter to be authorized for every selected reachable immutable and mutable record. Mixed-visibility selection fails atomically before writing a usable container. It preserves canonical object/snapshot/root IDs and is the only mode that claims identical-root restoration.
-- **Authorized projection export** emits only the caller's authorized view. It constructs a new projected graph with new tree/snapshot IDs, a non-authoritative projection namespace, explicit omitted-data markers that do not reveal protected identity/counts, and a signed provenance/redaction mapping accessible only under the export policy. It never claims full-fidelity restoration or identity with the source roots.
+- **Authorized projection export** emits only the caller's authorized view. Every projection creates a distinct repository descriptor with a new repository identity, required projection feature, declared identity class, and public non-disclosing provenance reference. Every repository-scoped projected object binds that descriptor, forcing new tree/snapshot IDs even for a full-view projection; path-independent manifests/chunks may retain content IDs. It uses the core hash formula rather than a private preimage, records explicit non-disclosing omissions plus protected signed provenance/redaction mapping, and never claims full-fidelity restoration or identity with the source roots.
 
 Both modes exclude secrets/private keys/tokens and use a separately implemented offline verifier for their declared profile. Clean import of a fidelity export stages, verifies, and atomically publishes identical roots with reconciliation evidence. Projection import publishes a distinct derived history and cannot replace or masquerade as its source repository.
 
@@ -721,8 +738,11 @@ These choices are defaults, not substitutes for the logical contracts:
 | Local workspace index | Embedded transactional database/journal, expected SQLite-class solution | Deferred concrete choice; OGVCS-012 |
 | Object backend | Confined filesystem for development/small installs; S3-compatible immutable store for production | Baseline; OGVCS-008/021 |
 | Object IDs | SHA-256 with domain-separated canonical preimages | Format-v1 invariant; OGVCS-002 |
-| Chunking | Versioned content-defined profile with whole-file hash | Algorithm/parameters deferred to OGVCS-007 benchmarks |
-| Path representation | Relative slash-separated UTF-8 NFC; immutable case/platform profile | Invariant; OGVCS-004 |
+| Content manifest and chunk identity | OGVCS-002 `ContentManifestV1`, raw logical chunks, whole-file SHA-256 | Format-v1 invariant; OGVCS-002 |
+| Chunking profiles | Versioned content-defined boundaries and parameters | Algorithm/profile entries deferred to OGVCS-007 benchmarks |
+| Pack and transfer representation | Identity-neutral versioned pack/compression framing | Deferred to OGVCS-008 |
+| Tree segment representation | NFC UTF-8 basename bytes, canonical order, entry/mode codepoints | Format-v1 invariant; OGVCS-002 |
+| Repository path semantics | Relative slash-joined paths under immutable case/platform profiles | Invariant/profile entries; OGVCS-004 |
 | Authentication | OIDC PKCE/device plus scoped service identities and recovery bootstrap | Baseline; OGVCS-009 |
 | Public API transport | HTTPS, schema-first, capability-negotiated baseline with generated bindings | R0 baseline; OGVCS-041, extended by OGVCS-036 |
 | Events | Transactional database outbox; no broker required initially | Invariant/default; OGVCS-006/019 |
@@ -804,12 +824,13 @@ Dependency direction is inward toward public foundation/core packages. Clients a
 
 | Decision | Required by | Owning PRD |
 |---|---|---|
-| Canonical encoding, hash preimages, extension rules and FileID vectors | R0 format freeze | OGVCS-002 |
+| Canonical object/chunk/manifest encoding, hash preimages, registries, extension rules, logical bundle and FileID vectors | R0 format freeze | OGVCS-002 |
 | Permission/resource vocabulary, redaction model, grant claims, threat assumptions | R0 security-contract freeze | OGVCS-003 |
 | Case-fold algorithm, platform profile, path/entry limits, symlink semantics | R0 path-library freeze | OGVCS-004 |
 | Benchmark/fault driver protocol and invariant result format | R0 exit | OGVCS-005 |
 | Metadata physical schema, isolation level/CAS strategy, consistency token | Before metadata writes | OGVCS-006 |
-| CDC algorithm/parameters, manifest and pack framing | Before content compatibility freeze | OGVCS-007/008 |
+| CDC profiles, fingerprint algorithm/parameters and selection policy | Before content compatibility freeze | OGVCS-007 |
+| Pack, compression and transfer framing | Before storage compatibility freeze | OGVCS-008 |
 | Public control/transfer wire transport, errors, negotiation and generated binding strategy | Before R1 API implementation | OGVCS-041 |
 | Audit integrity/checkpoint mechanism and policy-cache invalidation | Before authorization enforcement | OGVCS-009 |
 | Local index engine/layout and watcher adapter contract | Before scalable status | OGVCS-012 |

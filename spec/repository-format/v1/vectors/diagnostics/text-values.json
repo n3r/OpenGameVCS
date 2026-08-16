@@ -1,0 +1,109 @@
+{
+  "fileIds": [
+    {
+      "bytesHex": "11111111111111111111111111111111",
+      "text": "fid:11111111111111111111111111111111"
+    },
+    {
+      "bytesHex": "12121212121212121212121212121212",
+      "text": "fid:12121212121212121212121212121212"
+    },
+    {
+      "bytesHex": "13131313131313131313131313131313",
+      "text": "fid:13131313131313131313131313131313"
+    },
+    {
+      "bytesHex": "14141414141414141414141414141414",
+      "text": "fid:14141414141414141414141414141414"
+    },
+    {
+      "bytesHex": "51515151515151515151515151515151",
+      "text": "fid:51515151515151515151515151515151"
+    },
+    {
+      "bytesHex": "53535353535353535353535353535353",
+      "text": "fid:53535353535353535353535353535353"
+    },
+    {
+      "bytesHex": "60606060606060606060606060606060",
+      "text": "fid:60606060606060606060606060606060"
+    },
+    {
+      "bytesHex": "81818181818181818181818181818181",
+      "text": "fid:81818181818181818181818181818181"
+    }
+  ],
+  "objectRefs": [
+    {
+      "kind": 1,
+      "kindName": "chunk",
+      "objectId": "944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5",
+      "text": "ogvcs:v1:chunk:sha256:944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5"
+    },
+    {
+      "kind": 2,
+      "kindName": "content-manifest",
+      "objectId": "82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12",
+      "text": "ogvcs:v1:content-manifest:sha256:82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+    },
+    {
+      "kind": 3,
+      "kindName": "tree",
+      "objectId": "9458b24239ce71b75b1c6ab857883d66a6eab3f0f6f4e9afab15371af1d4bf19",
+      "text": "ogvcs:v1:tree:sha256:9458b24239ce71b75b1c6ab857883d66a6eab3f0f6f4e9afab15371af1d4bf19"
+    },
+    {
+      "kind": 4,
+      "kindName": "change-set",
+      "objectId": "9cda477b4303c876fc79feb4cbd0a5deda70011261bd81fc758b588872040720",
+      "text": "ogvcs:v1:change-set:sha256:9cda477b4303c876fc79feb4cbd0a5deda70011261bd81fc758b588872040720"
+    },
+    {
+      "kind": 5,
+      "kindName": "asset-group-set",
+      "objectId": "3b4641600c6951bfe3c96e4a9ccb28b424b20d8c251db5efcda65fd0c8bd4c7e",
+      "text": "ogvcs:v1:asset-group-set:sha256:3b4641600c6951bfe3c96e4a9ccb28b424b20d8c251db5efcda65fd0c8bd4c7e"
+    },
+    {
+      "kind": 6,
+      "kindName": "repository-descriptor",
+      "objectId": "dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+      "text": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+    },
+    {
+      "kind": 7,
+      "kindName": "snapshot",
+      "objectId": "cc4d4a4a7be098bc74f5bb97cfe1eb37d870832dd44c56f0ceac12d65f871290",
+      "text": "ogvcs:v1:snapshot:sha256:cc4d4a4a7be098bc74f5bb97cfe1eb37d870832dd44c56f0ceac12d65f871290"
+    },
+    {
+      "kind": 8,
+      "kindName": "shelf-revision",
+      "objectId": "552198509e456e40abdce5e9746c5d2f6ed47a639e79c3bb1dd319f4f65fa14f",
+      "text": "ogvcs:v1:shelf-revision:sha256:552198509e456e40abdce5e9746c5d2f6ed47a639e79c3bb1dd319f4f65fa14f"
+    },
+    {
+      "kind": 9,
+      "kindName": "provenance",
+      "objectId": "792a6322c62aaf3096be4d5c86e2850b01d8892083f58c3304dc52530c079235",
+      "text": "ogvcs:v1:provenance:sha256:792a6322c62aaf3096be4d5c86e2850b01d8892083f58c3304dc52530c079235"
+    },
+    {
+      "kind": 10,
+      "kindName": "attestation",
+      "objectId": "56fdc7943a314d8dcf628508f5abcbde57a9cbc15910eb6fe4527351d2eeec18",
+      "text": "ogvcs:v1:attestation:sha256:56fdc7943a314d8dcf628508f5abcbde57a9cbc15910eb6fe4527351d2eeec18"
+    },
+    {
+      "kind": 11,
+      "kindName": "conflict-set",
+      "objectId": "59f7814cfab891685197abebc61ea70cdca2a2328feab3c4cec816d4eabfca07",
+      "text": "ogvcs:v1:conflict-set:sha256:59f7814cfab891685197abebc61ea70cdca2a2328feab3c4cec816d4eabfca07"
+    }
+  ],
+  "parsePolicy": {
+    "fileId": "accept exactly fid: followed by 32 lowercase hexadecimal digits and reject the all-zero value",
+    "objectRef": "accept exactly ogvcs:v1:<registered-kind-textToken>:sha256:<64 lowercase hexadecimal digits> with no whitespace or aliases"
+  },
+  "schema": "ogvcs.repository-format.v1.text-constructor-values.v1"
+}

@@ -1,0 +1,14 @@
+{
+  "independentlyReproducible": {
+    "formatVersionUint16beHex": "0001",
+    "formula": "SHA-256(objectDomainHex || formatVersionUint16beHex || kindUint16beHex || payloadHex)",
+    "kindUint16beHex": "0001",
+    "objectDomainAscii": "OpenGameVCS object\\0",
+    "objectDomainHex": "4f70656e47616d65564353206f626a65637400",
+    "objectId": "944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5",
+    "payloadAsciiEscaped": "OpenGameVCS\\n",
+    "payloadHex": "4f70656e47616d655643530a",
+    "preimageHex": "4f70656e47616d65564353206f626a65637400000100014f70656e47616d655643530a"
+  },
+  "schema": "ogvcs.repository-format.v1.hand-auditable-seed.v1"
+}

@@ -1,0 +1,148 @@
+{
+  "algorithm": {
+    "id": "ogvcs.repository-validation-scenario-constructor",
+    "version": 1
+  },
+  "arithmetic": "mathematical nonnegative integers with explicit uint64 decode bounds; no host-width overflow is a semantic test oracle",
+  "detail": "replay canonical operations whose actual tree root differs from the candidate snapshot tree",
+  "exactConstructorValues": {},
+  "expectedRootState": {
+    "resultFamily": "repository",
+    "rootState": "unchanged-no-trusted-output",
+    "scenarioId": "transition-exact-result-mismatch",
+    "stableOutputIdentity": "ogvcs:v1:tree:sha256:a458f2bc72d5816dc3f7ee2cc8580eaaaed9a0208588ee66d18ea78f0c255c81"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "normativeContext": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "candidateSnapshot": "ogvcs:v1:snapshot:sha256:0ac2a723cd60c36716b9b2bb0219806328e6c8be0f2e04e1348dfee16c7f2ae2",
+    "designatedRoot": "ogvcs:v1:snapshot:sha256:1f12d26a139da2787ec41777f591ad2a7b52708a237691099ced6c23d9bb40ab",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 258,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-exact-result-mismatch/candidate-change.cbor",
+          "sha256": "299efa66c9fb061b7792c8c93124eaf910b8adcf48461f9168cd121a55ca7aa0"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:66723c7889568e6fe9b430160b1b987b5d068f7407e376fa1ac5783d01a27855"
+      },
+      {
+        "artifact": {
+          "bytes": 52,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-exact-result-mismatch/root-change.cbor",
+          "sha256": "ef6e897742ff4d1220c8cd636f2a889a8f8746b2e97b2b7dad6fec4dc3747a6d"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:82cc41e5e86d1397579a8ebfc7ea6c7d9102552130f4da86ca592fc3c10a424c"
+      },
+      {
+        "artifact": {
+          "bytes": 12,
+          "mediaType": "application/octet-stream",
+          "path": "objects/01-chunk.bin",
+          "sha256": "36fcc2e9442be1071c275604af6e41bd93875c743dc2fdaa6037662df74c5894"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5"
+      },
+      {
+        "artifact": {
+          "bytes": 183,
+          "mediaType": "application/cbor",
+          "path": "objects/02-content-manifest.cbor",
+          "sha256": "b635d76c8dd9f29c2862ae0e22077c70d157f68d4595861c09fb38bdf47c456b"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+      },
+      {
+        "artifact": {
+          "bytes": 274,
+          "mediaType": "application/cbor",
+          "path": "objects/06-repository-descriptor.cbor",
+          "sha256": "677905a883b1f4ddd87fea27b5afc0293cccd2d2ea29cc4884e758e4a071b6e9"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+      },
+      {
+        "artifact": {
+          "bytes": 383,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-exact-result-mismatch/candidate-snapshot.cbor",
+          "sha256": "7007d997999cda5e31d5ec1d835c4a4a1e1afa827d1801cc18d6ec4ad4b66ed1"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:0ac2a723cd60c36716b9b2bb0219806328e6c8be0f2e04e1348dfee16c7f2ae2"
+      },
+      {
+        "artifact": {
+          "bytes": 321,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-exact-result-mismatch/root-snapshot.cbor",
+          "sha256": "3d092ae0f364450bcfa3a2dd8bbd19ec59266ff602f02494163038c9b93ce680"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:1f12d26a139da2787ec41777f591ad2a7b52708a237691099ced6c23d9bb40ab"
+      },
+      {
+        "artifact": {
+          "bytes": 52,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-exact-result-mismatch/base-tree-root.cbor",
+          "sha256": "f0515d605a2c20abf9f321474bc861964b20faeaebbc41a2d8316ae4ffe2bb2b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a458f2bc72d5816dc3f7ee2cc8580eaaaed9a0208588ee66d18ea78f0c255c81"
+      },
+      {
+        "artifact": {
+          "bytes": 52,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-exact-result-mismatch/result-tree-root.cbor",
+          "sha256": "f0515d605a2c20abf9f321474bc861964b20faeaebbc41a2d8316ae4ffe2bb2b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a458f2bc72d5816dc3f7ee2cc8580eaaaed9a0208588ee66d18ea78f0c255c81"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registryVersion": 1
+    },
+    "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+    "requestedLayer": 3,
+    "roots": [],
+    "workingLifetimeAdditions": [
+      {
+        "fileId": "21212121212121212121212121212121",
+        "firstChangeSet": "ogvcs:v1:change-set:sha256:66723c7889568e6fe9b430160b1b987b5d068f7407e376fa1ac5783d01a27855",
+        "firstOperation": 0,
+        "origin": "native-create"
+      }
+    ]
+  },
+  "operation": "replay-change-set",
+  "parameters": {},
+  "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+  "scenarioId": "transition-exact-result-mismatch",
+  "seedHex": "881688f674afdc3aa48f6b32be0610e715f6e62e1127419de4706cc1883e6444",
+  "suppliedResourceCatalogue": {
+    "baseObjectArtifacts": [
+      "scenarios/objects/transition-exact-result-mismatch/candidate-change.cbor",
+      "scenarios/objects/transition-exact-result-mismatch/root-change.cbor",
+      "objects/01-chunk.bin",
+      "objects/02-content-manifest.cbor",
+      "objects/06-repository-descriptor.cbor",
+      "scenarios/objects/transition-exact-result-mismatch/candidate-snapshot.cbor",
+      "scenarios/objects/transition-exact-result-mismatch/root-snapshot.cbor",
+      "scenarios/objects/transition-exact-result-mismatch/base-tree-root.cbor",
+      "scenarios/objects/transition-exact-result-mismatch/result-tree-root.cbor"
+    ],
+    "logicalRecordArtifacts": [],
+    "mutationRecipe": "none",
+    "virtualLimitRecipe": "none"
+  },
+  "validation": {
+    "mode": "conformance",
+    "requestedLayer": 3
+  }
+}

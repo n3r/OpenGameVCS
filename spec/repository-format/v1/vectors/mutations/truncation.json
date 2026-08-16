@@ -1,0 +1,542 @@
+{
+  "algorithm": {
+    "id": "ogvcs.every-proper-prefix",
+    "operation": "for prefixBytes in the declared inclusive range, validate source[0:prefixBytes] (or the selected item subrange[0:prefixBytes])",
+    "order": "ascending prefixBytes",
+    "precedence": [
+      "CBOR_TRUNCATED when EOF is inside an item",
+      "BUNDLE_SEQUENCE_INVALID when a whole-sequence EOF is between items before the complete trailer",
+      "all later layer results are suppressed"
+    ],
+    "version": 1
+  },
+  "schema": "ogvcs.repository-format.v1.truncation-recipes.v1",
+  "sources": [
+    {
+      "byteLength": 183,
+      "category": "metadata-object",
+      "expected": {
+        "code": "CBOR_TRUNCATED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "prefixes": {
+        "fromInclusive": 0,
+        "toInclusive": 182
+      },
+      "source": "objects/02-content-manifest.cbor"
+    },
+    {
+      "byteLength": 481,
+      "category": "metadata-object",
+      "expected": {
+        "code": "CBOR_TRUNCATED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "prefixes": {
+        "fromInclusive": 0,
+        "toInclusive": 480
+      },
+      "source": "objects/03-tree.cbor"
+    },
+    {
+      "byteLength": 819,
+      "category": "metadata-object",
+      "expected": {
+        "code": "CBOR_TRUNCATED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "prefixes": {
+        "fromInclusive": 0,
+        "toInclusive": 818
+      },
+      "source": "objects/04-change-set.cbor"
+    },
+    {
+      "byteLength": 211,
+      "category": "metadata-object",
+      "expected": {
+        "code": "CBOR_TRUNCATED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "prefixes": {
+        "fromInclusive": 0,
+        "toInclusive": 210
+      },
+      "source": "objects/05-asset-group-set.cbor"
+    },
+    {
+      "byteLength": 274,
+      "category": "metadata-object",
+      "expected": {
+        "code": "CBOR_TRUNCATED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "prefixes": {
+        "fromInclusive": 0,
+        "toInclusive": 273
+      },
+      "source": "objects/06-repository-descriptor.cbor"
+    },
+    {
+      "byteLength": 412,
+      "category": "metadata-object",
+      "expected": {
+        "code": "CBOR_TRUNCATED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "prefixes": {
+        "fromInclusive": 0,
+        "toInclusive": 411
+      },
+      "source": "objects/07-snapshot.cbor"
+    },
+    {
+      "byteLength": 470,
+      "category": "metadata-object",
+      "expected": {
+        "code": "CBOR_TRUNCATED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "prefixes": {
+        "fromInclusive": 0,
+        "toInclusive": 469
+      },
+      "source": "objects/08-shelf-revision.cbor"
+    },
+    {
+      "byteLength": 147,
+      "category": "metadata-object",
+      "expected": {
+        "code": "CBOR_TRUNCATED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "prefixes": {
+        "fromInclusive": 0,
+        "toInclusive": 146
+      },
+      "source": "objects/09-provenance.cbor"
+    },
+    {
+      "byteLength": 182,
+      "category": "metadata-object",
+      "expected": {
+        "code": "CBOR_TRUNCATED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "prefixes": {
+        "fromInclusive": 0,
+        "toInclusive": 181
+      },
+      "source": "objects/10-attestation.cbor"
+    },
+    {
+      "byteLength": 1980,
+      "category": "metadata-object",
+      "expected": {
+        "code": "CBOR_TRUNCATED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "prefixes": {
+        "fromInclusive": 0,
+        "toInclusive": 1979
+      },
+      "source": "objects/11-conflict-set.cbor"
+    },
+    {
+      "byteLength": 91,
+      "category": "logical-record",
+      "expected": {
+        "code": "CBOR_TRUNCATED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "prefixes": {
+        "fromInclusive": 0,
+        "toInclusive": 90
+      },
+      "source": "logical-records/01-repository-root.cbor"
+    },
+    {
+      "byteLength": 101,
+      "category": "logical-record",
+      "expected": {
+        "code": "CBOR_TRUNCATED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "prefixes": {
+        "fromInclusive": 0,
+        "toInclusive": 100
+      },
+      "source": "logical-records/02-mutable-ref.cbor"
+    },
+    {
+      "byteLength": 111,
+      "category": "logical-record",
+      "expected": {
+        "code": "CBOR_TRUNCATED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "prefixes": {
+        "fromInclusive": 0,
+        "toInclusive": 110
+      },
+      "source": "logical-records/03-shelf-pointer.cbor"
+    },
+    {
+      "byteLength": 113,
+      "category": "logical-record",
+      "expected": {
+        "code": "CBOR_TRUNCATED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "prefixes": {
+        "fromInclusive": 0,
+        "toInclusive": 112
+      },
+      "source": "logical-records/04-file-id-lifetime.cbor"
+    },
+    {
+      "byteLength": 174,
+      "category": "logical-record",
+      "expected": {
+        "code": "CBOR_TRUNCATED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "prefixes": {
+        "fromInclusive": 0,
+        "toInclusive": 173
+      },
+      "source": "logical-records/05-import-mapping.cbor"
+    },
+    {
+      "byteLength": 195,
+      "category": "logical-record",
+      "expected": {
+        "code": "CBOR_TRUNCATED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "prefixes": {
+        "fromInclusive": 0,
+        "toInclusive": 194
+      },
+      "source": "logical-records/06-pending-change-reference.cbor"
+    },
+    {
+      "byteLength": 113,
+      "category": "logical-record",
+      "expected": {
+        "code": "CBOR_TRUNCATED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "prefixes": {
+        "fromInclusive": 0,
+        "toInclusive": 112
+      },
+      "source": "logical-records/07-lock-reference.cbor"
+    },
+    {
+      "byteLength": 85,
+      "category": "logical-record",
+      "expected": {
+        "code": "CBOR_TRUNCATED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "prefixes": {
+        "fromInclusive": 0,
+        "toInclusive": 84
+      },
+      "source": "logical-records/08-annotation.cbor"
+    },
+    {
+      "byteLength": 141,
+      "category": "logical-record",
+      "expected": {
+        "code": "CBOR_TRUNCATED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "prefixes": {
+        "fromInclusive": 0,
+        "toInclusive": 140
+      },
+      "source": "logical-records/09-fixture-event.cbor"
+    },
+    {
+      "byteLength": 26,
+      "byteOffset": 0,
+      "category": "bundle-header",
+      "expected": {
+        "code": "CBOR_TRUNCATED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "prefixes": {
+        "fromInclusive": 0,
+        "toInclusive": 25
+      },
+      "source": "logical-bundles/valid-supplied-closure.cborseq"
+    },
+    {
+      "byteLength": 64,
+      "byteOffset": 26,
+      "category": "bundle-object",
+      "expected": {
+        "code": "CBOR_TRUNCATED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "prefixes": {
+        "fromInclusive": 0,
+        "toInclusive": 63
+      },
+      "source": "logical-bundles/valid-supplied-closure.cborseq"
+    },
+    {
+      "byteLength": 132,
+      "byteOffset": 326,
+      "category": "bundle-logical-record",
+      "expected": {
+        "code": "CBOR_TRUNCATED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "prefixes": {
+        "fromInclusive": 0,
+        "toInclusive": 131
+      },
+      "source": "logical-bundles/valid-supplied-closure.cborseq"
+    },
+    {
+      "byteLength": 80,
+      "byteOffset": 458,
+      "category": "bundle-root",
+      "expected": {
+        "code": "CBOR_TRUNCATED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "prefixes": {
+        "fromInclusive": 0,
+        "toInclusive": 79
+      },
+      "source": "logical-bundles/valid-supplied-closure.cborseq"
+    },
+    {
+      "byteLength": 52,
+      "byteOffset": 614,
+      "category": "bundle-trailer",
+      "expected": {
+        "code": "CBOR_TRUNCATED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "prefixes": {
+        "fromInclusive": 0,
+        "toInclusive": 51
+      },
+      "source": "logical-bundles/valid-supplied-closure.cborseq"
+    }
+  ],
+  "totalCases": 7303,
+  "wholeSequence": {
+    "byteLength": 666,
+    "ranges": [
+      {
+        "expected": {
+          "code": "BUNDLE_SEQUENCE_INVALID",
+          "layer": 1,
+          "result": "reject",
+          "stage": "sequence-shape-and-order"
+        },
+        "fromInclusive": 0,
+        "reason": "prefix ends at an item boundary before a complete trailer and EOF",
+        "toInclusive": 0
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "fromInclusive": 1,
+        "reason": "prefix ends inside the current deterministic-CBOR item",
+        "toInclusive": 25
+      },
+      {
+        "expected": {
+          "code": "BUNDLE_SEQUENCE_INVALID",
+          "layer": 1,
+          "result": "reject",
+          "stage": "sequence-shape-and-order"
+        },
+        "fromInclusive": 26,
+        "reason": "prefix ends at an item boundary before a complete trailer and EOF",
+        "toInclusive": 26
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "fromInclusive": 27,
+        "reason": "prefix ends inside the current deterministic-CBOR item",
+        "toInclusive": 89
+      },
+      {
+        "expected": {
+          "code": "BUNDLE_SEQUENCE_INVALID",
+          "layer": 1,
+          "result": "reject",
+          "stage": "sequence-shape-and-order"
+        },
+        "fromInclusive": 90,
+        "reason": "prefix ends at an item boundary before a complete trailer and EOF",
+        "toInclusive": 90
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "fromInclusive": 91,
+        "reason": "prefix ends inside the current deterministic-CBOR item",
+        "toInclusive": 325
+      },
+      {
+        "expected": {
+          "code": "BUNDLE_SEQUENCE_INVALID",
+          "layer": 1,
+          "result": "reject",
+          "stage": "sequence-shape-and-order"
+        },
+        "fromInclusive": 326,
+        "reason": "prefix ends at an item boundary before a complete trailer and EOF",
+        "toInclusive": 326
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "fromInclusive": 327,
+        "reason": "prefix ends inside the current deterministic-CBOR item",
+        "toInclusive": 457
+      },
+      {
+        "expected": {
+          "code": "BUNDLE_SEQUENCE_INVALID",
+          "layer": 1,
+          "result": "reject",
+          "stage": "sequence-shape-and-order"
+        },
+        "fromInclusive": 458,
+        "reason": "prefix ends at an item boundary before a complete trailer and EOF",
+        "toInclusive": 458
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "fromInclusive": 459,
+        "reason": "prefix ends inside the current deterministic-CBOR item",
+        "toInclusive": 537
+      },
+      {
+        "expected": {
+          "code": "BUNDLE_SEQUENCE_INVALID",
+          "layer": 1,
+          "result": "reject",
+          "stage": "sequence-shape-and-order"
+        },
+        "fromInclusive": 538,
+        "reason": "prefix ends at an item boundary before a complete trailer and EOF",
+        "toInclusive": 538
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "fromInclusive": 539,
+        "reason": "prefix ends inside the current deterministic-CBOR item",
+        "toInclusive": 613
+      },
+      {
+        "expected": {
+          "code": "BUNDLE_SEQUENCE_INVALID",
+          "layer": 1,
+          "result": "reject",
+          "stage": "sequence-shape-and-order"
+        },
+        "fromInclusive": 614,
+        "reason": "prefix ends at an item boundary before a complete trailer and EOF",
+        "toInclusive": 614
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "fromInclusive": 615,
+        "reason": "prefix ends inside the current deterministic-CBOR item",
+        "toInclusive": 665
+      }
+    ],
+    "source": "logical-bundles/valid-supplied-closure.cborseq"
+  }
+}

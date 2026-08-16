@@ -1,0 +1,4899 @@
+{
+  "bundleItemShapes": [
+    {
+      "byteLength": 26,
+      "byteOffset": 0,
+      "diagnostic": {
+        "map": [
+          {
+            "key": 0,
+            "value": 1
+          },
+          {
+            "key": 1,
+            "value": 1
+          },
+          {
+            "key": 2,
+            "value": 1
+          },
+          {
+            "key": 3,
+            "value": 2
+          },
+          {
+            "key": 4,
+            "value": 1
+          },
+          {
+            "key": 5,
+            "value": 2
+          },
+          {
+            "key": 6,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 666
+                },
+                {
+                  "key": 1,
+                  "value": 236
+                },
+                {
+                  "key": 2,
+                  "value": 16
+                },
+                {
+                  "key": 3,
+                  "value": 3
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "itemKind": "header",
+      "source": "logical-bundles/valid-supplied-closure.cborseq"
+    },
+    {
+      "byteLength": 64,
+      "byteOffset": 26,
+      "diagnostic": {
+        "map": [
+          {
+            "key": 0,
+            "value": 1
+          },
+          {
+            "key": 1,
+            "value": 2
+          },
+          {
+            "key": 2,
+            "value": 0
+          },
+          {
+            "key": 3,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 1
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "byteStringHex": "944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 4,
+            "value": {
+              "byteStringHex": "4f70656e47616d655643530a"
+            }
+          }
+        ]
+      },
+      "itemKind": "object",
+      "source": "logical-bundles/valid-supplied-closure.cborseq"
+    },
+    {
+      "byteLength": 132,
+      "byteOffset": 326,
+      "diagnostic": {
+        "map": [
+          {
+            "key": 0,
+            "value": 1
+          },
+          {
+            "key": 1,
+            "value": 3
+          },
+          {
+            "key": 2,
+            "value": 0
+          },
+          {
+            "key": 3,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": {
+                    "byteStringHex": "6b177aa1f64ee93fd91847b78a4a3426a07ec37a3329c9308ef68cf62da4bfa7"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 4,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 8
+                },
+                {
+                  "key": 16,
+                  "value": {
+                    "map": [
+                      {
+                        "key": 0,
+                        "value": 1
+                      },
+                      {
+                        "key": 1,
+                        "value": 2
+                      },
+                      {
+                        "key": 2,
+                        "value": 1
+                      },
+                      {
+                        "key": 3,
+                        "value": {
+                          "byteStringHex": "82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "key": 17,
+                  "value": {
+                    "map": [
+                      {
+                        "key": 0,
+                        "value": "annotation.test"
+                      },
+                      {
+                        "key": 1,
+                        "value": "opaque"
+                      },
+                      {
+                        "key": 2,
+                        "value": 1
+                      }
+                    ]
+                  }
+                },
+                {
+                  "key": 18,
+                  "value": {
+                    "byteStringHex": "68696e742d61"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "itemKind": "logical-record",
+      "source": "logical-bundles/valid-supplied-closure.cborseq"
+    },
+    {
+      "byteLength": 80,
+      "byteOffset": 458,
+      "diagnostic": {
+        "map": [
+          {
+            "key": 0,
+            "value": 1
+          },
+          {
+            "key": 1,
+            "value": 4
+          },
+          {
+            "key": 2,
+            "value": 0
+          },
+          {
+            "key": 3,
+            "value": 1
+          },
+          {
+            "key": 4,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 2
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "byteStringHex": "82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 5,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": "bundle-role.test"
+                },
+                {
+                  "key": 1,
+                  "value": "root"
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "itemKind": "root",
+      "source": "logical-bundles/valid-supplied-closure.cborseq"
+    },
+    {
+      "byteLength": 52,
+      "byteOffset": 614,
+      "diagnostic": {
+        "map": [
+          {
+            "key": 0,
+            "value": 1
+          },
+          {
+            "key": 1,
+            "value": 5
+          },
+          {
+            "key": 2,
+            "value": 2
+          },
+          {
+            "key": 3,
+            "value": 1
+          },
+          {
+            "key": 4,
+            "value": 2
+          },
+          {
+            "key": 5,
+            "value": 7
+          },
+          {
+            "key": 6,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": {
+                    "byteStringHex": "c302bd2f60d259e6859ce677e2d2f08133d53236abaa4de82c5fa868b020735c"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "itemKind": "trailer",
+      "source": "logical-bundles/valid-supplied-closure.cborseq"
+    }
+  ],
+  "diagnosticRepresentation": {
+    "array": "{array:[diagnostic-value,...]}",
+    "byteString": "{byteStringHex:lowercase-even-length-hex}",
+    "map": "{map:[{key:diagnostic-value,value:diagnostic-value},...]} in deterministic-CBOR key order",
+    "scalar": "JSON string, safe integer, or boolean; unsignedDecimal tag is used beyond JSON's exact integer range"
+  },
+  "logicalRecords": [
+    {
+      "diagnostic": {
+        "map": [
+          {
+            "key": 0,
+            "value": 1
+          },
+          {
+            "key": 1,
+            "value": 1
+          },
+          {
+            "key": 16,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 6
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "byteStringHex": "dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 17,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 7
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "byteStringHex": "cc4d4a4a7be098bc74f5bb97cfe1eb37d870832dd44c56f0ceac12d65f871290"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "identity": "4a9eada49b937389d66d3e923a42539306ea841c5706f6ab148b29ad6c008ed3",
+      "name": "repository-root",
+      "payloadPath": "logical-records/01-repository-root.cbor",
+      "type": 1
+    },
+    {
+      "diagnostic": {
+        "map": [
+          {
+            "key": 0,
+            "value": 1
+          },
+          {
+            "key": 1,
+            "value": 2
+          },
+          {
+            "key": 16,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 6
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "byteStringHex": "dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 17,
+            "value": 1
+          },
+          {
+            "key": 18,
+            "value": "main"
+          },
+          {
+            "key": 19,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 7
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "byteStringHex": "cc4d4a4a7be098bc74f5bb97cfe1eb37d870832dd44c56f0ceac12d65f871290"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 20,
+            "value": 1
+          }
+        ]
+      },
+      "identity": "f4701d47f3ea48b62e2567f2d2c63547281eee5fdbd4b72af6c8e6de3c5ddc22",
+      "name": "mutable-ref",
+      "payloadPath": "logical-records/02-mutable-ref.cbor",
+      "type": 2
+    },
+    {
+      "diagnostic": {
+        "map": [
+          {
+            "key": 0,
+            "value": 1
+          },
+          {
+            "key": 1,
+            "value": 3
+          },
+          {
+            "key": 16,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 6
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "byteStringHex": "dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 17,
+            "value": {
+              "byteStringHex": "81818181818181818181818181818181"
+            }
+          },
+          {
+            "key": 18,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 8
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "byteStringHex": "552198509e456e40abdce5e9746c5d2f6ed47a639e79c3bb1dd319f4f65fa14f"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 19,
+            "value": 1
+          }
+        ]
+      },
+      "identity": "c3e5ebdd5b341319d74720fea3af55f9fc96883a5814a9eba53291471f283265",
+      "name": "shelf-pointer",
+      "payloadPath": "logical-records/03-shelf-pointer.cbor",
+      "type": 3
+    },
+    {
+      "diagnostic": {
+        "map": [
+          {
+            "key": 0,
+            "value": 1
+          },
+          {
+            "key": 1,
+            "value": 4
+          },
+          {
+            "key": 16,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 6
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "byteStringHex": "dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 17,
+            "value": {
+              "byteStringHex": "12121212121212121212121212121212"
+            }
+          },
+          {
+            "key": 18,
+            "value": 1
+          },
+          {
+            "key": 19,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 4
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "byteStringHex": "9cda477b4303c876fc79feb4cbd0a5deda70011261bd81fc758b588872040720"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 20,
+            "value": 0
+          }
+        ]
+      },
+      "identity": "dba1562b64924a99061d81a7fb9e492a27b5dce576b9b1aed7d8dc381fb1cee8",
+      "name": "file-id-lifetime",
+      "payloadPath": "logical-records/04-file-id-lifetime.cbor",
+      "type": 4
+    },
+    {
+      "diagnostic": {
+        "map": [
+          {
+            "key": 0,
+            "value": 1
+          },
+          {
+            "key": 1,
+            "value": 5
+          },
+          {
+            "key": 16,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 6
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "byteStringHex": "dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 17,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": "importer.test"
+                },
+                {
+                  "key": 1,
+                  "value": "fixture-adapter"
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                }
+              ]
+            }
+          },
+          {
+            "key": 18,
+            "value": {
+              "byteStringHex": "5151515151515151515151515151515151515151515151515151515151515151"
+            }
+          },
+          {
+            "key": 19,
+            "value": {
+              "byteStringHex": "5252525252525252525252525252525252525252525252525252525252525252"
+            }
+          },
+          {
+            "key": 20,
+            "value": {
+              "byteStringHex": "53535353535353535353535353535353"
+            }
+          },
+          {
+            "key": 21,
+            "value": 2
+          }
+        ]
+      },
+      "identity": "aeea7b0c2d24d24a02e2caa8c0862a8b463d361e2cce95aee3587713621c8a49",
+      "name": "import-mapping",
+      "payloadPath": "logical-records/05-import-mapping.cbor",
+      "type": 5
+    },
+    {
+      "diagnostic": {
+        "map": [
+          {
+            "key": 0,
+            "value": 1
+          },
+          {
+            "key": 1,
+            "value": 6
+          },
+          {
+            "key": 16,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 6
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "byteStringHex": "dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 17,
+            "value": {
+              "byteStringHex": "61616161616161616161616161616161"
+            }
+          },
+          {
+            "key": 18,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 7
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "byteStringHex": "cc4d4a4a7be098bc74f5bb97cfe1eb37d870832dd44c56f0ceac12d65f871290"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 19,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 4
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "byteStringHex": "9cda477b4303c876fc79feb4cbd0a5deda70011261bd81fc758b588872040720"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 20,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 11
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "byteStringHex": "59f7814cfab891685197abebc61ea70cdca2a2328feab3c4cec816d4eabfca07"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "identity": "df5a4b3dcf4e2ef99035dbc9b38977b11673bcc4000a65902acd1d53424c5cd9",
+      "name": "pending-change-reference",
+      "payloadPath": "logical-records/06-pending-change-reference.cbor",
+      "type": 6
+    },
+    {
+      "diagnostic": {
+        "map": [
+          {
+            "key": 0,
+            "value": 1
+          },
+          {
+            "key": 1,
+            "value": 7
+          },
+          {
+            "key": 16,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 6
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "byteStringHex": "dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 17,
+            "value": 1
+          },
+          {
+            "key": 18,
+            "value": {
+              "byteStringHex": "12121212121212121212121212121212"
+            }
+          },
+          {
+            "key": 19,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 7
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "byteStringHex": "cc4d4a4a7be098bc74f5bb97cfe1eb37d870832dd44c56f0ceac12d65f871290"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 20,
+            "value": 7
+          }
+        ]
+      },
+      "identity": "06d53309ae087d75f53080707eed7a969aedc8c7e7f0d32b520a5f2992d31629",
+      "name": "lock-reference",
+      "payloadPath": "logical-records/07-lock-reference.cbor",
+      "type": 7
+    },
+    {
+      "diagnostic": {
+        "map": [
+          {
+            "key": 0,
+            "value": 1
+          },
+          {
+            "key": 1,
+            "value": 8
+          },
+          {
+            "key": 16,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 2
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "byteStringHex": "82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 17,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": "annotation.test"
+                },
+                {
+                  "key": 1,
+                  "value": "opaque"
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                }
+              ]
+            }
+          },
+          {
+            "key": 18,
+            "value": {
+              "byteStringHex": "68696e742d61"
+            }
+          }
+        ]
+      },
+      "identity": "6b177aa1f64ee93fd91847b78a4a3426a07ec37a3329c9308ef68cf62da4bfa7",
+      "name": "annotation",
+      "payloadPath": "logical-records/08-annotation.cbor",
+      "type": 8
+    },
+    {
+      "diagnostic": {
+        "map": [
+          {
+            "key": 0,
+            "value": 1
+          },
+          {
+            "key": 1,
+            "value": 9
+          },
+          {
+            "key": 16,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": {
+                    "byteStringHex": "9191919191919191919191919191919191919191919191919191919191919191"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 17,
+            "value": 0
+          },
+          {
+            "key": 18,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": "fixture-event.opengamevcs.test"
+                },
+                {
+                  "key": 1,
+                  "value": "operation"
+                },
+                {
+                  "key": 2,
+                  "value": 2
+                }
+              ]
+            }
+          },
+          {
+            "key": 19,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": {
+                    "byteStringHex": "9292929292929292929292929292929292929292929292929292929292929292"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 20,
+            "value": "create"
+          }
+        ]
+      },
+      "identity": "63a77499add3176068c9c41ded0f5032ed2223b853d9772c82bb23ad3b8b099a",
+      "name": "fixture-event",
+      "payloadPath": "logical-records/09-fixture-event.cbor",
+      "type": 9
+    }
+  ],
+  "objects": [
+    {
+      "diagnostic": {
+        "byteStringHex": "4f70656e47616d655643530a"
+      },
+      "kind": 1,
+      "kindName": "chunk",
+      "objectId": "944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5",
+      "payloadPath": "objects/01-chunk.bin"
+    },
+    {
+      "diagnostic": {
+        "map": [
+          {
+            "key": 0,
+            "value": 1
+          },
+          {
+            "key": 1,
+            "value": 2
+          },
+          {
+            "key": 2,
+            "value": {
+              "array": []
+            }
+          },
+          {
+            "key": 16,
+            "value": 24
+          },
+          {
+            "key": 17,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": {
+                    "byteStringHex": "cb4f2424fd3588eb17773169678f8a2bc61546e0605e6f58ef64e4c67fdc49f8"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 18,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": "chunking.test"
+                },
+                {
+                  "key": 1,
+                  "value": "external-boundaries"
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                }
+              ]
+            }
+          },
+          {
+            "key": 19,
+            "value": {
+              "array": [
+                {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": 1
+                          },
+                          {
+                            "key": 1,
+                            "value": 1
+                          },
+                          {
+                            "key": 2,
+                            "value": 1
+                          },
+                          {
+                            "key": 3,
+                            "value": {
+                              "byteStringHex": "944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5"
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": 1,
+                      "value": 12
+                    }
+                  ]
+                },
+                {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": 1
+                          },
+                          {
+                            "key": 1,
+                            "value": 1
+                          },
+                          {
+                            "key": 2,
+                            "value": 1
+                          },
+                          {
+                            "key": 3,
+                            "value": {
+                              "byteStringHex": "944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5"
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": 1,
+                      "value": 12
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "kind": 2,
+      "kindName": "content-manifest",
+      "objectId": "82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12",
+      "payloadPath": "objects/02-content-manifest.cbor"
+    },
+    {
+      "diagnostic": {
+        "map": [
+          {
+            "key": 0,
+            "value": 1
+          },
+          {
+            "key": 1,
+            "value": 3
+          },
+          {
+            "key": 2,
+            "value": {
+              "array": []
+            }
+          },
+          {
+            "key": 16,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 6
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "byteStringHex": "dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 17,
+            "value": {
+              "array": [
+                {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": "dir"
+                    },
+                    {
+                      "key": 1,
+                      "value": 1
+                    },
+                    {
+                      "key": 2,
+                      "value": {
+                        "byteStringHex": "11111111111111111111111111111111"
+                      }
+                    },
+                    {
+                      "key": 3,
+                      "value": 1
+                    },
+                    {
+                      "key": 4,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": 1
+                          },
+                          {
+                            "key": 1,
+                            "value": 3
+                          },
+                          {
+                            "key": 2,
+                            "value": 1
+                          },
+                          {
+                            "key": 3,
+                            "value": {
+                              "byteStringHex": "a458f2bc72d5816dc3f7ee2cc8580eaaaed9a0208588ee66d18ea78f0c255c81"
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": 5,
+                      "value": 0
+                    },
+                    {
+                      "key": 6,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": "content-policy.test"
+                          },
+                          {
+                            "key": 1,
+                            "value": "opaque"
+                          },
+                          {
+                            "key": 2,
+                            "value": 1
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": "file"
+                    },
+                    {
+                      "key": 1,
+                      "value": 2
+                    },
+                    {
+                      "key": 2,
+                      "value": {
+                        "byteStringHex": "12121212121212121212121212121212"
+                      }
+                    },
+                    {
+                      "key": 3,
+                      "value": 2
+                    },
+                    {
+                      "key": 4,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": 1
+                          },
+                          {
+                            "key": 1,
+                            "value": 2
+                          },
+                          {
+                            "key": 2,
+                            "value": 1
+                          },
+                          {
+                            "key": 3,
+                            "value": {
+                              "byteStringHex": "82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": 5,
+                      "value": 24
+                    },
+                    {
+                      "key": 6,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": "content-policy.test"
+                          },
+                          {
+                            "key": 1,
+                            "value": "opaque"
+                          },
+                          {
+                            "key": 2,
+                            "value": 1
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": "link"
+                    },
+                    {
+                      "key": 1,
+                      "value": 4
+                    },
+                    {
+                      "key": 2,
+                      "value": {
+                        "byteStringHex": "13131313131313131313131313131313"
+                      }
+                    },
+                    {
+                      "key": 3,
+                      "value": 4
+                    },
+                    {
+                      "key": 4,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": 1
+                          },
+                          {
+                            "key": 1,
+                            "value": 2
+                          },
+                          {
+                            "key": 2,
+                            "value": 1
+                          },
+                          {
+                            "key": 3,
+                            "value": {
+                              "byteStringHex": "82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": 5,
+                      "value": 24
+                    },
+                    {
+                      "key": 6,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": "content-policy.test"
+                          },
+                          {
+                            "key": 1,
+                            "value": "opaque"
+                          },
+                          {
+                            "key": 2,
+                            "value": 1
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": "run"
+                    },
+                    {
+                      "key": 1,
+                      "value": 3
+                    },
+                    {
+                      "key": 2,
+                      "value": {
+                        "byteStringHex": "14141414141414141414141414141414"
+                      }
+                    },
+                    {
+                      "key": 3,
+                      "value": 3
+                    },
+                    {
+                      "key": 4,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": 1
+                          },
+                          {
+                            "key": 1,
+                            "value": 2
+                          },
+                          {
+                            "key": 2,
+                            "value": 1
+                          },
+                          {
+                            "key": 3,
+                            "value": {
+                              "byteStringHex": "82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": 5,
+                      "value": 24
+                    },
+                    {
+                      "key": 6,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": "content-policy.test"
+                          },
+                          {
+                            "key": 1,
+                            "value": "opaque"
+                          },
+                          {
+                            "key": 2,
+                            "value": 1
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "kind": 3,
+      "kindName": "tree",
+      "objectId": "9458b24239ce71b75b1c6ab857883d66a6eab3f0f6f4e9afab15371af1d4bf19",
+      "payloadPath": "objects/03-tree.cbor"
+    },
+    {
+      "diagnostic": {
+        "map": [
+          {
+            "key": 0,
+            "value": 1
+          },
+          {
+            "key": 1,
+            "value": 4
+          },
+          {
+            "key": 2,
+            "value": {
+              "array": []
+            }
+          },
+          {
+            "key": 16,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 6
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "byteStringHex": "dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 18,
+            "value": {
+              "array": [
+                {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": 0
+                    },
+                    {
+                      "key": 1,
+                      "value": 1
+                    },
+                    {
+                      "key": 3,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": {
+                              "array": [
+                                "dir"
+                              ]
+                            }
+                          },
+                          {
+                            "key": 1,
+                            "value": 1
+                          },
+                          {
+                            "key": 2,
+                            "value": {
+                              "byteStringHex": "11111111111111111111111111111111"
+                            }
+                          },
+                          {
+                            "key": 3,
+                            "value": 1
+                          },
+                          {
+                            "key": 5,
+                            "value": 0
+                          },
+                          {
+                            "key": 6,
+                            "value": {
+                              "map": [
+                                {
+                                  "key": 0,
+                                  "value": "content-policy.test"
+                                },
+                                {
+                                  "key": 1,
+                                  "value": "opaque"
+                                },
+                                {
+                                  "key": 2,
+                                  "value": 1
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": 5,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": {
+                              "map": [
+                                {
+                                  "key": 0,
+                                  "value": 1
+                                },
+                                {
+                                  "key": 1,
+                                  "value": 6
+                                },
+                                {
+                                  "key": 2,
+                                  "value": 1
+                                },
+                                {
+                                  "key": 3,
+                                  "value": {
+                                    "byteStringHex": "dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+                                  }
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "key": 1,
+                            "value": 1
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": 1
+                    },
+                    {
+                      "key": 1,
+                      "value": 1
+                    },
+                    {
+                      "key": 3,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": {
+                              "array": [
+                                "file"
+                              ]
+                            }
+                          },
+                          {
+                            "key": 1,
+                            "value": 2
+                          },
+                          {
+                            "key": 2,
+                            "value": {
+                              "byteStringHex": "12121212121212121212121212121212"
+                            }
+                          },
+                          {
+                            "key": 3,
+                            "value": 2
+                          },
+                          {
+                            "key": 4,
+                            "value": {
+                              "map": [
+                                {
+                                  "key": 0,
+                                  "value": 1
+                                },
+                                {
+                                  "key": 1,
+                                  "value": 2
+                                },
+                                {
+                                  "key": 2,
+                                  "value": 1
+                                },
+                                {
+                                  "key": 3,
+                                  "value": {
+                                    "byteStringHex": "82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+                                  }
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "key": 5,
+                            "value": 24
+                          },
+                          {
+                            "key": 6,
+                            "value": {
+                              "map": [
+                                {
+                                  "key": 0,
+                                  "value": "content-policy.test"
+                                },
+                                {
+                                  "key": 1,
+                                  "value": "opaque"
+                                },
+                                {
+                                  "key": 2,
+                                  "value": 1
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": 5,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": {
+                              "map": [
+                                {
+                                  "key": 0,
+                                  "value": 1
+                                },
+                                {
+                                  "key": 1,
+                                  "value": 6
+                                },
+                                {
+                                  "key": 2,
+                                  "value": 1
+                                },
+                                {
+                                  "key": 3,
+                                  "value": {
+                                    "byteStringHex": "dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+                                  }
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "key": 1,
+                            "value": 1
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": 2
+                    },
+                    {
+                      "key": 1,
+                      "value": 1
+                    },
+                    {
+                      "key": 3,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": {
+                              "array": [
+                                "link"
+                              ]
+                            }
+                          },
+                          {
+                            "key": 1,
+                            "value": 4
+                          },
+                          {
+                            "key": 2,
+                            "value": {
+                              "byteStringHex": "13131313131313131313131313131313"
+                            }
+                          },
+                          {
+                            "key": 3,
+                            "value": 4
+                          },
+                          {
+                            "key": 4,
+                            "value": {
+                              "map": [
+                                {
+                                  "key": 0,
+                                  "value": 1
+                                },
+                                {
+                                  "key": 1,
+                                  "value": 2
+                                },
+                                {
+                                  "key": 2,
+                                  "value": 1
+                                },
+                                {
+                                  "key": 3,
+                                  "value": {
+                                    "byteStringHex": "82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+                                  }
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "key": 5,
+                            "value": 24
+                          },
+                          {
+                            "key": 6,
+                            "value": {
+                              "map": [
+                                {
+                                  "key": 0,
+                                  "value": "content-policy.test"
+                                },
+                                {
+                                  "key": 1,
+                                  "value": "opaque"
+                                },
+                                {
+                                  "key": 2,
+                                  "value": 1
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": 5,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": {
+                              "map": [
+                                {
+                                  "key": 0,
+                                  "value": 1
+                                },
+                                {
+                                  "key": 1,
+                                  "value": 6
+                                },
+                                {
+                                  "key": 2,
+                                  "value": 1
+                                },
+                                {
+                                  "key": 3,
+                                  "value": {
+                                    "byteStringHex": "dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+                                  }
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "key": 1,
+                            "value": 1
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": 3
+                    },
+                    {
+                      "key": 1,
+                      "value": 1
+                    },
+                    {
+                      "key": 3,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": {
+                              "array": [
+                                "run"
+                              ]
+                            }
+                          },
+                          {
+                            "key": 1,
+                            "value": 3
+                          },
+                          {
+                            "key": 2,
+                            "value": {
+                              "byteStringHex": "14141414141414141414141414141414"
+                            }
+                          },
+                          {
+                            "key": 3,
+                            "value": 3
+                          },
+                          {
+                            "key": 4,
+                            "value": {
+                              "map": [
+                                {
+                                  "key": 0,
+                                  "value": 1
+                                },
+                                {
+                                  "key": 1,
+                                  "value": 2
+                                },
+                                {
+                                  "key": 2,
+                                  "value": 1
+                                },
+                                {
+                                  "key": 3,
+                                  "value": {
+                                    "byteStringHex": "82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+                                  }
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "key": 5,
+                            "value": 24
+                          },
+                          {
+                            "key": 6,
+                            "value": {
+                              "map": [
+                                {
+                                  "key": 0,
+                                  "value": "content-policy.test"
+                                },
+                                {
+                                  "key": 1,
+                                  "value": "opaque"
+                                },
+                                {
+                                  "key": 2,
+                                  "value": 1
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": 5,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": {
+                              "map": [
+                                {
+                                  "key": 0,
+                                  "value": 1
+                                },
+                                {
+                                  "key": 1,
+                                  "value": 6
+                                },
+                                {
+                                  "key": 2,
+                                  "value": 1
+                                },
+                                {
+                                  "key": 3,
+                                  "value": {
+                                    "byteStringHex": "dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+                                  }
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "key": 1,
+                            "value": 1
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": 4
+                    },
+                    {
+                      "key": 1,
+                      "value": 8
+                    },
+                    {
+                      "key": 8,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": {
+                              "byteStringHex": "51515151515151515151515151515151"
+                            }
+                          },
+                          {
+                            "key": 1,
+                            "value": {
+                              "map": [
+                                {
+                                  "key": 0,
+                                  "value": "group.test"
+                                },
+                                {
+                                  "key": 1,
+                                  "value": "opaque"
+                                },
+                                {
+                                  "key": 2,
+                                  "value": 1
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "key": 2,
+                            "value": {
+                              "byteStringHex": "12121212121212121212121212121212"
+                            }
+                          },
+                          {
+                            "key": 3,
+                            "value": {
+                              "array": [
+                                {
+                                  "map": [
+                                    {
+                                      "key": 0,
+                                      "value": {
+                                        "byteStringHex": "12121212121212121212121212121212"
+                                      }
+                                    },
+                                    {
+                                      "key": 1,
+                                      "value": {
+                                        "map": [
+                                          {
+                                            "key": 0,
+                                            "value": "group-role.test"
+                                          },
+                                          {
+                                            "key": 1,
+                                            "value": "member"
+                                          },
+                                          {
+                                            "key": 2,
+                                            "value": 1
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "key": 4,
+                            "value": {
+                              "array": [
+                                {
+                                  "map": [
+                                    {
+                                      "key": 0,
+                                      "value": {
+                                        "map": [
+                                          {
+                                            "key": 0,
+                                            "value": "external-key.test"
+                                          },
+                                          {
+                                            "key": 1,
+                                            "value": "opaque"
+                                          },
+                                          {
+                                            "key": 2,
+                                            "value": 1
+                                          }
+                                        ]
+                                      }
+                                    },
+                                    {
+                                      "key": 1,
+                                      "value": {
+                                        "byteStringHex": "65787465726e616c2d6b6579"
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "kind": 4,
+      "kindName": "change-set",
+      "objectId": "9cda477b4303c876fc79feb4cbd0a5deda70011261bd81fc758b588872040720",
+      "payloadPath": "objects/04-change-set.cbor"
+    },
+    {
+      "diagnostic": {
+        "map": [
+          {
+            "key": 0,
+            "value": 1
+          },
+          {
+            "key": 1,
+            "value": 5
+          },
+          {
+            "key": 2,
+            "value": {
+              "array": []
+            }
+          },
+          {
+            "key": 16,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 6
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "byteStringHex": "dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 17,
+            "value": {
+              "array": [
+                {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": {
+                        "byteStringHex": "51515151515151515151515151515151"
+                      }
+                    },
+                    {
+                      "key": 1,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": "group.test"
+                          },
+                          {
+                            "key": 1,
+                            "value": "opaque"
+                          },
+                          {
+                            "key": 2,
+                            "value": 1
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": 2,
+                      "value": {
+                        "byteStringHex": "12121212121212121212121212121212"
+                      }
+                    },
+                    {
+                      "key": 3,
+                      "value": {
+                        "array": [
+                          {
+                            "map": [
+                              {
+                                "key": 0,
+                                "value": {
+                                  "byteStringHex": "12121212121212121212121212121212"
+                                }
+                              },
+                              {
+                                "key": 1,
+                                "value": {
+                                  "map": [
+                                    {
+                                      "key": 0,
+                                      "value": "group-role.test"
+                                    },
+                                    {
+                                      "key": 1,
+                                      "value": "member"
+                                    },
+                                    {
+                                      "key": 2,
+                                      "value": 1
+                                    }
+                                  ]
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": 4,
+                      "value": {
+                        "array": [
+                          {
+                            "map": [
+                              {
+                                "key": 0,
+                                "value": {
+                                  "map": [
+                                    {
+                                      "key": 0,
+                                      "value": "external-key.test"
+                                    },
+                                    {
+                                      "key": 1,
+                                      "value": "opaque"
+                                    },
+                                    {
+                                      "key": 2,
+                                      "value": 1
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "key": 1,
+                                "value": {
+                                  "byteStringHex": "65787465726e616c2d6b6579"
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "kind": 5,
+      "kindName": "asset-group-set",
+      "objectId": "3b4641600c6951bfe3c96e4a9ccb28b424b20d8c251db5efcda65fd0c8bd4c7e",
+      "payloadPath": "objects/05-asset-group-set.cbor"
+    },
+    {
+      "diagnostic": {
+        "map": [
+          {
+            "key": 0,
+            "value": 1
+          },
+          {
+            "key": 1,
+            "value": 6
+          },
+          {
+            "key": 2,
+            "value": {
+              "array": []
+            }
+          },
+          {
+            "key": 16,
+            "value": {
+              "byteStringHex": "60606060606060606060606060606060"
+            }
+          },
+          {
+            "key": 17,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": "path.test"
+                },
+                {
+                  "key": 1,
+                  "value": "opaque"
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                }
+              ]
+            }
+          },
+          {
+            "key": 18,
+            "value": {
+              "array": [
+                {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": "content-policy.test"
+                    },
+                    {
+                      "key": 1,
+                      "value": "opaque"
+                    },
+                    {
+                      "key": 2,
+                      "value": 1
+                    }
+                  ]
+                },
+                {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": "content-policy.test"
+                    },
+                    {
+                      "key": 1,
+                      "value": "alternate"
+                    },
+                    {
+                      "key": 2,
+                      "value": 1
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "key": 19,
+            "value": {
+              "array": [
+                {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": "group.test"
+                    },
+                    {
+                      "key": 1,
+                      "value": "opaque"
+                    },
+                    {
+                      "key": 2,
+                      "value": 1
+                    }
+                  ]
+                },
+                {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": "fixture-group.opengamevcs.test"
+                    },
+                    {
+                      "key": 1,
+                      "value": "asset"
+                    },
+                    {
+                      "key": 2,
+                      "value": 2
+                    }
+                  ]
+                },
+                {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": "fixture-group.opengamevcs.test"
+                    },
+                    {
+                      "key": 1,
+                      "value": "asset-meta"
+                    },
+                    {
+                      "key": 2,
+                      "value": 2
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "key": 20,
+            "value": {
+              "array": [
+                {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": "chunking.test"
+                    },
+                    {
+                      "key": 1,
+                      "value": "external-boundaries"
+                    },
+                    {
+                      "key": 2,
+                      "value": 1
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "kind": 6,
+      "kindName": "repository-descriptor",
+      "objectId": "dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+      "payloadPath": "objects/06-repository-descriptor.cbor"
+    },
+    {
+      "diagnostic": {
+        "map": [
+          {
+            "key": 0,
+            "value": 1
+          },
+          {
+            "key": 1,
+            "value": 7
+          },
+          {
+            "key": 2,
+            "value": {
+              "array": []
+            }
+          },
+          {
+            "key": 16,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 6
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "byteStringHex": "dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 17,
+            "value": {
+              "array": []
+            }
+          },
+          {
+            "key": 18,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 3
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "byteStringHex": "9458b24239ce71b75b1c6ab857883d66a6eab3f0f6f4e9afab15371af1d4bf19"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 19,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 4
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "byteStringHex": "9cda477b4303c876fc79feb4cbd0a5deda70011261bd81fc758b588872040720"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 20,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 5
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "byteStringHex": "3b4641600c6951bfe3c96e4a9ccb28b424b20d8c251db5efcda65fd0c8bd4c7e"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 21,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": {
+                    "map": [
+                      {
+                        "key": 0,
+                        "value": "identity.test"
+                      },
+                      {
+                        "key": 1,
+                        "value": "opaque"
+                      },
+                      {
+                        "key": 2,
+                        "value": 1
+                      }
+                    ]
+                  }
+                },
+                {
+                  "key": 1,
+                  "value": {
+                    "byteStringHex": "31"
+                  }
+                },
+                {
+                  "key": 2,
+                  "value": "Vector Actor"
+                }
+              ]
+            }
+          },
+          {
+            "key": 22,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": {
+                    "map": [
+                      {
+                        "key": 0,
+                        "value": "identity.test"
+                      },
+                      {
+                        "key": 1,
+                        "value": "opaque"
+                      },
+                      {
+                        "key": 2,
+                        "value": 1
+                      }
+                    ]
+                  }
+                },
+                {
+                  "key": 1,
+                  "value": {
+                    "byteStringHex": "32"
+                  }
+                },
+                {
+                  "key": 2,
+                  "value": "Vector Actor"
+                }
+              ]
+            }
+          },
+          {
+            "key": 23,
+            "value": -1
+          },
+          {
+            "key": 24,
+            "value": 0
+          },
+          {
+            "key": 25,
+            "value": "Seed é snapshot"
+          },
+          {
+            "key": 26,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": {
+                    "map": [
+                      {
+                        "key": 0,
+                        "value": "policy.test"
+                      },
+                      {
+                        "key": 1,
+                        "value": "allow"
+                      },
+                      {
+                        "key": 2,
+                        "value": 1
+                      }
+                    ]
+                  }
+                },
+                {
+                  "key": 1,
+                  "value": 1
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "map": [
+                      {
+                        "key": 0,
+                        "value": 1
+                      },
+                      {
+                        "key": 1,
+                        "value": {
+                          "byteStringHex": "3232323232323232323232323232323232323232323232323232323232323232"
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 27,
+            "value": {
+              "array": [
+                {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": 1
+                    },
+                    {
+                      "key": 1,
+                      "value": 9
+                    },
+                    {
+                      "key": 2,
+                      "value": 1
+                    },
+                    {
+                      "key": 3,
+                      "value": {
+                        "byteStringHex": "792a6322c62aaf3096be4d5c86e2850b01d8892083f58c3304dc52530c079235"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "kind": 7,
+      "kindName": "snapshot",
+      "objectId": "cc4d4a4a7be098bc74f5bb97cfe1eb37d870832dd44c56f0ceac12d65f871290",
+      "payloadPath": "objects/07-snapshot.cbor"
+    },
+    {
+      "diagnostic": {
+        "map": [
+          {
+            "key": 0,
+            "value": 1
+          },
+          {
+            "key": 1,
+            "value": 8
+          },
+          {
+            "key": 2,
+            "value": {
+              "array": []
+            }
+          },
+          {
+            "key": 16,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 6
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "byteStringHex": "dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 17,
+            "value": {
+              "byteStringHex": "81818181818181818181818181818181"
+            }
+          },
+          {
+            "key": 18,
+            "value": 1
+          },
+          {
+            "key": 20,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 7
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "byteStringHex": "cc4d4a4a7be098bc74f5bb97cfe1eb37d870832dd44c56f0ceac12d65f871290"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 21,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 4
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "byteStringHex": "9cda477b4303c876fc79feb4cbd0a5deda70011261bd81fc758b588872040720"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 22,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 3
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "byteStringHex": "9458b24239ce71b75b1c6ab857883d66a6eab3f0f6f4e9afab15371af1d4bf19"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 23,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 5
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "byteStringHex": "3b4641600c6951bfe3c96e4a9ccb28b424b20d8c251db5efcda65fd0c8bd4c7e"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 24,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 11
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "byteStringHex": "59f7814cfab891685197abebc61ea70cdca2a2328feab3c4cec816d4eabfca07"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 25,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": {
+                    "map": [
+                      {
+                        "key": 0,
+                        "value": "identity.test"
+                      },
+                      {
+                        "key": 1,
+                        "value": "opaque"
+                      },
+                      {
+                        "key": 2,
+                        "value": 1
+                      }
+                    ]
+                  }
+                },
+                {
+                  "key": 1,
+                  "value": {
+                    "byteStringHex": "31"
+                  }
+                },
+                {
+                  "key": 2,
+                  "value": "Vector Actor"
+                }
+              ]
+            }
+          },
+          {
+            "key": 26,
+            "value": 1
+          },
+          {
+            "key": 27,
+            "value": "Unresolved shelf"
+          },
+          {
+            "key": 28,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": {
+                    "map": [
+                      {
+                        "key": 0,
+                        "value": "policy.test"
+                      },
+                      {
+                        "key": 1,
+                        "value": "allow"
+                      },
+                      {
+                        "key": 2,
+                        "value": 1
+                      }
+                    ]
+                  }
+                },
+                {
+                  "key": 1,
+                  "value": 1
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "map": [
+                      {
+                        "key": 0,
+                        "value": 1
+                      },
+                      {
+                        "key": 1,
+                        "value": {
+                          "byteStringHex": "3232323232323232323232323232323232323232323232323232323232323232"
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 29,
+            "value": {
+              "array": [
+                {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": 1
+                    },
+                    {
+                      "key": 1,
+                      "value": 9
+                    },
+                    {
+                      "key": 2,
+                      "value": 1
+                    },
+                    {
+                      "key": 3,
+                      "value": {
+                        "byteStringHex": "792a6322c62aaf3096be4d5c86e2850b01d8892083f58c3304dc52530c079235"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "kind": 8,
+      "kindName": "shelf-revision",
+      "objectId": "552198509e456e40abdce5e9746c5d2f6ed47a639e79c3bb1dd319f4f65fa14f",
+      "payloadPath": "objects/08-shelf-revision.cbor"
+    },
+    {
+      "diagnostic": {
+        "map": [
+          {
+            "key": 0,
+            "value": 1
+          },
+          {
+            "key": 1,
+            "value": 9
+          },
+          {
+            "key": 2,
+            "value": {
+              "array": []
+            }
+          },
+          {
+            "key": 16,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": "provenance.test"
+                },
+                {
+                  "key": 1,
+                  "value": "opaque"
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                }
+              ]
+            }
+          },
+          {
+            "key": 17,
+            "value": {
+              "array": [
+                {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": 1
+                    },
+                    {
+                      "key": 1,
+                      "value": 2
+                    },
+                    {
+                      "key": 2,
+                      "value": 1
+                    },
+                    {
+                      "key": 3,
+                      "value": {
+                        "byteStringHex": "82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "key": 18,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": {
+                    "byteStringHex": "d56cfc819bbbb87073f15b34da4ce8be0bb317cf77a1c87d771793c5973d9ea0"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 19,
+            "value": {
+              "byteStringHex": "6e65757472616c20766563746f722070726f76656e616e6365"
+            }
+          }
+        ]
+      },
+      "kind": 9,
+      "kindName": "provenance",
+      "objectId": "792a6322c62aaf3096be4d5c86e2850b01d8892083f58c3304dc52530c079235",
+      "payloadPath": "objects/09-provenance.cbor"
+    },
+    {
+      "diagnostic": {
+        "map": [
+          {
+            "key": 0,
+            "value": 1
+          },
+          {
+            "key": 1,
+            "value": 10
+          },
+          {
+            "key": 2,
+            "value": {
+              "array": []
+            }
+          },
+          {
+            "key": 16,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 7
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "byteStringHex": "cc4d4a4a7be098bc74f5bb97cfe1eb37d870832dd44c56f0ceac12d65f871290"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 17,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": "attestation.test"
+                },
+                {
+                  "key": 1,
+                  "value": "opaque"
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                }
+              ]
+            }
+          },
+          {
+            "key": 18,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": {
+                    "map": [
+                      {
+                        "key": 0,
+                        "value": "identity.test"
+                      },
+                      {
+                        "key": 1,
+                        "value": "opaque"
+                      },
+                      {
+                        "key": 2,
+                        "value": 1
+                      }
+                    ]
+                  }
+                },
+                {
+                  "key": 1,
+                  "value": {
+                    "byteStringHex": "31"
+                  }
+                },
+                {
+                  "key": 2,
+                  "value": "Vector Actor"
+                }
+              ]
+            }
+          },
+          {
+            "key": 19,
+            "value": 2
+          },
+          {
+            "key": 20,
+            "value": {
+              "byteStringHex": "6174746573746174696f6e207061796c6f6164"
+            }
+          },
+          {
+            "key": 21,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": "signature.test"
+                },
+                {
+                  "key": 1,
+                  "value": "opaque"
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                }
+              ]
+            }
+          },
+          {
+            "key": 22,
+            "value": {
+              "byteStringHex": "010203"
+            }
+          }
+        ]
+      },
+      "kind": 10,
+      "kindName": "attestation",
+      "objectId": "56fdc7943a314d8dcf628508f5abcbde57a9cbc15910eb6fe4527351d2eeec18",
+      "payloadPath": "objects/10-attestation.cbor"
+    },
+    {
+      "diagnostic": {
+        "map": [
+          {
+            "key": 0,
+            "value": 1
+          },
+          {
+            "key": 1,
+            "value": 11
+          },
+          {
+            "key": 2,
+            "value": {
+              "array": []
+            }
+          },
+          {
+            "key": 16,
+            "value": {
+              "map": [
+                {
+                  "key": 0,
+                  "value": 1
+                },
+                {
+                  "key": 1,
+                  "value": 6
+                },
+                {
+                  "key": 2,
+                  "value": 1
+                },
+                {
+                  "key": 3,
+                  "value": {
+                    "byteStringHex": "dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "key": 17,
+            "value": {
+              "array": [
+                {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": {
+                        "byteStringHex": "0b466edafb772a01a401cf66af1ec610e2d790263c825452211e23065d5fb9ce"
+                      }
+                    },
+                    {
+                      "key": 1,
+                      "value": 1
+                    },
+                    {
+                      "key": 2,
+                      "value": {
+                        "array": [
+                          1,
+                          {
+                            "array": [
+                              {
+                                "byteStringHex": "12121212121212121212121212121212"
+                              }
+                            ]
+                          },
+                          {
+                            "array": [
+                              {
+                                "array": [
+                                  "file"
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": 3,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": 1
+                          },
+                          {
+                            "key": 1,
+                            "value": {
+                              "map": [
+                                {
+                                  "key": 0,
+                                  "value": {
+                                    "array": [
+                                      "file"
+                                    ]
+                                  }
+                                },
+                                {
+                                  "key": 1,
+                                  "value": 2
+                                },
+                                {
+                                  "key": 2,
+                                  "value": {
+                                    "byteStringHex": "12121212121212121212121212121212"
+                                  }
+                                },
+                                {
+                                  "key": 3,
+                                  "value": 2
+                                },
+                                {
+                                  "key": 4,
+                                  "value": {
+                                    "map": [
+                                      {
+                                        "key": 0,
+                                        "value": 1
+                                      },
+                                      {
+                                        "key": 1,
+                                        "value": 2
+                                      },
+                                      {
+                                        "key": 2,
+                                        "value": 1
+                                      },
+                                      {
+                                        "key": 3,
+                                        "value": {
+                                          "byteStringHex": "82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "key": 5,
+                                  "value": 24
+                                },
+                                {
+                                  "key": 6,
+                                  "value": {
+                                    "map": [
+                                      {
+                                        "key": 0,
+                                        "value": "content-policy.test"
+                                      },
+                                      {
+                                        "key": 1,
+                                        "value": "opaque"
+                                      },
+                                      {
+                                        "key": 2,
+                                        "value": 1
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": 4,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": 1
+                          },
+                          {
+                            "key": 1,
+                            "value": {
+                              "map": [
+                                {
+                                  "key": 0,
+                                  "value": {
+                                    "array": [
+                                      "file"
+                                    ]
+                                  }
+                                },
+                                {
+                                  "key": 1,
+                                  "value": 2
+                                },
+                                {
+                                  "key": 2,
+                                  "value": {
+                                    "byteStringHex": "12121212121212121212121212121212"
+                                  }
+                                },
+                                {
+                                  "key": 3,
+                                  "value": 2
+                                },
+                                {
+                                  "key": 4,
+                                  "value": {
+                                    "map": [
+                                      {
+                                        "key": 0,
+                                        "value": 1
+                                      },
+                                      {
+                                        "key": 1,
+                                        "value": 2
+                                      },
+                                      {
+                                        "key": 2,
+                                        "value": 1
+                                      },
+                                      {
+                                        "key": 3,
+                                        "value": {
+                                          "byteStringHex": "82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "key": 5,
+                                  "value": 24
+                                },
+                                {
+                                  "key": 6,
+                                  "value": {
+                                    "map": [
+                                      {
+                                        "key": 0,
+                                        "value": "content-policy.test"
+                                      },
+                                      {
+                                        "key": 1,
+                                        "value": "opaque"
+                                      },
+                                      {
+                                        "key": 2,
+                                        "value": 1
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": 5,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": 1
+                          },
+                          {
+                            "key": 1,
+                            "value": {
+                              "map": [
+                                {
+                                  "key": 0,
+                                  "value": {
+                                    "array": [
+                                      "file"
+                                    ]
+                                  }
+                                },
+                                {
+                                  "key": 1,
+                                  "value": 2
+                                },
+                                {
+                                  "key": 2,
+                                  "value": {
+                                    "byteStringHex": "12121212121212121212121212121212"
+                                  }
+                                },
+                                {
+                                  "key": 3,
+                                  "value": 2
+                                },
+                                {
+                                  "key": 4,
+                                  "value": {
+                                    "map": [
+                                      {
+                                        "key": 0,
+                                        "value": 1
+                                      },
+                                      {
+                                        "key": 1,
+                                        "value": 2
+                                      },
+                                      {
+                                        "key": 2,
+                                        "value": 1
+                                      },
+                                      {
+                                        "key": 3,
+                                        "value": {
+                                          "byteStringHex": "82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "key": 5,
+                                  "value": 24
+                                },
+                                {
+                                  "key": 6,
+                                  "value": {
+                                    "map": [
+                                      {
+                                        "key": 0,
+                                        "value": "content-policy.test"
+                                      },
+                                      {
+                                        "key": 1,
+                                        "value": "opaque"
+                                      },
+                                      {
+                                        "key": 2,
+                                        "value": 1
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": 6,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": 0
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": {
+                        "byteStringHex": "5134dd2abab62fa4cde0c7c5450dce7929a6437f64a1d5c9e0934e284d80c8b5"
+                      }
+                    },
+                    {
+                      "key": 1,
+                      "value": 1
+                    },
+                    {
+                      "key": 2,
+                      "value": {
+                        "array": [
+                          1,
+                          {
+                            "array": [
+                              {
+                                "byteStringHex": "12121212121212121212121212121212"
+                              }
+                            ]
+                          },
+                          {
+                            "array": [
+                              {
+                                "array": [
+                                  "file"
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": 3,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": 1
+                          },
+                          {
+                            "key": 1,
+                            "value": {
+                              "map": [
+                                {
+                                  "key": 0,
+                                  "value": {
+                                    "array": [
+                                      "file"
+                                    ]
+                                  }
+                                },
+                                {
+                                  "key": 1,
+                                  "value": 2
+                                },
+                                {
+                                  "key": 2,
+                                  "value": {
+                                    "byteStringHex": "12121212121212121212121212121212"
+                                  }
+                                },
+                                {
+                                  "key": 3,
+                                  "value": 2
+                                },
+                                {
+                                  "key": 4,
+                                  "value": {
+                                    "map": [
+                                      {
+                                        "key": 0,
+                                        "value": 1
+                                      },
+                                      {
+                                        "key": 1,
+                                        "value": 2
+                                      },
+                                      {
+                                        "key": 2,
+                                        "value": 1
+                                      },
+                                      {
+                                        "key": 3,
+                                        "value": {
+                                          "byteStringHex": "82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "key": 5,
+                                  "value": 24
+                                },
+                                {
+                                  "key": 6,
+                                  "value": {
+                                    "map": [
+                                      {
+                                        "key": 0,
+                                        "value": "content-policy.test"
+                                      },
+                                      {
+                                        "key": 1,
+                                        "value": "opaque"
+                                      },
+                                      {
+                                        "key": 2,
+                                        "value": 1
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": 5,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": 1
+                          },
+                          {
+                            "key": 1,
+                            "value": {
+                              "map": [
+                                {
+                                  "key": 0,
+                                  "value": {
+                                    "array": [
+                                      "file"
+                                    ]
+                                  }
+                                },
+                                {
+                                  "key": 1,
+                                  "value": 2
+                                },
+                                {
+                                  "key": 2,
+                                  "value": {
+                                    "byteStringHex": "12121212121212121212121212121212"
+                                  }
+                                },
+                                {
+                                  "key": 3,
+                                  "value": 2
+                                },
+                                {
+                                  "key": 4,
+                                  "value": {
+                                    "map": [
+                                      {
+                                        "key": 0,
+                                        "value": 1
+                                      },
+                                      {
+                                        "key": 1,
+                                        "value": 2
+                                      },
+                                      {
+                                        "key": 2,
+                                        "value": 1
+                                      },
+                                      {
+                                        "key": 3,
+                                        "value": {
+                                          "byteStringHex": "82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "key": 5,
+                                  "value": 24
+                                },
+                                {
+                                  "key": 6,
+                                  "value": {
+                                    "map": [
+                                      {
+                                        "key": 0,
+                                        "value": "content-policy.test"
+                                      },
+                                      {
+                                        "key": 1,
+                                        "value": "opaque"
+                                      },
+                                      {
+                                        "key": 2,
+                                        "value": 1
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": 6,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": 0
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": {
+                        "byteStringHex": "70f3077ec004a7ea8cc2f31837f319ce4c296d1217ed4505a8c270b77d848e5c"
+                      }
+                    },
+                    {
+                      "key": 1,
+                      "value": 1
+                    },
+                    {
+                      "key": 2,
+                      "value": {
+                        "array": [
+                          1,
+                          {
+                            "array": [
+                              {
+                                "byteStringHex": "12121212121212121212121212121212"
+                              }
+                            ]
+                          },
+                          {
+                            "array": [
+                              {
+                                "array": [
+                                  "file"
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": 6,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": 0
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": {
+                        "byteStringHex": "9de89d82990c38fd054e7b5aecc9c9ea9e500e5ddf8d03c37fd365f8f802bfe2"
+                      }
+                    },
+                    {
+                      "key": 1,
+                      "value": 1
+                    },
+                    {
+                      "key": 2,
+                      "value": {
+                        "array": [
+                          1,
+                          {
+                            "array": [
+                              {
+                                "byteStringHex": "12121212121212121212121212121212"
+                              }
+                            ]
+                          },
+                          {
+                            "array": [
+                              {
+                                "array": [
+                                  "file"
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": 5,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": 1
+                          },
+                          {
+                            "key": 1,
+                            "value": {
+                              "map": [
+                                {
+                                  "key": 0,
+                                  "value": {
+                                    "array": [
+                                      "file"
+                                    ]
+                                  }
+                                },
+                                {
+                                  "key": 1,
+                                  "value": 2
+                                },
+                                {
+                                  "key": 2,
+                                  "value": {
+                                    "byteStringHex": "12121212121212121212121212121212"
+                                  }
+                                },
+                                {
+                                  "key": 3,
+                                  "value": 2
+                                },
+                                {
+                                  "key": 4,
+                                  "value": {
+                                    "map": [
+                                      {
+                                        "key": 0,
+                                        "value": 1
+                                      },
+                                      {
+                                        "key": 1,
+                                        "value": 2
+                                      },
+                                      {
+                                        "key": 2,
+                                        "value": 1
+                                      },
+                                      {
+                                        "key": 3,
+                                        "value": {
+                                          "byteStringHex": "82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "key": 5,
+                                  "value": 24
+                                },
+                                {
+                                  "key": 6,
+                                  "value": {
+                                    "map": [
+                                      {
+                                        "key": 0,
+                                        "value": "content-policy.test"
+                                      },
+                                      {
+                                        "key": 1,
+                                        "value": "opaque"
+                                      },
+                                      {
+                                        "key": 2,
+                                        "value": 1
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": 6,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": 0
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": {
+                        "byteStringHex": "b7c0984f0b9060714fad398011b4b8bf61ab9c91a82cdbfd1be6030678df0c3a"
+                      }
+                    },
+                    {
+                      "key": 1,
+                      "value": 1
+                    },
+                    {
+                      "key": 2,
+                      "value": {
+                        "array": [
+                          1,
+                          {
+                            "array": [
+                              {
+                                "byteStringHex": "12121212121212121212121212121212"
+                              }
+                            ]
+                          },
+                          {
+                            "array": [
+                              {
+                                "array": [
+                                  "file"
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": 3,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": 1
+                          },
+                          {
+                            "key": 1,
+                            "value": {
+                              "map": [
+                                {
+                                  "key": 0,
+                                  "value": {
+                                    "array": [
+                                      "file"
+                                    ]
+                                  }
+                                },
+                                {
+                                  "key": 1,
+                                  "value": 2
+                                },
+                                {
+                                  "key": 2,
+                                  "value": {
+                                    "byteStringHex": "12121212121212121212121212121212"
+                                  }
+                                },
+                                {
+                                  "key": 3,
+                                  "value": 2
+                                },
+                                {
+                                  "key": 4,
+                                  "value": {
+                                    "map": [
+                                      {
+                                        "key": 0,
+                                        "value": 1
+                                      },
+                                      {
+                                        "key": 1,
+                                        "value": 2
+                                      },
+                                      {
+                                        "key": 2,
+                                        "value": 1
+                                      },
+                                      {
+                                        "key": 3,
+                                        "value": {
+                                          "byteStringHex": "82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "key": 5,
+                                  "value": 24
+                                },
+                                {
+                                  "key": 6,
+                                  "value": {
+                                    "map": [
+                                      {
+                                        "key": 0,
+                                        "value": "content-policy.test"
+                                      },
+                                      {
+                                        "key": 1,
+                                        "value": "opaque"
+                                      },
+                                      {
+                                        "key": 2,
+                                        "value": 1
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": 4,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": 1
+                          },
+                          {
+                            "key": 1,
+                            "value": {
+                              "map": [
+                                {
+                                  "key": 0,
+                                  "value": {
+                                    "array": [
+                                      "file"
+                                    ]
+                                  }
+                                },
+                                {
+                                  "key": 1,
+                                  "value": 2
+                                },
+                                {
+                                  "key": 2,
+                                  "value": {
+                                    "byteStringHex": "12121212121212121212121212121212"
+                                  }
+                                },
+                                {
+                                  "key": 3,
+                                  "value": 2
+                                },
+                                {
+                                  "key": 4,
+                                  "value": {
+                                    "map": [
+                                      {
+                                        "key": 0,
+                                        "value": 1
+                                      },
+                                      {
+                                        "key": 1,
+                                        "value": 2
+                                      },
+                                      {
+                                        "key": 2,
+                                        "value": 1
+                                      },
+                                      {
+                                        "key": 3,
+                                        "value": {
+                                          "byteStringHex": "82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "key": 5,
+                                  "value": 24
+                                },
+                                {
+                                  "key": 6,
+                                  "value": {
+                                    "map": [
+                                      {
+                                        "key": 0,
+                                        "value": "content-policy.test"
+                                      },
+                                      {
+                                        "key": 1,
+                                        "value": "opaque"
+                                      },
+                                      {
+                                        "key": 2,
+                                        "value": 1
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": 6,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": 0
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": {
+                        "byteStringHex": "c8acc9630e0add05062a6eb49d7c261ac8ef97c8178777754749dd23992fc2f5"
+                      }
+                    },
+                    {
+                      "key": 1,
+                      "value": 1
+                    },
+                    {
+                      "key": 2,
+                      "value": {
+                        "array": [
+                          1,
+                          {
+                            "array": [
+                              {
+                                "byteStringHex": "12121212121212121212121212121212"
+                              }
+                            ]
+                          },
+                          {
+                            "array": [
+                              {
+                                "array": [
+                                  "file"
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": 4,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": 1
+                          },
+                          {
+                            "key": 1,
+                            "value": {
+                              "map": [
+                                {
+                                  "key": 0,
+                                  "value": {
+                                    "array": [
+                                      "file"
+                                    ]
+                                  }
+                                },
+                                {
+                                  "key": 1,
+                                  "value": 2
+                                },
+                                {
+                                  "key": 2,
+                                  "value": {
+                                    "byteStringHex": "12121212121212121212121212121212"
+                                  }
+                                },
+                                {
+                                  "key": 3,
+                                  "value": 2
+                                },
+                                {
+                                  "key": 4,
+                                  "value": {
+                                    "map": [
+                                      {
+                                        "key": 0,
+                                        "value": 1
+                                      },
+                                      {
+                                        "key": 1,
+                                        "value": 2
+                                      },
+                                      {
+                                        "key": 2,
+                                        "value": 1
+                                      },
+                                      {
+                                        "key": 3,
+                                        "value": {
+                                          "byteStringHex": "82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "key": 5,
+                                  "value": 24
+                                },
+                                {
+                                  "key": 6,
+                                  "value": {
+                                    "map": [
+                                      {
+                                        "key": 0,
+                                        "value": "content-policy.test"
+                                      },
+                                      {
+                                        "key": 1,
+                                        "value": "opaque"
+                                      },
+                                      {
+                                        "key": 2,
+                                        "value": 1
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": 5,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": 1
+                          },
+                          {
+                            "key": 1,
+                            "value": {
+                              "map": [
+                                {
+                                  "key": 0,
+                                  "value": {
+                                    "array": [
+                                      "file"
+                                    ]
+                                  }
+                                },
+                                {
+                                  "key": 1,
+                                  "value": 2
+                                },
+                                {
+                                  "key": 2,
+                                  "value": {
+                                    "byteStringHex": "12121212121212121212121212121212"
+                                  }
+                                },
+                                {
+                                  "key": 3,
+                                  "value": 2
+                                },
+                                {
+                                  "key": 4,
+                                  "value": {
+                                    "map": [
+                                      {
+                                        "key": 0,
+                                        "value": 1
+                                      },
+                                      {
+                                        "key": 1,
+                                        "value": 2
+                                      },
+                                      {
+                                        "key": 2,
+                                        "value": 1
+                                      },
+                                      {
+                                        "key": 3,
+                                        "value": {
+                                          "byteStringHex": "82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "key": 5,
+                                  "value": 24
+                                },
+                                {
+                                  "key": 6,
+                                  "value": {
+                                    "map": [
+                                      {
+                                        "key": 0,
+                                        "value": "content-policy.test"
+                                      },
+                                      {
+                                        "key": 1,
+                                        "value": "opaque"
+                                      },
+                                      {
+                                        "key": 2,
+                                        "value": 1
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": 6,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": 0
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": {
+                        "byteStringHex": "daf9b32b6693a4f2378589c9392515bcb3b29825491daea387077bd5330ec213"
+                      }
+                    },
+                    {
+                      "key": 1,
+                      "value": 1
+                    },
+                    {
+                      "key": 2,
+                      "value": {
+                        "array": [
+                          1,
+                          {
+                            "array": [
+                              {
+                                "byteStringHex": "12121212121212121212121212121212"
+                              }
+                            ]
+                          },
+                          {
+                            "array": [
+                              {
+                                "array": [
+                                  "file"
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": 4,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": 1
+                          },
+                          {
+                            "key": 1,
+                            "value": {
+                              "map": [
+                                {
+                                  "key": 0,
+                                  "value": {
+                                    "array": [
+                                      "file"
+                                    ]
+                                  }
+                                },
+                                {
+                                  "key": 1,
+                                  "value": 2
+                                },
+                                {
+                                  "key": 2,
+                                  "value": {
+                                    "byteStringHex": "12121212121212121212121212121212"
+                                  }
+                                },
+                                {
+                                  "key": 3,
+                                  "value": 2
+                                },
+                                {
+                                  "key": 4,
+                                  "value": {
+                                    "map": [
+                                      {
+                                        "key": 0,
+                                        "value": 1
+                                      },
+                                      {
+                                        "key": 1,
+                                        "value": 2
+                                      },
+                                      {
+                                        "key": 2,
+                                        "value": 1
+                                      },
+                                      {
+                                        "key": 3,
+                                        "value": {
+                                          "byteStringHex": "82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "key": 5,
+                                  "value": 24
+                                },
+                                {
+                                  "key": 6,
+                                  "value": {
+                                    "map": [
+                                      {
+                                        "key": 0,
+                                        "value": "content-policy.test"
+                                      },
+                                      {
+                                        "key": 1,
+                                        "value": "opaque"
+                                      },
+                                      {
+                                        "key": 2,
+                                        "value": 1
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": 6,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": 0
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": {
+                        "byteStringHex": "efd8b2a7549386e4ca6ff3e46cb40e7a2d2ee15c0ae8fbd8cab876a8f436b628"
+                      }
+                    },
+                    {
+                      "key": 1,
+                      "value": 1
+                    },
+                    {
+                      "key": 2,
+                      "value": {
+                        "array": [
+                          1,
+                          {
+                            "array": [
+                              {
+                                "byteStringHex": "12121212121212121212121212121212"
+                              }
+                            ]
+                          },
+                          {
+                            "array": [
+                              {
+                                "array": [
+                                  "file"
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": 3,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": 1
+                          },
+                          {
+                            "key": 1,
+                            "value": {
+                              "map": [
+                                {
+                                  "key": 0,
+                                  "value": {
+                                    "array": [
+                                      "file"
+                                    ]
+                                  }
+                                },
+                                {
+                                  "key": 1,
+                                  "value": 2
+                                },
+                                {
+                                  "key": 2,
+                                  "value": {
+                                    "byteStringHex": "12121212121212121212121212121212"
+                                  }
+                                },
+                                {
+                                  "key": 3,
+                                  "value": 2
+                                },
+                                {
+                                  "key": 4,
+                                  "value": {
+                                    "map": [
+                                      {
+                                        "key": 0,
+                                        "value": 1
+                                      },
+                                      {
+                                        "key": 1,
+                                        "value": 2
+                                      },
+                                      {
+                                        "key": 2,
+                                        "value": 1
+                                      },
+                                      {
+                                        "key": 3,
+                                        "value": {
+                                          "byteStringHex": "82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "key": 5,
+                                  "value": 24
+                                },
+                                {
+                                  "key": 6,
+                                  "value": {
+                                    "map": [
+                                      {
+                                        "key": 0,
+                                        "value": "content-policy.test"
+                                      },
+                                      {
+                                        "key": 1,
+                                        "value": "opaque"
+                                      },
+                                      {
+                                        "key": 2,
+                                        "value": 1
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": 6,
+                      "value": {
+                        "map": [
+                          {
+                            "key": 0,
+                            "value": 0
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "kind": 11,
+      "kindName": "conflict-set",
+      "objectId": "59f7814cfab891685197abebc61ea70cdca2a2328feab3c4cec816d4eabfca07",
+      "payloadPath": "objects/11-conflict-set.cbor"
+    }
+  ],
+  "schema": "ogvcs.repository-format.v1.decoded-diagnostics.v1"
+}

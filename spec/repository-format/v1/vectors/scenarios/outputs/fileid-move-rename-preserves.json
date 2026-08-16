@@ -1,0 +1,7 @@
+{
+  "resultFamily": "tree",
+  "rootState": "accepted-exact-constructor-result",
+  "scenarioId": "fileid-move-rename-preserves",
+  "schema": "ogvcs.repository-format.v1.scenario-output.v1",
+  "stableOutputIdentity": "ogvcs:v1:tree:sha256:698e806c6156fd213f1d6dbb3864d415b9fb3bd4ec847a32406176ba1e460c10"
+}

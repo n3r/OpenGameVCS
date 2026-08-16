@@ -1,0 +1,19 @@
+{
+  "entries": [],
+  "formatVersion": 1,
+  "registry": "ogvcs.repository-format.required-features",
+  "registryVersion": 1,
+  "reserved": [
+    {
+      "from": 0,
+      "reason": "invalid sentinel",
+      "to": 0
+    }
+  ],
+  "unassigned": [
+    {
+      "from": 1,
+      "to": 4294967295
+    }
+  ]
+}

@@ -1,0 +1,2915 @@
+{
+  "commonFieldInheritance": {
+    "appliesToScopes": [
+      "repository-format.cddl#attestation",
+      "repository-format.cddl#change-set",
+      "repository-format.cddl#conflict-set",
+      "repository-format.cddl#content-manifest",
+      "repository-format.cddl#group-set",
+      "repository-format.cddl#provenance",
+      "repository-format.cddl#repository-descriptor",
+      "repository-format.cddl#shelf-revision",
+      "repository-format.cddl#snapshot",
+      "repository-format.cddl#tree"
+    ],
+    "commonKeyRange": {
+      "from": 0,
+      "to": 3
+    },
+    "registry": "ogvcs.repository-format.common-fields",
+    "reservedKeyRange": {
+      "from": 4,
+      "to": 15
+    }
+  },
+  "entries": [
+    {
+      "cddlRule": "allocation-proof",
+      "code": 0,
+      "name": "repository-descriptor",
+      "requirement": "required",
+      "scope": "repository-format.cddl#allocation-proof",
+      "state": "ratified",
+      "type": "descriptor-ref"
+    },
+    {
+      "cddlRule": "allocation-proof",
+      "code": 1,
+      "name": "allocation-kind",
+      "requirement": "required",
+      "scope": "repository-format.cddl#allocation-proof",
+      "state": "ratified",
+      "type": "allocation-kind"
+    },
+    {
+      "cddlRule": "allocation-proof",
+      "code": 2,
+      "name": "import-mapping-key",
+      "requirement": "conditional",
+      "scope": "repository-format.cddl#allocation-proof",
+      "state": "ratified",
+      "type": "digest"
+    },
+    {
+      "cddlRule": "annotation-record",
+      "code": 0,
+      "logicalRecordType": 8,
+      "name": "format-version",
+      "requirement": "required",
+      "scope": "repository-format.cddl#annotation-record",
+      "state": "ratified",
+      "type": "format-v1"
+    },
+    {
+      "cddlRule": "annotation-record",
+      "code": 1,
+      "logicalRecordType": 8,
+      "name": "logical-record-type",
+      "requirement": "required",
+      "scope": "repository-format.cddl#annotation-record",
+      "state": "ratified",
+      "type": "8"
+    },
+    {
+      "cddlRule": "annotation-record",
+      "code": 16,
+      "logicalRecordType": 8,
+      "name": "subject",
+      "requirement": "required",
+      "scope": "repository-format.cddl#annotation-record",
+      "state": "ratified",
+      "type": "object-ref"
+    },
+    {
+      "cddlRule": "annotation-record",
+      "code": 17,
+      "logicalRecordType": 8,
+      "name": "annotation-profile",
+      "requirement": "required",
+      "scope": "repository-format.cddl#annotation-record",
+      "state": "ratified",
+      "type": "profile-ref"
+    },
+    {
+      "cddlRule": "annotation-record",
+      "code": 18,
+      "logicalRecordType": 8,
+      "name": "payload",
+      "requirement": "required",
+      "scope": "repository-format.cddl#annotation-record",
+      "state": "ratified",
+      "type": "bstr"
+    },
+    {
+      "cddlRule": "asset-group",
+      "code": 0,
+      "name": "group-id",
+      "requirement": "required",
+      "scope": "repository-format.cddl#asset-group",
+      "state": "ratified",
+      "type": "group-id"
+    },
+    {
+      "cddlRule": "asset-group",
+      "code": 1,
+      "name": "profile",
+      "requirement": "required",
+      "scope": "repository-format.cddl#asset-group",
+      "state": "ratified",
+      "type": "profile-ref"
+    },
+    {
+      "cddlRule": "asset-group",
+      "code": 2,
+      "name": "primary-file-id",
+      "requirement": "required",
+      "scope": "repository-format.cddl#asset-group",
+      "state": "ratified",
+      "type": "file-id"
+    },
+    {
+      "cddlRule": "asset-group",
+      "code": 3,
+      "name": "members",
+      "requirement": "required",
+      "scope": "repository-format.cddl#asset-group",
+      "state": "ratified",
+      "type": "[group-member, * group-member]"
+    },
+    {
+      "cddlRule": "asset-group",
+      "code": 4,
+      "name": "external-keys",
+      "requirement": "optional",
+      "scope": "repository-format.cddl#asset-group",
+      "state": "ratified",
+      "type": "[* external-key]"
+    },
+    {
+      "cddlRule": "attestation",
+      "code": 16,
+      "name": "subject",
+      "objectKind": 10,
+      "requirement": "required",
+      "scope": "repository-format.cddl#attestation",
+      "state": "ratified",
+      "type": "object-ref"
+    },
+    {
+      "cddlRule": "attestation",
+      "code": 17,
+      "name": "predicate",
+      "objectKind": 10,
+      "requirement": "required",
+      "scope": "repository-format.cddl#attestation",
+      "state": "ratified",
+      "type": "profile-ref"
+    },
+    {
+      "cddlRule": "attestation",
+      "code": 18,
+      "name": "issuer",
+      "objectKind": 10,
+      "requirement": "required",
+      "scope": "repository-format.cddl#attestation",
+      "state": "ratified",
+      "type": "identity-ref"
+    },
+    {
+      "cddlRule": "attestation",
+      "code": 19,
+      "name": "issued-at",
+      "objectKind": 10,
+      "requirement": "required",
+      "scope": "repository-format.cddl#attestation",
+      "state": "ratified",
+      "type": "timestamp-nanoseconds"
+    },
+    {
+      "cddlRule": "attestation",
+      "code": 20,
+      "name": "payload",
+      "objectKind": 10,
+      "requirement": "required",
+      "scope": "repository-format.cddl#attestation",
+      "state": "ratified",
+      "type": "bstr"
+    },
+    {
+      "cddlRule": "attestation",
+      "code": 21,
+      "name": "signature-profile",
+      "objectKind": 10,
+      "requirement": "optional",
+      "scope": "repository-format.cddl#attestation",
+      "state": "ratified",
+      "type": "profile-ref"
+    },
+    {
+      "cddlRule": "attestation",
+      "code": 22,
+      "name": "signature",
+      "objectKind": 10,
+      "requirement": "conditional",
+      "scope": "repository-format.cddl#attestation",
+      "state": "ratified",
+      "type": "nonempty-value-bytes"
+    },
+    {
+      "cddlRule": "attestation-ref",
+      "code": 0,
+      "name": "format-version",
+      "requirement": "required",
+      "scope": "repository-format.cddl#attestation-ref",
+      "state": "ratified",
+      "type": "format-v1"
+    },
+    {
+      "cddlRule": "attestation-ref",
+      "code": 1,
+      "name": "expected-object-kind",
+      "requirement": "required",
+      "scope": "repository-format.cddl#attestation-ref",
+      "state": "ratified",
+      "type": "10"
+    },
+    {
+      "cddlRule": "attestation-ref",
+      "code": 2,
+      "name": "hash-algorithm",
+      "requirement": "required",
+      "scope": "repository-format.cddl#attestation-ref",
+      "state": "ratified",
+      "type": "sha256-algorithm"
+    },
+    {
+      "cddlRule": "attestation-ref",
+      "code": 3,
+      "name": "digest",
+      "requirement": "required",
+      "scope": "repository-format.cddl#attestation-ref",
+      "state": "ratified",
+      "type": "digest"
+    },
+    {
+      "cddlRule": "bundle-budget",
+      "code": 0,
+      "itemType": 1,
+      "name": "declared-total-sequence-bytes",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-budget",
+      "state": "ratified",
+      "type": "bundle-sequence-bytes"
+    },
+    {
+      "cddlRule": "bundle-budget",
+      "code": 1,
+      "itemType": 1,
+      "name": "declared-largest-item-bytes",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-budget",
+      "state": "ratified",
+      "type": "bundle-largest-item-bytes"
+    },
+    {
+      "cddlRule": "bundle-budget",
+      "code": 2,
+      "itemType": 1,
+      "name": "declared-maximum-traversal-edges",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-budget",
+      "state": "ratified",
+      "type": "bundle-traversal-edge-count"
+    },
+    {
+      "cddlRule": "bundle-budget",
+      "code": 3,
+      "itemType": 1,
+      "name": "declared-maximum-index-entries",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-budget",
+      "state": "ratified",
+      "type": "bundle-index-entry-count"
+    },
+    {
+      "cddlRule": "bundle-header",
+      "code": 0,
+      "itemType": 1,
+      "name": "bundle-format",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-header",
+      "state": "ratified",
+      "type": "format-v1"
+    },
+    {
+      "cddlRule": "bundle-header",
+      "code": 1,
+      "itemType": 1,
+      "name": "item-type",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-header",
+      "state": "ratified",
+      "type": "1"
+    },
+    {
+      "cddlRule": "bundle-header",
+      "code": 2,
+      "itemType": 1,
+      "name": "closure-mode",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-header",
+      "state": "ratified",
+      "type": "1"
+    },
+    {
+      "cddlRule": "bundle-header",
+      "code": 3,
+      "itemType": 1,
+      "name": "object-count",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-header",
+      "state": "ratified",
+      "type": "bundle-object-count"
+    },
+    {
+      "cddlRule": "bundle-header",
+      "code": 4,
+      "itemType": 1,
+      "name": "logical-record-count",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-header",
+      "state": "ratified",
+      "type": "bundle-logical-record-count"
+    },
+    {
+      "cddlRule": "bundle-header",
+      "code": 5,
+      "itemType": 1,
+      "name": "root-count",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-header",
+      "state": "ratified",
+      "type": "bundle-root-count"
+    },
+    {
+      "cddlRule": "bundle-header",
+      "code": 6,
+      "itemType": 1,
+      "name": "budgets",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-header",
+      "state": "ratified",
+      "type": "bundle-budget"
+    },
+    {
+      "cddlRule": "bundle-logical-record",
+      "code": 0,
+      "itemType": 3,
+      "name": "bundle-format",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-logical-record",
+      "state": "ratified",
+      "type": "format-v1"
+    },
+    {
+      "cddlRule": "bundle-logical-record",
+      "code": 1,
+      "itemType": 3,
+      "name": "item-type",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-logical-record",
+      "state": "ratified",
+      "type": "3"
+    },
+    {
+      "cddlRule": "bundle-logical-record",
+      "code": 2,
+      "itemType": 3,
+      "name": "ordinal",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-logical-record",
+      "state": "ratified",
+      "type": "uint"
+    },
+    {
+      "cddlRule": "bundle-logical-record",
+      "code": 3,
+      "itemType": 3,
+      "name": "record-identity",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-logical-record",
+      "state": "ratified",
+      "type": "typed-digest"
+    },
+    {
+      "cddlRule": "bundle-logical-record",
+      "code": 4,
+      "itemType": 3,
+      "name": "logical-record",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-logical-record",
+      "state": "ratified",
+      "type": "logical-record"
+    },
+    {
+      "cddlRule": "bundle-object",
+      "code": 0,
+      "itemType": 2,
+      "name": "bundle-format",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-object",
+      "state": "ratified",
+      "type": "format-v1"
+    },
+    {
+      "cddlRule": "bundle-object",
+      "code": 1,
+      "itemType": 2,
+      "name": "item-type",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-object",
+      "state": "ratified",
+      "type": "2"
+    },
+    {
+      "cddlRule": "bundle-object",
+      "code": 2,
+      "itemType": 2,
+      "name": "ordinal",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-object",
+      "state": "ratified",
+      "type": "uint"
+    },
+    {
+      "cddlRule": "bundle-object",
+      "code": 3,
+      "itemType": 2,
+      "name": "object-reference",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-object",
+      "state": "ratified",
+      "type": "object-ref"
+    },
+    {
+      "cddlRule": "bundle-object",
+      "code": 4,
+      "itemType": 2,
+      "name": "payload-bytes",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-object",
+      "state": "ratified",
+      "type": "bundle-object-payload"
+    },
+    {
+      "cddlRule": "bundle-root",
+      "code": 0,
+      "itemType": 4,
+      "name": "bundle-format",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-root",
+      "state": "ratified",
+      "type": "format-v1"
+    },
+    {
+      "cddlRule": "bundle-root",
+      "code": 1,
+      "itemType": 4,
+      "name": "item-type",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-root",
+      "state": "ratified",
+      "type": "4"
+    },
+    {
+      "cddlRule": "bundle-root",
+      "code": 2,
+      "itemType": 4,
+      "name": "ordinal",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-root",
+      "state": "ratified",
+      "type": "uint"
+    },
+    {
+      "cddlRule": "bundle-root",
+      "code": 3,
+      "itemType": 4,
+      "name": "root-kind",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-root",
+      "state": "ratified",
+      "type": "1..2"
+    },
+    {
+      "cddlRule": "bundle-root",
+      "code": 4,
+      "itemType": 4,
+      "name": "identity",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-root",
+      "state": "ratified",
+      "type": "object-ref / typed-digest"
+    },
+    {
+      "cddlRule": "bundle-root",
+      "code": 5,
+      "itemType": 4,
+      "name": "role-profile",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-root",
+      "state": "ratified",
+      "type": "profile-ref"
+    },
+    {
+      "cddlRule": "bundle-trailer",
+      "code": 0,
+      "itemType": 5,
+      "name": "bundle-format",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-trailer",
+      "state": "ratified",
+      "type": "format-v1"
+    },
+    {
+      "cddlRule": "bundle-trailer",
+      "code": 1,
+      "itemType": 5,
+      "name": "item-type",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-trailer",
+      "state": "ratified",
+      "type": "5"
+    },
+    {
+      "cddlRule": "bundle-trailer",
+      "code": 2,
+      "itemType": 5,
+      "name": "object-count",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-trailer",
+      "state": "ratified",
+      "type": "bundle-object-count"
+    },
+    {
+      "cddlRule": "bundle-trailer",
+      "code": 3,
+      "itemType": 5,
+      "name": "logical-record-count",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-trailer",
+      "state": "ratified",
+      "type": "bundle-logical-record-count"
+    },
+    {
+      "cddlRule": "bundle-trailer",
+      "code": 4,
+      "itemType": 5,
+      "name": "root-count",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-trailer",
+      "state": "ratified",
+      "type": "bundle-root-count"
+    },
+    {
+      "cddlRule": "bundle-trailer",
+      "code": 5,
+      "itemType": 5,
+      "name": "total-item-count",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-trailer",
+      "state": "ratified",
+      "type": "bundle-total-item-count"
+    },
+    {
+      "cddlRule": "bundle-trailer",
+      "code": 6,
+      "itemType": 5,
+      "name": "transcript-digest",
+      "requirement": "required",
+      "scope": "repository-format.cddl#bundle-trailer",
+      "state": "ratified",
+      "type": "typed-digest"
+    },
+    {
+      "cddlRule": "change-set",
+      "code": 16,
+      "name": "repository-descriptor",
+      "objectKind": 4,
+      "requirement": "required",
+      "scope": "repository-format.cddl#change-set",
+      "state": "ratified",
+      "type": "descriptor-ref"
+    },
+    {
+      "cddlRule": "change-set",
+      "code": 17,
+      "name": "base-snapshot",
+      "objectKind": 4,
+      "requirement": "conditional",
+      "scope": "repository-format.cddl#change-set",
+      "state": "ratified",
+      "type": "snapshot-ref"
+    },
+    {
+      "cddlRule": "change-set",
+      "code": 18,
+      "name": "operations",
+      "objectKind": 4,
+      "requirement": "required",
+      "scope": "repository-format.cddl#change-set",
+      "state": "ratified",
+      "type": "[* operation]"
+    },
+    {
+      "cddlRule": "change-set-ref",
+      "code": 0,
+      "name": "format-version",
+      "requirement": "required",
+      "scope": "repository-format.cddl#change-set-ref",
+      "state": "ratified",
+      "type": "format-v1"
+    },
+    {
+      "cddlRule": "change-set-ref",
+      "code": 1,
+      "name": "expected-object-kind",
+      "requirement": "required",
+      "scope": "repository-format.cddl#change-set-ref",
+      "state": "ratified",
+      "type": "4"
+    },
+    {
+      "cddlRule": "change-set-ref",
+      "code": 2,
+      "name": "hash-algorithm",
+      "requirement": "required",
+      "scope": "repository-format.cddl#change-set-ref",
+      "state": "ratified",
+      "type": "sha256-algorithm"
+    },
+    {
+      "cddlRule": "change-set-ref",
+      "code": 3,
+      "name": "digest",
+      "requirement": "required",
+      "scope": "repository-format.cddl#change-set-ref",
+      "state": "ratified",
+      "type": "digest"
+    },
+    {
+      "cddlRule": "chunk-part",
+      "code": 0,
+      "name": "chunk-reference",
+      "requirement": "required",
+      "scope": "repository-format.cddl#chunk-part",
+      "state": "ratified",
+      "type": "chunk-ref"
+    },
+    {
+      "cddlRule": "chunk-part",
+      "code": 1,
+      "name": "logical-length",
+      "requirement": "required",
+      "scope": "repository-format.cddl#chunk-part",
+      "state": "ratified",
+      "type": "1..67108864"
+    },
+    {
+      "cddlRule": "chunk-ref",
+      "code": 0,
+      "name": "format-version",
+      "requirement": "required",
+      "scope": "repository-format.cddl#chunk-ref",
+      "state": "ratified",
+      "type": "format-v1"
+    },
+    {
+      "cddlRule": "chunk-ref",
+      "code": 1,
+      "name": "expected-object-kind",
+      "requirement": "required",
+      "scope": "repository-format.cddl#chunk-ref",
+      "state": "ratified",
+      "type": "1"
+    },
+    {
+      "cddlRule": "chunk-ref",
+      "code": 2,
+      "name": "hash-algorithm",
+      "requirement": "required",
+      "scope": "repository-format.cddl#chunk-ref",
+      "state": "ratified",
+      "type": "sha256-algorithm"
+    },
+    {
+      "cddlRule": "chunk-ref",
+      "code": 3,
+      "name": "digest",
+      "requirement": "required",
+      "scope": "repository-format.cddl#chunk-ref",
+      "state": "ratified",
+      "type": "digest"
+    },
+    {
+      "cddlRule": "conflict-id-preimage",
+      "code": 0,
+      "name": "conflict-kind",
+      "requirement": "required",
+      "scope": "repository-format.cddl#conflict-id-preimage",
+      "state": "ratified",
+      "type": "conflict-kind"
+    },
+    {
+      "cddlRule": "conflict-id-preimage",
+      "code": 1,
+      "name": "subject",
+      "requirement": "required",
+      "scope": "repository-format.cddl#conflict-id-preimage",
+      "state": "ratified",
+      "type": "conflict-subject"
+    },
+    {
+      "cddlRule": "conflict-id-preimage",
+      "code": 2,
+      "name": "base-side",
+      "requirement": "optional",
+      "scope": "repository-format.cddl#conflict-id-preimage",
+      "state": "ratified",
+      "type": "conflict-side"
+    },
+    {
+      "cddlRule": "conflict-id-preimage",
+      "code": 3,
+      "name": "left-side",
+      "requirement": "optional",
+      "scope": "repository-format.cddl#conflict-id-preimage",
+      "state": "ratified",
+      "type": "conflict-side"
+    },
+    {
+      "cddlRule": "conflict-id-preimage",
+      "code": 4,
+      "name": "right-side",
+      "requirement": "optional",
+      "scope": "repository-format.cddl#conflict-id-preimage",
+      "state": "ratified",
+      "type": "conflict-side"
+    },
+    {
+      "cddlRule": "conflict-record",
+      "code": 0,
+      "name": "conflict-id",
+      "requirement": "required",
+      "scope": "repository-format.cddl#conflict-record",
+      "state": "ratified",
+      "type": "digest"
+    },
+    {
+      "cddlRule": "conflict-record",
+      "code": 1,
+      "name": "conflict-kind",
+      "requirement": "required",
+      "scope": "repository-format.cddl#conflict-record",
+      "state": "ratified",
+      "type": "conflict-kind"
+    },
+    {
+      "cddlRule": "conflict-record",
+      "code": 2,
+      "name": "subject",
+      "requirement": "required",
+      "scope": "repository-format.cddl#conflict-record",
+      "state": "ratified",
+      "type": "conflict-subject"
+    },
+    {
+      "cddlRule": "conflict-record",
+      "code": 3,
+      "name": "base-side",
+      "requirement": "optional",
+      "scope": "repository-format.cddl#conflict-record",
+      "state": "ratified",
+      "type": "conflict-side"
+    },
+    {
+      "cddlRule": "conflict-record",
+      "code": 4,
+      "name": "left-side",
+      "requirement": "optional",
+      "scope": "repository-format.cddl#conflict-record",
+      "state": "ratified",
+      "type": "conflict-side"
+    },
+    {
+      "cddlRule": "conflict-record",
+      "code": 5,
+      "name": "right-side",
+      "requirement": "optional",
+      "scope": "repository-format.cddl#conflict-record",
+      "state": "ratified",
+      "type": "conflict-side"
+    },
+    {
+      "cddlRule": "conflict-record",
+      "code": 6,
+      "name": "resolution",
+      "requirement": "required",
+      "scope": "repository-format.cddl#conflict-record",
+      "state": "ratified",
+      "type": "conflict-resolution"
+    },
+    {
+      "cddlRule": "conflict-resolution",
+      "code": 0,
+      "name": "resolution-state",
+      "requirement": "required",
+      "scope": "repository-format.cddl#conflict-resolution",
+      "state": "ratified",
+      "type": "0 / 1"
+    },
+    {
+      "cddlRule": "conflict-resolution",
+      "code": 1,
+      "name": "choice",
+      "requirement": "conditional",
+      "scope": "repository-format.cddl#conflict-resolution",
+      "state": "ratified",
+      "type": "1..3 / 4 / 5"
+    },
+    {
+      "cddlRule": "conflict-resolution",
+      "code": 2,
+      "name": "result-side",
+      "requirement": "conditional",
+      "scope": "repository-format.cddl#conflict-resolution",
+      "state": "ratified",
+      "type": "conflict-side"
+    },
+    {
+      "cddlRule": "conflict-resolution",
+      "code": 3,
+      "name": "driver-profile",
+      "requirement": "conditional",
+      "scope": "repository-format.cddl#conflict-resolution",
+      "state": "ratified",
+      "type": "profile-ref"
+    },
+    {
+      "cddlRule": "conflict-set",
+      "code": 16,
+      "name": "repository-descriptor",
+      "objectKind": 11,
+      "requirement": "required",
+      "scope": "repository-format.cddl#conflict-set",
+      "state": "ratified",
+      "type": "descriptor-ref"
+    },
+    {
+      "cddlRule": "conflict-set",
+      "code": 17,
+      "name": "conflicts",
+      "objectKind": 11,
+      "requirement": "required",
+      "scope": "repository-format.cddl#conflict-set",
+      "state": "ratified",
+      "type": "[conflict-record, * conflict-record]"
+    },
+    {
+      "cddlRule": "conflict-set-ref",
+      "code": 0,
+      "name": "format-version",
+      "requirement": "required",
+      "scope": "repository-format.cddl#conflict-set-ref",
+      "state": "ratified",
+      "type": "format-v1"
+    },
+    {
+      "cddlRule": "conflict-set-ref",
+      "code": 1,
+      "name": "expected-object-kind",
+      "requirement": "required",
+      "scope": "repository-format.cddl#conflict-set-ref",
+      "state": "ratified",
+      "type": "11"
+    },
+    {
+      "cddlRule": "conflict-set-ref",
+      "code": 2,
+      "name": "hash-algorithm",
+      "requirement": "required",
+      "scope": "repository-format.cddl#conflict-set-ref",
+      "state": "ratified",
+      "type": "sha256-algorithm"
+    },
+    {
+      "cddlRule": "conflict-set-ref",
+      "code": 3,
+      "name": "digest",
+      "requirement": "required",
+      "scope": "repository-format.cddl#conflict-set-ref",
+      "state": "ratified",
+      "type": "digest"
+    },
+    {
+      "cddlRule": "content-manifest",
+      "code": 16,
+      "name": "logical-length",
+      "objectKind": 2,
+      "requirement": "required",
+      "scope": "repository-format.cddl#content-manifest",
+      "state": "ratified",
+      "type": "logical-length"
+    },
+    {
+      "cddlRule": "content-manifest",
+      "code": 17,
+      "name": "whole-file-digest",
+      "objectKind": 2,
+      "requirement": "required",
+      "scope": "repository-format.cddl#content-manifest",
+      "state": "ratified",
+      "type": "typed-digest"
+    },
+    {
+      "cddlRule": "content-manifest",
+      "code": 18,
+      "name": "chunk-profile",
+      "objectKind": 2,
+      "requirement": "required",
+      "scope": "repository-format.cddl#content-manifest",
+      "state": "ratified",
+      "type": "profile-ref"
+    },
+    {
+      "cddlRule": "content-manifest",
+      "code": 19,
+      "name": "chunks",
+      "objectKind": 2,
+      "requirement": "required",
+      "scope": "repository-format.cddl#content-manifest",
+      "state": "ratified",
+      "type": "[* chunk-part]"
+    },
+    {
+      "cddlRule": "copy-operation",
+      "code": 0,
+      "name": "sequence",
+      "requirement": "required",
+      "scope": "repository-format.cddl#copy-operation",
+      "state": "ratified",
+      "type": "uint"
+    },
+    {
+      "cddlRule": "copy-operation",
+      "code": 1,
+      "name": "operation-code",
+      "requirement": "required",
+      "scope": "repository-format.cddl#copy-operation",
+      "state": "ratified",
+      "type": "3"
+    },
+    {
+      "cddlRule": "copy-operation",
+      "code": 3,
+      "name": "after",
+      "requirement": "required",
+      "scope": "repository-format.cddl#copy-operation",
+      "state": "ratified",
+      "type": "entry-state"
+    },
+    {
+      "cddlRule": "copy-operation",
+      "code": 4,
+      "name": "source",
+      "requirement": "required",
+      "scope": "repository-format.cddl#copy-operation",
+      "state": "ratified",
+      "type": "entry-state"
+    },
+    {
+      "cddlRule": "copy-operation",
+      "code": 5,
+      "name": "allocation-proof",
+      "requirement": "required",
+      "scope": "repository-format.cddl#copy-operation",
+      "state": "ratified",
+      "type": "allocation-proof"
+    },
+    {
+      "cddlRule": "create-operation",
+      "code": 0,
+      "name": "sequence",
+      "requirement": "required",
+      "scope": "repository-format.cddl#create-operation",
+      "state": "ratified",
+      "type": "uint"
+    },
+    {
+      "cddlRule": "create-operation",
+      "code": 1,
+      "name": "operation-code",
+      "requirement": "required",
+      "scope": "repository-format.cddl#create-operation",
+      "state": "ratified",
+      "type": "1"
+    },
+    {
+      "cddlRule": "create-operation",
+      "code": 3,
+      "name": "after",
+      "requirement": "required",
+      "scope": "repository-format.cddl#create-operation",
+      "state": "ratified",
+      "type": "entry-state"
+    },
+    {
+      "cddlRule": "create-operation",
+      "code": 5,
+      "name": "allocation-proof",
+      "requirement": "required",
+      "scope": "repository-format.cddl#create-operation",
+      "state": "ratified",
+      "type": "allocation-proof"
+    },
+    {
+      "cddlRule": "delete-operation",
+      "code": 0,
+      "name": "sequence",
+      "requirement": "required",
+      "scope": "repository-format.cddl#delete-operation",
+      "state": "ratified",
+      "type": "uint"
+    },
+    {
+      "cddlRule": "delete-operation",
+      "code": 1,
+      "name": "operation-code",
+      "requirement": "required",
+      "scope": "repository-format.cddl#delete-operation",
+      "state": "ratified",
+      "type": "6"
+    },
+    {
+      "cddlRule": "delete-operation",
+      "code": 2,
+      "name": "before",
+      "requirement": "required",
+      "scope": "repository-format.cddl#delete-operation",
+      "state": "ratified",
+      "type": "entry-state"
+    },
+    {
+      "cddlRule": "descriptor-ref",
+      "code": 0,
+      "name": "format-version",
+      "requirement": "required",
+      "scope": "repository-format.cddl#descriptor-ref",
+      "state": "ratified",
+      "type": "format-v1"
+    },
+    {
+      "cddlRule": "descriptor-ref",
+      "code": 1,
+      "name": "expected-object-kind",
+      "requirement": "required",
+      "scope": "repository-format.cddl#descriptor-ref",
+      "state": "ratified",
+      "type": "6"
+    },
+    {
+      "cddlRule": "descriptor-ref",
+      "code": 2,
+      "name": "hash-algorithm",
+      "requirement": "required",
+      "scope": "repository-format.cddl#descriptor-ref",
+      "state": "ratified",
+      "type": "sha256-algorithm"
+    },
+    {
+      "cddlRule": "descriptor-ref",
+      "code": 3,
+      "name": "digest",
+      "requirement": "required",
+      "scope": "repository-format.cddl#descriptor-ref",
+      "state": "ratified",
+      "type": "digest"
+    },
+    {
+      "cddlRule": "entry-conflict-side",
+      "code": 0,
+      "name": "subject-kind",
+      "requirement": "required",
+      "scope": "repository-format.cddl#entry-conflict-side",
+      "state": "ratified",
+      "type": "1"
+    },
+    {
+      "cddlRule": "entry-conflict-side",
+      "code": 1,
+      "name": "entry-state",
+      "requirement": "required",
+      "scope": "repository-format.cddl#entry-conflict-side",
+      "state": "ratified",
+      "type": "entry-state"
+    },
+    {
+      "cddlRule": "entry-state",
+      "code": 0,
+      "name": "path",
+      "requirement": "required",
+      "scope": "repository-format.cddl#entry-state",
+      "state": "ratified",
+      "type": "path-value"
+    },
+    {
+      "cddlRule": "entry-state",
+      "code": 1,
+      "name": "entry-kind",
+      "requirement": "required",
+      "scope": "repository-format.cddl#entry-state",
+      "state": "ratified",
+      "type": "entry-kind"
+    },
+    {
+      "cddlRule": "entry-state",
+      "code": 2,
+      "name": "file-id",
+      "requirement": "required",
+      "scope": "repository-format.cddl#entry-state",
+      "state": "ratified",
+      "type": "file-id"
+    },
+    {
+      "cddlRule": "entry-state",
+      "code": 3,
+      "name": "portable-mode",
+      "requirement": "required",
+      "scope": "repository-format.cddl#entry-state",
+      "state": "ratified",
+      "type": "portable-mode"
+    },
+    {
+      "cddlRule": "entry-state",
+      "code": 4,
+      "name": "target",
+      "requirement": "conditional",
+      "scope": "repository-format.cddl#entry-state",
+      "state": "ratified",
+      "type": "object-ref"
+    },
+    {
+      "cddlRule": "entry-state",
+      "code": 5,
+      "name": "logical-size",
+      "requirement": "required",
+      "scope": "repository-format.cddl#entry-state",
+      "state": "ratified",
+      "type": "logical-length"
+    },
+    {
+      "cddlRule": "entry-state",
+      "code": 6,
+      "name": "content-policy",
+      "requirement": "required",
+      "scope": "repository-format.cddl#entry-state",
+      "state": "ratified",
+      "type": "profile-ref"
+    },
+    {
+      "cddlRule": "external-key",
+      "code": 0,
+      "name": "scheme-profile",
+      "requirement": "required",
+      "scope": "repository-format.cddl#external-key",
+      "state": "ratified",
+      "type": "profile-ref"
+    },
+    {
+      "cddlRule": "external-key",
+      "code": 1,
+      "name": "value",
+      "requirement": "required",
+      "scope": "repository-format.cddl#external-key",
+      "state": "ratified",
+      "type": "nonempty-value-bytes"
+    },
+    {
+      "cddlRule": "fileid-lifetime-record",
+      "code": 0,
+      "logicalRecordType": 4,
+      "name": "format-version",
+      "requirement": "required",
+      "scope": "repository-format.cddl#fileid-lifetime-record",
+      "state": "ratified",
+      "type": "format-v1"
+    },
+    {
+      "cddlRule": "fileid-lifetime-record",
+      "code": 1,
+      "logicalRecordType": 4,
+      "name": "logical-record-type",
+      "requirement": "required",
+      "scope": "repository-format.cddl#fileid-lifetime-record",
+      "state": "ratified",
+      "type": "4"
+    },
+    {
+      "cddlRule": "fileid-lifetime-record",
+      "code": 16,
+      "logicalRecordType": 4,
+      "name": "repository-descriptor",
+      "requirement": "required",
+      "scope": "repository-format.cddl#fileid-lifetime-record",
+      "state": "ratified",
+      "type": "descriptor-ref"
+    },
+    {
+      "cddlRule": "fileid-lifetime-record",
+      "code": 17,
+      "logicalRecordType": 4,
+      "name": "file-id",
+      "requirement": "required",
+      "scope": "repository-format.cddl#fileid-lifetime-record",
+      "state": "ratified",
+      "type": "file-id"
+    },
+    {
+      "cddlRule": "fileid-lifetime-record",
+      "code": 18,
+      "logicalRecordType": 4,
+      "name": "origin-kind",
+      "requirement": "required",
+      "scope": "repository-format.cddl#fileid-lifetime-record",
+      "state": "ratified",
+      "type": "1..3"
+    },
+    {
+      "cddlRule": "fileid-lifetime-record",
+      "code": 19,
+      "logicalRecordType": 4,
+      "name": "first-change-set",
+      "requirement": "required",
+      "scope": "repository-format.cddl#fileid-lifetime-record",
+      "state": "ratified",
+      "type": "change-set-ref"
+    },
+    {
+      "cddlRule": "fileid-lifetime-record",
+      "code": 20,
+      "logicalRecordType": 4,
+      "name": "first-operation",
+      "requirement": "required",
+      "scope": "repository-format.cddl#fileid-lifetime-record",
+      "state": "ratified",
+      "type": "uint"
+    },
+    {
+      "cddlRule": "fileid-lifetime-record",
+      "code": 21,
+      "logicalRecordType": 4,
+      "name": "import-mapping-key",
+      "requirement": "conditional",
+      "scope": "repository-format.cddl#fileid-lifetime-record",
+      "state": "ratified",
+      "type": "digest"
+    },
+    {
+      "cddlRule": "fixture-event-record",
+      "code": 0,
+      "logicalRecordType": 9,
+      "name": "format-version",
+      "requirement": "required",
+      "scope": "repository-format.cddl#fixture-event-record",
+      "state": "ratified",
+      "type": "format-v1"
+    },
+    {
+      "cddlRule": "fixture-event-record",
+      "code": 1,
+      "logicalRecordType": 9,
+      "name": "logical-record-type",
+      "requirement": "required",
+      "scope": "repository-format.cddl#fixture-event-record",
+      "state": "ratified",
+      "type": "9"
+    },
+    {
+      "cddlRule": "fixture-event-record",
+      "code": 16,
+      "logicalRecordType": 9,
+      "name": "scenario-digest",
+      "requirement": "required",
+      "scope": "repository-format.cddl#fixture-event-record",
+      "state": "ratified",
+      "type": "typed-digest"
+    },
+    {
+      "cddlRule": "fixture-event-record",
+      "code": 17,
+      "logicalRecordType": 9,
+      "name": "sequence",
+      "requirement": "required",
+      "scope": "repository-format.cddl#fixture-event-record",
+      "state": "ratified",
+      "type": "uint"
+    },
+    {
+      "cddlRule": "fixture-event-record",
+      "code": 18,
+      "logicalRecordType": 9,
+      "name": "fixture-event-profile",
+      "requirement": "required",
+      "scope": "repository-format.cddl#fixture-event-record",
+      "state": "ratified",
+      "type": "profile-ref"
+    },
+    {
+      "cddlRule": "fixture-event-record",
+      "code": 19,
+      "logicalRecordType": 9,
+      "name": "public-event-digest",
+      "requirement": "required",
+      "scope": "repository-format.cddl#fixture-event-record",
+      "state": "ratified",
+      "type": "typed-digest"
+    },
+    {
+      "cddlRule": "fixture-event-record",
+      "code": 20,
+      "logicalRecordType": 9,
+      "name": "operation-kind",
+      "requirement": "required",
+      "scope": "repository-format.cddl#fixture-event-record",
+      "state": "ratified",
+      "type": "fixture-operation-kind"
+    },
+    {
+      "cddlRule": "group-conflict-side",
+      "code": 0,
+      "name": "subject-kind",
+      "requirement": "required",
+      "scope": "repository-format.cddl#group-conflict-side",
+      "state": "ratified",
+      "type": "2"
+    },
+    {
+      "cddlRule": "group-conflict-side",
+      "code": 2,
+      "name": "asset-group",
+      "requirement": "required",
+      "scope": "repository-format.cddl#group-conflict-side",
+      "state": "ratified",
+      "type": "asset-group"
+    },
+    {
+      "cddlRule": "group-create-operation",
+      "code": 0,
+      "name": "sequence",
+      "requirement": "required",
+      "scope": "repository-format.cddl#group-create-operation",
+      "state": "ratified",
+      "type": "uint"
+    },
+    {
+      "cddlRule": "group-create-operation",
+      "code": 1,
+      "name": "operation-code",
+      "requirement": "required",
+      "scope": "repository-format.cddl#group-create-operation",
+      "state": "ratified",
+      "type": "8"
+    },
+    {
+      "cddlRule": "group-create-operation",
+      "code": 8,
+      "name": "group-after",
+      "requirement": "required",
+      "scope": "repository-format.cddl#group-create-operation",
+      "state": "ratified",
+      "type": "asset-group"
+    },
+    {
+      "cddlRule": "group-delete-operation",
+      "code": 0,
+      "name": "sequence",
+      "requirement": "required",
+      "scope": "repository-format.cddl#group-delete-operation",
+      "state": "ratified",
+      "type": "uint"
+    },
+    {
+      "cddlRule": "group-delete-operation",
+      "code": 1,
+      "name": "operation-code",
+      "requirement": "required",
+      "scope": "repository-format.cddl#group-delete-operation",
+      "state": "ratified",
+      "type": "10"
+    },
+    {
+      "cddlRule": "group-delete-operation",
+      "code": 7,
+      "name": "group-before",
+      "requirement": "required",
+      "scope": "repository-format.cddl#group-delete-operation",
+      "state": "ratified",
+      "type": "asset-group"
+    },
+    {
+      "cddlRule": "group-member",
+      "code": 0,
+      "name": "file-id",
+      "requirement": "required",
+      "scope": "repository-format.cddl#group-member",
+      "state": "ratified",
+      "type": "file-id"
+    },
+    {
+      "cddlRule": "group-member",
+      "code": 1,
+      "name": "role-profile",
+      "requirement": "required",
+      "scope": "repository-format.cddl#group-member",
+      "state": "ratified",
+      "type": "profile-ref"
+    },
+    {
+      "cddlRule": "group-set",
+      "code": 16,
+      "name": "repository-descriptor",
+      "objectKind": 5,
+      "requirement": "required",
+      "scope": "repository-format.cddl#group-set",
+      "state": "ratified",
+      "type": "descriptor-ref"
+    },
+    {
+      "cddlRule": "group-set",
+      "code": 17,
+      "name": "groups",
+      "objectKind": 5,
+      "requirement": "required",
+      "scope": "repository-format.cddl#group-set",
+      "state": "ratified",
+      "type": "[* asset-group]"
+    },
+    {
+      "cddlRule": "group-set-ref",
+      "code": 0,
+      "name": "format-version",
+      "requirement": "required",
+      "scope": "repository-format.cddl#group-set-ref",
+      "state": "ratified",
+      "type": "format-v1"
+    },
+    {
+      "cddlRule": "group-set-ref",
+      "code": 1,
+      "name": "expected-object-kind",
+      "requirement": "required",
+      "scope": "repository-format.cddl#group-set-ref",
+      "state": "ratified",
+      "type": "5"
+    },
+    {
+      "cddlRule": "group-set-ref",
+      "code": 2,
+      "name": "hash-algorithm",
+      "requirement": "required",
+      "scope": "repository-format.cddl#group-set-ref",
+      "state": "ratified",
+      "type": "sha256-algorithm"
+    },
+    {
+      "cddlRule": "group-set-ref",
+      "code": 3,
+      "name": "digest",
+      "requirement": "required",
+      "scope": "repository-format.cddl#group-set-ref",
+      "state": "ratified",
+      "type": "digest"
+    },
+    {
+      "cddlRule": "group-update-operation",
+      "code": 0,
+      "name": "sequence",
+      "requirement": "required",
+      "scope": "repository-format.cddl#group-update-operation",
+      "state": "ratified",
+      "type": "uint"
+    },
+    {
+      "cddlRule": "group-update-operation",
+      "code": 1,
+      "name": "operation-code",
+      "requirement": "required",
+      "scope": "repository-format.cddl#group-update-operation",
+      "state": "ratified",
+      "type": "9"
+    },
+    {
+      "cddlRule": "group-update-operation",
+      "code": 7,
+      "name": "group-before",
+      "requirement": "required",
+      "scope": "repository-format.cddl#group-update-operation",
+      "state": "ratified",
+      "type": "asset-group"
+    },
+    {
+      "cddlRule": "group-update-operation",
+      "code": 8,
+      "name": "group-after",
+      "requirement": "required",
+      "scope": "repository-format.cddl#group-update-operation",
+      "state": "ratified",
+      "type": "asset-group"
+    },
+    {
+      "cddlRule": "identity-ref",
+      "code": 0,
+      "name": "scheme",
+      "requirement": "required",
+      "scope": "repository-format.cddl#identity-ref",
+      "state": "ratified",
+      "type": "profile-ref"
+    },
+    {
+      "cddlRule": "identity-ref",
+      "code": 1,
+      "name": "identifier",
+      "requirement": "required",
+      "scope": "repository-format.cddl#identity-ref",
+      "state": "ratified",
+      "type": "nonempty-value-bytes"
+    },
+    {
+      "cddlRule": "identity-ref",
+      "code": 2,
+      "name": "display-name",
+      "requirement": "optional",
+      "scope": "repository-format.cddl#identity-ref",
+      "state": "ratified",
+      "type": "tstr"
+    },
+    {
+      "cddlRule": "import-mapping-record",
+      "code": 0,
+      "logicalRecordType": 5,
+      "name": "format-version",
+      "requirement": "required",
+      "scope": "repository-format.cddl#import-mapping-record",
+      "state": "ratified",
+      "type": "format-v1"
+    },
+    {
+      "cddlRule": "import-mapping-record",
+      "code": 1,
+      "logicalRecordType": 5,
+      "name": "logical-record-type",
+      "requirement": "required",
+      "scope": "repository-format.cddl#import-mapping-record",
+      "state": "ratified",
+      "type": "5"
+    },
+    {
+      "cddlRule": "import-mapping-record",
+      "code": 16,
+      "logicalRecordType": 5,
+      "name": "repository-descriptor",
+      "requirement": "required",
+      "scope": "repository-format.cddl#import-mapping-record",
+      "state": "ratified",
+      "type": "descriptor-ref"
+    },
+    {
+      "cddlRule": "import-mapping-record",
+      "code": 17,
+      "logicalRecordType": 5,
+      "name": "importer-profile",
+      "requirement": "required",
+      "scope": "repository-format.cddl#import-mapping-record",
+      "state": "ratified",
+      "type": "profile-ref"
+    },
+    {
+      "cddlRule": "import-mapping-record",
+      "code": 18,
+      "logicalRecordType": 5,
+      "name": "source-namespace-digest",
+      "requirement": "required",
+      "scope": "repository-format.cddl#import-mapping-record",
+      "state": "ratified",
+      "type": "digest"
+    },
+    {
+      "cddlRule": "import-mapping-record",
+      "code": 19,
+      "logicalRecordType": 5,
+      "name": "source-identity-digest",
+      "requirement": "required",
+      "scope": "repository-format.cddl#import-mapping-record",
+      "state": "ratified",
+      "type": "digest"
+    },
+    {
+      "cddlRule": "import-mapping-record",
+      "code": 20,
+      "logicalRecordType": 5,
+      "name": "file-id",
+      "requirement": "required",
+      "scope": "repository-format.cddl#import-mapping-record",
+      "state": "ratified",
+      "type": "file-id"
+    },
+    {
+      "cddlRule": "import-mapping-record",
+      "code": 21,
+      "logicalRecordType": 5,
+      "name": "mapping-state",
+      "requirement": "required",
+      "scope": "repository-format.cddl#import-mapping-record",
+      "state": "ratified",
+      "type": "1..3"
+    },
+    {
+      "cddlRule": "lock-reference-record",
+      "code": 0,
+      "logicalRecordType": 7,
+      "name": "format-version",
+      "requirement": "required",
+      "scope": "repository-format.cddl#lock-reference-record",
+      "state": "ratified",
+      "type": "format-v1"
+    },
+    {
+      "cddlRule": "lock-reference-record",
+      "code": 1,
+      "logicalRecordType": 7,
+      "name": "logical-record-type",
+      "requirement": "required",
+      "scope": "repository-format.cddl#lock-reference-record",
+      "state": "ratified",
+      "type": "7"
+    },
+    {
+      "cddlRule": "lock-reference-record",
+      "code": 16,
+      "logicalRecordType": 7,
+      "name": "repository-descriptor",
+      "requirement": "required",
+      "scope": "repository-format.cddl#lock-reference-record",
+      "state": "ratified",
+      "type": "descriptor-ref"
+    },
+    {
+      "cddlRule": "lock-reference-record",
+      "code": 17,
+      "logicalRecordType": 7,
+      "name": "target-kind",
+      "requirement": "required",
+      "scope": "repository-format.cddl#lock-reference-record",
+      "state": "ratified",
+      "type": "1..2"
+    },
+    {
+      "cddlRule": "lock-reference-record",
+      "code": 18,
+      "logicalRecordType": 7,
+      "name": "target-id",
+      "requirement": "required",
+      "scope": "repository-format.cddl#lock-reference-record",
+      "state": "ratified",
+      "type": "file-id / group-id"
+    },
+    {
+      "cddlRule": "lock-reference-record",
+      "code": 19,
+      "logicalRecordType": 7,
+      "name": "base-snapshot",
+      "requirement": "required",
+      "scope": "repository-format.cddl#lock-reference-record",
+      "state": "ratified",
+      "type": "snapshot-ref"
+    },
+    {
+      "cddlRule": "lock-reference-record",
+      "code": 20,
+      "logicalRecordType": 7,
+      "name": "generation",
+      "requirement": "required",
+      "scope": "repository-format.cddl#lock-reference-record",
+      "state": "ratified",
+      "type": "uint"
+    },
+    {
+      "cddlRule": "manifest-ref",
+      "code": 0,
+      "name": "format-version",
+      "requirement": "required",
+      "scope": "repository-format.cddl#manifest-ref",
+      "state": "ratified",
+      "type": "format-v1"
+    },
+    {
+      "cddlRule": "manifest-ref",
+      "code": 1,
+      "name": "expected-object-kind",
+      "requirement": "required",
+      "scope": "repository-format.cddl#manifest-ref",
+      "state": "ratified",
+      "type": "2"
+    },
+    {
+      "cddlRule": "manifest-ref",
+      "code": 2,
+      "name": "hash-algorithm",
+      "requirement": "required",
+      "scope": "repository-format.cddl#manifest-ref",
+      "state": "ratified",
+      "type": "sha256-algorithm"
+    },
+    {
+      "cddlRule": "manifest-ref",
+      "code": 3,
+      "name": "digest",
+      "requirement": "required",
+      "scope": "repository-format.cddl#manifest-ref",
+      "state": "ratified",
+      "type": "digest"
+    },
+    {
+      "cddlRule": "merge-resolution-operation",
+      "code": 0,
+      "name": "sequence",
+      "requirement": "required",
+      "scope": "repository-format.cddl#merge-resolution-operation",
+      "state": "ratified",
+      "type": "uint"
+    },
+    {
+      "cddlRule": "merge-resolution-operation",
+      "code": 1,
+      "name": "operation-code",
+      "requirement": "required",
+      "scope": "repository-format.cddl#merge-resolution-operation",
+      "state": "ratified",
+      "type": "11"
+    },
+    {
+      "cddlRule": "merge-resolution-operation",
+      "code": 9,
+      "name": "conflict-id",
+      "requirement": "required",
+      "scope": "repository-format.cddl#merge-resolution-operation",
+      "state": "ratified",
+      "type": "digest"
+    },
+    {
+      "cddlRule": "merge-resolution-operation",
+      "code": 10,
+      "name": "subject-kind",
+      "requirement": "required",
+      "scope": "repository-format.cddl#merge-resolution-operation",
+      "state": "ratified",
+      "type": "1..2"
+    },
+    {
+      "cddlRule": "merge-resolution-operation",
+      "code": 11,
+      "name": "result",
+      "requirement": "optional",
+      "scope": "repository-format.cddl#merge-resolution-operation",
+      "state": "ratified",
+      "type": "entry-state / asset-group"
+    },
+    {
+      "cddlRule": "modify-operation",
+      "code": 0,
+      "name": "sequence",
+      "requirement": "required",
+      "scope": "repository-format.cddl#modify-operation",
+      "state": "ratified",
+      "type": "uint"
+    },
+    {
+      "cddlRule": "modify-operation",
+      "code": 1,
+      "name": "operation-code",
+      "requirement": "required",
+      "scope": "repository-format.cddl#modify-operation",
+      "state": "ratified",
+      "type": "2"
+    },
+    {
+      "cddlRule": "modify-operation",
+      "code": 2,
+      "name": "before",
+      "requirement": "required",
+      "scope": "repository-format.cddl#modify-operation",
+      "state": "ratified",
+      "type": "entry-state"
+    },
+    {
+      "cddlRule": "modify-operation",
+      "code": 3,
+      "name": "after",
+      "requirement": "required",
+      "scope": "repository-format.cddl#modify-operation",
+      "state": "ratified",
+      "type": "entry-state"
+    },
+    {
+      "cddlRule": "move-operation",
+      "code": 0,
+      "name": "sequence",
+      "requirement": "required",
+      "scope": "repository-format.cddl#move-operation",
+      "state": "ratified",
+      "type": "uint"
+    },
+    {
+      "cddlRule": "move-operation",
+      "code": 1,
+      "name": "operation-code",
+      "requirement": "required",
+      "scope": "repository-format.cddl#move-operation",
+      "state": "ratified",
+      "type": "4"
+    },
+    {
+      "cddlRule": "move-operation",
+      "code": 2,
+      "name": "before",
+      "requirement": "required",
+      "scope": "repository-format.cddl#move-operation",
+      "state": "ratified",
+      "type": "entry-state"
+    },
+    {
+      "cddlRule": "move-operation",
+      "code": 3,
+      "name": "after",
+      "requirement": "required",
+      "scope": "repository-format.cddl#move-operation",
+      "state": "ratified",
+      "type": "entry-state"
+    },
+    {
+      "cddlRule": "mutable-ref-record",
+      "code": 0,
+      "logicalRecordType": 2,
+      "name": "format-version",
+      "requirement": "required",
+      "scope": "repository-format.cddl#mutable-ref-record",
+      "state": "ratified",
+      "type": "format-v1"
+    },
+    {
+      "cddlRule": "mutable-ref-record",
+      "code": 1,
+      "logicalRecordType": 2,
+      "name": "logical-record-type",
+      "requirement": "required",
+      "scope": "repository-format.cddl#mutable-ref-record",
+      "state": "ratified",
+      "type": "2"
+    },
+    {
+      "cddlRule": "mutable-ref-record",
+      "code": 16,
+      "logicalRecordType": 2,
+      "name": "repository-descriptor",
+      "requirement": "required",
+      "scope": "repository-format.cddl#mutable-ref-record",
+      "state": "ratified",
+      "type": "descriptor-ref"
+    },
+    {
+      "cddlRule": "mutable-ref-record",
+      "code": 17,
+      "logicalRecordType": 2,
+      "name": "reference-kind",
+      "requirement": "required",
+      "scope": "repository-format.cddl#mutable-ref-record",
+      "state": "ratified",
+      "type": "1..2"
+    },
+    {
+      "cddlRule": "mutable-ref-record",
+      "code": 18,
+      "logicalRecordType": 2,
+      "name": "name",
+      "requirement": "required",
+      "scope": "repository-format.cddl#mutable-ref-record",
+      "state": "ratified",
+      "type": "nonempty-text-value"
+    },
+    {
+      "cddlRule": "mutable-ref-record",
+      "code": 19,
+      "logicalRecordType": 2,
+      "name": "snapshot",
+      "requirement": "required",
+      "scope": "repository-format.cddl#mutable-ref-record",
+      "state": "ratified",
+      "type": "snapshot-ref"
+    },
+    {
+      "cddlRule": "mutable-ref-record",
+      "code": 20,
+      "logicalRecordType": 2,
+      "name": "generation",
+      "requirement": "required",
+      "scope": "repository-format.cddl#mutable-ref-record",
+      "state": "ratified",
+      "type": "uint"
+    },
+    {
+      "cddlRule": "object-ref",
+      "code": 0,
+      "name": "format-version",
+      "requirement": "required",
+      "scope": "repository-format.cddl#object-ref",
+      "state": "ratified",
+      "type": "format-v1"
+    },
+    {
+      "cddlRule": "object-ref",
+      "code": 1,
+      "name": "expected-object-kind",
+      "requirement": "required",
+      "scope": "repository-format.cddl#object-ref",
+      "state": "ratified",
+      "type": "object-kind"
+    },
+    {
+      "cddlRule": "object-ref",
+      "code": 2,
+      "name": "hash-algorithm",
+      "requirement": "required",
+      "scope": "repository-format.cddl#object-ref",
+      "state": "ratified",
+      "type": "sha256-algorithm"
+    },
+    {
+      "cddlRule": "object-ref",
+      "code": 3,
+      "name": "digest",
+      "requirement": "required",
+      "scope": "repository-format.cddl#object-ref",
+      "state": "ratified",
+      "type": "digest"
+    },
+    {
+      "cddlRule": "pending-change-reference-record",
+      "code": 0,
+      "logicalRecordType": 6,
+      "name": "format-version",
+      "requirement": "required",
+      "scope": "repository-format.cddl#pending-change-reference-record",
+      "state": "ratified",
+      "type": "format-v1"
+    },
+    {
+      "cddlRule": "pending-change-reference-record",
+      "code": 1,
+      "logicalRecordType": 6,
+      "name": "logical-record-type",
+      "requirement": "required",
+      "scope": "repository-format.cddl#pending-change-reference-record",
+      "state": "ratified",
+      "type": "6"
+    },
+    {
+      "cddlRule": "pending-change-reference-record",
+      "code": 16,
+      "logicalRecordType": 6,
+      "name": "repository-descriptor",
+      "requirement": "required",
+      "scope": "repository-format.cddl#pending-change-reference-record",
+      "state": "ratified",
+      "type": "descriptor-ref"
+    },
+    {
+      "cddlRule": "pending-change-reference-record",
+      "code": 17,
+      "logicalRecordType": 6,
+      "name": "pending-id",
+      "requirement": "required",
+      "scope": "repository-format.cddl#pending-change-reference-record",
+      "state": "ratified",
+      "type": "bstr .size 16"
+    },
+    {
+      "cddlRule": "pending-change-reference-record",
+      "code": 18,
+      "logicalRecordType": 6,
+      "name": "base-snapshot",
+      "requirement": "required",
+      "scope": "repository-format.cddl#pending-change-reference-record",
+      "state": "ratified",
+      "type": "snapshot-ref"
+    },
+    {
+      "cddlRule": "pending-change-reference-record",
+      "code": 19,
+      "logicalRecordType": 6,
+      "name": "change-set",
+      "requirement": "required",
+      "scope": "repository-format.cddl#pending-change-reference-record",
+      "state": "ratified",
+      "type": "change-set-ref"
+    },
+    {
+      "cddlRule": "pending-change-reference-record",
+      "code": 20,
+      "logicalRecordType": 6,
+      "name": "conflict-set",
+      "requirement": "optional",
+      "scope": "repository-format.cddl#pending-change-reference-record",
+      "state": "ratified",
+      "type": "conflict-set-ref"
+    },
+    {
+      "cddlRule": "policy-result",
+      "code": 0,
+      "name": "profile",
+      "requirement": "required",
+      "scope": "repository-format.cddl#policy-result",
+      "state": "ratified",
+      "type": "profile-ref"
+    },
+    {
+      "cddlRule": "policy-result",
+      "code": 1,
+      "name": "generation",
+      "requirement": "required",
+      "scope": "repository-format.cddl#policy-result",
+      "state": "ratified",
+      "type": "uint"
+    },
+    {
+      "cddlRule": "policy-result",
+      "code": 2,
+      "name": "decision",
+      "requirement": "required",
+      "scope": "repository-format.cddl#policy-result",
+      "state": "ratified",
+      "type": "1..2"
+    },
+    {
+      "cddlRule": "policy-result",
+      "code": 3,
+      "name": "result-digest",
+      "requirement": "required",
+      "scope": "repository-format.cddl#policy-result",
+      "state": "ratified",
+      "type": "typed-digest"
+    },
+    {
+      "cddlRule": "profile-ref",
+      "code": 0,
+      "name": "namespace",
+      "requirement": "required",
+      "scope": "repository-format.cddl#profile-ref",
+      "state": "ratified",
+      "type": "profile-namespace"
+    },
+    {
+      "cddlRule": "profile-ref",
+      "code": 1,
+      "name": "id",
+      "requirement": "required",
+      "scope": "repository-format.cddl#profile-ref",
+      "state": "ratified",
+      "type": "profile-token"
+    },
+    {
+      "cddlRule": "profile-ref",
+      "code": 2,
+      "name": "major",
+      "requirement": "required",
+      "scope": "repository-format.cddl#profile-ref",
+      "state": "ratified",
+      "type": "1..4294967295"
+    },
+    {
+      "cddlRule": "provenance",
+      "code": 16,
+      "name": "producer",
+      "objectKind": 9,
+      "requirement": "required",
+      "scope": "repository-format.cddl#provenance",
+      "state": "ratified",
+      "type": "profile-ref"
+    },
+    {
+      "cddlRule": "provenance",
+      "code": 17,
+      "name": "inputs",
+      "objectKind": 9,
+      "requirement": "required",
+      "scope": "repository-format.cddl#provenance",
+      "state": "ratified",
+      "type": "[* object-ref]"
+    },
+    {
+      "cddlRule": "provenance",
+      "code": 18,
+      "name": "statement-digest",
+      "objectKind": 9,
+      "requirement": "required",
+      "scope": "repository-format.cddl#provenance",
+      "state": "ratified",
+      "type": "typed-digest"
+    },
+    {
+      "cddlRule": "provenance",
+      "code": 19,
+      "name": "statement",
+      "objectKind": 9,
+      "requirement": "optional",
+      "scope": "repository-format.cddl#provenance",
+      "state": "ratified",
+      "type": "bstr"
+    },
+    {
+      "cddlRule": "provenance-ref",
+      "code": 0,
+      "name": "format-version",
+      "requirement": "required",
+      "scope": "repository-format.cddl#provenance-ref",
+      "state": "ratified",
+      "type": "format-v1"
+    },
+    {
+      "cddlRule": "provenance-ref",
+      "code": 1,
+      "name": "expected-object-kind",
+      "requirement": "required",
+      "scope": "repository-format.cddl#provenance-ref",
+      "state": "ratified",
+      "type": "9"
+    },
+    {
+      "cddlRule": "provenance-ref",
+      "code": 2,
+      "name": "hash-algorithm",
+      "requirement": "required",
+      "scope": "repository-format.cddl#provenance-ref",
+      "state": "ratified",
+      "type": "sha256-algorithm"
+    },
+    {
+      "cddlRule": "provenance-ref",
+      "code": 3,
+      "name": "digest",
+      "requirement": "required",
+      "scope": "repository-format.cddl#provenance-ref",
+      "state": "ratified",
+      "type": "digest"
+    },
+    {
+      "cddlRule": "rename-operation",
+      "code": 0,
+      "name": "sequence",
+      "requirement": "required",
+      "scope": "repository-format.cddl#rename-operation",
+      "state": "ratified",
+      "type": "uint"
+    },
+    {
+      "cddlRule": "rename-operation",
+      "code": 1,
+      "name": "operation-code",
+      "requirement": "required",
+      "scope": "repository-format.cddl#rename-operation",
+      "state": "ratified",
+      "type": "5"
+    },
+    {
+      "cddlRule": "rename-operation",
+      "code": 2,
+      "name": "before",
+      "requirement": "required",
+      "scope": "repository-format.cddl#rename-operation",
+      "state": "ratified",
+      "type": "entry-state"
+    },
+    {
+      "cddlRule": "rename-operation",
+      "code": 3,
+      "name": "after",
+      "requirement": "required",
+      "scope": "repository-format.cddl#rename-operation",
+      "state": "ratified",
+      "type": "entry-state"
+    },
+    {
+      "cddlRule": "repository-descriptor",
+      "code": 16,
+      "name": "repository-id",
+      "objectKind": 6,
+      "requirement": "required",
+      "scope": "repository-format.cddl#repository-descriptor",
+      "state": "ratified",
+      "type": "repository-id"
+    },
+    {
+      "cddlRule": "repository-descriptor",
+      "code": 17,
+      "name": "path-profile",
+      "objectKind": 6,
+      "requirement": "required",
+      "scope": "repository-format.cddl#repository-descriptor",
+      "state": "ratified",
+      "type": "profile-ref"
+    },
+    {
+      "cddlRule": "repository-descriptor",
+      "code": 18,
+      "name": "content-policy-profiles",
+      "objectKind": 6,
+      "requirement": "required",
+      "scope": "repository-format.cddl#repository-descriptor",
+      "state": "ratified",
+      "type": "[profile-ref, * profile-ref]"
+    },
+    {
+      "cddlRule": "repository-descriptor",
+      "code": 19,
+      "name": "group-profiles",
+      "objectKind": 6,
+      "requirement": "required",
+      "scope": "repository-format.cddl#repository-descriptor",
+      "state": "ratified",
+      "type": "[* profile-ref]"
+    },
+    {
+      "cddlRule": "repository-descriptor",
+      "code": 20,
+      "name": "chunk-profiles",
+      "objectKind": 6,
+      "requirement": "optional",
+      "scope": "repository-format.cddl#repository-descriptor",
+      "state": "ratified",
+      "type": "[* profile-ref]"
+    },
+    {
+      "cddlRule": "repository-root-record",
+      "code": 0,
+      "logicalRecordType": 1,
+      "name": "format-version",
+      "requirement": "required",
+      "scope": "repository-format.cddl#repository-root-record",
+      "state": "ratified",
+      "type": "format-v1"
+    },
+    {
+      "cddlRule": "repository-root-record",
+      "code": 1,
+      "logicalRecordType": 1,
+      "name": "logical-record-type",
+      "requirement": "required",
+      "scope": "repository-format.cddl#repository-root-record",
+      "state": "ratified",
+      "type": "1"
+    },
+    {
+      "cddlRule": "repository-root-record",
+      "code": 16,
+      "logicalRecordType": 1,
+      "name": "repository-descriptor",
+      "requirement": "required",
+      "scope": "repository-format.cddl#repository-root-record",
+      "state": "ratified",
+      "type": "descriptor-ref"
+    },
+    {
+      "cddlRule": "repository-root-record",
+      "code": 17,
+      "logicalRecordType": 1,
+      "name": "designated-root",
+      "requirement": "required",
+      "scope": "repository-format.cddl#repository-root-record",
+      "state": "ratified",
+      "type": "snapshot-ref"
+    },
+    {
+      "cddlRule": "restore-operation",
+      "code": 0,
+      "name": "sequence",
+      "requirement": "required",
+      "scope": "repository-format.cddl#restore-operation",
+      "state": "ratified",
+      "type": "uint"
+    },
+    {
+      "cddlRule": "restore-operation",
+      "code": 1,
+      "name": "operation-code",
+      "requirement": "required",
+      "scope": "repository-format.cddl#restore-operation",
+      "state": "ratified",
+      "type": "7"
+    },
+    {
+      "cddlRule": "restore-operation",
+      "code": 3,
+      "name": "after",
+      "requirement": "required",
+      "scope": "repository-format.cddl#restore-operation",
+      "state": "ratified",
+      "type": "entry-state"
+    },
+    {
+      "cddlRule": "restore-operation",
+      "code": 6,
+      "name": "restore-proof",
+      "requirement": "required",
+      "scope": "repository-format.cddl#restore-operation",
+      "state": "ratified",
+      "type": "restore-proof"
+    },
+    {
+      "cddlRule": "restore-proof",
+      "code": 0,
+      "name": "repository-descriptor",
+      "requirement": "required",
+      "scope": "repository-format.cddl#restore-proof",
+      "state": "ratified",
+      "type": "descriptor-ref"
+    },
+    {
+      "cddlRule": "restore-proof",
+      "code": 1,
+      "name": "source-snapshot",
+      "requirement": "required",
+      "scope": "repository-format.cddl#restore-proof",
+      "state": "ratified",
+      "type": "snapshot-ref"
+    },
+    {
+      "cddlRule": "restore-proof",
+      "code": 2,
+      "name": "source-path",
+      "requirement": "required",
+      "scope": "repository-format.cddl#restore-proof",
+      "state": "ratified",
+      "type": "path-value"
+    },
+    {
+      "cddlRule": "restore-proof",
+      "code": 3,
+      "name": "delete-snapshot",
+      "requirement": "required",
+      "scope": "repository-format.cddl#restore-proof",
+      "state": "ratified",
+      "type": "snapshot-ref"
+    },
+    {
+      "cddlRule": "shelf-pointer-record",
+      "code": 0,
+      "logicalRecordType": 3,
+      "name": "format-version",
+      "requirement": "required",
+      "scope": "repository-format.cddl#shelf-pointer-record",
+      "state": "ratified",
+      "type": "format-v1"
+    },
+    {
+      "cddlRule": "shelf-pointer-record",
+      "code": 1,
+      "logicalRecordType": 3,
+      "name": "logical-record-type",
+      "requirement": "required",
+      "scope": "repository-format.cddl#shelf-pointer-record",
+      "state": "ratified",
+      "type": "3"
+    },
+    {
+      "cddlRule": "shelf-pointer-record",
+      "code": 16,
+      "logicalRecordType": 3,
+      "name": "repository-descriptor",
+      "requirement": "required",
+      "scope": "repository-format.cddl#shelf-pointer-record",
+      "state": "ratified",
+      "type": "descriptor-ref"
+    },
+    {
+      "cddlRule": "shelf-pointer-record",
+      "code": 17,
+      "logicalRecordType": 3,
+      "name": "shelf-id",
+      "requirement": "required",
+      "scope": "repository-format.cddl#shelf-pointer-record",
+      "state": "ratified",
+      "type": "shelf-id"
+    },
+    {
+      "cddlRule": "shelf-pointer-record",
+      "code": 18,
+      "logicalRecordType": 3,
+      "name": "current-revision",
+      "requirement": "required",
+      "scope": "repository-format.cddl#shelf-pointer-record",
+      "state": "ratified",
+      "type": "shelf-revision-ref"
+    },
+    {
+      "cddlRule": "shelf-pointer-record",
+      "code": 19,
+      "logicalRecordType": 3,
+      "name": "generation",
+      "requirement": "required",
+      "scope": "repository-format.cddl#shelf-pointer-record",
+      "state": "ratified",
+      "type": "uint"
+    },
+    {
+      "cddlRule": "shelf-revision",
+      "code": 16,
+      "name": "repository-descriptor",
+      "objectKind": 8,
+      "requirement": "required",
+      "scope": "repository-format.cddl#shelf-revision",
+      "state": "ratified",
+      "type": "descriptor-ref"
+    },
+    {
+      "cddlRule": "shelf-revision",
+      "code": 17,
+      "name": "shelf-id",
+      "objectKind": 8,
+      "requirement": "required",
+      "scope": "repository-format.cddl#shelf-revision",
+      "state": "ratified",
+      "type": "shelf-id"
+    },
+    {
+      "cddlRule": "shelf-revision",
+      "code": 18,
+      "name": "revision-number",
+      "objectKind": 8,
+      "requirement": "required",
+      "scope": "repository-format.cddl#shelf-revision",
+      "state": "ratified",
+      "type": "1..4294967295"
+    },
+    {
+      "cddlRule": "shelf-revision",
+      "code": 19,
+      "name": "previous-revision",
+      "objectKind": 8,
+      "requirement": "conditional",
+      "scope": "repository-format.cddl#shelf-revision",
+      "state": "ratified",
+      "type": "shelf-revision-ref"
+    },
+    {
+      "cddlRule": "shelf-revision",
+      "code": 20,
+      "name": "base-snapshot",
+      "objectKind": 8,
+      "requirement": "required",
+      "scope": "repository-format.cddl#shelf-revision",
+      "state": "ratified",
+      "type": "snapshot-ref"
+    },
+    {
+      "cddlRule": "shelf-revision",
+      "code": 21,
+      "name": "change-set",
+      "objectKind": 8,
+      "requirement": "required",
+      "scope": "repository-format.cddl#shelf-revision",
+      "state": "ratified",
+      "type": "change-set-ref"
+    },
+    {
+      "cddlRule": "shelf-revision",
+      "code": 22,
+      "name": "result-tree",
+      "objectKind": 8,
+      "requirement": "required",
+      "scope": "repository-format.cddl#shelf-revision",
+      "state": "ratified",
+      "type": "tree-ref"
+    },
+    {
+      "cddlRule": "shelf-revision",
+      "code": 23,
+      "name": "group-set",
+      "objectKind": 8,
+      "requirement": "optional",
+      "scope": "repository-format.cddl#shelf-revision",
+      "state": "ratified",
+      "type": "group-set-ref"
+    },
+    {
+      "cddlRule": "shelf-revision",
+      "code": 24,
+      "name": "conflict-set",
+      "objectKind": 8,
+      "requirement": "optional",
+      "scope": "repository-format.cddl#shelf-revision",
+      "state": "ratified",
+      "type": "conflict-set-ref"
+    },
+    {
+      "cddlRule": "shelf-revision",
+      "code": 25,
+      "name": "author",
+      "objectKind": 8,
+      "requirement": "required",
+      "scope": "repository-format.cddl#shelf-revision",
+      "state": "ratified",
+      "type": "identity-ref"
+    },
+    {
+      "cddlRule": "shelf-revision",
+      "code": 26,
+      "name": "created-at",
+      "objectKind": 8,
+      "requirement": "required",
+      "scope": "repository-format.cddl#shelf-revision",
+      "state": "ratified",
+      "type": "timestamp-nanoseconds"
+    },
+    {
+      "cddlRule": "shelf-revision",
+      "code": 27,
+      "name": "message",
+      "objectKind": 8,
+      "requirement": "required",
+      "scope": "repository-format.cddl#shelf-revision",
+      "state": "ratified",
+      "type": "tstr"
+    },
+    {
+      "cddlRule": "shelf-revision",
+      "code": 28,
+      "name": "policy-result",
+      "objectKind": 8,
+      "requirement": "required",
+      "scope": "repository-format.cddl#shelf-revision",
+      "state": "ratified",
+      "type": "policy-result"
+    },
+    {
+      "cddlRule": "shelf-revision",
+      "code": 29,
+      "name": "provenance",
+      "objectKind": 8,
+      "requirement": "optional",
+      "scope": "repository-format.cddl#shelf-revision",
+      "state": "ratified",
+      "type": "[* provenance-ref]"
+    },
+    {
+      "cddlRule": "shelf-revision-ref",
+      "code": 0,
+      "name": "format-version",
+      "requirement": "required",
+      "scope": "repository-format.cddl#shelf-revision-ref",
+      "state": "ratified",
+      "type": "format-v1"
+    },
+    {
+      "cddlRule": "shelf-revision-ref",
+      "code": 1,
+      "name": "expected-object-kind",
+      "requirement": "required",
+      "scope": "repository-format.cddl#shelf-revision-ref",
+      "state": "ratified",
+      "type": "8"
+    },
+    {
+      "cddlRule": "shelf-revision-ref",
+      "code": 2,
+      "name": "hash-algorithm",
+      "requirement": "required",
+      "scope": "repository-format.cddl#shelf-revision-ref",
+      "state": "ratified",
+      "type": "sha256-algorithm"
+    },
+    {
+      "cddlRule": "shelf-revision-ref",
+      "code": 3,
+      "name": "digest",
+      "requirement": "required",
+      "scope": "repository-format.cddl#shelf-revision-ref",
+      "state": "ratified",
+      "type": "digest"
+    },
+    {
+      "cddlRule": "snapshot",
+      "code": 16,
+      "name": "repository-descriptor",
+      "objectKind": 7,
+      "requirement": "required",
+      "scope": "repository-format.cddl#snapshot",
+      "state": "ratified",
+      "type": "descriptor-ref"
+    },
+    {
+      "cddlRule": "snapshot",
+      "code": 17,
+      "name": "parents",
+      "objectKind": 7,
+      "requirement": "required",
+      "scope": "repository-format.cddl#snapshot",
+      "state": "ratified",
+      "type": "[* snapshot-ref]"
+    },
+    {
+      "cddlRule": "snapshot",
+      "code": 18,
+      "name": "root-tree",
+      "objectKind": 7,
+      "requirement": "required",
+      "scope": "repository-format.cddl#snapshot",
+      "state": "ratified",
+      "type": "tree-ref"
+    },
+    {
+      "cddlRule": "snapshot",
+      "code": 19,
+      "name": "change-set",
+      "objectKind": 7,
+      "requirement": "required",
+      "scope": "repository-format.cddl#snapshot",
+      "state": "ratified",
+      "type": "change-set-ref"
+    },
+    {
+      "cddlRule": "snapshot",
+      "code": 20,
+      "name": "group-set",
+      "objectKind": 7,
+      "requirement": "optional",
+      "scope": "repository-format.cddl#snapshot",
+      "state": "ratified",
+      "type": "group-set-ref"
+    },
+    {
+      "cddlRule": "snapshot",
+      "code": 21,
+      "name": "author",
+      "objectKind": 7,
+      "requirement": "required",
+      "scope": "repository-format.cddl#snapshot",
+      "state": "ratified",
+      "type": "identity-ref"
+    },
+    {
+      "cddlRule": "snapshot",
+      "code": 22,
+      "name": "committer",
+      "objectKind": 7,
+      "requirement": "required",
+      "scope": "repository-format.cddl#snapshot",
+      "state": "ratified",
+      "type": "identity-ref"
+    },
+    {
+      "cddlRule": "snapshot",
+      "code": 23,
+      "name": "authored-at",
+      "objectKind": 7,
+      "requirement": "required",
+      "scope": "repository-format.cddl#snapshot",
+      "state": "ratified",
+      "type": "timestamp-nanoseconds"
+    },
+    {
+      "cddlRule": "snapshot",
+      "code": 24,
+      "name": "committed-at",
+      "objectKind": 7,
+      "requirement": "required",
+      "scope": "repository-format.cddl#snapshot",
+      "state": "ratified",
+      "type": "timestamp-nanoseconds"
+    },
+    {
+      "cddlRule": "snapshot",
+      "code": 25,
+      "name": "message",
+      "objectKind": 7,
+      "requirement": "required",
+      "scope": "repository-format.cddl#snapshot",
+      "state": "ratified",
+      "type": "tstr"
+    },
+    {
+      "cddlRule": "snapshot",
+      "code": 26,
+      "name": "policy-result",
+      "objectKind": 7,
+      "requirement": "required",
+      "scope": "repository-format.cddl#snapshot",
+      "state": "ratified",
+      "type": "policy-result"
+    },
+    {
+      "cddlRule": "snapshot",
+      "code": 27,
+      "name": "provenance",
+      "objectKind": 7,
+      "requirement": "optional",
+      "scope": "repository-format.cddl#snapshot",
+      "state": "ratified",
+      "type": "[* provenance-ref]"
+    },
+    {
+      "cddlRule": "snapshot",
+      "code": 28,
+      "name": "conflict-set",
+      "objectKind": 7,
+      "requirement": "optional",
+      "scope": "repository-format.cddl#snapshot",
+      "state": "ratified",
+      "type": "conflict-set-ref"
+    },
+    {
+      "cddlRule": "snapshot-ref",
+      "code": 0,
+      "name": "format-version",
+      "requirement": "required",
+      "scope": "repository-format.cddl#snapshot-ref",
+      "state": "ratified",
+      "type": "format-v1"
+    },
+    {
+      "cddlRule": "snapshot-ref",
+      "code": 1,
+      "name": "expected-object-kind",
+      "requirement": "required",
+      "scope": "repository-format.cddl#snapshot-ref",
+      "state": "ratified",
+      "type": "7"
+    },
+    {
+      "cddlRule": "snapshot-ref",
+      "code": 2,
+      "name": "hash-algorithm",
+      "requirement": "required",
+      "scope": "repository-format.cddl#snapshot-ref",
+      "state": "ratified",
+      "type": "sha256-algorithm"
+    },
+    {
+      "cddlRule": "snapshot-ref",
+      "code": 3,
+      "name": "digest",
+      "requirement": "required",
+      "scope": "repository-format.cddl#snapshot-ref",
+      "state": "ratified",
+      "type": "digest"
+    },
+    {
+      "cddlRule": "tree",
+      "code": 16,
+      "name": "repository-descriptor",
+      "objectKind": 3,
+      "requirement": "required",
+      "scope": "repository-format.cddl#tree",
+      "state": "ratified",
+      "type": "descriptor-ref"
+    },
+    {
+      "cddlRule": "tree",
+      "code": 17,
+      "name": "entries",
+      "objectKind": 3,
+      "requirement": "required",
+      "scope": "repository-format.cddl#tree",
+      "state": "ratified",
+      "type": "[* tree-entry]"
+    },
+    {
+      "cddlRule": "tree-entry",
+      "code": 0,
+      "name": "basename",
+      "requirement": "required",
+      "scope": "repository-format.cddl#tree-entry",
+      "state": "ratified",
+      "type": "basename"
+    },
+    {
+      "cddlRule": "tree-entry",
+      "code": 1,
+      "name": "entry-kind",
+      "requirement": "required",
+      "scope": "repository-format.cddl#tree-entry",
+      "state": "ratified",
+      "type": "entry-kind"
+    },
+    {
+      "cddlRule": "tree-entry",
+      "code": 2,
+      "name": "file-id",
+      "requirement": "required",
+      "scope": "repository-format.cddl#tree-entry",
+      "state": "ratified",
+      "type": "file-id"
+    },
+    {
+      "cddlRule": "tree-entry",
+      "code": 3,
+      "name": "portable-mode",
+      "requirement": "required",
+      "scope": "repository-format.cddl#tree-entry",
+      "state": "ratified",
+      "type": "portable-mode"
+    },
+    {
+      "cddlRule": "tree-entry",
+      "code": 4,
+      "name": "target",
+      "requirement": "required",
+      "scope": "repository-format.cddl#tree-entry",
+      "state": "ratified",
+      "type": "object-ref"
+    },
+    {
+      "cddlRule": "tree-entry",
+      "code": 5,
+      "name": "logical-size",
+      "requirement": "required",
+      "scope": "repository-format.cddl#tree-entry",
+      "state": "ratified",
+      "type": "logical-length"
+    },
+    {
+      "cddlRule": "tree-entry",
+      "code": 6,
+      "name": "content-policy",
+      "requirement": "required",
+      "scope": "repository-format.cddl#tree-entry",
+      "state": "ratified",
+      "type": "profile-ref"
+    },
+    {
+      "cddlRule": "tree-ref",
+      "code": 0,
+      "name": "format-version",
+      "requirement": "required",
+      "scope": "repository-format.cddl#tree-ref",
+      "state": "ratified",
+      "type": "format-v1"
+    },
+    {
+      "cddlRule": "tree-ref",
+      "code": 1,
+      "name": "expected-object-kind",
+      "requirement": "required",
+      "scope": "repository-format.cddl#tree-ref",
+      "state": "ratified",
+      "type": "3"
+    },
+    {
+      "cddlRule": "tree-ref",
+      "code": 2,
+      "name": "hash-algorithm",
+      "requirement": "required",
+      "scope": "repository-format.cddl#tree-ref",
+      "state": "ratified",
+      "type": "sha256-algorithm"
+    },
+    {
+      "cddlRule": "tree-ref",
+      "code": 3,
+      "name": "digest",
+      "requirement": "required",
+      "scope": "repository-format.cddl#tree-ref",
+      "state": "ratified",
+      "type": "digest"
+    },
+    {
+      "cddlRule": "typed-digest",
+      "code": 0,
+      "name": "hash-algorithm",
+      "requirement": "required",
+      "scope": "repository-format.cddl#typed-digest",
+      "state": "ratified",
+      "type": "sha256-algorithm"
+    },
+    {
+      "cddlRule": "typed-digest",
+      "code": 1,
+      "name": "digest",
+      "requirement": "required",
+      "scope": "repository-format.cddl#typed-digest",
+      "state": "ratified",
+      "type": "digest"
+    }
+  ],
+  "formatVersion": 1,
+  "registry": "ogvcs.repository-format.kind-fields",
+  "registryVersion": 1
+}

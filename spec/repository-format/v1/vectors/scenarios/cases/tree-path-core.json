@@ -1,0 +1,246 @@
+{
+  "context": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 12,
+          "mediaType": "application/octet-stream",
+          "path": "objects/01-chunk.bin",
+          "sha256": "36fcc2e9442be1071c275604af6e41bd93875c743dc2fdaa6037662df74c5894"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5"
+      },
+      {
+        "artifact": {
+          "bytes": 183,
+          "mediaType": "application/cbor",
+          "path": "objects/02-content-manifest.cbor",
+          "sha256": "b635d76c8dd9f29c2862ae0e22077c70d157f68d4595861c09fb38bdf47c456b"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+      },
+      {
+        "artifact": {
+          "bytes": 274,
+          "mediaType": "application/cbor",
+          "path": "objects/06-repository-descriptor.cbor",
+          "sha256": "677905a883b1f4ddd87fea27b5afc0293cccd2d2ea29cc4884e758e4a071b6e9"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+      },
+      {
+        "artifact": {
+          "bytes": 397,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core/path-04.cbor",
+          "sha256": "cf852e1b7b1fcc963285b02dbe31561af5a36674f80b9288131ed24c91442d64"
+        },
+        "ref": "ogvcs:v1:tree:sha256:067c36e59b26042f2a6ffd20170a04f610fe31a120fc7c5519220445e9afd160"
+      },
+      {
+        "artifact": {
+          "bytes": 397,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core/path-07.cbor",
+          "sha256": "fbb1ff15866e2bcc4285c541f33c6a59a6c554ed88f9f184e7ac12afb408f149"
+        },
+        "ref": "ogvcs:v1:tree:sha256:0f7d5b22fe382ba899f8e9faa663fa1a04cc0c8819fd33ed42225f41bde55209"
+      },
+      {
+        "artifact": {
+          "bytes": 397,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core/path-09.cbor",
+          "sha256": "40dd73aa5cb70d3afd399430626e91de8193cfb47effa89bea5137fd72e53bd7"
+        },
+        "ref": "ogvcs:v1:tree:sha256:17cb2be6d0d5033f31fc04030988149e835932f824866c02f62da879a5c54e20"
+      },
+      {
+        "artifact": {
+          "bytes": 397,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core/path-05.cbor",
+          "sha256": "b4227c1bf5d1d336a68a4906fac25365c6fca8dd4287e2973524ec165a2ed0d2"
+        },
+        "ref": "ogvcs:v1:tree:sha256:1ae9b8aa4ba074549e450bc90984393ea11eff95de011a8838bfb7724fcabc07"
+      },
+      {
+        "artifact": {
+          "bytes": 397,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core/path-02.cbor",
+          "sha256": "72b01a5be0417352f1f53bb2689ebef4a87e87d26ea70b8e1b5d8f907f2994e0"
+        },
+        "ref": "ogvcs:v1:tree:sha256:6d75d59147bb44658d2305794539524f25453e05b4ed1c99241c95942463d7a0"
+      },
+      {
+        "artifact": {
+          "bytes": 397,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core/path-12.cbor",
+          "sha256": "da9266074d5eddb14d1f74923da588dcd690e22af477c596f53e37d17fb58cbc"
+        },
+        "ref": "ogvcs:v1:tree:sha256:725fd72df95250b736e4c7d09fd52782832bdab9b9c805763db28c1acb3810d1"
+      },
+      {
+        "artifact": {
+          "bytes": 397,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core/path-13.cbor",
+          "sha256": "4d806532b2a66e7280cce00da66ccce9a958d0c9ab6638b2b25d8c470a77a191"
+        },
+        "ref": "ogvcs:v1:tree:sha256:840a6d7109dbb2f2661e6ac4567ae0f9c3d3f64b0c4129afb6726ec384def04c"
+      },
+      {
+        "artifact": {
+          "bytes": 397,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core/path-10.cbor",
+          "sha256": "d748d86dab86f6cea1760e12df64e2c4375a04cc31066866f9b07ecb7b260763"
+        },
+        "ref": "ogvcs:v1:tree:sha256:8cd2e7264562a194ab25c303af1555236943239aa97741913ce0e1cdbdcd61b6"
+      },
+      {
+        "artifact": {
+          "bytes": 397,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core/path-00.cbor",
+          "sha256": "44bddace2899c891ec0cb089a3aa0b6860d0ee9476b3e67d4e4cfb8169355210"
+        },
+        "ref": "ogvcs:v1:tree:sha256:8f14ad95941778e46c090102ede4a4a42d48475ffc07d237b66e8fdaa0ac45e3"
+      },
+      {
+        "artifact": {
+          "bytes": 397,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core/path-06.cbor",
+          "sha256": "c1c145f241f72d761bda20bce3889768dc571df51a402252ead5e2c6313f60d5"
+        },
+        "ref": "ogvcs:v1:tree:sha256:9469bdffec52eb4f548c4df2d639c11a6e698ee7f22dc24e5ea3f91ba37bc516"
+      },
+      {
+        "artifact": {
+          "bytes": 397,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core/path-14.cbor",
+          "sha256": "1aceed9a58c8d5a2f5e0d031a769f9ca7cdb981e841f3308722db78acd9b2c2f"
+        },
+        "ref": "ogvcs:v1:tree:sha256:b9513d41b522b0557f32464a1e24ec9a4dbe82d3b8757c5f30175787b5c4e765"
+      },
+      {
+        "artifact": {
+          "bytes": 397,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core/path-08.cbor",
+          "sha256": "79ef470609292813589319efb1ff57a122d62caeecf8c7f256a3c54cbff9ef94"
+        },
+        "ref": "ogvcs:v1:tree:sha256:c0ecfc390626df3ac2649fbe5eef0bc77b705128d41d7632361a9a263a6b2911"
+      },
+      {
+        "artifact": {
+          "bytes": 397,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core/path-03.cbor",
+          "sha256": "9812014316a52253375ce3a8972da860bd34dd591291277922c9669dcce8aa56"
+        },
+        "ref": "ogvcs:v1:tree:sha256:cc9e50aeba53e36ac2d1fb849ba0e83e3082aaf630a257464f96d92dde87fd6b"
+      },
+      {
+        "artifact": {
+          "bytes": 397,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core/path-01.cbor",
+          "sha256": "6ca810e3fb23f20242cfddbabd2a06d2a40b63fd7615f329a8045f463244ad7d"
+        },
+        "ref": "ogvcs:v1:tree:sha256:d01a4c0a136f75df16f1dd000d430e427c8b333235a99f16c018749e6f53e545"
+      },
+      {
+        "artifact": {
+          "bytes": 397,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core/path-11.cbor",
+          "sha256": "ee82fddc5bf8f13421e40b38c84da97e9efe7f673cb8b55d678faa470bd53554"
+        },
+        "ref": "ogvcs:v1:tree:sha256:e07fee67439e40d62f16777ba494813728bb8823ed0734b592f258d48b0e886b"
+      },
+      {
+        "artifact": {
+          "bytes": 398,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core/path-16.cbor",
+          "sha256": "de0c9bbd8b6ef58ccd65da804d98731a008ec2c2f926f13e30d201ceeb7d7bd4"
+        },
+        "ref": "ogvcs:v1:tree:sha256:e8b69ecce5d35f60ad6a6d316a085cddf2e94582a99f091bccc399e139ac3c1c"
+      },
+      {
+        "artifact": {
+          "bytes": 397,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core/path-15.cbor",
+          "sha256": "861447625d90899f7c05a0bdde382c6c6acc2b3f60e7ff113686619102e01eb5"
+        },
+        "ref": "ogvcs:v1:tree:sha256:fdce66ad711a8d7c44964245f4f3691782b381971176cf2940a9afc34bdfcebf"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registryVersion": 1
+    },
+    "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+    "requestedLayer": 3,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "expected": {
+    "code": "PATH_CORE_INVALID",
+    "layer": 3,
+    "result": "reject",
+    "stage": "repository-semantics"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "inputs": [
+    {
+      "bytes": 397,
+      "mediaType": "application/cbor",
+      "path": "scenarios/objects/tree-path-core/path-00.cbor",
+      "sha256": "44bddace2899c891ec0cb089a3aa0b6860d0ee9476b3e67d4e4cfb8169355210"
+    },
+    {
+      "bytes": 10273,
+      "mediaType": "application/json",
+      "path": "scenarios/definitions/tree-path-core.json",
+      "sha256": "ca0691093686c6179627eb75090e1dc34934751a3c683f173aed06227c7b6d74"
+    }
+  ],
+  "operation": "validate-object",
+  "requirementIds": [
+    "OGVCS-002-FR-09"
+  ],
+  "resources": {
+    "recipe": {
+      "generator": "ogvcs.repository-validation-scenario-constructor/v1",
+      "parameters": {
+        "definition": "scenarios/definitions/tree-path-core.json",
+        "definitionSha256": "ca0691093686c6179627eb75090e1dc34934751a3c683f173aed06227c7b6d74",
+        "runtimeHighWaterMarks": "not-asserted"
+      },
+      "seed": "bd48f6122a946bfcffc732b33f2b39e9ad221cab4da5ab78935fcd808338a0b1"
+    },
+    "summary": {
+      "bytes": 17492,
+      "indexEntries": 0,
+      "items": 20,
+      "peakMemoryBytes": 0,
+      "scratchBytes": 0,
+      "summarySha256": "e4369ff79b23051cab0dcb00764b40cb8604fc80159a23bf8ef05e2b4d2c498d",
+      "traversalEdges": 0
+    }
+  },
+  "scenarioId": "tree-path-core",
+  "schemaVersion": "ogvcs.repository-format/validation-scenario/v1"
+}

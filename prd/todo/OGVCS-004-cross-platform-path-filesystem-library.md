@@ -4,10 +4,10 @@
 **Release:** R0 — Engineering Foundation  
 **Priority:** P0  
 **Owner:** Unassigned  
-**Depends on:** OGVCS-001  
-**Blocks:** OGVCS-005, OGVCS-006, OGVCS-007, OGVCS-011, OGVCS-012, OGVCS-037, OGVCS-041, OGVCS-042, OGVCS-045  
+**Depends on:** OGVCS-001, OGVCS-002
+**Blocks:** OGVCS-005, OGVCS-006, OGVCS-007, OGVCS-011, OGVCS-012, OGVCS-033, OGVCS-037, OGVCS-041, OGVCS-042, OGVCS-045
 **Source:** [OpenGameVCS proposal](../../GAME_DEV_VCS_ANALYSIS.md)  
-**Last updated:** 2026-08-14
+**Last updated:** 2026-08-15
 
 ## Outcome
 
@@ -21,7 +21,7 @@ Case folding, Unicode normalization, reserved names, symlinks, long paths, mode 
 
 ### In scope
 
-- Canonical repository path encoding and validation.
+- Joined repository-path encoding and validation built from OGVCS-002 canonical segment bytes, entry kinds, modes, and profile references.
 - Repository case mode and collision rules.
 - Unicode normalization and display behavior.
 - File, directory, symlink, executable-bit, and sidecar-group semantics.
@@ -34,6 +34,7 @@ Case folding, Unicode normalization, reserved names, symlinks, long paths, mode 
 - Virtual filesystem placeholders, owned by OGVCS-037.
 - Workspace indexing implementation, owned by OGVCS-012.
 - Engine-specific asset identity.
+- Redefinition of canonical tree/object bytes, entry-kind or portable-mode codepoints, and object hash preimages.
 
 ## Users and journeys
 
@@ -46,10 +47,10 @@ Case folding, Unicode normalization, reserved names, symlinks, long paths, mode 
 
 ### Functional
 
-- **OGVCS-004-FR-01:** Repository paths SHALL be slash-separated, relative, nonempty UTF-8 segments normalized to NFC; `.`/`..`, NUL, separators inside a segment, and noncanonical encodings SHALL be rejected.
+- **OGVCS-004-FR-01:** Repository paths SHALL consume OGVCS-002 canonical NFC UTF-8 segment bytes and SHALL be slash-separated and relative; empty segments, `.`/`..`, NUL, separators inside a segment, and noncanonical encodings SHALL be rejected without redefining tree bytes or ObjectIDs.
 - **OGVCS-004-FR-02:** Repository creation SHALL choose immutable `case-sensitive` or `case-folded` mode. The canonical fold algorithm and collision comparison SHALL be versioned and platform-independent.
 - **OGVCS-004-FR-03:** The server SHALL reject paths that collide under repository mode or under the declared supported-platform profile, including normalization and Windows reserved-name/trailing-dot/space cases.
-- **OGVCS-004-FR-04:** Maximum segment length, canonical path length, tree depth, and entry count SHALL be explicit protocol limits with preflight errors.
+- **OGVCS-004-FR-04:** Each ratified path/platform profile SHALL select explicit operational segment, joined-path, and depth limits no greater than OGVCS-002 hard parser maxima and SHALL expose preflight errors. The one-million-entry tree-object ceiling remains a core format limit rather than a platform-profile choice.
 - **OGVCS-004-FR-05:** A symlink SHALL be a distinct entry whose payload is its link target. Sync/export tools SHALL not follow it while writing; materialization on a platform without permitted symlink support SHALL fail explicitly or use a declared nondefault policy.
 - **OGVCS-004-FR-06:** Version 1 SHALL preserve regular-file executable intent as one portable bit and SHALL not claim to round-trip arbitrary POSIX ACLs, owners, or platform extended attributes.
 - **OGVCS-004-FR-07:** Clients SHALL use race-resistant, workspace-root-confined writes and atomic replacement where supported; crash remnants SHALL be detectable and recoverable.
@@ -65,11 +66,11 @@ Case folding, Unicode normalization, reserved names, symlinks, long paths, mode 
 
 ## Interfaces and data
 
-Outputs include canonical-path functions, case-fold version, platform-profile schema, entry-kind/mode rules, materialization preflight result, watcher cursor/gap contract, error codes, and a cross-platform golden path corpus.
+Outputs include joined-path functions, versioned case-fold and collision keys, ratified platform-profile registry entries, materialization preflight results, watcher cursor/gap contracts, error codes, and a cross-platform golden path corpus. The library consumes OGVCS-002 segment bytes, entry/mode codepoints, `ProfileRef`, canonical trees, and logical records without redefining their preimages.
 
 ## Development plan
 
-1. Implement the portable path/case/normalization library, repository platform profile, collision detector, limits, and cross-platform golden vectors.
+1. Implement the portable joined-path/case/normalization library on the OGVCS-002 lexical-segment contract, repository platform profiles, collision detector, limits, and cross-platform golden vectors.
 2. Implement workspace-confined path resolution, symlink/junction policy, safe temporary-write/atomic-replace primitives, and materialization preflight APIs.
 3. Implement the watcher cursor/gap/reconciliation contract and platform adapters with crash-remnant detection and deterministic error mapping.
 4. Package the shared library for server/client consumers, run the adversarial three-OS matrix, publish capability documentation, and freeze path-contract version 1.
@@ -78,7 +79,7 @@ Outputs include canonical-path functions, case-fold version, platform-profile sc
 
 - **OGVCS-004-AC-01:** Golden paths produce identical canonical values and collision decisions on Windows, macOS, and Linux.
 - **OGVCS-004-AC-02:** Malicious symlink/junction/race fixtures cannot cause writes outside a temporary workspace under elevated filesystem tracing.
-- **OGVCS-004-AC-03:** Case-only and Unicode normalization renames round-trip through snapshot, export, and reimport without identity loss.
+- **OGVCS-004-AC-03:** Case-only and Unicode-normalization renames round-trip through OGVCS-002 canonical tree and logical-bundle encoding with FileID preserved and the expected changed tree ID; fidelity export/reimport proof remains outside this PRD.
 - **OGVCS-004-AC-04:** Watcher overflow and unclean-shutdown tests force reconciliation and never falsely report a clean workspace.
 - **OGVCS-004-AC-05:** Unreal- and Unity-like long/deep path fixtures either materialize identically or fail preflight with stable actionable errors.
 

@@ -1,0 +1,84 @@
+{
+  "context": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 13,
+          "mediaType": "application/octet-stream",
+          "path": "scenarios/objects/manifest-length-sum-mismatch/chunk-0.bin",
+          "sha256": "37c757348e671599102d25f0c58362f5924a94fd313f4478cec8e3139f8886f5"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:8ae03cdb20ee0500d1cc4e9c5403469c318e1a3ec3a31826751650221c3550e1"
+      },
+      {
+        "artifact": {
+          "bytes": 136,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/manifest-length-sum-mismatch/manifest.cbor",
+          "sha256": "0de05184d4b445a7d3140e0d02e2b6d06bdcb2b1d02f6cc1c4ea65a9cb6e99df"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:6274bef2b0b0be70da51c40ea380c9260ef7f689a7c678c04812edd921df44fc"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registryVersion": 1
+    },
+    "requestedLayer": 2,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "expected": {
+    "code": "MANIFEST_LENGTH_MISMATCH",
+    "layer": 2,
+    "result": "reject",
+    "stage": "known-schema"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "inputs": [
+    {
+      "bytes": 136,
+      "mediaType": "application/cbor",
+      "path": "scenarios/objects/manifest-length-sum-mismatch/manifest.cbor",
+      "sha256": "0de05184d4b445a7d3140e0d02e2b6d06bdcb2b1d02f6cc1c4ea65a9cb6e99df"
+    },
+    {
+      "bytes": 2619,
+      "mediaType": "application/json",
+      "path": "scenarios/definitions/manifest-length-sum-mismatch.json",
+      "sha256": "17737e85292413364df9b0b547e31776b8960425223d090c0761785b4c3d9b53"
+    }
+  ],
+  "operation": "validate-object",
+  "requirementIds": [
+    "OGVCS-002-AC-09",
+    "OGVCS-002-FR-09"
+  ],
+  "resources": {
+    "recipe": {
+      "generator": "ogvcs.repository-validation-scenario-constructor/v1",
+      "parameters": {
+        "definition": "scenarios/definitions/manifest-length-sum-mismatch.json",
+        "definitionSha256": "17737e85292413364df9b0b547e31776b8960425223d090c0761785b4c3d9b53",
+        "runtimeHighWaterMarks": "not-asserted"
+      },
+      "seed": "00b61b5cb165484de66b00e3b7fc4cdd4cce74972d791d3f41dc17ce5658017b"
+    },
+    "summary": {
+      "bytes": 2768,
+      "indexEntries": 0,
+      "items": 2,
+      "peakMemoryBytes": 0,
+      "scratchBytes": 0,
+      "summarySha256": "569f07dfdc09ad6580efeea193046dad8d165d2791fbb20b4fa35f2fbc9b2893",
+      "traversalEdges": 0
+    }
+  },
+  "scenarioId": "manifest-length-sum-mismatch",
+  "schemaVersion": "ogvcs.repository-format/validation-scenario/v1"
+}

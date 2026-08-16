@@ -1,0 +1,17 @@
+{
+  "annotationInvariance": {
+    "annotationAIdentity": "6b177aa1f64ee93fd91847b78a4a3426a07ec37a3329c9308ef68cf62da4bfa7",
+    "annotationBIdentity": "ef8c5298d72e60e7a78262117c33954095625d6b1f657b3e5db7d1ec0a24d7b7",
+    "manifestObjectIdAfter": "82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12",
+    "manifestObjectIdBefore": "82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12",
+    "subjectObjectId": "82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+  },
+  "repeatedChunkReferences": {
+    "chunkObjectId": "944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5",
+    "logicalLength": 24,
+    "objectPath": "objects/02-content-manifest.cbor",
+    "occurrenceCount": 2,
+    "wholeFileSha256": "cb4f2424fd3588eb17773169678f8a2bc61546e0605e6f58ef64e4c67fdc49f8"
+  },
+  "schema": "ogvcs.repository-format.v1.invariants.v1"
+}

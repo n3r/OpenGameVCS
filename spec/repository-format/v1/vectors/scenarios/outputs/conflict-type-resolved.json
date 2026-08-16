@@ -1,0 +1,7 @@
+{
+  "resultFamily": "conflict",
+  "rootState": "accepted-exact-constructor-result",
+  "scenarioId": "conflict-type-resolved",
+  "schema": "ogvcs.repository-format.v1.scenario-output.v1",
+  "stableOutputIdentity": "ogvcs:v1:snapshot:sha256:849bcf1da53601e90a7514b7d51872f13dd902d1177a5206af93d781a9dc3e11"
+}

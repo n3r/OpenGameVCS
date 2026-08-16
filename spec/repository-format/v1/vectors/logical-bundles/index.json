@@ -1,0 +1,109 @@
+{
+  "negativeCases": [
+    {
+      "artifact": "logical-bundles/invalid-section-order.cborseq",
+      "expected": {
+        "code": "BUNDLE_SEQUENCE_INVALID",
+        "layer": 1,
+        "result": "reject",
+        "stage": "sequence-shape-and-order"
+      }
+    },
+    {
+      "artifact": "logical-bundles/invalid-duplicate-identity.cborseq",
+      "expected": {
+        "code": "BUNDLE_DUPLICATE_IDENTITY",
+        "layer": 1,
+        "result": "reject",
+        "stage": "sequence-shape-and-order"
+      }
+    },
+    {
+      "artifact": "logical-bundles/invalid-closure-missing.cborseq",
+      "expected": {
+        "code": "BUNDLE_CLOSURE_MISSING",
+        "layer": 2,
+        "result": "reject",
+        "stage": "closure-and-reference-resolution"
+      }
+    },
+    {
+      "artifact": "logical-bundles/invalid-closure-extra.cborseq",
+      "expected": {
+        "code": "BUNDLE_CLOSURE_EXTRA",
+        "layer": 2,
+        "result": "reject",
+        "stage": "closure-and-reference-resolution"
+      }
+    },
+    {
+      "artifact": "logical-bundles/invalid-reference-wrong-kind.cborseq",
+      "expected": {
+        "code": "OBJECT_REFERENCE_KIND_MISMATCH",
+        "layer": 2,
+        "result": "reject",
+        "stage": "closure-and-reference-resolution"
+      }
+    },
+    {
+      "artifact": "logical-bundles/invalid-trailer-mismatch.cborseq",
+      "expected": {
+        "code": "BUNDLE_TRAILER_MISMATCH",
+        "layer": 1,
+        "result": "reject",
+        "stage": "transcript-authentication"
+      }
+    },
+    {
+      "artifact": "logical-bundles/invalid-logical-record-type.cborseq",
+      "expected": {
+        "code": "LOGICAL_RECORD_TYPE_UNSUPPORTED",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      }
+    },
+    {
+      "artifact": "logical-bundles/valid-supplied-closure.cborseq",
+      "claim": "fidelity-export",
+      "expected": {
+        "code": "BUNDLE_EXPORT_CLAIM_FORBIDDEN",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      }
+    }
+  ],
+  "schema": "ogvcs.repository-format.v1.logical-bundle-vectors.v1",
+  "valid": {
+    "artifact": "logical-bundles/valid-supplied-closure.cborseq",
+    "expected": {
+      "highestLayer": 3,
+      "mode": "conformance",
+      "result": "accept"
+    },
+    "itemBytes": [
+      26,
+      64,
+      236,
+      132,
+      80,
+      76,
+      52
+    ],
+    "itemCount": 7,
+    "logicalRecordIdentity": "6b177aa1f64ee93fd91847b78a4a3426a07ec37a3329c9308ef68cf62da4bfa7",
+    "objectIdsInCanonicalOrder": [
+      {
+        "kind": 1,
+        "objectId": "944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5"
+      },
+      {
+        "kind": 2,
+        "objectId": "82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+      }
+    ],
+    "sequenceBytes": 666,
+    "transcriptDigest": "c302bd2f60d259e6859ce677e2d2f08133d53236abaa4de82c5fa868b020735c"
+  }
+}

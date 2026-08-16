@@ -1,0 +1,97 @@
+{
+  "entries": [
+    {
+      "code": 1,
+      "name": "chunk",
+      "payload": "raw-bytes",
+      "state": "ratified",
+      "textToken": "chunk"
+    },
+    {
+      "code": 2,
+      "name": "content-manifest",
+      "payload": "deterministic-cbor",
+      "state": "ratified",
+      "textToken": "content-manifest"
+    },
+    {
+      "code": 3,
+      "name": "tree",
+      "payload": "deterministic-cbor",
+      "state": "ratified",
+      "textToken": "tree"
+    },
+    {
+      "code": 4,
+      "name": "change-set",
+      "payload": "deterministic-cbor",
+      "state": "ratified",
+      "textToken": "change-set"
+    },
+    {
+      "code": 5,
+      "name": "asset-group-set",
+      "payload": "deterministic-cbor",
+      "state": "ratified",
+      "textToken": "asset-group-set"
+    },
+    {
+      "code": 6,
+      "name": "repository-descriptor",
+      "payload": "deterministic-cbor",
+      "state": "ratified",
+      "textToken": "repository-descriptor"
+    },
+    {
+      "code": 7,
+      "name": "snapshot",
+      "payload": "deterministic-cbor",
+      "state": "ratified",
+      "textToken": "snapshot"
+    },
+    {
+      "code": 8,
+      "name": "shelf-revision",
+      "payload": "deterministic-cbor",
+      "state": "ratified",
+      "textToken": "shelf-revision"
+    },
+    {
+      "code": 9,
+      "name": "provenance",
+      "payload": "deterministic-cbor",
+      "state": "ratified",
+      "textToken": "provenance"
+    },
+    {
+      "code": 10,
+      "name": "attestation",
+      "payload": "deterministic-cbor",
+      "state": "ratified",
+      "textToken": "attestation"
+    },
+    {
+      "code": 11,
+      "name": "conflict-set",
+      "payload": "deterministic-cbor",
+      "state": "ratified",
+      "textToken": "conflict-set"
+    }
+  ],
+  "formatVersion": 1,
+  "registry": "ogvcs.repository-format.object-kinds",
+  "registryVersion": 1,
+  "reserved": [
+    {
+      "from": 0,
+      "reason": "invalid sentinel",
+      "to": 0
+    }
+  ],
+  "unassigned": [
+    {
+      "from": 12,
+      "to": 65535
+    }
+  ]
+}

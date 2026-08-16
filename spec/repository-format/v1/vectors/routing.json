@@ -1,0 +1,21 @@
+{
+  "artifacts": {
+    "coverage": "coverage-matrix.json",
+    "decodedDiagnostics": "diagnostics/decoded-values.json",
+    "durableTextValues": "diagnostics/text-values.json",
+    "expectations": "expectations.json",
+    "hardLimits": "limits/virtual-constructors.json",
+    "inventory": "manifest.json",
+    "malformed": "malformed/index.json",
+    "mutation": "mutations/single-bit.json",
+    "registrySnapshot": "registries/live-snapshot.json",
+    "scenarios": "scenarios/index.json",
+    "truncation": "mutations/truncation.json"
+  },
+  "normativeSchemas": {
+    "abstractReferenceGraph": "../abstract-reference-graph.schema.json",
+    "scenario": "../validation-scenario.schema.json",
+    "vectorManifest": "../vector-manifest.schema.json"
+  },
+  "schema": "ogvcs.repository-format.v1.vector-routing.v1"
+}

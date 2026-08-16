@@ -1,0 +1,174 @@
+{
+  "algorithm": {
+    "id": "ogvcs.repository-validation-scenario-constructor",
+    "version": 1
+  },
+  "arithmetic": "mathematical nonnegative integers with explicit uint64 decode bounds; no host-width overflow is a semantic test oracle",
+  "detail": "two groups repeat a profile-unique external key",
+  "exactConstructorValues": {},
+  "expectedRootState": {
+    "resultFamily": "repository",
+    "rootState": "unchanged-no-trusted-output",
+    "scenarioId": "group-external-key-duplicate",
+    "stableOutputIdentity": "ogvcs:v1:tree:sha256:6b2cc01317f1cbe9579df4c1e79f684eb473b5cfe1e73bb98e61bf1352eaa502"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "normativeContext": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "candidateSnapshot": "ogvcs:v1:snapshot:sha256:ae3e77701478512c656fd9f982dfc02285a43165fe811c51c5dd87023e6412f1",
+    "designatedRoot": "ogvcs:v1:snapshot:sha256:81f9465991e41cc08f3466d7b5054fc5553727ca2138e9815f1972b2fa7a6da8",
+    "importMappings": [],
+    "lifetimeRecords": [
+      {
+        "fileId": "21212121212121212121212121212121",
+        "firstChangeSet": "ogvcs:v1:change-set:sha256:3ec149422e5c4d1f173a9b08a2565256043ffe24be53ffcd3b8bb0d16725afd2",
+        "firstOperation": 0,
+        "origin": "native-create"
+      },
+      {
+        "fileId": "22222222222222222222222222222222",
+        "firstChangeSet": "ogvcs:v1:change-set:sha256:3ec149422e5c4d1f173a9b08a2565256043ffe24be53ffcd3b8bb0d16725afd2",
+        "firstOperation": 1,
+        "origin": "native-create"
+      }
+    ],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 474,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/group-external-key-duplicate/result-groups.cbor",
+          "sha256": "5f129a90d2b90f82d61aec7d6c9bc8c3f1efe70f52b869c7d77d34f66ff5c267"
+        },
+        "ref": "ogvcs:v1:asset-group-set:sha256:d4e5c05c2d89cd9baf29f9d877cf72481aa5e507df14f2fd633bcf0cfb2dd994"
+      },
+      {
+        "artifact": {
+          "bytes": 263,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/group-external-key-duplicate/base-groups.cbor",
+          "sha256": "55dd679d0a56be858d3c8d7ae6b766432d0ec4e3e09fdf0006c993bd133e7311"
+        },
+        "ref": "ogvcs:v1:asset-group-set:sha256:f454e6d56efddc8797aa91e632d5e6dee42c927d76b03fa37dcc40df05b43f25"
+      },
+      {
+        "artifact": {
+          "bytes": 594,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/group-external-key-duplicate/root-change.cbor",
+          "sha256": "8a4e4293f68f0c04b3e47c6e3bb334646721bba6cf6f084901194c82d57ab2b4"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:3ec149422e5c4d1f173a9b08a2565256043ffe24be53ffcd3b8bb0d16725afd2"
+      },
+      {
+        "artifact": {
+          "bytes": 312,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/group-external-key-duplicate/candidate-change.cbor",
+          "sha256": "69b99beec5f793c4e05ef03d1d3b561765db30dd2de1528047e4064ede27ab1a"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:ce229dc2697a433b40f5820fedfdac3a19c5319e3cbca8f7af39bd12e86bcf2c"
+      },
+      {
+        "artifact": {
+          "bytes": 12,
+          "mediaType": "application/octet-stream",
+          "path": "objects/01-chunk.bin",
+          "sha256": "36fcc2e9442be1071c275604af6e41bd93875c743dc2fdaa6037662df74c5894"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5"
+      },
+      {
+        "artifact": {
+          "bytes": 183,
+          "mediaType": "application/cbor",
+          "path": "objects/02-content-manifest.cbor",
+          "sha256": "b635d76c8dd9f29c2862ae0e22077c70d157f68d4595861c09fb38bdf47c456b"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+      },
+      {
+        "artifact": {
+          "bytes": 274,
+          "mediaType": "application/cbor",
+          "path": "objects/06-repository-descriptor.cbor",
+          "sha256": "677905a883b1f4ddd87fea27b5afc0293cccd2d2ea29cc4884e758e4a071b6e9"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+      },
+      {
+        "artifact": {
+          "bytes": 364,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/group-external-key-duplicate/root-snapshot.cbor",
+          "sha256": "9b69e167cb38005860b0f872529d2da8c962ca8493fb86a813ece3a538aa59e0"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:81f9465991e41cc08f3466d7b5054fc5553727ca2138e9815f1972b2fa7a6da8"
+      },
+      {
+        "artifact": {
+          "bytes": 422,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/group-external-key-duplicate/candidate-snapshot.cbor",
+          "sha256": "b60489e8788d1a27d714b47406389b522c5c275aa2ea56608fac2a03d1a02262"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:ae3e77701478512c656fd9f982dfc02285a43165fe811c51c5dd87023e6412f1"
+      },
+      {
+        "artifact": {
+          "bytes": 269,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/group-external-key-duplicate/base-tree-root.cbor",
+          "sha256": "5f6a8d15dbfcae7e0b69cd1830d8ffdfd3aaedd0bde1a2908b04d34d4afefd25"
+        },
+        "ref": "ogvcs:v1:tree:sha256:6b2cc01317f1cbe9579df4c1e79f684eb473b5cfe1e73bb98e61bf1352eaa502"
+      },
+      {
+        "artifact": {
+          "bytes": 269,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/group-external-key-duplicate/result-tree-root.cbor",
+          "sha256": "5f6a8d15dbfcae7e0b69cd1830d8ffdfd3aaedd0bde1a2908b04d34d4afefd25"
+        },
+        "ref": "ogvcs:v1:tree:sha256:6b2cc01317f1cbe9579df4c1e79f684eb473b5cfe1e73bb98e61bf1352eaa502"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registryVersion": 1
+    },
+    "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+    "requestedLayer": 3,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "operation": "validate-repository",
+  "parameters": {},
+  "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+  "scenarioId": "group-external-key-duplicate",
+  "seedHex": "3497821e28c5153b20dd07a79c7bba71526628b4a6d8c921571103527c088386",
+  "suppliedResourceCatalogue": {
+    "baseObjectArtifacts": [
+      "scenarios/objects/group-external-key-duplicate/result-groups.cbor",
+      "scenarios/objects/group-external-key-duplicate/base-groups.cbor",
+      "scenarios/objects/group-external-key-duplicate/root-change.cbor",
+      "scenarios/objects/group-external-key-duplicate/candidate-change.cbor",
+      "objects/01-chunk.bin",
+      "objects/02-content-manifest.cbor",
+      "objects/06-repository-descriptor.cbor",
+      "scenarios/objects/group-external-key-duplicate/root-snapshot.cbor",
+      "scenarios/objects/group-external-key-duplicate/candidate-snapshot.cbor",
+      "scenarios/objects/group-external-key-duplicate/base-tree-root.cbor",
+      "scenarios/objects/group-external-key-duplicate/result-tree-root.cbor"
+    ],
+    "logicalRecordArtifacts": [],
+    "mutationRecipe": "none",
+    "virtualLimitRecipe": "none"
+  },
+  "validation": {
+    "mode": "conformance",
+    "requestedLayer": 3
+  }
+}

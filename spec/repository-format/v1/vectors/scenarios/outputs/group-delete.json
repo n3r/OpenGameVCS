@@ -1,0 +1,7 @@
+{
+  "resultFamily": "group",
+  "rootState": "accepted-exact-constructor-result",
+  "scenarioId": "group-delete",
+  "schema": "ogvcs.repository-format.v1.scenario-output.v1",
+  "stableOutputIdentity": "empty-group-state"
+}

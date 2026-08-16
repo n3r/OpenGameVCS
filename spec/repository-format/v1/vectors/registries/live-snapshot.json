@@ -1,0 +1,68 @@
+{
+  "formatVersion": 1,
+  "registries": [
+    {
+      "bytes": 2034,
+      "path": "registries/object-kinds.json",
+      "sha256": "4999b287429e4e91a6000602a9e3d30c8db8fa94723634759604a2c76c62c430"
+    },
+    {
+      "bytes": 400,
+      "path": "registries/hash-algorithms.json",
+      "sha256": "3ac7d9a6c38b9b49a7dc1cd4a5773d081a29199b65ae1ef0bc0e4aaa5b536d60"
+    },
+    {
+      "bytes": 866,
+      "path": "registries/common-fields.json",
+      "sha256": "ff198f35e7a667155368d2b6cc60b780931bcb01f52e4de63463e0f9d50c7e64"
+    },
+    {
+      "bytes": 78453,
+      "path": "registries/kind-fields.json",
+      "sha256": "8cd59fdd2294148c482e173888fb9c9d0423e70f2518b19ebc017488617ff25f"
+    },
+    {
+      "bytes": 956,
+      "path": "registries/entry-kinds.json",
+      "sha256": "10638b3671f41007f87cd25bf0de173add1a45e1149edcd584083b438b9db306"
+    },
+    {
+      "bytes": 966,
+      "path": "registries/entry-modes.json",
+      "sha256": "87724e7db81f2f5bfbd81dd3e3839eafcc1e3aa5ebe17072874e780f80ecb289"
+    },
+    {
+      "bytes": 300,
+      "path": "registries/required-features.json",
+      "sha256": "960414289cb5b74b370952fbd53dd47bc0199c66d81fe8747f658a1b982fef7f"
+    },
+    {
+      "bytes": 548,
+      "path": "registries/extensions.json",
+      "sha256": "10985000d57ed0b00510160aa850f4e59b6ae37cb7bc2c01485e8205d2eb1d53"
+    },
+    {
+      "bytes": 13089,
+      "path": "registries/profiles.json",
+      "sha256": "c1b73db84b76a8206de18731cfc476de384597d1ac562eaf2934c274e735cd23"
+    },
+    {
+      "bytes": 1641,
+      "path": "registries/logical-record-types.json",
+      "sha256": "f53f4c59e12482e00e462bccd132c67577a3da241b9b77c7ab24273d95f7773b"
+    },
+    {
+      "bytes": 6506,
+      "path": "registries/semantic-enums.json",
+      "sha256": "a7d428c389aa75608b85f7da995c4009286be5f7ff5c1dba1aa61b04fd329802"
+    },
+    {
+      "bytes": 3596,
+      "path": "registries/limits.json",
+      "sha256": "73a2bf4a4e2b3d3216bae9ef1e16991648f44dc4b46aa048c0f34b736a6d7d98"
+    }
+  ],
+  "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+  "registryVersion": 1,
+  "schema": "ogvcs.repository-format.v1.registry-set-snapshot.v1"
+}

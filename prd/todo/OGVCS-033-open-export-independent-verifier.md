@@ -4,10 +4,10 @@
 **Release:** R3 — Production Beta  
 **Priority:** P0  
 **Owner:** Unassigned  
-**Depends on:** OGVCS-002, OGVCS-009, OGVCS-017, OGVCS-018, OGVCS-020, OGVCS-025, OGVCS-029  
+**Depends on:** OGVCS-002, OGVCS-004, OGVCS-007, OGVCS-009, OGVCS-017, OGVCS-018, OGVCS-020, OGVCS-025, OGVCS-029
 **Blocks:** OGVCS-034, OGVCS-036, OGVCS-040  
 **Source:** [Architecture ADR-0002](../../adr/0002-export-fidelity-and-authorized-projection.md)  
-**Last updated:** 2026-08-14
+**Last updated:** 2026-08-15
 
 ## Outcome
 
@@ -24,6 +24,7 @@ Open source alone does not prevent data lock-in. If repository history, FileIDs,
 - Versioned public fidelity and authorized-projection profiles with streaming full/incremental containers and portable content or explicitly verified external-object mode.
 - Complete snapshot/tree/FileID/version/manifest/chunk graph and selected mutable state for fidelity; newly identified authorized derived graph plus non-disclosing omission/provenance records for projection.
 - Separate standalone verifier/reconstructor profiles and clean-deployment import semantics that cannot confuse projection with source truth.
+- Byte-preserving embedding of OGVCS-002 canonical objects for fidelity and creation of new canonical core objects for projection without redefining core hash preimages.
 
 ### Out of scope
 
@@ -40,14 +41,14 @@ Open source alone does not prevent data lock-in. If repository history, FileIDs,
 
 ### Functional
 
-- **OGVCS-033-FR-01:** Publish normative, implementation-neutral fidelity and authorized-projection profiles with canonical serialization, ordering, identity rules, framing, digest/signature algorithms, version negotiation, extension rules, and test vectors.
+- **OGVCS-033-FR-01:** Publish normative, implementation-neutral fidelity and authorized-projection profiles with canonical export-manifest serialization, ordering, identity-class rules, container framing, digest/signature algorithms, version negotiation, extension rules, and test vectors. Embedded core objects SHALL retain their OGVCS-002 canonical bytes, kinds, hash domains, and IDs.
 - **OGVCS-033-FR-02:** Fidelity export SHALL require authorization to every record reachable from each selected root and SHALL fail atomically on incomplete/mixed visibility before producing a usable container; it SHALL represent the complete selected graph/mutable state and preserve canonical object/snapshot/root IDs.
 - **OGVCS-033-FR-03:** Secrets, password hashes, bearer tokens, private signing/encryption keys, transient leases/sessions, and provider-specific credentials SHALL never be exported; replacements/omissions SHALL be explicit in the manifest.
-- **OGVCS-033-FR-04:** Every export SHALL require a dedicated mode-specific permission and explicit repository/root/time/policy selection. Authorized projection SHALL include only the caller's authorized view, construct new tree/snapshot IDs in a declared projection namespace, use non-disclosing omission markers, and SHALL NOT claim full-fidelity restoration or identity with source roots.
+- **OGVCS-033-FR-04:** Every export SHALL require a dedicated mode-specific permission and explicit repository/root/time/policy selection. Authorized projection SHALL include only the caller's authorized view and create a distinct repository descriptor carrying a required projection feature, new repository identity, declared projection identity class, and public non-disclosing provenance reference. Every repository-scoped projected object SHALL bind that descriptor, while path-independent manifests/chunks MAY retain content IDs. Projection SHALL use non-disclosing omission markers and SHALL NOT redefine core hash preimages or claim source-root identity.
 - **OGVCS-033-FR-05:** Portable mode SHALL embed every required content object. External-object mode SHALL record immutable provider-independent identity/size plus validated location requirements and SHALL be labeled non-self-contained.
 - **OGVCS-033-FR-06:** Each mode SHALL capture a consistent repository generation, stream/resume without loading the repository in memory, support volume splitting, and produce a canonical top-level manifest/root digest that names the mode and source/projection identity class.
 - **OGVCS-033-FR-07:** Incremental export SHALL name and verify its exact base export/root/generation and mode, remain within that profile, and contain enough tombstone/reference data to derive the declared result; cross-mode, missing, or out-of-order increments SHALL fail.
-- **OGVCS-033-FR-08:** The standalone verifier SHALL use no running OpenGameVCS service, metadata database, network, or server implementation libraries and SHALL validate the declared fidelity/projection profile, framing, canonical form, graph reachability, identity class, references, sizes/digests, signatures, scope consistency, and volume completeness.
+- **OGVCS-033-FR-08:** The standalone verifier SHALL use no running OpenGameVCS service, metadata database, network, server implementation library, or production OGVCS-002 codec package. It SHALL independently implement the public OGVCS-002 specification/vectors and validate the declared fidelity/projection profile, framing, canonical form, graph reachability, identity class, references, sizes/digests, signatures, scope consistency, and volume completeness.
 - **OGVCS-033-FR-09:** The reconstructor SHALL materialize any selected exported snapshot under OGVCS-004 path safety, label projected history as derived, and emit a tree/file digest report without executing repository content.
 - **OGVCS-033-FR-10:** Clean import SHALL stage and verify all records/content, map identities/providers explicitly, reject collisions/incompatibility, and publish atomically; fidelity import SHALL reconcile identical roots, while projection import SHALL publish a distinct derived namespace and SHALL NOT replace or impersonate the source repository.
 - **OGVCS-033-FR-11:** Every export SHALL create an immutable audit record and evidence manifest including requester/approvers, scope, generation, bytes/objects, mode, tool/spec version, destination class, verification result, and expiry/retention guidance.
@@ -61,7 +62,7 @@ Open source alone does not prevent data lock-in. If repository history, FileIDs,
 
 ## Interfaces and data
 
-Deliver the public two-profile specification, schema/test-vector repository, export request/approval and full-visibility preflight, export/volume manifests, incremental base/mode link, protected projection-provenance record, non-disclosing omission/external dependency record, verifier/reconstructor CLI profiles, import policy, and fidelity/projection reconciliation/evidence reports.
+Deliver the public two-profile specification, schema/test-vector repository, export request/approval and full-visibility preflight, export/volume manifests, incremental base/mode link, protected projection-provenance record, non-disclosing omission/external dependency record, verifier/reconstructor CLI profiles, import policy, and fidelity/projection reconciliation/evidence reports. Fidelity containers embed unchanged OGVCS-002 bytes; projection builders use OGVCS-002 schemas/preimages and OGVCS-004 path plus OGVCS-007 manifest semantics. Neither mode treats the OGVCS-002 caller-supplied logical bundle as completeness evidence.
 
 ## Development plan
 
@@ -79,6 +80,7 @@ Deliver the public two-profile specification, schema/test-vector repository, exp
 - **OGVCS-033-AC-05:** For a mixed-visibility fixture, fidelity export fails before a usable artifact while projection succeeds with distinct IDs; neither path/object/history/audit/review identity, count, manifest, error, timing class, nor telemetry discloses excluded state.
 - **OGVCS-033-AC-06:** A public third-party/clean-room review implements or validates the spec from documentation/test vectors without private assistance or vendor service access.
 - **OGVCS-033-AC-07:** Import rejects a projection relabeled as fidelity or targeted to replace its source; an authorized projection round-trip remains explicitly derived and never claims source-root equality.
+- **OGVCS-033-AC-08:** A full-view projection with no omitted path still creates a distinct descriptor and different repository-scoped tree/snapshot IDs, cannot impersonate the source repository, and retains identical manifest/chunk IDs only where logical content is unchanged.
 
 ## Verification plan
 

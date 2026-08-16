@@ -1,0 +1,3888 @@
+{
+  "cases": [
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "bundle-sequence-bytes",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "set header declared-total-sequence-bytes to n; stream actual item bytes independently and reject a declaration above the hard maximum before reserving or reading item bodies",
+      "expected": {
+        "highestLayer": 1,
+        "result": "accept"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 9,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "payloadBytes": "0",
+        "sequenceBytes": "2199023255552",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "invoke header budget validation after canonical unsigned decoding and before allocation or section reads",
+      "seedHex": "a9ebbae9d4fbd0e346e5676375e01596892bf10a5c8f8ea947653d8dfb284922",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "735c829ec32081b5892bbd510fc78c9d7ce51e8c6e887fc90da0135b6773298d",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "bundle-sequence-bytes",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 9,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "payloadBytes": "0",
+            "sequenceBytes": "2199023255552",
+            "traversalEdges": "0"
+          },
+          "seedHex": "a9ebbae9d4fbd0e346e5676375e01596892bf10a5c8f8ea947653d8dfb284922",
+          "valueDecimal": "2199023255552",
+          "variant": "maximum",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "2199023255552",
+      "variant": "maximum"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "bundle-sequence-bytes",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "set header declared-total-sequence-bytes to n; stream actual item bytes independently and reject a declaration above the hard maximum before reserving or reading item bodies",
+      "expected": {
+        "code": "BUNDLE_BUDGET_EXCEEDED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "configured-resource-preflight"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 9,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "payloadBytes": "0",
+        "sequenceBytes": "2199023255553",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "invoke header budget validation after canonical unsigned decoding and before allocation or section reads",
+      "seedHex": "6bbeb29e9e82c186ba2a69462b92bf1451deaef4b26e10bfcfb9c51e84e40f1c",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "c2f64859b25135b0a8b5179a99c98c7bb8c752bf47158c83a56a94010fa64c9c",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "bundle-sequence-bytes",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 9,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "payloadBytes": "0",
+            "sequenceBytes": "2199023255553",
+            "traversalEdges": "0"
+          },
+          "seedHex": "6bbeb29e9e82c186ba2a69462b92bf1451deaef4b26e10bfcfb9c51e84e40f1c",
+          "valueDecimal": "2199023255553",
+          "variant": "maximum-plus-one",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "2199023255553",
+      "variant": "maximum-plus-one"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "bundle-largest-item-bytes",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "set header declared-largest-item-bytes to n and supply an actual canonical header no larger than the declaration",
+      "expected": {
+        "highestLayer": 1,
+        "result": "accept"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 5,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "largestItemBytes": "536871424",
+        "logicalBytes": "0",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "invoke header budget validation after canonical unsigned decoding and before allocation or section reads",
+      "seedHex": "4c93b870a969d16d2f43044e08295779ebc3019818f38b111a45a8e8f87d8993",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "56a6d3992651f15ef7a79a772722e1af2158c87181fc713ffffab142a8014334",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "bundle-largest-item-bytes",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 5,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "largestItemBytes": "536871424",
+            "logicalBytes": "0",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "4c93b870a969d16d2f43044e08295779ebc3019818f38b111a45a8e8f87d8993",
+          "valueDecimal": "536871424",
+          "variant": "maximum",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "536871424",
+      "variant": "maximum"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "bundle-largest-item-bytes",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "set header declared-largest-item-bytes to n and supply an actual canonical header no larger than the declaration",
+      "expected": {
+        "code": "BUNDLE_BUDGET_EXCEEDED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "configured-resource-preflight"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 5,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "largestItemBytes": "536871425",
+        "logicalBytes": "0",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "invoke header budget validation after canonical unsigned decoding and before allocation or section reads",
+      "seedHex": "8965f364a8959ecb1b31056a4eb0d10e8435b10f3f0484fe0e9816dd475f378f",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "3f0e0bcb5c9e5f26f4376af62bf56dfa6c8c4a47065361cb2d162b4ec8735e12",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "bundle-largest-item-bytes",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 5,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "largestItemBytes": "536871425",
+            "logicalBytes": "0",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "8965f364a8959ecb1b31056a4eb0d10e8435b10f3f0484fe0e9816dd475f378f",
+          "valueDecimal": "536871425",
+          "variant": "maximum-plus-one",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "536871425",
+      "variant": "maximum-plus-one"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "bundle-objects",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit n eight-byte chunk object items whose payload is uint64be(i) and whose identity digest is SHA-256(object-domain || uint16be(1) || uint16be(1) || uint64be(i)); closure roots are supplied by the isolation harness",
+      "expected": {
+        "highestLayer": 1,
+        "result": "accept"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 5,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "10000000",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "objects": "10000000",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "provide valid header/budgets, unique ordered identities, roots and trailer; isolate object count before semantic closure",
+      "seedHex": "52c36d74aedf85eded39d65e402fe014166ac4bb1543e3ffe4f8cebb79dc85af",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "918c62db39f17cfb07550d65e80bb2fd16821ab455f4d7e56f3be8a489d831ce",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "bundle-objects",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 5,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "10000000",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "objects": "10000000",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "52c36d74aedf85eded39d65e402fe014166ac4bb1543e3ffe4f8cebb79dc85af",
+          "valueDecimal": "10000000",
+          "variant": "maximum",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "10000000",
+      "variant": "maximum"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "bundle-objects",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit n eight-byte chunk object items whose payload is uint64be(i) and whose identity digest is SHA-256(object-domain || uint16be(1) || uint16be(1) || uint64be(i)); closure roots are supplied by the isolation harness",
+      "expected": {
+        "code": "BUNDLE_BUDGET_EXCEEDED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "configured-resource-preflight"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 5,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "10000001",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "objects": "10000001",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "provide valid header/budgets, unique ordered identities, roots and trailer; isolate object count before semantic closure",
+      "seedHex": "f7628243d4cba65738662d47e80f13a3e7e102297968e3ee6d1fae751cf22c27",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "f0b141376b2fcaffc5366a1392ae5900c1816f3771da49894f8fdb762a4e0be4",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "bundle-objects",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 5,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "10000001",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "objects": "10000001",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "f7628243d4cba65738662d47e80f13a3e7e102297968e3ee6d1fae751cf22c27",
+          "valueDecimal": "10000001",
+          "variant": "maximum-plus-one",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "10000001",
+      "variant": "maximum-plus-one"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "bundle-logical-records",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit n annotation logical-record items with ordinal i and subject digest SHA-256(seed || 0x4c || uint64be(i)); emit one required root per record and a matching trailer",
+      "expected": {
+        "highestLayer": 1,
+        "result": "accept"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 5,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "10000000",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "logicalRecords": "10000000",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "provide valid header/budgets, deterministic identities, roots and trailer; isolate logical-record count before semantic closure",
+      "seedHex": "98e25e90a20af1a8035b345bd076d348275a1cd4654b93bb2cce85b3e83aed0e",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "624c799a0e5626ba67e82bbe2c2fee7589c6073ac2002d9ec6aeb5172e9d5d6f",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "bundle-logical-records",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 5,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "10000000",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "logicalRecords": "10000000",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "98e25e90a20af1a8035b345bd076d348275a1cd4654b93bb2cce85b3e83aed0e",
+          "valueDecimal": "10000000",
+          "variant": "maximum",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "10000000",
+      "variant": "maximum"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "bundle-logical-records",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit n annotation logical-record items with ordinal i and subject digest SHA-256(seed || 0x4c || uint64be(i)); emit one required root per record and a matching trailer",
+      "expected": {
+        "code": "BUNDLE_BUDGET_EXCEEDED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "configured-resource-preflight"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 5,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "10000001",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "logicalRecords": "10000001",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "provide valid header/budgets, deterministic identities, roots and trailer; isolate logical-record count before semantic closure",
+      "seedHex": "c3d4ef08c367f773dbab2f0e5c64fec115940ca5cef07cb5e063cb89bf2bcb92",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "64fb1475ba93ebaae9625c48b9018ec3b47827552247268fd916f76c627c1b2d",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "bundle-logical-records",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 5,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "10000001",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "logicalRecords": "10000001",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "c3d4ef08c367f773dbab2f0e5c64fec115940ca5cef07cb5e063cb89bf2bcb92",
+          "valueDecimal": "10000001",
+          "variant": "maximum-plus-one",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "10000001",
+      "variant": "maximum-plus-one"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "bundle-roots",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit n root items with ordinal i and identity SHA-256(seed || 0x52 || uint64be(i)); sort by root-kind, identity bytes, then role bytes",
+      "expected": {
+        "highestLayer": 1,
+        "result": "accept"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 5,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "20000000",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "payloadBytes": "0",
+        "roots": "20000000",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "provide valid header/budgets, canonical empty object/logical sections and trailer; isolate root count before root semantic resolution",
+      "seedHex": "695237197f80be171b8d21474567f48dc13e7bb4b6942795920f53a42f618ec4",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "eb8c1ac3cab151d990c50c8dd8fa579516d9c6da41b75d61d163e8627ff501ec",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "bundle-roots",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 5,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "20000000",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "payloadBytes": "0",
+            "roots": "20000000",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "695237197f80be171b8d21474567f48dc13e7bb4b6942795920f53a42f618ec4",
+          "valueDecimal": "20000000",
+          "variant": "maximum",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "20000000",
+      "variant": "maximum"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "bundle-roots",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit n root items with ordinal i and identity SHA-256(seed || 0x52 || uint64be(i)); sort by root-kind, identity bytes, then role bytes",
+      "expected": {
+        "code": "BUNDLE_BUDGET_EXCEEDED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "configured-resource-preflight"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 5,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "20000001",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "payloadBytes": "0",
+        "roots": "20000001",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "provide valid header/budgets, canonical empty object/logical sections and trailer; isolate root count before root semantic resolution",
+      "seedHex": "b0c5cde54c265224762169386595d7e02fa3f7e471897536500ccb4afde03a60",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "237979e33e1299da6255c91f0194a72bbcb5987294ed205f609883e3a859ade0",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "bundle-roots",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 5,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "20000001",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "payloadBytes": "0",
+            "roots": "20000001",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "b0c5cde54c265224762169386595d7e02fa3f7e471897536500ccb4afde03a60",
+          "valueDecimal": "20000001",
+          "variant": "maximum-plus-one",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "20000001",
+      "variant": "maximum-plus-one"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "bundle-total-items",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "set the isolated observed/trailer total-item counter to n using an unsigned arbitrary-precision counter; trailer count comparison follows the budget check",
+      "expected": {
+        "highestLayer": 1,
+        "result": "accept"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 5,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "40000002"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "totalItems": "40000002",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all item framing, ordinals and section counts are otherwise valid; isolate the total-item hard counter before trailer equality",
+      "seedHex": "3548e431fa49b29a4b0b4bed0c7629390629f50fd20282ed08bdcaa9d54b7df6",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "ca03577de61435ec4065d5b1c8af23fe324febd1c33510502a5254322561bf59",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "bundle-total-items",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 5,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "40000002"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "totalItems": "40000002",
+            "traversalEdges": "0"
+          },
+          "seedHex": "3548e431fa49b29a4b0b4bed0c7629390629f50fd20282ed08bdcaa9d54b7df6",
+          "valueDecimal": "40000002",
+          "variant": "maximum",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "40000002",
+      "variant": "maximum"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "bundle-total-items",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "set the isolated observed/trailer total-item counter to n using an unsigned arbitrary-precision counter; trailer count comparison follows the budget check",
+      "expected": {
+        "code": "BUNDLE_BUDGET_EXCEEDED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "configured-resource-preflight"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 5,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "40000003"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "totalItems": "40000003",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all item framing, ordinals and section counts are otherwise valid; isolate the total-item hard counter before trailer equality",
+      "seedHex": "597df3dfa104892b72680c3934a8608db839d6bd41c4ef31acada7ec5dc1e543",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "3d5aa27825db581629fef32f3a7f98489ed9ba449c86facd8252cdec6fd26966",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "bundle-total-items",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 5,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "40000003"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "totalItems": "40000003",
+            "traversalEdges": "0"
+          },
+          "seedHex": "597df3dfa104892b72680c3934a8608db839d6bd41c4ef31acada7ec5dc1e543",
+          "valueDecimal": "40000003",
+          "variant": "maximum-plus-one",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "40000003",
+      "variant": "maximum-plus-one"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "bundle-traversal-edges",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "set the isolated closure traversal-edge counter to n; each virtual edge i is (SHA-256(seed||0x46||uint64be(i)), SHA-256(seed||0x54||uint64be(i)))",
+      "expected": {
+        "highestLayer": 1,
+        "result": "accept"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 5,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "100000000"
+      },
+      "isolationPrerequisites": "all supplied refs are well typed; isolate the traversal work counter before dereferencing the edge that exceeds the limit",
+      "seedHex": "36ad80dfaaaa697ab256266ee7fe580a8b781d52087c4f9982cc336f8bcfbbd9",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "ee47ac685e71dee7721a5c072ac8d4eeeabb4fa4d32f79a2127da1ed103e5346",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "bundle-traversal-edges",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 5,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "100000000"
+          },
+          "seedHex": "36ad80dfaaaa697ab256266ee7fe580a8b781d52087c4f9982cc336f8bcfbbd9",
+          "valueDecimal": "100000000",
+          "variant": "maximum",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "100000000",
+      "variant": "maximum"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "bundle-traversal-edges",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "set the isolated closure traversal-edge counter to n; each virtual edge i is (SHA-256(seed||0x46||uint64be(i)), SHA-256(seed||0x54||uint64be(i)))",
+      "expected": {
+        "code": "BUNDLE_BUDGET_EXCEEDED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "configured-resource-preflight"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 5,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "100000001"
+      },
+      "isolationPrerequisites": "all supplied refs are well typed; isolate the traversal work counter before dereferencing the edge that exceeds the limit",
+      "seedHex": "c10b484b05713b6e872f6eff032ed46068941bbfb0577c657af3b46cfa2fbe14",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "aacc6bd5b98b6651d0c1bfac7b1fc043ad45bc8eeb5373bf321e58f0c82fc2c9",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "bundle-traversal-edges",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 5,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "100000001"
+          },
+          "seedHex": "c10b484b05713b6e872f6eff032ed46068941bbfb0577c657af3b46cfa2fbe14",
+          "valueDecimal": "100000001",
+          "variant": "maximum-plus-one",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "100000001",
+      "variant": "maximum-plus-one"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "bundle-index-entries",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "set the isolated bundle index-entry work counter to n; do not reserve memory from n",
+      "expected": {
+        "highestLayer": 1,
+        "result": "accept"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 5,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "20000000",
+        "logicalBytes": "0",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "invoke the bundle configured/hard-budget counter check with all earlier header fields canonical and within bounds",
+      "seedHex": "897b290bd9e9e20a207313cc421a9e66906526a05802650528f862aa93cc603f",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "3b2c9d9b5201d9e4547b79b05504321238b05b4303d3414241dcd8e6c933fe30",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "bundle-index-entries",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 5,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "20000000",
+            "logicalBytes": "0",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "897b290bd9e9e20a207313cc421a9e66906526a05802650528f862aa93cc603f",
+          "valueDecimal": "20000000",
+          "variant": "maximum",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "20000000",
+      "variant": "maximum"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "bundle-index-entries",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "set the isolated bundle index-entry work counter to n; do not reserve memory from n",
+      "expected": {
+        "code": "BUNDLE_BUDGET_EXCEEDED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "configured-resource-preflight"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 5,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "20000001",
+        "logicalBytes": "0",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "invoke the bundle configured/hard-budget counter check with all earlier header fields canonical and within bounds",
+      "seedHex": "8dcd294839605558b0f7298359d0d651cef5a1e7cf90d7b955c95f9e804183c0",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "e08a647b87a01f98b4a6fb1a3accef8e4543089cb941932dccf49e84d98ecce6",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "bundle-index-entries",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 5,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "20000001",
+            "logicalBytes": "0",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "8dcd294839605558b0f7298359d0d651cef5a1e7cf90d7b955c95f9e804183c0",
+          "valueDecimal": "20000001",
+          "variant": "maximum-plus-one",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "20000001",
+      "variant": "maximum-plus-one"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "cbor-nesting-depth",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit byte 0x81 exactly n times followed by byte 0x00",
+      "expected": {
+        "highestLayer": 2,
+        "result": "accept"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 2,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "nestingLevels": "32",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "76dc2dfb49a1a59ea1c8ae32e8f3eae29420fdfa6bb3eecfa92d6bb4cc86aad5",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "359d76fae4f2aebe8a42b9a93e239f41c3e8e249008088e62d24fd46b9b7db13",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "cbor-nesting-depth",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 2,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "nestingLevels": "32",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "76dc2dfb49a1a59ea1c8ae32e8f3eae29420fdfa6bb3eecfa92d6bb4cc86aad5",
+          "valueDecimal": "32",
+          "variant": "maximum",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "32",
+      "variant": "maximum"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "cbor-nesting-depth",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit byte 0x81 exactly n times followed by byte 0x00",
+      "expected": {
+        "code": "LIMIT_NESTING",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 2,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "nestingLevels": "33",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "8142e3707ab10f8e5fea0bce69edffbe51de646b79a6d3b2fe921df57ffe6578",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "5e3058b78bfff872f71c7a22ce63e5a1e68dc2cd6a1837bdf5fe92f7decbd8ae",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "cbor-nesting-depth",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 2,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "nestingLevels": "33",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "8142e3707ab10f8e5fea0bce69edffbe51de646b79a6d3b2fe921df57ffe6578",
+          "valueDecimal": "33",
+          "variant": "maximum-plus-one",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "33",
+      "variant": "maximum-plus-one"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "metadata-payload-bytes",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "choose padding length p by monotone search so canonical_size(metadata envelope plus extension x.test/opaque@1:{0:bstr(p)}) is exactly n; emit p recurrence bytes",
+      "expected": {
+        "highestLayer": 2,
+        "result": "accept"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 5,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "metadataPayloadBytes": "536870912",
+        "payloadBytes": "536870912",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "160f61afaf002024f3c1abe315c3580826c48da0e450e9274bbd9f770cad1aea",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "999b3bc875a38a4e29316171e4ba9e9c46ba46a6041aa9722cacde165d6a3170",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "metadata-payload-bytes",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 5,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "metadataPayloadBytes": "536870912",
+            "payloadBytes": "536870912",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "160f61afaf002024f3c1abe315c3580826c48da0e450e9274bbd9f770cad1aea",
+          "valueDecimal": "536870912",
+          "variant": "maximum",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "536870912",
+      "variant": "maximum"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "metadata-payload-bytes",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "choose padding length p by monotone search so canonical_size(metadata envelope plus extension x.test/opaque@1:{0:bstr(p)}) is exactly n; emit p recurrence bytes",
+      "expected": {
+        "code": "LIMIT_METADATA_BYTES",
+        "layer": 1,
+        "result": "reject",
+        "stage": "configured-resource-preflight"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 5,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "metadataPayloadBytes": "536870913",
+        "payloadBytes": "536870913",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "ea70e5b2b5025f1cdcb11ee007c3f5459306e11c8cdd145b16176b8a02fc08ac",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "b0b4a2e9f5b693c7ed5e5fed84e6ec59cfcee409866a9a78c197260c489a3dbd",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "metadata-payload-bytes",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 5,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "metadataPayloadBytes": "536870913",
+            "payloadBytes": "536870913",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "ea70e5b2b5025f1cdcb11ee007c3f5459306e11c8cdd145b16176b8a02fc08ac",
+          "valueDecimal": "536870913",
+          "variant": "maximum-plus-one",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "536870913",
+      "variant": "maximum-plus-one"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "chunk-payload-bytes",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit n bytes; byte[i] = SHA-256(seed || uint64be(floor(i/32)))[i mod 32]",
+      "expected": {
+        "highestLayer": 2,
+        "result": "accept"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 5,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "payloadBytes": "67108864",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "4f14b98d12357759c401771a0459847b17f90e0470e4ee8fdbcb166223c6ff4a",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "a1e73ee0df94603f7c247318f9b5edb0da1d75a6fd5492d3b07f611ce35c8ce5",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "chunk-payload-bytes",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 5,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "payloadBytes": "67108864",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "4f14b98d12357759c401771a0459847b17f90e0470e4ee8fdbcb166223c6ff4a",
+          "valueDecimal": "67108864",
+          "variant": "maximum",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "67108864",
+      "variant": "maximum"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "chunk-payload-bytes",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit n bytes; byte[i] = SHA-256(seed || uint64be(floor(i/32)))[i mod 32]",
+      "expected": {
+        "code": "LIMIT_CHUNK_BYTES",
+        "layer": 1,
+        "result": "reject",
+        "stage": "configured-resource-preflight"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 5,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "payloadBytes": "67108865",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "789d725acf2774ae0a0c9d6d7bd2e144052ba1eff5ae5c12fddaf504150c54e7",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "2d90c350b0cb93ddc945bb454c53a27a81363c4201a9ac433ba5f1bf7f227c06",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "chunk-payload-bytes",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 5,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "payloadBytes": "67108865",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "789d725acf2774ae0a0c9d6d7bd2e144052ba1eff5ae5c12fddaf504150c54e7",
+          "valueDecimal": "67108865",
+          "variant": "maximum-plus-one",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "67108865",
+      "variant": "maximum-plus-one"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "generic-text-or-byte-value-bytes",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit one byte string of n recurrence bytes in provenance statement field 19",
+      "expected": {
+        "highestLayer": 2,
+        "result": "accept"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 5,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0",
+        "valueBytes": "16777216"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "3496ae3e0b76df3cd69c247661b42e0e66a8f537ec8f4ed5dd6000d2756f8304",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "b546b6c15955fcd04c36e9f175e691179d13f4ba630f6aa39f9246fbee3bc653",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "generic-text-or-byte-value-bytes",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 5,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0",
+            "valueBytes": "16777216"
+          },
+          "seedHex": "3496ae3e0b76df3cd69c247661b42e0e66a8f537ec8f4ed5dd6000d2756f8304",
+          "valueDecimal": "16777216",
+          "variant": "maximum",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "16777216",
+      "variant": "maximum"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "generic-text-or-byte-value-bytes",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit one byte string of n recurrence bytes in provenance statement field 19",
+      "expected": {
+        "code": "LIMIT_VALUE_BYTES",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 5,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0",
+        "valueBytes": "16777217"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "92f84c3f2ab8dd3f07c525945eee1f95755c90eb11a429027f6e3fc8276a3e82",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "865e8ba7cfe5383c0209470a322f460aa8f24ced2396a0a4cf70362a2c1df8ec",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "generic-text-or-byte-value-bytes",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 5,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0",
+            "valueBytes": "16777217"
+          },
+          "seedHex": "92f84c3f2ab8dd3f07c525945eee1f95755c90eb11a429027f6e3fc8276a3e82",
+          "valueDecimal": "16777217",
+          "variant": "maximum-plus-one",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "16777217",
+      "variant": "maximum-plus-one"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "snapshot-message-bytes",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit one NFC ASCII message consisting of n bytes 0x61",
+      "expected": {
+        "highestLayer": 2,
+        "result": "accept"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 5,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "messageUtf8Bytes": "1048576",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "a2d16e33497d7632edf3e6f47697e11a9ce16f94abeba6ebe4daebfbd1ee1b12",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "da06bf47c6d1be0803d451cfdbafbf5d798001197b0ecce7f503ae2e38b87aa9",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "snapshot-message-bytes",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 5,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "messageUtf8Bytes": "1048576",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "a2d16e33497d7632edf3e6f47697e11a9ce16f94abeba6ebe4daebfbd1ee1b12",
+          "valueDecimal": "1048576",
+          "variant": "maximum",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "1048576",
+      "variant": "maximum"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "snapshot-message-bytes",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit one NFC ASCII message consisting of n bytes 0x61",
+      "expected": {
+        "code": "LIMIT_VALUE_BYTES",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 5,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "messageUtf8Bytes": "1048577",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "4c78c519543412a04d70a606c03379be8700b5f7ba7d2da874a0fcceba29ce30",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "1e9a14ac2817e81ed9a31220df984da4767315abbb22ae57d8522c01a6914221",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "snapshot-message-bytes",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 5,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "messageUtf8Bytes": "1048577",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "4c78c519543412a04d70a606c03379be8700b5f7ba7d2da874a0fcceba29ce30",
+          "valueDecimal": "1048577",
+          "variant": "maximum-plus-one",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "1048577",
+      "variant": "maximum-plus-one"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "extensions-per-object",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit extension entry i with key x.test/e-<zero-padded-decimal(i)>@1 and value {0:uint(i)}; sort keys by deterministic-CBOR encoded key bytes",
+      "expected": {
+        "highestLayer": 2,
+        "result": "accept"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 2,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "extensions": "128",
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "5a7d7c457f430bc41c60b63dab31ffea96176daec61151c86004a20c217dc6c0",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "adaa85a5595b54ac199b9626d672b0e11ed017248d573ef1d65aba66ceab5c99",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "extensions-per-object",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 2,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "extensions": "128",
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "5a7d7c457f430bc41c60b63dab31ffea96176daec61151c86004a20c217dc6c0",
+          "valueDecimal": "128",
+          "variant": "maximum",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "128",
+      "variant": "maximum"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "extensions-per-object",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit extension entry i with key x.test/e-<zero-padded-decimal(i)>@1 and value {0:uint(i)}; sort keys by deterministic-CBOR encoded key bytes",
+      "expected": {
+        "code": "LIMIT_COUNT",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 2,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "extensions": "129",
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "c03d1cccb3d096dbfa74e577fb24aa4b011e83626b23b37f3f8acd6c2030ad36",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "5ecb716f340d7beba14a64baaa8269df73cb57dea08c95193a110febc5fb7198",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "extensions-per-object",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 2,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "extensions": "129",
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "c03d1cccb3d096dbfa74e577fb24aa4b011e83626b23b37f3f8acd6c2030ad36",
+          "valueDecimal": "129",
+          "variant": "maximum-plus-one",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "129",
+      "variant": "maximum-plus-one"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "extension-aggregate-bytes-per-object",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "choose one extension byte-string payload length p by monotone search so canonical_size({0:1,1:9,2:[],3:{x.test/opaque@1:{0:bstr(p)}},16:producer,17:[],18:digest}) is exactly n; emit p recurrence bytes",
+      "expected": {
+        "highestLayer": 2,
+        "result": "accept"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 5,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "encodedExtensionBytes": "16777216",
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "add085debc73cdc0995a21d8a147f4dfc8769384a1c8f2429c5d91b3d584b187",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "fbeda6f06998621a096900ff22cbe4e6a0978afeed38f7e9467e64766aebf582",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "extension-aggregate-bytes-per-object",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 5,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "encodedExtensionBytes": "16777216",
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "add085debc73cdc0995a21d8a147f4dfc8769384a1c8f2429c5d91b3d584b187",
+          "valueDecimal": "16777216",
+          "variant": "maximum",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "16777216",
+      "variant": "maximum"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "extension-aggregate-bytes-per-object",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "choose one extension byte-string payload length p by monotone search so canonical_size({0:1,1:9,2:[],3:{x.test/opaque@1:{0:bstr(p)}},16:producer,17:[],18:digest}) is exactly n; emit p recurrence bytes",
+      "expected": {
+        "code": "LIMIT_EXTENSION_BYTES",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 5,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "encodedExtensionBytes": "16777217",
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "1bbc881f80e061ea136b1c979eee3aadcd5245fa75aed4257c62611841a5f6c7",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "110eb9272ba05771e47e3fd06d09d51a065d596ab31dfc27f17f33f3699d7857",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "extension-aggregate-bytes-per-object",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 5,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "encodedExtensionBytes": "16777217",
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "1bbc881f80e061ea136b1c979eee3aadcd5245fa75aed4257c62611841a5f6c7",
+          "valueDecimal": "16777217",
+          "variant": "maximum-plus-one",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "16777217",
+      "variant": "maximum-plus-one"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "path-segment-bytes",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit one NFC ASCII segment consisting of n bytes 0x61",
+      "expected": {
+        "highestLayer": 2,
+        "result": "accept"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 2,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "payloadBytes": "0",
+        "segmentUtf8Bytes": "255",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "af62303fb0bfa6ebed73450bdc3ce7ea0a604b7a5426e6d6d5927e1a85c1c916",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "0cb4de3c70a9d92477d57a35ece9dd5cb7fea8120b3b065c667b1518c9283b2f",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "path-segment-bytes",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 2,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "payloadBytes": "0",
+            "segmentUtf8Bytes": "255",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "af62303fb0bfa6ebed73450bdc3ce7ea0a604b7a5426e6d6d5927e1a85c1c916",
+          "valueDecimal": "255",
+          "variant": "maximum",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "255",
+      "variant": "maximum"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "path-segment-bytes",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit one NFC ASCII segment consisting of n bytes 0x61",
+      "expected": {
+        "code": "PATH_CORE_INVALID",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 3,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "payloadBytes": "0",
+        "segmentUtf8Bytes": "256",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "dfcf44070ea423a514de7156453aff268ed9a7f1d7fdf7ee8858a305e9745a00",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "844acff041ca800867f82b30d3335da90f474b250058478978968267513458b3",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "path-segment-bytes",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 3,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "payloadBytes": "0",
+            "segmentUtf8Bytes": "256",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "dfcf44070ea423a514de7156453aff268ed9a7f1d7fdf7ee8858a305e9745a00",
+          "valueDecimal": "256",
+          "variant": "maximum-plus-one",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "256",
+      "variant": "maximum-plus-one"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "path-bytes",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit 17 NFC ASCII segments; segments 0..15 have 240 bytes and segment 16 has n-(16*240)-16 bytes; joined measure is sum(utf8 lengths)+(segment-count-1)",
+      "expected": {
+        "highestLayer": 2,
+        "result": "accept"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 3,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "joinedPathUtf8Bytes": "4096",
+        "logicalBytes": "0",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "467dba8ffdb52b7d279ba033a8358132ebfa3d795e47028124490257b74e5bcf",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "643afe7b833438765f9a0226f4472b1a8da004037b06295147b225bdbd2a7041",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "path-bytes",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 3,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "joinedPathUtf8Bytes": "4096",
+            "logicalBytes": "0",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "467dba8ffdb52b7d279ba033a8358132ebfa3d795e47028124490257b74e5bcf",
+          "valueDecimal": "4096",
+          "variant": "maximum",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "4096",
+      "variant": "maximum"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "path-bytes",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit 17 NFC ASCII segments; segments 0..15 have 240 bytes and segment 16 has n-(16*240)-16 bytes; joined measure is sum(utf8 lengths)+(segment-count-1)",
+      "expected": {
+        "code": "PATH_CORE_INVALID",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 3,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "joinedPathUtf8Bytes": "4097",
+        "logicalBytes": "0",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "093dc83ef1a7e5060536c6edb035264ad53674357d1b5b57b44b28aa98334088",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "64099830fd6df4f463a95f3c9062553e576ce23633825c0035cdac0d15cb1603",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "path-bytes",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 3,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "joinedPathUtf8Bytes": "4097",
+            "logicalBytes": "0",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "093dc83ef1a7e5060536c6edb035264ad53674357d1b5b57b44b28aa98334088",
+          "valueDecimal": "4097",
+          "variant": "maximum-plus-one",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "4097",
+      "variant": "maximum-plus-one"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "path-segments",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit n one-byte NFC ASCII segments; segment[i] cycles a..z only in the isolated segment-count validator",
+      "expected": {
+        "highestLayer": 2,
+        "result": "accept"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 3,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "payloadBytes": "0",
+        "segments": "256",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "ce227c80034085a8d2c0cd1e0613142be6f2c83f6b006d9f2f4f74167f6b295f",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "0267c1ed7d509bc1bea067e4cfe315b8f4f753ec854339d27b28049f45f85821",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "path-segments",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 3,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "payloadBytes": "0",
+            "segments": "256",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "ce227c80034085a8d2c0cd1e0613142be6f2c83f6b006d9f2f4f74167f6b295f",
+          "valueDecimal": "256",
+          "variant": "maximum",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "256",
+      "variant": "maximum"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "path-segments",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit n one-byte NFC ASCII segments; segment[i] cycles a..z only in the isolated segment-count validator",
+      "expected": {
+        "code": "PATH_CORE_INVALID",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 3,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "payloadBytes": "0",
+        "segments": "257",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "2ab626ef87cdb20d04b9eb319d36a239e4a7d528e42edb6bdcb084af9d8c24f5",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "f2165cf145ffe9f27e61a751dd45a5d833fd089cc2d01f729f0ecf15c9ee82d5",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "path-segments",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 3,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "payloadBytes": "0",
+            "segments": "257",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "2ab626ef87cdb20d04b9eb319d36a239e4a7d528e42edb6bdcb084af9d8c24f5",
+          "valueDecimal": "257",
+          "variant": "maximum-plus-one",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "257",
+      "variant": "maximum-plus-one"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "tree-entries",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit n entries in ascending basename order e<zero-padded-decimal(i)>; FileID is deterministic nonzero128(SHA-256(seed||uint64be(i))[0:16]) and target/policy are fixed supplied references",
+      "expected": {
+        "highestLayer": 2,
+        "result": "accept"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 5,
+        "counts": {
+          "chunks": "0",
+          "entries": "1000000",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "entries": "1000000",
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "af56eafeb48c99b487f06505163a9c13e7cac6634a95145aac71541d4f0766f5",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "0a312c8b26dae780daa481624f5874d1a744ff434fab31a0a3e91511c9d5ed83",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "tree-entries",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 5,
+            "counts": {
+              "chunks": "0",
+              "entries": "1000000",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "entries": "1000000",
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "af56eafeb48c99b487f06505163a9c13e7cac6634a95145aac71541d4f0766f5",
+          "valueDecimal": "1000000",
+          "variant": "maximum",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "1000000",
+      "variant": "maximum"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "tree-entries",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit n entries in ascending basename order e<zero-padded-decimal(i)>; FileID is deterministic nonzero128(SHA-256(seed||uint64be(i))[0:16]) and target/policy are fixed supplied references",
+      "expected": {
+        "code": "LIMIT_COUNT",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 5,
+        "counts": {
+          "chunks": "0",
+          "entries": "1000001",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "entries": "1000001",
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "839bb863221a95cd507a24a3ca2113b74f66885821502901140fd94ff4f634e7",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "3fc6e8c721bc69a0400464ad0c22c036e028dad140bd5259fea6ff75feb0105b",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "tree-entries",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 5,
+            "counts": {
+              "chunks": "0",
+              "entries": "1000001",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "entries": "1000001",
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "839bb863221a95cd507a24a3ca2113b74f66885821502901140fd94ff4f634e7",
+          "valueDecimal": "1000001",
+          "variant": "maximum-plus-one",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "1000001",
+      "variant": "maximum-plus-one"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "snapshot-parents",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit n unique kind-7 ObjectRefs; digest[i]=SHA-256(seed || 0x50 || uint64be(i)); preserve array order",
+      "expected": {
+        "highestLayer": 2,
+        "result": "accept"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 1,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "parents": "8",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "db97ebe01228271dbfec78bc89c3531dc919ce0f988ef96fc203c9e4ea2af04a",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "0f4c805986741a0e33d5427d31675a08d662097eff1cc0aa84e5b979ed541175",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "snapshot-parents",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 1,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "parents": "8",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "db97ebe01228271dbfec78bc89c3531dc919ce0f988ef96fc203c9e4ea2af04a",
+          "valueDecimal": "8",
+          "variant": "maximum",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "8",
+      "variant": "maximum"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "snapshot-parents",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit n unique kind-7 ObjectRefs; digest[i]=SHA-256(seed || 0x50 || uint64be(i)); preserve array order",
+      "expected": {
+        "code": "SNAPSHOT_PARENT_COUNT_INVALID",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 1,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "parents": "9",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "1b72d3fff138dcb913b94ac1dbd413bbadcc4fbd4f935261cc7b26c6f21b2244",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "fda8f6f648e6ad59e54dc6daa1a1a62c45c28b3b86903e56b372bd63573a02e0",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "snapshot-parents",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 1,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "parents": "9",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "1b72d3fff138dcb913b94ac1dbd413bbadcc4fbd4f935261cc7b26c6f21b2244",
+          "valueDecimal": "9",
+          "variant": "maximum-plus-one",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "9",
+      "variant": "maximum-plus-one"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "change-set-operations",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit operation[i] = {0:i,1:1,3:entry-state(i)} using fixed-width sortable path e<zero-padded-decimal(i)> and deterministic nonzero FileID recurrence",
+      "expected": {
+        "highestLayer": 2,
+        "result": "accept"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 5,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "1000000",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "operations": "1000000",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "4cf27bd0b3e199f3b839f5470612a2d35e040b1e7cc0bc94b754d435fd07c7b9",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "91f7ba9652f097385d46e3723de49ba30ea93455a0b16d7c35241fc28a913665",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "change-set-operations",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 5,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "1000000",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "operations": "1000000",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "4cf27bd0b3e199f3b839f5470612a2d35e040b1e7cc0bc94b754d435fd07c7b9",
+          "valueDecimal": "1000000",
+          "variant": "maximum",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "1000000",
+      "variant": "maximum"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "change-set-operations",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit operation[i] = {0:i,1:1,3:entry-state(i)} using fixed-width sortable path e<zero-padded-decimal(i)> and deterministic nonzero FileID recurrence",
+      "expected": {
+        "code": "LIMIT_COUNT",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 5,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "1000001",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "operations": "1000001",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "c180ab1037ebb4354b64689e37f536e240022b41e0f08083f32c78a47c1ae4fc",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "a3499ff6e56bda6192d813115e6189d53df45b5c36d27307fb55c31c4e62dca8",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "change-set-operations",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 5,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "1000001",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "operations": "1000001",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "c180ab1037ebb4354b64689e37f536e240022b41e0f08083f32c78a47c1ae4fc",
+          "valueDecimal": "1000001",
+          "variant": "maximum-plus-one",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "1000001",
+      "variant": "maximum-plus-one"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "asset-groups",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit group[i] with group-id = nonzero128(SHA-256(seed || uint64be(i))[0:16]) and one distinct member; sort by GroupID",
+      "expected": {
+        "highestLayer": 2,
+        "result": "accept"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 3,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "10000",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "groups": "10000",
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "e2ca319844a8b7cc81f6ee24f8f03669f71c1a6198d285a4b13d3b10a342385b",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "6c5181c7a061f1ebfd2cd9c6be5c6f83dc200386088063c34aa9af36a424bec9",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "asset-groups",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 3,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "10000",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "groups": "10000",
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "e2ca319844a8b7cc81f6ee24f8f03669f71c1a6198d285a4b13d3b10a342385b",
+          "valueDecimal": "10000",
+          "variant": "maximum",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "10000",
+      "variant": "maximum"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "asset-groups",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit group[i] with group-id = nonzero128(SHA-256(seed || uint64be(i))[0:16]) and one distinct member; sort by GroupID",
+      "expected": {
+        "code": "LIMIT_COUNT",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 3,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "10001",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "groups": "10001",
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "de59859818918f89afd8631b596ad07d4ce5f5b9175976c8ce08864d37a62955",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "608c4b80d81da96f48e841df0e62257dd29f900f27612de48769f716293444cd",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "asset-groups",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 3,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "10001",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "groups": "10001",
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "de59859818918f89afd8631b596ad07d4ce5f5b9175976c8ce08864d37a62955",
+          "valueDecimal": "10001",
+          "variant": "maximum-plus-one",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "10001",
+      "variant": "maximum-plus-one"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "asset-group-members",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit one asset group; member[i].file-id = nonzero128(SHA-256(seed || uint64be(i))[0:16]), role is group-role.test/member@1, sort by encoded role then FileID",
+      "expected": {
+        "highestLayer": 2,
+        "result": "accept"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 2,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "64",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "members": "64",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "2cd5d960857522518e486378a3b3b7d9a49da1897b4ea7e9157ffb7703361c66",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "b2e32a142f7f9938aaa50cbf80807d4d1ad0d4938b4b10bb9bfa2493ab969612",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "asset-group-members",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 2,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "64",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "members": "64",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "2cd5d960857522518e486378a3b3b7d9a49da1897b4ea7e9157ffb7703361c66",
+          "valueDecimal": "64",
+          "variant": "maximum",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "64",
+      "variant": "maximum"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "asset-group-members",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit one asset group; member[i].file-id = nonzero128(SHA-256(seed || uint64be(i))[0:16]), role is group-role.test/member@1, sort by encoded role then FileID",
+      "expected": {
+        "code": "LIMIT_COUNT",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 2,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "65",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "members": "65",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "542c17be5de75b949bd55fa34a2aa9a00c7ecacc0ea97957fa013fbd0d668d1c",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "01ad0de7e24e5919a6bf35024f03c2ad6cc56b7fd3affc9532d32de7694a3bc7",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "asset-group-members",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 2,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "65",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "members": "65",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "542c17be5de75b949bd55fa34a2aa9a00c7ecacc0ea97957fa013fbd0d668d1c",
+          "valueDecimal": "65",
+          "variant": "maximum-plus-one",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "65",
+      "variant": "maximum-plus-one"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "manifest-chunks",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit n chunk parts, each {0:chunk-ref(i),1:1}; digest(i)=SHA-256(object-domain||uint16be(1)||uint16be(1)||one-byte(i mod 251)); ordered length sum is n",
+      "expected": {
+        "highestLayer": 2,
+        "result": "accept"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 5,
+        "chunks": "1048576",
+        "counts": {
+          "chunks": "1048576",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "08cfdab301464e7b68edd1b992a042eaadbcd3fa9cb1d0e13c63c23aa0da90eb",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "add11fca2872d6d3428b2e04d44d1c7047d8e04c24eb881befd737e87ec2235b",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "manifest-chunks",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 5,
+            "chunks": "1048576",
+            "counts": {
+              "chunks": "1048576",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "08cfdab301464e7b68edd1b992a042eaadbcd3fa9cb1d0e13c63c23aa0da90eb",
+          "valueDecimal": "1048576",
+          "variant": "maximum",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "1048576",
+      "variant": "maximum"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "manifest-chunks",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit n chunk parts, each {0:chunk-ref(i),1:1}; digest(i)=SHA-256(object-domain||uint16be(1)||uint16be(1)||one-byte(i mod 251)); ordered length sum is n",
+      "expected": {
+        "code": "LIMIT_COUNT",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 5,
+        "chunks": "1048577",
+        "counts": {
+          "chunks": "1048577",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "0",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "7ebe77a9480f82cff4457e0557b5c258437839f85bb940621b7969e00ed1a6b6",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "ab95d02952b02f58f455611cd99cf2e08c908a69cc331f1328e347e166bba4b6",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "manifest-chunks",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 5,
+            "chunks": "1048577",
+            "counts": {
+              "chunks": "1048577",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "0",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "7ebe77a9480f82cff4457e0557b5c258437839f85bb940621b7969e00ed1a6b6",
+          "valueDecimal": "1048577",
+          "variant": "maximum-plus-one",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "1048577",
+      "variant": "maximum-plus-one"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "logical-file-bytes",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit a manifest logical-length n using exact unsigned arithmetic; chunk inventory is supplied separately and its sum must equal n; n=max+1 is a logical-ceiling failure, not an integer-overflow claim",
+      "expected": {
+        "highestLayer": 2,
+        "result": "accept"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 9,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "1099511627776",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "c22ce54eec6c16f0e3232ac8fa3d3da4cb37aa09059a87a1af88658e71ba1f1c",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "d18e77edc0fb58244db237b599c329af0582fff99c08c9b4d230d4145aed7be0",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "logical-file-bytes",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 9,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "1099511627776",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "c22ce54eec6c16f0e3232ac8fa3d3da4cb37aa09059a87a1af88658e71ba1f1c",
+          "valueDecimal": "1099511627776",
+          "variant": "maximum",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "1099511627776",
+      "variant": "maximum"
+    },
+    {
+      "algorithm": {
+        "id": "ogvcs.virtual-boundary-constructor",
+        "version": 1
+      },
+      "arithmetic": "all counters, products, sums and comparisons use mathematical nonnegative integers; decode rejects values above uint64 before conversion to a host integer",
+      "case": "logical-file-bytes",
+      "cborSizing": {
+        "byteOrTextString": "head(length)+length",
+        "canonicalMap": "head(pair-count)+sum(canonical-key-bytes+canonical-value-bytes), keys sorted by encoded length then lexical bytes",
+        "definiteArray": "head(element-count)+sum(canonical-element-bytes)",
+        "head": "1 byte for argument 0..23; 2 for 24..255; 3 for 256..65535; 5 for 65536..4294967295; 9 for 4294967296..18446744073709551615",
+        "textLength": "UTF-8 byte length after verifying input is already NFC"
+      },
+      "emitter": "emit a manifest logical-length n using exact unsigned arithmetic; chunk inventory is supplied separately and its sum must equal n; n=max+1 is a logical-ceiling failure, not an integer-overflow claim",
+      "expected": {
+        "code": "LIMIT_LOGICAL_BYTES",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "expectedMetrics": {
+        "cborUnsignedArgumentHeadBytes": 9,
+        "counts": {
+          "chunks": "0",
+          "entries": "0",
+          "groups": "0",
+          "logicalRecords": "0",
+          "members": "0",
+          "objects": "0",
+          "operations": "0",
+          "roots": "0",
+          "totalItems": "0"
+        },
+        "indexEntries": "0",
+        "logicalBytes": "1099511627777",
+        "payloadBytes": "0",
+        "sequenceBytes": "0",
+        "traversalEdges": "0"
+      },
+      "isolationPrerequisites": "all enclosing fields and referenced fixed values are canonical, within their own limits, and valid; invoke only the named field/count validator before later graph semantics",
+      "seedHex": "605eb0f4d087193092ab4774cbaeba529730b16a1de35e2062bec8b46dd197eb",
+      "summary": {
+        "digestAlgorithm": "SHA-256",
+        "digestHex": "e0a34fa16cd135e4738a35dde653921fe0fc53dc7cd1c58a6488d2e13c0e3001",
+        "input": {
+          "algorithm": "ogvcs.virtual-boundary-constructor",
+          "case": "logical-file-bytes",
+          "metrics": {
+            "cborUnsignedArgumentHeadBytes": 9,
+            "counts": {
+              "chunks": "0",
+              "entries": "0",
+              "groups": "0",
+              "logicalRecords": "0",
+              "members": "0",
+              "objects": "0",
+              "operations": "0",
+              "roots": "0",
+              "totalItems": "0"
+            },
+            "indexEntries": "0",
+            "logicalBytes": "1099511627777",
+            "payloadBytes": "0",
+            "sequenceBytes": "0",
+            "traversalEdges": "0"
+          },
+          "seedHex": "605eb0f4d087193092ab4774cbaeba529730b16a1de35e2062bec8b46dd197eb",
+          "valueDecimal": "1099511627777",
+          "variant": "maximum-plus-one",
+          "version": 1
+        },
+        "serialization": "UTF-8 of lexicographically key-sorted, two-space-indented JSON with LF and one final LF"
+      },
+      "valueDecimal": "1099511627777",
+      "variant": "maximum-plus-one"
+    }
+  ],
+  "constructorCount": 50,
+  "errorPrecedence": "canonical unsigned decoding and enclosing framing; configured receiver budget; format hard maximum; named field/count rule; remaining schema; graph and semantic validation. Stop at the first failure and expose no trusted partial output.",
+  "independentlyReproducible": true,
+  "schema": "ogvcs.repository-format.v1.virtual-limit-constructors.v1"
+}

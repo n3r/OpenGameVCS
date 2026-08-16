@@ -1,0 +1,78 @@
+{
+  "combinations": [
+    {
+      "basePresent": false,
+      "conflictId": "70f3077ec004a7ea8cc2f31837f319ce4c296d1217ed4505a8c270b77d848e5c",
+      "domainHex": "4f70656e47616d6556435320636f6e666c69637400",
+      "formatVersionUint16beHex": "0001",
+      "keyedPayloadPath": "conflicts/000-keyed-preimage.cbor",
+      "leftPresent": false,
+      "rightPresent": false
+    },
+    {
+      "basePresent": false,
+      "conflictId": "9de89d82990c38fd054e7b5aecc9c9ea9e500e5ddf8d03c37fd365f8f802bfe2",
+      "domainHex": "4f70656e47616d6556435320636f6e666c69637400",
+      "formatVersionUint16beHex": "0001",
+      "keyedPayloadPath": "conflicts/001-keyed-preimage.cbor",
+      "leftPresent": false,
+      "rightPresent": true
+    },
+    {
+      "basePresent": false,
+      "conflictId": "daf9b32b6693a4f2378589c9392515bcb3b29825491daea387077bd5330ec213",
+      "domainHex": "4f70656e47616d6556435320636f6e666c69637400",
+      "formatVersionUint16beHex": "0001",
+      "keyedPayloadPath": "conflicts/010-keyed-preimage.cbor",
+      "leftPresent": true,
+      "rightPresent": false
+    },
+    {
+      "basePresent": false,
+      "conflictId": "c8acc9630e0add05062a6eb49d7c261ac8ef97c8178777754749dd23992fc2f5",
+      "domainHex": "4f70656e47616d6556435320636f6e666c69637400",
+      "formatVersionUint16beHex": "0001",
+      "keyedPayloadPath": "conflicts/011-keyed-preimage.cbor",
+      "leftPresent": true,
+      "rightPresent": true
+    },
+    {
+      "basePresent": true,
+      "conflictId": "efd8b2a7549386e4ca6ff3e46cb40e7a2d2ee15c0ae8fbd8cab876a8f436b628",
+      "domainHex": "4f70656e47616d6556435320636f6e666c69637400",
+      "formatVersionUint16beHex": "0001",
+      "keyedPayloadPath": "conflicts/100-keyed-preimage.cbor",
+      "leftPresent": false,
+      "rightPresent": false
+    },
+    {
+      "basePresent": true,
+      "conflictId": "5134dd2abab62fa4cde0c7c5450dce7929a6437f64a1d5c9e0934e284d80c8b5",
+      "domainHex": "4f70656e47616d6556435320636f6e666c69637400",
+      "formatVersionUint16beHex": "0001",
+      "keyedPayloadPath": "conflicts/101-keyed-preimage.cbor",
+      "leftPresent": false,
+      "rightPresent": true
+    },
+    {
+      "basePresent": true,
+      "conflictId": "b7c0984f0b9060714fad398011b4b8bf61ab9c91a82cdbfd1be6030678df0c3a",
+      "domainHex": "4f70656e47616d6556435320636f6e666c69637400",
+      "formatVersionUint16beHex": "0001",
+      "keyedPayloadPath": "conflicts/110-keyed-preimage.cbor",
+      "leftPresent": true,
+      "rightPresent": false
+    },
+    {
+      "basePresent": true,
+      "conflictId": "0b466edafb772a01a401cf66af1ec610e2d790263c825452211e23065d5fb9ce",
+      "domainHex": "4f70656e47616d6556435320636f6e666c69637400",
+      "formatVersionUint16beHex": "0001",
+      "keyedPayloadPath": "conflicts/111-keyed-preimage.cbor",
+      "leftPresent": true,
+      "rightPresent": true
+    }
+  ],
+  "conflictIdRecipe": "SHA-256(domainHex || 0001 || exact keyedPayloadPath bytes)",
+  "schema": "ogvcs.repository-format.v1.conflict-preimages.v1"
+}

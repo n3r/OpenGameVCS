@@ -1,0 +1,1900 @@
+{
+  "explicitCases": [
+    {
+      "artifact": "malformed/truncated.cbor",
+      "expected": {
+        "code": "CBOR_TRUNCATED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "hex": "a100",
+      "name": "truncated"
+    },
+    {
+      "artifact": "malformed/nonminimal-unsigned.cbor",
+      "expected": {
+        "code": "CBOR_NON_CANONICAL",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "hex": "1800",
+      "name": "nonminimal-unsigned"
+    },
+    {
+      "artifact": "malformed/nonminimal-negative.cbor",
+      "expected": {
+        "code": "CBOR_NON_CANONICAL",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "hex": "3800",
+      "name": "nonminimal-negative"
+    },
+    {
+      "artifact": "malformed/nonminimal-length.cbor",
+      "expected": {
+        "code": "CBOR_NON_CANONICAL",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "hex": "5800",
+      "name": "nonminimal-length"
+    },
+    {
+      "artifact": "malformed/map-key-order.cbor",
+      "expected": {
+        "code": "CBOR_NON_CANONICAL",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "hex": "a201000001",
+      "name": "map-key-order"
+    },
+    {
+      "artifact": "malformed/duplicate-map-key.cbor",
+      "expected": {
+        "code": "CBOR_NON_CANONICAL",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "hex": "a200010002",
+      "name": "duplicate-map-key"
+    },
+    {
+      "artifact": "malformed/indefinite-bytes.cbor",
+      "expected": {
+        "code": "CBOR_NON_CANONICAL",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "hex": "5f40ff",
+      "name": "indefinite-bytes"
+    },
+    {
+      "artifact": "malformed/indefinite-text.cbor",
+      "expected": {
+        "code": "CBOR_NON_CANONICAL",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "hex": "7f60ff",
+      "name": "indefinite-text"
+    },
+    {
+      "artifact": "malformed/indefinite-array.cbor",
+      "expected": {
+        "code": "CBOR_NON_CANONICAL",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "hex": "9fff",
+      "name": "indefinite-array"
+    },
+    {
+      "artifact": "malformed/indefinite-map.cbor",
+      "expected": {
+        "code": "CBOR_NON_CANONICAL",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "hex": "bfff",
+      "name": "indefinite-map"
+    },
+    {
+      "artifact": "malformed/float.cbor",
+      "expected": {
+        "code": "CBOR_NON_CANONICAL",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "hex": "f90000",
+      "name": "float"
+    },
+    {
+      "artifact": "malformed/tag.cbor",
+      "expected": {
+        "code": "CBOR_NON_CANONICAL",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "hex": "c000",
+      "name": "tag"
+    },
+    {
+      "artifact": "malformed/positive-bignum-tag-2.cbor",
+      "expected": {
+        "code": "CBOR_NON_CANONICAL",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "hex": "c240",
+      "name": "positive-bignum-tag-2"
+    },
+    {
+      "artifact": "malformed/negative-bignum-tag-3.cbor",
+      "expected": {
+        "code": "CBOR_NON_CANONICAL",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "hex": "c340",
+      "name": "negative-bignum-tag-3"
+    },
+    {
+      "artifact": "malformed/null.cbor",
+      "expected": {
+        "code": "CBOR_NON_CANONICAL",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "hex": "f6",
+      "name": "null"
+    },
+    {
+      "artifact": "malformed/undefined.cbor",
+      "expected": {
+        "code": "CBOR_NON_CANONICAL",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "hex": "f7",
+      "name": "undefined"
+    },
+    {
+      "artifact": "malformed/unassigned-simple.cbor",
+      "expected": {
+        "code": "CBOR_NON_CANONICAL",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "hex": "f0",
+      "name": "unassigned-simple"
+    },
+    {
+      "artifact": "malformed/invalid-utf8.cbor",
+      "expected": {
+        "code": "CBOR_NON_CANONICAL",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "hex": "61ff",
+      "name": "invalid-utf8"
+    },
+    {
+      "artifact": "malformed/nonshortest-utf8.cbor",
+      "expected": {
+        "code": "CBOR_NON_CANONICAL",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "hex": "62c080",
+      "name": "nonshortest-utf8"
+    },
+    {
+      "artifact": "malformed/non-nfc.cbor",
+      "expected": {
+        "code": "CBOR_NON_CANONICAL",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "hex": "6365cc81",
+      "name": "non-nfc"
+    },
+    {
+      "artifact": "malformed/trailing-bytes.cbor",
+      "expected": {
+        "code": "CBOR_TRAILING_BYTES",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "hex": "a300010102028000",
+      "name": "trailing-bytes"
+    },
+    {
+      "artifact": "malformed/nesting-33.cbor",
+      "expected": {
+        "code": "LIMIT_NESTING",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "hex": "81818181818181818181818181818181818181818181818181818181818181818100",
+      "name": "nesting-33"
+    }
+  ],
+  "schema": "ogvcs.repository-format.v1.malformed-cbor.v1",
+  "truncationRecipe": {
+    "cases": [
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 0
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 1
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 2
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 3
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 4
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 5
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 6
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 7
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 8
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 9
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 10
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 11
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 12
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 13
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 14
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 15
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 16
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 17
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 18
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 19
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 20
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 21
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 22
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 23
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 24
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 25
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 26
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 27
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 28
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 29
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 30
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 31
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 32
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 33
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 34
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 35
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 36
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 37
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 38
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 39
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 40
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 41
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 42
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 43
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 44
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 45
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 46
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 47
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 48
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 49
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 50
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 51
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 52
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 53
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 54
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 55
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 56
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 57
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 58
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 59
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 60
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 61
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 62
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 63
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 64
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 65
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 66
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 67
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 68
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 69
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 70
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 71
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 72
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 73
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 74
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 75
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 76
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 77
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 78
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 79
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 80
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 81
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 82
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 83
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 84
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 85
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 86
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 87
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 88
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 89
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 90
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 91
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 92
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 93
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 94
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 95
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 96
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 97
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 98
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 99
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 100
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 101
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 102
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 103
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 104
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 105
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 106
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 107
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 108
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 109
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 110
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 111
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 112
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 113
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 114
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 115
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 116
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 117
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 118
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 119
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 120
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 121
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 122
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 123
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 124
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 125
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 126
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 127
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 128
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 129
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 130
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 131
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 132
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 133
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 134
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 135
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 136
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 137
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 138
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 139
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 140
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 141
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 142
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 143
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 144
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 145
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 146
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 147
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 148
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 149
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 150
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 151
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 152
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 153
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 154
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 155
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 156
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 157
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 158
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 159
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 160
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 161
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 162
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 163
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 164
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 165
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 166
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 167
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 168
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 169
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 170
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 171
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 172
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 173
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 174
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 175
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 176
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 177
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 178
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 179
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 180
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 181
+      },
+      {
+        "expected": {
+          "code": "CBOR_TRUNCATED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "prefixBytes": 182
+      }
+    ],
+    "operation": "take the first prefixBytes bytes",
+    "source": "objects/02-content-manifest.cbor"
+  }
+}

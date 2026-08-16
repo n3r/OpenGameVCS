@@ -1,0 +1,49 @@
+{
+  "extensions": {
+    "entries": [],
+    "registryVersion": 1
+  },
+  "formatVersion": 1,
+  "profiles": {
+    "entries": [
+      {
+        "family": "path",
+        "id": "conformance",
+        "major": 1,
+        "namespace": "profile-state.test",
+        "productionWriteAllowed": false,
+        "state": "conformance-only"
+      },
+      {
+        "family": "path",
+        "id": "deprecated",
+        "major": 1,
+        "namespace": "profile-state.test",
+        "productionWriteAllowed": false,
+        "state": "deprecated"
+      },
+      {
+        "family": "path",
+        "id": "ratified",
+        "major": 1,
+        "namespace": "profile-state.test",
+        "productionWriteAllowed": true,
+        "state": "ratified"
+      },
+      {
+        "family": "path",
+        "id": "reserved",
+        "major": 1,
+        "namespace": "profile-state.test",
+        "productionWriteAllowed": false,
+        "state": "reserved"
+      }
+    ],
+    "registryVersion": 1
+  },
+  "requiredFeatures": {
+    "entries": [],
+    "registryVersion": 1
+  },
+  "schema": "ogvcs.repository-format.v1.registry-snapshot.v1"
+}

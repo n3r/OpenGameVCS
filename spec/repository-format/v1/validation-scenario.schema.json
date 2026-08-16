@@ -1,0 +1,576 @@
+{
+  "$id": "https://opengamevcs.org/spec/repository-format/v1/validation-scenario.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Language-neutral repository-format validation scenario and normative result contract.",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "validate-abstract-reference-graph"
+          }
+        },
+        "required": [
+          "operation"
+        ]
+      },
+      "then": {
+        "properties": {
+          "context": {
+            "properties": {
+              "requestedLayer": {
+                "const": 3
+              }
+            }
+          },
+          "inputs": {
+            "contains": {
+              "properties": {
+                "mediaType": {
+                  "const": "application/vnd.opengamevcs.abstract-reference-graph+json"
+                }
+              },
+              "required": [
+                "mediaType"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "adapt-fixture"
+          }
+        },
+        "required": [
+          "operation"
+        ]
+      },
+      "then": {
+        "properties": {
+          "context": {
+            "properties": {
+              "requestedLayer": {
+                "const": 3
+              }
+            }
+          },
+          "implementationScope": {
+            "const": [
+              "javascript"
+            ]
+          }
+        },
+        "required": [
+          "implementationScope"
+        ]
+      }
+    }
+  ],
+  "properties": {
+    "context": {
+      "$ref": "#/$defs/context"
+    },
+    "expected": {
+      "$ref": "#/$defs/expected"
+    },
+    "failurePrecedence": {
+      "const": "errors-v1-layer-stage-code-offset-subject"
+    },
+    "implementationScope": {
+      "items": {
+        "enum": [
+          "javascript",
+          "rust"
+        ]
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "inputs": {
+      "items": {
+        "$ref": "#/$defs/artifact"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "operation": {
+      "enum": [
+        "adapt-fixture",
+        "allocate-file-id",
+        "canonical-scan",
+        "import-file-id",
+        "replay-change-set",
+        "validate-abstract-reference-graph",
+        "validate-bundle",
+        "validate-bundle-claim",
+        "validate-object",
+        "validate-repository"
+      ]
+    },
+    "resources": {
+      "$ref": "#/$defs/resources"
+    },
+    "requirementIds": {
+      "items": {
+        "pattern": "^OGVCS-[0-9]{3}-(?:AC|FR|NFR)-[0-9]{2}$",
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "scenarioId": {
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": "ogvcs.repository-format/validation-scenario/v1"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "scenarioId",
+    "operation",
+    "requirementIds",
+    "inputs",
+    "context",
+    "resources",
+    "expected",
+    "failurePrecedence"
+  ],
+  "title": "OpenGameVCS repository-format validation scenario v1",
+  "type": "object",
+  "$defs": {
+    "artifact": {
+      "additionalProperties": false,
+      "properties": {
+        "bytes": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mediaType": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "path": {
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$",
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/digestHex"
+        }
+      },
+      "required": [
+        "path",
+        "mediaType",
+        "bytes",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "context": {
+      "additionalProperties": false,
+      "properties": {
+        "asOf": {
+          "const": "immediately-before-candidate-snapshot"
+        },
+        "candidateSnapshot": {
+          "$ref": "#/$defs/objectRefText"
+        },
+        "designatedRoot": {
+          "$ref": "#/$defs/objectRefText"
+        },
+        "importMappings": {
+          "items": {
+            "$ref": "#/$defs/importMapping"
+          },
+          "type": "array"
+        },
+        "lifetimeRecords": {
+          "items": {
+            "$ref": "#/$defs/lifetime"
+          },
+          "type": "array"
+        },
+        "mode": {
+          "enum": [
+            "conformance",
+            "production"
+          ]
+        },
+        "objectLookup": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "artifact": {
+                "$ref": "#/$defs/artifact"
+              },
+              "ref": {
+                "$ref": "#/$defs/objectRefText"
+              }
+            },
+            "required": [
+              "ref",
+              "artifact"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "registrySnapshot": {
+          "additionalProperties": false,
+          "properties": {
+            "formatVersion": {
+              "const": 1
+            },
+            "registrySetSha256": {
+              "$ref": "#/$defs/digestHex"
+            },
+            "registryVersion": {
+              "const": 1
+            }
+          },
+          "required": [
+            "formatVersion",
+            "registryVersion",
+            "registrySetSha256"
+          ],
+          "type": "object"
+        },
+        "requestedLayer": {
+          "enum": [
+            1,
+            2,
+            3
+          ]
+        },
+        "repositoryDescriptor": {
+          "$ref": "#/$defs/objectRefText"
+        },
+        "roots": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "identity": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "object",
+                  "logical-record"
+                ]
+              },
+              "roleProfile": {
+                "$ref": "#/$defs/profileRefText"
+              }
+            },
+            "required": [
+              "kind",
+              "identity"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "workingLifetimeAdditions": {
+          "items": {
+            "$ref": "#/$defs/lifetime"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "mode",
+        "requestedLayer",
+        "asOf",
+        "registrySnapshot",
+        "objectLookup",
+        "roots",
+        "lifetimeRecords",
+        "workingLifetimeAdditions",
+        "importMappings"
+      ],
+      "type": "object"
+    },
+    "digestHex": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "expected": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "highestLayer": {
+              "enum": [
+                1,
+                2,
+                3
+              ]
+            },
+            "output": {
+              "$ref": "#/$defs/output"
+            },
+            "result": {
+              "const": "accept"
+            }
+          },
+          "required": [
+            "result",
+            "highestLayer",
+            "output"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "pattern": "^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$",
+              "type": "string"
+            },
+            "layer": {
+              "enum": [
+                1,
+                2,
+                3
+              ]
+            },
+            "stage": {
+              "enum": [
+                "configured-resource-preflight",
+                "canonical-framing",
+                "sequence-shape-and-order",
+                "declared-identity",
+                "transcript-authentication",
+                "known-schema",
+                "closure-and-reference-resolution",
+                "declared-accounting",
+                "registry-semantics",
+                "repository-semantics"
+              ]
+            },
+            "result": {
+              "const": "reject"
+            }
+          },
+          "required": [
+            "result",
+            "layer",
+            "stage",
+            "code"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "fileIdHex": {
+      "pattern": "^(?!0{32}$)[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "importMapping": {
+      "additionalProperties": false,
+      "properties": {
+        "fileId": {
+          "$ref": "#/$defs/fileIdHex"
+        },
+        "importerProfile": {
+          "$ref": "#/$defs/profileRefText"
+        },
+        "mappingKey": {
+          "$ref": "#/$defs/digestHex"
+        },
+        "sourceIdentityDigest": {
+          "$ref": "#/$defs/digestHex"
+        },
+        "sourceNamespaceDigest": {
+          "$ref": "#/$defs/digestHex"
+        },
+        "state": {
+          "enum": [
+            "reserved",
+            "materialized",
+            "published"
+          ]
+        }
+      },
+      "required": [
+        "importerProfile",
+        "sourceNamespaceDigest",
+        "sourceIdentityDigest",
+        "mappingKey",
+        "fileId",
+        "state"
+      ],
+      "type": "object"
+    },
+    "lifetime": {
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "not": {
+            "required": [
+              "importMappingKey"
+            ]
+          },
+          "properties": {
+            "origin": {
+              "enum": [
+                "native-create",
+                "native-copy"
+              ]
+            }
+          }
+        },
+        {
+          "properties": {
+            "origin": {
+              "const": "import"
+            }
+          },
+          "required": [
+            "importMappingKey"
+          ]
+        }
+      ],
+      "properties": {
+        "fileId": {
+          "$ref": "#/$defs/fileIdHex"
+        },
+        "firstChangeSet": {
+          "$ref": "#/$defs/objectRefText"
+        },
+        "firstOperation": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "importMappingKey": {
+          "$ref": "#/$defs/digestHex"
+        },
+        "origin": {
+          "enum": [
+            "native-create",
+            "native-copy",
+            "import"
+          ]
+        }
+      },
+      "required": [
+        "fileId",
+        "origin",
+        "firstChangeSet",
+        "firstOperation"
+      ],
+      "type": "object"
+    },
+    "objectRefText": {
+      "pattern": "^ogvcs:v1:[a-z][a-z0-9-]*:sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "output": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact": {
+          "$ref": "#/$defs/artifact"
+        },
+        "summarySha256": {
+          "$ref": "#/$defs/digestHex"
+        }
+      },
+      "required": [
+        "summarySha256"
+      ],
+      "type": "object"
+    },
+    "profileRefText": {
+      "pattern": "^[a-z][a-z0-9-]*(?:\\.[a-z][a-z0-9-]*)+/[a-z][a-z0-9-]*@[1-9][0-9]*$",
+      "type": "string"
+    },
+    "resources": {
+      "additionalProperties": false,
+      "properties": {
+        "recipe": {
+          "additionalProperties": false,
+          "properties": {
+            "generator": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "parameters": {
+              "additionalProperties": {
+                "type": [
+                  "integer",
+                  "string"
+                ]
+              },
+              "type": "object"
+            },
+            "seed": {
+              "$ref": "#/$defs/digestHex"
+            }
+          },
+          "required": [
+            "generator",
+            "seed",
+            "parameters"
+          ],
+          "type": "object"
+        },
+        "summary": {
+          "additionalProperties": false,
+          "properties": {
+            "bytes": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "indexEntries": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "items": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "peakMemoryBytes": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "scratchBytes": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "summarySha256": {
+              "$ref": "#/$defs/digestHex"
+            },
+            "traversalEdges": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "bytes",
+            "items",
+            "traversalEdges",
+            "indexEntries",
+            "peakMemoryBytes",
+            "scratchBytes",
+            "summarySha256"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "recipe",
+        "summary"
+      ],
+      "type": "object"
+    }
+  }
+}

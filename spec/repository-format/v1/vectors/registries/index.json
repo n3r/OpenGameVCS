@@ -1,0 +1,185 @@
+{
+  "cases": [
+    {
+      "artifact": "registries/unknown-required-feature.cbor",
+      "expected": {
+        "highestLayer": 1,
+        "result": "accept-forwardable"
+      },
+      "scenarioId": "registry-unknown-feature-forward",
+      "snapshot": "old"
+    },
+    {
+      "artifact": "registries/unknown-required-feature.cbor",
+      "expected": {
+        "code": "REQUIRED_FEATURE_UNSUPPORTED",
+        "layer": 3,
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "scenarioId": "registry-unknown-feature",
+      "snapshot": "old"
+    },
+    {
+      "artifact": "registries/unknown-required-feature.cbor",
+      "expected": {
+        "highestLayer": 3,
+        "mode": "conformance",
+        "result": "accept"
+      },
+      "featureBehavior": "no-op",
+      "snapshot": "new"
+    },
+    {
+      "artifact": "registries/unknown-optional-extension.cbor",
+      "expected": {
+        "highestLayer": 3,
+        "mode": "conformance",
+        "preservationSha256": "3d3854b7a1584d4e07092c1e1d0c227f57fecdb75d5caa944dc3b91d9cb34122",
+        "result": "accept-byte-preserved"
+      },
+      "scenarioId": "registry-unknown-extension-preserve",
+      "snapshot": "old"
+    },
+    {
+      "expected": {
+        "code": "REGISTRY_INVALID",
+        "layer": 3,
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "mutation": {
+        "action": "append-copy",
+        "file": "object-kinds.json",
+        "selector": {
+          "code": 1
+        }
+      },
+      "operation": "validate-registry-set",
+      "scenarioId": "registry-duplicate",
+      "sourceRegistryDirectory": "../registries"
+    },
+    {
+      "expected": {
+        "code": "REGISTRY_INVALID",
+        "layer": 3,
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "mutation": {
+        "action": "replace-entry-field",
+        "field": "payload",
+        "file": "object-kinds.json",
+        "selector": {
+          "code": 1
+        },
+        "value": "deterministic-cbor"
+      },
+      "operation": "validate-registry-set",
+      "scenarioId": "registry-reassigned",
+      "sourceRegistryDirectory": "../registries"
+    },
+    {
+      "expected": {
+        "code": "REGISTRY_INVALID",
+        "layer": 3,
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "mutation": {
+        "action": "append-entry",
+        "entry": {
+          "name": "scenario-missing-error-code",
+          "unit": "bytes",
+          "value": 1
+        },
+        "file": "limits.json"
+      },
+      "operation": "validate-registry-set",
+      "scenarioId": "registry-invalid-entry",
+      "sourceRegistryDirectory": "../registries"
+    },
+    {
+      "expected": {
+        "code": "PROFILE_STATE_FORBIDDEN",
+        "layer": 3,
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "operation": "read-or-write",
+      "profile": "profile-state.test/reserved@1",
+      "scenarioId": "registry-reserved",
+      "snapshot": "old"
+    },
+    {
+      "expected": {
+        "highestLayer": 3,
+        "result": "accept"
+      },
+      "operation": "read-or-new-write",
+      "profile": "profile-state.test/ratified@1",
+      "scenarioId": "registry-ratified-read-write",
+      "snapshot": "old"
+    },
+    {
+      "expected": {
+        "highestLayer": 3,
+        "result": "accept"
+      },
+      "operation": "read",
+      "profile": "profile-state.test/deprecated@1",
+      "scenarioId": "registry-deprecated-read",
+      "snapshot": "old"
+    },
+    {
+      "expected": {
+        "code": "PROFILE_STATE_FORBIDDEN",
+        "layer": 3,
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "operation": "new-write",
+      "profile": "profile-state.test/deprecated@1",
+      "scenarioId": "registry-deprecated-write",
+      "snapshot": "old"
+    },
+    {
+      "expected": {
+        "highestLayer": 3,
+        "result": "accept"
+      },
+      "operation": "conformance",
+      "profile": "profile-state.test/conformance@1",
+      "scenarioId": "registry-conformance-mode",
+      "snapshot": "old"
+    },
+    {
+      "expected": {
+        "code": "PROFILE_CONFORMANCE_ONLY",
+        "layer": 3,
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "operation": "production-write",
+      "profile": "profile-state.test/conformance@1",
+      "scenarioId": "registry-conformance-production",
+      "snapshot": "old"
+    },
+    {
+      "expected": {
+        "code": "PROFILE_UNKNOWN",
+        "layer": 3,
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "operation": "read",
+      "profile": "profile-state.test/unknown@1",
+      "scenarioId": "registry-unknown-profile",
+      "snapshot": "old"
+    }
+  ],
+  "newSnapshot": "registries/new-snapshot.json",
+  "notice": "These self-contained vector snapshots use fixture-only demo assignments and do not amend the live format-v1 registries.",
+  "oldSnapshot": "registries/old-snapshot.json",
+  "schema": "ogvcs.repository-format.v1.registry-evolution-cases.v1"
+}

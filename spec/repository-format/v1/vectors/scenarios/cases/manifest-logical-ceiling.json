@@ -1,0 +1,75 @@
+{
+  "context": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 98,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/manifest-logical-ceiling/manifest.cbor",
+          "sha256": "6ad0e9a7c7e4ef6b5c418b6adf9ad0f1d746b7d5db140c1607b536965ef91e69"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:f48006dfecb38b6083029c60068acb9919ec8f9eba77539fe7491b3b3cfb46de"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registryVersion": 1
+    },
+    "requestedLayer": 2,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "expected": {
+    "code": "LIMIT_LOGICAL_BYTES",
+    "layer": 2,
+    "result": "reject",
+    "stage": "known-schema"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "inputs": [
+    {
+      "bytes": 98,
+      "mediaType": "application/cbor",
+      "path": "scenarios/objects/manifest-logical-ceiling/manifest.cbor",
+      "sha256": "6ad0e9a7c7e4ef6b5c418b6adf9ad0f1d746b7d5db140c1607b536965ef91e69"
+    },
+    {
+      "bytes": 2133,
+      "mediaType": "application/json",
+      "path": "scenarios/definitions/manifest-logical-ceiling.json",
+      "sha256": "90c4fa6eafd9cbff5ecc8ea26baf250292eafbb87f6b28d6c062090605b7edc0"
+    }
+  ],
+  "operation": "validate-object",
+  "requirementIds": [
+    "OGVCS-002-AC-09",
+    "OGVCS-002-FR-09"
+  ],
+  "resources": {
+    "recipe": {
+      "generator": "ogvcs.repository-validation-scenario-constructor/v1",
+      "parameters": {
+        "definition": "scenarios/definitions/manifest-logical-ceiling.json",
+        "definitionSha256": "90c4fa6eafd9cbff5ecc8ea26baf250292eafbb87f6b28d6c062090605b7edc0",
+        "runtimeHighWaterMarks": "not-asserted"
+      },
+      "seed": "6dd8f18723dfa2019f0132b82a5f7e370000c72e5b63c15a1888d18800971b2a"
+    },
+    "summary": {
+      "bytes": 2231,
+      "indexEntries": 0,
+      "items": 1,
+      "peakMemoryBytes": 0,
+      "scratchBytes": 0,
+      "summarySha256": "2d68afcaa1207c99057080d6ed34359fadf11f9e0ef1b0ee89268c2e621043f6",
+      "traversalEdges": 0
+    }
+  },
+  "scenarioId": "manifest-logical-ceiling",
+  "schemaVersion": "ogvcs.repository-format/validation-scenario/v1"
+}

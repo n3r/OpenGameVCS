@@ -1,0 +1,238 @@
+{
+  "algorithm": {
+    "id": "ogvcs.repository-validation-scenario-constructor",
+    "version": 1
+  },
+  "arithmetic": "mathematical nonnegative integers with explicit uint64 decode bounds; no host-width overflow is a semantic test oracle",
+  "detail": "delete exact /asset state and retain its consumed lifetime",
+  "exactConstructorValues": {
+    "operation": {
+      "map": [
+        {
+          "key": 0,
+          "value": 0
+        },
+        {
+          "key": 1,
+          "value": 6
+        },
+        {
+          "key": 2,
+          "value": {
+            "map": [
+              {
+                "key": 0,
+                "value": {
+                  "array": [
+                    "asset"
+                  ]
+                }
+              },
+              {
+                "key": 1,
+                "value": 2
+              },
+              {
+                "key": 2,
+                "value": {
+                  "byteStringHex": "21212121212121212121212121212121"
+                }
+              },
+              {
+                "key": 3,
+                "value": 2
+              },
+              {
+                "key": 4,
+                "value": {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": 1
+                    },
+                    {
+                      "key": 1,
+                      "value": 2
+                    },
+                    {
+                      "key": 2,
+                      "value": 1
+                    },
+                    {
+                      "key": 3,
+                      "value": {
+                        "byteStringHex": "82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "key": 5,
+                "value": 24
+              },
+              {
+                "key": 6,
+                "value": {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": "content-policy.test"
+                    },
+                    {
+                      "key": 1,
+                      "value": "opaque"
+                    },
+                    {
+                      "key": 2,
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "expectedRootState": {
+    "resultFamily": "tree",
+    "rootState": "accepted-exact-constructor-result",
+    "scenarioId": "transition-delete",
+    "stableOutputIdentity": "ogvcs:v1:tree:sha256:a458f2bc72d5816dc3f7ee2cc8580eaaaed9a0208588ee66d18ea78f0c255c81"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "normativeContext": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "candidateSnapshot": "ogvcs:v1:snapshot:sha256:d9ef8b0a1767cabdf8f1eff3d948e55ac7448e697fcb50e93e2d3993f5c55039",
+    "designatedRoot": "ogvcs:v1:snapshot:sha256:812b17a3fd9246a2eb231467de4bc0422034a16df2fceaec439aee48ba0368c9",
+    "importMappings": [],
+    "lifetimeRecords": [
+      {
+        "fileId": "21212121212121212121212121212121",
+        "firstChangeSet": "ogvcs:v1:change-set:sha256:b5e71418534c372755708cfd4c736e1daafb200bd328582cf8f566d31a0a1bbb",
+        "firstOperation": 0,
+        "origin": "native-create"
+      }
+    ],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 215,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-delete/root-change.cbor",
+          "sha256": "b1facea0b60a5a24b022cc2847e618da6c00d409d211afce6167ba4158c7d100"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:b5e71418534c372755708cfd4c736e1daafb200bd328582cf8f566d31a0a1bbb"
+      },
+      {
+        "artifact": {
+          "bytes": 211,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-delete/candidate-change.cbor",
+          "sha256": "d3de4d78f768eac8b0100516df4a3dc7bf828a380c2904cf48f717fb316d3e73"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:c71530114cffdc2b3e788f40bbe292a29fa1c0e84922e1840d8dc98856e5b34a"
+      },
+      {
+        "artifact": {
+          "bytes": 12,
+          "mediaType": "application/octet-stream",
+          "path": "objects/01-chunk.bin",
+          "sha256": "36fcc2e9442be1071c275604af6e41bd93875c743dc2fdaa6037662df74c5894"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5"
+      },
+      {
+        "artifact": {
+          "bytes": 183,
+          "mediaType": "application/cbor",
+          "path": "objects/02-content-manifest.cbor",
+          "sha256": "b635d76c8dd9f29c2862ae0e22077c70d157f68d4595861c09fb38bdf47c456b"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+      },
+      {
+        "artifact": {
+          "bytes": 274,
+          "mediaType": "application/cbor",
+          "path": "objects/06-repository-descriptor.cbor",
+          "sha256": "677905a883b1f4ddd87fea27b5afc0293cccd2d2ea29cc4884e758e4a071b6e9"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+      },
+      {
+        "artifact": {
+          "bytes": 321,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-delete/root-snapshot.cbor",
+          "sha256": "a416f80a5392662babbb45a96697430120f485ff09b1bcdf232a9f5e0b91fbeb"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:812b17a3fd9246a2eb231467de4bc0422034a16df2fceaec439aee48ba0368c9"
+      },
+      {
+        "artifact": {
+          "bytes": 367,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-delete/candidate-snapshot.cbor",
+          "sha256": "212f20962887600a468628e8ec2a8668fd33ac837255b76f18fe8f1c18b821bd"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:d9ef8b0a1767cabdf8f1eff3d948e55ac7448e697fcb50e93e2d3993f5c55039"
+      },
+      {
+        "artifact": {
+          "bytes": 52,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-delete/result-tree-root.cbor",
+          "sha256": "f0515d605a2c20abf9f321474bc861964b20faeaebbc41a2d8316ae4ffe2bb2b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a458f2bc72d5816dc3f7ee2cc8580eaaaed9a0208588ee66d18ea78f0c255c81"
+      },
+      {
+        "artifact": {
+          "bytes": 161,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-delete/base-tree-root.cbor",
+          "sha256": "218397b999252ca34fc3195a05c4229cb7654008559ec77be7941a4793a05428"
+        },
+        "ref": "ogvcs:v1:tree:sha256:cbd1dd98c1dc7b03787f870e0e38d78a44ff7253b67dfe5c692276e2d57a5225"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registryVersion": 1
+    },
+    "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+    "requestedLayer": 3,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "operation": "replay-change-set",
+  "parameters": {},
+  "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+  "scenarioId": "transition-delete",
+  "seedHex": "4fe47a1ab15bbb8f5e38bd5a4584bf3960151156211a7f061acdc44d116ac632",
+  "suppliedResourceCatalogue": {
+    "baseObjectArtifacts": [
+      "scenarios/objects/transition-delete/root-change.cbor",
+      "scenarios/objects/transition-delete/candidate-change.cbor",
+      "objects/01-chunk.bin",
+      "objects/02-content-manifest.cbor",
+      "objects/06-repository-descriptor.cbor",
+      "scenarios/objects/transition-delete/root-snapshot.cbor",
+      "scenarios/objects/transition-delete/candidate-snapshot.cbor",
+      "scenarios/objects/transition-delete/result-tree-root.cbor",
+      "scenarios/objects/transition-delete/base-tree-root.cbor"
+    ],
+    "logicalRecordArtifacts": [],
+    "mutationRecipe": "none",
+    "virtualLimitRecipe": "none"
+  },
+  "validation": {
+    "mode": "conformance",
+    "requestedLayer": 3
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "claim": "fidelity-export",
+  "operation": "validate-bundle-claim",
+  "schema": "ogvcs.repository-format.v1.bundle-claim-input.v1"
+}

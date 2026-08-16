@@ -1,0 +1,180 @@
+{
+  "algorithm": {
+    "id": "ogvcs.repository-validation-scenario-constructor",
+    "version": 1
+  },
+  "arithmetic": "mathematical nonnegative integers with explicit uint64 decode bounds; no host-width overflow is a semantic test oracle",
+  "detail": "ordered two-parent merge",
+  "exactConstructorValues": {
+    "orderedParents": {
+      "array": [
+        {
+          "map": [
+            {
+              "key": 0,
+              "value": 1
+            },
+            {
+              "key": 1,
+              "value": 7
+            },
+            {
+              "key": 2,
+              "value": 1
+            },
+            {
+              "key": 3,
+              "value": {
+                "byteStringHex": "f7b079c72b0c0904b0ba938bde2adaad55dd5cf65436fac4ddc04450fd7de4a6"
+              }
+            }
+          ]
+        },
+        {
+          "map": [
+            {
+              "key": 0,
+              "value": 1
+            },
+            {
+              "key": 1,
+              "value": 7
+            },
+            {
+              "key": 2,
+              "value": 1
+            },
+            {
+              "key": 3,
+              "value": {
+                "byteStringHex": "24c7a94d888e5df20083cdcbbfccf794bc6ba2b6617665443c35bc76fbadb7f1"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "expectedRootState": {
+    "resultFamily": "repository",
+    "rootState": "accepted-exact-constructor-result",
+    "scenarioId": "history-two-parent",
+    "stableOutputIdentity": "ogvcs:v1:snapshot:sha256:dd2edeabaeeda77d7d608f9f3b00b4452c5ba9bae08118a0fc1c99c7c8c1d75e"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "normativeContext": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "candidateSnapshot": "ogvcs:v1:snapshot:sha256:dd2edeabaeeda77d7d608f9f3b00b4452c5ba9bae08118a0fc1c99c7c8c1d75e",
+    "designatedRoot": "ogvcs:v1:snapshot:sha256:0ac217a384f2ebb14dbe4400972d05ac5dd13e9b4272411d71e68448e27f18b5",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 52,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/history-two-parent/root-change.cbor",
+          "sha256": "ef6e897742ff4d1220c8cd636f2a889a8f8746b2e97b2b7dad6fec4dc3747a6d"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:82cc41e5e86d1397579a8ebfc7ea6c7d9102552130f4da86ca592fc3c10a424c"
+      },
+      {
+        "artifact": {
+          "bytes": 95,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/history-two-parent/side-change.cbor",
+          "sha256": "a88be4839e48c479a0eee8e1a22080091d4c1fd3ef6d13d3ec38381a70e269cf"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:f29b5ba1e25fe434272c878aef755239bc1a7aa301d26d75cf3a9ef1258bae1b"
+      },
+      {
+        "artifact": {
+          "bytes": 95,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/history-two-parent/candidate-change.cbor",
+          "sha256": "a88be4839e48c479a0eee8e1a22080091d4c1fd3ef6d13d3ec38381a70e269cf"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:f29b5ba1e25fe434272c878aef755239bc1a7aa301d26d75cf3a9ef1258bae1b"
+      },
+      {
+        "artifact": {
+          "bytes": 274,
+          "mediaType": "application/cbor",
+          "path": "objects/06-repository-descriptor.cbor",
+          "sha256": "677905a883b1f4ddd87fea27b5afc0293cccd2d2ea29cc4884e758e4a071b6e9"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+      },
+      {
+        "artifact": {
+          "bytes": 312,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/history-two-parent/designated-root.cbor",
+          "sha256": "9322fc70782819da97e88cb08cfb9b1493327f0bedd34e79dddfbb668e9424d1"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:0ac217a384f2ebb14dbe4400972d05ac5dd13e9b4272411d71e68448e27f18b5"
+      },
+      {
+        "artifact": {
+          "bytes": 356,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/history-two-parent/side-1.cbor",
+          "sha256": "a101ceec7d400d1f70519ae990fd33b4488e40924c846139c4749ac51054d211"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:8d761026e2742923f75b7fa422b15de73815b64bfad22e4b9b03755473f6f75b"
+      },
+      {
+        "artifact": {
+          "bytes": 410,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/history-two-parent/candidate.cbor",
+          "sha256": "3f278acd977ebfba663db87632d2fc237bdbd39f44a3b6ae8c106896fe38a869"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:dd2edeabaeeda77d7d608f9f3b00b4452c5ba9bae08118a0fc1c99c7c8c1d75e"
+      },
+      {
+        "artifact": {
+          "bytes": 52,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/history-two-parent/empty-tree.cbor",
+          "sha256": "f0515d605a2c20abf9f321474bc861964b20faeaebbc41a2d8316ae4ffe2bb2b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a458f2bc72d5816dc3f7ee2cc8580eaaaed9a0208588ee66d18ea78f0c255c81"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registryVersion": 1
+    },
+    "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+    "requestedLayer": 3,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "operation": "validate-repository",
+  "parameters": {},
+  "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+  "scenarioId": "history-two-parent",
+  "seedHex": "4f90fcdec314171838b371b8d24e33f7e48298254065968834aee8518c2d93f6",
+  "suppliedResourceCatalogue": {
+    "baseObjectArtifacts": [
+      "scenarios/objects/history-two-parent/root-change.cbor",
+      "scenarios/objects/history-two-parent/side-change.cbor",
+      "scenarios/objects/history-two-parent/candidate-change.cbor",
+      "objects/06-repository-descriptor.cbor",
+      "scenarios/objects/history-two-parent/designated-root.cbor",
+      "scenarios/objects/history-two-parent/side-1.cbor",
+      "scenarios/objects/history-two-parent/candidate.cbor",
+      "scenarios/objects/history-two-parent/empty-tree.cbor"
+    ],
+    "logicalRecordArtifacts": [],
+    "mutationRecipe": "none",
+    "virtualLimitRecipe": "none"
+  },
+  "validation": {
+    "mode": "conformance",
+    "requestedLayer": 3
+  }
+}

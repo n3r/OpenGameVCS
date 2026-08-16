@@ -1,0 +1,7 @@
+{
+  "candidateFileId": "21212121212121212121212121212121",
+  "operation": "allocate-file-id",
+  "phase": "finalize",
+  "retryLimit": 1,
+  "schema": "ogvcs.repository-format.v1.fileid-operation-input.v1"
+}

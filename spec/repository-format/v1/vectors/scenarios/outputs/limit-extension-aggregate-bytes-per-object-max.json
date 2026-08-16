@@ -1,0 +1,7 @@
+{
+  "resultFamily": "limit",
+  "rootState": "accepted-exact-constructor-result",
+  "scenarioId": "limit-extension-aggregate-bytes-per-object-max",
+  "schema": "ogvcs.repository-format.v1.scenario-output.v1",
+  "stableOutputIdentity": "8157a147108993026f9648bcac3f2e80a8ce7797ccc2b0267f2ff7048b6a93b3"
+}

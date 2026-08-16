@@ -1,0 +1,11 @@
+{
+  "candidateFileId": "21212121212121212121212121212121",
+  "entropyRecipe": {
+    "failAtCall": 0,
+    "failure": "operating-system-entropy-unavailable"
+  },
+  "operation": "allocate-file-id",
+  "phase": "generate",
+  "retryLimit": 1,
+  "schema": "ogvcs.repository-format.v1.fileid-operation-input.v1"
+}

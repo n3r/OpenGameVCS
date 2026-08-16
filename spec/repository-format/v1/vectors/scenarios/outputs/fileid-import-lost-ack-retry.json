@@ -1,0 +1,7 @@
+{
+  "resultFamily": "fileid",
+  "rootState": "accepted-exact-constructor-result",
+  "scenarioId": "fileid-import-lost-ack-retry",
+  "schema": "ogvcs.repository-format.v1.scenario-output.v1",
+  "stableOutputIdentity": "fid:53535353535353535353535353535353"
+}

@@ -1,0 +1,7 @@
+{
+  "resultFamily": "shelf",
+  "rootState": "accepted-exact-constructor-result",
+  "scenarioId": "conflict-content-unresolved-shelf",
+  "schema": "ogvcs.repository-format.v1.scenario-output.v1",
+  "stableOutputIdentity": "ogvcs:v1:shelf-revision:sha256:34d439df7d99d88a69ce0351f384b677e46676a924b6901efc813146df76b2c4"
+}

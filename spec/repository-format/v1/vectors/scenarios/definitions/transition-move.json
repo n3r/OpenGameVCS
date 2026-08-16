@@ -1,0 +1,369 @@
+{
+  "algorithm": {
+    "id": "ogvcs.repository-validation-scenario-constructor",
+    "version": 1
+  },
+  "arithmetic": "mathematical nonnegative integers with explicit uint64 decode bounds; no host-width overflow is a semantic test oracle",
+  "detail": "move /dir/asset to /other/asset while preserving FileID",
+  "exactConstructorValues": {
+    "operation": {
+      "map": [
+        {
+          "key": 0,
+          "value": 0
+        },
+        {
+          "key": 1,
+          "value": 4
+        },
+        {
+          "key": 2,
+          "value": {
+            "map": [
+              {
+                "key": 0,
+                "value": {
+                  "array": [
+                    "dir",
+                    "asset"
+                  ]
+                }
+              },
+              {
+                "key": 1,
+                "value": 2
+              },
+              {
+                "key": 2,
+                "value": {
+                  "byteStringHex": "21212121212121212121212121212121"
+                }
+              },
+              {
+                "key": 3,
+                "value": 2
+              },
+              {
+                "key": 4,
+                "value": {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": 1
+                    },
+                    {
+                      "key": 1,
+                      "value": 2
+                    },
+                    {
+                      "key": 2,
+                      "value": 1
+                    },
+                    {
+                      "key": 3,
+                      "value": {
+                        "byteStringHex": "82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "key": 5,
+                "value": 24
+              },
+              {
+                "key": 6,
+                "value": {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": "content-policy.test"
+                    },
+                    {
+                      "key": 1,
+                      "value": "opaque"
+                    },
+                    {
+                      "key": 2,
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "key": 3,
+          "value": {
+            "map": [
+              {
+                "key": 0,
+                "value": {
+                  "array": [
+                    "other",
+                    "asset"
+                  ]
+                }
+              },
+              {
+                "key": 1,
+                "value": 2
+              },
+              {
+                "key": 2,
+                "value": {
+                  "byteStringHex": "21212121212121212121212121212121"
+                }
+              },
+              {
+                "key": 3,
+                "value": 2
+              },
+              {
+                "key": 4,
+                "value": {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": 1
+                    },
+                    {
+                      "key": 1,
+                      "value": 2
+                    },
+                    {
+                      "key": 2,
+                      "value": 1
+                    },
+                    {
+                      "key": 3,
+                      "value": {
+                        "byteStringHex": "82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "key": 5,
+                "value": 24
+              },
+              {
+                "key": 6,
+                "value": {
+                  "map": [
+                    {
+                      "key": 0,
+                      "value": "content-policy.test"
+                    },
+                    {
+                      "key": 1,
+                      "value": "opaque"
+                    },
+                    {
+                      "key": 2,
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "expectedRootState": {
+    "resultFamily": "tree",
+    "rootState": "accepted-exact-constructor-result",
+    "scenarioId": "transition-move",
+    "stableOutputIdentity": "ogvcs:v1:tree:sha256:698e806c6156fd213f1d6dbb3864d415b9fb3bd4ec847a32406176ba1e460c10"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "normativeContext": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "candidateSnapshot": "ogvcs:v1:snapshot:sha256:63976960990d8e0455e285dd66642bc85cf42172998ad40a76f7cedf2cc4fede",
+    "designatedRoot": "ogvcs:v1:snapshot:sha256:ea6512682b6e586b010046f855d39a5867c15939c608f828d5317d894ce6a1f8",
+    "importMappings": [],
+    "lifetimeRecords": [
+      {
+        "fileId": "21212121212121212121212121212121",
+        "firstChangeSet": "ogvcs:v1:change-set:sha256:2a69fc0da93de7897f7e4b76208f5b8013f0c4620fdc7d9c6b677fc84eb9f7f8",
+        "firstOperation": 2,
+        "origin": "native-create"
+      },
+      {
+        "fileId": "31313131313131313131313131313131",
+        "firstChangeSet": "ogvcs:v1:change-set:sha256:2a69fc0da93de7897f7e4b76208f5b8013f0c4620fdc7d9c6b677fc84eb9f7f8",
+        "firstOperation": 0,
+        "origin": "native-create"
+      },
+      {
+        "fileId": "32323232323232323232323232323232",
+        "firstChangeSet": "ogvcs:v1:change-set:sha256:2a69fc0da93de7897f7e4b76208f5b8013f0c4620fdc7d9c6b677fc84eb9f7f8",
+        "firstOperation": 1,
+        "origin": "native-create"
+      }
+    ],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 457,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-move/root-change.cbor",
+          "sha256": "02bd08b42ac38fd59d3f8bc933fa2d811c2ff08984ebefc4a60e700aac6733bf"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:2a69fc0da93de7897f7e4b76208f5b8013f0c4620fdc7d9c6b677fc84eb9f7f8"
+      },
+      {
+        "artifact": {
+          "bytes": 333,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-move/candidate-change.cbor",
+          "sha256": "eb36393dd9ddc8006ee7a6e2b2abfa33e07622df7faa7d73ef1698d1bc18afc5"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:66c957c7037420c55f018940eef19f1ff2786c0ee29115d2b41ff27653098a34"
+      },
+      {
+        "artifact": {
+          "bytes": 12,
+          "mediaType": "application/octet-stream",
+          "path": "objects/01-chunk.bin",
+          "sha256": "36fcc2e9442be1071c275604af6e41bd93875c743dc2fdaa6037662df74c5894"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5"
+      },
+      {
+        "artifact": {
+          "bytes": 183,
+          "mediaType": "application/cbor",
+          "path": "objects/02-content-manifest.cbor",
+          "sha256": "b635d76c8dd9f29c2862ae0e22077c70d157f68d4595861c09fb38bdf47c456b"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+      },
+      {
+        "artifact": {
+          "bytes": 274,
+          "mediaType": "application/cbor",
+          "path": "objects/06-repository-descriptor.cbor",
+          "sha256": "677905a883b1f4ddd87fea27b5afc0293cccd2d2ea29cc4884e758e4a071b6e9"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+      },
+      {
+        "artifact": {
+          "bytes": 365,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-move/candidate-snapshot.cbor",
+          "sha256": "78d4e74c9a82ec01e883e0897d724933566ceddf98db9a6ce0093acb39105aac"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:63976960990d8e0455e285dd66642bc85cf42172998ad40a76f7cedf2cc4fede"
+      },
+      {
+        "artifact": {
+          "bytes": 321,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-move/root-snapshot.cbor",
+          "sha256": "eb25e52b2dc981440bcf093b219ed5074cbeaba1744a0e0deff1d7c0918307be"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:ea6512682b6e586b010046f855d39a5867c15939c608f828d5317d894ce6a1f8"
+      },
+      {
+        "artifact": {
+          "bytes": 267,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-move/base-tree-root.cbor",
+          "sha256": "d2cc597437b55538d9e4a724fbe685c31089a4eb92068f5e114598ff1d035c74"
+        },
+        "ref": "ogvcs:v1:tree:sha256:4215fc116665e35dd9a8c8d504d978873f9fa0f283ce27af413726155f7f1a2e"
+      },
+      {
+        "artifact": {
+          "bytes": 267,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-move/result-tree-root.cbor",
+          "sha256": "4396ab0adda607e97fc00e18e281d945bd448074fe0ef8e979b9406e97d4aa67"
+        },
+        "ref": "ogvcs:v1:tree:sha256:698e806c6156fd213f1d6dbb3864d415b9fb3bd4ec847a32406176ba1e460c10"
+      },
+      {
+        "artifact": {
+          "bytes": 52,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-move/base-tree-right.cbor",
+          "sha256": "f0515d605a2c20abf9f321474bc861964b20faeaebbc41a2d8316ae4ffe2bb2b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a458f2bc72d5816dc3f7ee2cc8580eaaaed9a0208588ee66d18ea78f0c255c81"
+      },
+      {
+        "artifact": {
+          "bytes": 52,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-move/result-tree-left.cbor",
+          "sha256": "f0515d605a2c20abf9f321474bc861964b20faeaebbc41a2d8316ae4ffe2bb2b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a458f2bc72d5816dc3f7ee2cc8580eaaaed9a0208588ee66d18ea78f0c255c81"
+      },
+      {
+        "artifact": {
+          "bytes": 161,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-move/base-tree-left.cbor",
+          "sha256": "218397b999252ca34fc3195a05c4229cb7654008559ec77be7941a4793a05428"
+        },
+        "ref": "ogvcs:v1:tree:sha256:cbd1dd98c1dc7b03787f870e0e38d78a44ff7253b67dfe5c692276e2d57a5225"
+      },
+      {
+        "artifact": {
+          "bytes": 161,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-move/result-tree-right.cbor",
+          "sha256": "218397b999252ca34fc3195a05c4229cb7654008559ec77be7941a4793a05428"
+        },
+        "ref": "ogvcs:v1:tree:sha256:cbd1dd98c1dc7b03787f870e0e38d78a44ff7253b67dfe5c692276e2d57a5225"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registryVersion": 1
+    },
+    "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+    "requestedLayer": 3,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "operation": "replay-change-set",
+  "parameters": {},
+  "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+  "scenarioId": "transition-move",
+  "seedHex": "804338184f11805b1b90b932447c0c1cc7ecde242e1daaa894bca429acee70b9",
+  "suppliedResourceCatalogue": {
+    "baseObjectArtifacts": [
+      "scenarios/objects/transition-move/root-change.cbor",
+      "scenarios/objects/transition-move/candidate-change.cbor",
+      "objects/01-chunk.bin",
+      "objects/02-content-manifest.cbor",
+      "objects/06-repository-descriptor.cbor",
+      "scenarios/objects/transition-move/candidate-snapshot.cbor",
+      "scenarios/objects/transition-move/root-snapshot.cbor",
+      "scenarios/objects/transition-move/base-tree-root.cbor",
+      "scenarios/objects/transition-move/result-tree-root.cbor",
+      "scenarios/objects/transition-move/base-tree-right.cbor",
+      "scenarios/objects/transition-move/result-tree-left.cbor",
+      "scenarios/objects/transition-move/base-tree-left.cbor",
+      "scenarios/objects/transition-move/result-tree-right.cbor"
+    ],
+    "logicalRecordArtifacts": [],
+    "mutationRecipe": "none",
+    "virtualLimitRecipe": "none"
+  },
+  "validation": {
+    "mode": "conformance",
+    "requestedLayer": 3
+  }
+}

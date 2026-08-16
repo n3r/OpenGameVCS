@@ -1,0 +1,170 @@
+{
+  "context": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "candidateSnapshot": "ogvcs:v1:snapshot:sha256:47443c3c337113cadb4d363ec65c7b4a91cb90d979b12a2b64af2e466603a34f",
+    "designatedRoot": "ogvcs:v1:snapshot:sha256:812b17a3fd9246a2eb231467de4bc0422034a16df2fceaec439aee48ba0368c9",
+    "importMappings": [],
+    "lifetimeRecords": [
+      {
+        "fileId": "21212121212121212121212121212121",
+        "firstChangeSet": "ogvcs:v1:change-set:sha256:b5e71418534c372755708cfd4c736e1daafb200bd328582cf8f566d31a0a1bbb",
+        "firstOperation": 0,
+        "origin": "native-create"
+      }
+    ],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 374,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-copy/candidate-change.cbor",
+          "sha256": "f719f876524c09ccc61c57bfc87692a52489470277719c7dfde19c6c9eb6df1e"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:0605fcbe1aa40cb20b151ec06352457fbc759757c74c97255e40fa46f05afd3c"
+      },
+      {
+        "artifact": {
+          "bytes": 215,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-copy/root-change.cbor",
+          "sha256": "b1facea0b60a5a24b022cc2847e618da6c00d409d211afce6167ba4158c7d100"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:b5e71418534c372755708cfd4c736e1daafb200bd328582cf8f566d31a0a1bbb"
+      },
+      {
+        "artifact": {
+          "bytes": 12,
+          "mediaType": "application/octet-stream",
+          "path": "objects/01-chunk.bin",
+          "sha256": "36fcc2e9442be1071c275604af6e41bd93875c743dc2fdaa6037662df74c5894"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5"
+      },
+      {
+        "artifact": {
+          "bytes": 183,
+          "mediaType": "application/cbor",
+          "path": "objects/02-content-manifest.cbor",
+          "sha256": "b635d76c8dd9f29c2862ae0e22077c70d157f68d4595861c09fb38bdf47c456b"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+      },
+      {
+        "artifact": {
+          "bytes": 274,
+          "mediaType": "application/cbor",
+          "path": "objects/06-repository-descriptor.cbor",
+          "sha256": "677905a883b1f4ddd87fea27b5afc0293cccd2d2ea29cc4884e758e4a071b6e9"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+      },
+      {
+        "artifact": {
+          "bytes": 365,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-copy/candidate-snapshot.cbor",
+          "sha256": "1622ddd790cb7be9c57b3caf93d7d138e2f9662946585bb2c99146c5c781d8dd"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:47443c3c337113cadb4d363ec65c7b4a91cb90d979b12a2b64af2e466603a34f"
+      },
+      {
+        "artifact": {
+          "bytes": 321,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-copy/root-snapshot.cbor",
+          "sha256": "a416f80a5392662babbb45a96697430120f485ff09b1bcdf232a9f5e0b91fbeb"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:812b17a3fd9246a2eb231467de4bc0422034a16df2fceaec439aee48ba0368c9"
+      },
+      {
+        "artifact": {
+          "bytes": 275,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-copy/result-tree-root.cbor",
+          "sha256": "69d5872fc4b3df26c7812297d680e624973f464d8b4ef4748dffae167085600c"
+        },
+        "ref": "ogvcs:v1:tree:sha256:c7b523e0c55572ab1496b9e2bd733e7ab9e6598fb02bcb80745cce63cc0d1071"
+      },
+      {
+        "artifact": {
+          "bytes": 161,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/transition-copy/base-tree-root.cbor",
+          "sha256": "218397b999252ca34fc3195a05c4229cb7654008559ec77be7941a4793a05428"
+        },
+        "ref": "ogvcs:v1:tree:sha256:cbd1dd98c1dc7b03787f870e0e38d78a44ff7253b67dfe5c692276e2d57a5225"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registryVersion": 1
+    },
+    "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+    "requestedLayer": 3,
+    "roots": [],
+    "workingLifetimeAdditions": [
+      {
+        "fileId": "22222222222222222222222222222222",
+        "firstChangeSet": "ogvcs:v1:change-set:sha256:0605fcbe1aa40cb20b151ec06352457fbc759757c74c97255e40fa46f05afd3c",
+        "firstOperation": 0,
+        "origin": "native-copy"
+      }
+    ]
+  },
+  "expected": {
+    "highestLayer": 3,
+    "output": {
+      "artifact": {
+        "bytes": 292,
+        "mediaType": "application/json",
+        "path": "scenarios/outputs/transition-copy.json",
+        "sha256": "7317b3c68ff95b3abbddb82d14a7cae276fae00ba5463f69db94b09870d2c650"
+      },
+      "summarySha256": "981734519184a3977e54284f9b9bcd18bb78116f5284124ca19afee20207ee43"
+    },
+    "result": "accept"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "inputs": [
+    {
+      "bytes": 365,
+      "mediaType": "application/cbor",
+      "path": "scenarios/objects/transition-copy/candidate-snapshot.cbor",
+      "sha256": "1622ddd790cb7be9c57b3caf93d7d138e2f9662946585bb2c99146c5c781d8dd"
+    },
+    {
+      "bytes": 11439,
+      "mediaType": "application/json",
+      "path": "scenarios/definitions/transition-copy.json",
+      "sha256": "fd83b951608222bdd9558cec9106f0d842712278cf52c91063edcd698d7788e5"
+    }
+  ],
+  "operation": "replay-change-set",
+  "requirementIds": [
+    "OGVCS-002-FR-09"
+  ],
+  "resources": {
+    "recipe": {
+      "generator": "ogvcs.repository-validation-scenario-constructor/v1",
+      "parameters": {
+        "definition": "scenarios/definitions/transition-copy.json",
+        "definitionSha256": "fd83b951608222bdd9558cec9106f0d842712278cf52c91063edcd698d7788e5",
+        "runtimeHighWaterMarks": "not-asserted"
+      },
+      "seed": "3f666b9cf33c499695e0d183058f267ae000cfc23fc7a7fec0c89e67ec6a4eb5"
+    },
+    "summary": {
+      "bytes": 13619,
+      "indexEntries": 0,
+      "items": 9,
+      "peakMemoryBytes": 0,
+      "scratchBytes": 0,
+      "summarySha256": "981734519184a3977e54284f9b9bcd18bb78116f5284124ca19afee20207ee43",
+      "traversalEdges": 0
+    }
+  },
+  "scenarioId": "transition-copy",
+  "schemaVersion": "ogvcs.repository-format/validation-scenario/v1"
+}

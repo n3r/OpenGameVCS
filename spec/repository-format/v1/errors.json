@@ -1,0 +1,1316 @@
+{
+  "schemaVersion": "ogvcs.repository-format/errors/v1",
+  "formatVersion": 1,
+  "precedence": {
+    "betweenLayers": "lowest-layer-first",
+    "occurrenceTieBreak": "smallest-input-offset-then-frozen-subject-comparator",
+    "stageOrder": [
+      "configured-resource-preflight",
+      "canonical-framing",
+      "sequence-shape-and-order",
+      "declared-identity",
+      "transcript-authentication",
+      "known-schema",
+      "closure-and-reference-resolution",
+      "declared-accounting",
+      "registry-semantics",
+      "repository-semantics"
+    ],
+    "withinLayer": "stage-order-then-errors-array-order"
+  },
+  "errors": [
+    {
+      "number": 1001,
+      "code": "CBOR_TRUNCATED",
+      "class": "encoding",
+      "retryability": "never",
+      "description": "A deterministic-CBOR item ended before its declared value was complete.",
+      "sites": [
+        {
+          "stage": "canonical-framing",
+          "layers": [
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1002,
+      "code": "CBOR_NON_CANONICAL",
+      "class": "encoding",
+      "retryability": "never",
+      "description": "CBOR used a forbidden type, non-minimal value, indefinite container, duplicate or unordered key, invalid UTF-8, or non-NFC text.",
+      "sites": [
+        {
+          "stage": "canonical-framing",
+          "layers": [
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1003,
+      "code": "CBOR_TRAILING_BYTES",
+      "class": "encoding",
+      "retryability": "never",
+      "description": "A metadata payload contained bytes after its one complete CBOR item.",
+      "sites": [
+        {
+          "stage": "canonical-framing",
+          "layers": [
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1004,
+      "code": "SCHEMA_FIELD_INVALID",
+      "class": "schema",
+      "retryability": "never",
+      "description": "A required field was absent or a field, enum, or nested value violated its registered shape.",
+      "sites": [
+        {
+          "stage": "configured-resource-preflight",
+          "layers": [
+            1
+          ]
+        },
+        {
+          "stage": "canonical-framing",
+          "layers": [
+            1
+          ]
+        },
+        {
+          "stage": "known-schema",
+          "layers": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1005,
+      "code": "SCHEMA_FIELD_UNKNOWN",
+      "class": "schema",
+      "retryability": "never",
+      "description": "An unregistered non-extension field was present.",
+      "sites": [
+        {
+          "stage": "known-schema",
+          "layers": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1101,
+      "code": "LIMIT_METADATA_BYTES",
+      "class": "resource",
+      "retryability": "configuration",
+      "description": "A metadata payload exceeded the format or configured byte limit.",
+      "sites": [
+        {
+          "stage": "configured-resource-preflight",
+          "layers": [
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1102,
+      "code": "LIMIT_CHUNK_BYTES",
+      "class": "resource",
+      "retryability": "configuration",
+      "description": "A chunk exceeded 64 MiB or a smaller configured limit.",
+      "sites": [
+        {
+          "stage": "configured-resource-preflight",
+          "layers": [
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1103,
+      "code": "LIMIT_NESTING",
+      "class": "resource",
+      "retryability": "configuration",
+      "description": "CBOR nesting exceeded 32 or a smaller configured limit.",
+      "sites": [
+        {
+          "stage": "canonical-framing",
+          "layers": [
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1104,
+      "code": "LIMIT_COUNT",
+      "class": "resource",
+      "retryability": "configuration",
+      "description": "An array, map, object, edge, entry, operation, group, member, chunk, parent, or extension count exceeded its limit.",
+      "sites": [
+        {
+          "stage": "configured-resource-preflight",
+          "layers": [
+            1
+          ]
+        },
+        {
+          "stage": "canonical-framing",
+          "layers": [
+            1
+          ]
+        },
+        {
+          "stage": "known-schema",
+          "layers": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1105,
+      "code": "LIMIT_MEMORY",
+      "class": "resource",
+      "retryability": "configuration",
+      "description": "Verification could not continue within the configured memory budget.",
+      "sites": [
+        {
+          "stage": "configured-resource-preflight",
+          "layers": [
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1106,
+      "code": "LIMIT_SCRATCH",
+      "class": "resource",
+      "retryability": "configuration",
+      "description": "Verification could not continue within the configured scratch budget.",
+      "sites": [
+        {
+          "stage": "configured-resource-preflight",
+          "layers": [
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1107,
+      "code": "LIMIT_TIME",
+      "class": "resource",
+      "retryability": "configuration",
+      "description": "Verification exceeded the configured time budget.",
+      "sites": [
+        {
+          "stage": "configured-resource-preflight",
+          "layers": [
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1108,
+      "code": "LIMIT_VALUE_BYTES",
+      "class": "resource",
+      "retryability": "never",
+      "description": "A text or byte-string value exceeded its field-specific or generic hard byte ceiling.",
+      "sites": [
+        {
+          "stage": "canonical-framing",
+          "layers": [
+            1
+          ]
+        },
+        {
+          "stage": "known-schema",
+          "layers": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1109,
+      "code": "LIMIT_EXTENSION_BYTES",
+      "class": "resource",
+      "retryability": "never",
+      "description": "The aggregate canonical encoded bytes of optional extensions exceeded the per-object hard ceiling.",
+      "sites": [
+        {
+          "stage": "canonical-framing",
+          "layers": [
+            1
+          ]
+        },
+        {
+          "stage": "known-schema",
+          "layers": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1110,
+      "code": "LIMIT_LOGICAL_BYTES",
+      "class": "resource",
+      "retryability": "never",
+      "description": "A declared or reconstructed logical file length exceeded the format-v1 hard ceiling.",
+      "sites": [
+        {
+          "stage": "known-schema",
+          "layers": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1201,
+      "code": "OBJECT_ID_MISMATCH",
+      "class": "identity",
+      "retryability": "never",
+      "description": "The domain-separated SHA-256 of payload bytes did not equal the declared ObjectRef digest.",
+      "sites": [
+        {
+          "stage": "declared-identity",
+          "layers": [
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1202,
+      "code": "OBJECT_REFERENCE_FORMAT_UNSUPPORTED",
+      "class": "unsupported",
+      "retryability": "capability",
+      "description": "An ObjectRef named an unsupported format version or hash algorithm.",
+      "sites": [
+        {
+          "stage": "declared-identity",
+          "layers": [
+            1
+          ]
+        },
+        {
+          "stage": "known-schema",
+          "layers": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1203,
+      "code": "OBJECT_REFERENCE_KIND_MISMATCH",
+      "class": "graph",
+      "retryability": "never",
+      "description": "A reference resolved to an object whose kind differed from the expected kind.",
+      "sites": [
+        {
+          "stage": "known-schema",
+          "layers": [
+            2
+          ]
+        },
+        {
+          "stage": "closure-and-reference-resolution",
+          "layers": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1204,
+      "code": "OBJECT_REFERENCE_MISSING",
+      "class": "graph",
+      "retryability": "context",
+      "description": "A required referenced object was absent from the supplied lookup or closure.",
+      "sites": [
+        {
+          "stage": "closure-and-reference-resolution",
+          "layers": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1205,
+      "code": "REQUIRED_FEATURE_UNSUPPORTED",
+      "class": "unsupported",
+      "retryability": "capability",
+      "description": "Integrity scanning succeeded but semantic interpretation requires an unsupported feature.",
+      "sites": [
+        {
+          "stage": "registry-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1206,
+      "code": "PROFILE_UNKNOWN",
+      "class": "unsupported",
+      "retryability": "capability",
+      "description": "Semantic validation required an unknown profile reference.",
+      "sites": [
+        {
+          "stage": "registry-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1207,
+      "code": "PROFILE_CONFORMANCE_ONLY",
+      "class": "unsupported",
+      "retryability": "configuration",
+      "description": "A production validation or write attempted to use a conformance-only profile.",
+      "sites": [
+        {
+          "stage": "registry-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1208,
+      "code": "REPOSITORY_DESCRIPTOR_MISMATCH",
+      "class": "repository",
+      "retryability": "never",
+      "description": "Repository-scoped objects, proofs, or references did not bind the same descriptor.",
+      "sites": [
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1209,
+      "code": "OBJECT_KIND_UNSUPPORTED",
+      "class": "unsupported",
+      "retryability": "capability",
+      "description": "Canonical framing and identity succeeded for a numeric object kind absent from the local registry, so schema or semantic interpretation was unavailable.",
+      "sites": [
+        {
+          "stage": "known-schema",
+          "layers": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1210,
+      "code": "PROFILE_STATE_FORBIDDEN",
+      "class": "unsupported",
+      "retryability": "configuration",
+      "description": "A profile state or profile-defined conformance rule was not permitted for the requested read, conformance write, production write, or migration operation.",
+      "sites": [
+        {
+          "stage": "registry-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1211,
+      "code": "REGISTRY_INVALID",
+      "class": "schema",
+      "retryability": "never",
+      "description": "The registry set contained a duplicate, reassignment, overlap, invalid grammar/state, noncanonical order, or inconsistent cross-reference and was rejected atomically.",
+      "sites": [
+        {
+          "stage": "registry-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1212,
+      "code": "EXTENSION_KEY_INVALID",
+      "class": "schema",
+      "retryability": "never",
+      "description": "An optional extension key or payload violated the registered canonical key grammar, deterministic value subset, or extension limits.",
+      "sites": [
+        {
+          "stage": "known-schema",
+          "layers": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1213,
+      "code": "LOGICAL_RECORD_TYPE_UNSUPPORTED",
+      "class": "unsupported",
+      "retryability": "capability",
+      "description": "A canonical logical record used a type absent from the local registry or unavailable in the requested context.",
+      "sites": [
+        {
+          "stage": "known-schema",
+          "layers": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1301,
+      "code": "MANIFEST_CHUNK_LENGTH_INVALID",
+      "class": "content",
+      "retryability": "never",
+      "description": "A chunk part was zero, exceeded 64 MiB, or disagreed with the raw chunk length.",
+      "sites": [
+        {
+          "stage": "known-schema",
+          "layers": [
+            2
+          ]
+        },
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1302,
+      "code": "MANIFEST_LENGTH_MISMATCH",
+      "class": "content",
+      "retryability": "never",
+      "description": "The within-ceiling ordered chunk-length sum did not equal the manifest logical length. Exceeding the logical ceiling is LIMIT_LOGICAL_BYTES.",
+      "sites": [
+        {
+          "stage": "known-schema",
+          "layers": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1303,
+      "code": "MANIFEST_FILE_DIGEST_MISMATCH",
+      "class": "content",
+      "retryability": "never",
+      "description": "Streaming ordered chunk bytes did not reproduce the whole-file SHA-256.",
+      "sites": [
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1401,
+      "code": "TREE_ENTRY_ORDER_INVALID",
+      "class": "tree",
+      "retryability": "never",
+      "description": "Immediate entries were not strictly ordered by NFC UTF-8 basename bytes or contained a duplicate.",
+      "sites": [
+        {
+          "stage": "known-schema",
+          "layers": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1402,
+      "code": "TREE_ENTRY_TARGET_INVALID",
+      "class": "tree",
+      "retryability": "never",
+      "description": "An entry kind, portable mode, target kind, logical size, or content policy combination was invalid.",
+      "sites": [
+        {
+          "stage": "known-schema",
+          "layers": [
+            2
+          ]
+        },
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1403,
+      "code": "PATH_CORE_INVALID",
+      "class": "path",
+      "retryability": "never",
+      "description": "A basename or canonical path-segment array violated the core NFC, forbidden-segment, joined-byte-measure, or segment-count ceiling.",
+      "sites": [
+        {
+          "stage": "known-schema",
+          "layers": [
+            2
+          ]
+        },
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1404,
+      "code": "PATH_PROFILE_INVALID",
+      "class": "path",
+      "retryability": "never",
+      "description": "A registered path profile rejected a joined path, collision, depth, or rename.",
+      "sites": [
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1501,
+      "code": "SNAPSHOT_ROOT_INVALID",
+      "class": "history",
+      "retryability": "never",
+      "description": "The repository had no designated zero-parent root, a parented designated root, or a second zero-parent root.",
+      "sites": [
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1502,
+      "code": "SNAPSHOT_PARENT_COUNT_INVALID",
+      "class": "history",
+      "retryability": "never",
+      "description": "A snapshot declared more than eight parents.",
+      "sites": [
+        {
+          "stage": "known-schema",
+          "layers": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1503,
+      "code": "SNAPSHOT_PARENT_DUPLICATE",
+      "class": "history",
+      "retryability": "never",
+      "description": "A snapshot repeated an ordered parent.",
+      "sites": [
+        {
+          "stage": "known-schema",
+          "layers": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1504,
+      "code": "SNAPSHOT_PARENT_CYCLE",
+      "class": "history",
+      "retryability": "never",
+      "description": "The prevalidated abstract snapshot-parent graph contained a cycle; attempted canonical-byte cycles fail ObjectID validation first.",
+      "sites": [
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1505,
+      "code": "SNAPSHOT_PARENT_CROSS_REPOSITORY",
+      "class": "history",
+      "retryability": "never",
+      "description": "A parent used another repository descriptor.",
+      "sites": [
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1506,
+      "code": "CHANGESET_BASE_MISMATCH",
+      "class": "history",
+      "retryability": "never",
+      "description": "A change-set base did not equal parent zero or was present/absent contrary to root status.",
+      "sites": [
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1507,
+      "code": "CHANGESET_SEQUENCE_INVALID",
+      "class": "transition",
+      "retryability": "never",
+      "description": "Operation sequence numbers were not contiguous from zero.",
+      "sites": [
+        {
+          "stage": "known-schema",
+          "layers": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1508,
+      "code": "CHANGESET_TRANSITION_INVALID",
+      "class": "transition",
+      "retryability": "never",
+      "description": "A create, modify, copy, move, rename, delete, restore, group, or merge-resolution pre/post condition failed.",
+      "sites": [
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1509,
+      "code": "CHANGESET_RESULT_MISMATCH",
+      "class": "transition",
+      "retryability": "never",
+      "description": "Exact ordered replay did not reproduce the declared tree and group roots.",
+      "sites": [
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1601,
+      "code": "FILEID_ZERO",
+      "class": "fileid",
+      "retryability": "never",
+      "description": "A FileID was all zero.",
+      "sites": [
+        {
+          "stage": "known-schema",
+          "layers": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1602,
+      "code": "FILEID_DUPLICATE_IN_TREE",
+      "class": "fileid",
+      "retryability": "never",
+      "description": "A FileID appeared more than once in an expanded snapshot tree.",
+      "sites": [
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1603,
+      "code": "FILEID_ALREADY_CONSUMED",
+      "class": "collision",
+      "retryability": "conflict",
+      "description": "Create or copy attempted to allocate a FileID already consumed in the repository.",
+      "sites": [
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1604,
+      "code": "FILEID_SOURCE_MISMATCH",
+      "class": "fileid",
+      "retryability": "never",
+      "description": "Modify, copy, move, rename, or delete did not name the exact expected source FileID/state.",
+      "sites": [
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1605,
+      "code": "FILEID_RESTORE_PROOF_INVALID",
+      "class": "fileid",
+      "retryability": "never",
+      "description": "Restore lacked same-repository source, ancestral delete, base absence, or matching FileID/path evidence.",
+      "sites": [
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1606,
+      "code": "FILEID_CROSS_REPOSITORY_PROOF",
+      "class": "fileid",
+      "retryability": "never",
+      "description": "A transition, restore, or import proof relied on another repository context.",
+      "sites": [
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1607,
+      "code": "FILEID_IMPORT_MAPPING_CONFLICT",
+      "class": "collision",
+      "retryability": "conflict",
+      "description": "An import source changed its mapped FileID or a FileID was claimed by a different source mapping.",
+      "sites": [
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1608,
+      "code": "FILEID_ALLOCATION_COLLISION",
+      "class": "collision",
+      "retryability": "conflict",
+      "description": "A concurrent allocation lost the lifetime-registry race; the loser must not advance its reference.",
+      "sites": [
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1609,
+      "code": "FILEID_ENTROPY_UNAVAILABLE",
+      "class": "resource",
+      "retryability": "environment",
+      "description": "The operating-system cryptographic entropy API failed; allocation stopped without a deterministic fallback.",
+      "sites": [
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1610,
+      "code": "FILEID_ALLOCATION_EXHAUSTED",
+      "class": "collision",
+      "retryability": "conflict",
+      "description": "Allocation exhausted its bounded zero/collision retry count without reserving a new FileID.",
+      "sites": [
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1611,
+      "code": "FILEID_LIFETIME_EVIDENCE_INVALID",
+      "class": "fileid",
+      "retryability": "never",
+      "description": "A lifetime record did not identify immutable first-consumption evidence consistent with its create, copy, or import origin.",
+      "sites": [
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1701,
+      "code": "GROUP_MEMBER_INVALID",
+      "class": "group",
+      "retryability": "never",
+      "description": "A group member was duplicate, absent from the tree, ambiguous, or the primary was not a member.",
+      "sites": [
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1702,
+      "code": "GROUP_MEMBERSHIP_OVERLAP",
+      "class": "group",
+      "retryability": "never",
+      "description": "A FileID belonged to more than one asset group in format v1.",
+      "sites": [
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1703,
+      "code": "GROUP_REQUIRED_ROLE_MISSING",
+      "class": "group",
+      "retryability": "never",
+      "description": "A registered group profile's required role/cardinality was not satisfied.",
+      "sites": [
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1704,
+      "code": "GROUP_EXTERNAL_KEY_DUPLICATE",
+      "class": "group",
+      "retryability": "never",
+      "description": "An external key declared unique by its group profile occurred in distinct groups.",
+      "sites": [
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1801,
+      "code": "CONFLICT_ID_MISMATCH",
+      "class": "conflict",
+      "retryability": "never",
+      "description": "A conflict ID did not equal the canonical digest of its unresolved alternatives.",
+      "sites": [
+        {
+          "stage": "declared-identity",
+          "layers": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1802,
+      "code": "CONFLICT_UNRESOLVED_PUBLISHED",
+      "class": "conflict",
+      "retryability": "conflict",
+      "description": "A published snapshot referenced an unresolved conflict.",
+      "sites": [
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1803,
+      "code": "CONFLICT_RESOLUTION_MISMATCH",
+      "class": "conflict",
+      "retryability": "never",
+      "description": "A resolved conflict, merge-resolution operation, and final tree/group state disagreed.",
+      "sites": [
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1804,
+      "code": "SHELF_CHAIN_INVALID",
+      "class": "shelf",
+      "retryability": "never",
+      "description": "A shelf predecessor used another shelf/repository or did not have revision number exactly one less.",
+      "sites": [
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1805,
+      "code": "PROVENANCE_CYCLE",
+      "class": "graph",
+      "retryability": "never",
+      "description": "The prevalidated abstract provenance graph formed a cycle or backlink; attempted canonical-byte cycles fail ObjectID validation first.",
+      "sites": [
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1806,
+      "code": "ATTESTATION_SIGNATURE_SHAPE_INVALID",
+      "class": "attestation",
+      "retryability": "never",
+      "description": "An attestation signature profile and signature bytes were not both present or both absent.",
+      "sites": [
+        {
+          "stage": "known-schema",
+          "layers": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1807,
+      "code": "CONFLICT_SUBJECT_INVALID",
+      "class": "conflict",
+      "retryability": "never",
+      "description": "A conflict kind, typed subject, side presence, side type, or side subject relationship was inconsistent.",
+      "sites": [
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1901,
+      "code": "BUNDLE_SEQUENCE_INVALID",
+      "class": "bundle",
+      "retryability": "never",
+      "description": "Bundle item type, section, ordinal, deterministic order, count, or EOF placement was invalid.",
+      "sites": [
+        {
+          "stage": "sequence-shape-and-order",
+          "layers": [
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1902,
+      "code": "BUNDLE_BUDGET_EXCEEDED",
+      "class": "resource",
+      "retryability": "configuration",
+      "description": "Actual or declared bundle work exceeded a format or configured budget.",
+      "sites": [
+        {
+          "stage": "configured-resource-preflight",
+          "layers": [
+            1
+          ]
+        },
+        {
+          "stage": "declared-accounting",
+          "layers": [
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1903,
+      "code": "BUNDLE_RECORD_ID_MISMATCH",
+      "class": "bundle",
+      "retryability": "never",
+      "description": "A logical-record identity did not match its canonical record bytes and type.",
+      "sites": [
+        {
+          "stage": "declared-identity",
+          "layers": [
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1904,
+      "code": "BUNDLE_TRAILER_MISMATCH",
+      "class": "bundle",
+      "retryability": "never",
+      "description": "Trailer counts or the transcript digest did not match preceding exact item bytes.",
+      "sites": [
+        {
+          "stage": "transcript-authentication",
+          "layers": [
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1905,
+      "code": "BUNDLE_DUPLICATE_IDENTITY",
+      "class": "bundle",
+      "retryability": "never",
+      "description": "The bundle repeated an object, logical-record, or disallowed root identity.",
+      "sites": [
+        {
+          "stage": "sequence-shape-and-order",
+          "layers": [
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1906,
+      "code": "BUNDLE_CLOSURE_MISSING",
+      "class": "bundle",
+      "retryability": "context",
+      "description": "An object reachable from supplied roots or logical records was not supplied.",
+      "sites": [
+        {
+          "stage": "closure-and-reference-resolution",
+          "layers": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1907,
+      "code": "BUNDLE_CLOSURE_EXTRA",
+      "class": "bundle",
+      "retryability": "never",
+      "description": "A supplied immutable object was not reachable from any declared root or logical record.",
+      "sites": [
+        {
+          "stage": "closure-and-reference-resolution",
+          "layers": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1908,
+      "code": "BUNDLE_ROOT_INVALID",
+      "class": "bundle",
+      "retryability": "never",
+      "description": "A root identity, kind, role, or required logical-record root was invalid. Duplicate identities use BUNDLE_DUPLICATE_IDENTITY.",
+      "sites": [
+        {
+          "stage": "known-schema",
+          "layers": [
+            2
+          ]
+        },
+        {
+          "stage": "closure-and-reference-resolution",
+          "layers": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1909,
+      "code": "BUNDLE_EXPORT_CLAIM_FORBIDDEN",
+      "class": "boundary",
+      "retryability": "never",
+      "description": "A logical bundle was relabelled or accepted as fidelity, projection, export, restoration, or repository-completeness evidence.",
+      "sites": [
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 1910,
+      "code": "BUNDLE_MODE_UNSUPPORTED",
+      "class": "capability",
+      "retryability": "capability",
+      "description": "The logical bundle closure mode is not supported by format v1.",
+      "sites": [
+        {
+          "stage": "sequence-shape-and-order",
+          "layers": [
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "number": 2001,
+      "code": "FIXTURE_SCHEMA_UNSUPPORTED",
+      "class": "fixture",
+      "retryability": "capability",
+      "description": "The fixture profile/schema version is not the supported profile-v2 public contract.",
+      "sites": [
+        {
+          "stage": "registry-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 2002,
+      "code": "FIXTURE_SEMANTIC_INVALID",
+      "class": "fixture",
+      "retryability": "never",
+      "description": "Public fixture deep verification or cross-record lineage failed.",
+      "sites": [
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 2003,
+      "code": "FIXTURE_MAPPING_MISSING",
+      "class": "fixture",
+      "retryability": "context",
+      "description": "A required persisted directory, group, FileID, revision, or import mapping was absent.",
+      "sites": [
+        {
+          "stage": "closure-and-reference-resolution",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 2004,
+      "code": "FIXTURE_CONTENT_UNAVAILABLE",
+      "class": "fixture",
+      "retryability": "context",
+      "description": "Exact selected content bytes or external boundary input was unavailable, so no manifest was fabricated.",
+      "sites": [
+        {
+          "stage": "closure-and-reference-resolution",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "number": 2005,
+      "code": "FIXTURE_NATIVE_BINDING_MISSING",
+      "class": "fixture",
+      "retryability": "context",
+      "description": "A workload mutation or revision lacked complete entry/content/snapshot bindings required to become immutable repository history.",
+      "sites": [
+        {
+          "stage": "repository-semantics",
+          "layers": [
+            3
+          ]
+        }
+      ]
+    }
+  ]
+}

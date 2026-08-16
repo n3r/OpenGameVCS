@@ -1,0 +1,30 @@
+{
+  "assumedValidation": "canonical-framing-schema-and-identity-prevalidated",
+  "graphKind": "provenance-input",
+  "nodes": [
+    {
+      "edges": [
+        {
+          "kind": "provenance-input",
+          "target": "node-b"
+        }
+      ],
+      "id": "node-a",
+      "type": "provenance"
+    },
+    {
+      "edges": [
+        {
+          "kind": "provenance-input",
+          "target": "node-a"
+        }
+      ],
+      "id": "node-b",
+      "type": "provenance"
+    }
+  ],
+  "roots": [
+    "node-a"
+  ],
+  "schemaVersion": "ogvcs.repository-format/abstract-reference-graph/v1"
+}

@@ -1,0 +1,7 @@
+{
+  "resultFamily": "repository",
+  "rootState": "accepted-exact-constructor-result",
+  "scenarioId": "history-zero-parent-root",
+  "schema": "ogvcs.repository-format.v1.scenario-output.v1",
+  "stableOutputIdentity": "ogvcs:v1:snapshot:sha256:0ac217a384f2ebb14dbe4400972d05ac5dd13e9b4272411d71e68448e27f18b5"
+}

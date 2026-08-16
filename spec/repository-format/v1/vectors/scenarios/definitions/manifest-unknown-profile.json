@@ -1,0 +1,68 @@
+{
+  "algorithm": {
+    "id": "ogvcs.repository-validation-scenario-constructor",
+    "version": 1
+  },
+  "arithmetic": "mathematical nonnegative integers with explicit uint64 decode bounds; no host-width overflow is a semantic test oracle",
+  "detail": "chunking profile is absent from registry snapshot",
+  "exactConstructorValues": {},
+  "expectedRootState": {
+    "resultFamily": "repository",
+    "rootState": "unchanged-no-trusted-output",
+    "scenarioId": "manifest-unknown-profile",
+    "stableOutputIdentity": "ogvcs:v1:content-manifest:sha256:6cb2484d15fd047a284bccd248559fc2b27155c96ec58fde21c7ec4ca6cdbf4d"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "normativeContext": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 13,
+          "mediaType": "application/octet-stream",
+          "path": "scenarios/objects/manifest-unknown-profile/chunk-0.bin",
+          "sha256": "37c757348e671599102d25f0c58362f5924a94fd313f4478cec8e3139f8886f5"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:8ae03cdb20ee0500d1cc4e9c5403469c318e1a3ec3a31826751650221c3550e1"
+      },
+      {
+        "artifact": {
+          "bytes": 127,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/manifest-unknown-profile/manifest.cbor",
+          "sha256": "b43e5b6285d1cc0ab2b6d57d8bd5491496d8c2fd034b8e3cf991647791b07961"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:6cb2484d15fd047a284bccd248559fc2b27155c96ec58fde21c7ec4ca6cdbf4d"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registryVersion": 1
+    },
+    "requestedLayer": 3,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "operation": "validate-object",
+  "parameters": {},
+  "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+  "scenarioId": "manifest-unknown-profile",
+  "seedHex": "d059af1745f3e96cb45485e6b4ab4be430da8804d9f9d4d551a4302218e4892a",
+  "suppliedResourceCatalogue": {
+    "baseObjectArtifacts": [
+      "scenarios/objects/manifest-unknown-profile/chunk-0.bin",
+      "scenarios/objects/manifest-unknown-profile/manifest.cbor"
+    ],
+    "logicalRecordArtifacts": [],
+    "mutationRecipe": "none",
+    "virtualLimitRecipe": "none"
+  },
+  "validation": {
+    "mode": "conformance",
+    "requestedLayer": 3
+  }
+}

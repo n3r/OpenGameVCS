@@ -1,0 +1,260 @@
+{
+  "context": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "importMappings": [],
+    "lifetimeRecords": [
+      {
+        "fileId": "11111111111111111111111111111111",
+        "firstChangeSet": "ogvcs:v1:change-set:sha256:9cda477b4303c876fc79feb4cbd0a5deda70011261bd81fc758b588872040720",
+        "firstOperation": 0,
+        "origin": "native-create"
+      },
+      {
+        "fileId": "12121212121212121212121212121212",
+        "firstChangeSet": "ogvcs:v1:change-set:sha256:9cda477b4303c876fc79feb4cbd0a5deda70011261bd81fc758b588872040720",
+        "firstOperation": 1,
+        "origin": "native-create"
+      },
+      {
+        "fileId": "13131313131313131313131313131313",
+        "firstChangeSet": "ogvcs:v1:change-set:sha256:9cda477b4303c876fc79feb4cbd0a5deda70011261bd81fc758b588872040720",
+        "firstOperation": 2,
+        "origin": "native-create"
+      },
+      {
+        "fileId": "14141414141414141414141414141414",
+        "firstChangeSet": "ogvcs:v1:change-set:sha256:9cda477b4303c876fc79feb4cbd0a5deda70011261bd81fc758b588872040720",
+        "firstOperation": 3,
+        "origin": "native-create"
+      }
+    ],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 211,
+          "mediaType": "application/cbor",
+          "path": "objects/05-asset-group-set.cbor",
+          "sha256": "0eed5e03ee9f3f9466ba31992517605891c7f8518e37d7deafa5a179454cb623"
+        },
+        "ref": "ogvcs:v1:asset-group-set:sha256:3b4641600c6951bfe3c96e4a9ccb28b424b20d8c251db5efcda65fd0c8bd4c7e"
+      },
+      {
+        "artifact": {
+          "bytes": 182,
+          "mediaType": "application/cbor",
+          "path": "objects/10-attestation.cbor",
+          "sha256": "b9b1468f3704b2bb786e123c04c330338a771b43dae13822904c273c6186b654"
+        },
+        "ref": "ogvcs:v1:attestation:sha256:56fdc7943a314d8dcf628508f5abcbde57a9cbc15910eb6fe4527351d2eeec18"
+      },
+      {
+        "artifact": {
+          "bytes": 819,
+          "mediaType": "application/cbor",
+          "path": "objects/04-change-set.cbor",
+          "sha256": "92e3eea8bd2e861dde897b537c8d5af39d53166673b4e4e0ceb34e117b33e103"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:9cda477b4303c876fc79feb4cbd0a5deda70011261bd81fc758b588872040720"
+      },
+      {
+        "artifact": {
+          "bytes": 95,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/conflict-divergent-move-unresolved-shelf/unresolved-shelf-change.cbor",
+          "sha256": "44e9d6450132ee9fca2c4cbaa1dff7f41ecdf60380e9938a77343d98e481916b"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:eb093ea018d6996e1ba0a62e5c6e3c9b37e7f5b61cb450d700a5eddc5e54b38a"
+      },
+      {
+        "artifact": {
+          "bytes": 12,
+          "mediaType": "application/octet-stream",
+          "path": "objects/01-chunk.bin",
+          "sha256": "36fcc2e9442be1071c275604af6e41bd93875c743dc2fdaa6037662df74c5894"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5"
+      },
+      {
+        "artifact": {
+          "bytes": 4,
+          "mediaType": "application/octet-stream",
+          "path": "scenarios/objects/conflict-divergent-move-unresolved-shelf/left-chunk.bin",
+          "sha256": "360f84035942243c6a36537ae2f8673485e6c04455a0a85a0db19690f2541480"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:db8566eb37b332a9df27e95f1d2d0e70d655d8f5ac032358cc2c5d176dce9b78"
+      },
+      {
+        "artifact": {
+          "bytes": 5,
+          "mediaType": "application/octet-stream",
+          "path": "scenarios/objects/conflict-divergent-move-unresolved-shelf/right-chunk.bin",
+          "sha256": "27042f4e6eca7d0b2a7ee4026df2ecfa51d3339e6d122aa099118ecd8563bad9"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:fc6dba7a5a4bd3d7bac00ebe90157b62b0608a16909374446367901fa5dc83fc"
+      },
+      {
+        "artifact": {
+          "bytes": 476,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/conflict-divergent-move-unresolved-shelf/conflict-set.cbor",
+          "sha256": "e678dc0ffdf97c453f26a55c1ff22a389b3d5b1db364de1d03fe97ac9d891117"
+        },
+        "ref": "ogvcs:v1:conflict-set:sha256:9bc139118270291977e683ff0d9200a7d6e8be1729f29bbf27ba9c851f747235"
+      },
+      {
+        "artifact": {
+          "bytes": 183,
+          "mediaType": "application/cbor",
+          "path": "objects/02-content-manifest.cbor",
+          "sha256": "b635d76c8dd9f29c2862ae0e22077c70d157f68d4595861c09fb38bdf47c456b"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+      },
+      {
+        "artifact": {
+          "bytes": 136,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/conflict-divergent-move-unresolved-shelf/left-manifest.cbor",
+          "sha256": "5f65630441b52a2c0529d86870430552e0adf3160dac28f9a58d34b0ee7e7c45"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:b7aa287ed7fd65ff8dce800567cb64dd4ff005a451aef88242ed7a11412d20b5"
+      },
+      {
+        "artifact": {
+          "bytes": 136,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/conflict-divergent-move-unresolved-shelf/right-manifest.cbor",
+          "sha256": "012a9a1d1e70577454991bd49bb5a1124715fd8901702407553a32821a8fa778"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:bcc54f48ebb520f25109ff84d809f7f36a97bd89b6011636d1f3887b810b8f2e"
+      },
+      {
+        "artifact": {
+          "bytes": 147,
+          "mediaType": "application/cbor",
+          "path": "objects/09-provenance.cbor",
+          "sha256": "9fdc958c1450b34cf5b83db6cc2873fc78a099ad13e1c26abbfc1e3305d945a9"
+        },
+        "ref": "ogvcs:v1:provenance:sha256:792a6322c62aaf3096be4d5c86e2850b01d8892083f58c3304dc52530c079235"
+      },
+      {
+        "artifact": {
+          "bytes": 274,
+          "mediaType": "application/cbor",
+          "path": "objects/06-repository-descriptor.cbor",
+          "sha256": "677905a883b1f4ddd87fea27b5afc0293cccd2d2ea29cc4884e758e4a071b6e9"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+      },
+      {
+        "artifact": {
+          "bytes": 470,
+          "mediaType": "application/cbor",
+          "path": "objects/08-shelf-revision.cbor",
+          "sha256": "05d9e78f8fe210364b97c7790f0006875b024513ff4e1f5369c71d4e9e95252e"
+        },
+        "ref": "ogvcs:v1:shelf-revision:sha256:552198509e456e40abdce5e9746c5d2f6ed47a639e79c3bb1dd319f4f65fa14f"
+      },
+      {
+        "artifact": {
+          "bytes": 495,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/conflict-divergent-move-unresolved-shelf/unresolved-shelf.cbor",
+          "sha256": "5aa65c727c1363d024aba0289ac52e481fc12fb6d5104a62dd16bd71d2192016"
+        },
+        "ref": "ogvcs:v1:shelf-revision:sha256:711a9d5140693ca9a6c5a59e3fd7f3168b5ec0218eaa7926507d2babe1751456"
+      },
+      {
+        "artifact": {
+          "bytes": 412,
+          "mediaType": "application/cbor",
+          "path": "objects/07-snapshot.cbor",
+          "sha256": "1c71e8db2d215449fcb7e91380245325d001f839252d49385cf4f97514119a50"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:cc4d4a4a7be098bc74f5bb97cfe1eb37d870832dd44c56f0ceac12d65f871290"
+      },
+      {
+        "artifact": {
+          "bytes": 481,
+          "mediaType": "application/cbor",
+          "path": "objects/03-tree.cbor",
+          "sha256": "dbd560e078aa8da76b423c5e2f83a5e795fa601416593802f79c172495859b2b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:9458b24239ce71b75b1c6ab857883d66a6eab3f0f6f4e9afab15371af1d4bf19"
+      },
+      {
+        "artifact": {
+          "bytes": 52,
+          "mediaType": "application/cbor",
+          "path": "objects/03-tree-child.cbor",
+          "sha256": "f0515d605a2c20abf9f321474bc861964b20faeaebbc41a2d8316ae4ffe2bb2b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a458f2bc72d5816dc3f7ee2cc8580eaaaed9a0208588ee66d18ea78f0c255c81"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registryVersion": 1
+    },
+    "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+    "requestedLayer": 3,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "expected": {
+    "highestLayer": 3,
+    "output": {
+      "artifact": {
+        "bytes": 328,
+        "mediaType": "application/json",
+        "path": "scenarios/outputs/conflict-divergent-move-unresolved-shelf.json",
+        "sha256": "62d0fe96f770659d0a577ee04396e5c1c2950137e4afc5c1eea70a35da3f53dd"
+      },
+      "summarySha256": "408b2ccaddd2cc034903c02dcb15a30e02122699b7982751325f0b59741f22aa"
+    },
+    "result": "accept"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "inputs": [
+    {
+      "bytes": 495,
+      "mediaType": "application/cbor",
+      "path": "scenarios/objects/conflict-divergent-move-unresolved-shelf/unresolved-shelf.cbor",
+      "sha256": "5aa65c727c1363d024aba0289ac52e481fc12fb6d5104a62dd16bd71d2192016"
+    },
+    {
+      "bytes": 10785,
+      "mediaType": "application/json",
+      "path": "scenarios/definitions/conflict-divergent-move-unresolved-shelf.json",
+      "sha256": "8df2824131004564435d5e50c3e7ebfe790f1432804ae7e6d63b35a165d374d1"
+    }
+  ],
+  "operation": "validate-object",
+  "requirementIds": [
+    "OGVCS-002-FR-09"
+  ],
+  "resources": {
+    "recipe": {
+      "generator": "ogvcs.repository-validation-scenario-constructor/v1",
+      "parameters": {
+        "definition": "scenarios/definitions/conflict-divergent-move-unresolved-shelf.json",
+        "definitionSha256": "8df2824131004564435d5e50c3e7ebfe790f1432804ae7e6d63b35a165d374d1",
+        "runtimeHighWaterMarks": "not-asserted"
+      },
+      "seed": "5e26334cfc61e95cd70d511c267fe98ab7a19ac6036ab34f47e708932a56ee31"
+    },
+    "summary": {
+      "bytes": 15375,
+      "indexEntries": 0,
+      "items": 18,
+      "peakMemoryBytes": 0,
+      "scratchBytes": 0,
+      "summarySha256": "408b2ccaddd2cc034903c02dcb15a30e02122699b7982751325f0b59741f22aa",
+      "traversalEdges": 0
+    }
+  },
+  "scenarioId": "conflict-divergent-move-unresolved-shelf",
+  "schemaVersion": "ogvcs.repository-format/validation-scenario/v1"
+}

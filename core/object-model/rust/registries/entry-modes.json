@@ -1,0 +1,56 @@
+{
+  "entries": [
+    {
+      "allowedEntryKindCodes": [
+        1
+      ],
+      "code": 1,
+      "name": "directory",
+      "portableMode": "040000",
+      "state": "ratified"
+    },
+    {
+      "allowedEntryKindCodes": [
+        2
+      ],
+      "code": 2,
+      "name": "regular-file",
+      "portableMode": "100644",
+      "state": "ratified"
+    },
+    {
+      "allowedEntryKindCodes": [
+        3
+      ],
+      "code": 3,
+      "name": "executable-file",
+      "portableMode": "100755",
+      "state": "ratified"
+    },
+    {
+      "allowedEntryKindCodes": [
+        4
+      ],
+      "code": 4,
+      "name": "symlink",
+      "portableMode": "120000",
+      "state": "ratified"
+    }
+  ],
+  "formatVersion": 1,
+  "registry": "ogvcs.repository-format.entry-modes",
+  "registryVersion": 1,
+  "reserved": [
+    {
+      "from": 0,
+      "reason": "invalid sentinel",
+      "to": 0
+    }
+  ],
+  "unassigned": [
+    {
+      "from": 5,
+      "to": 65535
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "importerProfile": "importer.test/fixture-adapter@1",
+  "operation": "import-file-id",
+  "requestedFileId": "53535353535353535353535353535353",
+  "schema": "ogvcs.repository-format.v1.fileid-operation-input.v1",
+  "sourceIdentityDigest": "5252525252525252525252525252525252525252525252525252525252525252",
+  "sourceNamespaceDigest": "5151515151515151515151515151515151515151515151515151515151515151"
+}

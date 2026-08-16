@@ -1,0 +1,202 @@
+{
+  "context": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "candidateSnapshot": "ogvcs:v1:snapshot:sha256:0a66c7f2a52cb600d779af8acd5a1ec408c54b7f7f7d9cf41c717be0bb3376d8",
+    "designatedRoot": "ogvcs:v1:snapshot:sha256:fd79feadd41098e276151723a4c018dae4292e24b3999d77437713ddc5d697d5",
+    "importMappings": [],
+    "lifetimeRecords": [
+      {
+        "fileId": "21212121212121212121212121212121",
+        "firstChangeSet": "ogvcs:v1:change-set:sha256:b5e71418534c372755708cfd4c736e1daafb200bd328582cf8f566d31a0a1bbb",
+        "firstOperation": 0,
+        "origin": "native-create"
+      }
+    ],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 350,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/fileid-restore-invalid-ancestry/candidate-change.cbor",
+          "sha256": "94de81f7fa127d2f6eb5ecff867c3eb3b0f30353778728f99c55eb78722fd567"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:9e633befc610d3f840caee474882c2ff136db83d65563f3c33d8eb5c1c3f321b"
+      },
+      {
+        "artifact": {
+          "bytes": 215,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/fileid-restore-invalid-ancestry/source-change.cbor",
+          "sha256": "b1facea0b60a5a24b022cc2847e618da6c00d409d211afce6167ba4158c7d100"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:b5e71418534c372755708cfd4c736e1daafb200bd328582cf8f566d31a0a1bbb"
+      },
+      {
+        "artifact": {
+          "bytes": 211,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/fileid-restore-invalid-ancestry/delete-change.cbor",
+          "sha256": "88af982be926ef055cac6924029d676a4a5f43bdad04858c13168de5102185af"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:faba9db208fbfba5e4b2510c5e68b40ac9238e931f3f5a3f88ffb969862b13bc"
+      },
+      {
+        "artifact": {
+          "bytes": 211,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/fileid-restore-invalid-ancestry/sibling-change.cbor",
+          "sha256": "88af982be926ef055cac6924029d676a4a5f43bdad04858c13168de5102185af"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:faba9db208fbfba5e4b2510c5e68b40ac9238e931f3f5a3f88ffb969862b13bc"
+      },
+      {
+        "artifact": {
+          "bytes": 12,
+          "mediaType": "application/octet-stream",
+          "path": "objects/01-chunk.bin",
+          "sha256": "36fcc2e9442be1071c275604af6e41bd93875c743dc2fdaa6037662df74c5894"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5"
+      },
+      {
+        "artifact": {
+          "bytes": 183,
+          "mediaType": "application/cbor",
+          "path": "objects/02-content-manifest.cbor",
+          "sha256": "b635d76c8dd9f29c2862ae0e22077c70d157f68d4595861c09fb38bdf47c456b"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+      },
+      {
+        "artifact": {
+          "bytes": 274,
+          "mediaType": "application/cbor",
+          "path": "objects/06-repository-descriptor.cbor",
+          "sha256": "677905a883b1f4ddd87fea27b5afc0293cccd2d2ea29cc4884e758e4a071b6e9"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+      },
+      {
+        "artifact": {
+          "bytes": 382,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/fileid-restore-invalid-ancestry/candidate-snapshot.cbor",
+          "sha256": "edf06ed19fc975cee1c56cd41a318628c1d5e55e7c86ba553a306b52ca57e8a9"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:0a66c7f2a52cb600d779af8acd5a1ec408c54b7f7f7d9cf41c717be0bb3376d8"
+      },
+      {
+        "artifact": {
+          "bytes": 366,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/fileid-restore-invalid-ancestry/delete-snapshot.cbor",
+          "sha256": "f1dbe8a52fabe126f941389799d6d8a757e42342c60c058f76729695189e1998"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:8d9a841a58c7ec3237411f22344bfa3fe4ae001750bebaf1b1112976dd5333e6"
+      },
+      {
+        "artifact": {
+          "bytes": 370,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/fileid-restore-invalid-ancestry/sibling-delete.cbor",
+          "sha256": "46417aa621e33f72e69d5935230365228b73e0491d134f0f9fddd20f2e11b830"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:bbd9697692597db2c35a1d91f7146bc1b835782d63da89fe705701c3e1239d6d"
+      },
+      {
+        "artifact": {
+          "bytes": 322,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/fileid-restore-invalid-ancestry/source-snapshot.cbor",
+          "sha256": "28f1ff09666b2ee1a150affd993763b4d7c74f5fb286cb9b778162db1227fa7d"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:fd79feadd41098e276151723a4c018dae4292e24b3999d77437713ddc5d697d5"
+      },
+      {
+        "artifact": {
+          "bytes": 52,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/fileid-restore-invalid-ancestry/deleted-tree-root.cbor",
+          "sha256": "f0515d605a2c20abf9f321474bc861964b20faeaebbc41a2d8316ae4ffe2bb2b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a458f2bc72d5816dc3f7ee2cc8580eaaaed9a0208588ee66d18ea78f0c255c81"
+      },
+      {
+        "artifact": {
+          "bytes": 161,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/fileid-restore-invalid-ancestry/source-tree-root.cbor",
+          "sha256": "218397b999252ca34fc3195a05c4229cb7654008559ec77be7941a4793a05428"
+        },
+        "ref": "ogvcs:v1:tree:sha256:cbd1dd98c1dc7b03787f870e0e38d78a44ff7253b67dfe5c692276e2d57a5225"
+      },
+      {
+        "artifact": {
+          "bytes": 161,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/fileid-restore-invalid-ancestry/restored-tree-root.cbor",
+          "sha256": "218397b999252ca34fc3195a05c4229cb7654008559ec77be7941a4793a05428"
+        },
+        "ref": "ogvcs:v1:tree:sha256:cbd1dd98c1dc7b03787f870e0e38d78a44ff7253b67dfe5c692276e2d57a5225"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registryVersion": 1
+    },
+    "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+    "requestedLayer": 3,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "expected": {
+    "code": "FILEID_RESTORE_PROOF_INVALID",
+    "layer": 3,
+    "result": "reject",
+    "stage": "repository-semantics"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "inputs": [
+    {
+      "bytes": 382,
+      "mediaType": "application/cbor",
+      "path": "scenarios/objects/fileid-restore-invalid-ancestry/candidate-snapshot.cbor",
+      "sha256": "edf06ed19fc975cee1c56cd41a318628c1d5e55e7c86ba553a306b52ca57e8a9"
+    },
+    {
+      "bytes": 8836,
+      "mediaType": "application/json",
+      "path": "scenarios/definitions/fileid-restore-invalid-ancestry.json",
+      "sha256": "cae9f174b792edfbdbc5bcac0207ecf475140d3e1a82e80d2ce951b3f7983e84"
+    }
+  ],
+  "operation": "replay-change-set",
+  "requirementIds": [
+    "OGVCS-002-AC-07",
+    "OGVCS-002-FR-11"
+  ],
+  "resources": {
+    "recipe": {
+      "generator": "ogvcs.repository-validation-scenario-constructor/v1",
+      "parameters": {
+        "definition": "scenarios/definitions/fileid-restore-invalid-ancestry.json",
+        "definitionSha256": "cae9f174b792edfbdbc5bcac0207ecf475140d3e1a82e80d2ce951b3f7983e84",
+        "runtimeHighWaterMarks": "not-asserted"
+      },
+      "seed": "062e5910a1daa2984724f18cc2174325db3049ca80e35320b4b3c4211bbadf99"
+    },
+    "summary": {
+      "bytes": 12106,
+      "indexEntries": 0,
+      "items": 14,
+      "peakMemoryBytes": 0,
+      "scratchBytes": 0,
+      "summarySha256": "e7099ce3cbc2190e0570c9b1a9343fd891d57bbe7132ff7423a6c084f3766996",
+      "traversalEdges": 0
+    }
+  },
+  "scenarioId": "fileid-restore-invalid-ancestry",
+  "schemaVersion": "ogvcs.repository-format/validation-scenario/v1"
+}

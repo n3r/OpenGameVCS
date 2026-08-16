@@ -1,0 +1,7 @@
+{
+  "resultFamily": "shelf",
+  "rootState": "accepted-exact-constructor-result",
+  "scenarioId": "shelf-revision-chain",
+  "schema": "ogvcs.repository-format.v1.scenario-output.v1",
+  "stableOutputIdentity": "ogvcs:v1:shelf-revision:sha256:d7a45cc69735b497354ef7c5d340a851860c2cdbdf668693a91e8ff06d68f7ad"
+}

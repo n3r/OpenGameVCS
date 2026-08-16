@@ -1,0 +1,73 @@
+{
+  "$id": "https://opengamevcs.org/spec/repository-format/v1/vector-manifest.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Manifest and generator provenance for repository-format validation scenarios.",
+  "properties": {
+    "artifacts": {
+      "items": {
+        "$ref": "validation-scenario.schema.json#/$defs/artifact"
+      },
+      "type": "array"
+    },
+    "generator": {
+      "additionalProperties": false,
+      "properties": {
+        "implementation": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "sourceSha256": {
+          "$ref": "validation-scenario.schema.json#/$defs/digestHex"
+        },
+        "version": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "implementation",
+        "version",
+        "sourceSha256"
+      ],
+      "type": "object"
+    },
+    "manifestVersion": {
+      "const": "ogvcs.repository-format/vector-manifest/v1"
+    },
+    "scenarios": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+\\.json$",
+            "type": "string"
+          },
+          "scenarioId": {
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "type": "string"
+          },
+          "sha256": {
+            "$ref": "validation-scenario.schema.json#/$defs/digestHex"
+          }
+        },
+        "required": [
+          "scenarioId",
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    }
+  },
+  "required": [
+    "manifestVersion",
+    "generator",
+    "scenarios",
+    "artifacts"
+  ],
+  "title": "OpenGameVCS repository-format vector manifest v1",
+  "type": "object"
+}

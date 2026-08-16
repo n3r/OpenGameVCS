@@ -1,0 +1,95 @@
+{
+  "algorithm": {
+    "id": "ogvcs.repository-validation-scenario-constructor",
+    "version": 1
+  },
+  "arithmetic": "mathematical nonnegative integers with explicit uint64 decode bounds; no host-width overflow is a semantic test oracle",
+  "detail": "designated zero-parent repository root",
+  "exactConstructorValues": {
+    "orderedParents": {
+      "array": []
+    }
+  },
+  "expectedRootState": {
+    "resultFamily": "repository",
+    "rootState": "accepted-exact-constructor-result",
+    "scenarioId": "history-zero-parent-root",
+    "stableOutputIdentity": "ogvcs:v1:snapshot:sha256:0ac217a384f2ebb14dbe4400972d05ac5dd13e9b4272411d71e68448e27f18b5"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "normativeContext": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "candidateSnapshot": "ogvcs:v1:snapshot:sha256:0ac217a384f2ebb14dbe4400972d05ac5dd13e9b4272411d71e68448e27f18b5",
+    "designatedRoot": "ogvcs:v1:snapshot:sha256:0ac217a384f2ebb14dbe4400972d05ac5dd13e9b4272411d71e68448e27f18b5",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 52,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/history-zero-parent-root/root-change.cbor",
+          "sha256": "ef6e897742ff4d1220c8cd636f2a889a8f8746b2e97b2b7dad6fec4dc3747a6d"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:82cc41e5e86d1397579a8ebfc7ea6c7d9102552130f4da86ca592fc3c10a424c"
+      },
+      {
+        "artifact": {
+          "bytes": 274,
+          "mediaType": "application/cbor",
+          "path": "objects/06-repository-descriptor.cbor",
+          "sha256": "677905a883b1f4ddd87fea27b5afc0293cccd2d2ea29cc4884e758e4a071b6e9"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+      },
+      {
+        "artifact": {
+          "bytes": 312,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/history-zero-parent-root/designated-root.cbor",
+          "sha256": "9322fc70782819da97e88cb08cfb9b1493327f0bedd34e79dddfbb668e9424d1"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:0ac217a384f2ebb14dbe4400972d05ac5dd13e9b4272411d71e68448e27f18b5"
+      },
+      {
+        "artifact": {
+          "bytes": 52,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/history-zero-parent-root/empty-tree.cbor",
+          "sha256": "f0515d605a2c20abf9f321474bc861964b20faeaebbc41a2d8316ae4ffe2bb2b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a458f2bc72d5816dc3f7ee2cc8580eaaaed9a0208588ee66d18ea78f0c255c81"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registryVersion": 1
+    },
+    "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+    "requestedLayer": 3,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "operation": "validate-repository",
+  "parameters": {},
+  "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+  "scenarioId": "history-zero-parent-root",
+  "seedHex": "e26be2914c76a24f130a35c3f08134461faf5de0c99b65e4ec1db845b0a2df91",
+  "suppliedResourceCatalogue": {
+    "baseObjectArtifacts": [
+      "scenarios/objects/history-zero-parent-root/root-change.cbor",
+      "objects/06-repository-descriptor.cbor",
+      "scenarios/objects/history-zero-parent-root/designated-root.cbor",
+      "scenarios/objects/history-zero-parent-root/empty-tree.cbor"
+    ],
+    "logicalRecordArtifacts": [],
+    "mutationRecipe": "none",
+    "virtualLimitRecipe": "none"
+  },
+  "validation": {
+    "mode": "conformance",
+    "requestedLayer": 3
+  }
+}

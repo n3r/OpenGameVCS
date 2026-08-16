@@ -1,0 +1,202 @@
+{
+  "context": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "candidateSnapshot": "ogvcs:v1:snapshot:sha256:247447696e17877197b95b7ebed41ae8ef14d8e8112a737e5441276503bbf353",
+    "designatedRoot": "ogvcs:v1:snapshot:sha256:0ac217a384f2ebb14dbe4400972d05ac5dd13e9b4272411d71e68448e27f18b5",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 52,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/history-eight-parent/root-change.cbor",
+          "sha256": "ef6e897742ff4d1220c8cd636f2a889a8f8746b2e97b2b7dad6fec4dc3747a6d"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:82cc41e5e86d1397579a8ebfc7ea6c7d9102552130f4da86ca592fc3c10a424c"
+      },
+      {
+        "artifact": {
+          "bytes": 95,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/history-eight-parent/side-change.cbor",
+          "sha256": "a88be4839e48c479a0eee8e1a22080091d4c1fd3ef6d13d3ec38381a70e269cf"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:f29b5ba1e25fe434272c878aef755239bc1a7aa301d26d75cf3a9ef1258bae1b"
+      },
+      {
+        "artifact": {
+          "bytes": 95,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/history-eight-parent/candidate-change.cbor",
+          "sha256": "a88be4839e48c479a0eee8e1a22080091d4c1fd3ef6d13d3ec38381a70e269cf"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:f29b5ba1e25fe434272c878aef755239bc1a7aa301d26d75cf3a9ef1258bae1b"
+      },
+      {
+        "artifact": {
+          "bytes": 274,
+          "mediaType": "application/cbor",
+          "path": "objects/06-repository-descriptor.cbor",
+          "sha256": "677905a883b1f4ddd87fea27b5afc0293cccd2d2ea29cc4884e758e4a071b6e9"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+      },
+      {
+        "artifact": {
+          "bytes": 312,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/history-eight-parent/designated-root.cbor",
+          "sha256": "9322fc70782819da97e88cb08cfb9b1493327f0bedd34e79dddfbb668e9424d1"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:0ac217a384f2ebb14dbe4400972d05ac5dd13e9b4272411d71e68448e27f18b5"
+      },
+      {
+        "artifact": {
+          "bytes": 664,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/history-eight-parent/candidate.cbor",
+          "sha256": "1928056a521b67338226c0a34aeefd18d4069bee3c4a16535c976e09af67b465"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:247447696e17877197b95b7ebed41ae8ef14d8e8112a737e5441276503bbf353"
+      },
+      {
+        "artifact": {
+          "bytes": 356,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/history-eight-parent/side-6.cbor",
+          "sha256": "21cd487ffecd89cab1f71f07435f3032d63cc23bd530acd1c96d892a0403975e"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:26d71e8e74c0138f22fccd33afba07caf2c0f33d8839b91fdef52be4213e3d20"
+      },
+      {
+        "artifact": {
+          "bytes": 356,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/history-eight-parent/side-5.cbor",
+          "sha256": "d7e607ae9392e6cac1cac8d86c229af3145cf58d82656c3edf21ced8d345bf33"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:66e593d7a21e9700496bb5626e2c2be7afe4ccde850026c4ff60da9a8b679a27"
+      },
+      {
+        "artifact": {
+          "bytes": 356,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/history-eight-parent/side-3.cbor",
+          "sha256": "97ab285535ad6d1ac608ad59b87fe251a7a2aeff6906b30961d676dd9bcb5518"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:83d74707a68dc22024a51e752b2185cb7455db9cc2cd1ca864eca1abb0235b21"
+      },
+      {
+        "artifact": {
+          "bytes": 356,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/history-eight-parent/side-1.cbor",
+          "sha256": "a101ceec7d400d1f70519ae990fd33b4488e40924c846139c4749ac51054d211"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:8d761026e2742923f75b7fa422b15de73815b64bfad22e4b9b03755473f6f75b"
+      },
+      {
+        "artifact": {
+          "bytes": 356,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/history-eight-parent/side-7.cbor",
+          "sha256": "eee21d478b3528266db406c462749273eeddd8d566f8f496fff58029968dd10d"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:92bb9f4498acd66d1a75772ab403ed274140249deeee96057a77715874ba4e7f"
+      },
+      {
+        "artifact": {
+          "bytes": 356,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/history-eight-parent/side-4.cbor",
+          "sha256": "386e2bda65001bfd4cf4473858cf0b65a26d0bcffcab94e9a4c1c838e36c1a45"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:99e99dca16015b1bdd01f84a25eeba06c56375c36f3429f71c15bc96559a9e84"
+      },
+      {
+        "artifact": {
+          "bytes": 356,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/history-eight-parent/side-2.cbor",
+          "sha256": "f1430c57158bfff64f9c7a1b72b4970edbd707a3ac77d7edbeb32e4b7289d0c6"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:e9d4850a5a45bca04d6eadeec7f56f1d189bdeaaeaa767106604e3118e10f0e0"
+      },
+      {
+        "artifact": {
+          "bytes": 52,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/history-eight-parent/empty-tree.cbor",
+          "sha256": "f0515d605a2c20abf9f321474bc861964b20faeaebbc41a2d8316ae4ffe2bb2b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a458f2bc72d5816dc3f7ee2cc8580eaaaed9a0208588ee66d18ea78f0c255c81"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registryVersion": 1
+    },
+    "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+    "requestedLayer": 3,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "expected": {
+    "highestLayer": 3,
+    "output": {
+      "artifact": {
+        "bytes": 307,
+        "mediaType": "application/json",
+        "path": "scenarios/outputs/history-eight-parent.json",
+        "sha256": "3d403e0cb779e6e9f6329a01b2550b19e11c9eceb7b7b6d8040c37d551881a22"
+      },
+      "summarySha256": "53d1c6c995a87d0fabba085a5fc32ed494fba1ef9d45e9964db8b7a1e4397c12"
+    },
+    "result": "accept"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "inputs": [
+    {
+      "bytes": 664,
+      "mediaType": "application/cbor",
+      "path": "scenarios/objects/history-eight-parent/candidate.cbor",
+      "sha256": "1928056a521b67338226c0a34aeefd18d4069bee3c4a16535c976e09af67b465"
+    },
+    {
+      "bytes": 12149,
+      "mediaType": "application/json",
+      "path": "scenarios/definitions/history-eight-parent.json",
+      "sha256": "31c9516785c59d426c466d29fd9cd510cae4dda6c1446a0c93170b459ac5c008"
+    }
+  ],
+  "operation": "validate-repository",
+  "requirementIds": [
+    "OGVCS-002-AC-06",
+    "OGVCS-002-FR-09"
+  ],
+  "resources": {
+    "recipe": {
+      "generator": "ogvcs.repository-validation-scenario-constructor/v1",
+      "parameters": {
+        "definition": "scenarios/definitions/history-eight-parent.json",
+        "definitionSha256": "31c9516785c59d426c466d29fd9cd510cae4dda6c1446a0c93170b459ac5c008",
+        "runtimeHighWaterMarks": "not-asserted"
+      },
+      "seed": "d4ae37c3968095b39cf7a9638757ec2554ce77679a00004348077c4319ff8db4"
+    },
+    "summary": {
+      "bytes": 16185,
+      "indexEntries": 0,
+      "items": 14,
+      "peakMemoryBytes": 0,
+      "scratchBytes": 0,
+      "summarySha256": "53d1c6c995a87d0fabba085a5fc32ed494fba1ef9d45e9964db8b7a1e4397c12",
+      "traversalEdges": 0
+    }
+  },
+  "scenarioId": "history-eight-parent",
+  "schemaVersion": "ogvcs.repository-format/validation-scenario/v1"
+}

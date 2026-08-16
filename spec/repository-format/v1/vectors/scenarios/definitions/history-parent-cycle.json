@@ -1,0 +1,46 @@
+{
+  "algorithm": {
+    "id": "ogvcs.repository-validation-scenario-constructor",
+    "version": 1
+  },
+  "arithmetic": "mathematical nonnegative integers with explicit uint64 decode bounds; no host-width overflow is a semantic test oracle",
+  "detail": "prevalidated abstract snapshot-parent graph contains a two-node cycle",
+  "exactConstructorValues": {},
+  "expectedRootState": {
+    "resultFamily": "repository",
+    "rootState": "unchanged-no-trusted-output",
+    "scenarioId": "history-parent-cycle",
+    "stableOutputIdentity": "ogvcs:v1:snapshot:sha256:cc4d4a4a7be098bc74f5bb97cfe1eb37d870832dd44c56f0ceac12d65f871290"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "normativeContext": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "conformance",
+    "objectLookup": [],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registryVersion": 1
+    },
+    "requestedLayer": 3,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "operation": "validate-abstract-reference-graph",
+  "parameters": {},
+  "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+  "scenarioId": "history-parent-cycle",
+  "seedHex": "32f43c0e63ff112bad4f73cca853f6ab7cae7f53b4ff30d7f7949b9268ebf98d",
+  "suppliedResourceCatalogue": {
+    "baseObjectArtifacts": [],
+    "logicalRecordArtifacts": [],
+    "mutationRecipe": "none",
+    "virtualLimitRecipe": "none"
+  },
+  "validation": {
+    "mode": "conformance",
+    "requestedLayer": 3
+  }
+}

@@ -5,9 +5,9 @@
 **Priority:** P0  
 **Owner:** Unassigned  
 **Depends on:** OGVCS-002, OGVCS-004, OGVCS-005  
-**Blocks:** OGVCS-008, OGVCS-013, OGVCS-014, OGVCS-017, OGVCS-020, OGVCS-028, OGVCS-029  
+**Blocks:** OGVCS-008, OGVCS-013, OGVCS-014, OGVCS-017, OGVCS-020, OGVCS-028, OGVCS-029, OGVCS-033
 **Source:** [OpenGameVCS proposal](../../GAME_DEV_VCS_ANALYSIS.md)  
-**Last updated:** 2026-08-14
+**Last updated:** 2026-08-15
 
 ## Outcome
 
@@ -22,14 +22,15 @@ Whole-object large-file storage re-uploads a giant file after a small edit. A ch
 ### In scope
 
 - Versioned content-defined chunk algorithm and tunable size classes.
-- Streaming whole-file digest, chunk digest, ordered manifest, and reconstruction.
+- Streaming chunk-profile execution, whole-file digest, OGVCS-002 `ContentManifestV1` emission, and reconstruction.
 - Whole-object/small-file fast path.
 - Local missing/reuse analysis and shared-cache key contract.
 - Per-format benchmark and safe resource limits.
 
 ### Out of scope
 
-- Network negotiation, object persistence, authorization, pack storage, or garbage collection.
+- Core object/chunk hash preimages or manifest-envelope encoding, already owned by OGVCS-002.
+- Network negotiation, object persistence, authorization, pack/compression/transfer framing, or garbage collection.
 
 ## Users and journeys
 
@@ -41,13 +42,13 @@ Whole-object large-file storage re-uploads a giant file after a small edit. A ch
 
 ### Functional
 
-- **OGVCS-007-FR-01:** Version 1 SHALL define deterministic content-defined boundaries, hash preimages, minimum/target/maximum chunk sizes, and size-class selection.
-- **OGVCS-007-FR-02:** A manifest SHALL include format version, logical length, whole-file SHA-256, ordered chunk IDs/lengths, and optional nonidentity hints.
+- **OGVCS-007-FR-01:** The first ratified chunk profile SHALL define deterministic content-defined boundary fingerprint initialization/input, parameters, minimum/target/maximum chunk sizes, and size-class selection while using the OGVCS-002 ChunkID preimage unchanged.
+- **OGVCS-007-FR-02:** The engine SHALL emit the OGVCS-002 `ContentManifestV1` envelope with the ratified chunk-profile reference, logical length, whole-file SHA-256, and ordered chunk IDs/lengths; optional nonidentity hints SHALL use registered payloads inside OGVCS-002 non-object logical annotation records and SHALL not alter manifest identity.
 - **OGVCS-007-FR-03:** Processing and reconstruction SHALL be streaming with a configurable bounded worker/memory budget.
 - **OGVCS-007-FR-04:** Small files below a documented threshold MAY use one chunk but SHALL use the same manifest verification contract.
 - **OGVCS-007-FR-05:** Reconstruction SHALL verify chunk ID/length and final file digest before atomic publication to a workspace.
 - **OGVCS-007-FR-06:** The library SHALL calculate logical, unique, reused, and newly required bytes without contacting a remote service when given a known-chunk index.
-- **OGVCS-007-FR-07:** Unsupported algorithm/version, malformed manifest, duplicate ambiguity, integer overflow, excessive chunk count, and resource exhaustion SHALL fail safely.
+- **OGVCS-007-FR-07:** Unsupported algorithm/version, malformed manifest, conflicting duplicate delivery/index metadata, integer overflow, excessive chunk count, and resource exhaustion SHALL fail safely. Repeated ordered references to the same chunk ID in a content manifest are valid and SHALL NOT be treated as duplicate ambiguity.
 - **OGVCS-007-FR-08:** The benchmark SHALL report results separately for source-like, structured, already-compressed, encrypted/random, insertion, replacement, and append workloads.
 
 ### Quality attributes
@@ -58,13 +59,13 @@ Whole-object large-file storage re-uploads a giant file after a small edit. A ch
 
 ## Interfaces and data
 
-Publish a stable library/API for `chunk(stream, policy) -> manifest + chunk stream`, `verify`, `reconstruct`, `compare`, and cache keys. Test vectors become part of OGVCS-002/005 conformance. Chunk/policy version is part of manifest identity.
+Publish a stable library/API for `chunk(stream, policy) -> ContentManifestV1 + chunk stream`, `verify`, `reconstruct`, `compare`, and cache keys. It consumes OGVCS-002 codecs, preimages, registries, and conformance-only external-boundary vectors. Additive profile vectors feed aggregate OGVCS-005 conformance but do not amend OGVCS-002 completion evidence. The chunk-profile reference is part of manifest identity.
 
 ## Development plan
 
-1. Implement the versioned streaming chunker, canonical chunk/manifest encoding, hashing, and small fixed-boundary/golden reconstruction vectors.
+1. Implement the versioned streaming chunker using OGVCS-002 ChunkID and `ContentManifestV1` codecs, plus small external-boundary and golden reconstruction vectors.
 2. Add content-defined chunking, large-file streaming ingest/reassembly, corruption/short-read handling, and bounded resource/error behavior.
-3. Add policy selection, parameter/version compatibility, reuse/deduplication accounting, compression framing rules, and OGVCS-001 asset profiles.
+3. Add policy selection, parameter/version compatibility, reuse/deduplication accounting, and OGVCS-001 asset-profile benchmarks; physical pack and compression framing remain outside this engine.
 4. Package client/server libraries, run cross-platform determinism/fuzz/performance suites, publish vectors and migration rules, and freeze the first interoperable chunker profile.
 
 ## Acceptance criteria

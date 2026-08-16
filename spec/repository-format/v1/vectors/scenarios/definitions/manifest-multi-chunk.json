@@ -1,0 +1,88 @@
+{
+  "algorithm": {
+    "id": "ogvcs.repository-validation-scenario-constructor",
+    "version": 1
+  },
+  "arithmetic": "mathematical nonnegative integers with explicit uint64 decode bounds; no host-width overflow is a semantic test oracle",
+  "detail": "three distinct ordered chunks reconstruct exact digest",
+  "exactConstructorValues": {},
+  "expectedRootState": {
+    "resultFamily": "manifest",
+    "rootState": "accepted-exact-constructor-result",
+    "scenarioId": "manifest-multi-chunk",
+    "stableOutputIdentity": "ogvcs:v1:content-manifest:sha256:d16ffcb794ffea8182758eb99f26364031076066c5cf555b167437810d12c8a9"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "normativeContext": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 2,
+          "mediaType": "application/octet-stream",
+          "path": "scenarios/objects/manifest-multi-chunk/chunk-1.bin",
+          "sha256": "768921a22b8e190c2cfafeb0688f0d58a5f76ee4c7fb369758a208c7ba5e9acb"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:20c01aeda3cda1e9efb50f84b75091b19df25431260f05c782f84b655be747b0"
+      },
+      {
+        "artifact": {
+          "bytes": 1,
+          "mediaType": "application/octet-stream",
+          "path": "scenarios/objects/manifest-multi-chunk/chunk-0.bin",
+          "sha256": "559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:24bed8082e050921b6065eacdafb9774aeaaacad910fb525fcea7a932cff533d"
+      },
+      {
+        "artifact": {
+          "bytes": 3,
+          "mediaType": "application/octet-stream",
+          "path": "scenarios/objects/manifest-multi-chunk/chunk-2.bin",
+          "sha256": "967c5a5b7e2fbbe3080a0c5cefea7c279570b16ae8465525538bc3b115267a45"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:985a63589f426c980ede00517bff99aa71ecbb0f683a49ca19cfd8e6c1ad29d3"
+      },
+      {
+        "artifact": {
+          "bytes": 228,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/manifest-multi-chunk/manifest.cbor",
+          "sha256": "eea1ecfa42afd97caad34227bc82d8963ac5d31d108a347432b472c7802421f0"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:d16ffcb794ffea8182758eb99f26364031076066c5cf555b167437810d12c8a9"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registryVersion": 1
+    },
+    "requestedLayer": 3,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "operation": "validate-object",
+  "parameters": {},
+  "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+  "scenarioId": "manifest-multi-chunk",
+  "seedHex": "856197e586dca605b047346645938a1958c1b3885fc7c7b44859d637c798686e",
+  "suppliedResourceCatalogue": {
+    "baseObjectArtifacts": [
+      "scenarios/objects/manifest-multi-chunk/chunk-1.bin",
+      "scenarios/objects/manifest-multi-chunk/chunk-0.bin",
+      "scenarios/objects/manifest-multi-chunk/chunk-2.bin",
+      "scenarios/objects/manifest-multi-chunk/manifest.cbor"
+    ],
+    "logicalRecordArtifacts": [],
+    "mutationRecipe": "none",
+    "virtualLimitRecipe": "none"
+  },
+  "validation": {
+    "mode": "conformance",
+    "requestedLayer": 3
+  }
+}

@@ -1,0 +1,91 @@
+{
+  "context": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 13,
+          "mediaType": "application/octet-stream",
+          "path": "scenarios/objects/manifest-repeated-chunk/chunk-0.bin",
+          "sha256": "37c757348e671599102d25f0c58362f5924a94fd313f4478cec8e3139f8886f5"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:8ae03cdb20ee0500d1cc4e9c5403469c318e1a3ec3a31826751650221c3550e1"
+      },
+      {
+        "artifact": {
+          "bytes": 183,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/manifest-repeated-chunk/manifest.cbor",
+          "sha256": "89e808dd74e884b2cdd8b6e29df69b61103cbccc58609eca52753db03037a75b"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:2f8b811c54467047d8256c0a2526ae90765d6c8faa4b04ebdd38176d99e2ff3e"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registryVersion": 1
+    },
+    "requestedLayer": 3,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "expected": {
+    "highestLayer": 3,
+    "output": {
+      "artifact": {
+        "bytes": 316,
+        "mediaType": "application/json",
+        "path": "scenarios/outputs/manifest-repeated-chunk.json",
+        "sha256": "131d663fa71782acac575519b621a401f6a7829e27f0cffaa3ddf679b7765be9"
+      },
+      "summarySha256": "fdca8e0db7be187ac249156185627f703c246efbe73fd6c15782b87da1097f98"
+    },
+    "result": "accept"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "inputs": [
+    {
+      "bytes": 183,
+      "mediaType": "application/cbor",
+      "path": "scenarios/objects/manifest-repeated-chunk/manifest.cbor",
+      "sha256": "89e808dd74e884b2cdd8b6e29df69b61103cbccc58609eca52753db03037a75b"
+    },
+    {
+      "bytes": 2560,
+      "mediaType": "application/json",
+      "path": "scenarios/definitions/manifest-repeated-chunk.json",
+      "sha256": "d981484ae743f852c6b4b3c8796d6f7734bcc3ec3cbe733a70073f24c7eeafb7"
+    }
+  ],
+  "operation": "validate-object",
+  "requirementIds": [
+    "OGVCS-002-AC-09",
+    "OGVCS-002-FR-09"
+  ],
+  "resources": {
+    "recipe": {
+      "generator": "ogvcs.repository-validation-scenario-constructor/v1",
+      "parameters": {
+        "definition": "scenarios/definitions/manifest-repeated-chunk.json",
+        "definitionSha256": "d981484ae743f852c6b4b3c8796d6f7734bcc3ec3cbe733a70073f24c7eeafb7",
+        "runtimeHighWaterMarks": "not-asserted"
+      },
+      "seed": "aad4af449c32ad3c1cc9caa19665af1d7f34491fef7be049f4ad7f3e29e970d1"
+    },
+    "summary": {
+      "bytes": 2756,
+      "indexEntries": 0,
+      "items": 2,
+      "peakMemoryBytes": 0,
+      "scratchBytes": 0,
+      "summarySha256": "fdca8e0db7be187ac249156185627f703c246efbe73fd6c15782b87da1097f98",
+      "traversalEdges": 0
+    }
+  },
+  "scenarioId": "manifest-repeated-chunk",
+  "schemaVersion": "ogvcs.repository-format/validation-scenario/v1"
+}

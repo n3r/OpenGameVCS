@@ -1,0 +1,102 @@
+{
+  "context": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 12,
+          "mediaType": "application/octet-stream",
+          "path": "objects/01-chunk.bin",
+          "sha256": "36fcc2e9442be1071c275604af6e41bd93875c743dc2fdaa6037662df74c5894"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5"
+      },
+      {
+        "artifact": {
+          "bytes": 183,
+          "mediaType": "application/cbor",
+          "path": "objects/02-content-manifest.cbor",
+          "sha256": "b635d76c8dd9f29c2862ae0e22077c70d157f68d4595861c09fb38bdf47c456b"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+      },
+      {
+        "artifact": {
+          "bytes": 274,
+          "mediaType": "application/cbor",
+          "path": "objects/06-repository-descriptor.cbor",
+          "sha256": "677905a883b1f4ddd87fea27b5afc0293cccd2d2ea29cc4884e758e4a071b6e9"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+      },
+      {
+        "artifact": {
+          "bytes": 52,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/error-repository-descriptor-mismatch/tree.cbor",
+          "sha256": "649ad4049b70a1a0750a2559e5abaefe84407712a9f0083e871422f0f7c128d7"
+        },
+        "ref": "ogvcs:v1:tree:sha256:d6b0dc8db96b752d8336fe9ed88de33bf99931cd3ad2e17d0f7c5f649487fb2c"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registryVersion": 1
+    },
+    "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+    "requestedLayer": 3,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "expected": {
+    "code": "REPOSITORY_DESCRIPTOR_MISMATCH",
+    "layer": 3,
+    "result": "reject",
+    "stage": "repository-semantics"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "inputs": [
+    {
+      "bytes": 52,
+      "mediaType": "application/cbor",
+      "path": "scenarios/objects/error-repository-descriptor-mismatch/tree.cbor",
+      "sha256": "649ad4049b70a1a0750a2559e5abaefe84407712a9f0083e871422f0f7c128d7"
+    },
+    {
+      "bytes": 3518,
+      "mediaType": "application/json",
+      "path": "scenarios/definitions/error-repository-descriptor-mismatch.json",
+      "sha256": "892902d5fd2d55a0ef68857f8af9dd35436aa293d565e37f7a7463200efb96de"
+    }
+  ],
+  "operation": "validate-object",
+  "requirementIds": [
+    "OGVCS-002-FR-09"
+  ],
+  "resources": {
+    "recipe": {
+      "generator": "ogvcs.repository-validation-scenario-constructor/v1",
+      "parameters": {
+        "definition": "scenarios/definitions/error-repository-descriptor-mismatch.json",
+        "definitionSha256": "892902d5fd2d55a0ef68857f8af9dd35436aa293d565e37f7a7463200efb96de",
+        "runtimeHighWaterMarks": "not-asserted"
+      },
+      "seed": "0bf51d4c68d6bea7a7da84dc834ea77ccfc9b782b377972fdeea01882816456e"
+    },
+    "summary": {
+      "bytes": 4039,
+      "indexEntries": 0,
+      "items": 4,
+      "peakMemoryBytes": 0,
+      "scratchBytes": 0,
+      "summarySha256": "8266473bb903381ca911ae4b12d162bffcd0819a5d0a9047429fdc537d28538b",
+      "traversalEdges": 0
+    }
+  },
+  "scenarioId": "error-repository-descriptor-mismatch",
+  "schemaVersion": "ogvcs.repository-format/validation-scenario/v1"
+}

@@ -1,3 +1,10 @@
 # Canonical schemas, vectors, manifests, scripts, and documentation use LF on
 # every supported checkout. `text=auto` leaves detected binary content untouched.
 * text=auto eol=lf
+
+# Repository-format vectors are identity-bearing byte streams. Never subject
+# them to text detection or line-ending conversion, even when a raw chunk is
+# printable ASCII.
+*.bin binary
+*.cbor binary
+*.cborseq binary

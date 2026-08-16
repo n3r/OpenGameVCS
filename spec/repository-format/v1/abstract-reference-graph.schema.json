@@ -1,0 +1,89 @@
+{
+  "$id": "https://opengamevcs.org/spec/repository-format/v1/abstract-reference-graph.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Prevalidated symbolic graph used only for defense-in-depth cycle-algorithm scenarios; it is not a repository object or wire-format vector.",
+  "properties": {
+    "assumedValidation": {
+      "const": "canonical-framing-schema-and-identity-prevalidated"
+    },
+    "graphKind": {
+      "enum": [
+        "provenance-input",
+        "snapshot-parent"
+      ]
+    },
+    "nodes": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "edges": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "parent",
+                    "provenance-input"
+                  ]
+                },
+                "target": {
+                  "$ref": "#/$defs/nodeId"
+                }
+              },
+              "required": [
+                "kind",
+                "target"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "id": {
+            "$ref": "#/$defs/nodeId"
+          },
+          "type": {
+            "enum": [
+              "provenance",
+              "snapshot"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "edges"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "roots": {
+      "items": {
+        "$ref": "#/$defs/nodeId"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "schemaVersion": {
+      "const": "ogvcs.repository-format/abstract-reference-graph/v1"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "assumedValidation",
+    "graphKind",
+    "roots",
+    "nodes"
+  ],
+  "title": "OpenGameVCS prevalidated abstract reference graph v1",
+  "type": "object",
+  "$defs": {
+    "nodeId": {
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "type": "string"
+    }
+  }
+}

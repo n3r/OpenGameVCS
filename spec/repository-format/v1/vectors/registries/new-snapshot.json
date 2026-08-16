@@ -1,0 +1,63 @@
+{
+  "extensions": {
+    "entries": [
+      {
+        "id": "opaque",
+        "major": 1,
+        "namespace": "extension-state.test",
+        "state": "ratified"
+      }
+    ],
+    "registryVersion": 2
+  },
+  "formatVersion": 1,
+  "profiles": {
+    "entries": [
+      {
+        "family": "path",
+        "id": "conformance",
+        "major": 1,
+        "namespace": "profile-state.test",
+        "productionWriteAllowed": false,
+        "state": "conformance-only"
+      },
+      {
+        "family": "path",
+        "id": "deprecated",
+        "major": 1,
+        "namespace": "profile-state.test",
+        "productionWriteAllowed": false,
+        "state": "deprecated"
+      },
+      {
+        "family": "path",
+        "id": "ratified",
+        "major": 1,
+        "namespace": "profile-state.test",
+        "productionWriteAllowed": true,
+        "state": "ratified"
+      },
+      {
+        "family": "path",
+        "id": "reserved",
+        "major": 1,
+        "namespace": "profile-state.test",
+        "productionWriteAllowed": false,
+        "state": "reserved"
+      }
+    ],
+    "registryVersion": 2
+  },
+  "requiredFeatures": {
+    "entries": [
+      {
+        "behavior": "no-op: validate the unchanged registered base kind semantics and preserve exact payload bytes",
+        "code": 1,
+        "name": "vector-required-feature",
+        "state": "ratified"
+      }
+    ],
+    "registryVersion": 2
+  },
+  "schema": "ogvcs.repository-format.v1.registry-snapshot.v1"
+}

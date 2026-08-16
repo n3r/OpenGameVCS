@@ -1,0 +1,21 @@
+{
+  "entries": [],
+  "extensionKey": {
+    "idPattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+    "idUtf8BytesMaximum": 63,
+    "majorMaximum": 4294967295,
+    "majorMinimum": 1,
+    "namespacePattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+$",
+    "namespaceUtf8BytesMaximum": 253,
+    "textKey": "<namespace>/<id>@<major>"
+  },
+  "formatVersion": 1,
+  "registry": "ogvcs.repository-format.extensions",
+  "registryVersion": 1,
+  "states": [
+    "reserved",
+    "conformance-only",
+    "ratified",
+    "deprecated"
+  ]
+}

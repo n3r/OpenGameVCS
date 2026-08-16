@@ -1,0 +1,99 @@
+{
+  "algorithm": {
+    "id": "ogvcs.repository-validation-scenario-constructor",
+    "version": 1
+  },
+  "arithmetic": "mathematical nonnegative integers with explicit uint64 decode bounds; no host-width overflow is a semantic test oracle",
+  "detail": "registered test path profile rejects joined path",
+  "exactConstructorValues": {},
+  "expectedRootState": {
+    "resultFamily": "repository",
+    "rootState": "unchanged-no-trusted-output",
+    "scenarioId": "tree-path-profile",
+    "stableOutputIdentity": "ogvcs:v1:tree:sha256:a09f47e1ac7f1cd33ae4615565626bce8dd03e631d0971221a2759b6cca640b6"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "normativeContext": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 12,
+          "mediaType": "application/octet-stream",
+          "path": "objects/01-chunk.bin",
+          "sha256": "36fcc2e9442be1071c275604af6e41bd93875c743dc2fdaa6037662df74c5894"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5"
+      },
+      {
+        "artifact": {
+          "bytes": 183,
+          "mediaType": "application/cbor",
+          "path": "objects/02-content-manifest.cbor",
+          "sha256": "b635d76c8dd9f29c2862ae0e22077c70d157f68d4595861c09fb38bdf47c456b"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+      },
+      {
+        "artifact": {
+          "bytes": 283,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-profile/repository-descriptor.cbor",
+          "sha256": "bf6170411289ffd9a754d4c9673d98858b2695ef96e2da59889d0f855deefad0"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:8381951066a4eedcb4cfa361242063e5063f74deeed93d7bac3afc03925e4748"
+      },
+      {
+        "artifact": {
+          "bytes": 274,
+          "mediaType": "application/cbor",
+          "path": "objects/06-repository-descriptor.cbor",
+          "sha256": "677905a883b1f4ddd87fea27b5afc0293cccd2d2ea29cc4884e758e4a071b6e9"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+      },
+      {
+        "artifact": {
+          "bytes": 164,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-profile/tree.cbor",
+          "sha256": "bc891ada7f5638f24d865c599b91709e3ceab6c09135341f408b1a864cbe5ad6"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a09f47e1ac7f1cd33ae4615565626bce8dd03e631d0971221a2759b6cca640b6"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registryVersion": 1
+    },
+    "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:8381951066a4eedcb4cfa361242063e5063f74deeed93d7bac3afc03925e4748",
+    "requestedLayer": 3,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "operation": "validate-object",
+  "parameters": {},
+  "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+  "scenarioId": "tree-path-profile",
+  "seedHex": "a7147cfb7a146cd468c88ae9c5813b71bae8d779f69328a7b67c8622f8731c2c",
+  "suppliedResourceCatalogue": {
+    "baseObjectArtifacts": [
+      "objects/01-chunk.bin",
+      "objects/02-content-manifest.cbor",
+      "scenarios/objects/tree-path-profile/repository-descriptor.cbor",
+      "objects/06-repository-descriptor.cbor",
+      "scenarios/objects/tree-path-profile/tree.cbor"
+    ],
+    "logicalRecordArtifacts": [],
+    "mutationRecipe": "none",
+    "virtualLimitRecipe": "none"
+  },
+  "validation": {
+    "mode": "conformance",
+    "requestedLayer": 3
+  }
+}

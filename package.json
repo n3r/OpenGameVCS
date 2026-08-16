@@ -3,12 +3,20 @@
   "version": "0.0.0",
   "private": true,
   "description": "OpenGameVCS implementation workspace",
+  "license": "MIT",
   "type": "module",
   "workspaces": [
-    "foundation/fixture-generator"
+    "foundation/fixture-generator",
+    "core/object-model/js"
   ],
   "scripts": {
-    "test": "npm run test --workspace @opengamevcs/fixture-generator && node --test prd/validate-roadmap.test.mjs",
+    "test": "npm run test --workspace @opengamevcs/fixture-generator && npm run test --workspace @opengamevcs/object-model && npm run test:spec && npm run test:vectors && node --test prd/validate-roadmap.test.mjs && npm run test:object-model:ci-report",
+    "test:object-model:js": "npm run test --workspace @opengamevcs/object-model",
+    "test:object-model:report": "node tools/object-model-conformance-report.mjs --output artifacts/object-model-conformance.json",
+    "test:object-model:packed-report": "node tools/run-packed-object-model-conformance.mjs --output artifacts/packed-object-model-conformance",
+    "test:object-model:ci-report": "node --test tools/object-model-conformance-report.test.mjs tools/compare-object-model-scale.test.mjs",
+    "test:vectors": "node tools/verify-reference-vectors.mjs && node --test tools/verify-reference-vectors.test.mjs",
+    "test:spec": "node spec/repository-format/v1/validate-spec.mjs && node --test spec/repository-format/v1/validate-spec.test.mjs",
     "test:roadmap": "node prd/validate-roadmap.mjs && node --test prd/validate-roadmap.test.mjs",
     "test:fixture:scale": "npm run test:scale --workspace @opengamevcs/fixture-generator"
   },

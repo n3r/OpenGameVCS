@@ -1,0 +1,508 @@
+{
+  "cases": [
+    {
+      "maximum": {
+        "expected": {
+          "highestLayer": 1,
+          "result": "accept"
+        },
+        "value": 2199023255552
+      },
+      "maximumPlusOne": {
+        "expected": {
+          "code": "BUNDLE_BUDGET_EXCEEDED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "configured-resource-preflight"
+        },
+        "value": 2199023255553
+      },
+      "name": "bundle-sequence-bytes",
+      "unit": "bytes"
+    },
+    {
+      "maximum": {
+        "expected": {
+          "highestLayer": 1,
+          "result": "accept"
+        },
+        "value": 536871424
+      },
+      "maximumPlusOne": {
+        "expected": {
+          "code": "BUNDLE_BUDGET_EXCEEDED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "configured-resource-preflight"
+        },
+        "value": 536871425
+      },
+      "name": "bundle-largest-item-bytes",
+      "unit": "bytes"
+    },
+    {
+      "maximum": {
+        "expected": {
+          "highestLayer": 1,
+          "result": "accept"
+        },
+        "value": 10000000
+      },
+      "maximumPlusOne": {
+        "expected": {
+          "code": "BUNDLE_BUDGET_EXCEEDED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "configured-resource-preflight"
+        },
+        "value": 10000001
+      },
+      "name": "bundle-objects",
+      "unit": "objects"
+    },
+    {
+      "maximum": {
+        "expected": {
+          "highestLayer": 1,
+          "result": "accept"
+        },
+        "value": 10000000
+      },
+      "maximumPlusOne": {
+        "expected": {
+          "code": "BUNDLE_BUDGET_EXCEEDED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "configured-resource-preflight"
+        },
+        "value": 10000001
+      },
+      "name": "bundle-logical-records",
+      "unit": "records"
+    },
+    {
+      "maximum": {
+        "expected": {
+          "highestLayer": 1,
+          "result": "accept"
+        },
+        "value": 20000000
+      },
+      "maximumPlusOne": {
+        "expected": {
+          "code": "BUNDLE_BUDGET_EXCEEDED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "configured-resource-preflight"
+        },
+        "value": 20000001
+      },
+      "name": "bundle-roots",
+      "unit": "roots"
+    },
+    {
+      "maximum": {
+        "expected": {
+          "highestLayer": 1,
+          "result": "accept"
+        },
+        "value": 40000002
+      },
+      "maximumPlusOne": {
+        "expected": {
+          "code": "BUNDLE_BUDGET_EXCEEDED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "configured-resource-preflight"
+        },
+        "value": 40000003
+      },
+      "name": "bundle-total-items",
+      "unit": "items"
+    },
+    {
+      "maximum": {
+        "expected": {
+          "highestLayer": 1,
+          "result": "accept"
+        },
+        "value": 100000000
+      },
+      "maximumPlusOne": {
+        "expected": {
+          "code": "BUNDLE_BUDGET_EXCEEDED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "configured-resource-preflight"
+        },
+        "value": 100000001
+      },
+      "name": "bundle-traversal-edges",
+      "unit": "edges"
+    },
+    {
+      "maximum": {
+        "expected": {
+          "highestLayer": 1,
+          "result": "accept"
+        },
+        "value": 20000000
+      },
+      "maximumPlusOne": {
+        "expected": {
+          "code": "BUNDLE_BUDGET_EXCEEDED",
+          "layer": 1,
+          "result": "reject",
+          "stage": "configured-resource-preflight"
+        },
+        "value": 20000001
+      },
+      "name": "bundle-index-entries",
+      "unit": "entries"
+    },
+    {
+      "maximum": {
+        "expected": {
+          "highestLayer": 2,
+          "result": "accept"
+        },
+        "value": 32
+      },
+      "maximumPlusOne": {
+        "expected": {
+          "code": "LIMIT_NESTING",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "value": 33
+      },
+      "name": "cbor-nesting-depth",
+      "unit": "levels"
+    },
+    {
+      "maximum": {
+        "expected": {
+          "highestLayer": 2,
+          "result": "accept"
+        },
+        "value": 536870912
+      },
+      "maximumPlusOne": {
+        "expected": {
+          "code": "LIMIT_METADATA_BYTES",
+          "layer": 1,
+          "result": "reject",
+          "stage": "configured-resource-preflight"
+        },
+        "value": 536870913
+      },
+      "name": "metadata-payload-bytes",
+      "unit": "bytes"
+    },
+    {
+      "maximum": {
+        "expected": {
+          "highestLayer": 2,
+          "result": "accept"
+        },
+        "value": 67108864
+      },
+      "maximumPlusOne": {
+        "expected": {
+          "code": "LIMIT_CHUNK_BYTES",
+          "layer": 1,
+          "result": "reject",
+          "stage": "configured-resource-preflight"
+        },
+        "value": 67108865
+      },
+      "name": "chunk-payload-bytes",
+      "unit": "bytes"
+    },
+    {
+      "maximum": {
+        "expected": {
+          "highestLayer": 2,
+          "result": "accept"
+        },
+        "value": 16777216
+      },
+      "maximumPlusOne": {
+        "expected": {
+          "code": "LIMIT_VALUE_BYTES",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "value": 16777217
+      },
+      "name": "generic-text-or-byte-value-bytes",
+      "unit": "bytes"
+    },
+    {
+      "maximum": {
+        "expected": {
+          "highestLayer": 2,
+          "result": "accept"
+        },
+        "value": 1048576
+      },
+      "maximumPlusOne": {
+        "expected": {
+          "code": "LIMIT_VALUE_BYTES",
+          "layer": 2,
+          "result": "reject",
+          "stage": "known-schema"
+        },
+        "value": 1048577
+      },
+      "name": "snapshot-message-bytes",
+      "unit": "utf8-bytes"
+    },
+    {
+      "maximum": {
+        "expected": {
+          "highestLayer": 2,
+          "result": "accept"
+        },
+        "value": 128
+      },
+      "maximumPlusOne": {
+        "expected": {
+          "code": "LIMIT_COUNT",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "value": 129
+      },
+      "name": "extensions-per-object",
+      "unit": "entries"
+    },
+    {
+      "maximum": {
+        "expected": {
+          "highestLayer": 2,
+          "result": "accept"
+        },
+        "value": 16777216
+      },
+      "maximumPlusOne": {
+        "expected": {
+          "code": "LIMIT_EXTENSION_BYTES",
+          "layer": 1,
+          "result": "reject",
+          "stage": "canonical-framing"
+        },
+        "value": 16777217
+      },
+      "name": "extension-aggregate-bytes-per-object",
+      "unit": "encoded-bytes"
+    },
+    {
+      "maximum": {
+        "expected": {
+          "highestLayer": 2,
+          "result": "accept"
+        },
+        "value": 255
+      },
+      "maximumPlusOne": {
+        "expected": {
+          "code": "PATH_CORE_INVALID",
+          "layer": 2,
+          "result": "reject",
+          "stage": "known-schema"
+        },
+        "value": 256
+      },
+      "name": "path-segment-bytes",
+      "unit": "utf8-bytes"
+    },
+    {
+      "maximum": {
+        "expected": {
+          "highestLayer": 2,
+          "result": "accept"
+        },
+        "value": 4096
+      },
+      "maximumPlusOne": {
+        "expected": {
+          "code": "PATH_CORE_INVALID",
+          "layer": 2,
+          "result": "reject",
+          "stage": "known-schema"
+        },
+        "value": 4097
+      },
+      "name": "path-bytes",
+      "unit": "utf8-bytes"
+    },
+    {
+      "maximum": {
+        "expected": {
+          "highestLayer": 2,
+          "result": "accept"
+        },
+        "value": 256
+      },
+      "maximumPlusOne": {
+        "expected": {
+          "code": "PATH_CORE_INVALID",
+          "layer": 2,
+          "result": "reject",
+          "stage": "known-schema"
+        },
+        "value": 257
+      },
+      "name": "path-segments",
+      "unit": "segments"
+    },
+    {
+      "maximum": {
+        "expected": {
+          "highestLayer": 2,
+          "result": "accept"
+        },
+        "value": 1000000
+      },
+      "maximumPlusOne": {
+        "expected": {
+          "code": "LIMIT_COUNT",
+          "layer": 2,
+          "result": "reject",
+          "stage": "known-schema"
+        },
+        "value": 1000001
+      },
+      "name": "tree-entries",
+      "unit": "entries"
+    },
+    {
+      "maximum": {
+        "expected": {
+          "highestLayer": 2,
+          "result": "accept"
+        },
+        "value": 8
+      },
+      "maximumPlusOne": {
+        "expected": {
+          "code": "SNAPSHOT_PARENT_COUNT_INVALID",
+          "layer": 2,
+          "result": "reject",
+          "stage": "known-schema"
+        },
+        "value": 9
+      },
+      "name": "snapshot-parents",
+      "unit": "parents"
+    },
+    {
+      "maximum": {
+        "expected": {
+          "highestLayer": 2,
+          "result": "accept"
+        },
+        "value": 1000000
+      },
+      "maximumPlusOne": {
+        "expected": {
+          "code": "LIMIT_COUNT",
+          "layer": 2,
+          "result": "reject",
+          "stage": "known-schema"
+        },
+        "value": 1000001
+      },
+      "name": "change-set-operations",
+      "unit": "operations"
+    },
+    {
+      "maximum": {
+        "expected": {
+          "highestLayer": 2,
+          "result": "accept"
+        },
+        "value": 10000
+      },
+      "maximumPlusOne": {
+        "expected": {
+          "code": "LIMIT_COUNT",
+          "layer": 2,
+          "result": "reject",
+          "stage": "known-schema"
+        },
+        "value": 10001
+      },
+      "name": "asset-groups",
+      "unit": "groups"
+    },
+    {
+      "maximum": {
+        "expected": {
+          "highestLayer": 2,
+          "result": "accept"
+        },
+        "value": 64
+      },
+      "maximumPlusOne": {
+        "expected": {
+          "code": "LIMIT_COUNT",
+          "layer": 2,
+          "result": "reject",
+          "stage": "known-schema"
+        },
+        "value": 65
+      },
+      "name": "asset-group-members",
+      "unit": "members-per-group"
+    },
+    {
+      "maximum": {
+        "expected": {
+          "highestLayer": 2,
+          "result": "accept"
+        },
+        "value": 1048576
+      },
+      "maximumPlusOne": {
+        "expected": {
+          "code": "LIMIT_COUNT",
+          "layer": 2,
+          "result": "reject",
+          "stage": "known-schema"
+        },
+        "value": 1048577
+      },
+      "name": "manifest-chunks",
+      "unit": "chunks"
+    },
+    {
+      "maximum": {
+        "expected": {
+          "highestLayer": 2,
+          "result": "accept"
+        },
+        "value": 1099511627776
+      },
+      "maximumPlusOne": {
+        "expected": {
+          "code": "LIMIT_LOGICAL_BYTES",
+          "layer": 2,
+          "result": "reject",
+          "stage": "known-schema"
+        },
+        "value": 1099511627777
+      },
+      "name": "logical-file-bytes",
+      "unit": "bytes"
+    }
+  ],
+  "constructorIndex": "limits/virtual-constructors.json",
+  "materialization": "Each descriptor is an exact virtual constructor. Consumers stream/synthesize recurrence values and MUST NOT preallocate from a declaration. Materialized files are constructor inputs, not standalone whole-object semantic claims.",
+  "materializedIndex": "limits/materialized/index.json",
+  "schema": "ogvcs.repository-format.v1.limit-recipes.v2"
+}

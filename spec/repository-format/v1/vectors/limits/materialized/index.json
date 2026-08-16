@@ -1,0 +1,104 @@
+{
+  "artifacts": [
+    {
+      "artifact": "limits/materialized/cbor-nesting-depth-maximum.cbor",
+      "byteLength": 33,
+      "case": "cbor-nesting-depth",
+      "sha256": "ee10086ce96c112894b1a0dd4ba8a17a20c9e1d3f1f61f860d2499928b445ee7",
+      "variant": "maximum"
+    },
+    {
+      "artifact": "limits/materialized/cbor-nesting-depth-maximum-plus-one.cbor",
+      "byteLength": 34,
+      "case": "cbor-nesting-depth",
+      "sha256": "fd042da871e00a808667891ad5249c631acd89c5490d06c9ca8065a1bd3314f4",
+      "variant": "maximum-plus-one"
+    },
+    {
+      "artifact": "limits/materialized/extensions-per-object-maximum.cbor",
+      "byteLength": 2410,
+      "case": "extensions-per-object",
+      "sha256": "5397c40d5ff900566af1183d63b2ea91d80d1e6ddb3814edc2586e768017c840",
+      "variant": "maximum"
+    },
+    {
+      "artifact": "limits/materialized/extensions-per-object-maximum-plus-one.cbor",
+      "byteLength": 2429,
+      "case": "extensions-per-object",
+      "sha256": "35c22c9671593f4af70cf03e86919662009214d21732b7cf48c9705d455e8c43",
+      "variant": "maximum-plus-one"
+    },
+    {
+      "artifact": "limits/materialized/path-segment-bytes-maximum.cbor",
+      "byteLength": 257,
+      "case": "path-segment-bytes",
+      "sha256": "387ed65171029fc9a0ebf680927572aef94a35b4d854b79a205cd77f674be36d",
+      "variant": "maximum"
+    },
+    {
+      "artifact": "limits/materialized/path-segment-bytes-maximum-plus-one.cbor",
+      "byteLength": 259,
+      "case": "path-segment-bytes",
+      "sha256": "ff52b61d7119986ee47df10f52d9dd52c3ed0aba3f98364301c17593dd9d5feb",
+      "variant": "maximum-plus-one"
+    },
+    {
+      "artifact": "limits/materialized/path-bytes-maximum.cbor",
+      "byteLength": 4115,
+      "case": "path-bytes",
+      "sha256": "feeb21b4b5f5bf94d49c4889f43f4638fcc17a440ad5f17c81a9b619a7345894",
+      "variant": "maximum"
+    },
+    {
+      "artifact": "limits/materialized/path-bytes-maximum-plus-one.cbor",
+      "byteLength": 4116,
+      "case": "path-bytes",
+      "sha256": "45d193ed9ede95c78a63836be3d3ba1f5a9407777eb9ab9fd3043f9835d806f8",
+      "variant": "maximum-plus-one"
+    },
+    {
+      "artifact": "limits/materialized/path-segments-maximum.cbor",
+      "byteLength": 515,
+      "case": "path-segments",
+      "sha256": "29d1dcce69e42c35e0b8dd7601e636cfd9ab86087012687806adb03f5e78464f",
+      "variant": "maximum"
+    },
+    {
+      "artifact": "limits/materialized/path-segments-maximum-plus-one.cbor",
+      "byteLength": 517,
+      "case": "path-segments",
+      "sha256": "84ce3080b3f71cf3924a2673dc484587948052b7815bf7555da5f43abe0f2b3d",
+      "variant": "maximum-plus-one"
+    },
+    {
+      "artifact": "limits/materialized/snapshot-parents-maximum.cbor",
+      "byteLength": 337,
+      "case": "snapshot-parents",
+      "sha256": "9529a1ab7bd9262702670c6eb5d6ef587d325e8afc4abcc2ff23a776069c92cc",
+      "variant": "maximum"
+    },
+    {
+      "artifact": "limits/materialized/snapshot-parents-maximum-plus-one.cbor",
+      "byteLength": 379,
+      "case": "snapshot-parents",
+      "sha256": "df6666db4e074998037f6a8f49eea1498cd3d7da71cd0782110c92b9fe759e5c",
+      "variant": "maximum-plus-one"
+    },
+    {
+      "artifact": "limits/materialized/asset-group-members-maximum.cbor",
+      "byteLength": 3074,
+      "case": "asset-group-members",
+      "sha256": "7e520761f28140c7f6576c9004851cf8586a3b2af9c23e1006d3b2b1c588891d",
+      "variant": "maximum"
+    },
+    {
+      "artifact": "limits/materialized/asset-group-members-maximum-plus-one.cbor",
+      "byteLength": 3122,
+      "case": "asset-group-members",
+      "sha256": "b911ffa4503d82a7686ee0aa223f1281dff5ba2224732b64ebdd757dd9fa40dc",
+      "variant": "maximum-plus-one"
+    }
+  ],
+  "note": "These bounded CBOR artifacts materialize the exact recurrence input for small limits. Apply the associated isolation prerequisites and expected result from ../virtual-constructors.json.",
+  "schema": "ogvcs.repository-format.v1.materialized-limit-inputs.v1"
+}

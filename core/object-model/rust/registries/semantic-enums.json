@@ -1,0 +1,342 @@
+{
+  "domains": [
+    {
+      "entries": [
+        {
+          "code": 1,
+          "name": "native",
+          "state": "ratified"
+        },
+        {
+          "code": 2,
+          "name": "import",
+          "state": "ratified"
+        }
+      ],
+      "name": "allocation-kind"
+    },
+    {
+      "entries": [
+        {
+          "code": 1,
+          "name": "header",
+          "state": "ratified"
+        },
+        {
+          "code": 2,
+          "name": "object",
+          "state": "ratified"
+        },
+        {
+          "code": 3,
+          "name": "logical-record",
+          "state": "ratified"
+        },
+        {
+          "code": 4,
+          "name": "root",
+          "state": "ratified"
+        },
+        {
+          "code": 5,
+          "name": "trailer",
+          "state": "ratified"
+        }
+      ],
+      "name": "bundle-item-type"
+    },
+    {
+      "entries": [
+        {
+          "code": 1,
+          "name": "supplied-closure",
+          "state": "ratified"
+        }
+      ],
+      "name": "bundle-mode"
+    },
+    {
+      "entries": [
+        {
+          "code": 1,
+          "name": "object",
+          "state": "ratified"
+        },
+        {
+          "code": 2,
+          "name": "logical-record",
+          "state": "ratified"
+        }
+      ],
+      "name": "bundle-root-kind"
+    },
+    {
+      "entries": [
+        {
+          "code": 1,
+          "name": "base",
+          "state": "ratified"
+        },
+        {
+          "code": 2,
+          "name": "left",
+          "state": "ratified"
+        },
+        {
+          "code": 3,
+          "name": "right",
+          "state": "ratified"
+        },
+        {
+          "code": 4,
+          "name": "delete",
+          "state": "ratified"
+        },
+        {
+          "code": 5,
+          "name": "custom",
+          "state": "ratified"
+        }
+      ],
+      "name": "conflict-resolution-choice"
+    },
+    {
+      "entries": [
+        {
+          "code": 0,
+          "name": "unresolved",
+          "state": "ratified"
+        },
+        {
+          "code": 1,
+          "name": "resolved",
+          "state": "ratified"
+        }
+      ],
+      "name": "conflict-resolution-state"
+    },
+    {
+      "entries": [
+        {
+          "code": 1,
+          "name": "entry",
+          "state": "ratified"
+        },
+        {
+          "code": 2,
+          "name": "group",
+          "state": "ratified"
+        }
+      ],
+      "name": "conflict-side-kind"
+    },
+    {
+      "entries": [
+        {
+          "code": 1,
+          "name": "entry",
+          "state": "ratified"
+        },
+        {
+          "code": 2,
+          "name": "group",
+          "state": "ratified"
+        }
+      ],
+      "name": "conflict-subject-kind"
+    },
+    {
+      "entries": [
+        {
+          "code": 1,
+          "name": "content",
+          "state": "ratified"
+        },
+        {
+          "code": 2,
+          "name": "divergent-move",
+          "state": "ratified"
+        },
+        {
+          "code": 3,
+          "name": "delete-modify",
+          "state": "ratified"
+        },
+        {
+          "code": 4,
+          "name": "type",
+          "state": "ratified"
+        },
+        {
+          "code": 5,
+          "name": "mode",
+          "state": "reserved"
+        },
+        {
+          "code": 6,
+          "name": "policy",
+          "state": "ratified"
+        },
+        {
+          "code": 7,
+          "name": "group",
+          "state": "ratified"
+        },
+        {
+          "code": 8,
+          "name": "path-collision",
+          "state": "ratified"
+        }
+      ],
+      "name": "conflict-kind"
+    },
+    {
+      "entries": [
+        {
+          "code": 1,
+          "name": "reserved",
+          "state": "ratified"
+        },
+        {
+          "code": 2,
+          "name": "materialized",
+          "state": "ratified"
+        },
+        {
+          "code": 3,
+          "name": "published",
+          "state": "ratified"
+        }
+      ],
+      "name": "import-state"
+    },
+    {
+      "entries": [
+        {
+          "code": 1,
+          "name": "native-create",
+          "state": "ratified"
+        },
+        {
+          "code": 2,
+          "name": "native-copy",
+          "state": "ratified"
+        },
+        {
+          "code": 3,
+          "name": "import",
+          "state": "ratified"
+        }
+      ],
+      "name": "lifetime-origin"
+    },
+    {
+      "entries": [
+        {
+          "code": 1,
+          "name": "file-id",
+          "state": "ratified"
+        },
+        {
+          "code": 2,
+          "name": "group-id",
+          "state": "ratified"
+        }
+      ],
+      "name": "lock-target-kind"
+    },
+    {
+      "entries": [
+        {
+          "code": 1,
+          "name": "create",
+          "state": "ratified"
+        },
+        {
+          "code": 2,
+          "name": "modify",
+          "state": "ratified"
+        },
+        {
+          "code": 3,
+          "name": "copy",
+          "state": "ratified"
+        },
+        {
+          "code": 4,
+          "name": "move",
+          "state": "ratified"
+        },
+        {
+          "code": 5,
+          "name": "rename",
+          "state": "ratified"
+        },
+        {
+          "code": 6,
+          "name": "delete",
+          "state": "ratified"
+        },
+        {
+          "code": 7,
+          "name": "restore",
+          "state": "ratified"
+        },
+        {
+          "code": 8,
+          "name": "group-create",
+          "state": "ratified"
+        },
+        {
+          "code": 9,
+          "name": "group-update",
+          "state": "ratified"
+        },
+        {
+          "code": 10,
+          "name": "group-delete",
+          "state": "ratified"
+        },
+        {
+          "code": 11,
+          "name": "merge-resolution",
+          "state": "ratified"
+        }
+      ],
+      "name": "operation"
+    },
+    {
+      "entries": [
+        {
+          "code": 1,
+          "name": "pass",
+          "state": "ratified"
+        },
+        {
+          "code": 2,
+          "name": "override",
+          "state": "ratified"
+        }
+      ],
+      "name": "policy-decision"
+    },
+    {
+      "entries": [
+        {
+          "code": 1,
+          "name": "branch",
+          "state": "ratified"
+        },
+        {
+          "code": 2,
+          "name": "tag",
+          "state": "ratified"
+        }
+      ],
+      "name": "ref-kind"
+    }
+  ],
+  "formatVersion": 1,
+  "registry": "ogvcs.repository-format.semantic-enums",
+  "registryVersion": 1
+}

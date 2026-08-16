@@ -1,0 +1,5451 @@
+{
+  "cases": [
+    {
+      "artifact": "scenarios/cases/attestation-signature-shape.json",
+      "code": "ATTESTATION_SIGNATURE_SHAPE_INVALID",
+      "expected": {
+        "code": "ATTESTATION_SIGNATURE_SHAPE_INVALID",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "attestation:signature-shape"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "attestation-signature-shape"
+    },
+    {
+      "artifact": "scenarios/cases/attestation-signed.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 309,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/attestation-signed.json",
+            "sha256": "a5590d45df590cf2b8976c72fc961a3c1940d3b18da0554a183b9745aed592b5"
+          },
+          "summarySha256": "6f87bf02d7ddd808f390d35546c771654bd09d62de706988e5646c91490fd7b3"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "attestation:signed"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "attestation-signed"
+    },
+    {
+      "artifact": "scenarios/cases/attestation-unsigned.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 311,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/attestation-unsigned.json",
+            "sha256": "7dfb9ab9389b5f7c08c1801ae6a116b89885c06f19fe2fb8251ecb11d19c4bac"
+          },
+          "summarySha256": "782c676e359afd59c532adf7e50401b1621bd79f6b31b3fded2374a865e0034d"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "attestation:unsigned"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "attestation-unsigned"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-budget.json",
+      "code": "BUNDLE_BUDGET_EXCEEDED",
+      "expected": {
+        "code": "BUNDLE_BUDGET_EXCEEDED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "configured-resource-preflight"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:budget"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-budget"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-closure-extra.json",
+      "code": "BUNDLE_CLOSURE_EXTRA",
+      "expected": {
+        "code": "BUNDLE_CLOSURE_EXTRA",
+        "layer": 2,
+        "result": "reject",
+        "stage": "closure-and-reference-resolution"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:closure-extra"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-closure-extra"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-closure-missing.json",
+      "code": "BUNDLE_CLOSURE_MISSING",
+      "expected": {
+        "code": "BUNDLE_CLOSURE_MISSING",
+        "layer": 2,
+        "result": "reject",
+        "stage": "closure-and-reference-resolution"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:closure-missing"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-closure-missing"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-count.json",
+      "code": "BUNDLE_SEQUENCE_INVALID",
+      "expected": {
+        "code": "BUNDLE_SEQUENCE_INVALID",
+        "layer": 1,
+        "result": "reject",
+        "stage": "sequence-shape-and-order"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:count"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-count"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-declared-accounting.json",
+      "code": "BUNDLE_BUDGET_EXCEEDED",
+      "expected": {
+        "code": "BUNDLE_BUDGET_EXCEEDED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "declared-accounting"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:declared-accounting"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-declared-accounting"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-duplicate.json",
+      "code": "BUNDLE_DUPLICATE_IDENTITY",
+      "expected": {
+        "code": "BUNDLE_DUPLICATE_IDENTITY",
+        "layer": 1,
+        "result": "reject",
+        "stage": "sequence-shape-and-order"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:duplicate"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-duplicate"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-edge-families.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 278,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/bundle-edge-families.json",
+            "sha256": "2678582500bab358ce305fb62c6fd5b6dc7a6e5552bbcf110402837eb3be383c"
+          },
+          "summarySha256": "a835adbc131466df36e6708d174155cd6a4d5ac991b1a15c2595161c53da16f8"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:every-edge-family",
+        "bundle:every-root-family"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-edge-families"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-eof.json",
+      "code": "BUNDLE_SEQUENCE_INVALID",
+      "expected": {
+        "code": "BUNDLE_SEQUENCE_INVALID",
+        "layer": 1,
+        "result": "reject",
+        "stage": "sequence-shape-and-order"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:eof"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-eof"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-export-claim.json",
+      "code": "BUNDLE_EXPORT_CLAIM_FORBIDDEN",
+      "expected": {
+        "code": "BUNDLE_EXPORT_CLAIM_FORBIDDEN",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-operation-request",
+      "obligationTags": [
+        "bundle:forbidden-claim"
+      ],
+      "operation": "validate-bundle-claim",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-export-claim"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-item-header.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 276,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/bundle-item-header.json",
+            "sha256": "b6799491f5628e28b3fa7bdd370e5b9b9b619f7b02d530dc8d71641f5fc531ba"
+          },
+          "summarySha256": "972a40fd553805c839ba3b9c38f487b6e1207b446acd4bc30e778ea320474243"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:item-header"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-item-header"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-item-logical-record.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 284,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/bundle-item-logical-record.json",
+            "sha256": "46e4c248ba04b351b1a852ad1067ce2a19bb2656a7f63e5aff4073ec68653831"
+          },
+          "summarySha256": "175c69d8dce052dc25b8c55353431bc6a109c5fd7a700e4ac89b3a2293c75825"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:item-logical-record"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-item-logical-record"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-item-object.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 276,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/bundle-item-object.json",
+            "sha256": "877534f3a0af949767413d4d8cf1e4bb340a84b144fb1f8886030f1744a0c3ac"
+          },
+          "summarySha256": "972a40fd553805c839ba3b9c38f487b6e1207b446acd4bc30e778ea320474243"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:item-object"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-item-object"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-item-root.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 274,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/bundle-item-root.json",
+            "sha256": "e51257d7116b9c0304641c38b3b854e68a74703206815b5af8dd5e8ea11631a4"
+          },
+          "summarySha256": "3503bfeaebf0d46466c126b67ff88bdd8da3ee02d6752021f4bfea4d4c3bd9f6"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:item-root"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-item-root"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-item-trailer.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 277,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/bundle-item-trailer.json",
+            "sha256": "7aac985ccc16493df8cff9bf7a88400f66fb487ba537f4701693d7c0d52d7e04"
+          },
+          "summarySha256": "b4edb2e86bf73856c294c3bdb6891351ba36375ea0b5b261af4afdc8b6561d42"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:item-trailer"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-item-trailer"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-logical-reference-preservation.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 295,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/bundle-logical-reference-preservation.json",
+            "sha256": "e786e3aa5f9a71a409e119df1b326e2fde223423a8d1ba0c4ed6360368711b94"
+          },
+          "summarySha256": "53a833d3494f1770707d9a7374b8b74d145c55d107b3d547b94ef097c975c369"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:logical-preservation"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-logical-reference-preservation"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-logical-type-1.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 279,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/bundle-logical-type-1.json",
+            "sha256": "eb2f81b0589ea5d9830acfc8c0de080bb2cabc88390fba338bf9a2615706d3a2"
+          },
+          "summarySha256": "7785bc5f5c2e012f659d907f6151bab6ad1e100f04788a1362d930eb9bb5a9c4"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:logical-type-1"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-logical-type-1"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-logical-type-2.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 279,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/bundle-logical-type-2.json",
+            "sha256": "2f96bb6c85f61908f5fcf21dc80b99efb15ec3142bdc76984709e6ebc817a648"
+          },
+          "summarySha256": "7785bc5f5c2e012f659d907f6151bab6ad1e100f04788a1362d930eb9bb5a9c4"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:logical-type-2"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-logical-type-2"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-logical-type-3.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 279,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/bundle-logical-type-3.json",
+            "sha256": "22c7f2c2f5f9884f9840b76061ae8a3cd7542e3f6d233e1497f30b98d2207524"
+          },
+          "summarySha256": "7785bc5f5c2e012f659d907f6151bab6ad1e100f04788a1362d930eb9bb5a9c4"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:logical-type-3"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-logical-type-3"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-logical-type-4.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 279,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/bundle-logical-type-4.json",
+            "sha256": "d6d9efc218f26bd4f4dd6a55c6269b40fa4f2283d8c24d00cadb9d04b3564a87"
+          },
+          "summarySha256": "7785bc5f5c2e012f659d907f6151bab6ad1e100f04788a1362d930eb9bb5a9c4"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:logical-type-4"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-logical-type-4"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-logical-type-5.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 279,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/bundle-logical-type-5.json",
+            "sha256": "65b898b604ab44ad45381a0c14eaa7aef0c11c8acdb0b7344c4cbd3374531678"
+          },
+          "summarySha256": "7785bc5f5c2e012f659d907f6151bab6ad1e100f04788a1362d930eb9bb5a9c4"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:logical-type-5"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-logical-type-5"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-logical-type-6.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 279,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/bundle-logical-type-6.json",
+            "sha256": "cbe2344ef10f7bf031166f875f2bd4e883620847459f92cd44e6b746d03dc3c1"
+          },
+          "summarySha256": "7785bc5f5c2e012f659d907f6151bab6ad1e100f04788a1362d930eb9bb5a9c4"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:logical-type-6"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-logical-type-6"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-logical-type-7.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 279,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/bundle-logical-type-7.json",
+            "sha256": "645f163c69e7e8ec0cba6755995c6ebd3c7f170d2da42e9a1b467a1056717d63"
+          },
+          "summarySha256": "7785bc5f5c2e012f659d907f6151bab6ad1e100f04788a1362d930eb9bb5a9c4"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:logical-type-7"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-logical-type-7"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-logical-type-8.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 279,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/bundle-logical-type-8.json",
+            "sha256": "5d56e5bbd95dfd47ae7e33712a9a63fda5eaa2888d4ca1dfe1b7f3c889286479"
+          },
+          "summarySha256": "7785bc5f5c2e012f659d907f6151bab6ad1e100f04788a1362d930eb9bb5a9c4"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:logical-type-8"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-logical-type-8"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-logical-type-9.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 279,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/bundle-logical-type-9.json",
+            "sha256": "77aded7205c60f0dd8c0d5ca8a3d3070dbc4ebcfbb733f3b1f5f65c0499cbfee"
+          },
+          "summarySha256": "7785bc5f5c2e012f659d907f6151bab6ad1e100f04788a1362d930eb9bb5a9c4"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:logical-type-9"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-logical-type-9"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-mode.json",
+      "code": "BUNDLE_MODE_UNSUPPORTED",
+      "expected": {
+        "code": "BUNDLE_MODE_UNSUPPORTED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "sequence-shape-and-order"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:mode"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-mode"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-multi-root-disambiguation.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 290,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/bundle-multi-root-disambiguation.json",
+            "sha256": "39470a1b51e4cf3848b40291407edf56b77b8f94a273618a68e00c944af63d15"
+          },
+          "summarySha256": "f943da00486d60a0f746ac2c212582e810d6798a3611ae4cc531600fff314415"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:multi-root-sort"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-multi-root-disambiguation"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-object-id.json",
+      "code": "OBJECT_ID_MISMATCH",
+      "expected": {
+        "code": "OBJECT_ID_MISMATCH",
+        "layer": 1,
+        "result": "reject",
+        "stage": "declared-identity"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:object-id"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-object-id"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-object-kind-1.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 278,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/bundle-object-kind-1.json",
+            "sha256": "d3cd75143193f6a3ef2c0bd5b1b46bed878b50e58d4c4d6ee7ce3ad85b438708"
+          },
+          "summarySha256": "768849bb9e67264de48fe8d7de8a6fc254ad0ccfe27169f6b95883652cdbc19c"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:edge-object-kind-1"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-object-kind-1"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-object-kind-10.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 279,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/bundle-object-kind-10.json",
+            "sha256": "ed33b0285ab60acde1522686d023b220d52553f7dddb1d7fa8f4fee24e5688ee"
+          },
+          "summarySha256": "f9dff2810c67e7666eae81d0ccf9976e1ec80053028800c3d6fe5c27f04136bc"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:edge-object-kind-10"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-object-kind-10"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-object-kind-11.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 279,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/bundle-object-kind-11.json",
+            "sha256": "bf68f90caaa9175dda81828f30b1b034f26be655292f4550c99af997ec3744f4"
+          },
+          "summarySha256": "e74de595504619e43e036b8b1fc6ab78a39133cf7918f832b48a8c4cc3fd407c"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:edge-object-kind-11"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-object-kind-11"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-object-kind-2.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 278,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/bundle-object-kind-2.json",
+            "sha256": "cd04909f98cb93c1fddf03b50889a01698dde0d099e012026c6406340063d32b"
+          },
+          "summarySha256": "b6b5f0438104406df10d2440e2ff3cecffdcaf3cb22a1d0aca96733c5c689781"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:edge-object-kind-2"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-object-kind-2"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-object-kind-3.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 278,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/bundle-object-kind-3.json",
+            "sha256": "1114454d8b55a346dfa3f2727cace8e8ff66d7fefa13c9fb529717022e579fdb"
+          },
+          "summarySha256": "7599a4e7027018ac75d93060e7efd6becd4146dedfef2161644f5c03fbe0cf10"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:edge-object-kind-3"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-object-kind-3"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-object-kind-4.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 278,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/bundle-object-kind-4.json",
+            "sha256": "a4313213e57228d7ae00c232432e9a9cf913ac544b65d3c289642c744a53d1d7"
+          },
+          "summarySha256": "0ff22a74506a5179b7e087ce3e7bbf0b2dfb161c3dd93b0e69a73cc5fbe063ae"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:edge-object-kind-4"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-object-kind-4"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-object-kind-5.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 278,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/bundle-object-kind-5.json",
+            "sha256": "7b0dd7a0b14f0882d3eb0486a6ca6631aa53f68a3bbc811e8d2de0526ab86527"
+          },
+          "summarySha256": "e74de595504619e43e036b8b1fc6ab78a39133cf7918f832b48a8c4cc3fd407c"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:edge-object-kind-5"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-object-kind-5"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-object-kind-6.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 278,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/bundle-object-kind-6.json",
+            "sha256": "0e19d15da810e1c0270a3e56524ccff79568869a7b993cde9cf505f2d677d94e"
+          },
+          "summarySha256": "3ee8100c2a31f4944b893cb6e92c5f59c82b34765558c8a182537cb449ab7887"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:edge-object-kind-6"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-object-kind-6"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-object-kind-7.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 278,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/bundle-object-kind-7.json",
+            "sha256": "007e17cf96a6318b32f1ccd356a1d2938caf4124da11e78023cce8278df238df"
+          },
+          "summarySha256": "b8eef1ec6f6d28e8d3d6fcff9f4420a8b89b44c36e810212486fdbacf7639468"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:edge-object-kind-7"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-object-kind-7"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-object-kind-8.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 278,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/bundle-object-kind-8.json",
+            "sha256": "aa7804230929bdd5ba190d4d5a62730ed7840980b0095ebef971775af8250c3f"
+          },
+          "summarySha256": "f9dff2810c67e7666eae81d0ccf9976e1ec80053028800c3d6fe5c27f04136bc"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:edge-object-kind-8"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-object-kind-8"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-object-kind-9.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 278,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/bundle-object-kind-9.json",
+            "sha256": "09d6e0e04a49c31128e2b6e0dd8335565accaae669c6982c1728ed806795647d"
+          },
+          "summarySha256": "0ff22a74506a5179b7e087ce3e7bbf0b2dfb161c3dd93b0e69a73cc5fbe063ae"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:edge-object-kind-9"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-object-kind-9"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-ordinal.json",
+      "code": "BUNDLE_SEQUENCE_INVALID",
+      "expected": {
+        "code": "BUNDLE_SEQUENCE_INVALID",
+        "layer": 1,
+        "result": "reject",
+        "stage": "sequence-shape-and-order"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:ordinal"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-ordinal"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-record-id.json",
+      "code": "BUNDLE_RECORD_ID_MISMATCH",
+      "expected": {
+        "code": "BUNDLE_RECORD_ID_MISMATCH",
+        "layer": 1,
+        "result": "reject",
+        "stage": "declared-identity"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:record-id"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-record-id"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-root-invalid.json",
+      "code": "BUNDLE_ROOT_INVALID",
+      "expected": {
+        "code": "BUNDLE_ROOT_INVALID",
+        "layer": 2,
+        "result": "reject",
+        "stage": "closure-and-reference-resolution"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:root-invalid"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-root-invalid"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-root-kind-logical-record.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 289,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/bundle-root-kind-logical-record.json",
+            "sha256": "f0dd478716f856a9658285aef083f4103711abdae8b3488e2c23731ee05e3965"
+          },
+          "summarySha256": "9fe611158fe608088d527c9681718118a466bf51a1fb342549c340ea581adafc"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:root-kind-logical-record"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-root-kind-logical-record"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-root-kind-object.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 281,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/bundle-root-kind-object.json",
+            "sha256": "40064d5aa6e34b009d542ec2ab17e51cb6d0d4362b155dd82d8c96cbe3770a74"
+          },
+          "summarySha256": "75a59efd72cd4701ba7c168565d221c6932e40c71dab53f7f4438de887d2352a"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:root-kind-object"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-root-kind-object"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-sort-order.json",
+      "code": "BUNDLE_SEQUENCE_INVALID",
+      "expected": {
+        "code": "BUNDLE_SEQUENCE_INVALID",
+        "layer": 1,
+        "result": "reject",
+        "stage": "sequence-shape-and-order"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:sort"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-sort-order"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-trailer.json",
+      "code": "BUNDLE_TRAILER_MISMATCH",
+      "expected": {
+        "code": "BUNDLE_TRAILER_MISMATCH",
+        "layer": 1,
+        "result": "reject",
+        "stage": "transcript-authentication"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:trailer"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-trailer"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-wrong-kind.json",
+      "code": "OBJECT_REFERENCE_KIND_MISMATCH",
+      "expected": {
+        "code": "OBJECT_REFERENCE_KIND_MISMATCH",
+        "layer": 2,
+        "result": "reject",
+        "stage": "closure-and-reference-resolution"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:wrong-kind"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-wrong-kind"
+    },
+    {
+      "artifact": "scenarios/cases/bundle-zero-sections.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 278,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/bundle-zero-sections.json",
+            "sha256": "dd456921cddb00c158d777be4c528999bb924b4688491a344186c33cd32b7045"
+          },
+          "summarySha256": "85a610ee7700e4c59613c044122ed2e082a2cd64e6b55c92e08af29b8c1c3a0a"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "bundle:zero-sections"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-10",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "bundle-zero-sections"
+    },
+    {
+      "artifact": "scenarios/cases/conflict-choice-base.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 305,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/conflict-choice-base.json",
+            "sha256": "d93550f4755bd867ee35cef1f9887fbb0e83216b2397fbf4fcefd35d76e15ba4"
+          },
+          "summarySha256": "2de87a76d5547ec43a0fef797c044a11f2f19088c199431ae4fdd5f21fdbe823"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "conflict:choice-base",
+        "conflict:resolved"
+      ],
+      "operation": "validate-repository",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "conflict-choice-base"
+    },
+    {
+      "artifact": "scenarios/cases/conflict-choice-custom.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 307,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/conflict-choice-custom.json",
+            "sha256": "57d1f388372709f34f5f1c36325efbde85bddbdd51300cfa0e523aa8e445e54c"
+          },
+          "summarySha256": "f5fcca31b545a3f7db571943e67609b77564884c473d1f46bfef583a23679388"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "conflict:choice-custom",
+        "conflict:resolved"
+      ],
+      "operation": "validate-repository",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "conflict-choice-custom"
+    },
+    {
+      "artifact": "scenarios/cases/conflict-choice-delete.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 307,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/conflict-choice-delete.json",
+            "sha256": "a91e10d48a19481fce5c949143b97f30b26df402ccc7e15ee0ac5b256f984059"
+          },
+          "summarySha256": "02972c84b7a4b387ce05625ac5499036509c9d3b0c6a0944ee9576ee7804c854"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "conflict:choice-delete",
+        "conflict:resolved"
+      ],
+      "operation": "validate-repository",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "conflict-choice-delete"
+    },
+    {
+      "artifact": "scenarios/cases/conflict-choice-left.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 305,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/conflict-choice-left.json",
+            "sha256": "213943990623ae58dbaca1543a3d22c86764451ea7890aad3df99272d122be4f"
+          },
+          "summarySha256": "3bf6628e121d59830f8dbf588576a80bff4f818c2767201be1a66bf1adffbaa1"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "conflict:choice-left",
+        "conflict:resolved"
+      ],
+      "operation": "validate-repository",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "conflict-choice-left"
+    },
+    {
+      "artifact": "scenarios/cases/conflict-choice-right.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 306,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/conflict-choice-right.json",
+            "sha256": "4f47746837e844ebea1835f035f534219cb39c0af069db7cc0c28bfe91e1b128"
+          },
+          "summarySha256": "79f6c9ffd43f36744e550dd04d8268f474f8ae14bec65ae6441db1989bffddf0"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "conflict:choice-right",
+        "conflict:resolved"
+      ],
+      "operation": "validate-repository",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "conflict-choice-right"
+    },
+    {
+      "artifact": "scenarios/cases/conflict-content-resolved.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 310,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/conflict-content-resolved.json",
+            "sha256": "3488b407a0668f4ecbbe85ac22f59280febfa6d9b16b563be1b3da451be86271"
+          },
+          "summarySha256": "b328aff5f2a8928d61764210fcedb1dcbf5316f08b9586606dc6b19255a30f34"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "conflict:kind-content",
+        "conflict:resolved"
+      ],
+      "operation": "validate-repository",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "conflict-content-resolved"
+    },
+    {
+      "artifact": "scenarios/cases/conflict-content-unresolved-shelf.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 321,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/conflict-content-unresolved-shelf.json",
+            "sha256": "66349090666c089733fc474bbf58cd53ef5456d59da432257960027143523364"
+          },
+          "summarySha256": "40e5b228d6677cd1b6d96e636405d0b9ab5e0dcfc3c1204273d8545bfdb644bd"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "conflict:kind-content",
+        "conflict:unresolved"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "conflict-content-unresolved-shelf"
+    },
+    {
+      "artifact": "scenarios/cases/conflict-custom-driver.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 307,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/conflict-custom-driver.json",
+            "sha256": "36947abdc8a38983ef5f7a75949f1b1ccf42dd97d0d521731a9e916c0270bca9"
+          },
+          "summarySha256": "aec9fa497dc0cac51d0b9ac01d209b455ba242a83f5e606bcd370adac8d1c0cb"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "conflict:custom-driver",
+        "conflict:resolved"
+      ],
+      "operation": "validate-repository",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "conflict-custom-driver"
+    },
+    {
+      "artifact": "scenarios/cases/conflict-delete-modify-resolved.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 316,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/conflict-delete-modify-resolved.json",
+            "sha256": "25459bab19b9587eda8ae3c84c062ebfe66d75018a5484ec80012a51bb93757b"
+          },
+          "summarySha256": "4b9d7ad3482b9eca9eae406a6b42219437afb0897e7945342333794e39107cb2"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "conflict:kind-delete-modify",
+        "conflict:resolved"
+      ],
+      "operation": "validate-repository",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "conflict-delete-modify-resolved"
+    },
+    {
+      "artifact": "scenarios/cases/conflict-delete-modify-unresolved-shelf.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 327,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/conflict-delete-modify-unresolved-shelf.json",
+            "sha256": "f0b789be836435d8e36b1f2e7d151547a2032f1336eb9145f21564cb889969a6"
+          },
+          "summarySha256": "a0df5a53a44e5d35d3791472174d3385270ee2b620e3af41b87b5f92ea4ee6b0"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "conflict:kind-delete-modify",
+        "conflict:unresolved"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "conflict-delete-modify-unresolved-shelf"
+    },
+    {
+      "artifact": "scenarios/cases/conflict-divergent-move-resolved.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 317,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/conflict-divergent-move-resolved.json",
+            "sha256": "c27b7191937ea890e4316fc1e2a0415c92b2eb335db681d96bc9f6522bcb7567"
+          },
+          "summarySha256": "9d17871f9773533ea58902872588fdb3a51a2105ded91718cfa8ff07d13c1dee"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "conflict:kind-divergent-move",
+        "conflict:resolved"
+      ],
+      "operation": "validate-repository",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "conflict-divergent-move-resolved"
+    },
+    {
+      "artifact": "scenarios/cases/conflict-divergent-move-unresolved-shelf.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 328,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/conflict-divergent-move-unresolved-shelf.json",
+            "sha256": "62d0fe96f770659d0a577ee04396e5c1c2950137e4afc5c1eea70a35da3f53dd"
+          },
+          "summarySha256": "408b2ccaddd2cc034903c02dcb15a30e02122699b7982751325f0b59741f22aa"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "conflict:kind-divergent-move",
+        "conflict:unresolved"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "conflict-divergent-move-unresolved-shelf"
+    },
+    {
+      "artifact": "scenarios/cases/conflict-group-resolved.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 308,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/conflict-group-resolved.json",
+            "sha256": "1dc09b058ab71b78f6d485e20a0c7f3599400bf718b73f790056b9996e8d7ec7"
+          },
+          "summarySha256": "6471f34eb722f156cd55f6b07935d251d4801f9d023679cbaaa95cebd6b73f0f"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "conflict:kind-group",
+        "conflict:resolved"
+      ],
+      "operation": "validate-repository",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "conflict-group-resolved"
+    },
+    {
+      "artifact": "scenarios/cases/conflict-group-unresolved-shelf.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 319,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/conflict-group-unresolved-shelf.json",
+            "sha256": "b83a5128e75a55dbcc56ffed868c4711ec67373b01b460044e926e547f86090e"
+          },
+          "summarySha256": "cb1f3200e54beff696c533e936339e7d19c741d0dfba54702f0f4b04326741bd"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "conflict:kind-group",
+        "conflict:unresolved"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "conflict-group-unresolved-shelf"
+    },
+    {
+      "artifact": "scenarios/cases/conflict-id-mismatch.json",
+      "code": "CONFLICT_ID_MISMATCH",
+      "expected": {
+        "code": "CONFLICT_ID_MISMATCH",
+        "layer": 2,
+        "result": "reject",
+        "stage": "declared-identity"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "conflict:id-mismatch"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "conflict-id-mismatch"
+    },
+    {
+      "artifact": "scenarios/cases/conflict-mode-resolved.json",
+      "code": "SCHEMA_FIELD_INVALID",
+      "expected": {
+        "code": "SCHEMA_FIELD_INVALID",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "conflict:kind-mode",
+        "conflict:resolved"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "conflict-mode-resolved"
+    },
+    {
+      "artifact": "scenarios/cases/conflict-mode-unresolved-shelf.json",
+      "code": "SCHEMA_FIELD_INVALID",
+      "expected": {
+        "code": "SCHEMA_FIELD_INVALID",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "conflict:kind-mode",
+        "conflict:unresolved"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "conflict-mode-unresolved-shelf"
+    },
+    {
+      "artifact": "scenarios/cases/conflict-path-collision-resolved.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 317,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/conflict-path-collision-resolved.json",
+            "sha256": "51d10a7b890cd2ed7642a985d2220e874b5243e08ce573704480c6d0c9e4ce62"
+          },
+          "summarySha256": "cded4f8b1cb4ae9cc61726fb3a6490a0c5d3d80fb26e37e79878432d578fecb6"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "conflict:kind-path-collision",
+        "conflict:resolved"
+      ],
+      "operation": "validate-repository",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "conflict-path-collision-resolved"
+    },
+    {
+      "artifact": "scenarios/cases/conflict-path-collision-unresolved-shelf.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 328,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/conflict-path-collision-unresolved-shelf.json",
+            "sha256": "b771882101ffbded44628d5b40e7c9299cf66af00494badd1f0c256ffafb0214"
+          },
+          "summarySha256": "7092bd9fb860d1ebd240811b4d68d6b16c3cf453118a61afb3fdf9da3757aa75"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "conflict:kind-path-collision",
+        "conflict:unresolved"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "conflict-path-collision-unresolved-shelf"
+    },
+    {
+      "artifact": "scenarios/cases/conflict-policy-resolved.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 309,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/conflict-policy-resolved.json",
+            "sha256": "f15a1731d1f2d6eda0c9cefd3a34f207b4b66a0ad1a5444a84d853379f84294e"
+          },
+          "summarySha256": "33a8b7a1e128a43b8a7aec311b2221dbf0d2753d246e3281cd090ace6212b6de"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "conflict:kind-policy",
+        "conflict:resolved"
+      ],
+      "operation": "validate-repository",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "conflict-policy-resolved"
+    },
+    {
+      "artifact": "scenarios/cases/conflict-policy-unresolved-shelf.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 320,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/conflict-policy-unresolved-shelf.json",
+            "sha256": "b07c5c5f8a272b26a965060eba07f746ed8f7c8b83988c48be585a8015931bf6"
+          },
+          "summarySha256": "f5aaa205eea394c7043f904c4a4b66f4b1def10c8279d105cc15a754ed6af1b7"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "conflict:kind-policy",
+        "conflict:unresolved"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "conflict-policy-unresolved-shelf"
+    },
+    {
+      "artifact": "scenarios/cases/conflict-resolution-mismatch.json",
+      "code": "CONFLICT_RESOLUTION_MISMATCH",
+      "expected": {
+        "code": "CONFLICT_RESOLUTION_MISMATCH",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "conflict:resolution-mismatch"
+      ],
+      "operation": "validate-repository",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "conflict-resolution-mismatch"
+    },
+    {
+      "artifact": "scenarios/cases/conflict-type-resolved.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 307,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/conflict-type-resolved.json",
+            "sha256": "2150e03f742ba8d6c3a1b1c89b1247c5bc42fef0842553c735a302ce04abe32e"
+          },
+          "summarySha256": "cd4b509674ad4094e17594334fe38747402837fd7c55efa65563ac030c2011d3"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "conflict:kind-type",
+        "conflict:resolved"
+      ],
+      "operation": "validate-repository",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "conflict-type-resolved"
+    },
+    {
+      "artifact": "scenarios/cases/conflict-type-unresolved-shelf.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 318,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/conflict-type-unresolved-shelf.json",
+            "sha256": "68827ec23c60aeb62f15b149b079f9221cbeea6b921baaed9c4642af58e571d4"
+          },
+          "summarySha256": "7a01fdce4afa02da0ea69f8f96ea7fba1b448938c3bee52a1c323c6811c7dbd0"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "conflict:kind-type",
+        "conflict:unresolved"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "conflict-type-unresolved-shelf"
+    },
+    {
+      "artifact": "scenarios/cases/conflict-unresolved-published.json",
+      "code": "CONFLICT_UNRESOLVED_PUBLISHED",
+      "expected": {
+        "code": "CONFLICT_UNRESOLVED_PUBLISHED",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "conflict:unresolved-published"
+      ],
+      "operation": "validate-repository",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "conflict-unresolved-published"
+    },
+    {
+      "artifact": "scenarios/cases/error-cbor-non-canonical.json",
+      "code": "CBOR_NON_CANONICAL",
+      "expected": {
+        "code": "CBOR_NON_CANONICAL",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "materialization": "byte-materialized-stable-error-artifact",
+      "obligationTags": [
+        "error:CBOR_NON_CANONICAL"
+      ],
+      "operation": "canonical-scan",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "error-cbor-non-canonical"
+    },
+    {
+      "artifact": "scenarios/cases/error-cbor-trailing-bytes.json",
+      "code": "CBOR_TRAILING_BYTES",
+      "expected": {
+        "code": "CBOR_TRAILING_BYTES",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "materialization": "byte-materialized-stable-error-artifact",
+      "obligationTags": [
+        "error:CBOR_TRAILING_BYTES"
+      ],
+      "operation": "canonical-scan",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "error-cbor-trailing-bytes"
+    },
+    {
+      "artifact": "scenarios/cases/error-cbor-truncated.json",
+      "code": "CBOR_TRUNCATED",
+      "expected": {
+        "code": "CBOR_TRUNCATED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "materialization": "byte-materialized-stable-error-artifact",
+      "obligationTags": [
+        "error:CBOR_TRUNCATED"
+      ],
+      "operation": "canonical-scan",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "error-cbor-truncated"
+    },
+    {
+      "artifact": "scenarios/cases/error-changeset-transition-invalid.json",
+      "code": "CHANGESET_TRANSITION_INVALID",
+      "expected": {
+        "code": "CHANGESET_TRANSITION_INVALID",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "error:CHANGESET_TRANSITION_INVALID"
+      ],
+      "operation": "replay-change-set",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "error-changeset-transition-invalid"
+    },
+    {
+      "artifact": "scenarios/cases/error-conflict-subject-invalid.json",
+      "code": "CONFLICT_SUBJECT_INVALID",
+      "expected": {
+        "code": "CONFLICT_SUBJECT_INVALID",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "error:CONFLICT_SUBJECT_INVALID"
+      ],
+      "operation": "validate-repository",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "error-conflict-subject-invalid"
+    },
+    {
+      "artifact": "scenarios/cases/error-extension-key-invalid.json",
+      "code": "EXTENSION_KEY_INVALID",
+      "expected": {
+        "code": "EXTENSION_KEY_INVALID",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "materialization": "byte-materialized-stable-error-artifact",
+      "obligationTags": [
+        "error:EXTENSION_KEY_INVALID"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "error-extension-key-invalid"
+    },
+    {
+      "artifact": "scenarios/cases/error-fileid-allocation-exhausted.json",
+      "code": "FILEID_ALLOCATION_EXHAUSTED",
+      "expected": {
+        "code": "FILEID_ALLOCATION_EXHAUSTED",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-operation-request",
+      "obligationTags": [
+        "error:FILEID_ALLOCATION_EXHAUSTED"
+      ],
+      "operation": "allocate-file-id",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "error-fileid-allocation-exhausted"
+    },
+    {
+      "artifact": "scenarios/cases/error-fileid-entropy-unavailable.json",
+      "code": "FILEID_ENTROPY_UNAVAILABLE",
+      "expected": {
+        "code": "FILEID_ENTROPY_UNAVAILABLE",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-operation-request",
+      "obligationTags": [
+        "error:FILEID_ENTROPY_UNAVAILABLE"
+      ],
+      "operation": "allocate-file-id",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "error-fileid-entropy-unavailable"
+    },
+    {
+      "artifact": "scenarios/cases/error-fileid-lifetime-evidence-invalid.json",
+      "code": "FILEID_LIFETIME_EVIDENCE_INVALID",
+      "expected": {
+        "code": "FILEID_LIFETIME_EVIDENCE_INVALID",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "error:FILEID_LIFETIME_EVIDENCE_INVALID"
+      ],
+      "operation": "validate-repository",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "error-fileid-lifetime-evidence-invalid"
+    },
+    {
+      "artifact": "scenarios/cases/error-fixture-content-unavailable.json",
+      "code": "FIXTURE_CONTENT_UNAVAILABLE",
+      "expected": {
+        "code": "FIXTURE_CONTENT_UNAVAILABLE",
+        "layer": 3,
+        "result": "reject",
+        "stage": "closure-and-reference-resolution"
+      },
+      "implementationScope": [
+        "javascript"
+      ],
+      "materialization": "executable-fixture-adapter-constructor",
+      "obligationTags": [
+        "error:FIXTURE_CONTENT_UNAVAILABLE",
+        "fixture-adapter:content-unavailable"
+      ],
+      "operation": "adapt-fixture",
+      "requirementIds": [
+        "OGVCS-002-AC-04",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "error-fixture-content-unavailable"
+    },
+    {
+      "artifact": "scenarios/cases/error-fixture-mapping-missing.json",
+      "code": "FIXTURE_MAPPING_MISSING",
+      "expected": {
+        "code": "FIXTURE_MAPPING_MISSING",
+        "layer": 3,
+        "result": "reject",
+        "stage": "closure-and-reference-resolution"
+      },
+      "implementationScope": [
+        "javascript"
+      ],
+      "materialization": "executable-fixture-adapter-constructor",
+      "obligationTags": [
+        "error:FIXTURE_MAPPING_MISSING",
+        "fixture-adapter:mapping-missing"
+      ],
+      "operation": "adapt-fixture",
+      "requirementIds": [
+        "OGVCS-002-AC-04",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "error-fixture-mapping-missing"
+    },
+    {
+      "artifact": "scenarios/cases/error-fixture-native-binding-missing.json",
+      "code": "FIXTURE_NATIVE_BINDING_MISSING",
+      "expected": {
+        "code": "FIXTURE_NATIVE_BINDING_MISSING",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "implementationScope": [
+        "javascript"
+      ],
+      "materialization": "executable-fixture-adapter-constructor",
+      "obligationTags": [
+        "error:FIXTURE_NATIVE_BINDING_MISSING",
+        "fixture-adapter:native-binding-missing"
+      ],
+      "operation": "adapt-fixture",
+      "requirementIds": [
+        "OGVCS-002-AC-04",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "error-fixture-native-binding-missing"
+    },
+    {
+      "artifact": "scenarios/cases/error-fixture-schema-unsupported.json",
+      "code": "FIXTURE_SCHEMA_UNSUPPORTED",
+      "expected": {
+        "code": "FIXTURE_SCHEMA_UNSUPPORTED",
+        "layer": 3,
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "implementationScope": [
+        "javascript"
+      ],
+      "materialization": "executable-fixture-adapter-constructor",
+      "obligationTags": [
+        "error:FIXTURE_SCHEMA_UNSUPPORTED",
+        "fixture-adapter:schema-unsupported"
+      ],
+      "operation": "adapt-fixture",
+      "requirementIds": [
+        "OGVCS-002-AC-04",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "error-fixture-schema-unsupported"
+    },
+    {
+      "artifact": "scenarios/cases/error-fixture-semantic-invalid.json",
+      "code": "FIXTURE_SEMANTIC_INVALID",
+      "expected": {
+        "code": "FIXTURE_SEMANTIC_INVALID",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "implementationScope": [
+        "javascript"
+      ],
+      "materialization": "executable-fixture-adapter-constructor",
+      "obligationTags": [
+        "error:FIXTURE_SEMANTIC_INVALID",
+        "fixture-adapter:semantic-invalid"
+      ],
+      "operation": "adapt-fixture",
+      "requirementIds": [
+        "OGVCS-002-AC-04",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "error-fixture-semantic-invalid"
+    },
+    {
+      "artifact": "scenarios/cases/error-limit-memory.json",
+      "code": "LIMIT_MEMORY",
+      "expected": {
+        "code": "LIMIT_MEMORY",
+        "layer": 1,
+        "result": "reject",
+        "stage": "configured-resource-preflight"
+      },
+      "materialization": "executable-configured-resource-constructor",
+      "obligationTags": [
+        "error:LIMIT_MEMORY"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "error-limit-memory"
+    },
+    {
+      "artifact": "scenarios/cases/error-limit-scratch.json",
+      "code": "LIMIT_SCRATCH",
+      "expected": {
+        "code": "LIMIT_SCRATCH",
+        "layer": 1,
+        "result": "reject",
+        "stage": "configured-resource-preflight"
+      },
+      "materialization": "executable-configured-resource-constructor",
+      "obligationTags": [
+        "error:LIMIT_SCRATCH"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "error-limit-scratch"
+    },
+    {
+      "artifact": "scenarios/cases/error-limit-time.json",
+      "code": "LIMIT_TIME",
+      "expected": {
+        "code": "LIMIT_TIME",
+        "layer": 1,
+        "result": "reject",
+        "stage": "configured-resource-preflight"
+      },
+      "materialization": "executable-configured-resource-constructor",
+      "obligationTags": [
+        "error:LIMIT_TIME"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "error-limit-time"
+    },
+    {
+      "artifact": "scenarios/cases/error-logical-record-type-unsupported.json",
+      "code": "LOGICAL_RECORD_TYPE_UNSUPPORTED",
+      "expected": {
+        "code": "LOGICAL_RECORD_TYPE_UNSUPPORTED",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "materialization": "byte-materialized-bundle-case-specific",
+      "obligationTags": [
+        "error:LOGICAL_RECORD_TYPE_UNSUPPORTED"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "error-logical-record-type-unsupported"
+    },
+    {
+      "artifact": "scenarios/cases/error-object-kind-unsupported.json",
+      "code": "OBJECT_KIND_UNSUPPORTED",
+      "expected": {
+        "code": "OBJECT_KIND_UNSUPPORTED",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "materialization": "byte-materialized-stable-error-artifact",
+      "obligationTags": [
+        "error:OBJECT_KIND_UNSUPPORTED"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "error-object-kind-unsupported"
+    },
+    {
+      "artifact": "scenarios/cases/error-object-reference-format-unsupported.json",
+      "code": "OBJECT_REFERENCE_FORMAT_UNSUPPORTED",
+      "expected": {
+        "code": "OBJECT_REFERENCE_FORMAT_UNSUPPORTED",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "materialization": "byte-materialized-stable-error-artifact",
+      "obligationTags": [
+        "error:OBJECT_REFERENCE_FORMAT_UNSUPPORTED"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "error-object-reference-format-unsupported"
+    },
+    {
+      "artifact": "scenarios/cases/error-repository-descriptor-mismatch.json",
+      "code": "REPOSITORY_DESCRIPTOR_MISMATCH",
+      "expected": {
+        "code": "REPOSITORY_DESCRIPTOR_MISMATCH",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "error:REPOSITORY_DESCRIPTOR_MISMATCH"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "error-repository-descriptor-mismatch"
+    },
+    {
+      "artifact": "scenarios/cases/error-schema-field-unknown.json",
+      "code": "SCHEMA_FIELD_UNKNOWN",
+      "expected": {
+        "code": "SCHEMA_FIELD_UNKNOWN",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "materialization": "byte-materialized-stable-error-artifact",
+      "obligationTags": [
+        "error:SCHEMA_FIELD_UNKNOWN"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "error-schema-field-unknown"
+    },
+    {
+      "artifact": "scenarios/cases/fileid-ancestral-restore.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 301,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/fileid-ancestral-restore.json",
+            "sha256": "c2fe058ee11e1d6033b563c8c40428e768b8a7f5d9a7b1b665b2e62678f365cb"
+          },
+          "summarySha256": "b81b80aeb28555ee731a24efd078327115a81b0962b738dbb1df457388e21bba"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "fileid:restore-ancestry"
+      ],
+      "operation": "replay-change-set",
+      "requirementIds": [
+        "OGVCS-002-AC-07",
+        "OGVCS-002-FR-09",
+        "OGVCS-002-FR-11"
+      ],
+      "scenarioId": "fileid-ancestral-restore"
+    },
+    {
+      "artifact": "scenarios/cases/fileid-concurrent-loser.json",
+      "code": "FILEID_ALLOCATION_COLLISION",
+      "expected": {
+        "code": "FILEID_ALLOCATION_COLLISION",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-operation-request",
+      "obligationTags": [
+        "fileid:concurrent-loser-state"
+      ],
+      "operation": "allocate-file-id",
+      "requirementIds": [
+        "OGVCS-002-AC-07",
+        "OGVCS-002-FR-11"
+      ],
+      "scenarioId": "fileid-concurrent-loser"
+    },
+    {
+      "artifact": "scenarios/cases/fileid-copy-fresh.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 294,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/fileid-copy-fresh.json",
+            "sha256": "4b9f4a21f6b317c77e99a4b15275295efa45bd5c7518d15df913ec29f57fad84"
+          },
+          "summarySha256": "ab9771d88a10b03938a325b29d2d6f70c33f56d2a5a97809ed8def1df46dc9d1"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "fileid:copy"
+      ],
+      "operation": "replay-change-set",
+      "requirementIds": [
+        "OGVCS-002-AC-07",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "fileid-copy-fresh"
+    },
+    {
+      "artifact": "scenarios/cases/fileid-copy-reuse.json",
+      "code": "FILEID_ALREADY_CONSUMED",
+      "expected": {
+        "code": "FILEID_ALREADY_CONSUMED",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "fileid:copy-reuse"
+      ],
+      "operation": "replay-change-set",
+      "requirementIds": [
+        "OGVCS-002-AC-07",
+        "OGVCS-002-FR-11"
+      ],
+      "scenarioId": "fileid-copy-reuse"
+    },
+    {
+      "artifact": "scenarios/cases/fileid-create-reuse.json",
+      "code": "FILEID_ALREADY_CONSUMED",
+      "expected": {
+        "code": "FILEID_ALREADY_CONSUMED",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "fileid:create-reuse"
+      ],
+      "operation": "replay-change-set",
+      "requirementIds": [
+        "OGVCS-002-AC-07",
+        "OGVCS-002-FR-11"
+      ],
+      "scenarioId": "fileid-create-reuse"
+    },
+    {
+      "artifact": "scenarios/cases/fileid-cross-repository-proof.json",
+      "code": "FILEID_CROSS_REPOSITORY_PROOF",
+      "expected": {
+        "code": "FILEID_CROSS_REPOSITORY_PROOF",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "fileid:cross-repository"
+      ],
+      "operation": "replay-change-set",
+      "requirementIds": [
+        "OGVCS-002-AC-07",
+        "OGVCS-002-FR-11"
+      ],
+      "scenarioId": "fileid-cross-repository-proof"
+    },
+    {
+      "artifact": "scenarios/cases/fileid-delete-recreate-reuse.json",
+      "code": "FILEID_ALREADY_CONSUMED",
+      "expected": {
+        "code": "FILEID_ALREADY_CONSUMED",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "fileid:delete-recreate"
+      ],
+      "operation": "replay-change-set",
+      "requirementIds": [
+        "OGVCS-002-AC-07",
+        "OGVCS-002-FR-11"
+      ],
+      "scenarioId": "fileid-delete-recreate-reuse"
+    },
+    {
+      "artifact": "scenarios/cases/fileid-duplicate-expanded-tree.json",
+      "code": "FILEID_DUPLICATE_IN_TREE",
+      "expected": {
+        "code": "FILEID_DUPLICATE_IN_TREE",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "fileid:duplicate"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-07",
+        "OGVCS-002-FR-11"
+      ],
+      "scenarioId": "fileid-duplicate-expanded-tree"
+    },
+    {
+      "artifact": "scenarios/cases/fileid-import-conflict.json",
+      "code": "FILEID_IMPORT_MAPPING_CONFLICT",
+      "expected": {
+        "code": "FILEID_IMPORT_MAPPING_CONFLICT",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-operation-request",
+      "obligationTags": [
+        "fileid:import-conflict"
+      ],
+      "operation": "import-file-id",
+      "requirementIds": [
+        "OGVCS-002-AC-07",
+        "OGVCS-002-FR-11"
+      ],
+      "scenarioId": "fileid-import-conflict"
+    },
+    {
+      "artifact": "scenarios/cases/fileid-import-lost-ack-retry.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 258,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/fileid-import-lost-ack-retry.json",
+            "sha256": "5e5cf04cd7eaef8921c355a353b1ca9b15265d15102ce132b177ad6178730f07"
+          },
+          "summarySha256": "af8dcf19363d8969cbf002db10d66ab43425a1772f97199bdf8743dbe795bd66"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-operation-request",
+      "obligationTags": [
+        "fileid:import-retry"
+      ],
+      "operation": "import-file-id",
+      "requirementIds": [
+        "OGVCS-002-AC-07",
+        "OGVCS-002-FR-09",
+        "OGVCS-002-FR-11"
+      ],
+      "scenarioId": "fileid-import-lost-ack-retry"
+    },
+    {
+      "artifact": "scenarios/cases/fileid-import-native-collision.json",
+      "code": "FILEID_IMPORT_MAPPING_CONFLICT",
+      "expected": {
+        "code": "FILEID_IMPORT_MAPPING_CONFLICT",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-operation-request",
+      "obligationTags": [
+        "fileid:import-native-collision"
+      ],
+      "operation": "import-file-id",
+      "requirementIds": [
+        "OGVCS-002-AC-07",
+        "OGVCS-002-FR-11"
+      ],
+      "scenarioId": "fileid-import-native-collision"
+    },
+    {
+      "artifact": "scenarios/cases/fileid-move-rename-preserves.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 305,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/fileid-move-rename-preserves.json",
+            "sha256": "0c7d29ca785df1bcd5816f08dc2a85dd6e2b96da5861d5299a64d8c257c29ffe"
+          },
+          "summarySha256": "decab3ed00ddf42dd42cf777e9e0886176e29e5adb18e36c7cd8d8b053bd0f2e"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "fileid:move-rename"
+      ],
+      "operation": "replay-change-set",
+      "requirementIds": [
+        "OGVCS-002-AC-07",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "fileid-move-rename-preserves"
+    },
+    {
+      "artifact": "scenarios/cases/fileid-move-source-forgery.json",
+      "code": "FILEID_SOURCE_MISMATCH",
+      "expected": {
+        "code": "FILEID_SOURCE_MISMATCH",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "fileid:move-rename",
+        "fileid:source-forgery"
+      ],
+      "operation": "replay-change-set",
+      "requirementIds": [
+        "OGVCS-002-AC-07",
+        "OGVCS-002-FR-11"
+      ],
+      "scenarioId": "fileid-move-source-forgery"
+    },
+    {
+      "artifact": "scenarios/cases/fileid-restore-invalid-ancestry.json",
+      "code": "FILEID_RESTORE_PROOF_INVALID",
+      "expected": {
+        "code": "FILEID_RESTORE_PROOF_INVALID",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "fileid:restore-invalid-ancestry"
+      ],
+      "operation": "replay-change-set",
+      "requirementIds": [
+        "OGVCS-002-AC-07",
+        "OGVCS-002-FR-11"
+      ],
+      "scenarioId": "fileid-restore-invalid-ancestry"
+    },
+    {
+      "artifact": "scenarios/cases/fileid-restore-source-forgery.json",
+      "code": "FILEID_RESTORE_PROOF_INVALID",
+      "expected": {
+        "code": "FILEID_RESTORE_PROOF_INVALID",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "fileid:restore-forgery"
+      ],
+      "operation": "replay-change-set",
+      "requirementIds": [
+        "OGVCS-002-AC-07",
+        "OGVCS-002-FR-11"
+      ],
+      "scenarioId": "fileid-restore-source-forgery"
+    },
+    {
+      "artifact": "scenarios/cases/fileid-zero.json",
+      "code": "FILEID_ZERO",
+      "expected": {
+        "code": "FILEID_ZERO",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "fileid:zero"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-07",
+        "OGVCS-002-FR-09",
+        "OGVCS-002-FR-11"
+      ],
+      "scenarioId": "fileid-zero"
+    },
+    {
+      "artifact": "scenarios/cases/group-create.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 301,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/group-create.json",
+            "sha256": "dc8d1e20b392fe4ce1a874eff1882ace27faf074831e13c4669d44c8046644de"
+          },
+          "summarySha256": "a2e89d165509c6a8149785cf011c90319d0d63e8fa75ec3a367633143c4882d0"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "group:create"
+      ],
+      "operation": "replay-change-set",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "group-create"
+    },
+    {
+      "artifact": "scenarios/cases/group-delete.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 222,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/group-delete.json",
+            "sha256": "2f39622b9c4f902061dfed50560112d2ccbbe3062a67d29c849047b757b7e5eb"
+          },
+          "summarySha256": "03d13b1a7c4dc8ebd716ea9d60f82ae106d9055d954abeff3c3baa3b8afc74ca"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "group:delete"
+      ],
+      "operation": "replay-change-set",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "group-delete"
+    },
+    {
+      "artifact": "scenarios/cases/group-external-key-duplicate.json",
+      "code": "GROUP_EXTERNAL_KEY_DUPLICATE",
+      "expected": {
+        "code": "GROUP_EXTERNAL_KEY_DUPLICATE",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "group:external-key"
+      ],
+      "operation": "validate-repository",
+      "requirementIds": [
+        "OGVCS-002-FR-09",
+        "OGVCS-002-FR-11"
+      ],
+      "scenarioId": "group-external-key-duplicate"
+    },
+    {
+      "artifact": "scenarios/cases/group-member-invalid.json",
+      "code": "GROUP_MEMBER_INVALID",
+      "expected": {
+        "code": "GROUP_MEMBER_INVALID",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "group:member-invalid"
+      ],
+      "operation": "validate-repository",
+      "requirementIds": [
+        "OGVCS-002-FR-09",
+        "OGVCS-002-FR-11"
+      ],
+      "scenarioId": "group-member-invalid"
+    },
+    {
+      "artifact": "scenarios/cases/group-membership-overlap.json",
+      "code": "GROUP_MEMBERSHIP_OVERLAP",
+      "expected": {
+        "code": "GROUP_MEMBERSHIP_OVERLAP",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "group:overlap"
+      ],
+      "operation": "validate-repository",
+      "requirementIds": [
+        "OGVCS-002-FR-09",
+        "OGVCS-002-FR-11"
+      ],
+      "scenarioId": "group-membership-overlap"
+    },
+    {
+      "artifact": "scenarios/cases/group-required-role-missing.json",
+      "code": "GROUP_REQUIRED_ROLE_MISSING",
+      "expected": {
+        "code": "GROUP_REQUIRED_ROLE_MISSING",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "group:cardinality"
+      ],
+      "operation": "validate-repository",
+      "requirementIds": [
+        "OGVCS-002-FR-09",
+        "OGVCS-002-FR-11"
+      ],
+      "scenarioId": "group-required-role-missing"
+    },
+    {
+      "artifact": "scenarios/cases/group-update.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 301,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/group-update.json",
+            "sha256": "3e8989eeed1407105851af8a0e9c9bcbb2cd9bf4ac2b572d0c35ce14feafcce2"
+          },
+          "summarySha256": "50a9b4b78a5462b30c5157e561528483474a406b28929c8f0bd5872f01ba7379"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "group:update"
+      ],
+      "operation": "replay-change-set",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "group-update"
+    },
+    {
+      "artifact": "scenarios/cases/hash-tampered-object.json",
+      "code": "OBJECT_ID_MISMATCH",
+      "expected": {
+        "code": "OBJECT_ID_MISMATCH",
+        "layer": 1,
+        "result": "reject",
+        "stage": "declared-identity"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "hash:tamper"
+      ],
+      "operation": "canonical-scan",
+      "requirementIds": [
+        "OGVCS-002-AC-03",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "hash-tampered-object"
+    },
+    {
+      "artifact": "scenarios/cases/history-base-mismatch.json",
+      "code": "CHANGESET_BASE_MISMATCH",
+      "expected": {
+        "code": "CHANGESET_BASE_MISMATCH",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "history:base-mismatch"
+      ],
+      "operation": "validate-repository",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "history-base-mismatch"
+    },
+    {
+      "artifact": "scenarios/cases/history-cross-repository-parent.json",
+      "code": "SNAPSHOT_PARENT_CROSS_REPOSITORY",
+      "expected": {
+        "code": "SNAPSHOT_PARENT_CROSS_REPOSITORY",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "history:cross-repository"
+      ],
+      "operation": "validate-repository",
+      "requirementIds": [
+        "OGVCS-002-AC-06",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "history-cross-repository-parent"
+    },
+    {
+      "artifact": "scenarios/cases/history-duplicate-parent.json",
+      "code": "SNAPSHOT_PARENT_DUPLICATE",
+      "expected": {
+        "code": "SNAPSHOT_PARENT_DUPLICATE",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "history:duplicate-parent"
+      ],
+      "operation": "validate-repository",
+      "requirementIds": [
+        "OGVCS-002-AC-06",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "history-duplicate-parent"
+    },
+    {
+      "artifact": "scenarios/cases/history-eight-parent.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 307,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/history-eight-parent.json",
+            "sha256": "3d403e0cb779e6e9f6329a01b2550b19e11c9eceb7b7b6d8040c37d551881a22"
+          },
+          "summarySha256": "53d1c6c995a87d0fabba085a5fc32ed494fba1ef9d45e9964db8b7a1e4397c12"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "history:parents-8"
+      ],
+      "operation": "validate-repository",
+      "requirementIds": [
+        "OGVCS-002-AC-06",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "history-eight-parent"
+    },
+    {
+      "artifact": "scenarios/cases/history-missing-parent.json",
+      "code": "OBJECT_REFERENCE_MISSING",
+      "expected": {
+        "code": "OBJECT_REFERENCE_MISSING",
+        "layer": 2,
+        "result": "reject",
+        "stage": "closure-and-reference-resolution"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "history:missing-parent"
+      ],
+      "operation": "validate-repository",
+      "requirementIds": [
+        "OGVCS-002-AC-06",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "history-missing-parent"
+    },
+    {
+      "artifact": "scenarios/cases/history-ninth-parent.json",
+      "code": "SNAPSHOT_PARENT_COUNT_INVALID",
+      "expected": {
+        "code": "SNAPSHOT_PARENT_COUNT_INVALID",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "history:parents-9"
+      ],
+      "operation": "validate-repository",
+      "requirementIds": [
+        "OGVCS-002-AC-06",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "history-ninth-parent"
+    },
+    {
+      "artifact": "scenarios/cases/history-one-parent.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 305,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/history-one-parent.json",
+            "sha256": "3bb96494c52438371b6be5ae010f3f0a3c73f2ab8c4f2edccb25aac2f3c5d3b0"
+          },
+          "summarySha256": "fe7f1f121d6d17392b73b372af3126f8440f00dafe215965ac3028126b617dd7"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "history:parents-1"
+      ],
+      "operation": "validate-repository",
+      "requirementIds": [
+        "OGVCS-002-AC-06",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "history-one-parent"
+    },
+    {
+      "artifact": "scenarios/cases/history-parent-cycle.json",
+      "code": "SNAPSHOT_PARENT_CYCLE",
+      "expected": {
+        "code": "SNAPSHOT_PARENT_CYCLE",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "prevalidated-abstract-graph",
+      "obligationTags": [
+        "history:cycle"
+      ],
+      "operation": "validate-abstract-reference-graph",
+      "requirementIds": [
+        "OGVCS-002-AC-06",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "history-parent-cycle"
+    },
+    {
+      "artifact": "scenarios/cases/history-second-root.json",
+      "code": "SNAPSHOT_ROOT_INVALID",
+      "expected": {
+        "code": "SNAPSHOT_ROOT_INVALID",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "history:second-root"
+      ],
+      "operation": "validate-repository",
+      "requirementIds": [
+        "OGVCS-002-AC-06",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "history-second-root"
+    },
+    {
+      "artifact": "scenarios/cases/history-two-parent.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 305,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/history-two-parent.json",
+            "sha256": "0b1607fc44d7b901e6449974492dea3bd6045c3fcef6356b2e72f81ea81f3efc"
+          },
+          "summarySha256": "ca1830ad72f10c8481c7133440e1459d6f0e7bdc7cf72c88801fe200efbac5ea"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "history:parents-2"
+      ],
+      "operation": "validate-repository",
+      "requirementIds": [
+        "OGVCS-002-AC-06",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "history-two-parent"
+    },
+    {
+      "artifact": "scenarios/cases/history-zero-parent-root.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 311,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/history-zero-parent-root.json",
+            "sha256": "43444df5424899cde14cd21c2883216ec1558cbc0848f94be1d59032ebdbef0e"
+          },
+          "summarySha256": "e5e1c3d390b556aa517a232eb535f4621db4ec73388be0cdd0c48eea9035cc42"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "history:parents-0"
+      ],
+      "operation": "validate-repository",
+      "requirementIds": [
+        "OGVCS-002-AC-06",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "history-zero-parent-root"
+    },
+    {
+      "artifact": "scenarios/cases/limit-asset-group-members-max.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 286,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/limit-asset-group-members-max.json",
+            "sha256": "f4c2d7c40daab23136508f30a3a78600c5d3c0f39a1743946b22e576870d3dbb"
+          },
+          "summarySha256": "a2e2040e241e93ddc87ad3006463d53c2c62126e0643514a95282fa19a0de40a"
+        },
+        "result": "accept"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:asset-group-members:max",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-asset-group-members-max"
+    },
+    {
+      "artifact": "scenarios/cases/limit-asset-group-members-max-plus-one.json",
+      "code": "LIMIT_COUNT",
+      "expected": {
+        "code": "LIMIT_COUNT",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:asset-group-members:max-plus-one",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-asset-group-members-max-plus-one"
+    },
+    {
+      "artifact": "scenarios/cases/limit-asset-groups-max.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 279,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/limit-asset-groups-max.json",
+            "sha256": "df3064514e803a33c4791fa6e69e55ecef2970291267abd3cde79b0530083c49"
+          },
+          "summarySha256": "77710ec5a43b52b0ac52fdabd966d89a4eb8391c16865c1545384e9cf31f444a"
+        },
+        "result": "accept"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:asset-groups:max",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-asset-groups-max"
+    },
+    {
+      "artifact": "scenarios/cases/limit-asset-groups-max-plus-one.json",
+      "code": "LIMIT_COUNT",
+      "expected": {
+        "code": "LIMIT_COUNT",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:asset-groups:max-plus-one",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-asset-groups-max-plus-one"
+    },
+    {
+      "artifact": "scenarios/cases/limit-bundle-index-entries-max.json",
+      "expected": {
+        "highestLayer": 1,
+        "output": {
+          "artifact": {
+            "bytes": 287,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/limit-bundle-index-entries-max.json",
+            "sha256": "a0818ebd7436f7975e58e7a3e1cba226cde0d13cd1011030c55a11f7a79059ab"
+          },
+          "summarySha256": "912637f53b3d589b83adb10bd667bce46ca52c176a9b9e04b0f6c505e3b79474"
+        },
+        "result": "accept"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:bundle-index-entries:max",
+        "limits:all"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-bundle-index-entries-max"
+    },
+    {
+      "artifact": "scenarios/cases/limit-bundle-index-entries-max-plus-one.json",
+      "code": "BUNDLE_BUDGET_EXCEEDED",
+      "expected": {
+        "code": "BUNDLE_BUDGET_EXCEEDED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "configured-resource-preflight"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:bundle-index-entries:max-plus-one",
+        "limits:all"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-bundle-index-entries-max-plus-one"
+    },
+    {
+      "artifact": "scenarios/cases/limit-bundle-largest-item-bytes-max.json",
+      "expected": {
+        "highestLayer": 1,
+        "output": {
+          "artifact": {
+            "bytes": 292,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/limit-bundle-largest-item-bytes-max.json",
+            "sha256": "3fd4db1f43b6cd57cf8ac3cb608b74266e97339189664f302a6a0910b70d975f"
+          },
+          "summarySha256": "2e7aa75c0c430aadf22165361799eeaf7e7ddbc7413e6ce9ffe7b84d4e0fee37"
+        },
+        "result": "accept"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:bundle-largest-item-bytes:max",
+        "limits:all"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-bundle-largest-item-bytes-max"
+    },
+    {
+      "artifact": "scenarios/cases/limit-bundle-largest-item-bytes-max-plus-one.json",
+      "code": "BUNDLE_BUDGET_EXCEEDED",
+      "expected": {
+        "code": "BUNDLE_BUDGET_EXCEEDED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "configured-resource-preflight"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:bundle-largest-item-bytes:max-plus-one",
+        "limits:all"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-bundle-largest-item-bytes-max-plus-one"
+    },
+    {
+      "artifact": "scenarios/cases/limit-bundle-logical-records-max.json",
+      "expected": {
+        "highestLayer": 1,
+        "output": {
+          "artifact": {
+            "bytes": 289,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/limit-bundle-logical-records-max.json",
+            "sha256": "e4f22c5a7c49afaabecfa013520cc7df2fe921589db8e3b1dabe79734c011edf"
+          },
+          "summarySha256": "26d8f9794f735d20c9d1a181f631ecd21b36a286d2eb35d23c87399aaee362e0"
+        },
+        "result": "accept"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:bundle-logical-records:max",
+        "limits:all"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-bundle-logical-records-max"
+    },
+    {
+      "artifact": "scenarios/cases/limit-bundle-logical-records-max-plus-one.json",
+      "code": "BUNDLE_BUDGET_EXCEEDED",
+      "expected": {
+        "code": "BUNDLE_BUDGET_EXCEEDED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "configured-resource-preflight"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:bundle-logical-records:max-plus-one",
+        "limits:all"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-bundle-logical-records-max-plus-one"
+    },
+    {
+      "artifact": "scenarios/cases/limit-bundle-objects-max.json",
+      "expected": {
+        "highestLayer": 1,
+        "output": {
+          "artifact": {
+            "bytes": 281,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/limit-bundle-objects-max.json",
+            "sha256": "a6829f783292540d790ef8c3f49fc62041e96539ca7d5c7566efc8d20366fa11"
+          },
+          "summarySha256": "9d2745f16126d3a419bd94963e03baf8a31caa60d7efd2389bacff17544f7dc7"
+        },
+        "result": "accept"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:bundle-objects:max",
+        "limits:all"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-bundle-objects-max"
+    },
+    {
+      "artifact": "scenarios/cases/limit-bundle-objects-max-plus-one.json",
+      "code": "BUNDLE_BUDGET_EXCEEDED",
+      "expected": {
+        "code": "BUNDLE_BUDGET_EXCEEDED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "configured-resource-preflight"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:bundle-objects:max-plus-one",
+        "limits:all"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-bundle-objects-max-plus-one"
+    },
+    {
+      "artifact": "scenarios/cases/limit-bundle-roots-max.json",
+      "expected": {
+        "highestLayer": 1,
+        "output": {
+          "artifact": {
+            "bytes": 279,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/limit-bundle-roots-max.json",
+            "sha256": "aae5d3569a4e835ae4a36b7b598a5da6c6e4de74bdb0488e619aa45fca1bef9e"
+          },
+          "summarySha256": "f533c253a979c6d5d3a27385017b49dd11b6fe08d6b8b7e2cd7af391fe7bd4b8"
+        },
+        "result": "accept"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:bundle-roots:max",
+        "limits:all"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-bundle-roots-max"
+    },
+    {
+      "artifact": "scenarios/cases/limit-bundle-roots-max-plus-one.json",
+      "code": "BUNDLE_BUDGET_EXCEEDED",
+      "expected": {
+        "code": "BUNDLE_BUDGET_EXCEEDED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "configured-resource-preflight"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:bundle-roots:max-plus-one",
+        "limits:all"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-bundle-roots-max-plus-one"
+    },
+    {
+      "artifact": "scenarios/cases/limit-bundle-sequence-bytes-max.json",
+      "expected": {
+        "highestLayer": 1,
+        "output": {
+          "artifact": {
+            "bytes": 288,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/limit-bundle-sequence-bytes-max.json",
+            "sha256": "ffe36e8fc845ff56dac521f26867a5cd60e8436693a6b69a8fc2dde809ccf684"
+          },
+          "summarySha256": "bbeb9a149131d4a1ea3288191c7f8b07359a855ca8e7fc58eb13c24e660e96f7"
+        },
+        "result": "accept"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:bundle-sequence-bytes:max",
+        "limits:all"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-bundle-sequence-bytes-max"
+    },
+    {
+      "artifact": "scenarios/cases/limit-bundle-sequence-bytes-max-plus-one.json",
+      "code": "BUNDLE_BUDGET_EXCEEDED",
+      "expected": {
+        "code": "BUNDLE_BUDGET_EXCEEDED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "configured-resource-preflight"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:bundle-sequence-bytes:max-plus-one",
+        "limits:all"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-bundle-sequence-bytes-max-plus-one"
+    },
+    {
+      "artifact": "scenarios/cases/limit-bundle-total-items-max.json",
+      "expected": {
+        "highestLayer": 1,
+        "output": {
+          "artifact": {
+            "bytes": 285,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/limit-bundle-total-items-max.json",
+            "sha256": "657b4f0675a346924993296ee0b6f730f4aa0bd4ddd510f3cc707b4f5fa61136"
+          },
+          "summarySha256": "14a366d347a0ee7e1c5a9c4d30518d31afd25a241093b04e4737905e3d148a2e"
+        },
+        "result": "accept"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:bundle-total-items:max",
+        "limits:all"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-bundle-total-items-max"
+    },
+    {
+      "artifact": "scenarios/cases/limit-bundle-total-items-max-plus-one.json",
+      "code": "BUNDLE_BUDGET_EXCEEDED",
+      "expected": {
+        "code": "BUNDLE_BUDGET_EXCEEDED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "configured-resource-preflight"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:bundle-total-items:max-plus-one",
+        "limits:all"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-bundle-total-items-max-plus-one"
+    },
+    {
+      "artifact": "scenarios/cases/limit-bundle-traversal-edges-max.json",
+      "expected": {
+        "highestLayer": 1,
+        "output": {
+          "artifact": {
+            "bytes": 289,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/limit-bundle-traversal-edges-max.json",
+            "sha256": "bcea2abfc6973c29de923d171f9fb9230acab1a22c4b1f05e93084ad31eca0d7"
+          },
+          "summarySha256": "26d8f9794f735d20c9d1a181f631ecd21b36a286d2eb35d23c87399aaee362e0"
+        },
+        "result": "accept"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:bundle-traversal-edges:max",
+        "limits:all"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-bundle-traversal-edges-max"
+    },
+    {
+      "artifact": "scenarios/cases/limit-bundle-traversal-edges-max-plus-one.json",
+      "code": "BUNDLE_BUDGET_EXCEEDED",
+      "expected": {
+        "code": "BUNDLE_BUDGET_EXCEEDED",
+        "layer": 1,
+        "result": "reject",
+        "stage": "configured-resource-preflight"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:bundle-traversal-edges:max-plus-one",
+        "limits:all"
+      ],
+      "operation": "validate-bundle",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-bundle-traversal-edges-max-plus-one"
+    },
+    {
+      "artifact": "scenarios/cases/limit-cbor-nesting-depth-max.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 285,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/limit-cbor-nesting-depth-max.json",
+            "sha256": "348fd5b2534f02ee9ed28ef4bb28e80a8dd0cb5685055ea29f277950696f9f4e"
+          },
+          "summarySha256": "0348818ca2f781ac229a05fcfadb2ddaf0cff4f1da12010e42bd64db6f7ad91f"
+        },
+        "result": "accept"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:cbor-nesting-depth:max",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-cbor-nesting-depth-max"
+    },
+    {
+      "artifact": "scenarios/cases/limit-cbor-nesting-depth-max-plus-one.json",
+      "code": "LIMIT_NESTING",
+      "expected": {
+        "code": "LIMIT_NESTING",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:cbor-nesting-depth:max-plus-one",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-cbor-nesting-depth-max-plus-one"
+    },
+    {
+      "artifact": "scenarios/cases/limit-change-set-operations-max.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 288,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/limit-change-set-operations-max.json",
+            "sha256": "c47d33a1beffa6adc7542892161302f5c890f16084efcc3c5811a0436ced8169"
+          },
+          "summarySha256": "32570dd75e70702f72873104e6afd951f83898d4886139d907301c90b91aa878"
+        },
+        "result": "accept"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:change-set-operations:max",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-change-set-operations-max"
+    },
+    {
+      "artifact": "scenarios/cases/limit-change-set-operations-max-plus-one.json",
+      "code": "LIMIT_COUNT",
+      "expected": {
+        "code": "LIMIT_COUNT",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:change-set-operations:max-plus-one",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-change-set-operations-max-plus-one"
+    },
+    {
+      "artifact": "scenarios/cases/limit-chunk-payload-bytes-max.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 286,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/limit-chunk-payload-bytes-max.json",
+            "sha256": "9a55d92513329e6271099517983e04e888b840ad3f8790ea9ea77699f0d7bf34"
+          },
+          "summarySha256": "a2e2040e241e93ddc87ad3006463d53c2c62126e0643514a95282fa19a0de40a"
+        },
+        "result": "accept"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:chunk-payload-bytes:max",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-chunk-payload-bytes-max"
+    },
+    {
+      "artifact": "scenarios/cases/limit-chunk-payload-bytes-max-plus-one.json",
+      "code": "LIMIT_CHUNK_BYTES",
+      "expected": {
+        "code": "LIMIT_CHUNK_BYTES",
+        "layer": 1,
+        "result": "reject",
+        "stage": "configured-resource-preflight"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:chunk-payload-bytes:max-plus-one",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-chunk-payload-bytes-max-plus-one"
+    },
+    {
+      "artifact": "scenarios/cases/limit-extension-aggregate-bytes-per-object-max.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 303,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/limit-extension-aggregate-bytes-per-object-max.json",
+            "sha256": "44789b4676fe818285683ce6b9e2f17587afe0c38d9311c4854a615b61931b81"
+          },
+          "summarySha256": "7fb8cc2ba0f372dea13cbddd6ff4491f5637c3d7a82d0487ea9c831279aaee8f"
+        },
+        "result": "accept"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:extension-aggregate-bytes-per-object:max",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-extension-aggregate-bytes-per-object-max"
+    },
+    {
+      "artifact": "scenarios/cases/limit-extension-aggregate-bytes-per-object-max-plus-one.json",
+      "code": "LIMIT_EXTENSION_BYTES",
+      "expected": {
+        "code": "LIMIT_EXTENSION_BYTES",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:extension-aggregate-bytes-per-object:max-plus-one",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-extension-aggregate-bytes-per-object-max-plus-one"
+    },
+    {
+      "artifact": "scenarios/cases/limit-extensions-per-object-max.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 288,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/limit-extensions-per-object-max.json",
+            "sha256": "6b4be32de50e2ba1e5407b6335627f4405d1c49939a3b64c5cc291bf1b689f50"
+          },
+          "summarySha256": "32570dd75e70702f72873104e6afd951f83898d4886139d907301c90b91aa878"
+        },
+        "result": "accept"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:extensions-per-object:max",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-extensions-per-object-max"
+    },
+    {
+      "artifact": "scenarios/cases/limit-extensions-per-object-max-plus-one.json",
+      "code": "LIMIT_COUNT",
+      "expected": {
+        "code": "LIMIT_COUNT",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:extensions-per-object:max-plus-one",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-extensions-per-object-max-plus-one"
+    },
+    {
+      "artifact": "scenarios/cases/limit-generic-text-or-byte-value-bytes-max.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 299,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/limit-generic-text-or-byte-value-bytes-max.json",
+            "sha256": "05b7c88726b4afda74c0eb4570d229a3677b41c23d0fa0d6b7e7435947acb494"
+          },
+          "summarySha256": "a48569ad6abc38dfd755ddb181dd10e9474ae08174c59edb0887f31781824b5f"
+        },
+        "result": "accept"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:generic-text-or-byte-value-bytes:max",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-generic-text-or-byte-value-bytes-max"
+    },
+    {
+      "artifact": "scenarios/cases/limit-generic-text-or-byte-value-bytes-max-plus-one.json",
+      "code": "LIMIT_VALUE_BYTES",
+      "expected": {
+        "code": "LIMIT_VALUE_BYTES",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:generic-text-or-byte-value-bytes:max-plus-one",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-generic-text-or-byte-value-bytes-max-plus-one"
+    },
+    {
+      "artifact": "scenarios/cases/limit-logical-file-bytes-max.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 285,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/limit-logical-file-bytes-max.json",
+            "sha256": "e1ae10231554eb2889fc9a1027a948d03f2d1fc608b2d36d435daad38fad1794"
+          },
+          "summarySha256": "0348818ca2f781ac229a05fcfadb2ddaf0cff4f1da12010e42bd64db6f7ad91f"
+        },
+        "result": "accept"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:logical-file-bytes:max",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-logical-file-bytes-max"
+    },
+    {
+      "artifact": "scenarios/cases/limit-logical-file-bytes-max-plus-one.json",
+      "code": "LIMIT_LOGICAL_BYTES",
+      "expected": {
+        "code": "LIMIT_LOGICAL_BYTES",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:logical-file-bytes:max-plus-one",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-logical-file-bytes-max-plus-one"
+    },
+    {
+      "artifact": "scenarios/cases/limit-manifest-chunks-max.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 282,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/limit-manifest-chunks-max.json",
+            "sha256": "087b521135fd65be315a1d0cb63ac82d086cb5c563b7f3e49604e1e8220bd7e9"
+          },
+          "summarySha256": "bb1985665e440ef6e5d63453eb8d33787b3b9520d7d1129b87148f720c75cd55"
+        },
+        "result": "accept"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:manifest-chunks:max",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-manifest-chunks-max"
+    },
+    {
+      "artifact": "scenarios/cases/limit-manifest-chunks-max-plus-one.json",
+      "code": "LIMIT_COUNT",
+      "expected": {
+        "code": "LIMIT_COUNT",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:manifest-chunks:max-plus-one",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-manifest-chunks-max-plus-one"
+    },
+    {
+      "artifact": "scenarios/cases/limit-metadata-payload-bytes-max.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 289,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/limit-metadata-payload-bytes-max.json",
+            "sha256": "ebdec3342b6f3a1f7cea274f8d61c13d104e87cf3f740426b052388227c890d3"
+          },
+          "summarySha256": "d67754c9fd988197e826b8f1b3b6111a0508db1ecd19e4bf6a38a11f24040e5b"
+        },
+        "result": "accept"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:metadata-payload-bytes:max",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-metadata-payload-bytes-max"
+    },
+    {
+      "artifact": "scenarios/cases/limit-metadata-payload-bytes-max-plus-one.json",
+      "code": "LIMIT_METADATA_BYTES",
+      "expected": {
+        "code": "LIMIT_METADATA_BYTES",
+        "layer": 1,
+        "result": "reject",
+        "stage": "configured-resource-preflight"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:metadata-payload-bytes:max-plus-one",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-metadata-payload-bytes-max-plus-one"
+    },
+    {
+      "artifact": "scenarios/cases/limit-path-bytes-max.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 277,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/limit-path-bytes-max.json",
+            "sha256": "b4dc178e8e6cb2a33fd245c0228c9395d9f5327397e902812caeaad7e45c277d"
+          },
+          "summarySha256": "a313d2d67346357056972b5e839960d7207914d49b3ac33bc2e38efa2f0e92b2"
+        },
+        "result": "accept"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:path-bytes:max",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-path-bytes-max"
+    },
+    {
+      "artifact": "scenarios/cases/limit-path-bytes-max-plus-one.json",
+      "code": "PATH_CORE_INVALID",
+      "expected": {
+        "code": "PATH_CORE_INVALID",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:path-bytes:max-plus-one",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-path-bytes-max-plus-one"
+    },
+    {
+      "artifact": "scenarios/cases/limit-path-segment-bytes-max.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 285,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/limit-path-segment-bytes-max.json",
+            "sha256": "0d55636eede3f87fb3668d26e059a719d81ce1c84b4adea81fe851919eb8ac6c"
+          },
+          "summarySha256": "0348818ca2f781ac229a05fcfadb2ddaf0cff4f1da12010e42bd64db6f7ad91f"
+        },
+        "result": "accept"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:path-segment-bytes:max",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-path-segment-bytes-max"
+    },
+    {
+      "artifact": "scenarios/cases/limit-path-segment-bytes-max-plus-one.json",
+      "code": "PATH_CORE_INVALID",
+      "expected": {
+        "code": "PATH_CORE_INVALID",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:path-segment-bytes:max-plus-one",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-path-segment-bytes-max-plus-one"
+    },
+    {
+      "artifact": "scenarios/cases/limit-path-segments-max.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 280,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/limit-path-segments-max.json",
+            "sha256": "7ca858ec708ab987ffd20714e8dd63695aed5ca9295898a95cc939357805a9f0"
+          },
+          "summarySha256": "50136c8050bbc9b71fb825ff4949edbde68f956a8d150d6f04575faa49df484c"
+        },
+        "result": "accept"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:path-segments:max",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-path-segments-max"
+    },
+    {
+      "artifact": "scenarios/cases/limit-path-segments-max-plus-one.json",
+      "code": "PATH_CORE_INVALID",
+      "expected": {
+        "code": "PATH_CORE_INVALID",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:path-segments:max-plus-one",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-path-segments-max-plus-one"
+    },
+    {
+      "artifact": "scenarios/cases/limit-snapshot-message-bytes-max.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 289,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/limit-snapshot-message-bytes-max.json",
+            "sha256": "bfe54f4d8b2ba6991a2e7a173480233de202f0d42fc5a1f922164d45bc5cb5e1"
+          },
+          "summarySha256": "d67754c9fd988197e826b8f1b3b6111a0508db1ecd19e4bf6a38a11f24040e5b"
+        },
+        "result": "accept"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:snapshot-message-bytes:max",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-snapshot-message-bytes-max"
+    },
+    {
+      "artifact": "scenarios/cases/limit-snapshot-message-bytes-max-plus-one.json",
+      "code": "LIMIT_VALUE_BYTES",
+      "expected": {
+        "code": "LIMIT_VALUE_BYTES",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:snapshot-message-bytes:max-plus-one",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-snapshot-message-bytes-max-plus-one"
+    },
+    {
+      "artifact": "scenarios/cases/limit-snapshot-parents-max.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 283,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/limit-snapshot-parents-max.json",
+            "sha256": "b047571c1d13b20dce35dc6001c03386da79c1b94d20f75b312ec085507f07c8"
+          },
+          "summarySha256": "64ef95b3b0b9ec598bc519cff5bc4d64c20b768b8379e7e61dcb040ec93748a0"
+        },
+        "result": "accept"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:snapshot-parents:max",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-snapshot-parents-max"
+    },
+    {
+      "artifact": "scenarios/cases/limit-snapshot-parents-max-plus-one.json",
+      "code": "SNAPSHOT_PARENT_COUNT_INVALID",
+      "expected": {
+        "code": "SNAPSHOT_PARENT_COUNT_INVALID",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:snapshot-parents:max-plus-one",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-snapshot-parents-max-plus-one"
+    },
+    {
+      "artifact": "scenarios/cases/limit-tree-entries-max.json",
+      "expected": {
+        "highestLayer": 2,
+        "output": {
+          "artifact": {
+            "bytes": 279,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/limit-tree-entries-max.json",
+            "sha256": "e42535c0de1ee8adbf286c93bfc2e978dd0dc31af3b16254c2f0ab96eda675d9"
+          },
+          "summarySha256": "77710ec5a43b52b0ac52fdabd966d89a4eb8391c16865c1545384e9cf31f444a"
+        },
+        "result": "accept"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:tree-entries:max",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-tree-entries-max"
+    },
+    {
+      "artifact": "scenarios/cases/limit-tree-entries-max-plus-one.json",
+      "code": "LIMIT_COUNT",
+      "expected": {
+        "code": "LIMIT_COUNT",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "materialization": "executable-virtual-limit-constructor",
+      "obligationTags": [
+        "limit:tree-entries:max-plus-one",
+        "limits:all"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "limit-tree-entries-max-plus-one"
+    },
+    {
+      "artifact": "scenarios/cases/malformed-complete-corpus.json",
+      "expected": {
+        "highestLayer": 1,
+        "output": {
+          "artifact": {
+            "bytes": 285,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/malformed-complete-corpus.json",
+            "sha256": "0a7bfb58b3cdb461196c1b5c4bbfa840366aea25deff2c8f4ff836dac00f2c38"
+          },
+          "summarySha256": "112f94c72793fe5c09cffa26f47ca04f08fbe0f60fe145ddeac149f5fdc11c35"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-direct-artifact",
+      "obligationTags": [
+        "malformed:complete"
+      ],
+      "operation": "canonical-scan",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "malformed-complete-corpus"
+    },
+    {
+      "artifact": "scenarios/cases/manifest-annotation-invariance.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 323,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/manifest-annotation-invariance.json",
+            "sha256": "2098e60acf2644685e7fe92fe5ffa0387d7bef66a68dcbe21365416aa4460fc5"
+          },
+          "summarySha256": "523b25106341ea44f6541966a3e41c414a11bb7201a83f282c8c87b0a969d424"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "manifest:annotation-invariance"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-09",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "manifest-annotation-invariance"
+    },
+    {
+      "artifact": "scenarios/cases/manifest-chunk-length.json",
+      "code": "MANIFEST_CHUNK_LENGTH_INVALID",
+      "expected": {
+        "code": "MANIFEST_CHUNK_LENGTH_INVALID",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "manifest:chunk-length"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-09",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "manifest-chunk-length"
+    },
+    {
+      "artifact": "scenarios/cases/manifest-corrupt-chunk.json",
+      "code": "MANIFEST_FILE_DIGEST_MISMATCH",
+      "expected": {
+        "code": "MANIFEST_FILE_DIGEST_MISMATCH",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "manifest:corrupt-chunk"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-09",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "manifest-corrupt-chunk"
+    },
+    {
+      "artifact": "scenarios/cases/manifest-empty.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 307,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/manifest-empty.json",
+            "sha256": "24aa4f9c4e4638ec176bf55f975a750e004d6390e04d512ec0e9b5137a478904"
+          },
+          "summarySha256": "a5dfb6d7c97576a23d207cdb27402d6e4680703a95052d7afaecd42089250dac"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "manifest:empty"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-09",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "manifest-empty"
+    },
+    {
+      "artifact": "scenarios/cases/manifest-length-sum-mismatch.json",
+      "code": "MANIFEST_LENGTH_MISMATCH",
+      "expected": {
+        "code": "MANIFEST_LENGTH_MISMATCH",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "manifest:length-sum-mismatch"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-09",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "manifest-length-sum-mismatch"
+    },
+    {
+      "artifact": "scenarios/cases/manifest-logical-ceiling.json",
+      "code": "LIMIT_LOGICAL_BYTES",
+      "expected": {
+        "code": "LIMIT_LOGICAL_BYTES",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "manifest:logical-ceiling"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-09",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "manifest-logical-ceiling"
+    },
+    {
+      "artifact": "scenarios/cases/manifest-multi-chunk.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 313,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/manifest-multi-chunk.json",
+            "sha256": "79b6f9032646396f7f5c95998d0c87684d53a9b7124d5f5ef8f20cabc41d1d80"
+          },
+          "summarySha256": "0287a851ff257dc8199726739ecf34f3cb598ca55522f97f7c9d58a6eda19e88"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "manifest:multi-chunk"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-09",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "manifest-multi-chunk"
+    },
+    {
+      "artifact": "scenarios/cases/manifest-one-tib.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 256,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/manifest-one-tib.json",
+            "sha256": "3a0c0528dee69e3fc311b2e50f6a656dd900da8a7424da1dc8b894026b0cda95"
+          },
+          "summarySha256": "cc361f11313f4258e60e19288905e2a1f2ab00e196d2718c453e695a3f5065d8"
+        },
+        "result": "accept"
+      },
+      "materialization": "virtual-constructor",
+      "obligationTags": [
+        "manifest:one-tib"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-09",
+        "OGVCS-002-FR-09",
+        "OGVCS-002-NFR-02"
+      ],
+      "scenarioId": "manifest-one-tib"
+    },
+    {
+      "artifact": "scenarios/cases/manifest-repeated-chunk.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 316,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/manifest-repeated-chunk.json",
+            "sha256": "131d663fa71782acac575519b621a401f6a7829e27f0cffaa3ddf679b7765be9"
+          },
+          "summarySha256": "fdca8e0db7be187ac249156185627f703c246efbe73fd6c15782b87da1097f98"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "manifest:repeated-chunk"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-09",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "manifest-repeated-chunk"
+    },
+    {
+      "artifact": "scenarios/cases/manifest-unknown-profile.json",
+      "code": "PROFILE_UNKNOWN",
+      "expected": {
+        "code": "PROFILE_UNKNOWN",
+        "layer": 3,
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "manifest:unknown-profile"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-09",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "manifest-unknown-profile"
+    },
+    {
+      "artifact": "scenarios/cases/mutation-systematic-single-bit.json",
+      "expected": {
+        "highestLayer": 1,
+        "output": {
+          "artifact": {
+            "bytes": 290,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/mutation-systematic-single-bit.json",
+            "sha256": "0bb5dcec24426f8d162043f9b7fa625062bb0f0c7c87d235db58ceb8bf59d6ed"
+          },
+          "summarySha256": "98dc7b8fe441002e8c4811b1fc9d3f9bf61ee19caf92778761e0b5876b34be93"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-direct-artifact",
+      "obligationTags": [
+        "hash:tamper",
+        "mutation:single-bit"
+      ],
+      "operation": "canonical-scan",
+      "requirementIds": [
+        "OGVCS-002-AC-03",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "mutation-systematic-single-bit"
+    },
+    {
+      "artifact": "scenarios/cases/provenance-acyclic.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 307,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/provenance-acyclic.json",
+            "sha256": "4434d135006fae2a06346530e07989e40b6b6ded057648c871c419be24891a9e"
+          },
+          "summarySha256": "682edc3e26612891031f61effc530e5513809dc1669e72cec3c1b5df323ae8a1"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "provenance:acyclic"
+      ],
+      "operation": "validate-repository",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "provenance-acyclic"
+    },
+    {
+      "artifact": "scenarios/cases/provenance-cycle.json",
+      "code": "PROVENANCE_CYCLE",
+      "expected": {
+        "code": "PROVENANCE_CYCLE",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "prevalidated-abstract-graph",
+      "obligationTags": [
+        "provenance:cycle"
+      ],
+      "operation": "validate-abstract-reference-graph",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "provenance-cycle"
+    },
+    {
+      "artifact": "scenarios/cases/provenance-reaches-snapshot.json",
+      "code": "OBJECT_ID_MISMATCH",
+      "expected": {
+        "code": "OBJECT_ID_MISMATCH",
+        "layer": 1,
+        "result": "reject",
+        "stage": "declared-identity"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "provenance:snapshot-cycle"
+      ],
+      "operation": "canonical-scan",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "provenance-reaches-snapshot"
+    },
+    {
+      "artifact": "scenarios/cases/registry-conformance-mode.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 285,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/registry-conformance-mode.json",
+            "sha256": "cee083f3aa53fdef1b32c905b0d5c510f21b9c894ad4f41c6606944c68885db9"
+          },
+          "summarySha256": "d5ece6cdfa1884f765eb08959f41927561e0a0c5b91d2fb32065608c5cfe6d6c"
+        },
+        "result": "accept"
+      },
+      "materialization": "executable-enumerated-registry-recipe",
+      "obligationTags": [
+        "registry:conformance"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-11",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "registry-conformance-mode"
+    },
+    {
+      "artifact": "scenarios/cases/registry-conformance-production.json",
+      "code": "PROFILE_CONFORMANCE_ONLY",
+      "expected": {
+        "code": "PROFILE_CONFORMANCE_ONLY",
+        "layer": 3,
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "materialization": "executable-enumerated-registry-recipe",
+      "obligationTags": [
+        "registry:conformance-production"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-11",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "registry-conformance-production"
+    },
+    {
+      "artifact": "scenarios/cases/registry-deprecated-read.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 284,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/registry-deprecated-read.json",
+            "sha256": "3b29055eccda49ae0f2b83c7b692e37023229eb0c07ae67cc3cbd085e92cbcaa"
+          },
+          "summarySha256": "dd82a183593ec984f0ab218d6fd94dd0fe2686ee442e74fd1bb11189fb4d2bc0"
+        },
+        "result": "accept"
+      },
+      "materialization": "executable-enumerated-registry-recipe",
+      "obligationTags": [
+        "registry:deprecated-read"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-11",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "registry-deprecated-read"
+    },
+    {
+      "artifact": "scenarios/cases/registry-deprecated-write.json",
+      "code": "PROFILE_STATE_FORBIDDEN",
+      "expected": {
+        "code": "PROFILE_STATE_FORBIDDEN",
+        "layer": 3,
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "materialization": "executable-enumerated-registry-recipe",
+      "obligationTags": [
+        "registry:deprecated-write"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-11",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "registry-deprecated-write"
+    },
+    {
+      "artifact": "scenarios/cases/registry-duplicate.json",
+      "code": "REGISTRY_INVALID",
+      "expected": {
+        "code": "REGISTRY_INVALID",
+        "layer": 3,
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "materialization": "executable-enumerated-registry-recipe",
+      "obligationTags": [
+        "registry:duplicate"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-11",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "registry-duplicate"
+    },
+    {
+      "artifact": "scenarios/cases/registry-invalid-entry.json",
+      "code": "REGISTRY_INVALID",
+      "expected": {
+        "code": "REGISTRY_INVALID",
+        "layer": 3,
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "materialization": "executable-enumerated-registry-recipe",
+      "obligationTags": [
+        "registry:invalid-entry"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-11",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "registry-invalid-entry"
+    },
+    {
+      "artifact": "scenarios/cases/registry-ratified-read-write.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 288,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/registry-ratified-read-write.json",
+            "sha256": "b07c5aaf4751600d7e0cce10f6549e46342f28680680f426e79498f3b911d82d"
+          },
+          "summarySha256": "d5ece6cdfa1884f765eb08959f41927561e0a0c5b91d2fb32065608c5cfe6d6c"
+        },
+        "result": "accept"
+      },
+      "materialization": "executable-enumerated-registry-recipe",
+      "obligationTags": [
+        "registry:ratified"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-11",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "registry-ratified-read-write"
+    },
+    {
+      "artifact": "scenarios/cases/registry-reassigned.json",
+      "code": "REGISTRY_INVALID",
+      "expected": {
+        "code": "REGISTRY_INVALID",
+        "layer": 3,
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "materialization": "executable-enumerated-registry-recipe",
+      "obligationTags": [
+        "registry:reassigned"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-11",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "registry-reassigned"
+    },
+    {
+      "artifact": "scenarios/cases/registry-reserved.json",
+      "code": "PROFILE_STATE_FORBIDDEN",
+      "expected": {
+        "code": "PROFILE_STATE_FORBIDDEN",
+        "layer": 3,
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "materialization": "executable-enumerated-registry-recipe",
+      "obligationTags": [
+        "registry:reserved"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-11",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "registry-reserved"
+    },
+    {
+      "artifact": "scenarios/cases/registry-unknown-extension-preserve.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 295,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/registry-unknown-extension-preserve.json",
+            "sha256": "48db39a80d30f1578ccb2953f53ff48b9ea0ad1f1ec0b104b75329c7c66ae95d"
+          },
+          "summarySha256": "6c322567344b46f9e2846218c7a0952ce74d32ef9089dd4de3bddd8b8e8f8cff"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-direct-artifact",
+      "obligationTags": [
+        "registry:unknown-extension-preserve"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-11",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "registry-unknown-extension-preserve"
+    },
+    {
+      "artifact": "scenarios/cases/registry-unknown-feature.json",
+      "code": "REQUIRED_FEATURE_UNSUPPORTED",
+      "expected": {
+        "code": "REQUIRED_FEATURE_UNSUPPORTED",
+        "layer": 3,
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "materialization": "byte-materialized-stable-error-artifact",
+      "obligationTags": [
+        "registry:unknown-feature"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-11",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "registry-unknown-feature"
+    },
+    {
+      "artifact": "scenarios/cases/registry-unknown-feature-forward.json",
+      "expected": {
+        "highestLayer": 1,
+        "output": {
+          "artifact": {
+            "bytes": 292,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/registry-unknown-feature-forward.json",
+            "sha256": "e43a08516f331695f380d92bf7e375fdb74f6c33a2a6badf280582c9c4123e15"
+          },
+          "summarySha256": "997bce81917b3bc2af8bffed75783c96b2bd97d97311c15163297c911478c560"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-direct-artifact",
+      "obligationTags": [
+        "registry:unknown-feature-forward"
+      ],
+      "operation": "canonical-scan",
+      "requirementIds": [
+        "OGVCS-002-AC-11",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "registry-unknown-feature-forward"
+    },
+    {
+      "artifact": "scenarios/cases/registry-unknown-profile.json",
+      "code": "PROFILE_UNKNOWN",
+      "expected": {
+        "code": "PROFILE_UNKNOWN",
+        "layer": 3,
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "materialization": "executable-enumerated-registry-recipe",
+      "obligationTags": [
+        "registry:unknown-profile"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-11",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "registry-unknown-profile"
+    },
+    {
+      "artifact": "scenarios/cases/shelf-chain-invalid.json",
+      "code": "SHELF_CHAIN_INVALID",
+      "expected": {
+        "code": "SHELF_CHAIN_INVALID",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "shelf:chain-invalid"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "shelf-chain-invalid"
+    },
+    {
+      "artifact": "scenarios/cases/shelf-revision-chain.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 308,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/shelf-revision-chain.json",
+            "sha256": "f72f94a97dfcddfcba50f25447b862a2462bf8f43fd69b5dce38a23424375b28"
+          },
+          "summarySha256": "e5c0a227c2ad0a9781c63793cd8538e0a5b23a6522b937cae71dcfad31e7e9ba"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "shelf:revision-chain"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "shelf-revision-chain"
+    },
+    {
+      "artifact": "scenarios/cases/transition-copy.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 292,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/transition-copy.json",
+            "sha256": "7317b3c68ff95b3abbddb82d14a7cae276fae00ba5463f69db94b09870d2c650"
+          },
+          "summarySha256": "981734519184a3977e54284f9b9bcd18bb78116f5284124ca19afee20207ee43"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "transition:copy"
+      ],
+      "operation": "replay-change-set",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "transition-copy"
+    },
+    {
+      "artifact": "scenarios/cases/transition-create.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 294,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/transition-create.json",
+            "sha256": "bcbc55396e479d05290eeb5117defd38d615a68d9c2e92dc24dbe345ea7f1721"
+          },
+          "summarySha256": "0315ff08d8b434e3e47a86166e3c2c9ad54aa70d9c8e05f6a5ffce6368c1b6b1"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "transition:create"
+      ],
+      "operation": "replay-change-set",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "transition-create"
+    },
+    {
+      "artifact": "scenarios/cases/transition-delete.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 294,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/transition-delete.json",
+            "sha256": "97ecb8bec2a76ce63df02ab991c35acd83d64cacbad75e8a852906ef1445a978"
+          },
+          "summarySha256": "483c05f14b29e2d302020b228abffd054ee96caccf8661d61d3d748c2985276c"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "transition:delete"
+      ],
+      "operation": "replay-change-set",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "transition-delete"
+    },
+    {
+      "artifact": "scenarios/cases/transition-exact-result-mismatch.json",
+      "code": "CHANGESET_RESULT_MISMATCH",
+      "expected": {
+        "code": "CHANGESET_RESULT_MISMATCH",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "transition:exact-replay",
+        "transition:result-mismatch"
+      ],
+      "operation": "replay-change-set",
+      "requirementIds": [
+        "OGVCS-002-FR-09",
+        "OGVCS-002-FR-11"
+      ],
+      "scenarioId": "transition-exact-result-mismatch"
+    },
+    {
+      "artifact": "scenarios/cases/transition-group-create.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 312,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/transition-group-create.json",
+            "sha256": "7aaf97565ff0203c95fac1d2aeae8568a500a9a1f6cd163df1148d358ab53036"
+          },
+          "summarySha256": "4e398fe343630becbff8c0fca2e8c3dc0b077f95782419f4f73cb7ef50767bc1"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "transition:group-create"
+      ],
+      "operation": "replay-change-set",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "transition-group-create"
+    },
+    {
+      "artifact": "scenarios/cases/transition-group-delete.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 233,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/transition-group-delete.json",
+            "sha256": "f3aa6da4e4606b9a238f929b2d2ffd2304084d56f55bff4991ab3c984fe5a952"
+          },
+          "summarySha256": "1f73185a452eb6e42475f01e98e9965e9474680c0abe6b52924d65ded8623075"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "transition:group-delete"
+      ],
+      "operation": "replay-change-set",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "transition-group-delete"
+    },
+    {
+      "artifact": "scenarios/cases/transition-group-update.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 312,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/transition-group-update.json",
+            "sha256": "22835abd113d331fae0c7fe19cdff43de11559616e58e5fd837121acfcab8e0d"
+          },
+          "summarySha256": "766e8209c963fc98d978a6efeeae39f75c58e7ac50bcab95f13e2b9334140a28"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "transition:group-update"
+      ],
+      "operation": "replay-change-set",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "transition-group-update"
+    },
+    {
+      "artifact": "scenarios/cases/transition-merge-resolution.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 304,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/transition-merge-resolution.json",
+            "sha256": "1a27f793d4736abb59313d3455c75ef468ead1238a5f658a601cc84c933ae059"
+          },
+          "summarySha256": "89ebb69fa9111ce6f5c10e437278eacd85c2c5c9850494919c558986a948c979"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "transition:merge-resolution"
+      ],
+      "operation": "replay-change-set",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "transition-merge-resolution"
+    },
+    {
+      "artifact": "scenarios/cases/transition-modify.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 294,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/transition-modify.json",
+            "sha256": "8d022a84221588dce5674a68177b7e01e56410ffb07114dd0a147a86094776a2"
+          },
+          "summarySha256": "0f02eac35a3dfc258b6601efc122dd24051fdc84840d475063ce6caa7cce93b0"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "transition:modify"
+      ],
+      "operation": "replay-change-set",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "transition-modify"
+    },
+    {
+      "artifact": "scenarios/cases/transition-move.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 292,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/transition-move.json",
+            "sha256": "eb072e2e8d7d6893b1adfce06ab6850a78507d6325a631d4937a398530269752"
+          },
+          "summarySha256": "46d55eb6240706508e3ef48378c69459abb46cf23dbeef03a8ea9363fe127289"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "transition:move"
+      ],
+      "operation": "replay-change-set",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "transition-move"
+    },
+    {
+      "artifact": "scenarios/cases/transition-rename.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 294,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/transition-rename.json",
+            "sha256": "4959dd9b4e7f275eb01fcf3be28f3206a608691e7f3a7319725c25cd4f2fcc7c"
+          },
+          "summarySha256": "df1b37c05bd259f3f2e872f343164f2ffe60da6c9e339ac114539001e7500f34"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "transition:rename"
+      ],
+      "operation": "replay-change-set",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "transition-rename"
+    },
+    {
+      "artifact": "scenarios/cases/transition-restore.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 295,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/transition-restore.json",
+            "sha256": "06b54e9a57899bbefa6993fc07027032026d8bb5f59229cc7ea5093d65bf0d35"
+          },
+          "summarySha256": "479a4206093ccd64172d565e80f7cb5b3768f58a0952100592c3e040f96b11e2"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "transition:restore"
+      ],
+      "operation": "replay-change-set",
+      "requirementIds": [
+        "OGVCS-002-FR-09",
+        "OGVCS-002-FR-11"
+      ],
+      "scenarioId": "transition-restore"
+    },
+    {
+      "artifact": "scenarios/cases/transition-sequence-gap.json",
+      "code": "CHANGESET_SEQUENCE_INVALID",
+      "expected": {
+        "code": "CHANGESET_SEQUENCE_INVALID",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "transition:sequence"
+      ],
+      "operation": "replay-change-set",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "transition-sequence-gap"
+    },
+    {
+      "artifact": "scenarios/cases/tree-all-entry-kinds-modes.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 303,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/tree-all-entry-kinds-modes.json",
+            "sha256": "5da1af14a337c019a78e7c30d2201e26d4e513f13c5886a4c8a33cf7f2a4a108"
+          },
+          "summarySha256": "8621cf1a73a895553c189df1c1b882d0e087c989ee7a1922cc2aca9696c57e29"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "tree:all-entry-kinds",
+        "tree:all-modes"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "tree-all-entry-kinds-modes"
+    },
+    {
+      "artifact": "scenarios/cases/tree-empty.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 287,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/tree-empty.json",
+            "sha256": "bafec484ed5d8a433c1ac6437c7485b37f4ce9edeb8fc66151f142779637d25c"
+          },
+          "summarySha256": "3684bec25e867da47d7e59672bd7716d660e7ee955031b4e3a40920ec4951055"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "tree:empty"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "tree-empty"
+    },
+    {
+      "artifact": "scenarios/cases/tree-entry-order.json",
+      "code": "TREE_ENTRY_ORDER_INVALID",
+      "expected": {
+        "code": "TREE_ENTRY_ORDER_INVALID",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "tree:order-error"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "tree-entry-order"
+    },
+    {
+      "artifact": "scenarios/cases/tree-entry-target.json",
+      "code": "TREE_ENTRY_TARGET_INVALID",
+      "expected": {
+        "code": "TREE_ENTRY_TARGET_INVALID",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "tree:target-error"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "tree-entry-target"
+    },
+    {
+      "artifact": "scenarios/cases/tree-manifest-length-mismatch.json",
+      "code": "TREE_ENTRY_TARGET_INVALID",
+      "expected": {
+        "code": "TREE_ENTRY_TARGET_INVALID",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "tree:manifest-length-mismatch"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "tree-manifest-length-mismatch"
+    },
+    {
+      "artifact": "scenarios/cases/tree-million-entries.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 260,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/tree-million-entries.json",
+            "sha256": "bb76b1a0ab0d9da2d3032d40a6b7ad994a23a34cc562ba0a7908c68fd64fea6f"
+          },
+          "summarySha256": "74d8b7751e1765425f5fd33cf6515d8c674114c8ea0d58ca959df545fa922c07"
+        },
+        "result": "accept"
+      },
+      "materialization": "virtual-constructor",
+      "obligationTags": [
+        "tree:million-entries"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-AC-02",
+        "OGVCS-002-FR-09",
+        "OGVCS-002-NFR-02"
+      ],
+      "scenarioId": "tree-million-entries"
+    },
+    {
+      "artifact": "scenarios/cases/tree-path-core.json",
+      "code": "PATH_CORE_INVALID",
+      "expected": {
+        "code": "PATH_CORE_INVALID",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "tree:path-core-error"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "tree-path-core"
+    },
+    {
+      "artifact": "scenarios/cases/tree-path-profile.json",
+      "code": "PATH_PROFILE_INVALID",
+      "expected": {
+        "code": "PATH_PROFILE_INVALID",
+        "layer": 3,
+        "result": "reject",
+        "stage": "repository-semantics"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "tree:path-profile-error"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "tree-path-profile"
+    },
+    {
+      "artifact": "scenarios/cases/tree-unicode.json",
+      "expected": {
+        "highestLayer": 3,
+        "output": {
+          "artifact": {
+            "bytes": 289,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/tree-unicode.json",
+            "sha256": "76e67d880f3b46fe686d5fdce0d393d59a3062a9f3c43ebaf9ff75da660d2ffd"
+          },
+          "summarySha256": "c933f3459ecebd147c7de1be7a1b1ece5d94fa7f777a26255b9ccbd195c313a0"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-object-graph",
+      "obligationTags": [
+        "tree:unicode"
+      ],
+      "operation": "validate-object",
+      "requirementIds": [
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "tree-unicode"
+    },
+    {
+      "artifact": "scenarios/cases/truncation-every-prefix.json",
+      "expected": {
+        "highestLayer": 1,
+        "output": {
+          "artifact": {
+            "bytes": 283,
+            "mediaType": "application/json",
+            "path": "scenarios/outputs/truncation-every-prefix.json",
+            "sha256": "cf66ed06f1a66273e2d1c653034ddcd97c340fb0b1e977c9e2e9c9cee4d9df9b"
+          },
+          "summarySha256": "61e3ebdb504f9f1cd5afb904245f344f1d6074d92b965b16a80ed70ce83eb6c4"
+        },
+        "result": "accept"
+      },
+      "materialization": "byte-materialized-direct-artifact",
+      "obligationTags": [
+        "truncation:every-prefix"
+      ],
+      "operation": "canonical-scan",
+      "requirementIds": [
+        "OGVCS-002-AC-08",
+        "OGVCS-002-FR-09"
+      ],
+      "scenarioId": "truncation-every-prefix"
+    }
+  ],
+  "registrySnapshot": "registries/live-snapshot.json",
+  "schema": "ogvcs.repository-format.v1.validation-scenario-index.v1"
+}

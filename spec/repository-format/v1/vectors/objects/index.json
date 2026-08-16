@@ -1,0 +1,126 @@
+{
+  "objects": [
+    {
+      "formatVersionUint16beHex": "0001",
+      "kind": 1,
+      "kindUint16beHex": "0001",
+      "name": "chunk",
+      "objectDomainHex": "4f70656e47616d65564353206f626a65637400",
+      "objectId": "944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5",
+      "payloadPath": "objects/01-chunk.bin",
+      "preimageHex": "4f70656e47616d65564353206f626a65637400000100014f70656e47616d655643530a",
+      "preimageRecipe": "objectDomainHex || formatVersionUint16beHex || kindUint16beHex || exact payloadPath bytes"
+    },
+    {
+      "formatVersionUint16beHex": "0001",
+      "kind": 2,
+      "kindUint16beHex": "0002",
+      "name": "content-manifest",
+      "objectDomainHex": "4f70656e47616d65564353206f626a65637400",
+      "objectId": "82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12",
+      "payloadPath": "objects/02-content-manifest.cbor",
+      "preimageHex": "4f70656e47616d65564353206f626a6563740000010002a700010102028010181811a20001015820cb4f2424fd3588eb17773169678f8a2bc61546e0605e6f58ef64e4c67fdc49f812a3006d6368756e6b696e672e74657374017365787465726e616c2d626f756e64617269657302011382a200a4000101010201035820944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5010ca200a4000101010201035820944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5010c",
+      "preimageRecipe": "objectDomainHex || formatVersionUint16beHex || kindUint16beHex || exact payloadPath bytes"
+    },
+    {
+      "formatVersionUint16beHex": "0001",
+      "kind": 3,
+      "kindUint16beHex": "0003",
+      "name": "tree",
+      "objectDomainHex": "4f70656e47616d65564353206f626a65637400",
+      "objectId": "9458b24239ce71b75b1c6ab857883d66a6eab3f0f6f4e9afab15371af1d4bf19",
+      "payloadPath": "objects/03-tree.cbor",
+      "preimageHex": null,
+      "preimageRecipe": "objectDomainHex || formatVersionUint16beHex || kindUint16beHex || exact payloadPath bytes"
+    },
+    {
+      "formatVersionUint16beHex": "0001",
+      "kind": 4,
+      "kindUint16beHex": "0004",
+      "name": "change-set",
+      "objectDomainHex": "4f70656e47616d65564353206f626a65637400",
+      "objectId": "9cda477b4303c876fc79feb4cbd0a5deda70011261bd81fc758b588872040720",
+      "payloadPath": "objects/04-change-set.cbor",
+      "preimageHex": null,
+      "preimageRecipe": "objectDomainHex || formatVersionUint16beHex || kindUint16beHex || exact payloadPath bytes"
+    },
+    {
+      "formatVersionUint16beHex": "0001",
+      "kind": 5,
+      "kindUint16beHex": "0005",
+      "name": "asset-group-set",
+      "objectDomainHex": "4f70656e47616d65564353206f626a65637400",
+      "objectId": "3b4641600c6951bfe3c96e4a9ccb28b424b20d8c251db5efcda65fd0c8bd4c7e",
+      "payloadPath": "objects/05-asset-group-set.cbor",
+      "preimageHex": "4f70656e47616d65564353206f626a6563740000010005a500010105028010a4000101060201035820dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a530425451181a500505151515151515151515151515151515101a3006a67726f75702e7465737401666f706171756502010250121212121212121212121212121212120381a200501212121212121212121212121212121201a3006f67726f75702d726f6c652e7465737401666d656d62657202010481a200a3007165787465726e616c2d6b65792e7465737401666f70617175650201014c65787465726e616c2d6b6579",
+      "preimageRecipe": "objectDomainHex || formatVersionUint16beHex || kindUint16beHex || exact payloadPath bytes"
+    },
+    {
+      "formatVersionUint16beHex": "0001",
+      "kind": 6,
+      "kindUint16beHex": "0006",
+      "name": "repository-descriptor",
+      "objectDomainHex": "4f70656e47616d65564353206f626a65637400",
+      "objectId": "dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+      "payloadPath": "objects/06-repository-descriptor.cbor",
+      "preimageHex": null,
+      "preimageRecipe": "objectDomainHex || formatVersionUint16beHex || kindUint16beHex || exact payloadPath bytes"
+    },
+    {
+      "formatVersionUint16beHex": "0001",
+      "kind": 7,
+      "kindUint16beHex": "0007",
+      "name": "snapshot",
+      "objectDomainHex": "4f70656e47616d65564353206f626a65637400",
+      "objectId": "cc4d4a4a7be098bc74f5bb97cfe1eb37d870832dd44c56f0ceac12d65f871290",
+      "payloadPath": "objects/07-snapshot.cbor",
+      "preimageHex": null,
+      "preimageRecipe": "objectDomainHex || formatVersionUint16beHex || kindUint16beHex || exact payloadPath bytes"
+    },
+    {
+      "formatVersionUint16beHex": "0001",
+      "kind": 8,
+      "kindUint16beHex": "0008",
+      "name": "shelf-revision",
+      "objectDomainHex": "4f70656e47616d65564353206f626a65637400",
+      "objectId": "552198509e456e40abdce5e9746c5d2f6ed47a639e79c3bb1dd319f4f65fa14f",
+      "payloadPath": "objects/08-shelf-revision.cbor",
+      "preimageHex": null,
+      "preimageRecipe": "objectDomainHex || formatVersionUint16beHex || kindUint16beHex || exact payloadPath bytes"
+    },
+    {
+      "formatVersionUint16beHex": "0001",
+      "kind": 9,
+      "kindUint16beHex": "0009",
+      "name": "provenance",
+      "objectDomainHex": "4f70656e47616d65564353206f626a65637400",
+      "objectId": "792a6322c62aaf3096be4d5c86e2850b01d8892083f58c3304dc52530c079235",
+      "payloadPath": "objects/09-provenance.cbor",
+      "preimageHex": "4f70656e47616d65564353206f626a6563740000010009a700010109028010a3006f70726f76656e616e63652e7465737401666f706171756502011181a400010102020103582082fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a1212a20001015820d56cfc819bbbb87073f15b34da4ce8be0bb317cf77a1c87d771793c5973d9ea01358196e65757472616c20766563746f722070726f76656e616e6365",
+      "preimageRecipe": "objectDomainHex || formatVersionUint16beHex || kindUint16beHex || exact payloadPath bytes"
+    },
+    {
+      "formatVersionUint16beHex": "0001",
+      "kind": 10,
+      "kindUint16beHex": "000a",
+      "name": "attestation",
+      "objectDomainHex": "4f70656e47616d65564353206f626a65637400",
+      "objectId": "56fdc7943a314d8dcf628508f5abcbde57a9cbc15910eb6fe4527351d2eeec18",
+      "payloadPath": "objects/10-attestation.cbor",
+      "preimageHex": "4f70656e47616d65564353206f626a656374000001000aaa0001010a028010a4000101070201035820cc4d4a4a7be098bc74f5bb97cfe1eb37d870832dd44c56f0ceac12d65f87129011a300706174746573746174696f6e2e7465737401666f7061717565020112a300a3006d6964656e746974792e7465737401666f70617175650201014131026c566563746f72204163746f72130214536174746573746174696f6e207061796c6f616415a3006e7369676e61747572652e7465737401666f706171756502011643010203",
+      "preimageRecipe": "objectDomainHex || formatVersionUint16beHex || kindUint16beHex || exact payloadPath bytes"
+    },
+    {
+      "formatVersionUint16beHex": "0001",
+      "kind": 11,
+      "kindUint16beHex": "000b",
+      "name": "conflict-set",
+      "objectDomainHex": "4f70656e47616d65564353206f626a65637400",
+      "objectId": "59f7814cfab891685197abebc61ea70cdca2a2328feab3c4cec816d4eabfca07",
+      "payloadPath": "objects/11-conflict-set.cbor",
+      "preimageHex": null,
+      "preimageRecipe": "objectDomainHex || formatVersionUint16beHex || kindUint16beHex || exact payloadPath bytes"
+    }
+  ],
+  "schema": "ogvcs.repository-format.v1.object-vectors.v1"
+}

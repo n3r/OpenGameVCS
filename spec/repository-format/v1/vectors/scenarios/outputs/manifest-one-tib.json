@@ -1,0 +1,7 @@
+{
+  "resultFamily": "manifest",
+  "rootState": "inventory-only-no-executed-output",
+  "scenarioId": "manifest-one-tib",
+  "schema": "ogvcs.repository-format.v1.scenario-output.v1",
+  "stableOutputIdentity": "inventory-only:not-executed:manifest-one-tib"
+}

@@ -1,0 +1,496 @@
+{
+  "entries": [
+    {
+      "family": "annotation-payload",
+      "id": "opaque",
+      "major": 1,
+      "namespace": "annotation.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "attestation-predicate",
+      "id": "opaque",
+      "major": 1,
+      "namespace": "attestation.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "bundle-root-role",
+      "id": "root",
+      "major": 1,
+      "namespace": "bundle-role.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "chunking",
+      "id": "external-boundaries",
+      "major": 1,
+      "namespace": "chunking.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "conflict-driver",
+      "id": "opaque",
+      "major": 1,
+      "namespace": "conflict-driver.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "content-policy",
+      "id": "alternate",
+      "major": 1,
+      "namespace": "content-policy.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "content-policy",
+      "id": "opaque",
+      "major": 1,
+      "namespace": "content-policy.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "external-key",
+      "id": "opaque",
+      "major": 1,
+      "namespace": "external-key.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-content-policy",
+      "id": "asset",
+      "major": 2,
+      "namespace": "fixture-content.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-content-policy",
+      "id": "binary-import",
+      "major": 2,
+      "namespace": "fixture-content.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-content-policy",
+      "id": "binary-version",
+      "major": 2,
+      "namespace": "fixture-content.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-content-policy",
+      "id": "configuration",
+      "major": 2,
+      "namespace": "fixture-content.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-content-policy",
+      "id": "documentation",
+      "major": 2,
+      "namespace": "fixture-content.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-content-policy",
+      "id": "external-actor",
+      "major": 2,
+      "namespace": "fixture-content.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-content-policy",
+      "id": "header",
+      "major": 2,
+      "namespace": "fixture-content.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-content-policy",
+      "id": "map",
+      "major": 2,
+      "namespace": "fixture-content.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-content-policy",
+      "id": "meta",
+      "major": 2,
+      "namespace": "fixture-content.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-content-policy",
+      "id": "mutable-large-file",
+      "major": 2,
+      "namespace": "fixture-content.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-content-policy",
+      "id": "negative-evidence",
+      "major": 2,
+      "namespace": "fixture-content.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-content-policy",
+      "id": "package",
+      "major": 2,
+      "namespace": "fixture-content.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-content-policy",
+      "id": "prefab",
+      "major": 2,
+      "namespace": "fixture-content.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-content-policy",
+      "id": "review-input",
+      "major": 2,
+      "namespace": "fixture-content.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-content-policy",
+      "id": "scene",
+      "major": 2,
+      "namespace": "fixture-content.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-content-policy",
+      "id": "script",
+      "major": 2,
+      "namespace": "fixture-content.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-content-policy",
+      "id": "sidecar",
+      "major": 2,
+      "namespace": "fixture-content.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-content-policy",
+      "id": "source",
+      "major": 2,
+      "namespace": "fixture-content.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-event",
+      "id": "operation",
+      "major": 2,
+      "namespace": "fixture-event.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-group",
+      "id": "asset",
+      "major": 2,
+      "namespace": "fixture-group.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-group",
+      "id": "asset-meta",
+      "major": 2,
+      "namespace": "fixture-group.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-group",
+      "id": "binary-version-family",
+      "major": 2,
+      "namespace": "fixture-group.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-group",
+      "id": "map-external-actors",
+      "major": 2,
+      "namespace": "fixture-group.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-group",
+      "id": "package-sidecars",
+      "major": 2,
+      "namespace": "fixture-group.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-group",
+      "id": "site",
+      "major": 2,
+      "namespace": "fixture-group.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-group",
+      "id": "team",
+      "major": 2,
+      "namespace": "fixture-group.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-external-key",
+      "id": "synthetic-guid",
+      "major": 2,
+      "namespace": "fixture-key.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-group-role",
+      "id": "external-actor",
+      "major": 2,
+      "namespace": "fixture-role.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-group-role",
+      "id": "map",
+      "major": 2,
+      "namespace": "fixture-role.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-group-role",
+      "id": "member",
+      "major": 2,
+      "namespace": "fixture-role.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-group-role",
+      "id": "meta",
+      "major": 2,
+      "namespace": "fixture-role.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-group-role",
+      "id": "package",
+      "major": 2,
+      "namespace": "fixture-role.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-group-role",
+      "id": "primary",
+      "major": 2,
+      "namespace": "fixture-role.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "fixture-group-role",
+      "id": "sidecar",
+      "major": 2,
+      "namespace": "fixture-role.opengamevcs.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "group-role",
+      "id": "member",
+      "major": 1,
+      "namespace": "group-role.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "group",
+      "id": "opaque",
+      "major": 1,
+      "namespace": "group.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "identity",
+      "id": "opaque",
+      "major": 1,
+      "namespace": "identity.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "importer",
+      "id": "fixture-adapter",
+      "major": 1,
+      "namespace": "importer.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "path",
+      "id": "opaque",
+      "major": 1,
+      "namespace": "path.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "path",
+      "id": "reject-reserved",
+      "major": 1,
+      "namespace": "path.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "policy",
+      "id": "allow",
+      "major": 1,
+      "namespace": "policy.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "provenance",
+      "id": "opaque",
+      "major": 1,
+      "namespace": "provenance.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    },
+    {
+      "family": "signature",
+      "id": "opaque",
+      "major": 1,
+      "namespace": "signature.test",
+      "owner": "OGVCS-002",
+      "productionWriteAllowed": false,
+      "state": "conformance-only"
+    }
+  ],
+  "formatVersion": 1,
+  "profileRef": {
+    "fields": [
+      {
+        "code": 0,
+        "name": "namespace",
+        "type": "tstr"
+      },
+      {
+        "code": 1,
+        "name": "id",
+        "type": "tstr"
+      },
+      {
+        "code": 2,
+        "name": "major",
+        "type": "uint32-positive"
+      }
+    ],
+    "idPattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+    "idUtf8BytesMaximum": 63,
+    "namespacePattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+$",
+    "namespaceUtf8BytesMaximum": 253,
+    "textKey": "<namespace>/<id>@<major>"
+  },
+  "registry": "ogvcs.repository-format.profiles",
+  "registryVersion": 1,
+  "states": [
+    "reserved",
+    "conformance-only",
+    "ratified",
+    "deprecated"
+  ]
+}

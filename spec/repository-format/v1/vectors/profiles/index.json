@@ -1,0 +1,634 @@
+{
+  "productionMode": [
+    {
+      "artifact": "logical-records/08-annotation.cbor",
+      "expected": {
+        "code": "PROFILE_CONFORMANCE_ONLY",
+        "layer": 3,
+        "mode": "production",
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "family": "annotation-payload",
+      "profile": "annotation.test/opaque@1",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "objects/10-attestation.cbor",
+      "expected": {
+        "code": "PROFILE_CONFORMANCE_ONLY",
+        "layer": 3,
+        "mode": "production",
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "family": "attestation-predicate",
+      "profile": "attestation.test/opaque@1",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "profiles/bundle-root.cbor",
+      "expected": {
+        "code": "PROFILE_CONFORMANCE_ONLY",
+        "layer": 3,
+        "mode": "production",
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "family": "bundle-root-role",
+      "profile": "bundle-role.test/root@1",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "objects/02-content-manifest.cbor",
+      "expected": {
+        "code": "PROFILE_CONFORMANCE_ONLY",
+        "layer": 3,
+        "mode": "production",
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "family": "chunking",
+      "profile": "chunking.test/external-boundaries@1",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "objects/03-tree.cbor",
+      "expected": {
+        "code": "PROFILE_CONFORMANCE_ONLY",
+        "layer": 3,
+        "mode": "production",
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "family": "content-policy",
+      "profile": "content-policy.test/opaque@1",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "objects/05-asset-group-set.cbor",
+      "expected": {
+        "code": "PROFILE_CONFORMANCE_ONLY",
+        "layer": 3,
+        "mode": "production",
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "family": "external-key",
+      "profile": "external-key.test/opaque@1",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "profiles/fixture-tree.cbor",
+      "expected": {
+        "code": "PROFILE_CONFORMANCE_ONLY",
+        "layer": 3,
+        "mode": "production",
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "family": "fixture-content-policy",
+      "profile": "fixture-content.opengamevcs.test/asset@2",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "logical-records/09-fixture-event.cbor",
+      "expected": {
+        "code": "PROFILE_CONFORMANCE_ONLY",
+        "layer": 3,
+        "mode": "production",
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "family": "fixture-event",
+      "profile": "fixture-event.opengamevcs.test/operation@2",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "profiles/fixture-group-set.cbor",
+      "expected": {
+        "code": "PROFILE_CONFORMANCE_ONLY",
+        "layer": 3,
+        "mode": "production",
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "family": "fixture-external-key",
+      "profile": "fixture-key.opengamevcs.test/synthetic-guid@2",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "profiles/fixture-group-set.cbor",
+      "expected": {
+        "code": "PROFILE_CONFORMANCE_ONLY",
+        "layer": 3,
+        "mode": "production",
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "family": "fixture-group",
+      "profile": "fixture-group.opengamevcs.test/asset-meta@2",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "profiles/fixture-group-set.cbor",
+      "expected": {
+        "code": "PROFILE_CONFORMANCE_ONLY",
+        "layer": 3,
+        "mode": "production",
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "family": "fixture-group-role",
+      "profile": "fixture-role.opengamevcs.test/primary@2",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "objects/05-asset-group-set.cbor",
+      "expected": {
+        "code": "PROFILE_CONFORMANCE_ONLY",
+        "layer": 3,
+        "mode": "production",
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "family": "group",
+      "profile": "group.test/opaque@1",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "objects/05-asset-group-set.cbor",
+      "expected": {
+        "code": "PROFILE_CONFORMANCE_ONLY",
+        "layer": 3,
+        "mode": "production",
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "family": "group-role",
+      "profile": "group-role.test/member@1",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "objects/07-snapshot.cbor",
+      "expected": {
+        "code": "PROFILE_CONFORMANCE_ONLY",
+        "layer": 3,
+        "mode": "production",
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "family": "identity",
+      "profile": "identity.test/opaque@1",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "logical-records/05-import-mapping.cbor",
+      "expected": {
+        "code": "PROFILE_CONFORMANCE_ONLY",
+        "layer": 3,
+        "mode": "production",
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "family": "importer",
+      "profile": "importer.test/fixture-adapter@1",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "objects/06-repository-descriptor.cbor",
+      "expected": {
+        "code": "PROFILE_CONFORMANCE_ONLY",
+        "layer": 3,
+        "mode": "production",
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "family": "path",
+      "profile": "path.test/opaque@1",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "objects/07-snapshot.cbor",
+      "expected": {
+        "code": "PROFILE_CONFORMANCE_ONLY",
+        "layer": 3,
+        "mode": "production",
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "family": "policy",
+      "profile": "policy.test/allow@1",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "objects/09-provenance.cbor",
+      "expected": {
+        "code": "PROFILE_CONFORMANCE_ONLY",
+        "layer": 3,
+        "mode": "production",
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "family": "provenance",
+      "profile": "provenance.test/opaque@1",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "objects/10-attestation.cbor",
+      "expected": {
+        "code": "PROFILE_CONFORMANCE_ONLY",
+        "layer": 3,
+        "mode": "production",
+        "result": "reject",
+        "stage": "registry-semantics"
+      },
+      "family": "signature",
+      "profile": "signature.test/opaque@1",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    }
+  ],
+  "schema": "ogvcs.repository-format.v1.profile-cases.v1",
+  "validFamilyUses": [
+    {
+      "artifact": "logical-records/08-annotation.cbor",
+      "expected": {
+        "highestLayer": 3,
+        "mode": "conformance",
+        "result": "accept"
+      },
+      "family": "annotation-payload",
+      "field": "annotation.profile",
+      "profile": "annotation.test/opaque@1",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "objects/10-attestation.cbor",
+      "expected": {
+        "highestLayer": 3,
+        "mode": "conformance",
+        "result": "accept"
+      },
+      "family": "attestation-predicate",
+      "field": "attestation.predicate",
+      "profile": "attestation.test/opaque@1",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "profiles/bundle-root.cbor",
+      "expected": {
+        "highestLayer": 3,
+        "mode": "conformance",
+        "result": "accept"
+      },
+      "family": "bundle-root-role",
+      "field": "bundle-root.role",
+      "profile": "bundle-role.test/root@1",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "objects/02-content-manifest.cbor",
+      "expected": {
+        "highestLayer": 3,
+        "mode": "conformance",
+        "result": "accept"
+      },
+      "family": "chunking",
+      "field": "manifest.chunk-profile",
+      "profile": "chunking.test/external-boundaries@1",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "objects/03-tree.cbor",
+      "expected": {
+        "highestLayer": 3,
+        "mode": "conformance",
+        "result": "accept"
+      },
+      "family": "content-policy",
+      "field": "tree-entry.content-policy",
+      "profile": "content-policy.test/opaque@1",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "objects/05-asset-group-set.cbor",
+      "expected": {
+        "highestLayer": 3,
+        "mode": "conformance",
+        "result": "accept"
+      },
+      "family": "external-key",
+      "field": "group.external-key.scheme",
+      "profile": "external-key.test/opaque@1",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "profiles/fixture-tree.cbor",
+      "expected": {
+        "highestLayer": 3,
+        "mode": "conformance",
+        "result": "accept"
+      },
+      "family": "fixture-content-policy",
+      "field": "fixture-tree-entry.content-policy",
+      "profile": "fixture-content.opengamevcs.test/asset@2",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "logical-records/09-fixture-event.cbor",
+      "expected": {
+        "highestLayer": 3,
+        "mode": "conformance",
+        "result": "accept"
+      },
+      "family": "fixture-event",
+      "field": "fixture-event.profile",
+      "profile": "fixture-event.opengamevcs.test/operation@2",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "profiles/fixture-group-set.cbor",
+      "expected": {
+        "highestLayer": 3,
+        "mode": "conformance",
+        "result": "accept"
+      },
+      "family": "fixture-external-key",
+      "field": "fixture-group.external-key.scheme",
+      "profile": "fixture-key.opengamevcs.test/synthetic-guid@2",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "profiles/fixture-group-set.cbor",
+      "expected": {
+        "highestLayer": 3,
+        "mode": "conformance",
+        "result": "accept"
+      },
+      "family": "fixture-group",
+      "field": "fixture-group.profile",
+      "profile": "fixture-group.opengamevcs.test/asset-meta@2",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "profiles/fixture-group-set.cbor",
+      "expected": {
+        "highestLayer": 3,
+        "mode": "conformance",
+        "result": "accept"
+      },
+      "family": "fixture-group-role",
+      "field": "fixture-group.member.role",
+      "profile": "fixture-role.opengamevcs.test/primary@2",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "objects/05-asset-group-set.cbor",
+      "expected": {
+        "highestLayer": 3,
+        "mode": "conformance",
+        "result": "accept"
+      },
+      "family": "group",
+      "field": "group.profile",
+      "profile": "group.test/opaque@1",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "objects/05-asset-group-set.cbor",
+      "expected": {
+        "highestLayer": 3,
+        "mode": "conformance",
+        "result": "accept"
+      },
+      "family": "group-role",
+      "field": "group.member.role",
+      "profile": "group-role.test/member@1",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "objects/07-snapshot.cbor",
+      "expected": {
+        "highestLayer": 3,
+        "mode": "conformance",
+        "result": "accept"
+      },
+      "family": "identity",
+      "field": "snapshot.author.scheme",
+      "profile": "identity.test/opaque@1",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "logical-records/05-import-mapping.cbor",
+      "expected": {
+        "highestLayer": 3,
+        "mode": "conformance",
+        "result": "accept"
+      },
+      "family": "importer",
+      "field": "import-mapping.importer",
+      "profile": "importer.test/fixture-adapter@1",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "objects/06-repository-descriptor.cbor",
+      "expected": {
+        "highestLayer": 3,
+        "mode": "conformance",
+        "result": "accept"
+      },
+      "family": "path",
+      "field": "descriptor.path-profile",
+      "profile": "path.test/opaque@1",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "objects/07-snapshot.cbor",
+      "expected": {
+        "highestLayer": 3,
+        "mode": "conformance",
+        "result": "accept"
+      },
+      "family": "policy",
+      "field": "snapshot.policy-result.profile",
+      "profile": "policy.test/allow@1",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "objects/09-provenance.cbor",
+      "expected": {
+        "highestLayer": 3,
+        "mode": "conformance",
+        "result": "accept"
+      },
+      "family": "provenance",
+      "field": "provenance.producer",
+      "profile": "provenance.test/opaque@1",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    },
+    {
+      "artifact": "objects/10-attestation.cbor",
+      "expected": {
+        "highestLayer": 3,
+        "mode": "conformance",
+        "result": "accept"
+      },
+      "family": "signature",
+      "field": "attestation.signature-profile",
+      "profile": "signature.test/opaque@1",
+      "validationScope": "isolated profile family, registry state, and profile-specific behavior after layer-2 acceptance"
+    }
+  ],
+  "wrongFamilyUses": [
+    {
+      "artifact": "profiles/wrong-family/descriptor-path.cbor",
+      "expected": {
+        "code": "SCHEMA_FIELD_INVALID",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "name": "descriptor-path"
+    },
+    {
+      "artifact": "profiles/wrong-family/manifest-chunking.cbor",
+      "expected": {
+        "code": "SCHEMA_FIELD_INVALID",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "name": "manifest-chunking"
+    },
+    {
+      "artifact": "profiles/wrong-family/tree-content-policy.cbor",
+      "expected": {
+        "code": "SCHEMA_FIELD_INVALID",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "name": "tree-content-policy"
+    },
+    {
+      "artifact": "profiles/wrong-family/group-profile.cbor",
+      "expected": {
+        "code": "SCHEMA_FIELD_INVALID",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "name": "group-profile"
+    },
+    {
+      "artifact": "profiles/wrong-family/group-member-role.cbor",
+      "expected": {
+        "code": "SCHEMA_FIELD_INVALID",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "name": "group-member-role"
+    },
+    {
+      "artifact": "profiles/wrong-family/group-external-key.cbor",
+      "expected": {
+        "code": "SCHEMA_FIELD_INVALID",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "name": "group-external-key"
+    },
+    {
+      "artifact": "profiles/wrong-family/snapshot-identity.cbor",
+      "expected": {
+        "code": "SCHEMA_FIELD_INVALID",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "name": "snapshot-identity"
+    },
+    {
+      "artifact": "profiles/wrong-family/snapshot-policy.cbor",
+      "expected": {
+        "code": "SCHEMA_FIELD_INVALID",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "name": "snapshot-policy"
+    },
+    {
+      "artifact": "profiles/wrong-family/provenance-producer.cbor",
+      "expected": {
+        "code": "SCHEMA_FIELD_INVALID",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "name": "provenance-producer"
+    },
+    {
+      "artifact": "profiles/wrong-family/attestation-predicate.cbor",
+      "expected": {
+        "code": "SCHEMA_FIELD_INVALID",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "name": "attestation-predicate"
+    },
+    {
+      "artifact": "profiles/wrong-family/attestation-signature.cbor",
+      "expected": {
+        "code": "SCHEMA_FIELD_INVALID",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "name": "attestation-signature"
+    },
+    {
+      "artifact": "profiles/wrong-family/annotation-profile.cbor",
+      "expected": {
+        "code": "SCHEMA_FIELD_INVALID",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "name": "annotation-profile"
+    },
+    {
+      "artifact": "profiles/wrong-family/importer-profile.cbor",
+      "expected": {
+        "code": "SCHEMA_FIELD_INVALID",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "name": "importer-profile"
+    },
+    {
+      "artifact": "profiles/wrong-family/fixture-event-profile.cbor",
+      "expected": {
+        "code": "SCHEMA_FIELD_INVALID",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "name": "fixture-event-profile"
+    },
+    {
+      "artifact": "profiles/wrong-family/bundle-root-role.cbor",
+      "expected": {
+        "code": "SCHEMA_FIELD_INVALID",
+        "layer": 2,
+        "result": "reject",
+        "stage": "known-schema"
+      },
+      "name": "bundle-root-role"
+    }
+  ]
+}

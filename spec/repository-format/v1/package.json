@@ -1,0 +1,24 @@
+{
+  "name": "@opengamevcs/repository-format-v1",
+  "version": "0.1.0",
+  "description": "Normative OpenGameVCS repository-format-v1 specification, registries, and conformance vectors",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./index.mjs",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "*.cddl",
+    "*.json",
+    "*.md",
+    "LICENSE",
+    "index.mjs",
+    "registries",
+    "vectors"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  }
+}

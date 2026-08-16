@@ -1,0 +1,56 @@
+{
+  "entries": [
+    {
+      "allowedModeCodes": [
+        1
+      ],
+      "code": 1,
+      "name": "directory",
+      "state": "ratified",
+      "targetKind": "tree"
+    },
+    {
+      "allowedModeCodes": [
+        2
+      ],
+      "code": 2,
+      "name": "regular",
+      "state": "ratified",
+      "targetKind": "content-manifest"
+    },
+    {
+      "allowedModeCodes": [
+        3
+      ],
+      "code": 3,
+      "name": "executable",
+      "state": "ratified",
+      "targetKind": "content-manifest"
+    },
+    {
+      "allowedModeCodes": [
+        4
+      ],
+      "code": 4,
+      "name": "symlink",
+      "state": "ratified",
+      "targetKind": "content-manifest"
+    }
+  ],
+  "formatVersion": 1,
+  "registry": "ogvcs.repository-format.entry-kinds",
+  "registryVersion": 1,
+  "reserved": [
+    {
+      "from": 0,
+      "reason": "invalid sentinel",
+      "to": 0
+    }
+  ],
+  "unassigned": [
+    {
+      "from": 5,
+      "to": 65535
+    }
+  ]
+}

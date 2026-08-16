@@ -1,0 +1,199 @@
+{
+  "algorithm": {
+    "bitNumbering": "bitIndex 0 is mask 0x01 and bitIndex 7 is mask 0x80",
+    "id": "ogvcs.systematic-single-bit-xor",
+    "operation": "for byteOffset in [0,byteLength), then bitIndex in [0,8), clone the selected byte range and XOR byte[byteOffset] with (1 << bitIndex)",
+    "order": [
+      "source catalogue order",
+      "ascending byteOffset",
+      "ascending bitIndex"
+    ],
+    "version": 1
+  },
+  "bundleItemShapes": [
+    {
+      "byteLength": 26,
+      "byteOffset": 0,
+      "category": "bundle-header",
+      "source": "logical-bundles/valid-supplied-closure.cborseq"
+    },
+    {
+      "byteLength": 64,
+      "byteOffset": 26,
+      "category": "bundle-object",
+      "source": "logical-bundles/valid-supplied-closure.cborseq"
+    },
+    {
+      "byteLength": 132,
+      "byteOffset": 326,
+      "category": "bundle-logical-record",
+      "source": "logical-bundles/valid-supplied-closure.cborseq"
+    },
+    {
+      "byteLength": 80,
+      "byteOffset": 458,
+      "category": "bundle-root",
+      "source": "logical-bundles/valid-supplied-closure.cborseq"
+    },
+    {
+      "byteLength": 52,
+      "byteOffset": 614,
+      "category": "bundle-trailer",
+      "source": "logical-bundles/valid-supplied-closure.cborseq"
+    }
+  ],
+  "invariants": {
+    "bundleItem": "apply canonical framing first; if framing succeeds, item/record/object identity and then transcript verification use the original declarations",
+    "bundleSequence": "apply canonical item framing, section/order/count/ordinal/mode/budget and embedded identity checks in normative layer order; if those pass, require BUNDLE_TRAILER_MISMATCH because the original trailer transcript digest cannot authenticate changed pre-trailer bytes",
+    "objectOrLogicalRecord": "apply canonical framing before identity; a canonical changed payload must recompute a digest different from declaredIdentity and fail identityFailure"
+  },
+  "schema": "ogvcs.repository-format.v1.single-bit-mutation-recipes.v1",
+  "sources": [
+    {
+      "byteLength": 12,
+      "category": "raw-object",
+      "declaredIdentity": "944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5",
+      "identityFailure": "OBJECT_ID_MISMATCH",
+      "source": "objects/01-chunk.bin"
+    },
+    {
+      "byteLength": 183,
+      "category": "metadata-object",
+      "declaredIdentity": "82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12",
+      "identityFailure": "OBJECT_ID_MISMATCH",
+      "source": "objects/02-content-manifest.cbor"
+    },
+    {
+      "byteLength": 481,
+      "category": "metadata-object",
+      "declaredIdentity": "9458b24239ce71b75b1c6ab857883d66a6eab3f0f6f4e9afab15371af1d4bf19",
+      "identityFailure": "OBJECT_ID_MISMATCH",
+      "source": "objects/03-tree.cbor"
+    },
+    {
+      "byteLength": 819,
+      "category": "metadata-object",
+      "declaredIdentity": "9cda477b4303c876fc79feb4cbd0a5deda70011261bd81fc758b588872040720",
+      "identityFailure": "OBJECT_ID_MISMATCH",
+      "source": "objects/04-change-set.cbor"
+    },
+    {
+      "byteLength": 211,
+      "category": "metadata-object",
+      "declaredIdentity": "3b4641600c6951bfe3c96e4a9ccb28b424b20d8c251db5efcda65fd0c8bd4c7e",
+      "identityFailure": "OBJECT_ID_MISMATCH",
+      "source": "objects/05-asset-group-set.cbor"
+    },
+    {
+      "byteLength": 274,
+      "category": "metadata-object",
+      "declaredIdentity": "dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+      "identityFailure": "OBJECT_ID_MISMATCH",
+      "source": "objects/06-repository-descriptor.cbor"
+    },
+    {
+      "byteLength": 412,
+      "category": "metadata-object",
+      "declaredIdentity": "cc4d4a4a7be098bc74f5bb97cfe1eb37d870832dd44c56f0ceac12d65f871290",
+      "identityFailure": "OBJECT_ID_MISMATCH",
+      "source": "objects/07-snapshot.cbor"
+    },
+    {
+      "byteLength": 470,
+      "category": "metadata-object",
+      "declaredIdentity": "552198509e456e40abdce5e9746c5d2f6ed47a639e79c3bb1dd319f4f65fa14f",
+      "identityFailure": "OBJECT_ID_MISMATCH",
+      "source": "objects/08-shelf-revision.cbor"
+    },
+    {
+      "byteLength": 147,
+      "category": "metadata-object",
+      "declaredIdentity": "792a6322c62aaf3096be4d5c86e2850b01d8892083f58c3304dc52530c079235",
+      "identityFailure": "OBJECT_ID_MISMATCH",
+      "source": "objects/09-provenance.cbor"
+    },
+    {
+      "byteLength": 182,
+      "category": "metadata-object",
+      "declaredIdentity": "56fdc7943a314d8dcf628508f5abcbde57a9cbc15910eb6fe4527351d2eeec18",
+      "identityFailure": "OBJECT_ID_MISMATCH",
+      "source": "objects/10-attestation.cbor"
+    },
+    {
+      "byteLength": 1980,
+      "category": "metadata-object",
+      "declaredIdentity": "59f7814cfab891685197abebc61ea70cdca2a2328feab3c4cec816d4eabfca07",
+      "identityFailure": "OBJECT_ID_MISMATCH",
+      "source": "objects/11-conflict-set.cbor"
+    },
+    {
+      "byteLength": 91,
+      "category": "logical-record",
+      "declaredIdentity": "4a9eada49b937389d66d3e923a42539306ea841c5706f6ab148b29ad6c008ed3",
+      "identityFailure": "BUNDLE_RECORD_ID_MISMATCH",
+      "source": "logical-records/01-repository-root.cbor"
+    },
+    {
+      "byteLength": 101,
+      "category": "logical-record",
+      "declaredIdentity": "f4701d47f3ea48b62e2567f2d2c63547281eee5fdbd4b72af6c8e6de3c5ddc22",
+      "identityFailure": "BUNDLE_RECORD_ID_MISMATCH",
+      "source": "logical-records/02-mutable-ref.cbor"
+    },
+    {
+      "byteLength": 111,
+      "category": "logical-record",
+      "declaredIdentity": "c3e5ebdd5b341319d74720fea3af55f9fc96883a5814a9eba53291471f283265",
+      "identityFailure": "BUNDLE_RECORD_ID_MISMATCH",
+      "source": "logical-records/03-shelf-pointer.cbor"
+    },
+    {
+      "byteLength": 113,
+      "category": "logical-record",
+      "declaredIdentity": "dba1562b64924a99061d81a7fb9e492a27b5dce576b9b1aed7d8dc381fb1cee8",
+      "identityFailure": "BUNDLE_RECORD_ID_MISMATCH",
+      "source": "logical-records/04-file-id-lifetime.cbor"
+    },
+    {
+      "byteLength": 174,
+      "category": "logical-record",
+      "declaredIdentity": "aeea7b0c2d24d24a02e2caa8c0862a8b463d361e2cce95aee3587713621c8a49",
+      "identityFailure": "BUNDLE_RECORD_ID_MISMATCH",
+      "source": "logical-records/05-import-mapping.cbor"
+    },
+    {
+      "byteLength": 195,
+      "category": "logical-record",
+      "declaredIdentity": "df5a4b3dcf4e2ef99035dbc9b38977b11673bcc4000a65902acd1d53424c5cd9",
+      "identityFailure": "BUNDLE_RECORD_ID_MISMATCH",
+      "source": "logical-records/06-pending-change-reference.cbor"
+    },
+    {
+      "byteLength": 113,
+      "category": "logical-record",
+      "declaredIdentity": "06d53309ae087d75f53080707eed7a969aedc8c7e7f0d32b520a5f2992d31629",
+      "identityFailure": "BUNDLE_RECORD_ID_MISMATCH",
+      "source": "logical-records/07-lock-reference.cbor"
+    },
+    {
+      "byteLength": 85,
+      "category": "logical-record",
+      "declaredIdentity": "6b177aa1f64ee93fd91847b78a4a3426a07ec37a3329c9308ef68cf62da4bfa7",
+      "identityFailure": "BUNDLE_RECORD_ID_MISMATCH",
+      "source": "logical-records/08-annotation.cbor"
+    },
+    {
+      "byteLength": 141,
+      "category": "logical-record",
+      "declaredIdentity": "63a77499add3176068c9c41ded0f5032ed2223b853d9772c82bb23ad3b8b099a",
+      "identityFailure": "BUNDLE_RECORD_ID_MISMATCH",
+      "source": "logical-records/09-fixture-event.cbor"
+    }
+  ],
+  "totalCases": 58520,
+  "wholeSequence": {
+    "byteLength": 666,
+    "category": "bundle-sequence",
+    "source": "logical-bundles/valid-supplied-closure.cborseq"
+  }
+}

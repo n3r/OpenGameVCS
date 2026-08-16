@@ -1,0 +1,68 @@
+{
+  "algorithm": {
+    "id": "ogvcs.repository-validation-scenario-constructor",
+    "version": 1
+  },
+  "arithmetic": "mathematical nonnegative integers with explicit uint64 decode bounds; no host-width overflow is a semantic test oracle",
+  "detail": "chunk bytes do not reproduce whole-file digest",
+  "exactConstructorValues": {},
+  "expectedRootState": {
+    "resultFamily": "repository",
+    "rootState": "unchanged-no-trusted-output",
+    "scenarioId": "manifest-corrupt-chunk",
+    "stableOutputIdentity": "ogvcs:v1:content-manifest:sha256:0a76556cf9af050d9681ea38338992ba9c60db9d9f6afae99a376dbea2c4208c"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "normativeContext": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 13,
+          "mediaType": "application/octet-stream",
+          "path": "scenarios/objects/manifest-corrupt-chunk/chunk-0.bin",
+          "sha256": "37c757348e671599102d25f0c58362f5924a94fd313f4478cec8e3139f8886f5"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:8ae03cdb20ee0500d1cc4e9c5403469c318e1a3ec3a31826751650221c3550e1"
+      },
+      {
+        "artifact": {
+          "bytes": 136,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/manifest-corrupt-chunk/manifest.cbor",
+          "sha256": "a44f871b72c2300960984c4758aa4cb887a72275d5b549e40110ae5013e97bbb"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:0a76556cf9af050d9681ea38338992ba9c60db9d9f6afae99a376dbea2c4208c"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registryVersion": 1
+    },
+    "requestedLayer": 3,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "operation": "validate-object",
+  "parameters": {},
+  "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+  "scenarioId": "manifest-corrupt-chunk",
+  "seedHex": "5560d940fcd0ee4d0f03b0b34daf2761f729f4e33f3d74f0ca21045e25ea5b0b",
+  "suppliedResourceCatalogue": {
+    "baseObjectArtifacts": [
+      "scenarios/objects/manifest-corrupt-chunk/chunk-0.bin",
+      "scenarios/objects/manifest-corrupt-chunk/manifest.cbor"
+    ],
+    "logicalRecordArtifacts": [],
+    "mutationRecipe": "none",
+    "virtualLimitRecipe": "none"
+  },
+  "validation": {
+    "mode": "conformance",
+    "requestedLayer": 3
+  }
+}

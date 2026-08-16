@@ -1,0 +1,7 @@
+{
+  "resultFamily": "attestation",
+  "rootState": "accepted-exact-constructor-result",
+  "scenarioId": "attestation-unsigned",
+  "schema": "ogvcs.repository-format.v1.scenario-output.v1",
+  "stableOutputIdentity": "ogvcs:v1:attestation:sha256:8e970723339c4d46abc59446ba6bce414617a19f648afe72540843b2a1f89fd7"
+}

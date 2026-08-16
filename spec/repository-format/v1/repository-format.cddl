@@ -1,0 +1,612 @@
+; OpenGameVCS repository format v1.
+; This CDDL describes data-model shape. object-model.md additionally requires
+; deterministic CBOR, NFC, ordering, cross-field invariants, and hard budgets.
+; A chunk is raw bytes and is not a CBOR item.
+
+repository-format-cbor-item =
+  metadata-object /
+  logical-record /
+  logical-bundle-item /
+  conflict-id-preimage
+
+metadata-object =
+  content-manifest /
+  tree /
+  change-set /
+  group-set /
+  repository-descriptor /
+  snapshot /
+  shelf-revision /
+  provenance /
+  attestation /
+  conflict-set
+
+format-v1 = 1
+sha256-algorithm = 1
+digest = bstr .size 32
+id128 = bstr .size 16 ; nonzero: layer-2 FILEID_ZERO for FileID, SCHEMA_FIELD_INVALID otherwise
+repository-id = id128
+file-id = id128
+group-id = id128
+shelf-id = id128
+principal-id = id128
+timestamp-nanoseconds = -9223372036854775808..9223372036854775807
+logical-length = uint .le 1099511627776
+bundle-sequence-bytes = 0..2199023255552
+bundle-largest-item-bytes = 0..536871424
+bundle-object-count = 0..10000000
+bundle-logical-record-count = 0..10000000
+bundle-root-count = 0..20000000
+bundle-total-item-count = 2..40000002
+bundle-traversal-edge-count = 0..100000000
+bundle-index-entry-count = 0..20000000
+
+required-features = [* feature-id]
+feature-id = uint .le 4294967295
+extension-key = tstr .regexp "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+/[a-z][a-z0-9]*(?:-[a-z0-9]+)*@[1-9][0-9]*$"
+extensions = {* extension-key => extension-value}
+extension-value =
+  uint /
+  nint /
+  bstr /
+  tstr /
+  bool /
+  [* extension-value] /
+  {* uint => extension-value}
+
+typed-digest = {
+  0: sha256-algorithm,
+  1: digest
+}
+
+object-ref = {
+  0: format-v1,
+  1: object-kind,
+  2: sha256-algorithm,
+  3: digest
+}
+
+object-kind = 1..11
+chunk-ref = {0: 1, 1: 1, 2: 1, 3: digest}
+manifest-ref = {0: 1, 1: 2, 2: 1, 3: digest}
+tree-ref = {0: 1, 1: 3, 2: 1, 3: digest}
+change-set-ref = {0: 1, 1: 4, 2: 1, 3: digest}
+group-set-ref = {0: 1, 1: 5, 2: 1, 3: digest}
+descriptor-ref = {0: 1, 1: 6, 2: 1, 3: digest}
+snapshot-ref = {0: 1, 1: 7, 2: 1, 3: digest}
+shelf-revision-ref = {0: 1, 1: 8, 2: 1, 3: digest}
+provenance-ref = {0: 1, 1: 9, 2: 1, 3: digest}
+attestation-ref = {0: 1, 1: 10, 2: 1, 3: digest}
+conflict-set-ref = {0: 1, 1: 11, 2: 1, 3: digest}
+
+profile-token-sized = tstr .size (1..63)
+profile-token = profile-token-sized .regexp "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+profile-namespace-sized = tstr .size (3..253)
+profile-namespace = profile-namespace-sized .regexp "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+$"
+profile-ref = {
+  0: profile-namespace,
+  1: profile-token,
+  2: 1..4294967295
+}
+
+basename-sized = tstr .size (1..255)
+basename = basename-sized .regexp "^[^/\\u0000]+$" ; dot/dotdot: layer-2 PATH_CORE_INVALID
+path-segment = basename ; dot/dotdot: layer-2 PATH_CORE_INVALID
+path-value = [path-segment, * path-segment] ; <=256, joined measure <=4096
+nonempty-value-bytes = bstr .size (1..16777216)
+nonempty-text-value = tstr .size (1..16777216)
+
+identity-ref = {
+  0: profile-ref,
+  1: nonempty-value-bytes,
+  ? 2: tstr ; NFC; generic 16 MiB value ceiling
+}
+
+policy-result = {
+  0: profile-ref,
+  1: uint,
+  2: 1..2, ; pass, explicit override
+  3: typed-digest
+}
+
+; Kind 2: ContentManifestV1
+content-manifest = {
+  0: 1,
+  1: 2,
+  2: required-features,
+  ? 3: extensions,
+  16: logical-length,
+  17: typed-digest,
+  18: profile-ref,
+  19: [* chunk-part]
+}
+
+chunk-part = {
+  0: chunk-ref,
+  1: 1..67108864
+}
+
+; Kind 3: one-directory tree
+tree = {
+  0: 1,
+  1: 3,
+  2: required-features,
+  ? 3: extensions,
+  16: descriptor-ref,
+  17: [* tree-entry]
+}
+
+tree-entry = {
+  0: basename,
+  1: entry-kind,
+  2: file-id,
+  3: portable-mode,
+  4: object-ref,
+  5: logical-length,
+  6: profile-ref
+}
+
+entry-kind = 1..4 ; directory, regular, executable, symlink
+portable-mode = 1..4 ; directory, regular, executable, symlink
+
+; Kind 4: exact ordered change set
+change-set = {
+  0: 1,
+  1: 4,
+  2: required-features,
+  ? 3: extensions,
+  16: descriptor-ref,
+  ? 17: snapshot-ref,
+  18: [* operation]
+}
+
+entry-state = {
+  0: path-value,
+  1: entry-kind,
+  2: file-id,
+  3: portable-mode,
+  ? 4: object-ref, ; absent exactly for directory states
+  5: logical-length,
+  6: profile-ref
+}
+
+allocation-proof = {
+  0: descriptor-ref,
+  1: allocation-kind,
+  ? 2: digest ; absent for native, required for import: layer-2 SCHEMA_FIELD_INVALID
+}
+allocation-kind = 1..2 ; native, import
+
+restore-proof = {
+  0: descriptor-ref,
+  1: snapshot-ref,
+  2: path-value,
+  3: snapshot-ref
+}
+
+operation =
+  create-operation /
+  modify-operation /
+  copy-operation /
+  move-operation /
+  rename-operation /
+  delete-operation /
+  restore-operation /
+  group-create-operation /
+  group-update-operation /
+  group-delete-operation /
+  merge-resolution-operation
+
+create-operation = {
+  0: uint,
+  1: 1,
+  3: entry-state,
+  5: allocation-proof
+}
+
+modify-operation = {
+  0: uint,
+  1: 2,
+  2: entry-state,
+  3: entry-state
+}
+
+copy-operation = {
+  0: uint,
+  1: 3,
+  3: entry-state,
+  4: entry-state,
+  5: allocation-proof
+}
+
+move-operation = {
+  0: uint,
+  1: 4,
+  2: entry-state,
+  3: entry-state
+}
+
+rename-operation = {
+  0: uint,
+  1: 5,
+  2: entry-state,
+  3: entry-state
+}
+
+delete-operation = {
+  0: uint,
+  1: 6,
+  2: entry-state
+}
+
+restore-operation = {
+  0: uint,
+  1: 7,
+  3: entry-state,
+  6: restore-proof
+}
+
+group-create-operation = {
+  0: uint,
+  1: 8,
+  8: asset-group
+}
+
+group-update-operation = {
+  0: uint,
+  1: 9,
+  7: asset-group,
+  8: asset-group
+}
+
+group-delete-operation = {
+  0: uint,
+  1: 10,
+  7: asset-group
+}
+
+merge-resolution-operation = {
+  0: uint,
+  1: 11,
+  9: digest,
+  10: 1..2, ; entry, group
+  ? 11: entry-state / asset-group
+}
+
+; Kind 5: asset-group set
+group-set = {
+  0: 1,
+  1: 5,
+  2: required-features,
+  ? 3: extensions,
+  16: descriptor-ref,
+  17: [* asset-group]
+}
+
+asset-group = {
+  0: group-id,
+  1: profile-ref,
+  2: file-id,
+  3: [group-member, * group-member],
+  ? 4: [* external-key]
+}
+
+group-member = {
+  0: file-id,
+  1: profile-ref
+}
+
+external-key = {
+  0: profile-ref,
+  1: nonempty-value-bytes
+}
+
+; Kind 6: repository descriptor
+repository-descriptor = {
+  0: 1,
+  1: 6,
+  2: required-features,
+  ? 3: extensions,
+  16: repository-id,
+  17: profile-ref,
+  18: [profile-ref, * profile-ref],
+  19: [* profile-ref],
+  ? 20: [* profile-ref]
+}
+
+; Kind 7: snapshot
+snapshot = {
+  0: 1,
+  1: 7,
+  2: required-features,
+  ? 3: extensions,
+  16: descriptor-ref,
+  17: [* snapshot-ref],
+  18: tree-ref,
+  19: change-set-ref,
+  ? 20: group-set-ref,
+  21: identity-ref,
+  22: identity-ref,
+  23: timestamp-nanoseconds,
+  24: timestamp-nanoseconds,
+  25: tstr,
+  26: policy-result,
+  ? 27: [* provenance-ref],
+  ? 28: conflict-set-ref
+}
+
+; Kind 8: shelf revision
+shelf-revision = {
+  0: 1,
+  1: 8,
+  2: required-features,
+  ? 3: extensions,
+  16: descriptor-ref,
+  17: shelf-id,
+  18: 1..4294967295,
+  ? 19: shelf-revision-ref,
+  20: snapshot-ref,
+  21: change-set-ref,
+  22: tree-ref,
+  ? 23: group-set-ref,
+  ? 24: conflict-set-ref,
+  25: identity-ref,
+  26: timestamp-nanoseconds,
+  27: tstr,
+  28: policy-result,
+  ? 29: [* provenance-ref]
+}
+
+; Kind 9: provenance
+provenance = {
+  0: 1,
+  1: 9,
+  2: required-features,
+  ? 3: extensions,
+  16: profile-ref,
+  17: [* object-ref],
+  18: typed-digest,
+  ? 19: bstr
+}
+
+; Kind 10: inbound attestation
+attestation = {
+  0: 1,
+  1: 10,
+  2: required-features,
+  ? 3: extensions,
+  16: object-ref,
+  17: profile-ref,
+  18: identity-ref,
+  19: timestamp-nanoseconds,
+  20: bstr,
+  ? 21: profile-ref,
+  ? 22: nonempty-value-bytes ; present iff key 21: layer-2 ATTESTATION_SIGNATURE_SHAPE_INVALID
+}
+
+; Kind 11: conflict set
+conflict-set = {
+  0: 1,
+  1: 11,
+  2: required-features,
+  ? 3: extensions,
+  16: descriptor-ref,
+  17: [conflict-record, * conflict-record]
+}
+
+conflict-record = {
+  0: digest,
+  1: conflict-kind,
+  2: conflict-subject,
+  ? 3: conflict-side,
+  ? 4: conflict-side,
+  ? 5: conflict-side,
+  6: conflict-resolution
+}
+
+; Canonical payload P in the conflict-ID preimage. Explicit keyed omissions
+; distinguish all eight base/left/right presence combinations. Resolution and
+; the resulting conflict ID are deliberately excluded.
+conflict-id-preimage = {
+  0: conflict-kind,
+  1: conflict-subject,
+  ? 2: conflict-side,
+  ? 3: conflict-side,
+  ? 4: conflict-side
+}
+
+conflict-kind = 1..4 / 6..8
+conflict-subject = entry-conflict-subject / group-conflict-subject
+entry-conflict-subject = [1, [1*3 file-id], [1*3 path-value]]
+group-conflict-subject = [2, group-id]
+conflict-side = entry-conflict-side / group-conflict-side
+entry-conflict-side = {0: 1, 1: entry-state}
+group-conflict-side = {0: 2, 2: asset-group}
+
+conflict-resolution =
+  {0: 0} /
+  {0: 1, 1: 1..3, 2: conflict-side} /
+  {0: 1, 1: 4} /
+  {0: 1, 1: 5, 2: conflict-side, 3: profile-ref}
+
+; Logical records used by a logical bundle. They are canonical records, not
+; immutable objects and not service/database state-machine definitions.
+logical-record =
+  repository-root-record /
+  mutable-ref-record /
+  shelf-pointer-record /
+  fileid-lifetime-record /
+  import-mapping-record /
+  pending-change-reference-record /
+  lock-reference-record /
+  annotation-record /
+  fixture-event-record
+
+repository-root-record = {
+  0: 1,
+  1: 1,
+  16: descriptor-ref,
+  17: snapshot-ref
+}
+
+mutable-ref-record = {
+  0: 1,
+  1: 2,
+  16: descriptor-ref,
+  17: 1..2, ; branch, tag
+  18: nonempty-text-value,
+  19: snapshot-ref,
+  20: uint
+}
+
+shelf-pointer-record = {
+  0: 1,
+  1: 3,
+  16: descriptor-ref,
+  17: shelf-id,
+  18: shelf-revision-ref,
+  19: uint
+}
+
+fileid-lifetime-record = {
+  0: 1,
+  1: 4,
+  16: descriptor-ref,
+  17: file-id,
+  18: 1..3, ; native-create, native-copy, import
+  19: change-set-ref,
+  20: uint,
+  ? 21: digest ; required only for import
+}
+
+import-mapping-record = {
+  0: 1,
+  1: 5,
+  16: descriptor-ref,
+  17: profile-ref,
+  18: digest,
+  19: digest,
+  20: file-id,
+  21: 1..3 ; reserved, materialized, published
+}
+
+pending-change-reference-record = {
+  0: 1,
+  1: 6,
+  16: descriptor-ref,
+  17: bstr .size 16,
+  18: snapshot-ref,
+  19: change-set-ref,
+  ? 20: conflict-set-ref
+}
+
+lock-reference-record = {
+  0: 1,
+  1: 7,
+  16: descriptor-ref,
+  17: 1..2, ; FileID, GroupID
+  18: file-id / group-id,
+  19: snapshot-ref,
+  20: uint
+}
+
+annotation-record = {
+  0: 1,
+  1: 8,
+  16: object-ref,
+  17: profile-ref,
+  18: bstr
+}
+
+fixture-event-record = {
+  0: 1,
+  1: 9,
+  16: typed-digest,
+  17: uint,
+  18: profile-ref,
+  19: typed-digest,
+  20: fixture-operation-kind
+}
+
+fixture-operation-kind =
+  "branch" /
+  "branch-update" /
+  "ci-materialize" /
+  "copy" /
+  "create" /
+  "delete" /
+  "edit" /
+  "interrupt" /
+  "lock-acquire" /
+  "lock-conflict" /
+  "lock-loss" /
+  "merge" /
+  "move" /
+  "network-condition" /
+  "rename" /
+  "review" /
+  "selective-sync" /
+  "submit"
+
+; Each logical-bundle item is one top-level CBOR item in an RFC 8742-style
+; concatenated CBOR sequence. logical-bundle.md defines mandatory ordering,
+; exact counts, roots, transcript hashing, closure, and the no-export claim.
+logical-bundle-item =
+  bundle-header /
+  bundle-object /
+  bundle-logical-record /
+  bundle-root /
+  bundle-trailer
+
+bundle-header = {
+  0: 1,
+  1: 1,
+  2: 1, ; supplied-closure bundle mode
+  3: bundle-object-count,
+  4: bundle-logical-record-count,
+  5: bundle-root-count,
+  6: bundle-budget
+}
+
+bundle-budget = {
+  0: bundle-sequence-bytes,
+  1: bundle-largest-item-bytes,
+  2: bundle-traversal-edge-count,
+  3: bundle-index-entry-count
+}
+
+bundle-object = {
+  0: 1,
+  1: 2,
+  2: uint,
+  3: object-ref,
+  4: bundle-object-payload
+}
+bundle-object-payload = bstr .size (0..536870912) ; chunk kind has 64 MiB semantic ceiling
+
+bundle-logical-record = {
+  0: 1,
+  1: 3,
+  2: uint,
+  3: typed-digest,
+  4: logical-record
+}
+
+bundle-root = {
+  0: 1,
+  1: 4,
+  2: uint,
+  3: 1..2, ; object, logical record
+  4: object-ref / typed-digest,
+  5: profile-ref
+}
+
+bundle-trailer = {
+  0: 1,
+  1: 5,
+  2: bundle-object-count,
+  3: bundle-logical-record-count,
+  4: bundle-root-count,
+  5: bundle-total-item-count,
+  6: typed-digest
+}

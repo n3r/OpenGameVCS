@@ -1,0 +1,32 @@
+[package]
+name = "ogvcs-object-model"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+license = "MIT"
+description = "Clean-room OpenGameVCS repository-format-v1 codec"
+readme = "README.md"
+repository = "https://github.com/n3r/OpenGameVCS"
+homepage = "https://github.com/n3r/OpenGameVCS"
+documentation = "https://docs.rs/ogvcs-object-model"
+keywords = ["version-control", "cbor", "content-addressed", "gamedev", "vcs"]
+categories = ["encoding", "data-structures", "development-tools"]
+include = [
+    "src/**",
+    "registries/**",
+    "scripts/**",
+    "tests/**",
+    "build.rs",
+    "Cargo.toml",
+    "Cargo.lock",
+    "LICENSE",
+    "README.md",
+]
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+getrandom = "=0.2.16"
+serde_json = "=1.0.151"
+unicode-normalization = "=0.1.24"
