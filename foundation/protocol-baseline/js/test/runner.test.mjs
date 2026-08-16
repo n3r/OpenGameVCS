@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import test from 'node:test';
 
 import {
+  collectProtocolScenarios,
   loadProtocolContract,
   PROTOCOL_OPERATIONS,
   runExternalProtocolConformance,
@@ -70,6 +71,10 @@ test('runner derives protected canaries from actual sensitive carrier fields', a
 
 test('Node permission mode confines an adapter to its closure and staged authority', async () => {
   const contract = await loadProtocolContract({ root: protocolRoot });
+  const permissionContract = {
+    ...contract,
+    vectors: { permission: { cases: [collectProtocolScenarios(contract)[0]] } },
+  };
   const root = await mkdtemp(join(tmpdir(), 'ogvcs-protocol-permission-test-'));
   const closure = join(root, 'adapter');
   const forbidden = [join(root, 'protocol-vectors.json'), join(root, 'authorization-vectors.json')];
@@ -79,7 +84,7 @@ test('Node permission mode confines an adapter to its closure and staged authori
   try {
     for (const path of forbidden) {
       await writeFile(script, `import { readFileSync } from 'node:fs'; readFileSync(${JSON.stringify(path)});`, 'utf8');
-      await assert.rejects(() => runExternalProtocolConformance(contract, [process.execPath, script], {
+      await assert.rejects(() => runExternalProtocolConformance(permissionContract, [process.execPath, script], {
         nodeAdapterReadRoots: [closure],
         timeoutMs: 30_000,
       }), /adapter|stderr|permission/u, path);

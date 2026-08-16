@@ -97,7 +97,7 @@
     "schemaSetSha256": "5751fd3d06706de95c328303558a14bd4dff0fd3062f031b50cfe3810b64aae8",
     "registrySetSha256": "bc15d6833d2dd0daffe8d72263ee8a2e6384a314d69955f7eff1249e6aa52f14",
     "vectorSetSha256": "f80da3324e3cd3c3f82035711871227db025a7eefee074891e3faa7f20e768d0",
-    "sourceSetSha256": "1e27851d14beb21bcbc4f1e7f0bf24508c6e9c33621f983f814e7c8d1f6b69e1",
+    "sourceSetSha256": "9cfff64d3cae6c7cf7c658309e5235622cff4c20ea8712cebf9a8b8c2376f324",
     "reportDigest": "7816829692bb88b2dfbb7a391e67e9e550914f5b9aedc108cbd101a473e01039",
     "referenceReportSha256": "f840ddcb89fbe42e9dfbb765a3da10df5614e420834b25ba4b076aca2ca39f0a",
     "independentReportSha256": "db250a85d5d335b38fbf3a163cd054d872800c2dca89814f04edf66c5b789915",
@@ -115,7 +115,7 @@
       {
         "name": "@opengamevcs/protocol-baseline",
         "version": "1.0.0-rc.1",
-        "sha256": "8b3836391046521a5672a08cdfbfb486fb7a55ac9b07e7f6c1eeb9418ac0a097"
+        "sha256": "abd5c27f6385806875265940e5fae77917b02f5f29fb9482f9dd52d8bc9a1711"
       },
       {
         "name": "@opengamevcs/protocol-baseline-independent-adapter",

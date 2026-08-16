@@ -65,13 +65,13 @@ The local packed artifacts were:
 |---|---|
 | `@opengamevcs/authorization-contract` 1.0.0 | `e28a0da4310b2bcdb12acdf6d39c55dea5221bdef451b15a601aaf63939b43c7` |
 | `@opengamevcs/authorization-contract-v1` 1.0.0 | `766078f881bba7bd7f4e3657f506ce8270992667c425ec8054cf506e13170770` |
-| `@opengamevcs/protocol-baseline` 1.0.0-rc.1 | `8b3836391046521a5672a08cdfbfb486fb7a55ac9b07e7f6c1eeb9418ac0a097` |
+| `@opengamevcs/protocol-baseline` 1.0.0-rc.1 | `abd5c27f6385806875265940e5fae77917b02f5f29fb9482f9dd52d8bc9a1711` |
 | `@opengamevcs/protocol-baseline-independent-adapter` 1.0.0-rc.1 | `2f8427f1503e1640bc131bcfabd089bf0b5a6e8895cbc4b934035480550d0f36` |
 | `@opengamevcs/protocol-contract-v1` 1.0.0-rc.1 | `ced7e8a8b84d3ca1165b23c9c5fd0ff15709edf40eac9f6f4f4596eaeb2b4381` |
 | `@opengamevcs/protocol-types-v1` 1.0.0-rc.1 | `633aee67cbbeada7c17fd95ebecea7d0d6becaa9e90145d08f451beb540beca0` |
 
 The packed offline-source set SHA-256 is
-`1e27851d14beb21bcbc4f1e7f0bf24508c6e9c33621f983f814e7c8d1f6b69e1`.
+`9cfff64d3cae6c7cf7c658309e5235622cff4c20ea8712cebf9a8b8c2376f324`.
 The reference and independent report files have SHA-256
 `f840ddcb89fbe42e9dfbb765a3da10df5614e420834b25ba4b076aca2ca39f0a`
 and `db250a85d5d335b38fbf3a163cd054d872800c2dca89814f04edf66c5b789915`.
