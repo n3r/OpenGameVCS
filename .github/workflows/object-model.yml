@@ -121,7 +121,9 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Install the pinned normative CDDL compiler
         if: runner.os == 'Linux'
-        run: cargo install cddl --version 0.10.7 --locked
+        run: |
+          rustup toolchain install 1.88.0 --profile minimal --no-self-update
+          cargo +1.88.0 install cddl --version 0.10.7 --locked
       - name: Check generated reference vectors
         run: node tools/reference-vector-generator/generate.mjs --check
       - name: Audit reference vectors independently of their generator
