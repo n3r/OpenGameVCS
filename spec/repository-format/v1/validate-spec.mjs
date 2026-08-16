@@ -972,7 +972,11 @@ function validateSpec(root) {
     v.check(sameArray(kindRows, OBJECT_KINDS.map(([code]) => code)), objectModelRelative, "object-kind prose table disagrees with the registry");
   }
   if (cddl) {
-    const compile = spawnSync("cddl", ["--ci", "compile-cddl", "--cddl", v.absolute(cddlRelative)], { encoding: "utf8" });
+    const testDriver = process.env.OGVCS_CDDL_TEST_DRIVER;
+    const compile = spawnSync(testDriver ? process.execPath : "cddl", [
+      ...(testDriver ? [testDriver] : []),
+      "--ci", "compile-cddl", "--cddl", v.absolute(cddlRelative)
+    ], { encoding: "utf8" });
     if (!compile.error || compile.error.code !== "ENOENT") {
       v.check(compile.status === 0, cddlRelative, `optional cddl compiler rejected schema: ${(compile.stderr || compile.stdout || `exit ${compile.status}`).trim()}`);
     }

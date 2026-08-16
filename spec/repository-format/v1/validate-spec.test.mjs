@@ -46,13 +46,14 @@ test("the checked-in format-v1 specification validates in an isolated copy", (t)
 
 test("the optional cddl hook uses the cddl 0.10 compile command", (t) => {
   const root = fixture(t);
-  const bin = path.join(root, "fake-bin");
   const argumentsFile = path.join(root, "cddl-arguments.txt");
-  fs.mkdirSync(bin);
-  const executable = path.join(bin, "cddl");
-  fs.writeFileSync(executable, "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$OGVCS_CDDL_ARGUMENTS\"\n");
-  fs.chmodSync(executable, 0o755);
-  const result = validate(root, { ...process.env, OGVCS_CDDL_ARGUMENTS: argumentsFile, PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}` });
+  const driver = path.join(root, "cddl-test-driver.mjs");
+  fs.writeFileSync(driver, "import fs from 'node:fs';\nfs.writeFileSync(process.env.OGVCS_CDDL_ARGUMENTS, process.argv.slice(2).join('\\n') + '\\n');\n");
+  const result = validate(root, {
+    ...process.env,
+    OGVCS_CDDL_ARGUMENTS: argumentsFile,
+    OGVCS_CDDL_TEST_DRIVER: driver
+  });
   assert.equal(result.status, 0, result.output);
   assert.deepEqual(fs.readFileSync(argumentsFile, "utf8").trim().split("\n"), [
     "--ci",
