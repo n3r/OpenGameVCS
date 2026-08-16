@@ -19,6 +19,8 @@ use std::{
 
 #[cfg(unix)]
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
+#[cfg(windows)]
+use std::os::windows::fs::MetadataExt as WindowsMetadataExt;
 
 use crate::hard_limits::{
     configured_hard_limit, enforce_hard_limit_context, MAX_BUNDLE_INDEX_ENTRIES,
@@ -350,11 +352,11 @@ fn configured_resource_schema_error() -> Error {
         .with_stage(ValidationStage::ConfiguredResourcePreflight)
 }
 
-fn configure_private_open(options: &mut OpenOptions) {
+fn configure_private_open(_options: &mut OpenOptions) {
     #[cfg(unix)]
     {
-        options.mode(0o600);
-        options.custom_flags(no_follow_flag());
+        _options.mode(0o600);
+        _options.custom_flags(no_follow_flag());
     }
 }
 
@@ -383,15 +385,19 @@ struct ScratchIdentity {
     device: u64,
     #[cfg(unix)]
     inode: u64,
+    #[cfg(windows)]
+    creation_time: u64,
 }
 
 impl ScratchIdentity {
-    fn from_metadata(metadata: &std::fs::Metadata) -> Self {
+    fn from_metadata(_metadata: &std::fs::Metadata) -> Self {
         Self {
             #[cfg(unix)]
-            device: metadata.dev(),
+            device: _metadata.dev(),
             #[cfg(unix)]
-            inode: metadata.ino(),
+            inode: _metadata.ino(),
+            #[cfg(windows)]
+            creation_time: _metadata.creation_time(),
         }
     }
 
@@ -400,7 +406,11 @@ impl ScratchIdentity {
         {
             metadata.dev() == self.device && metadata.ino() == self.inode
         }
-        #[cfg(not(unix))]
+        #[cfg(windows)]
+        {
+            metadata.creation_time() == self.creation_time
+        }
+        #[cfg(not(any(unix, windows)))]
         {
             let _ = metadata;
             true

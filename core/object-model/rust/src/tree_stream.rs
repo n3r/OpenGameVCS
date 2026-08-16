@@ -1174,15 +1174,12 @@ fn run_file_identity(metadata: &std::fs::Metadata) -> Result<RunFileIdentity> {
 #[cfg(windows)]
 fn run_file_identity(metadata: &std::fs::Metadata) -> Result<RunFileIdentity> {
     use std::os::windows::fs::MetadataExt;
+    // Rust 1.82 does not yet expose the Win32 volume/file index pair. Creation
+    // time plus size catches ordinary path replacement, while the separately
+    // retained whole-run SHA-256 remains the authoritative content binding.
     Ok(RunFileIdentity(
-        u64::from(
-            metadata
-                .volume_serial_number()
-                .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))?,
-        ),
-        metadata
-            .file_index()
-            .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))?,
+        metadata.creation_time(),
+        metadata.file_size(),
     ))
 }
 
