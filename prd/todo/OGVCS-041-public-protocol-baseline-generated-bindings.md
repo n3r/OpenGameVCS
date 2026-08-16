@@ -1,13 +1,13 @@
 # OGVCS-041 — Public protocol baseline and generated bindings
 
-**Status:** Todo  
+**Status:** Validation
 **Release:** R0 — Engineering Foundation  
 **Priority:** P0  
-**Owner:** Unassigned  
+**Owner:** Codex and OpenGameVCS maintainers
 **Depends on:** OGVCS-002, OGVCS-003, OGVCS-004  
 **Blocks:** OGVCS-005, OGVCS-006, OGVCS-008, OGVCS-009, OGVCS-011, OGVCS-019, OGVCS-030, OGVCS-036, OGVCS-042, OGVCS-043  
-**Source:** [Architecture ADR-0005](../../adr/0005-early-public-protocol-baseline.md)  
-**Last updated:** 2026-08-14
+**Source:** [ADR-0013 public protocol v1 transport, schema, and generation](../../adr/0013-protocol-v1-transport-schema-and-generation.md)
+**Last updated:** 2026-08-16
 
 ## Outcome
 
@@ -21,7 +21,7 @@ Repository services cannot be independently developed against prose and private 
 
 ### In scope
 
-- Reference control-plane and transfer-control transport profile over TLS, message/schema registry, protocol/version envelopes, and capability negotiation.
+- Reference TLS 1.3 HTTP/1.1 control profile and application-neutral transfer carrier/probe, message/schema registry, protocol/version envelopes, and capability negotiation.
 - Typed error, retry, idempotency, cursor, cancellation, deadline, correlation, limit, and extension rules.
 - Transfer-grant claims/envelope integration with the authorization contract without implementing identity policy.
 - Reproducible code generation, generated binding smoke packages, reference client/server stubs, golden traces, malformed vectors, and offline contract runner.
@@ -30,6 +30,7 @@ Repository services cannot be independently developed against prose and private 
 ### Out of scope
 
 - Domain behavior for metadata, content, identity, submit, locks, or automation.
+- Production object routes, upload-session lifecycle, multipart behavior, pack framing, compression, placement, or availability owned by OGVCS-008.
 - Long-term-support policy, ecosystem certification, production-wide skew matrix, or high-level integration SDK.
 - Canonical repository-object encoding, authorization decisions, or path rules owned by predecessor PRDs.
 
@@ -43,15 +44,15 @@ Repository services cannot be independently developed against prose and private 
 
 ### Functional
 
-- **OGVCS-041-FR-01:** The package SHALL select and publish one reference HTTPS transport/framing profile for control messages and one range/resume profile for bulk transfer, including TLS, proxy, timeout, compression, and streaming rules.
-- **OGVCS-041-FR-02:** Every session SHALL negotiate independent protocol, schema, repository-format, event, transfer, and extension capabilities before mutation; unknown required capabilities SHALL fail safely.
+- **OGVCS-041-FR-01:** The package SHALL select and publish one reference HTTPS transport/framing profile for control messages and one application-neutral range/resume carrier plus conformance probe for bulk transfer, including TLS, proxy, timeout, compression, and streaming rules, without defining OGVCS-008 routes, session lifecycle, packs, or placement.
+- **OGVCS-041-FR-02:** Every session SHALL negotiate independent protocol, schema, repository-format, authorization-contract, path-contract/profile, event, transfer, and extension capabilities before mutation; unknown required capabilities SHALL fail safely.
 - **OGVCS-041-FR-03:** Schemas SHALL define bounded message sizes, recursion, collection counts, strings/paths, pagination, streaming frames, cancellation, deadlines, and unknown-field behavior.
 - **OGVCS-041-FR-04:** Errors SHALL carry a stable code, authorization-safe message class, retryability, conflict/current-generation data when visible, correlation ID, and optional bounded details.
 - **OGVCS-041-FR-05:** Every retryable mutation SHALL carry an idempotency key and canonical request fingerprint; reuse with different semantic input SHALL be rejected.
 - **OGVCS-041-FR-06:** Pagination/event cursors SHALL be opaque, scoped, expiring, and explicit about gaps or invalidation; clients SHALL never infer completion from transport closure alone.
-- **OGVCS-041-FR-07:** Transfer-grant schemas SHALL bind issuer/key generation, authority epoch, subject, tenant/repository, operation, bounded object/request root, audience, expiry, and replay fields from the security contract.
+- **OGVCS-041-FR-07:** The transfer carrier SHALL import and digest-bind the exact OGVCS-003 transfer-grant envelope/signing contract, require a compact request-root grant for bulk HTTP, and SHALL NOT duplicate or reinterpret its issuer/key generation, authority epoch, subject, tenant/repository, operation, audience, expiry, or replay fields.
 - **OGVCS-041-FR-08:** Extension registration SHALL identify owner, namespace, stability, required/optional status, fallback, security/data impact, and version lifecycle.
-- **OGVCS-041-FR-09:** Reproducible code generation SHALL emit compilable reference bindings for Rust plus C++, C#, and TypeScript schema consumers without handwritten field-number forks.
+- **OGVCS-041-FR-09:** Reproducible code generation from one numbered declarative model SHALL emit compilable reference bindings for Rust plus C++, C#, and TypeScript schema consumers without handwritten wire-name, type, or field-number forks.
 - **OGVCS-041-FR-10:** An offline contract runner SHALL validate negotiation, golden traces, malformed input, retry/idempotency, cursor, downgrade, and bounded-resource behavior against reference stubs.
 
 ### Quality attributes
@@ -62,18 +63,26 @@ Repository services cannot be independently developed against prose and private 
 
 ## Interfaces and data
 
-Deliver the protocol/profile registry, session negotiation, request/response/event envelopes, error model, idempotency descriptor, cursor contract, transfer-grant schema, extension registry, compatibility entry, code-generation manifest, trace/vector format, and contract-runner adapter. Domain PRDs publish messages through these envelopes rather than private transports.
+Deliver the protocol/profile/field registries, MAC-bound session negotiation,
+request/response/event/terminal-stream envelopes, closed error model,
+idempotency descriptor and semantic fingerprint, opaque cursor contract,
+request-root transfer-grant carrier and synthetic range/resume probe, extension
+registry, compatibility entry, code-generation manifests, trace/vector format,
+and contract-runner adapter. Domain PRDs publish messages through these
+envelopes rather than private transports. OGVCS-008 supplies production bulk
+routes and sessions while preserving the carrier contract.
 
 ## Development plan
 
-1. Select and ADR-record the transport/framing profile; implement schema/version registries, negotiation, base envelopes, bounded decoder, and reference loopback stubs.
-2. Implement errors, retries/idempotency fingerprints, pagination/cursors, deadlines/cancellation, transfer grants, and extension/compatibility manifests with valid/malformed vectors.
-3. Build reproducible Rust/C++/C#/TypeScript generation and an offline black-box contract runner with proxy, disconnect, duplicate, downgrade, and resource fault cases.
-4. Exercise two independently built adapters, freeze the R0 baseline, publish packages/specifications, and require downstream API PRDs to attach conformance evidence.
+1. Record ADR-0013 and generate the numbered model, closed schemas, version/field/limit/error/extension registries, predecessor pins, compatibility entry, and deterministic manifests.
+2. Implement bounded control parsing, independent capability negotiation with authenticated receipts, base and terminal-stream envelopes, and reference loopback client/server stubs.
+3. Implement safe errors, semantic idempotency fingerprints, opaque cursors, deadlines/cancellation, request-root grant carriage, and the application-neutral range/resume probe with valid/malformed/security vectors.
+4. Generate and compile Rust/C++/C#/TypeScript model packages, implement two independent semantic adapters, and run the offline black-box contract runner with proxy, disconnect, duplicate, reorder, downgrade, and resource faults.
+5. Compare retained packed evidence on Windows, macOS, and Linux, critically review every acceptance criterion, and freeze/publish the R0 candidate after predecessor contracts are complete.
 
 ## Acceptance criteria
 
-- **OGVCS-041-AC-01:** Two independently built reference adapters negotiate every supported/unsupported profile and produce the expected pre-mutation result from public schemas only.
+- **OGVCS-041-AC-01:** Two independently built reference adapters that share no semantic selector, idempotency, cursor, or mutation engine negotiate every finite registered supported/unsupported profile and produce the expected pre-mutation result from public artifacts only.
 - **OGVCS-041-AC-02:** Duplicate, reordered, disconnected, expired-cursor, incompatible-version, downgrade, malformed, and oversized cases match golden traces without partial mutation.
 - **OGVCS-041-AC-03:** Clean generation compiles all four language consumers and reproduces checked-in schema digests with no handwritten wire-model divergence.
 - **OGVCS-041-AC-04:** Authorization red-team vectors find no protected path/object/policy detail in generic errors, negotiation, cursor, or transfer-grant failures.
@@ -89,7 +98,11 @@ Reference stubs expose negotiated versions/features, stable error codes, retry c
 
 ## Rollout and rollback
 
-Publish as a draft profile until two adapters and every R0 consumer pass. Ratification freezes assigned fields and semantics; corrections require errata or a negotiated version. Downstream services may not ship a private alternative protocol.
+Publish as a draft profile until two adapters and every R0 consumer pass.
+OGVCS-041 remains in validation while OGVCS-002 or OGVCS-004 is incomplete.
+Ratification freezes assigned fields and semantics; corrections require errata
+or a negotiated version. Downstream services may not ship a private alternative
+protocol.
 
 ## Risks and mitigations
 
@@ -101,8 +114,19 @@ Publish as a draft profile until two adapters and every R0 consumer pass. Ratifi
 
 ## Completion evidence
 
-- Implementation changes:
-- Test and benchmark results:
-- Security/reliability review:
-- Documentation/runbooks:
-- Rollout result:
+The MIT-licensed `1.0.0-rc.1` implementation candidate is complete. Two
+independent adapters passed all 360 bounded scenarios with identical semantic
+results, and the six exact npm packages installed, regenerated, and ran fully
+offline. The local TypeScript and C++ consumers compile; the retained workflow
+compiles all four generated consumers and compares exact packages, generated
+source, and decisions on Linux, macOS, and Windows. Hosted execution remains
+pending. Per maintainer direction, the OGVCS-002 one-million-entry tree and
+logical-1-TiB cases were not run and remain deferred to the final R0 campaign.
+This PRD remains in Validation until its OGVCS-002 and OGVCS-004 predecessors
+are Done and hosted evidence is retained.
+
+- Implementation changes: [Detailed candidate changelog](../../docs/changelog/OGVCS-041.md)
+- Test and benchmark results: [Candidate evidence packet](../../docs/evidence/OGVCS-041/README.md)
+- Security/reliability review: [Independent critical review](../../docs/reviews/OGVCS-041-critical-review.md)
+- Documentation/runbooks: [Accepted ADR-0013 and generated protocol documentation](../../adr/0013-protocol-v1-transport-schema-and-generation.md)
+- Rollout result: [Local candidate passed; hosted three-OS proof pending](../../docs/evidence/OGVCS-041/README.md#hosted-validation)

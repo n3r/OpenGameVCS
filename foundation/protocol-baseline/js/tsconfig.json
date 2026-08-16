@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": true,
+    "paths": {
+      "@opengamevcs/protocol-baseline": ["./types/index.d.ts"],
+      "@opengamevcs/protocol-types-v1": ["../bindings/typescript/index.d.ts"]
+    },
+    "skipLibCheck": false,
+    "strict": true,
+    "target": "ES2023"
+  },
+  "include": ["test/public-api.ts", "types/index.d.ts"]
+}

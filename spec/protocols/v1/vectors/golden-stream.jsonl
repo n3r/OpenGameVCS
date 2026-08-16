@@ -1,0 +1,2 @@
+{"kind":"data","payload":{"value":"alpha"},"schemaVersion":"ogvcs.protocol/stream-frame/v1","sequence":0,"streamId":"golden-stream-0001"}
+{"kind":"terminal","schemaVersion":"ogvcs.protocol/stream-frame/v1","sequence":1,"streamId":"golden-stream-0001"}

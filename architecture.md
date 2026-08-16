@@ -2,7 +2,7 @@
 
 **Status:** Proposed implementation baseline  
 **Architecture version:** 0.3
-**Last updated:** 2026-08-15
+**Last updated:** 2026-08-16
 **Applies to:** [OpenGameVCS delivery roadmap](prd/ROADMAP.md)  
 **Source:** [Game-development VCS analysis and proposal](GAME_DEV_VCS_ANALYSIS.md)
 
@@ -355,7 +355,10 @@ Search indexes and derived previews are separate from repository truth. Both rec
 
 ## 9. Public protocols and internal contracts
 
-The exact wire transport is a deferred reference choice, but all supported transports follow these rules:
+ADR-0013 fixes the R0 reference control profile as TLS 1.3 over HTTP/1.1 with
+bounded schema-first JSON messages and separately negotiated transfer-carrier
+semantics. Later wire profiles may be added only through explicit negotiation
+and must preserve these rules:
 
 - TLS for non-loopback communication.
 - Versioned schema-first messages and explicit capability negotiation.
@@ -749,7 +752,7 @@ These choices are defaults, not substitutes for the logical contracts:
 | Tree segment representation | NFC UTF-8 basename bytes, canonical order, entry/mode codepoints | Format-v1 invariant; OGVCS-002 |
 | Repository path semantics | Relative slash-joined paths under immutable case/platform profiles | Invariant/profile entries; OGVCS-004 |
 | Authentication | OIDC PKCE/device plus scoped service identities and recovery bootstrap | Baseline; OGVCS-009 |
-| Public API transport | HTTPS, schema-first, capability-negotiated baseline with generated bindings | R0 baseline; OGVCS-041, extended by OGVCS-036 |
+| Public API transport | TLS 1.3 HTTP/1.1, bounded JSON-schema, capability-negotiated baseline with generated bindings | R0 baseline; ADR-0013/OGVCS-041, extended by OGVCS-036 |
 | Events | Transactional database outbox; no broker required initially | Invariant/default; OGVCS-006/019 |
 | Observability | OpenTelemetry-compatible structured metrics/traces/logs | Reference interoperability choice; OGVCS-028 |
 | Deployment packaging | Signed container/native bundles with offline verification | Baseline; OGVCS-021/030 |
@@ -836,7 +839,7 @@ Dependency direction is inward toward public foundation/core packages. Clients a
 | Metadata physical schema, isolation level/CAS strategy, consistency token | Before metadata writes | OGVCS-006 |
 | CDC profiles, fingerprint algorithm/parameters and selection policy | Before content compatibility freeze | OGVCS-007 |
 | Pack, compression and transfer framing | Before storage compatibility freeze | OGVCS-008 |
-| Public control/transfer wire transport, errors, negotiation and generated binding strategy | Before R1 API implementation | OGVCS-041 |
+| Public control/transfer carrier, errors, negotiation and generated binding strategy | Closed for R0 by ADR-0013; before R1 API implementation | OGVCS-041 |
 | Audit integrity/checkpoint mechanism and policy-cache invalidation | Before authorization enforcement | OGVCS-009 |
 | Local index engine/layout and watcher adapter contract | Before scalable status | OGVCS-012 |
 | Lock lease/stale/takeover timing and integration-domain calculation | Before hard-lock enforcement | OGVCS-016/024 |

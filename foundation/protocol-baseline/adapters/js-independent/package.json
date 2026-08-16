@@ -1,0 +1,25 @@
+{
+  "name": "@opengamevcs/protocol-baseline-independent-adapter",
+  "version": "1.0.0-rc.1",
+  "description": "Independent JavaScript process adapter for the OpenGameVCS protocol v1 conformance recipes",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "ogvcs-protocol-independent-adapter": "bin/ogvcs-protocol-independent-adapter.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "check": "node --check bin/ogvcs-protocol-independent-adapter.mjs"
+  },
+  "dependencies": {
+    "@opengamevcs/authorization-contract": "1.0.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

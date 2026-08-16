@@ -16,3 +16,4 @@ This directory records accepted cross-cutting decisions behind the normative beh
 | [0010](0010-core-profile-registries-and-logical-bundle-boundary.md) | Proposed | Core/path/chunk/export ownership and additive profile registries |
 | [0011](0011-authorization-contract-v1.md) | Accepted | Authorization decision, authorized-view, transfer-grant, audit, and threat-contract v1 |
 | [0012](0012-path-and-workspace-filesystem-contract-v1.md) | Accepted | Unicode case folding, platform profiles, confined mutation, and watcher recovery |
+| [0013](0013-protocol-v1-transport-schema-and-generation.md) | Accepted | TLS 1.3 HTTP/1.1 JSON control, range/resume carrier, negotiation, and generated models |

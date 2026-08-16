@@ -1,0 +1,10 @@
+[package]
+name = "opengamevcs-protocol-v1"
+version = "1.0.0-rc.1"
+edition = "2021"
+license = "MIT"
+description = "Generated OpenGameVCS protocol-v1 type models"
+publish = false
+
+[lib]
+path = "src/lib.rs"

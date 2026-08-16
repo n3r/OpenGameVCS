@@ -1,0 +1,185 @@
+name: Protocol baseline candidate conformance
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/protocol-baseline.yml"
+      - "LICENSE*"
+      - "adr/0013-*.md"
+      - "adr/README.md"
+      - "architecture.md"
+      - "core/authz-contract/**"
+      - "docs/changelog/OGVCS-041.md"
+      - "docs/evidence/OGVCS-041/**"
+      - "docs/reviews/OGVCS-041-critical-review.md"
+      - "foundation/protocol-baseline/**"
+      - "package.json"
+      - "package-lock.json"
+      - "prd/README.md"
+      - "prd/ROADMAP.md"
+      - "prd/TEMPLATE.md"
+      - "prd/validate-roadmap.mjs"
+      - "prd/validate-roadmap.test.mjs"
+      - "prd/todo/OGVCS-041-*.md"
+      - "prd/done/OGVCS-041-*.md"
+      - "spec/authorization/v1/**"
+      - "spec/path-filesystem/v1/**"
+      - "spec/protocols/v1/**"
+      - "spec/repository-format/v1/**"
+      - "tools/compare-protocol-conformance-reports*.mjs"
+      - "tools/normalize-npm-tarball.mjs"
+      - "tools/protocol-conformance-report*.mjs"
+      - "tools/run-packed-protocol-conformance*.mjs"
+  push:
+    branches:
+      - main
+      - "ogvcs-041/**"
+    paths:
+      - ".github/workflows/protocol-baseline.yml"
+      - "LICENSE*"
+      - "adr/0013-*.md"
+      - "adr/README.md"
+      - "architecture.md"
+      - "core/authz-contract/**"
+      - "docs/changelog/OGVCS-041.md"
+      - "docs/evidence/OGVCS-041/**"
+      - "docs/reviews/OGVCS-041-critical-review.md"
+      - "foundation/protocol-baseline/**"
+      - "package.json"
+      - "package-lock.json"
+      - "prd/README.md"
+      - "prd/ROADMAP.md"
+      - "prd/TEMPLATE.md"
+      - "prd/validate-roadmap.mjs"
+      - "prd/validate-roadmap.test.mjs"
+      - "prd/todo/OGVCS-041-*.md"
+      - "prd/done/OGVCS-041-*.md"
+      - "spec/authorization/v1/**"
+      - "spec/path-filesystem/v1/**"
+      - "spec/protocols/v1/**"
+      - "spec/repository-format/v1/**"
+      - "tools/compare-protocol-conformance-reports*.mjs"
+      - "tools/normalize-npm-tarball.mjs"
+      - "tools/protocol-conformance-report*.mjs"
+      - "tools/run-packed-protocol-conformance*.mjs"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: protocol-baseline-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  conformance:
+    name: Packed candidate (${{ matrix.os }})
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+      NUGET_XMLDOC_MODE: skip
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.23.2
+          cache: npm
+      - uses: dtolnay/rust-toolchain@7d11e79e1714f6b6da93cac39ad8435666f5c337 # 1.82.0
+        with:
+          toolchain: 1.82.0
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        with:
+          dotnet-version: 8.0.423
+      - name: Install the exact workspace tool closure
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Validate and mutation-test the language-neutral contract
+        run: npm run test:protocol:spec
+      - name: Test the bounded runtime and independent adapter
+        run: npm run test:protocol && npm run test:protocol:adapter
+      - name: Build retained reports from offline-installed packed artifacts
+        run: node tools/run-packed-protocol-conformance.mjs --output artifacts/protocol-${{ runner.os }}
+      - name: Stage generated bindings outside the retained source artifact
+        run: >-
+          node -e "require('node:fs').cpSync(process.argv[1],process.argv[2],{recursive:true,errorOnExist:true})"
+          artifacts/protocol-${{ runner.os }}/offline-source/foundation/protocol-baseline/bindings
+          ${{ runner.temp }}/ogvcs-protocol-bindings
+      - name: Compile the retained Rust binding offline
+        run: cargo test --manifest-path ${{ runner.temp }}/ogvcs-protocol-bindings/rust/Cargo.toml --offline
+      - name: Compile and execute the retained C++ binding
+        run: >-
+          cmake -S ${{ runner.temp }}/ogvcs-protocol-bindings/cpp
+          -B ${{ runner.temp }}/ogvcs-protocol-cpp
+          -DOGVCS_PROTOCOL_BUILD_TESTS=ON
+      - name: Build the retained C++ binding
+        run: cmake --build ${{ runner.temp }}/ogvcs-protocol-cpp --config Release
+      - name: Test the retained C++ binding
+        run: ctest --test-dir ${{ runner.temp }}/ogvcs-protocol-cpp -C Release --output-on-failure
+      - name: Restore the retained C# binding without external packages
+        run: >-
+          dotnet restore
+          ${{ runner.temp }}/ogvcs-protocol-bindings/csharp/Smoke/OpenGameVcs.Protocol.Smoke.csproj
+          --configfile ${{ runner.temp }}/ogvcs-protocol-bindings/csharp/NuGet.Config
+          --packages ${{ runner.temp }}/ogvcs-protocol-nuget-packages
+      - name: Compile and execute the retained C# binding
+        run: >-
+          dotnet run
+          --project ${{ runner.temp }}/ogvcs-protocol-bindings/csharp/Smoke/OpenGameVcs.Protocol.Smoke.csproj
+          --no-restore
+      - name: Typecheck and execute the retained TypeScript binding
+        run: >-
+          npx --no-install tsc
+          -p ${{ runner.temp }}/ogvcs-protocol-bindings/typescript/tsconfig.json
+          --noEmit
+      - name: Execute the retained TypeScript binding
+        run: node ${{ runner.temp }}/ogvcs-protocol-bindings/typescript/smoke.mjs
+      - name: Test report and package-integrity tooling
+        if: runner.os == 'Linux'
+        run: npm run test:protocol:ci-report
+      - name: Validate roadmap lifecycle
+        if: runner.os == 'Linux'
+        run: npm run test:roadmap
+      - name: Upload exact candidate packages, sources, and reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: protocol-${{ runner.os }}
+          path: artifacts/protocol-${{ runner.os }}
+          if-no-files-found: error
+          retention-days: 30
+
+  compare:
+    name: Compare Linux, macOS, and Windows evidence
+    if: ${{ !cancelled() }}
+    needs: conformance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.23.2
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: protocol-*
+          path: artifacts/downloaded
+      - name: Require identical packages, sources, and semantic outcomes
+        run: >-
+          node tools/compare-protocol-conformance-reports.mjs
+          artifacts/downloaded/protocol-Linux/packed-evidence.json
+          artifacts/downloaded/protocol-macOS/packed-evidence.json
+          artifacts/downloaded/protocol-Windows/packed-evidence.json
+          > artifacts/protocol-comparison.json
+      - name: Upload cross-platform comparison
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: protocol-comparison
+          path: artifacts/protocol-comparison.json
+          if-no-files-found: error
+          retention-days: 30

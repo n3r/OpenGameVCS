@@ -1,0 +1,41 @@
+{
+  "name": "@opengamevcs/protocol-baseline",
+  "version": "1.0.0-rc.1",
+  "description": "Bounded OpenGameVCS public protocol v1 runtime and conformance runner",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "ogvcs-protocol": "bin/ogvcs-protocol.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "default": "./src/index.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "bin",
+    "src",
+    "types",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "check": "node bin/ogvcs-protocol.mjs --help && npm run test:types",
+    "conformance": "node bin/ogvcs-protocol.mjs run --contract ../../../spec/protocols/v1",
+    "conformance:external": "node bin/ogvcs-protocol.mjs run --contract ../../../spec/protocols/v1 --adapter ogvcs-protocol-independent-adapter --adapter-arg --contract --adapter-arg ../../../spec/protocols/v1 --expected-adapter-id ogvcs.protocol/independent-js@1",
+    "test": "npm run test:types && node --test --test-concurrency=1 test/*.test.mjs",
+    "test:types": "tsc -p tsconfig.json --noEmit",
+    "test:package": "npm pack --dry-run --json"
+  },
+  "dependencies": {
+    "@opengamevcs/authorization-contract": "1.0.0",
+    "@opengamevcs/authorization-contract-v1": "1.0.0",
+    "@opengamevcs/protocol-contract-v1": "1.0.0-rc.1",
+    "@opengamevcs/protocol-types-v1": "1.0.0-rc.1"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

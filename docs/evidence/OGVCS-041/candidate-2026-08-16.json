@@ -1,0 +1,137 @@
+{
+  "schemaVersion": "ogvcs.protocol/candidate-evidence/v1",
+  "contractVersion": "1.0.0-rc.1",
+  "date": "2026-08-16",
+  "status": "local-protocol-acceptance-passed-hosted-and-predecessors-pending",
+  "exactScale": {
+    "treeMillionEntries": "not-run",
+    "manifestOneTiB": "not-run",
+    "reason": "Maintainer-deferred OGVCS-002 acceptance work for the final R0 campaign; ADR-0013 excludes exact scale from this protocol proof"
+  },
+  "hosted": {
+    "status": "pending-first-three-os-run",
+    "sourceRevision": null
+  },
+  "license": {
+    "name": "MIT",
+    "sha256": "6f0f22f485ae8614870468a48f2c084eaf800fe02c5a2c4d9a91d34bc7f58eb4"
+  },
+  "local": {
+    "environment": {
+      "operatingSystem": "macOS 26.6.1",
+      "architecture": "arm64",
+      "node": "24.9.0",
+      "npm": "11.6.0"
+    },
+    "contract": {
+      "artifacts": 90,
+      "schemas": 46,
+      "fields": 352,
+      "limits": 35,
+      "errors": 25,
+      "scenarios": 360,
+      "accept": 87,
+      "reject": 273,
+      "tests": {
+        "passed": 14,
+        "failed": 0
+      }
+    },
+    "referenceAdapter": {
+      "passed": 360,
+      "failed": 0
+    },
+    "independentAdapter": {
+      "passed": 360,
+      "failed": 0
+    },
+    "runtime": {
+      "passed": 102,
+      "failed": 0
+    },
+    "differential": {
+      "operations": 9,
+      "broadMutations": 28889,
+      "correctedBoundarySweep": "pass-no-live-p0-p1"
+    },
+    "generatedConsumers": {
+      "typescript": "typecheck-smoke-pass",
+      "cpp": "configure-build-ctest-pass",
+      "rust": "pending-hosted-toolchain",
+      "csharp": "pending-hosted-toolchain"
+    },
+    "reportTools": {
+      "passed": 3,
+      "failed": 0
+    },
+    "fullRepository": {
+      "status": "pass",
+      "command": "npm test",
+      "fixtureGenerator": {
+        "passed": 128,
+        "skipped": 2,
+        "skippedReasons": [
+          "reference-scale-maintainer-deferred",
+          "windows-only-junction-on-macos"
+        ],
+        "failed": 0
+      },
+      "objectModel": {
+        "passed": 164,
+        "mutations": 58520,
+        "failed": 0
+      },
+      "exactScaleDispatched": false
+    }
+  },
+  "packed": {
+    "result": "pass",
+    "adapterIsolation": "node-permission-isolated-package-staged-authority-v1",
+    "contractManifestSha256": "41bfebd0524458a669324e055c9849aff40f5a55bd5b8b47f1891516910ebffe",
+    "bindingManifestSha256": "a6905b649d593d536d8b6870654d7de319f6e228156c4eaf50720688ff01149b",
+    "bindingSetSha256": "de584a7e0e57a0b4ed39a24b2a85542b92268a58b3f83d44d5ca57cc6eafd6ad",
+    "vectorManifestSha256": "ea204feb3573427bba785cc7e38643f97ce3cc916629f3cd8c3cc61c6f1d7076",
+    "adapterViewSha256": "accf5219fb560085fb780cc4d86fa3bd4124d555fd08b149fe90dde9bc289901",
+    "modelSha256": "45f4325ab0d01129e37f75610265709c4551ad09541a272d375120322346ed44",
+    "generatorSha256": "98dd6bef4f5a7dfc914523ac95ec6cf925de6a02223fbd25a7323861f81d570d",
+    "schemaSetSha256": "5751fd3d06706de95c328303558a14bd4dff0fd3062f031b50cfe3810b64aae8",
+    "registrySetSha256": "bc15d6833d2dd0daffe8d72263ee8a2e6384a314d69955f7eff1249e6aa52f14",
+    "vectorSetSha256": "f80da3324e3cd3c3f82035711871227db025a7eefee074891e3faa7f20e768d0",
+    "sourceSetSha256": "1e27851d14beb21bcbc4f1e7f0bf24508c6e9c33621f983f814e7c8d1f6b69e1",
+    "reportDigest": "7816829692bb88b2dfbb7a391e67e9e550914f5b9aedc108cbd101a473e01039",
+    "referenceReportSha256": "f840ddcb89fbe42e9dfbb765a3da10df5614e420834b25ba4b076aca2ca39f0a",
+    "independentReportSha256": "db250a85d5d335b38fbf3a163cd054d872800c2dca89814f04edf66c5b789915",
+    "packages": [
+      {
+        "name": "@opengamevcs/authorization-contract",
+        "version": "1.0.0",
+        "sha256": "e28a0da4310b2bcdb12acdf6d39c55dea5221bdef451b15a601aaf63939b43c7"
+      },
+      {
+        "name": "@opengamevcs/authorization-contract-v1",
+        "version": "1.0.0",
+        "sha256": "766078f881bba7bd7f4e3657f506ce8270992667c425ec8054cf506e13170770"
+      },
+      {
+        "name": "@opengamevcs/protocol-baseline",
+        "version": "1.0.0-rc.1",
+        "sha256": "8b3836391046521a5672a08cdfbfb486fb7a55ac9b07e7f6c1eeb9418ac0a097"
+      },
+      {
+        "name": "@opengamevcs/protocol-baseline-independent-adapter",
+        "version": "1.0.0-rc.1",
+        "sha256": "2f8427f1503e1640bc131bcfabd089bf0b5a6e8895cbc4b934035480550d0f36"
+      },
+      {
+        "name": "@opengamevcs/protocol-contract-v1",
+        "version": "1.0.0-rc.1",
+        "sha256": "ced7e8a8b84d3ca1165b23c9c5fd0ff15709edf40eac9f6f4f4596eaeb2b4381"
+      },
+      {
+        "name": "@opengamevcs/protocol-types-v1",
+        "version": "1.0.0-rc.1",
+        "sha256": "633aee67cbbeada7c17fd95ebecea7d0d6becaa9e90145d08f451beb540beca0"
+      }
+    ]
+  }
+}
