@@ -7,13 +7,24 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const execFile = promisify(execFileCallback);
 const SPEC_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const REPOSITORY_ROOT = path.resolve(SPEC_ROOT, "../../..");
 const BINDINGS_ROOT = path.join(REPOSITORY_ROOT, "foundation/protocol-baseline/bindings");
 const GENERATOR = path.join(REPOSITORY_ROOT, "foundation/protocol-baseline/codegen/generate.mjs");
+
+function npmInvocation(arguments_) {
+  const npmCli = process.env.npm_execpath;
+  if (typeof npmCli === "string" && npmCli.length > 0) return [process.execPath, [npmCli, ...arguments_]];
+  return [process.platform === "win32" ? "npm.cmd" : "npm", arguments_];
+}
+
+async function execNpm(arguments_, options) {
+  const [executable, args] = npmInvocation(arguments_);
+  return execFile(executable, args, options);
+}
 
 test("checked-in generation is byte-for-byte clean", async () => {
   const { stdout } = await execFile(process.execPath, [GENERATOR, "--check"], { cwd: REPOSITORY_ROOT });
@@ -23,9 +34,8 @@ test("checked-in generation is byte-for-byte clean", async () => {
 test("contract packs and installs offline with every normative artifact", async (context) => {
   const temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "ogvcs-protocol-pack-"));
   context.after(() => fs.rm(temporaryRoot, { recursive: true, force: true }));
-  const npm = process.platform === "win32" ? "npm.cmd" : "npm";
   const environment = { ...process.env, npm_config_cache: path.join(temporaryRoot, "npm-cache") };
-  const packed = await execFile(npm, ["pack", "--json", "--ignore-scripts", "--pack-destination", temporaryRoot, SPEC_ROOT], { cwd: REPOSITORY_ROOT, env: environment, maxBuffer: 8 * 1024 * 1024 });
+  const packed = await execNpm(["pack", "--json", "--ignore-scripts", "--pack-destination", temporaryRoot, SPEC_ROOT], { cwd: REPOSITORY_ROOT, env: environment, maxBuffer: 8 * 1024 * 1024 });
   const report = JSON.parse(packed.stdout)[0];
   assert.equal(report.name, "@opengamevcs/protocol-contract-v1");
   assert.equal(report.version, "1.0.0-rc.1");
@@ -41,7 +51,7 @@ test("contract packs and installs offline with every normative artifact", async 
   const consumer = path.join(temporaryRoot, "consumer");
   await fs.mkdir(consumer);
   await fs.writeFile(path.join(consumer, "package.json"), '{"name":"offline-consumer","private":true,"version":"1.0.0"}');
-  await execFile(npm, ["install", "--offline", "--ignore-scripts", "--no-package-lock", archivePath], { cwd: consumer, env: environment, maxBuffer: 8 * 1024 * 1024 });
+  await execNpm(["install", "--offline", "--ignore-scripts", "--no-package-lock", archivePath], { cwd: consumer, env: environment, maxBuffer: 8 * 1024 * 1024 });
   const installedManifest = JSON.parse(await fs.readFile(path.join(consumer, "node_modules/@opengamevcs/protocol-contract-v1/manifest.json"), "utf8"));
   assert.equal(installedManifest.registrySetSha256, manifest.registrySetSha256);
   const installedPackageRoot = path.join(consumer, "node_modules/@opengamevcs/protocol-contract-v1");
@@ -50,7 +60,7 @@ test("contract packs and installs offline with every normative artifact", async 
   assert.equal(installedPackage.scripts.generate, undefined);
   assert.equal(installedPackage.scripts.check, "node validate-spec.mjs");
   assert.equal(installedPackage.scripts.test, "node validate-spec.mjs");
-  const selfCheck = await execFile(npm, ["run", "check"], { cwd: installedPackageRoot, env: environment, maxBuffer: 8 * 1024 * 1024 });
+  const selfCheck = await execNpm(["run", "check"], { cwd: installedPackageRoot, env: environment, maxBuffer: 8 * 1024 * 1024 });
   assert.match(selfCheck.stdout, /validated protocol contract [0-9a-f]{64}: 90 artifacts, 46 schemas, 360 scenarios/);
 });
 
@@ -65,7 +75,9 @@ test("binding manifest pins all four generated type packages and TypeScript smok
   const descriptors = JSON.parse(await fs.readFile(path.join(BINDINGS_ROOT, "descriptors.json"), "utf8"));
   assert.deepEqual([descriptors.messages.length, descriptors.fields.length], [46, 352]);
   await execFile(process.execPath, [path.join(BINDINGS_ROOT, "typescript/smoke.mjs")], { cwd: REPOSITORY_ROOT });
-  const constants = await import(`${path.join(BINDINGS_ROOT, "typescript/index.js")}?test=${Date.now()}`);
+  const constantsUrl = pathToFileURL(path.join(BINDINGS_ROOT, "typescript/index.js"));
+  constantsUrl.searchParams.set("test", String(Date.now()));
+  const constants = await import(constantsUrl.href);
   assert.equal(Object.isFrozen(constants.FIELD_ASSIGNMENTS), true);
   assert.equal(Object.isFrozen(constants.FIELD_ASSIGNMENTS.CapabilityAxes), true);
   assert.equal(Object.isFrozen(constants.FIELD_ASSIGNMENTS.CapabilityAxes.fields), true);
