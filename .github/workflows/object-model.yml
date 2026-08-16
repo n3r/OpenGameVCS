@@ -153,6 +153,9 @@ jobs:
         run: cargo fetch --manifest-path core/object-model/rust/Cargo.toml --locked
       - name: Test reproducible Rust offline distribution
         run: node --test core/object-model/rust/scripts/offline-distribution.test.mjs
+      - name: Run full conformance from packed JavaScript, Rust, and format artifacts
+        if: runner.os == 'Linux'
+        run: node tools/run-packed-object-model-conformance.mjs --output artifacts/packed-object-model-conformance
       - name: Build and verify Rust offline distribution
         if: runner.os == 'Linux'
         run: |
@@ -188,9 +191,6 @@ jobs:
         run: node tools/object-model-conformance-report.mjs --output artifacts/object-model-javascript-${{ runner.os }}.json
       - name: Write deterministic Rust conformance report
         run: cargo run --manifest-path core/object-model/rust/Cargo.toml --locked --offline --bin object_model_scenario_report -- --conformance --output artifacts/object-model-rust-${{ runner.os }}.json
-      - name: Run full conformance from packed JavaScript, Rust, and format artifacts
-        if: runner.os == 'Linux'
-        run: node tools/run-packed-object-model-conformance.mjs --output artifacts/packed-object-model-conformance
       - name: Upload conformance reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
