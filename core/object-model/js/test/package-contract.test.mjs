@@ -7,7 +7,7 @@ import test from 'node:test';
 
 const PACKAGE = resolve(import.meta.dirname, '..');
 const REPOSITORY = resolve(PACKAGE, '../../..');
-const NPM = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const NPM_CLI = process.env.npm_execpath;
 
 function run(command, args, options = {}) {
   return new Promise((resolvePromise, reject) => {
@@ -31,6 +31,11 @@ function run(command, args, options = {}) {
   });
 }
 
+function runNpm(args, options = {}) {
+  if (NPM_CLI) return run(process.execPath, [NPM_CLI, ...args], options);
+  return run('npm', args, options);
+}
+
 async function temporary(t) {
   const directory = await mkdtemp(join(tmpdir(), 'ogvcs-object-package-'));
   t.after(() => rm(directory, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 }));
@@ -46,7 +51,7 @@ test('packed public package and fixture peer install and run offline without rep
   await mkdir(consumer);
   const environment = { ...process.env, npm_config_cache: cache, npm_config_audit: 'false', npm_config_fund: 'false' };
 
-  const packed = await run(NPM, ['pack', PACKAGE, '--json', '--pack-destination', packDirectory], {
+  const packed = await runNpm(['pack', PACKAGE, '--json', '--pack-destination', packDirectory], {
     cwd: REPOSITORY,
     env: environment
   });
@@ -67,7 +72,7 @@ test('packed public package and fixture peer install and run offline without rep
   ]) assert.equal(fileNames.has(required), true, `packed artifact omitted ${required}`);
   assert.equal([...fileNames].some(name => name.startsWith('test/')), false);
 
-  const fixturePacked = await run(NPM, [
+  const fixturePacked = await runNpm([
     'pack', join(REPOSITORY, 'foundation', 'fixture-generator'), '--json', '--pack-destination', packDirectory
   ], { cwd: REPOSITORY, env: environment });
   assert.equal(fixturePacked.code, 0, fixturePacked.stderr || fixturePacked.stdout);
@@ -79,7 +84,7 @@ test('packed public package and fixture peer install and run offline without rep
     assert.equal(fixtureFileNames.has(required), true, `packed fixture artifact omitted ${required}`);
   }
 
-  const formatPacked = await run(NPM, [
+  const formatPacked = await runNpm([
     'pack', join(REPOSITORY, 'spec', 'repository-format', 'v1'), '--json', '--pack-destination', packDirectory
   ], { cwd: REPOSITORY, env: environment });
   assert.equal(formatPacked.code, 0, formatPacked.stderr || formatPacked.stdout);
@@ -93,7 +98,7 @@ test('packed public package and fixture peer install and run offline without rep
   ]) assert.equal(formatFileNames.has(required), true, `packed format artifact omitted ${required}`);
 
   await writeFile(join(consumer, 'package.json'), '{"private":true,"type":"module"}\n', 'utf8');
-  const installed = await run(NPM, [
+  const installed = await runNpm([
     'install', '--offline', '--ignore-scripts', '--no-audit', '--no-fund', '--package-lock=false',
     tarball, fixtureTarball, formatTarball
   ], { cwd: consumer, env: environment });
