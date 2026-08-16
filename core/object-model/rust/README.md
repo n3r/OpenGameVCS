@@ -211,11 +211,13 @@ To build a self-contained offline distribution, first create an artifact
 parent directory, then run:
 
 ```text
+cargo fetch --manifest-path Cargo.toml --locked
 node scripts/build-offline-distribution.mjs --output <parent>/ogvcs-object-model-offline-0.1.0
 node scripts/build-offline-distribution.mjs --verify <parent>/ogvcs-object-model-offline-0.1.0
 ```
 
-The builder refuses dirty source by default and every Cargo operation is
+The fetch populates Cargo's cache with the complete locked dependency closure.
+The builder refuses dirty source by default and every operation it performs is
 `--locked --offline`. The result contains the packaged crate, lockfile,
 checksum-verified vendored dependencies and licenses, offline Cargo source
 configuration, a locked smoke consumer, and a canonical manifest. Its

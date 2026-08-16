@@ -2,12 +2,14 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import test from 'node:test';
 
 const PACKAGE = resolve(import.meta.dirname, '..');
 const REPOSITORY = resolve(PACKAGE, '../../..');
-const NPM_CLI = process.env.npm_execpath;
+const NPM_CLI = process.env.npm_execpath ?? (process.platform === 'win32'
+  ? join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js')
+  : undefined);
 
 function run(command, args, options = {}) {
   return new Promise((resolvePromise, reject) => {

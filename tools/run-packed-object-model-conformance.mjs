@@ -7,10 +7,12 @@ import {
   copyFile, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dirname, '..');
-const NPM = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const NPM_CLI = process.env.npm_execpath ?? (process.platform === 'win32'
+  ? join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js')
+  : undefined);
 const CARGO = process.env.CARGO ?? 'cargo';
 const MAX_COMMAND_OUTPUT = 16 * 1024 * 1024;
 const MAX_ARCHIVE_BYTES = 64 * 1024 * 1024;
@@ -141,6 +143,11 @@ function run(command, args, { cwd = ROOT, env = {}, label = command } = {}) {
   });
 }
 
+function runNpm(args, options = {}) {
+  if (NPM_CLI) return run(process.execPath, [NPM_CLI, ...args], options);
+  return run('npm', args, options);
+}
+
 async function archiveDigest(path) {
   const metadata = await stat(path);
   if (!metadata.isFile() || metadata.size < 1 || metadata.size > MAX_ARCHIVE_BYTES) {
@@ -168,7 +175,7 @@ async function packageIdentity(packageRoot, expectedName, expectedLicense) {
 }
 
 async function npmPack(packageRoot, destination, cache) {
-  const result = await run(NPM, [
+  const result = await runNpm([
     'pack', packageRoot, '--json', '--pack-destination', destination, '--ignore-scripts'
   ], { env: { npm_config_cache: cache, npm_config_offline: 'true' }, label: `npm pack ${packageRoot}` });
   let records;
@@ -235,7 +242,7 @@ async function main() {
     const fixtureArchive = await npmPack(join(ROOT, 'foundation', 'fixture-generator'), packs, cache);
     const javascriptArchive = await npmPack(join(ROOT, 'core', 'object-model', 'js'), packs, cache);
     const formatArchive = await npmPack(join(ROOT, 'spec', 'repository-format', 'v1'), packs, cache);
-    await run(NPM, [
+    await runNpm([
       'install', '--offline', '--ignore-scripts', '--no-audit', '--no-fund', '--save-exact',
       fixtureArchive, javascriptArchive, formatArchive
     ], { cwd: consumer, env: { npm_config_cache: cache, npm_config_offline: 'true' }, label: 'offline npm install' });

@@ -149,6 +149,8 @@ jobs:
         run: cargo clippy --manifest-path core/object-model/rust/Cargo.toml --locked --all-targets -- -D warnings
       - name: Build Rust package
         run: cargo package --manifest-path core/object-model/rust/Cargo.toml --locked --offline
+      - name: Prefetch complete locked Rust dependency closure
+        run: cargo fetch --manifest-path core/object-model/rust/Cargo.toml --locked
       - name: Test reproducible Rust offline distribution
         run: node --test core/object-model/rust/scripts/offline-distribution.test.mjs
       - name: Build and verify Rust offline distribution

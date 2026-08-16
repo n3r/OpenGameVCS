@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, open, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { createDiskFileIdIndex, hashObject, writeContentManifest, writeOrderedTree, writeSortedTree } from '../src/index.js';
@@ -20,7 +20,9 @@ const TREE_TARGET = new Map([[0, 1], [1, 2], [2, 1],
 const CONTENT_PROFILE = new Map([[0, 'content-policy.test'], [1, 'opaque'], [2, 1]]);
 const CHUNK_PROFILE = new Map([[0, 'chunking.test'], [1, 'external-boundaries'], [2, 1]]);
 const PACKAGE_ROOT = fileURLToPath(new URL('..', import.meta.url));
-const NPM = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const NPM_CLI = process.env.npm_execpath ?? (process.platform === 'win32'
+  ? join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js')
+  : undefined);
 
 function parsePositive(text, flag) {
   if (!/^[1-9][0-9]*$/.test(text ?? '')) throw new Error(`${flag} requires a positive decimal integer`);
@@ -186,6 +188,11 @@ async function runChild(command, arguments_, options = {}) {
   return result;
 }
 
+function runNpm(arguments_, options = {}) {
+  if (NPM_CLI) return runChild(process.execPath, [NPM_CLI, ...arguments_], options);
+  return runChild('npm', arguments_, options);
+}
+
 async function preparePackagedCli() {
   const directory = await mkdtemp(join(tmpdir(), 'ogvcs-js-scale-package-'));
   const packDirectory = join(directory, 'pack');
@@ -199,14 +206,14 @@ async function preparePackagedCli() {
     npm_config_fund: 'false'
   };
   try {
-    const packed = await runChild(NPM, ['pack', PACKAGE_ROOT, '--json', '--pack-destination', packDirectory], {
+    const packed = await runNpm(['pack', PACKAGE_ROOT, '--json', '--pack-destination', packDirectory], {
       cwd: PACKAGE_ROOT, env: environment
     });
     const result = JSON.parse(packed.stdout);
     if (!Array.isArray(result) || result.length !== 1) throw new Error('npm pack returned an invalid package result');
     const tarball = join(packDirectory, basename(result[0].filename));
     await writeFile(join(consumer, 'package.json'), '{"private":true,"type":"module"}\n', 'utf8');
-    await runChild(NPM, [
+    await runNpm([
       'install', '--offline', '--ignore-scripts', '--no-audit', '--no-fund', '--package-lock=false', tarball
     ], { cwd: consumer, env: environment });
     const installedRoot = join(consumer, 'node_modules', '@opengamevcs', 'object-model');

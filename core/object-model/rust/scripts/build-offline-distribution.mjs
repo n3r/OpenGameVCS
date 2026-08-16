@@ -23,7 +23,9 @@ import { pathToFileURL } from 'node:url';
 const CRATE_ROOT = resolve(import.meta.dirname, '..');
 const REPOSITORY_ROOT = resolve(CRATE_ROOT, '../../..');
 const FORMAT_ROOT = join(REPOSITORY_ROOT, 'spec', 'repository-format', 'v1');
-const NPM = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const NPM_CLI = process.env.npm_execpath ?? (process.platform === 'win32'
+  ? join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js')
+  : undefined);
 const MANIFEST_NAME = 'MANIFEST.json';
 const INCOMPLETE_NAME = '.INCOMPLETE';
 const SCHEMA = 'ogvcs.rust-offline-distribution/v1';
@@ -193,6 +195,11 @@ async function requireSuccess(command, args, options) {
     fail(`${basename(command)} failed${detail === '' ? '' : `: ${detail}`}`);
   }
   return result;
+}
+
+function requireNpmSuccess(args, options) {
+  if (NPM_CLI) return requireSuccess(process.execPath, [NPM_CLI, ...args], options);
+  return requireSuccess('npm', args, options);
 }
 
 async function validateVendor(bundleRoot, lockText) {
@@ -390,7 +397,7 @@ async function runFormatSmoke(bundleRoot, scratchRoot, metadata) {
     npm_config_offline: 'true'
   };
   const archive = join(bundleRoot, 'conformance', metadata.archiveName);
-  await requireSuccess(NPM, [
+  await requireNpmSuccess([
     'install', '--offline', '--ignore-scripts', '--no-audit', '--no-fund',
     '--package-lock=false', archive
   ], { cwd: consumer, env: environment });
@@ -654,7 +661,7 @@ async function buildOfflineDistribution(outputPath, cargo, { allowDirty = false 
       npm_config_fund: 'false',
       npm_config_offline: 'true'
     };
-    const packedFormat = await requireSuccess(NPM, [
+    const packedFormat = await requireNpmSuccess([
       'pack', FORMAT_ROOT, '--json', '--pack-destination', join(stage, 'conformance')
     ], { cwd: REPOSITORY_ROOT, env: npmEnvironment });
     let packResult;
