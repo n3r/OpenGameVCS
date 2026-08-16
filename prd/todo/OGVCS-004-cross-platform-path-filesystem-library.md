@@ -108,15 +108,17 @@ The contract is fixed before repositories are created. Case mode and normalizati
 
 ## Completion evidence
 
-The MIT-licensed implementation and local packed validation candidate are
-complete. Per maintainer direction, the OGVCS-002 one-million-tree and
-logical-1-TiB jobs are deferred to the final R0 campaign and were not run.
-Those are predecessor format gates rather than OGVCS-004 materializer tests.
-This PRD remains in Validation until the committed candidate passes its hosted
-Linux/macOS/Windows comparison and until OGVCS-002 becomes Done.
+The MIT-licensed implementation and packed validation candidate are complete.
+GitHub Actions run 31939458256 passed 72/72 rows on Linux, macOS, and Windows,
+accepted exact cross-host package bytes and pure decisions, and retained a
+Linux syscall trace with zero outside-workspace references. Per maintainer
+direction, the OGVCS-002 one-million-tree and logical-1-TiB jobs are deferred
+to the final R0 campaign and were not run. Those are predecessor format gates
+rather than OGVCS-004 materializer tests. This PRD remains in Validation only
+until OGVCS-002 becomes Done.
 
 - Implementation changes: [Detailed candidate changelog](../../docs/changelog/OGVCS-004.md)
 - Test and benchmark results: [Candidate evidence packet](../../docs/evidence/OGVCS-004/README.md)
 - Security/reliability review: [Independent critical review](../../docs/reviews/OGVCS-004-critical-review.md)
 - Documentation/runbooks: [ADR-0012 and its normative documentation index](../../adr/0012-path-and-workspace-filesystem-contract-v1.md)
-- Rollout result: [Pending-release evidence boundary](../../docs/evidence/OGVCS-004/README.md#pending-release-evidence)
+- Rollout result: [Hosted proof and deferred dependency](../../docs/evidence/OGVCS-004/README.md#deferred-roadmap-completion)

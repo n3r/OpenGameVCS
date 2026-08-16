@@ -2,7 +2,11 @@
 
 **Evidence date:** 2026-08-16
 
-**Status:** Local validation candidate; hosted Linux/macOS/Windows proof pending
+**Status:** Hosted OGVCS-004 acceptance passed; OGVCS-002 predecessor evidence deferred
+
+**Frozen product source:** [`aaf7f96f8f0909f7f529fe02ef089ff22bb8439b`](https://github.com/n3r/OpenGameVCS/commit/aaf7f96f8f0909f7f529fe02ef089ff22bb8439b)
+
+**Hosted proof:** [GitHub Actions run 31939458256](https://github.com/n3r/OpenGameVCS/actions/runs/31939458256)
 
 ## Evidence boundary
 
@@ -10,15 +14,17 @@ This packet covers path/workspace contract v1, the pinned Unicode case-fold
 authority, four ratified platform profiles, closed schemas and stable errors,
 the JavaScript runtime and CLI, OGVCS-002 profile integration, offline package
 installation, bounded native filesystem proofs, and the cross-platform report
-comparator. The machine-readable local record is
-[`candidate-2026-08-16.json`](candidate-2026-08-16.json), and the independent
-assessment is
+comparator. The machine-readable hosted record is
+[`github-actions-run-31939458256.json`](github-actions-run-31939458256.json),
+the local candidate record is
+[`candidate-2026-08-16.json`](candidate-2026-08-16.json), and the independent assessment is
 [`docs/reviews/OGVCS-004-critical-review.md`](../../reviews/OGVCS-004-critical-review.md).
 
-This is intentionally not final release evidence. The three hosted operating
-systems and elevated Linux syscall trace must pass from the committed source.
-In addition, the roadmap does not permit OGVCS-004 to move to `prd/done` while
-its OGVCS-002 predecessor remains in development.
+The committed packages passed on Linux, macOS, and Windows, including exact
+cross-host archive and pure-decision comparison plus the elevated Linux syscall
+trace. This is intentionally not final R0 roadmap-completion evidence: the
+roadmap does not permit OGVCS-004 to move to `prd/done` while its OGVCS-002
+predecessor remains in development.
 
 The maintainer directed that OGVCS-002's exact one-million-entry tree and
 logical-1-TiB manifest tests not run now. They remain deferred to the final R0
@@ -36,7 +42,7 @@ explicitly leaves the one-million-entry tree ceiling with OGVCS-002.
 | Contract manifest SHA-256 | `15251e63487e442f46ea689850f8d4d8db9ef65f1f1eeb961d9594686531b000` |
 | Registry-set SHA-256 | `bbabdd95d78cfe0dd9751ab67ccbd9dfa5565bf8c049468aea3129bec787bd42` |
 | Unicode case-fold source SHA-256 | `6f1f9c588eb4a5c718d9e8f93b782685e5c7fec872cf05e8e6878053599e09bb` |
-| Local result SHA-256 | `baffdd9ec60e53865a39048c6f995086f4e5d102351d6bc514337f1b1fa3260a` |
+| Cross-platform result SHA-256 | `baffdd9ec60e53865a39048c6f995086f4e5d102351d6bc514337f1b1fa3260a` |
 | Pure cross-platform rows | 62 |
 | Bounded native filesystem rows | 10 |
 
@@ -64,20 +70,46 @@ The local packed artifacts were:
 | Package | SHA-256 |
 |---|---|
 | `@opengamevcs/path-contract-v1` 1.0.0 | `c376cd1d29d42295f4842491b2fdf76322bd0537198d202f288f788d4271662e` |
-| `@opengamevcs/path-filesystem` 1.0.0 | `b115450fdd758e2b403a4469bc429c0267d3b3635233601a9c65582bba0fac6e` |
+| `@opengamevcs/path-filesystem` 1.0.0 | `58007e2e447803bb2d10d19be325c5339d7c808ff7240ee8d7a9b060b4e65107` |
 
 The normalized report SHA-256 was
 `de1921e62673ee349e0fe106261ca8285c85aadd6512694d2eff365311c9beee`.
-Hosted comparison will require the same package bytes and all pure outcomes on
-Linux, macOS, and Windows. Native rows may expose different measured
-capabilities but must all pass.
+The same package bytes and all 62 pure outcomes were reproduced on Linux,
+macOS, and Windows. Native rows exposed host-specific measured capabilities and
+all ten passed on every host.
+
+## Hosted jobs and retained evidence
+
+The corrected candidate run completed against source revision `aaf7f96` after
+the first run exposed a Windows-only npm file-mode assumption. No exact-scale
+job was requested or executed.
+
+| Job | ID | Result |
+|---|---:|---|
+| Packed conformance (Windows) | `95146411258` | Passed 72/72 |
+| Packed conformance (macOS) | `95146411312` | Passed 72/72 |
+| Packed conformance (Ubuntu) | `95146411329` | Passed 72/72, including syscall trace |
+| Cross-platform comparison | `95146481739` | Passed |
+
+| GitHub artifact | ID | Archive digest | Expiry |
+|---|---:|---|---|
+| `path-filesystem-Linux` | `9261607224` | `sha256:983c6daece3c2065db69836997b5a0ff35d1156f3f38454b881664f2a77854f9` | 2026-09-15 |
+| `path-filesystem-macOS` | `9261606441` | `sha256:1cbb265443ea588df8f81e99872efe2241f9e9c429f7d84167da907eb3e2468c` | 2026-09-15 |
+| `path-filesystem-Windows` | `9261610032` | `sha256:6b0ef0c5ea097f9aa186b4b22d7530ef4b5bd01434b9a477dd31268ca29cb77e` | 2026-09-15 |
+
+The exact package SHA-256 values are the same in all three artifacts. Report
+SHA-256 values are `4368da7d…abce` (Linux), `9d2c0d76…13c76` (macOS), and
+`770ec54d…e9809` (Windows), reflecting platform/runtime/capability metadata.
+The shared results digest remains byte-identical. Linux retained a 42-line,
+4,548-byte trace with SHA-256 `a6130c1c…99f2f`; its audit has SHA-256
+`3fac571d…65107` and reports zero outside-workspace references.
 
 ## Acceptance map
 
 | Criterion | Candidate evidence | Status |
 |---|---|---|
-| OGVCS-004-AC-01 | All 62 pure rows are independently reproduced and the comparator requires exact results and package hashes from Linux, macOS, and Windows. | Local pass; hosted pending |
-| OGVCS-004-AC-02 | Symlink/junction ancestors, target replacement, restored-mtime rewrites, forged handles, and unowned remnants fail closed. The Linux workflow retains and audits a `strace` proof with a disjoint outside fixture. | Local pass; hosted trace pending |
+| OGVCS-004-AC-01 | All 62 pure rows are independently reproduced; run 31939458256 compared exact decisions and package hashes from Linux, macOS, and Windows. | Pass |
+| OGVCS-004-AC-02 | Symlink/junction ancestors, target replacement, restored-mtime rewrites, forged handles, and unowned remnants fail closed. The retained Linux `strace` audit reports zero references to the disjoint outside fixture. | Pass |
 | OGVCS-004-AC-03 | The OGVCS-002 integration test re-encodes canonical trees/bundles, preserves `FileID`, rejects non-NFC input, and observes the expected changed tree/object/bundle identities for a case/Unicode rename. | Pass |
 | OGVCS-004-AC-04 | Gap, overflow, adapter failure, corrupt state, and unclean restart durably require reconciliation; only completed reconciliation restores clean. | Pass |
 | OGVCS-004-AC-05 | Long/deep Unreal/Unity-style bounded preflight passes on the local profile; limit and platform failures use stable codes. | Pass |
@@ -99,11 +131,8 @@ container, or equivalent); a stronger native adapter may use directory-handle
 relative operations. A detected race never becomes success, and no top-level
 operation result becomes trusted before commit.
 
-## Pending release evidence
+## Deferred roadmap completion
 
-1. Push the frozen candidate and retain the path-filesystem workflow's exact
-   Linux, macOS, and Windows package/report artifacts.
-2. Require the comparison job to accept exact package hashes and all pure rows.
-3. Retain and audit the Linux syscall trace for the unsafe-target fixture.
-4. At the final R0 campaign, complete OGVCS-002's maintainer-deferred exact
-   scale evidence; only then can the roadmap dependency permit OGVCS-004 Done.
+The OGVCS-004 acceptance criteria are satisfied. At the final R0 campaign,
+complete OGVCS-002's maintainer-deferred exact scale evidence; only then can
+the roadmap dependency permit OGVCS-004 to move from `Validation` to `Done`.

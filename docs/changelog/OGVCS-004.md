@@ -114,9 +114,12 @@ archives normalize that member to mode `0755` before exact cross-OS comparison.
 
 Local validation passed all 62 pure rows, ten bounded native rows, six contract
 tests, runtime/package/integration tests, report/comparator/trace-auditor tests,
-and the OGVCS-002 164-test/58,520-mutation ordinary regression suite. Exact
-hashes and the acceptance map are recorded in the
-[candidate evidence packet](../evidence/OGVCS-004/README.md).
+and the OGVCS-002 164-test/58,520-mutation ordinary regression suite. Hosted run
+[31939458256](https://github.com/n3r/OpenGameVCS/actions/runs/31939458256)
+then passed 72/72 rows on Linux, macOS, and Windows, accepted byte-identical
+packages and pure decisions, and retained a Linux trace with zero
+outside-workspace references. Exact hashes and the acceptance map are recorded
+in the [evidence packet](../evidence/OGVCS-004/README.md).
 
 The three-OS workflow uses commit-pinned actions, retains both normalized npm
 archives and the report from every host, and compares exact package/pure result
@@ -124,17 +127,17 @@ hashes across the complete 72-row report. Linux additionally executes the
 outside-root symlink attack under `strace`, verifies no syscall reaches the
 disjoint outside fixture, and retains the raw trace and audit.
 
-## Rollout and remaining work
+## Rollout and deferred roadmap work
 
-This is a validation candidate, not a completed roadmap item. Hosted
-Linux/macOS/Windows evidence is pending the first candidate push. Repositories
-must pin case mode, profile, and contract major at creation; an incompatible
-fold/profile change requires a new version and migration preview. A defective
-candidate can be withdrawn, but rollback cannot reinterpret existing keys or
-mark an unreconciled workspace clean.
+The OGVCS-004 acceptance criteria are satisfied, but this remains a validation
+item until its OGVCS-002 predecessor is complete. Repositories must pin case
+mode, profile, and contract major at creation; an incompatible fold/profile
+change requires a new version and migration preview. A defective release can
+be withdrawn, but rollback cannot reinterpret existing keys or mark an
+unreconciled workspace clean.
 
 Per maintainer direction, no one-million-tree or logical-1-TiB test ran during
 this delivery. Those are OGVCS-002 exact-scale gates deferred to the final R0
 campaign, not smaller OGVCS-004 claims. Because OGVCS-004 depends on OGVCS-002,
-the PRD remains in `Validation` until the hosted path proof passes and the final
-R0 campaign closes the predecessor.
+the PRD remains in `Validation` until the final R0 campaign closes the
+predecessor.

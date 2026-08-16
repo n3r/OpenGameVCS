@@ -1,0 +1,124 @@
+{
+  "contract": {
+    "manifestSha256": "15251e63487e442f46ea689850f8d4d8db9ef65f1f1eeb961d9594686531b000",
+    "nativeRows": 10,
+    "pureRows": 62,
+    "registrySetSha256": "bbabdd95d78cfe0dd9751ab67ccbd9dfa5565bf8c049468aea3129bec787bd42",
+    "resultsSha256": "baffdd9ec60e53865a39048c6f995086f4e5d102351d6bc514337f1b1fa3260a",
+    "unicodeCaseFoldingSha256": "6f1f9c588eb4a5c718d9e8f93b782685e5c7fec872cf05e8e6878053599e09bb",
+    "version": "1.0.0"
+  },
+  "evidenceDate": "2026-08-16",
+  "exactScale": {
+    "decision": "deferred-to-final-r0-campaign",
+    "executed": false,
+    "reason": "The one-million-entry tree and logical-1-TiB manifest are OGVCS-002 acceptance cases and the maintainer directed that they run only in the final R0 campaign."
+  },
+  "github": {
+    "artifacts": [
+      {
+        "expiresAt": "2026-09-15T09:36:07Z",
+        "githubArchiveDigest": "sha256:983c6daece3c2065db69836997b5a0ff35d1156f3f38454b881664f2a77854f9",
+        "id": 9261607224,
+        "name": "path-filesystem-Linux",
+        "sizeBytes": 70297
+      },
+      {
+        "expiresAt": "2026-09-15T09:36:03Z",
+        "githubArchiveDigest": "sha256:1cbb265443ea588df8f81e99872efe2241f9e9c429f7d84167da907eb3e2468c",
+        "id": 9261606441,
+        "name": "path-filesystem-macOS",
+        "sizeBytes": 69221
+      },
+      {
+        "expiresAt": "2026-09-15T09:36:22Z",
+        "githubArchiveDigest": "sha256:6b0ef0c5ea097f9aa186b4b22d7530ef4b5bd01434b9a477dd31268ca29cb77e",
+        "id": 9261610032,
+        "name": "path-filesystem-Windows",
+        "sizeBytes": 69226
+      }
+    ],
+    "completedAt": "2026-08-16T09:36:36Z",
+    "conclusion": "success",
+    "createdAt": "2026-08-16T09:35:44Z",
+    "event": "push",
+    "jobs": [
+      {
+        "conclusion": "success",
+        "id": 95146411258,
+        "name": "Packed conformance (windows-latest)"
+      },
+      {
+        "conclusion": "success",
+        "id": 95146411312,
+        "name": "Packed conformance (macos-latest)"
+      },
+      {
+        "conclusion": "success",
+        "id": 95146411329,
+        "name": "Packed conformance (ubuntu-latest)"
+      },
+      {
+        "conclusion": "success",
+        "id": 95146481739,
+        "name": "Compare Linux, macOS, and Windows results"
+      }
+    ],
+    "repository": "n3r/OpenGameVCS",
+    "runId": 31939458256,
+    "runNumber": 2,
+    "runUrl": "https://github.com/n3r/OpenGameVCS/actions/runs/31939458256",
+    "sourceRevision": "aaf7f96f8f0909f7f529fe02ef089ff22bb8439b",
+    "workflow": "Path and workspace filesystem conformance"
+  },
+  "license": {
+    "name": "MIT",
+    "sha256": "6f0f22f485ae8614870468a48f2c084eaf800fe02c5a2c4d9a91d34bc7f58eb4"
+  },
+  "packedConformance": {
+    "failedPerReport": 0,
+    "packages": [
+      {
+        "filename": "opengamevcs-path-contract-v1-1.0.0.tgz",
+        "name": "@opengamevcs/path-contract-v1",
+        "sha256": "c376cd1d29d42295f4842491b2fdf76322bd0537198d202f288f788d4271662e",
+        "version": "1.0.0"
+      },
+      {
+        "filename": "opengamevcs-path-filesystem-1.0.0.tgz",
+        "name": "@opengamevcs/path-filesystem",
+        "sha256": "58007e2e447803bb2d10d19be325c5339d7c808ff7240ee8d7a9b060b4e65107",
+        "version": "1.0.0"
+      }
+    ],
+    "reportArtifacts": [
+      {
+        "filename": "conformance-report.json",
+        "platform": "linux",
+        "sha256": "4368da7de577b40b49a6c87933050b41aea26daa3739fe054e72d431c4fcabce"
+      },
+      {
+        "filename": "conformance-report.json",
+        "platform": "macos",
+        "sha256": "9d2c0d76d3a5442aee79c75097d7c57d71ec9b7ea85f7097b3c72a3e7ca13c76"
+      },
+      {
+        "filename": "conformance-report.json",
+        "platform": "windows",
+        "sha256": "770ec54d1b9bad9133f6e786221c3d8b2b8c342fd6d7cf1ac262974c3a6e9809"
+      }
+    ],
+    "reports": 3,
+    "result": "equal-pure-results-and-package-bytes",
+    "rowsPerReport": 72,
+    "syscallTrace": {
+      "auditSha256": "3fac571d0ab6e6f5ccf90ebb2352b0543655be9bbae2d78dea07fade0187be6a",
+      "bytes": 4548,
+      "lines": 42,
+      "outsideReferences": 0,
+      "traceSha256": "a6130c1c4f646eab849be56789228678a260d16da356cbc8bf0c9140b0999f2f"
+    }
+  },
+  "schema": "ogvcs.path/hosted-validation-evidence/v1",
+  "status": "hosted-path-acceptance-passed-predecessor-pending"
+}

@@ -15,4 +15,4 @@ This directory records accepted cross-cutting decisions behind the normative beh
 | [0009](0009-format-v1-object-graph-and-fileid-validation.md) | Proposed | Immutable graph, transition replay, groups, conflicts, and FileID proof |
 | [0010](0010-core-profile-registries-and-logical-bundle-boundary.md) | Proposed | Core/path/chunk/export ownership and additive profile registries |
 | [0011](0011-authorization-contract-v1.md) | Accepted | Authorization decision, authorized-view, transfer-grant, audit, and threat-contract v1 |
-| [0012](0012-path-and-workspace-filesystem-contract-v1.md) | Proposed | Unicode case folding, platform profiles, confined mutation, and watcher recovery |
+| [0012](0012-path-and-workspace-filesystem-contract-v1.md) | Accepted | Unicode case folding, platform profiles, confined mutation, and watcher recovery |

@@ -3,7 +3,7 @@
 - **Review date:** 2026-08-16
 - **Reviewer:** Independent Codex critical-review pass
 - **Initial verdict:** Not acceptance-ready
-- **Current verdict:** Locally accepted as a validation candidate; hosted and predecessor evidence pending
+- **Current verdict:** OGVCS-004 acceptance-ready; roadmap completion waits only for its OGVCS-002 predecessor
 
 ## Scope and method
 
@@ -39,7 +39,7 @@ state, hung promise callbacks, and package path/hash substitution.
 | AC-02 proof | Native assertions alone did not literally provide elevated filesystem tracing. | Linux hosted conformance now runs the unsafe-target fixture under `strace`, rejects any outside-root syscall reference, and retains the trace/audit with the package reports. |
 | OGVCS-002 integration | Ratified path profile names could be recognized without proving complete composed-path semantics. | JavaScript requires the OGVCS-004 adapter for every composed path and full-set collisions; Rust explicitly fails closed until supplied with an equivalent adapter boundary. |
 
-## Residual boundary and release gaps
+## Residual boundary and roadmap dependency
 
 No live P0 or P1 local implementation defect remains in the reviewed scope.
 One explicit environmental boundary remains: separate pathname syscalls cannot
@@ -48,30 +48,33 @@ ADR require a private root or stronger native adapter, preserve staged output
 as untrusted until success, and fail every detected race closed. This is an
 accepted deployment boundary, not an authorization claim.
 
-The release is not yet acceptance-complete for two evidence reasons:
+Hosted run
+[31939458256](https://github.com/n3r/OpenGameVCS/actions/runs/31939458256)
+passed all 72 rows on Linux, macOS, and Windows, compared exact package bytes
+and pure results, and retained a Linux syscall trace whose audit found zero
+outside-workspace references. The first candidate run had exposed a Windows
+npm file-mode assumption; the correction was reviewed, regression-tested, and
+proved by the successful replacement run.
 
-1. the candidate has not yet passed and retained the Linux/macOS/Windows hosted
-   package/report comparison and Linux syscall trace; and
-2. OGVCS-002 remains In development because the maintainer deferred its exact
-   one-million-tree and logical-1-TiB runs to the final R0 campaign. The roadmap
-   correctly forbids marking dependent OGVCS-004 Done before that predecessor.
-
-Neither missing item is hidden or replaced by a smaller-scale claim.
+One roadmap dependency remains. OGVCS-002 is still in development because the
+maintainer deferred its exact one-million-tree and logical-1-TiB runs to the
+final R0 campaign. The roadmap correctly forbids marking dependent OGVCS-004
+Done before that predecessor. This missing predecessor evidence is not hidden
+or replaced by a smaller-scale claim.
 
 ## Acceptance verdict
 
 | Criterion | Verdict | Basis |
 |---|---|---|
-| OGVCS-004-AC-01 | Pending hosted proof | The pure implementation, independent evaluator, and strict comparator are green locally; all three hosted reports are still required. |
-| OGVCS-004-AC-02 | Pending hosted trace | Local adversarial fixtures pass and the exact elevated trace gate exists; its retained Linux artifact is pending. |
+| OGVCS-004-AC-01 | Pass | The pure implementation and independent evaluator passed on all three hosts; the comparison job accepted exact package bytes and all 62 pure decisions. |
+| OGVCS-004-AC-02 | Pass | The elevated Linux trace is retained and its bounded audit found zero references to the disjoint outside fixture. |
 | OGVCS-004-AC-03 | Pass | Canonical tree/bundle re-encoding changes the expected identities while preserving `FileID`; non-NFC input is rejected, never repaired. |
 | OGVCS-004-AC-04 | Pass | Every gap, overflow, failure, corruption, and unclean restart forces durable reconciliation. |
 | OGVCS-004-AC-05 | Pass | Long/deep game-project paths either pass within profile bounds or fail with stable preflight diagnostics. |
 
 ## Recommendation
 
-Commit and push this candidate, run the ordinary three-OS workflows without
-enabling OGVCS-002 scale, and update this review with exact run/job/artifact
-identities. Keep OGVCS-004 in `Validation` and ADR-0012 Proposed until hosted
-proof is accepted. At the final R0 campaign, run the two deferred OGVCS-002
-scale cases and close the dependency before moving OGVCS-004 to `prd/done`.
+Accept ADR-0012 and preserve the frozen v1 packages. Keep OGVCS-004 in
+`Validation` solely because its OGVCS-002 predecessor is not yet `Done`. At the
+final R0 campaign, run the two deferred OGVCS-002 scale cases and close that
+dependency before moving OGVCS-004 to `prd/done`.

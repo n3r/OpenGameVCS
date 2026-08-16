@@ -1,6 +1,6 @@
 # ADR-0012: Path and workspace filesystem contract v1
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-08-16
 **Owners:** OGVCS-004
 
@@ -100,14 +100,15 @@ machine without private repository imports. Offline package tests and a
 three-operating-system matrix compare every pure result byte-for-byte and run
 native filesystem adversarial cases appropriate to each host.
 
-The 2026-08-16 local validation candidate reproduces 62 pure decisions and ten
-bounded native proofs from offline-installed MIT packages. Its exact hashes,
-critical review, and pending hosted boundary are recorded in the
-[OGVCS-004 evidence packet](../docs/evidence/OGVCS-004/README.md). ADR status
-remains Proposed until the committed Linux/macOS/Windows comparison and Linux
-syscall trace are retained. OGVCS-002's separate million-tree and logical-1-TiB
-acceptance runs remain maintainer-deferred to the final R0 campaign and are not
-represented as path-materializer evidence here.
+The 2026-08-16 candidate reproduces 62 pure decisions and ten bounded native
+proofs from offline-installed MIT packages. GitHub Actions run 31939458256
+passed all 72 rows on Linux, macOS, and Windows, compared exact package bytes
+and pure results, and retained a Linux syscall trace with zero outside-root
+references. Its exact hashes and independent critical review are recorded in
+the [OGVCS-004 evidence packet](../docs/evidence/OGVCS-004/README.md).
+OGVCS-002's separate million-tree and logical-1-TiB acceptance runs remain
+maintainer-deferred to the final R0 campaign and are not represented as
+path-materializer evidence here.
 
 Case mode, fold version, and platform profile are repository-immutable. A
 changed mapping, collision rule, or meaning requires a new profile major and a
