@@ -6,6 +6,8 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 
+import { normalizeNpmTarball } from './normalize-npm-tarball.mjs';
+
 const REPOSITORY = resolve(import.meta.dirname, '..');
 const SPEC = join(REPOSITORY, 'spec/authorization/v1');
 const RUNTIME = join(REPOSITORY, 'core/authz-contract/js');
@@ -66,6 +68,8 @@ try {
   const [runtimeResult] = JSON.parse(runtimePack.stdout);
   const specTarball = join(packages, basename(specResult.filename));
   const runtimeTarball = join(packages, basename(runtimeResult.filename));
+  await normalizeNpmTarball(specTarball);
+  await normalizeNpmTarball(runtimeTarball, { executables: ['package/bin/ogvcs-authz.mjs'] });
   await writeFile(join(consumer, 'package.json'), '{"private":true,"type":"module"}\n');
   const installed = await npm([
     'install', '--offline', '--ignore-scripts', '--no-audit', '--no-fund', '--package-lock=false', specTarball, runtimeTarball,

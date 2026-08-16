@@ -25,6 +25,7 @@ on:
       - "spec/authorization/v1/**"
       - "tools/authorization-contract-report.test.mjs"
       - "tools/compare-authorization-contract-reports.mjs"
+      - "tools/normalize-npm-tarball.mjs"
       - "tools/run-packed-authorization-conformance.mjs"
   push:
     branches:
@@ -53,6 +54,7 @@ on:
       - "spec/authorization/v1/**"
       - "tools/authorization-contract-report.test.mjs"
       - "tools/compare-authorization-contract-reports.mjs"
+      - "tools/normalize-npm-tarball.mjs"
       - "tools/run-packed-authorization-conformance.mjs"
   workflow_dispatch:
 

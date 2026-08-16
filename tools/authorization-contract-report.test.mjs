@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
 
+import { normalizeNpmTarballBytes } from './normalize-npm-tarball.mjs';
+
 const REPOSITORY = resolve(import.meta.dirname, '..');
 const RUNNER = join(REPOSITORY, 'tools/run-packed-authorization-conformance.mjs');
 const COMPARATOR = join(REPOSITORY, 'tools/compare-authorization-contract-reports.mjs');
@@ -27,6 +29,11 @@ test('packed conformance retains both exact packages and equal reference/adapter
   assert.deepEqual(evidence.packages.map(({ name }) => name).sort(), ['@opengamevcs/authorization-contract', '@opengamevcs/authorization-contract-v1']);
   assert.equal(evidence.reports.length, 2);
   for (const entry of [...evidence.packages, ...evidence.reports]) assert.match(entry.sha256, /^[0-9a-f]{64}$/);
+  for (const entry of evidence.packages) {
+    const bytes = await readFile(join(root, 'packages', entry.filename));
+    const executables = entry.name === '@opengamevcs/authorization-contract' ? ['package/bin/ogvcs-authz.mjs'] : [];
+    assert.deepEqual(normalizeNpmTarballBytes(bytes, { executables }), bytes, `${entry.name} archive is not normalized idempotently`);
+  }
   const reference = join(root, 'reference-report.json');
   const external = join(root, 'external-adapter-report.json');
   const compared = await run(COMPARATOR, [reference, external]);
