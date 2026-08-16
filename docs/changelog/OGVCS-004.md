@@ -108,7 +108,9 @@ Both packages carry the byte-identical MIT license. The contract archive ships
 the complete public authority but excludes generation/test internals. The
 runtime archive ships public source, examples, and executable CLI but no tests
 or private repository paths. A clean temporary consumer installs the exact
-archives offline and runs the public CLI/report.
+archives offline and runs the public CLI/report. Windows validates the declared
+`bin` without pretending npm's host file-mode metadata is POSIX; retained
+archives normalize that member to mode `0755` before exact cross-OS comparison.
 
 Local validation passed all 62 pure rows, ten bounded native rows, six contract
 tests, runtime/package/integration tests, report/comparator/trace-auditor tests,

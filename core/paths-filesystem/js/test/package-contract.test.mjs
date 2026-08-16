@@ -33,7 +33,9 @@ test('offline-installed packed runtime binds the packed contract and passes conf
     assert.equal(runtimePack.code, 0, runtimePack.stderr);
     const [specResult] = JSON.parse(specPack.stdout); const [runtimeResult] = JSON.parse(runtimePack.stdout);
     assert.equal(runtimeResult.name, '@opengamevcs/path-filesystem');
-    assert.ok(runtimeResult.files.some(({ path, mode }) => path === 'bin/ogvcs-path.mjs' && (mode & 0o111) !== 0));
+    const binary = runtimeResult.files.find(({ path }) => path === 'bin/ogvcs-path.mjs');
+    assert.ok(binary);
+    if (process.platform !== 'win32') assert.ok((binary.mode & 0o111) !== 0);
     assert.ok(runtimeResult.files.some(({ path }) => path === 'LICENSE'));
     assert.ok(runtimeResult.files.every(({ path }) => !path.startsWith('test/') && !path.startsWith('scripts/')));
     await writeFile(join(consumer, 'package.json'), '{"private":true,"type":"module"}\n');
