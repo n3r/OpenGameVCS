@@ -119,6 +119,11 @@ jobs:
           components: clippy,rustfmt
       - name: Install JavaScript workspaces
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Prefetch complete locked Rust dependency closure
+        run: cargo fetch --manifest-path core/object-model/rust/Cargo.toml --locked
+      - name: Run full conformance from packed JavaScript, Rust, and format artifacts
+        if: runner.os == 'Linux'
+        run: node tools/run-packed-object-model-conformance.mjs --output artifacts/packed-object-model-conformance
       - name: Install the pinned normative CDDL compiler
         if: runner.os == 'Linux'
         run: |
@@ -149,13 +154,8 @@ jobs:
         run: cargo clippy --manifest-path core/object-model/rust/Cargo.toml --locked --all-targets -- -D warnings
       - name: Build Rust package
         run: cargo package --manifest-path core/object-model/rust/Cargo.toml --locked --offline
-      - name: Prefetch complete locked Rust dependency closure
-        run: cargo fetch --manifest-path core/object-model/rust/Cargo.toml --locked
       - name: Test reproducible Rust offline distribution
         run: node --test core/object-model/rust/scripts/offline-distribution.test.mjs
-      - name: Run full conformance from packed JavaScript, Rust, and format artifacts
-        if: runner.os == 'Linux'
-        run: node tools/run-packed-object-model-conformance.mjs --output artifacts/packed-object-model-conformance
       - name: Build and verify Rust offline distribution
         if: runner.os == 'Linux'
         run: |

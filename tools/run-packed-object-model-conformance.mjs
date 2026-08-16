@@ -227,8 +227,9 @@ async function main() {
   const worktree = await run('git', ['status', '--porcelain=v1', '--untracked-files=all'], {
     label: 'git worktree status'
   });
-  if (!allowDirty && worktree.stdout.trim().length !== 0) {
-    fail('release evidence requires a clean worktree (use --allow-dirty only for local diagnosis)');
+  const dirtyEntries = worktree.stdout.trim();
+  if (!allowDirty && dirtyEntries.length !== 0) {
+    fail(`release evidence requires a clean worktree (use --allow-dirty only for local diagnosis):\n${dirtyEntries}`);
   }
   await mkdir(output, { recursive: true });
   const scratch = await mkdtemp(join(tmpdir(), 'ogvcs-packed-conformance-'));
