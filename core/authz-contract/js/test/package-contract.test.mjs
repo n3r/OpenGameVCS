@@ -53,6 +53,13 @@ test('packed bindings install offline with the exact packed contract and run the
   ], { cwd: consumer, env });
   assert.equal(installed.code, 0, installed.stderr || installed.stdout);
 
+  const installedBin = await npm(['exec', '--offline', '--', 'ogvcs-authz', '--help'], {
+    cwd: consumer,
+    env: { ...env, npm_config_offline: 'true' },
+  });
+  assert.equal(installedBin.code, 0, installedBin.stderr || installedBin.stdout);
+  assert.match(installedBin.stdout, /OpenGameVCS authorization contract runner/);
+
   const runtimeRoot = join(consumer, 'node_modules/@opengamevcs/authorization-contract');
   const cli = join(runtimeRoot, 'bin/ogvcs-authz.mjs');
   for (const args of [['inspect'], ['verify-grants'], ['run']]) {
