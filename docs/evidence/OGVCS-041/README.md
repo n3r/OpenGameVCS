@@ -1,8 +1,8 @@
 # OGVCS-041 validation evidence
 
-**Evidence date:** 2026-08-16
+**Evidence date:** 2026-08-17
 
-**Status:** Local OGVCS-041 acceptance passed; hosted three-OS proof and predecessor completion pending
+**Status:** Local and hosted OGVCS-041 acceptance passed; predecessor completion pending
 
 ## Evidence boundary
 
@@ -15,8 +15,8 @@ assessment is
 [`docs/reviews/OGVCS-041-critical-review.md`](../../reviews/OGVCS-041-critical-review.md).
 
 The contract is intentionally `1.0.0-rc.1`, candidate, and unratified. The PRD
-remains in Validation because hosted proof has not yet been retained and its
-OGVCS-002/OGVCS-004 predecessors are not Done.
+remains in Validation because its OGVCS-002/OGVCS-004 predecessors are not
+Done.
 
 The maintainer directed that OGVCS-002's exact one-million-entry tree and
 logical-1-TiB manifest tests not run now. They remain deferred to the final R0
@@ -54,7 +54,7 @@ Local environment: macOS 26.6.1 arm64, Node.js 24.9.0, npm 11.6.0.
 | Reference and independent adapters | Passed 360/360 each with identical result rows and report digest. |
 | Runtime and isolation | Passed 102/102 tests, including permission confinement, hostile output, deadline, and package cases. |
 | Differential review | A 28,889-case broad sweep plus corrected stripped-RunnerCase boundary and combined-invalid sweeps covered all nine operations; no live P0/P1 remained. |
-| Generated consumers | TypeScript typecheck/smoke and C++ configure/build/CTest 1/1 passed locally; retained Rust/C# sources await hosted compilation. |
+| Generated consumers | TypeScript typecheck/smoke and C++ configure/build/CTest 1/1 passed locally; Rust, C++, C#, and TypeScript retained consumers compiled on all three hosted operating systems. |
 | Offline packed proof | Six exact archives installed, regenerated, and ran both adapters from isolated offline consumers. |
 | Report tooling | Passed source, packed, and synthetic three-OS comparator tests 3/3. |
 | Full repository ordinary suite | Passed; the reference-scale fixture case and one Windows-only junction case were skipped on the local macOS host. |
@@ -82,7 +82,7 @@ and `db250a85d5d335b38fbf3a163cd054d872800c2dca89814f04edf66c5b789915`.
 |---|---|---|
 | OGVCS-041-AC-01 | Separate process implementation, oracle-free authenticated execution view, randomized handles/order, and exact 360/360 equality across every finite registered tuple and selectable extension. | Pass |
 | OGVCS-041-AC-02 | 273 exact negative traces cover duplicate, reorder, disconnect, expiry, incompatibility, downgrade, malformed and bounded-resource classes with pre-mutation counts. | Pass |
-| OGVCS-041-AC-03 | One numbered model reproduced four manifest-bound consumers; TypeScript and C++ compile locally, with all four retained for the hosted three-OS matrix. | Local pass; hosted pending |
+| OGVCS-041-AC-03 | One numbered model reproduced four manifest-bound consumers; all four compiled from retained source on Ubuntu, macOS, and Windows. | Pass |
 | OGVCS-041-AC-04 | 28 tagged red-team rejects, sensitive-carrier derivation, encoded/hash canary scanning, empty successful stderr, and permission isolation found no protected output. | Pass |
 | OGVCS-041-AC-05 | 24 release-preflight rows reject pin, tuple, required-feature, assignment, lifecycle, and semantic drift while accepting only the exact pre-reserved addition. | Pass |
 
@@ -91,20 +91,40 @@ The full FR/NFR/AC matrix and remediation history are in the independent
 
 ## Hosted validation
 
-The commit-pinned workflow builds the packed candidate on Ubuntu, macOS, and
-Windows. Each host runs the 360-row reference and independent reports, compiles
-retained Rust/C++/C#/TypeScript consumers using only retained source and local
-configuration, and uploads exact packages, source, and reports. A final job
-rejects any package, generated-source, or semantic-decision difference.
+The commit-pinned [workflow run 31967884476](https://github.com/n3r/OpenGameVCS/actions/runs/31967884476)
+passed at source revision
+`f938c296759ce4a7228647221670f9160de4c77c`. Each host ran the 360-row
+reference and independent reports, built the packed candidate offline, and
+compiled the retained Rust/C++/C#/TypeScript consumers using only retained
+source and local configuration. The platform and comparison jobs were:
 
-The first hosted run is pending. This section and the machine-readable evidence
-record will be updated with the source revision, run/job/artifact IDs, archive
-digests, and comparator result after it succeeds. The exact-scale workflow is
-separate and will not be dispatched during this validation step.
+| Job | ID | Result |
+|---|---:|---|
+| [Ubuntu](https://github.com/n3r/OpenGameVCS/actions/runs/31967884476/job/95215708587) | `95215708587` | Pass |
+| [macOS](https://github.com/n3r/OpenGameVCS/actions/runs/31967884476/job/95215708603) | `95215708603` | Pass |
+| [Windows](https://github.com/n3r/OpenGameVCS/actions/runs/31967884476/job/95215708506) | `95215708506` | Pass |
+| [Cross-platform comparison](https://github.com/n3r/OpenGameVCS/actions/runs/31967884476/job/95217259894) | `95217259894` | Pass |
+
+GitHub retained four archives until 2026-09-15. The archive digests reported by
+the Actions API are:
+
+| Artifact | ID | Bytes | Archive SHA-256 |
+|---|---:|---:|---|
+| `protocol-Linux` | `9269058422` | 1,927,354 | `3c2184dddf8fe7f30bc5691f81c02593660f43920ffcc50df2bbe168d5098601` |
+| `protocol-macOS` | `9269024611` | 1,927,353 | `6182167a27c8a15baa96b7e8dfd554c0b77d02eb56125615aa83b9de5fa031ee` |
+| `protocol-Windows` | `9269137328` | 1,927,356 | `973b2799b48e6698dbe71b17328a7fa14ab45a89686889665b3742a995884741` |
+| `protocol-comparison` | `9269140389` | 584 | `756c9d6e63e9760c0095d8ba4023b38fd337e509a6dfb4dcd2c3d27a38d4f147` |
+
+The downloaded comparison record has SHA-256
+`77536ef06fb3c5c85e961caf28c66fb9136ec8d8c646864a00c9e9c25849af74`
+and reports `equal` for all six reports, all 360 scenarios, the six package
+archives, and the complete offline source set. Re-running the comparator over
+the downloaded platform directories produced the same record. The exact-scale
+workflow is separate and was not dispatched.
 
 ## Deferred roadmap completion
 
-The local OGVCS-041 implementation and acceptance criteria are satisfied. Keep
-the PRD in Validation until hosted evidence succeeds and OGVCS-002/OGVCS-004 are
-Done. At the final R0 campaign, run the two maintainer-deferred OGVCS-002 scale
-cases before considering ratification or moving OGVCS-041 to `prd/done`.
+The local and hosted OGVCS-041 implementation and acceptance criteria are
+satisfied. Keep the PRD in Validation until OGVCS-002/OGVCS-004 are Done. At
+the final R0 campaign, run the two maintainer-deferred OGVCS-002 scale cases
+before considering ratification or moving OGVCS-041 to `prd/done`.

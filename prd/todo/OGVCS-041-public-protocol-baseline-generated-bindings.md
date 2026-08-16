@@ -7,7 +7,7 @@
 **Depends on:** OGVCS-002, OGVCS-003, OGVCS-004  
 **Blocks:** OGVCS-005, OGVCS-006, OGVCS-008, OGVCS-009, OGVCS-011, OGVCS-019, OGVCS-030, OGVCS-036, OGVCS-042, OGVCS-043  
 **Source:** [ADR-0013 public protocol v1 transport, schema, and generation](../../adr/0013-protocol-v1-transport-schema-and-generation.md)
-**Last updated:** 2026-08-16
+**Last updated:** 2026-08-17
 
 ## Outcome
 
@@ -117,16 +117,16 @@ protocol.
 The MIT-licensed `1.0.0-rc.1` implementation candidate is complete. Two
 independent adapters passed all 360 bounded scenarios with identical semantic
 results, and the six exact npm packages installed, regenerated, and ran fully
-offline. The local TypeScript and C++ consumers compile; the retained workflow
-compiles all four generated consumers and compares exact packages, generated
-source, and decisions on Linux, macOS, and Windows. Hosted execution remains
-pending. Per maintainer direction, the OGVCS-002 one-million-entry tree and
-logical-1-TiB cases were not run and remain deferred to the final R0 campaign.
-This PRD remains in Validation until its OGVCS-002 and OGVCS-004 predecessors
-are Done and hosted evidence is retained.
+offline. Hosted workflow run
+[31967884476](https://github.com/n3r/OpenGameVCS/actions/runs/31967884476)
+compiled all four generated consumers and proved identical packages, generated
+source, and decisions on Linux, macOS, and Windows. Per maintainer direction,
+the OGVCS-002 one-million-entry tree and logical-1-TiB cases were not run and
+remain deferred to the final R0 campaign. This PRD remains in Validation until
+its OGVCS-002 and OGVCS-004 predecessors are Done.
 
 - Implementation changes: [Detailed candidate changelog](../../docs/changelog/OGVCS-041.md)
 - Test and benchmark results: [Candidate evidence packet](../../docs/evidence/OGVCS-041/README.md)
 - Security/reliability review: [Independent critical review](../../docs/reviews/OGVCS-041-critical-review.md)
 - Documentation/runbooks: [Accepted ADR-0013 and generated protocol documentation](../../adr/0013-protocol-v1-transport-schema-and-generation.md)
-- Rollout result: [Local candidate passed; hosted three-OS proof pending](../../docs/evidence/OGVCS-041/README.md#hosted-validation)
+- Rollout result: [Local and hosted candidate passed; predecessor completion pending](../../docs/evidence/OGVCS-041/README.md#hosted-validation)

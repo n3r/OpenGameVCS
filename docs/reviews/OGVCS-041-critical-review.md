@@ -1,9 +1,10 @@
 # OGVCS-041 critical review
 
 - **Review date:** 2026-08-16
+- **Hosted evidence retained:** 2026-08-17
 - **Reviewer:** Independent Codex critical-review pass
 - **Initial verdict:** Not definition-of-ready; later not acceptance-ready
-- **Current verdict:** Implementation candidate acceptance-ready; hosted and predecessor gates remain external
+- **Current verdict:** Local and hosted acceptance passed; predecessor gates remain external
 
 ## Scope and method
 
@@ -55,14 +56,14 @@ ceilings. The exact one-million-entry tree and logical-1-TiB cases were not run.
 | FR-06 | Pass | Opaque five-dimension cursors, expiry/gap/invalidation, page/stream state, terminal frames, and incomplete EOF are explicit and tested. |
 | FR-07 | Pass | Exact predecessor manifest/vector provenance and 16 request-root verifier executions plus two explicit-object pre-verifier exclusions prove no claim reinterpretation. |
 | FR-08 | Pass | Extension owner, namespace, lifecycle, requirement, fallback, security/data impact, affected schema, tuple, and pre-reserved-addition rules are machine-readable. |
-| FR-09 | Pass at implementation boundary | One model generates four complete manifest-bound consumers; local TypeScript/C++ builds pass and retained Rust/C# compilation is a hosted evidence gate. |
+| FR-09 | Pass | One model generates four complete manifest-bound consumers; retained Rust/C++/C#/TypeScript builds pass on Ubuntu, macOS, and Windows. |
 | FR-10 | Pass | Offline runner covers all nine operations, exact traces, malformed, retry, cursor, downgrade, resource, release, security, and transfer cases. |
-| NFR-01 | Pass locally | Clean generation and installed-package regeneration are byte-stable; comparator requires exact package/source/decision equality across three hosts. |
+| NFR-01 | Pass | Clean generation and installed-package regeneration are byte-stable; the hosted comparator proved exact package/source/decision equality across three hosts. |
 | NFR-02 | Pass | All finite bounds run through real reduced routes with pre-mutation results, combined accounting, safe errors, and protected-output scanning. Exact scale is explicitly separate. |
 | NFR-03 | Pass | All source/generated/package artifacts carry the identical MIT text and the six-package closure installs, regenerates, and executes offline. |
 | AC-01 | Pass | Genuinely separate engines receive only public authority, pass 360/360 exact rows, and cannot read either oracle corpus. |
 | AC-02 | Pass | 273 rejects cover required failure classes with exact trace digest, stable code, pre-mutation flag, and mutation count. |
-| AC-03 | Local implementation pass | Generation and local TS/C++ compile pass; hosted Rust/C#/three-OS retained-source compilation remains pending evidence. |
+| AC-03 | Pass | Generation is clean and retained Rust/C++/C#/TypeScript consumers compile on all three hosted operating systems. |
 | AC-04 | Pass | Twenty-eight tagged red-team rejects plus sensitive-carrier/encoded/hash scanning find no protected error, negotiation, cursor, grant, trace, stdout, or stderr output. |
 | AC-05 | Pass | Twenty-four release rows cover unknown/omitted/extra requirements, absent tuples, pin drift, reassignment/removal, lifecycle, semantic drift, and exact pre-reserved addition. |
 
@@ -75,18 +76,18 @@ admission of an arbitrary new candidate manifest is intentionally deferred to a
 future release-preflight version; R0 supports only predecessor-pre-reserved
 additions. These are documented boundaries, not hidden compatibility claims.
 
-The first hosted Ubuntu/macOS/Windows workflow and comparator remain external
-evidence. OGVCS-002 is still in development because the maintainer deferred its
-one-million-entry tree and logical-1-TiB tests to the final R0 campaign, and
-OGVCS-004 consequently remains in Validation. The roadmap correctly prevents
-OGVCS-041 from becoming Done or its 1.0.0 contract from being ratified while
-those dependencies remain open.
+Hosted workflow run
+[31967884476](https://github.com/n3r/OpenGameVCS/actions/runs/31967884476)
+passed on Ubuntu, macOS, and Windows; its final comparator proved identical
+packages, source, and all six 360-row reports. OGVCS-002 is still in development
+because the maintainer deferred its one-million-entry tree and logical-1-TiB
+tests to the final R0 campaign, and OGVCS-004 consequently remains in
+Validation. The roadmap correctly prevents OGVCS-041 from becoming Done or its
+1.0.0 contract from being ratified while those dependencies remain open.
 
 ## Recommendation
 
-Accept ADR-0013 and preserve the frozen `1.0.0-rc.1` candidate. Keep OGVCS-041
-in Validation. Run the ordinary hosted three-OS workflow and retain its package,
-source, consumer-build, and report-comparison evidence without dispatching the
-separate exact-scale job. At the final R0 campaign, close OGVCS-002's deferred
-scale evidence and the OGVCS-004 dependency before ratification or moving this
-PRD to `prd/done`.
+Preserve the frozen `1.0.0-rc.1` candidate and its retained local and hosted
+evidence. Keep OGVCS-041 in Validation. At the final R0 campaign, close
+OGVCS-002's deferred scale evidence and the OGVCS-004 dependency before
+ratification or moving this PRD to `prd/done`.

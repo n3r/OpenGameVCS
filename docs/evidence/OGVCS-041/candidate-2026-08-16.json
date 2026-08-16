@@ -2,15 +2,110 @@
   "schemaVersion": "ogvcs.protocol/candidate-evidence/v1",
   "contractVersion": "1.0.0-rc.1",
   "date": "2026-08-16",
-  "status": "local-protocol-acceptance-passed-hosted-and-predecessors-pending",
+  "status": "local-and-hosted-protocol-acceptance-passed-predecessors-pending",
   "exactScale": {
     "treeMillionEntries": "not-run",
     "manifestOneTiB": "not-run",
     "reason": "Maintainer-deferred OGVCS-002 acceptance work for the final R0 campaign; ADR-0013 excludes exact scale from this protocol proof"
   },
   "hosted": {
-    "status": "pending-first-three-os-run",
-    "sourceRevision": null
+    "status": "pass",
+    "sourceRevision": "f938c296759ce4a7228647221670f9160de4c77c",
+    "workflow": {
+      "runId": 31967884476,
+      "url": "https://github.com/n3r/OpenGameVCS/actions/runs/31967884476",
+      "conclusion": "success",
+      "createdAt": "2026-08-16T19:32:23Z",
+      "completedAt": "2026-08-16T19:45:38Z"
+    },
+    "jobs": [
+      {
+        "platform": "windows",
+        "jobId": 95215708506,
+        "name": "Packed candidate (windows-latest)",
+        "url": "https://github.com/n3r/OpenGameVCS/actions/runs/31967884476/job/95215708506",
+        "conclusion": "success",
+        "startedAt": "2026-08-16T19:32:27Z",
+        "completedAt": "2026-08-16T19:45:25Z"
+      },
+      {
+        "platform": "linux",
+        "jobId": 95215708587,
+        "name": "Packed candidate (ubuntu-latest)",
+        "url": "https://github.com/n3r/OpenGameVCS/actions/runs/31967884476/job/95215708587",
+        "conclusion": "success",
+        "startedAt": "2026-08-16T19:32:27Z",
+        "completedAt": "2026-08-16T19:39:09Z"
+      },
+      {
+        "platform": "macos",
+        "jobId": 95215708603,
+        "name": "Packed candidate (macos-latest)",
+        "url": "https://github.com/n3r/OpenGameVCS/actions/runs/31967884476/job/95215708603",
+        "conclusion": "success",
+        "startedAt": "2026-08-16T19:32:27Z",
+        "completedAt": "2026-08-16T19:36:31Z"
+      },
+      {
+        "platform": "comparison",
+        "jobId": 95217259894,
+        "name": "Compare Linux, macOS, and Windows evidence",
+        "url": "https://github.com/n3r/OpenGameVCS/actions/runs/31967884476/job/95217259894",
+        "conclusion": "success",
+        "startedAt": "2026-08-16T19:45:27Z",
+        "completedAt": "2026-08-16T19:45:37Z"
+      }
+    ],
+    "artifacts": [
+      {
+        "artifactId": 9269058422,
+        "name": "protocol-Linux",
+        "sizeBytes": 1927354,
+        "archiveSha256": "3c2184dddf8fe7f30bc5691f81c02593660f43920ffcc50df2bbe168d5098601",
+        "createdAt": "2026-08-16T19:39:08Z",
+        "expiresAt": "2026-09-15T19:39:07Z"
+      },
+      {
+        "artifactId": 9269024611,
+        "name": "protocol-macOS",
+        "sizeBytes": 1927353,
+        "archiveSha256": "6182167a27c8a15baa96b7e8dfd554c0b77d02eb56125615aa83b9de5fa031ee",
+        "createdAt": "2026-08-16T19:36:27Z",
+        "expiresAt": "2026-09-15T19:36:26Z"
+      },
+      {
+        "artifactId": 9269137328,
+        "name": "protocol-Windows",
+        "sizeBytes": 1927356,
+        "archiveSha256": "973b2799b48e6698dbe71b17328a7fa14ab45a89686889665b3742a995884741",
+        "createdAt": "2026-08-16T19:45:21Z",
+        "expiresAt": "2026-09-15T19:45:20Z"
+      },
+      {
+        "artifactId": 9269140389,
+        "name": "protocol-comparison",
+        "sizeBytes": 584,
+        "archiveSha256": "756c9d6e63e9760c0095d8ba4023b38fd337e509a6dfb4dcd2c3d27a38d4f147",
+        "createdAt": "2026-08-16T19:45:35Z",
+        "expiresAt": "2026-09-15T19:45:35Z"
+      }
+    ],
+    "comparison": {
+      "schemaVersion": "ogvcs.protocol/comparison/v1",
+      "result": "equal",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "reports": 6,
+      "scenarios": 360,
+      "fileSha256": "77536ef06fb3c5c85e961caf28c66fb9136ec8d8c646864a00c9e9c25849af74",
+      "contractManifestSha256": "41bfebd0524458a669324e055c9849aff40f5a55bd5b8b47f1891516910ebffe",
+      "bindingSetSha256": "de584a7e0e57a0b4ed39a24b2a85542b92268a58b3f83d44d5ca57cc6eafd6ad",
+      "sourceSetSha256": "ac2c6da88486b4511c89bb9a968cae0a3892a190ea90e98bb41c1b0c3da6f456",
+      "licenseSha256": "6f0f22f485ae8614870468a48f2c084eaf800fe02c5a2c4d9a91d34bc7f58eb4"
+    }
   },
   "license": {
     "name": "MIT",
@@ -57,8 +152,8 @@
     "generatedConsumers": {
       "typescript": "typecheck-smoke-pass",
       "cpp": "configure-build-ctest-pass",
-      "rust": "pending-hosted-toolchain",
-      "csharp": "pending-hosted-toolchain"
+      "rust": "hosted-three-os-offline-compile-pass",
+      "csharp": "hosted-three-os-offline-compile-pass"
     },
     "reportTools": {
       "passed": 3,

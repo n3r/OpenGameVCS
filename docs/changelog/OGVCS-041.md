@@ -67,10 +67,11 @@ Six exact MIT npm archives—the four protocol packages plus the OGVCS-003
 contract/runtime predecessors—install in separate clean consumers without
 network access. The packed proof regenerates checked-in outputs, runs both
 adapters, retains exact package/report/source hashes, and proves the independent
-adapter cannot read either outcome corpus. A commit-pinned workflow repeats the
-proof and compiles retained Rust, C++, C#, and TypeScript consumers on Ubuntu,
-macOS, and Windows before comparing exact packages, generated sources, and
-semantic decisions.
+adapter cannot read either outcome corpus. Commit-pinned hosted workflow run
+[31967884476](https://github.com/n3r/OpenGameVCS/actions/runs/31967884476)
+repeated the proof and compiled retained Rust, C++, C#, and TypeScript consumers
+on Ubuntu, macOS, and Windows. Its final comparator found the packages,
+generated sources, and all six 360-row semantic reports identical.
 
 ## Review remediation
 
@@ -92,5 +93,6 @@ cursors, idempotency records, assignments, or errors.
 OGVCS-041 stays in Validation while OGVCS-002 and OGVCS-004 remain incomplete.
 Per maintainer direction, the OGVCS-002 exact one-million-entry tree and
 logical-1-TiB tests were not run here and remain deferred to the final R0
-campaign. Hosted three-OS evidence is also pending and will be linked from the
-[evidence packet](../evidence/OGVCS-041/README.md) before any completion claim.
+campaign. The retained [evidence packet](../evidence/OGVCS-041/README.md)
+records the passing hosted jobs, artifact archive digests, and equal comparison
+result. The candidate remains unratified until its predecessor gates close.
