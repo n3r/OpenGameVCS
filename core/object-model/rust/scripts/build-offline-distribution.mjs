@@ -440,10 +440,12 @@ async function packagedVcsInfo(bundleRoot, packageDirectory) {
   if (!(await fileExists(path))) return { sourceRevision: null, sourceTreeDirty: null };
   const value = JSON.parse(await readFile(path, 'utf8'));
   const sourceRevision = value?.git?.sha1;
-  const sourceTreeDirty = value?.git?.dirty;
-  if (!/^[0-9a-f]{40}$/u.test(sourceRevision ?? '') || typeof sourceTreeDirty !== 'boolean') {
+  const dirty = value?.git?.dirty;
+  if (!/^[0-9a-f]{40}$/u.test(sourceRevision ?? '') ||
+      (dirty !== undefined && typeof dirty !== 'boolean')) {
     fail('packaged crate has invalid VCS metadata');
   }
+  const sourceTreeDirty = dirty ?? false;
   return { sourceRevision, sourceTreeDirty };
 }
 
