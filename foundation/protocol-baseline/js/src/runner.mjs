@@ -199,12 +199,9 @@ async function isolatedDescriptor(descriptor, authorityRoot, options) {
     if (marker + 1 >= args.length || args.indexOf('--contract', marker + 1) !== -1) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'adapter contract argument is invalid');
     args[marker + 1] = authorityRoot;
   }
+  if (options.nodeAdapterReadRoots === undefined) return { ...descriptor, args };
   const executable = basename(descriptor.command).toLowerCase();
-  const isNodeAdapter = executable === 'node' || executable === 'node.exe' || descriptor.command === process.execPath;
-  if (options.nodeAdapterReadRoots === undefined) {
-    return { ...descriptor, args: isNodeAdapter ? ['--no-warnings', ...args] : args };
-  }
-  if (!isNodeAdapter) {
+  if (!(executable === 'node' || executable === 'node.exe' || descriptor.command === process.execPath)) {
     protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'nodeAdapterReadRoots requires a Node adapter command');
   }
   if (!Array.isArray(options.nodeAdapterReadRoots) || options.nodeAdapterReadRoots.length < 1 || options.nodeAdapterReadRoots.length > 8
@@ -222,7 +219,6 @@ async function isolatedDescriptor(descriptor, authorityRoot, options) {
     try { return await realpath(argument); } catch { return argument; }
   }));
   const permissionArgs = [
-    '--no-warnings',
     '--permission',
     ...[...new Set([...canonicalRoots, authorityRoot])].map((root) => `--allow-fs-read=${root}`),
   ];

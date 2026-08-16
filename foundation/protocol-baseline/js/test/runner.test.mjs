@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import {
   collectProtocolScenarios,
@@ -18,7 +19,7 @@ const adapterScript = new URL('../../adapters/js-independent/bin/ogvcs-protocol-
 test('reference and genuinely independent process adapter execute every case with identical semantic rows', async () => {
   const contract = await loadProtocolContract({ root: protocolRoot });
   const reference = await runReferenceProtocolConformance(contract);
-  const external = await runExternalProtocolConformance(contract, [process.execPath, adapterScript.pathname, '--contract', protocolRoot.pathname], { expectedAdapterId: 'ogvcs.protocol/independent-js@1' });
+  const external = await runExternalProtocolConformance(contract, [process.execPath, fileURLToPath(adapterScript), '--contract', fileURLToPath(protocolRoot)], { expectedAdapterId: 'ogvcs.protocol/independent-js@1' });
   assert.equal(reference.passed, contract.manifest.counts.scenarios);
   assert.equal(external.passed, contract.manifest.counts.scenarios);
   assert.equal(reference.failed, 0);

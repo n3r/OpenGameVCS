@@ -115,7 +115,7 @@
       {
         "name": "@opengamevcs/protocol-baseline",
         "version": "1.0.0-rc.1",
-        "sha256": "abd5c27f6385806875265940e5fae77917b02f5f29fb9482f9dd52d8bc9a1711"
+        "sha256": "8b3836391046521a5672a08cdfbfb486fb7a55ac9b07e7f6c1eeb9418ac0a097"
       },
       {
         "name": "@opengamevcs/protocol-baseline-independent-adapter",
