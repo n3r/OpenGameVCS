@@ -9,6 +9,7 @@ use std::{
 use unicode_normalization::is_nfc;
 
 use crate::{
+    file_identity::FileIdentity,
     hard_limits::{
         enforce_hard_limit_context, MAX_CHUNK_BYTES, MAX_LOGICAL_FILE_BYTES, MAX_METADATA_BYTES,
         MAX_PATH_SEGMENT_BYTES, MAX_TREE_ENTRIES,
@@ -1158,34 +1159,8 @@ struct RunFile {
     path: PathBuf,
     bytes: u64,
     records: u64,
-    identity: RunFileIdentity,
+    identity: FileIdentity,
     digest: [u8; 32],
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct RunFileIdentity(u64, u64);
-
-#[cfg(unix)]
-fn run_file_identity(metadata: &std::fs::Metadata) -> Result<RunFileIdentity> {
-    use std::os::unix::fs::MetadataExt;
-    Ok(RunFileIdentity(metadata.dev(), metadata.ino()))
-}
-
-#[cfg(windows)]
-fn run_file_identity(metadata: &std::fs::Metadata) -> Result<RunFileIdentity> {
-    use std::os::windows::fs::MetadataExt;
-    // Rust 1.82 does not yet expose the Win32 volume/file index pair. Creation
-    // time plus size catches ordinary path replacement, while the separately
-    // retained whole-run SHA-256 remains the authoritative content binding.
-    Ok(RunFileIdentity(
-        metadata.creation_time(),
-        metadata.file_size(),
-    ))
-}
-
-#[cfg(not(any(unix, windows)))]
-fn run_file_identity(_metadata: &std::fs::Metadata) -> Result<RunFileIdentity> {
-    Err(Error::new(ErrorCode::SchemaFieldInvalid))
 }
 
 fn run_file_digest(file: &mut File) -> Result<[u8; 32]> {
@@ -1219,7 +1194,8 @@ fn open_verified_run(run: &RunFile) -> Result<File> {
         .map_err(|_| Error::new(ErrorCode::SchemaFieldInvalid))?;
     if !opened.is_file()
         || opened.len() != run.bytes
-        || run_file_identity(&opened)? != run.identity
+        || FileIdentity::from_file(&file).map_err(|_| Error::new(ErrorCode::SchemaFieldInvalid))?
+            != run.identity
         || run_file_digest(&mut file)? != run.digest
     {
         return Err(Error::new(ErrorCode::SchemaFieldInvalid));
@@ -1448,7 +1424,8 @@ impl ScratchWorkspace {
             .metadata()
             .map_err(|_| Error::new(ErrorCode::SchemaFieldInvalid))?;
         let bytes = metadata.len();
-        let identity = run_file_identity(&metadata)?;
+        let identity = FileIdentity::from_file(&file)
+            .map_err(|_| Error::new(ErrorCode::SchemaFieldInvalid))?;
         let digest = run_file_digest(&mut file)?;
         Ok(RunFile {
             path,
@@ -1465,7 +1442,10 @@ impl ScratchWorkspace {
         if metadata.file_type().is_symlink()
             || !metadata.is_file()
             || metadata.len() != run.bytes
-            || run_file_identity(&metadata)? != run.identity
+            || !run
+                .identity
+                .matches_path(&run.path, &metadata)
+                .map_err(|_| Error::new(ErrorCode::SchemaFieldInvalid))?
         {
             return Err(Error::new(ErrorCode::SchemaFieldInvalid));
         }

@@ -18,10 +18,9 @@ use std::{
 };
 
 #[cfg(unix)]
-use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
-#[cfg(windows)]
-use std::os::windows::fs::MetadataExt as WindowsMetadataExt;
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
+use crate::file_identity::FileIdentity;
 use crate::hard_limits::{
     configured_hard_limit, enforce_hard_limit_context, MAX_BUNDLE_INDEX_ENTRIES,
     MAX_BUNDLE_ITEM_BYTES, MAX_BUNDLE_LOGICAL_RECORDS, MAX_BUNDLE_OBJECTS, MAX_BUNDLE_ROOTS,
@@ -308,17 +307,19 @@ impl ScratchWorkspace {
             configure_private_open(&mut open);
             match open.open(&path) {
                 Ok(file) => {
-                    let metadata = file
+                    let _metadata = file
                         .metadata()
                         .map_err(|_| Error::new(ErrorCode::LimitScratch))?;
                     #[cfg(unix)]
                     {
-                        let mode = metadata.permissions().mode() & 0o777;
+                        let mode = _metadata.permissions().mode() & 0o777;
                         if mode != 0o600 {
                             let _ = std::fs::remove_file(&path);
                             return Err(Error::new(ErrorCode::LimitScratch));
                         }
                     }
+                    let identity = FileIdentity::from_file(&file)
+                        .map_err(|_| Error::new(ErrorCode::LimitScratch))?;
                     self.state.borrow_mut().files_created += 1;
                     return Ok(ScratchFile {
                         path,
@@ -326,7 +327,7 @@ impl ScratchWorkspace {
                         size: 0,
                         maximum: self.maximum,
                         state: Rc::clone(&self.state),
-                        identity: ScratchIdentity::from_metadata(&metadata),
+                        identity,
                     });
                 }
                 Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
@@ -376,46 +377,7 @@ struct ScratchFile {
     size: u64,
     maximum: u64,
     state: Rc<RefCell<ScratchState>>,
-    identity: ScratchIdentity,
-}
-
-#[derive(Clone, Copy)]
-struct ScratchIdentity {
-    #[cfg(unix)]
-    device: u64,
-    #[cfg(unix)]
-    inode: u64,
-    #[cfg(windows)]
-    creation_time: u64,
-}
-
-impl ScratchIdentity {
-    fn from_metadata(_metadata: &std::fs::Metadata) -> Self {
-        Self {
-            #[cfg(unix)]
-            device: _metadata.dev(),
-            #[cfg(unix)]
-            inode: _metadata.ino(),
-            #[cfg(windows)]
-            creation_time: _metadata.creation_time(),
-        }
-    }
-
-    fn matches(self, metadata: &std::fs::Metadata) -> bool {
-        #[cfg(unix)]
-        {
-            metadata.dev() == self.device && metadata.ino() == self.inode
-        }
-        #[cfg(windows)]
-        {
-            metadata.creation_time() == self.creation_time
-        }
-        #[cfg(not(any(unix, windows)))]
-        {
-            let _ = metadata;
-            true
-        }
-    }
+    identity: FileIdentity,
 }
 
 impl ScratchFile {
@@ -494,7 +456,10 @@ impl ScratchFile {
         if !metadata.is_file()
             || metadata.file_type().is_symlink()
             || metadata.len() != self.size
-            || !self.identity.matches(&metadata)
+            || !self
+                .identity
+                .matches_path(&self.path, &metadata)
+                .map_err(|_| Error::new(ErrorCode::LimitScratch))?
         {
             return Err(Error::new(ErrorCode::LimitScratch));
         }

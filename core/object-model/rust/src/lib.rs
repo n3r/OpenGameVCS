@@ -8,6 +8,7 @@ mod bundle_write;
 mod cbor;
 mod error;
 mod file_id;
+mod file_identity;
 mod hard_limits;
 mod hash;
 mod manifest_stream;
