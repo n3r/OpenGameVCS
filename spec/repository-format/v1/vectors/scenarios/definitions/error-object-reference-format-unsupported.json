@@ -130,7 +130,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 2,
@@ -139,7 +139,7 @@
   },
   "operation": "validate-object",
   "parameters": {},
-  "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+  "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
   "scenarioId": "error-object-reference-format-unsupported",
   "seedHex": "7b1b9eec6ec26dbd41cc511e22870fff111e076196caaecb5f30f8dfd820e8a5",
   "suppliedResourceCatalogue": {

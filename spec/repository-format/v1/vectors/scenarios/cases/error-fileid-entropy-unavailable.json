@@ -116,7 +116,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
@@ -142,7 +142,7 @@
       "bytes": 6624,
       "mediaType": "application/json",
       "path": "scenarios/definitions/error-fileid-entropy-unavailable.json",
-      "sha256": "7c18bb671e9729bd90eb1b70ec3ee8865cb1a3792ae952a9d2d07cabcc68596e"
+      "sha256": "0c2db3213c6cda5ede17809faa35207bf6ff7ece1f0c783722cb261cd0c825b1"
     }
   ],
   "operation": "allocate-file-id",
@@ -154,7 +154,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/error-fileid-entropy-unavailable.json",
-        "definitionSha256": "7c18bb671e9729bd90eb1b70ec3ee8865cb1a3792ae952a9d2d07cabcc68596e",
+        "definitionSha256": "0c2db3213c6cda5ede17809faa35207bf6ff7ece1f0c783722cb261cd0c825b1",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "d7ca0358456dc0397148885acc4f4706d0bc561f035463400a207df773eadd9b"

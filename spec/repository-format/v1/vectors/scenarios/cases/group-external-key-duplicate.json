@@ -122,7 +122,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
@@ -148,7 +148,7 @@
       "bytes": 7576,
       "mediaType": "application/json",
       "path": "scenarios/definitions/group-external-key-duplicate.json",
-      "sha256": "85b2b88b086c20c639eda9ac9c8b315b4e0be65f7fc1bc4e327e47ec002567ed"
+      "sha256": "e666d822367581a137aed5195bf1f9a3dc8312d683f26530ad9e319f886579b1"
     }
   ],
   "operation": "validate-repository",
@@ -161,7 +161,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/group-external-key-duplicate.json",
-        "definitionSha256": "85b2b88b086c20c639eda9ac9c8b315b4e0be65f7fc1bc4e327e47ec002567ed",
+        "definitionSha256": "e666d822367581a137aed5195bf1f9a3dc8312d683f26530ad9e319f886579b1",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "3497821e28c5153b20dd07a79c7bba71526628b4a6d8c921571103527c088386"

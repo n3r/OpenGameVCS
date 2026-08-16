@@ -116,7 +116,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 3,
@@ -142,7 +142,7 @@
       "bytes": 9853,
       "mediaType": "application/json",
       "path": "scenarios/definitions/manifest-one-tib.json",
-      "sha256": "439a946b5df568ea299d7e8260a42404b932a387dbf1adafeb877b58cfdabd13"
+      "sha256": "5a4f54b9f8ed7df12e0bc0b04f4d15ee612e08c83c53978ffbebd9c660ce69ce"
     }
   ],
   "operation": "validate-object",
@@ -156,7 +156,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/manifest-one-tib.json",
-        "definitionSha256": "439a946b5df568ea299d7e8260a42404b932a387dbf1adafeb877b58cfdabd13",
+        "definitionSha256": "5a4f54b9f8ed7df12e0bc0b04f4d15ee612e08c83c53978ffbebd9c660ce69ce",
         "runtimeHighWaterMarks": "not-measured-inventory-only"
       },
       "seed": "860f753350ec981c19f401b44ed6a36a0ac76353a5389e31dc36048dd2d78f65"

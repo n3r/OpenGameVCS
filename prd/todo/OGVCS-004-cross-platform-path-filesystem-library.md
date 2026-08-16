@@ -1,13 +1,13 @@
 # OGVCS-004 — Cross-platform path and workspace filesystem library
 
-**Status:** Todo  
+**Status:** Validation
 **Release:** R0 — Engineering Foundation  
 **Priority:** P0  
-**Owner:** Unassigned  
+**Owner:** Codex and OpenGameVCS maintainers
 **Depends on:** OGVCS-001, OGVCS-002
 **Blocks:** OGVCS-005, OGVCS-006, OGVCS-007, OGVCS-011, OGVCS-012, OGVCS-033, OGVCS-037, OGVCS-041, OGVCS-042, OGVCS-045
 **Source:** [OpenGameVCS proposal](../../GAME_DEV_VCS_ANALYSIS.md)  
-**Last updated:** 2026-08-15
+**Last updated:** 2026-08-16
 
 ## Outcome
 
@@ -108,8 +108,15 @@ The contract is fixed before repositories are created. Case mode and normalizati
 
 ## Completion evidence
 
-- Implementation changes:
-- Test and benchmark results:
-- Security/reliability review:
-- Documentation/runbooks:
-- Rollout result:
+The MIT-licensed implementation and local packed validation candidate are
+complete. Per maintainer direction, the OGVCS-002 one-million-tree and
+logical-1-TiB jobs are deferred to the final R0 campaign and were not run.
+Those are predecessor format gates rather than OGVCS-004 materializer tests.
+This PRD remains in Validation until the committed candidate passes its hosted
+Linux/macOS/Windows comparison and until OGVCS-002 becomes Done.
+
+- Implementation changes: [Detailed candidate changelog](../../docs/changelog/OGVCS-004.md)
+- Test and benchmark results: [Candidate evidence packet](../../docs/evidence/OGVCS-004/README.md)
+- Security/reliability review: [Independent critical review](../../docs/reviews/OGVCS-004-critical-review.md)
+- Documentation/runbooks: [ADR-0012 and its normative documentation index](../../adr/0012-path-and-workspace-filesystem-contract-v1.md)
+- Rollout result: [Pending-release evidence boundary](../../docs/evidence/OGVCS-004/README.md#pending-release-evidence)

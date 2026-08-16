@@ -10,7 +10,7 @@
     "resultFamily": "registry",
     "rootState": "accepted-exact-constructor-result",
     "scenarioId": "registry-unknown-feature-forward",
-    "stableOutputIdentity": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585"
+    "stableOutputIdentity": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6"
   },
   "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
   "normativeContext": {
@@ -130,7 +130,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 1,
@@ -139,7 +139,7 @@
   },
   "operation": "canonical-scan",
   "parameters": {},
-  "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+  "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
   "scenarioId": "registry-unknown-feature-forward",
   "seedHex": "e80b6478ac50e9a93a9c54fc106c9a98ae2ad54704936078984c65a7e01c58e7",
   "suppliedResourceCatalogue": {

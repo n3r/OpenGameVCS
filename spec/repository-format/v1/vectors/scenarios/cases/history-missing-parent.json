@@ -64,7 +64,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
@@ -90,7 +90,7 @@
       "bytes": 4733,
       "mediaType": "application/json",
       "path": "scenarios/definitions/history-missing-parent.json",
-      "sha256": "851f33ec67b3a8936fe756ecb0fd89f4b876d76e4b8ac453179e13424c8d2286"
+      "sha256": "9dfbd7dd5374fb8c49b3e319effa8e5895827ba444a4b87c50d436cc913307f1"
     }
   ],
   "operation": "validate-repository",
@@ -103,7 +103,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/history-missing-parent.json",
-        "definitionSha256": "851f33ec67b3a8936fe756ecb0fd89f4b876d76e4b8ac453179e13424c8d2286",
+        "definitionSha256": "9dfbd7dd5374fb8c49b3e319effa8e5895827ba444a4b87c50d436cc913307f1",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "3b1bea3c42ccd71230983135da6f8573d18e3953591678cbd1f5c19db5bb3c3a"

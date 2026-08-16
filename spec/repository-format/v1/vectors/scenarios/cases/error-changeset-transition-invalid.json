@@ -98,7 +98,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
@@ -124,7 +124,7 @@
       "bytes": 6466,
       "mediaType": "application/json",
       "path": "scenarios/definitions/error-changeset-transition-invalid.json",
-      "sha256": "baaeec70b2f137128fbcb51a928cfa81adf804c4890be6a01d7194cfccc26ef9"
+      "sha256": "b6169f8255edffbdaca552bc46c0eb31b766c4a17d87a7a660ed7553100010b3"
     }
   ],
   "operation": "replay-change-set",
@@ -136,7 +136,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/error-changeset-transition-invalid.json",
-        "definitionSha256": "baaeec70b2f137128fbcb51a928cfa81adf804c4890be6a01d7194cfccc26ef9",
+        "definitionSha256": "b6169f8255edffbdaca552bc46c0eb31b766c4a17d87a7a660ed7553100010b3",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "a6079b6b34ff2eca4d8ec7d31f36b38d247b0db230e98186e63f3f1086e9aedb"

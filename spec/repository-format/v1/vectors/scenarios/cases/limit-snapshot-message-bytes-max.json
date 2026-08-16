@@ -116,7 +116,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 2,
@@ -142,7 +142,7 @@
       "bytes": 6637,
       "mediaType": "application/json",
       "path": "scenarios/definitions/limit-snapshot-message-bytes-max.json",
-      "sha256": "91b6f2ea8ebe06882ac267ce1de0b08ae0c54f7b9c28923749525c4d225d1a1f"
+      "sha256": "56dc529580f95e5c025bcd49b305bbfc312fade80d4f8e93b886c2c8d0bf2a36"
     }
   ],
   "operation": "validate-object",
@@ -155,7 +155,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/limit-snapshot-message-bytes-max.json",
-        "definitionSha256": "91b6f2ea8ebe06882ac267ce1de0b08ae0c54f7b9c28923749525c4d225d1a1f",
+        "definitionSha256": "56dc529580f95e5c025bcd49b305bbfc312fade80d4f8e93b886c2c8d0bf2a36",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "070385c7717643ac60cf9d588e5e01a91fe8c8667dde5606c823e6ddb0422d7b"

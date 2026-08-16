@@ -1,0 +1,25 @@
+{
+  "name": "@opengamevcs/path-contract-v1",
+  "version": "1.0.0",
+  "description": "Language-neutral OpenGameVCS path and workspace filesystem contract v1",
+  "type": "module",
+  "files": [
+    "data",
+    "docs",
+    "LICENSE",
+    "manifest.json",
+    "README.md",
+    "registries",
+    "schemas",
+    "THIRD_PARTY_NOTICES.md",
+    "vectors"
+  ],
+  "scripts": {
+    "check": "node scripts/generate.mjs --check && node validate-spec.mjs",
+    "test": "node scripts/generate.mjs --check && node validate-spec.mjs && node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT"
+}

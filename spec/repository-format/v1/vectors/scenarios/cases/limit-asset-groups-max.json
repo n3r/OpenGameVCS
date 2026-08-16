@@ -116,7 +116,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 2,
@@ -142,7 +142,7 @@
       "bytes": 6597,
       "mediaType": "application/json",
       "path": "scenarios/definitions/limit-asset-groups-max.json",
-      "sha256": "92d07319e436e8cd371df92fdd1f43bfb3136a35d96aa47f40fb3176e1985f14"
+      "sha256": "90039b83cb4df7dd553acdecb154ba945be0d4f403d00719c97f89b9e1ca1031"
     }
   ],
   "operation": "validate-object",
@@ -155,7 +155,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/limit-asset-groups-max.json",
-        "definitionSha256": "92d07319e436e8cd371df92fdd1f43bfb3136a35d96aa47f40fb3176e1985f14",
+        "definitionSha256": "90039b83cb4df7dd553acdecb154ba945be0d4f403d00719c97f89b9e1ca1031",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "2a582fbd1ce3a82185dd8721f164a82cf63de9c61489d4c9ad18a4357ce31e6e"

@@ -116,7 +116,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 3,
@@ -141,7 +141,7 @@
       "bytes": 6550,
       "mediaType": "application/json",
       "path": "scenarios/definitions/registry-unknown-profile.json",
-      "sha256": "6f0c9c77c99eb06139705a1907edebdc2615349449b963815f86d87f7c371bde"
+      "sha256": "aca1216a62865001fe0cdab7152f200e836da785f38eca3b3682631bd05aa53a"
     }
   ],
   "operation": "validate-object",
@@ -154,7 +154,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/registry-unknown-profile.json",
-        "definitionSha256": "6f0c9c77c99eb06139705a1907edebdc2615349449b963815f86d87f7c371bde",
+        "definitionSha256": "aca1216a62865001fe0cdab7152f200e836da785f38eca3b3682631bd05aa53a",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "c303c81a20bed86e354f9a0d360278487ff3c551e8692338c738d0a320f17ab2"

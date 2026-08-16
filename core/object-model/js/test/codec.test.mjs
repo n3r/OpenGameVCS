@@ -407,7 +407,7 @@ test('registry files bind exact authorities and nonempty coded-entry names', asy
 test('the packaged registry snapshot is complete and has the normative fingerprint', async () => {
   const bundled = await loadRegistryDirectory(bundledRegistryDirectory());
   assert.equal(bundled.objectKinds.size, 11);
-  assert.equal(await registrySetDigest(bundledRegistryDirectory()), '6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585');
+  assert.equal(await registrySetDigest(bundledRegistryDirectory()), '6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6');
 });
 
 test('tree basenames and opaque pending identifiers reject forbidden zero/dot forms', async () => {

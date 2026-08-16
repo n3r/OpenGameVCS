@@ -116,7 +116,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 2,
@@ -142,7 +142,7 @@
       "bytes": 6621,
       "mediaType": "application/json",
       "path": "scenarios/definitions/limit-cbor-nesting-depth-max.json",
-      "sha256": "1945fcf838783950f188df65a1bb4923df187600484adeca01a264bdb2e1e0c5"
+      "sha256": "02efbd4be61541e643afdc66b0f4251300e0599aca4f27adc2f06cab00c8628c"
     }
   ],
   "operation": "validate-object",
@@ -155,7 +155,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/limit-cbor-nesting-depth-max.json",
-        "definitionSha256": "1945fcf838783950f188df65a1bb4923df187600484adeca01a264bdb2e1e0c5",
+        "definitionSha256": "02efbd4be61541e643afdc66b0f4251300e0599aca4f27adc2f06cab00c8628c",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "2ab5813a6192819232dbaf2c89b8945b1a15830a8a6cc988f917181cad521ad3"

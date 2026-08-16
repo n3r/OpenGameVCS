@@ -116,7 +116,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 2,
@@ -142,7 +142,7 @@
       "bytes": 6693,
       "mediaType": "application/json",
       "path": "scenarios/definitions/limit-extension-aggregate-bytes-per-object-max.json",
-      "sha256": "3eba8e793a7322a8702d0836e21c518ec9c3e85a25114ceba85ff1b87ca438da"
+      "sha256": "86902d57a3be3c5ee94dca10e25ba2a3986af1aa496b5c53d6048c4c2e9260f6"
     }
   ],
   "operation": "validate-object",
@@ -155,7 +155,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/limit-extension-aggregate-bytes-per-object-max.json",
-        "definitionSha256": "3eba8e793a7322a8702d0836e21c518ec9c3e85a25114ceba85ff1b87ca438da",
+        "definitionSha256": "86902d57a3be3c5ee94dca10e25ba2a3986af1aa496b5c53d6048c4c2e9260f6",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "f6f08db4bf944bbbb1a8d9c6bf2990f336f395892d22397d9e81077e7b464858"

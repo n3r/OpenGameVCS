@@ -66,6 +66,13 @@ scratch ceilings, 64 MiB chunks, and ten minutes); ingestion is checked before
 objects enter the lookup. Larger graph validation must use an explicitly
 bounded caller-owned lookup/service rather than relying on unbounded defaults.
 
+Ratified `path.opengamevcs/*@1` assignments are owned by OGVCS-004. This crate
+recognizes their registry lifecycle but deliberately returns
+`PATH_PROFILE_INVALID` during tree expansion until a version-pinned external
+path adapter is integrated; it never treats registry recognition as proof that
+platform/collision semantics ran. The built-in `path.test/*` profiles remain
+conformance-only fixtures.
+
 `visit_logical_bundle` is the small streaming framing/visitor boundary. For a
 complete supplied-closure decision, use `verify_logical_bundle_stream` with any
 `Read`, or `verify_logical_bundle_file` for same-handle file verification:

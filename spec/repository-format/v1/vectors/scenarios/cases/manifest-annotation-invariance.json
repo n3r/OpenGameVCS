@@ -26,7 +26,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 3,
@@ -70,7 +70,7 @@
       "bytes": 2626,
       "mediaType": "application/json",
       "path": "scenarios/definitions/manifest-annotation-invariance.json",
-      "sha256": "703f84ff71006d05e000b72f2f5b857ea4e3e1eb6d4df546f7ce098d115511ce"
+      "sha256": "44cf7c61c312790af9438c63b6f4e78b132ae193d75d9bab628f1b6b40076f27"
     }
   ],
   "operation": "validate-object",
@@ -83,7 +83,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/manifest-annotation-invariance.json",
-        "definitionSha256": "703f84ff71006d05e000b72f2f5b857ea4e3e1eb6d4df546f7ce098d115511ce",
+        "definitionSha256": "44cf7c61c312790af9438c63b6f4e78b132ae193d75d9bab628f1b6b40076f27",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "03c10e81e1ad92af929f8cfeb4ee30d776ae2470e07c9c8e0827de4cf507c483"

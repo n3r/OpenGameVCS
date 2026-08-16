@@ -116,7 +116,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 1,
@@ -152,7 +152,7 @@
       "bytes": 6901,
       "mediaType": "application/json",
       "path": "scenarios/definitions/bundle-declared-accounting.json",
-      "sha256": "e247bd2b429876b18e2f79387fc3166c1c0c8c6d2d48138bc1b7cc181b8d03fd"
+      "sha256": "5d33e4b5c8da0238f8f21e10a987becba8ccc721c5f544740c9e2bc0f2b35689"
     }
   ],
   "operation": "validate-bundle",
@@ -166,7 +166,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/bundle-declared-accounting.json",
-        "definitionSha256": "e247bd2b429876b18e2f79387fc3166c1c0c8c6d2d48138bc1b7cc181b8d03fd",
+        "definitionSha256": "5d33e4b5c8da0238f8f21e10a987becba8ccc721c5f544740c9e2bc0f2b35689",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "9205527b9bdf84bc7c749cff8b4c287aa25091a2220d7fa0690273bc78b12ae7"

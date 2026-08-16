@@ -116,7 +116,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 3,
@@ -130,7 +130,7 @@
         "bytes": 295,
         "mediaType": "application/json",
         "path": "scenarios/outputs/registry-unknown-extension-preserve.json",
-        "sha256": "48db39a80d30f1578ccb2953f53ff48b9ea0ad1f1ec0b104b75329c7c66ae95d"
+        "sha256": "655bb53e4c59af6f84a5a1b10e6bb9ee4e7aabf0344ebb1682a13401d2d34500"
       },
       "summarySha256": "6c322567344b46f9e2846218c7a0952ce74d32ef9089dd4de3bddd8b8e8f8cff"
     },
@@ -148,7 +148,7 @@
       "bytes": 6479,
       "mediaType": "application/json",
       "path": "scenarios/definitions/registry-unknown-extension-preserve.json",
-      "sha256": "d9bf909f623e6c4faeee7b160fa1ad304f5f10cd746c5536deae44b1f03552d3"
+      "sha256": "dcb95d18143aa185660f87cc3ad0fbd46714b822d1ad6957360ccaf0e847b09e"
     }
   ],
   "operation": "validate-object",
@@ -161,7 +161,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/registry-unknown-extension-preserve.json",
-        "definitionSha256": "d9bf909f623e6c4faeee7b160fa1ad304f5f10cd746c5536deae44b1f03552d3",
+        "definitionSha256": "dcb95d18143aa185660f87cc3ad0fbd46714b822d1ad6957360ccaf0e847b09e",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "d0e2753cd928ac3411559b9152b087fd965d627bf97e9395c527c3098c6c89b0"

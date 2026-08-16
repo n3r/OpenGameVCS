@@ -130,7 +130,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 1,
@@ -150,7 +150,7 @@
   },
   "operation": "validate-bundle",
   "parameters": {},
-  "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+  "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
   "scenarioId": "bundle-trailer",
   "seedHex": "07398f2627b333b07a76c194803395ab66598b6fad52c07407adc15ec688c374",
   "suppliedResourceCatalogue": {

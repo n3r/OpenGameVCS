@@ -496,6 +496,7 @@ export function expandTree(rootReference, lookup, descriptorReference, options =
   reservation.reserve(512);
   const allowed = descriptorProfiles(descriptor); const entries = new Map(); const fileIds = new Map();
   const visiting = new Set();
+  const pathProfileRepositoryKeys = new Map(); const pathProfilePlatformKeys = new Map();
   let pathProfileChecked = false;
   const validatePathProfile = path => {
     if (allowed.path === undefined) return;
@@ -510,6 +511,20 @@ export function expandTree(rootReference, lookup, descriptorReference, options =
       if (path.includes('reserved')) semanticFail('PATH_PROFILE_INVALID');
       return;
     }
+    if (typeof options.validatePathProfile === 'function') {
+      const decision = options.validatePathProfile(Object.freeze({ profile: allowed.path, segments: Object.freeze([...path]) }));
+      if (decision !== true && decision?.accepted !== true) semanticFail('PATH_PROFILE_INVALID');
+      if (typeof decision?.repositoryKey === 'string') {
+        if (pathProfileRepositoryKeys.has(decision.repositoryKey)) semanticFail('PATH_PROFILE_INVALID');
+        pathProfileRepositoryKeys.set(decision.repositoryKey, true);
+      }
+      if (typeof decision?.platformKey === 'string') {
+        if (pathProfilePlatformKeys.has(decision.platformKey)) semanticFail('PATH_PROFILE_INVALID');
+        pathProfilePlatformKeys.set(decision.platformKey, true);
+      }
+      return;
+    }
+    if (allowed.path.startsWith('path.opengamevcs/')) semanticFail('PATH_PROFILE_INVALID');
     fail('PROFILE_UNKNOWN', { layer: 3 });
   };
   const walk = (treeReference, prefix) => {

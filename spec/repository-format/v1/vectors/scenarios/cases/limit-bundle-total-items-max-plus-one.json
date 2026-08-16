@@ -116,7 +116,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 1,
@@ -152,7 +152,7 @@
       "bytes": 7086,
       "mediaType": "application/json",
       "path": "scenarios/definitions/limit-bundle-total-items-max-plus-one.json",
-      "sha256": "ba28d4c1dc2d2c5e4a779b348c7fdd401f8b7602f57e94b67a142eecf15c5d51"
+      "sha256": "66dcc8464d3cd0859032f844c02e5f69f93ffc84fbe4f490a4bb1ecab673d52e"
     }
   ],
   "operation": "validate-bundle",
@@ -165,7 +165,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/limit-bundle-total-items-max-plus-one.json",
-        "definitionSha256": "ba28d4c1dc2d2c5e4a779b348c7fdd401f8b7602f57e94b67a142eecf15c5d51",
+        "definitionSha256": "66dcc8464d3cd0859032f844c02e5f69f93ffc84fbe4f490a4bb1ecab673d52e",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "628736635231b2701af1c79bc67cecc3b666d68db989f4708f9ddfd2d8b62658"

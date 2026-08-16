@@ -116,7 +116,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 2,
@@ -159,7 +159,7 @@
       "bytes": 6854,
       "mediaType": "application/json",
       "path": "scenarios/definitions/bundle-root-kind-object.json",
-      "sha256": "fc8a409629bb8ec2dc26866da8ee70832128c8edc28dbad245937bbb9c472b95"
+      "sha256": "6e713ee5ecb9fdc052b22b4f134866f5d785c089f54480e88fd2dd303923303a"
     }
   ],
   "operation": "validate-bundle",
@@ -172,7 +172,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/bundle-root-kind-object.json",
-        "definitionSha256": "fc8a409629bb8ec2dc26866da8ee70832128c8edc28dbad245937bbb9c472b95",
+        "definitionSha256": "6e713ee5ecb9fdc052b22b4f134866f5d785c089f54480e88fd2dd303923303a",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "4fc3057682c688e452a0486cb71a965c088b147ff478fb0743470c2e6741b012"

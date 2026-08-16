@@ -146,7 +146,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
@@ -179,7 +179,7 @@
       "bytes": 8499,
       "mediaType": "application/json",
       "path": "scenarios/definitions/fileid-move-rename-preserves.json",
-      "sha256": "a15dcee5756960d07769781fbd613a4c0750d0c6a50b1d7b32f27d2e9f99f91b"
+      "sha256": "7570bc4167d5ca753d8d04990a1b263fd2330f906ee3eb39e31661a94b9a78c4"
     }
   ],
   "operation": "replay-change-set",
@@ -192,7 +192,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/fileid-move-rename-preserves.json",
-        "definitionSha256": "a15dcee5756960d07769781fbd613a4c0750d0c6a50b1d7b32f27d2e9f99f91b",
+        "definitionSha256": "7570bc4167d5ca753d8d04990a1b263fd2330f906ee3eb39e31661a94b9a78c4",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "7bbffe71505747c89116f01425227f1bee2f984ed6d4f1df5f0a32da8a47ab18"

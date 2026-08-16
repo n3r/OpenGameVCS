@@ -17,7 +17,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 3,
@@ -49,7 +49,7 @@
       "bytes": 2092,
       "mediaType": "application/json",
       "path": "scenarios/definitions/manifest-empty.json",
-      "sha256": "895970945e0e86059e04dc1ecde8ee6a48766ddbad7b5b1bb76a8c0290cd69b0"
+      "sha256": "ed87c74966c1475d6335b913a2c0fe22a4c2bb6b93984ca44fb4c313eb3f8f1d"
     }
   ],
   "operation": "validate-object",
@@ -62,7 +62,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/manifest-empty.json",
-        "definitionSha256": "895970945e0e86059e04dc1ecde8ee6a48766ddbad7b5b1bb76a8c0290cd69b0",
+        "definitionSha256": "ed87c74966c1475d6335b913a2c0fe22a4c2bb6b93984ca44fb4c313eb3f8f1d",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "2bf810200146b39f86471f1fd211761ab07da476c3b5a902998aef97b00c357b"

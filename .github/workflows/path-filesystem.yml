@@ -1,0 +1,154 @@
+name: Path and workspace filesystem conformance
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/path-filesystem.yml"
+      - "LICENSE*"
+      - "adr/0012-*.md"
+      - "adr/README.md"
+      - "architecture.md"
+      - "core/object-model/js/registries/profiles.json"
+      - "core/object-model/js/src/repository.js"
+      - "core/object-model/rust/registries/profiles.json"
+      - "core/object-model/rust/src/registry.rs"
+      - "core/paths-filesystem/**"
+      - "docs/changelog/OGVCS-004.md"
+      - "docs/evidence/OGVCS-004/**"
+      - "docs/reviews/OGVCS-004-critical-review.md"
+      - "package.json"
+      - "package-lock.json"
+      - "prd/README.md"
+      - "prd/ROADMAP.md"
+      - "prd/TEMPLATE.md"
+      - "prd/validate-roadmap.mjs"
+      - "prd/validate-roadmap.test.mjs"
+      - "prd/todo/OGVCS-004-*.md"
+      - "prd/done/OGVCS-004-*.md"
+      - "spec/path-filesystem/v1/**"
+      - "spec/repository-format/v1/registries/profiles.json"
+      - "spec/repository-format/v1/vectors/**"
+      - "tools/path-filesystem-*.mjs"
+      - "tools/compare-path-filesystem-reports.mjs"
+      - "tools/run-packed-path-filesystem-conformance.mjs"
+  push:
+    branches:
+      - main
+      - "ogvcs-004/**"
+    paths:
+      - ".github/workflows/path-filesystem.yml"
+      - "LICENSE*"
+      - "adr/0012-*.md"
+      - "adr/README.md"
+      - "architecture.md"
+      - "core/object-model/js/registries/profiles.json"
+      - "core/object-model/js/src/repository.js"
+      - "core/object-model/rust/registries/profiles.json"
+      - "core/object-model/rust/src/registry.rs"
+      - "core/paths-filesystem/**"
+      - "docs/changelog/OGVCS-004.md"
+      - "docs/evidence/OGVCS-004/**"
+      - "docs/reviews/OGVCS-004-critical-review.md"
+      - "package.json"
+      - "package-lock.json"
+      - "prd/README.md"
+      - "prd/ROADMAP.md"
+      - "prd/TEMPLATE.md"
+      - "prd/validate-roadmap.mjs"
+      - "prd/validate-roadmap.test.mjs"
+      - "prd/todo/OGVCS-004-*.md"
+      - "prd/done/OGVCS-004-*.md"
+      - "spec/path-filesystem/v1/**"
+      - "spec/repository-format/v1/registries/profiles.json"
+      - "spec/repository-format/v1/vectors/**"
+      - "tools/path-filesystem-*.mjs"
+      - "tools/compare-path-filesystem-reports.mjs"
+      - "tools/run-packed-path-filesystem-conformance.mjs"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: path-filesystem-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  conformance:
+    name: Packed conformance (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install exact workspace dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Validate and mutation-test the language-neutral path contract
+        run: npm test --workspace @opengamevcs/path-contract-v1
+      - name: Test path, workspace, watcher, and OGVCS-002 integration
+        run: npm test --workspace @opengamevcs/path-filesystem
+      - name: Retain elevated syscall proof for unsafe-target confinement
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          if ! command -v strace >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install --yes strace
+          fi
+          trace_root="${RUNNER_TEMP}/ogvcs-path-trace-workspace"
+          trace_outside="${RUNNER_TEMP}/ogvcs-path-trace-outside"
+          mkdir -p "$trace_root" "$trace_outside" "artifacts/path-filesystem-${RUNNER_OS}"
+          ln -s "$trace_outside" "$trace_root/escape"
+          strace -f -qq -e trace=openat,openat2,rename,renameat,renameat2,unlink,unlinkat,mkdir,mkdirat,link,linkat,symlink,symlinkat \
+            -o "artifacts/path-filesystem-${RUNNER_OS}/filesystem-trace.log" \
+            node tools/path-filesystem-trace-fixture.mjs "$trace_root" "$trace_outside"
+          test ! -e "$trace_outside/pwned"
+          node tools/path-filesystem-trace-audit.mjs \
+            --trace "artifacts/path-filesystem-${RUNNER_OS}/filesystem-trace.log" \
+            --workspace "$trace_root" --outside "$trace_outside" \
+            > "artifacts/path-filesystem-${RUNNER_OS}/filesystem-trace-audit.json"
+      - name: Build retained report from offline-installed packed artifacts
+        run: node tools/run-packed-path-filesystem-conformance.mjs --output artifacts/path-filesystem-${{ runner.os }}
+      - name: Validate roadmap lifecycle
+        if: runner.os == 'Linux'
+        run: npm run test:roadmap
+      - name: Test report tooling and reference-vector audit
+        if: runner.os == 'Linux'
+        run: node --test tools/path-filesystem-conformance-report.test.mjs tools/compare-path-filesystem-reports.test.mjs tools/path-filesystem-trace-audit.test.mjs tools/verify-reference-vectors.test.mjs
+      - name: Upload exact packages and conformance evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: path-filesystem-${{ runner.os }}
+          path: artifacts/path-filesystem-${{ runner.os }}
+          if-no-files-found: error
+          retention-days: 30
+
+  compare:
+    name: Compare Linux, macOS, and Windows results
+    if: ${{ !cancelled() }}
+    needs: conformance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: path-filesystem-*
+          path: artifacts/downloaded
+      - name: Require exact pure decisions and package bytes across all operating systems
+        run: >-
+          node tools/compare-path-filesystem-reports.mjs
+          artifacts/downloaded/path-filesystem-Linux/conformance-report.json
+          artifacts/downloaded/path-filesystem-macOS/conformance-report.json
+          artifacts/downloaded/path-filesystem-Windows/conformance-report.json

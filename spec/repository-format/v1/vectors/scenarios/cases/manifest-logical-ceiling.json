@@ -17,7 +17,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 2,
@@ -42,7 +42,7 @@
       "bytes": 2133,
       "mediaType": "application/json",
       "path": "scenarios/definitions/manifest-logical-ceiling.json",
-      "sha256": "90c4fa6eafd9cbff5ecc8ea26baf250292eafbb87f6b28d6c062090605b7edc0"
+      "sha256": "baf341445fdc92de76b03b101f4ba2b128597466ca9caff2c9f7e107e895d48c"
     }
   ],
   "operation": "validate-object",
@@ -55,7 +55,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/manifest-logical-ceiling.json",
-        "definitionSha256": "90c4fa6eafd9cbff5ecc8ea26baf250292eafbb87f6b28d6c062090605b7edc0",
+        "definitionSha256": "baf341445fdc92de76b03b101f4ba2b128597466ca9caff2c9f7e107e895d48c",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "6dd8f18723dfa2019f0132b82a5f7e370000c72e5b63c15a1888d18800971b2a"

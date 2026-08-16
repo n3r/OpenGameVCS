@@ -116,7 +116,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 2,
@@ -142,7 +142,7 @@
       "bytes": 6609,
       "mediaType": "application/json",
       "path": "scenarios/definitions/limit-manifest-chunks-max.json",
-      "sha256": "bb284b1f2acb2ad7f08970a89ae9c581c49d5e96dcedb5e96da69974214a8a3c"
+      "sha256": "b35a74363fffda69a1d9114d2affee051bfa81383df89a63e407e3a9365cd1dc"
     }
   ],
   "operation": "validate-object",
@@ -155,7 +155,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/limit-manifest-chunks-max.json",
-        "definitionSha256": "bb284b1f2acb2ad7f08970a89ae9c581c49d5e96dcedb5e96da69974214a8a3c",
+        "definitionSha256": "b35a74363fffda69a1d9114d2affee051bfa81383df89a63e407e3a9365cd1dc",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "52d28a18ec529f1e998832327f3c9b6420be09339c719cd192a3ca688eded486"

@@ -116,7 +116,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 1,
@@ -152,7 +152,7 @@
       "bytes": 7102,
       "mediaType": "application/json",
       "path": "scenarios/definitions/limit-bundle-logical-records-max-plus-one.json",
-      "sha256": "31abbb7edb9351b3d0a6a6fbb61e5ea0134e4c0cb2b8509af6ad63cefcd16fb3"
+      "sha256": "9e103251456f5508b3e8a599ab9b3034b80c385dab97bcf5b57f7869e9e00217"
     }
   ],
   "operation": "validate-bundle",
@@ -165,7 +165,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/limit-bundle-logical-records-max-plus-one.json",
-        "definitionSha256": "31abbb7edb9351b3d0a6a6fbb61e5ea0134e4c0cb2b8509af6ad63cefcd16fb3",
+        "definitionSha256": "9e103251456f5508b3e8a599ab9b3034b80c385dab97bcf5b57f7869e9e00217",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "459ef0435259476b40e6fc61fbe6e6dee1985ed22c489473218360ae10d944c1"

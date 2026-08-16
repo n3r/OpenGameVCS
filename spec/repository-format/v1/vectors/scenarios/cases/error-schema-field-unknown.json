@@ -116,7 +116,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 2,
@@ -141,7 +141,7 @@
       "bytes": 6471,
       "mediaType": "application/json",
       "path": "scenarios/definitions/error-schema-field-unknown.json",
-      "sha256": "0b7fe50632d019363e25cdd1d320ac58730909dc9ef146e874a58a3d75331178"
+      "sha256": "8f2ad112827354cb998899b9ba147a2b26aea17fcdea710e0bd57ee5263a3438"
     }
   ],
   "operation": "validate-object",
@@ -153,7 +153,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/error-schema-field-unknown.json",
-        "definitionSha256": "0b7fe50632d019363e25cdd1d320ac58730909dc9ef146e874a58a3d75331178",
+        "definitionSha256": "8f2ad112827354cb998899b9ba147a2b26aea17fcdea710e0bd57ee5263a3438",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "9244b500bbae23e458fedba2e9004bf72a492e9c54595b8c3503b6208d9a53ec"

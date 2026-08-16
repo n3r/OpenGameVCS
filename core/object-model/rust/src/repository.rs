@@ -869,6 +869,12 @@ fn walk_tree(
 }
 
 fn validate_path_profile(profile: &ProfileRef, path: &[String]) -> Result<()> {
+    if profile.namespace() == "path.opengamevcs" {
+        // Ratified OGVCS-004 profiles require the external version-pinned
+        // collision/platform adapter. This core crate must fail closed rather
+        // than silently claim those semantics were applied.
+        return Err(Error::new(ErrorCode::PathProfileInvalid));
+    }
     if profile.namespace() == "path.test"
         && profile.id() == "reject-reserved"
         && profile.major() == 1

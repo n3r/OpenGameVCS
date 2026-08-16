@@ -197,7 +197,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
@@ -230,7 +230,7 @@
       "bytes": 10877,
       "mediaType": "application/json",
       "path": "scenarios/definitions/conflict-divergent-move-resolved.json",
-      "sha256": "b4706080051aa4779884d4d453b4c4e515deb6320f0c18fdb7386e39694dd7a4"
+      "sha256": "9ce613a4dc7ead80718caa7447be74d3fa0c6879ca312f63cd2e039a12a360b6"
     }
   ],
   "operation": "validate-repository",
@@ -242,7 +242,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/conflict-divergent-move-resolved.json",
-        "definitionSha256": "b4706080051aa4779884d4d453b4c4e515deb6320f0c18fdb7386e39694dd7a4",
+        "definitionSha256": "9ce613a4dc7ead80718caa7447be74d3fa0c6879ca312f63cd2e039a12a360b6",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "743a3db4d19459b2a3565044dcf483cacad82bf0c7dffa1804110c46df90efa1"

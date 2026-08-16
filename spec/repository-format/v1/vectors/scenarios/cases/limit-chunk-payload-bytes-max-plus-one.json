@@ -116,7 +116,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 1,
@@ -135,7 +135,7 @@
       "bytes": 6685,
       "mediaType": "application/json",
       "path": "scenarios/definitions/limit-chunk-payload-bytes-max-plus-one.json",
-      "sha256": "5e66273fc2d798eec41625e22a6253e431959f433245dcbd663a1fdcd68ad068"
+      "sha256": "dcd485094df2496a9c8a6fa66ff08b606650345356c69720d906d3b5de5e37ff"
     }
   ],
   "operation": "validate-object",
@@ -148,7 +148,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/limit-chunk-payload-bytes-max-plus-one.json",
-        "definitionSha256": "5e66273fc2d798eec41625e22a6253e431959f433245dcbd663a1fdcd68ad068",
+        "definitionSha256": "dcd485094df2496a9c8a6fa66ff08b606650345356c69720d906d3b5de5e37ff",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "8cef9168d9f023ca29013d01a2c778aa1040a35b683e6607267a4ff7efa2b124"

@@ -116,7 +116,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 1,
@@ -148,7 +148,7 @@
       "bytes": 6613,
       "mediaType": "application/json",
       "path": "scenarios/definitions/mutation-systematic-single-bit.json",
-      "sha256": "9cf53703ab4d81a66d60b2c91cd3c82a6ef6f120010a3c035efd04232ca611d9"
+      "sha256": "a8aa69302bebf02e8c01222e0e7941fa65fc8018faf3c0cb466d99c9e06448bd"
     }
   ],
   "operation": "canonical-scan",
@@ -161,7 +161,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/mutation-systematic-single-bit.json",
-        "definitionSha256": "9cf53703ab4d81a66d60b2c91cd3c82a6ef6f120010a3c035efd04232ca611d9",
+        "definitionSha256": "a8aa69302bebf02e8c01222e0e7941fa65fc8018faf3c0cb466d99c9e06448bd",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "236b5d67a2b52141640721f1dbae6fe5434d13ad2694e2e1b9a7ccd88d30da54"

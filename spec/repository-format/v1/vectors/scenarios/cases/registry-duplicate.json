@@ -116,7 +116,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 3,
@@ -141,7 +141,7 @@
       "bytes": 6536,
       "mediaType": "application/json",
       "path": "scenarios/definitions/registry-duplicate.json",
-      "sha256": "535b501f01e5ecd772197a409f381a3b85f6d69edb2689302c5f1bb102dd7af5"
+      "sha256": "674422b20dbf8e8ad46fe7d44e35e20440c6250e3bdc96da63b1234a25d436ec"
     }
   ],
   "operation": "validate-object",
@@ -154,7 +154,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/registry-duplicate.json",
-        "definitionSha256": "535b501f01e5ecd772197a409f381a3b85f6d69edb2689302c5f1bb102dd7af5",
+        "definitionSha256": "674422b20dbf8e8ad46fe7d44e35e20440c6250e3bdc96da63b1234a25d436ec",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "f30941fdd4c7d31e6bc545301bb901a9bf85a5cbdd36d54891b4dd1461abb3e2"

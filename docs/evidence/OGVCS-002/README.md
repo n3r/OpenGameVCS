@@ -28,7 +28,7 @@ The three-platform and optional exact-scale workflow is
 | Authority | Candidate value |
 |---|---:|
 | Format version | 1 |
-| Registry-set SHA-256 | `6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585` |
+| Registry-set SHA-256 | `6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6` (extended additively by OGVCS-004 path profiles) |
 | Packaged registries | 12 |
 | Reference-vector artifacts | 1,236 |
 | Coverage obligations | 148 |

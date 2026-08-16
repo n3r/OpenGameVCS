@@ -116,7 +116,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 3,
@@ -142,7 +142,7 @@
       "bytes": 9547,
       "mediaType": "application/json",
       "path": "scenarios/definitions/tree-million-entries.json",
-      "sha256": "a0e6cfefa862af24049e7cfee0df7ed7c43391d9a6a7e869ffc68f2f5c27dc0b"
+      "sha256": "f571db284bd2dfe64fe9e1110de23515a050d9bb902343caad049b8901ca4428"
     }
   ],
   "operation": "validate-object",
@@ -156,7 +156,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/tree-million-entries.json",
-        "definitionSha256": "a0e6cfefa862af24049e7cfee0df7ed7c43391d9a6a7e869ffc68f2f5c27dc0b",
+        "definitionSha256": "f571db284bd2dfe64fe9e1110de23515a050d9bb902343caad049b8901ca4428",
         "runtimeHighWaterMarks": "not-measured-inventory-only"
       },
       "seed": "a73b9b82eb035d7f2d8bbfa98a94b71be16360dacc1b22a5c2d28bf5fa56fc80"

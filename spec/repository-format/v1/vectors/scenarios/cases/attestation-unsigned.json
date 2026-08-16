@@ -125,7 +125,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 3,
@@ -157,7 +157,7 @@
       "bytes": 6910,
       "mediaType": "application/json",
       "path": "scenarios/definitions/attestation-unsigned.json",
-      "sha256": "5a26b83b2105f4f5089a05c063349bd95851834c6d5efc8cf6fdcc861eb1244b"
+      "sha256": "37a5c4576e839d81fc9f0eaed9366b3de4bcec1d17fb1ff14fb47cddf067979f"
     }
   ],
   "operation": "validate-object",
@@ -169,7 +169,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/attestation-unsigned.json",
-        "definitionSha256": "5a26b83b2105f4f5089a05c063349bd95851834c6d5efc8cf6fdcc861eb1244b",
+        "definitionSha256": "37a5c4576e839d81fc9f0eaed9366b3de4bcec1d17fb1ff14fb47cddf067979f",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "a4b5c17fc9658e5969b306a946be889f5340efd07ead92acf8c894d0234e3b94"

@@ -197,7 +197,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
@@ -230,7 +230,7 @@
       "bytes": 10860,
       "mediaType": "application/json",
       "path": "scenarios/definitions/conflict-delete-modify-resolved.json",
-      "sha256": "1d4322b6523ec26fc9b1f86cef2fa4a687a5187d6587ac9a7da4f64228aedea2"
+      "sha256": "7890ffcfc275ef97a896a36c6b18e3ba0180fc0e13de6dfdd507dfb07b0b71b5"
     }
   ],
   "operation": "validate-repository",
@@ -242,7 +242,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/conflict-delete-modify-resolved.json",
-        "definitionSha256": "1d4322b6523ec26fc9b1f86cef2fa4a687a5187d6587ac9a7da4f64228aedea2",
+        "definitionSha256": "7890ffcfc275ef97a896a36c6b18e3ba0180fc0e13de6dfdd507dfb07b0b71b5",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "13f06ed3cd08112f8e414b98dc5a5a55ef56682c55d5149e6eebec8b386b7e03"

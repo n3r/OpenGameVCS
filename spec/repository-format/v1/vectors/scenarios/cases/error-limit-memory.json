@@ -116,7 +116,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 1,
@@ -152,7 +152,7 @@
       "bytes": 7054,
       "mediaType": "application/json",
       "path": "scenarios/definitions/error-limit-memory.json",
-      "sha256": "6f47ac52b3dab8ec9280580a4df80d67d6489fe012147459433a02ddccb05278"
+      "sha256": "c3f542918b83122ab4f1d3006e6107df79c1b1e34576f35059ede3e340c3d46d"
     }
   ],
   "operation": "validate-bundle",
@@ -164,7 +164,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/error-limit-memory.json",
-        "definitionSha256": "6f47ac52b3dab8ec9280580a4df80d67d6489fe012147459433a02ddccb05278",
+        "definitionSha256": "c3f542918b83122ab4f1d3006e6107df79c1b1e34576f35059ede3e340c3d46d",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "76cb90b2bb23106ff01ef2162964609138f3e7197069dc48acbf37411f78dd81"

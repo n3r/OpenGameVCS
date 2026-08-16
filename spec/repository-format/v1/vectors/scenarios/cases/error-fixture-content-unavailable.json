@@ -116,7 +116,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 3,
@@ -138,7 +138,7 @@
       "bytes": 7432,
       "mediaType": "application/json",
       "path": "scenarios/definitions/error-fixture-content-unavailable.json",
-      "sha256": "c0a3fd6fb4ef02bc46f958c9dc2a92789735295eba383b638bc1258f05111e02"
+      "sha256": "a0dd2db98e701fc73fa04754ac2904321651945453673a3c7fdf0517191f230d"
     }
   ],
   "operation": "adapt-fixture",
@@ -151,7 +151,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/error-fixture-content-unavailable.json",
-        "definitionSha256": "c0a3fd6fb4ef02bc46f958c9dc2a92789735295eba383b638bc1258f05111e02",
+        "definitionSha256": "a0dd2db98e701fc73fa04754ac2904321651945453673a3c7fdf0517191f230d",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "35da63e77e97c293857feb63f68e167b09fe724f1c50d1e509dda46c8c5d6c1b"

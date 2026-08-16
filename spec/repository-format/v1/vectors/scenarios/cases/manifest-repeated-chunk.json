@@ -26,7 +26,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 3,
@@ -58,7 +58,7 @@
       "bytes": 2560,
       "mediaType": "application/json",
       "path": "scenarios/definitions/manifest-repeated-chunk.json",
-      "sha256": "d981484ae743f852c6b4b3c8796d6f7734bcc3ec3cbe733a70073f24c7eeafb7"
+      "sha256": "d0ad8e08c3122625a7e0317127061e4be654920d866637c7abaeba5c4312483c"
     }
   ],
   "operation": "validate-object",
@@ -71,7 +71,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/manifest-repeated-chunk.json",
-        "definitionSha256": "d981484ae743f852c6b4b3c8796d6f7734bcc3ec3cbe733a70073f24c7eeafb7",
+        "definitionSha256": "d0ad8e08c3122625a7e0317127061e4be654920d866637c7abaeba5c4312483c",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "aad4af449c32ad3c1cc9caa19665af1d7f34491fef7be049f4ad7f3e29e970d1"

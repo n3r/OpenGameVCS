@@ -116,7 +116,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 2,
@@ -152,7 +152,7 @@
       "bytes": 6843,
       "mediaType": "application/json",
       "path": "scenarios/definitions/bundle-closure-missing.json",
-      "sha256": "d5eb579ef57a664ffa9a5373203a3b0b014808e577a4714235b3e75d06199f29"
+      "sha256": "4b044e3b024bb7597d8407712271b224fb9b4906861201706fffb5331ae13685"
     }
   ],
   "operation": "validate-bundle",
@@ -165,7 +165,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/bundle-closure-missing.json",
-        "definitionSha256": "d5eb579ef57a664ffa9a5373203a3b0b014808e577a4714235b3e75d06199f29",
+        "definitionSha256": "4b044e3b024bb7597d8407712271b224fb9b4906861201706fffb5331ae13685",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "ac20cbee3e0f02f2b198a1ade5b0e45358d3cd51b9720d929eb66dd92c314387"

@@ -195,7 +195,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
@@ -228,7 +228,7 @@
       "bytes": 10649,
       "mediaType": "application/json",
       "path": "scenarios/definitions/conflict-policy-unresolved-shelf.json",
-      "sha256": "c7cf57c34307186ff3233d2476a0868a173afcdfd895d75bd2c80fb3a4afe908"
+      "sha256": "228fd5cca878fb002a71134f5cfa52820eedf91392c92a27ed2a7c624ed3cca6"
     }
   ],
   "operation": "validate-object",
@@ -240,7 +240,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/conflict-policy-unresolved-shelf.json",
-        "definitionSha256": "c7cf57c34307186ff3233d2476a0868a173afcdfd895d75bd2c80fb3a4afe908",
+        "definitionSha256": "228fd5cca878fb002a71134f5cfa52820eedf91392c92a27ed2a7c624ed3cca6",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "05348a281805b65384027275952dcc6d682e3e03161c18e7e35e3326dc79ab8f"

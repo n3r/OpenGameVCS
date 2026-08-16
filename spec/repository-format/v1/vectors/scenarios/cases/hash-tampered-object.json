@@ -116,7 +116,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 1,
@@ -141,7 +141,7 @@
       "bytes": 6522,
       "mediaType": "application/json",
       "path": "scenarios/definitions/hash-tampered-object.json",
-      "sha256": "c6c53a224f35a6ccb7e6f7724022e7c196d4d6755ecaa789e0e4e18b57ef6520"
+      "sha256": "4844f4723aed6928c8472d03c1860855375c99c6e4d3c830375316a814430ae3"
     }
   ],
   "operation": "canonical-scan",
@@ -154,7 +154,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/hash-tampered-object.json",
-        "definitionSha256": "c6c53a224f35a6ccb7e6f7724022e7c196d4d6755ecaa789e0e4e18b57ef6520",
+        "definitionSha256": "4844f4723aed6928c8472d03c1860855375c99c6e4d3c830375316a814430ae3",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "ba4ee28600640feccd7b7276829716011ac88ac8cab73cd0d850c140cce412a8"

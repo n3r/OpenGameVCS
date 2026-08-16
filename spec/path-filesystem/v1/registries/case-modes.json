@@ -1,0 +1,1 @@
+{"entries":[{"code":1,"description":"Repository path collision uses exact NFC segment bytes.","fold":"identity","name":"case-sensitive"},{"code":2,"description":"Repository path collision uses Unicode 16.0 full default case folding.","fold":"unicode-default-full-16.0.0","name":"case-folded"}],"registry":"case-modes","schemaVersion":"ogvcs.path/registry/v1","version":1}

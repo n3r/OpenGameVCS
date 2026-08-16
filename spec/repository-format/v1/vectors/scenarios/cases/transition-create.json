@@ -91,7 +91,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
@@ -131,7 +131,7 @@
       "bytes": 9269,
       "mediaType": "application/json",
       "path": "scenarios/definitions/transition-create.json",
-      "sha256": "f8f73cad6ad70bab2c205aa879b27488cad469c6edc321bebeddfa326fc6f984"
+      "sha256": "55104fdcabe7bfb26fec2c44a3315b355cf15a8196e28b1496e0b56c0cd3ff46"
     }
   ],
   "operation": "replay-change-set",
@@ -143,7 +143,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/transition-create.json",
-        "definitionSha256": "f8f73cad6ad70bab2c205aa879b27488cad469c6edc321bebeddfa326fc6f984",
+        "definitionSha256": "55104fdcabe7bfb26fec2c44a3315b355cf15a8196e28b1496e0b56c0cd3ff46",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "9aaef0ec11603297e670715628e13b56502ade8db8df04a791e6983c008b8fce"

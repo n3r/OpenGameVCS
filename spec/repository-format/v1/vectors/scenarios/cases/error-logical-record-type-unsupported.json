@@ -116,7 +116,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 2,
@@ -152,7 +152,7 @@
       "bytes": 6909,
       "mediaType": "application/json",
       "path": "scenarios/definitions/error-logical-record-type-unsupported.json",
-      "sha256": "3551f7a01989abaeea7e3a7aca8d7be1e36970b8feec1f18b07e9b7ccddb3b66"
+      "sha256": "f7a0fcc1f36205dbc8d0b9201246ef0be55e900f29805d839b39c8a2cf5cb5d4"
     }
   ],
   "operation": "validate-bundle",
@@ -164,7 +164,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/error-logical-record-type-unsupported.json",
-        "definitionSha256": "3551f7a01989abaeea7e3a7aca8d7be1e36970b8feec1f18b07e9b7ccddb3b66",
+        "definitionSha256": "f7a0fcc1f36205dbc8d0b9201246ef0be55e900f29805d839b39c8a2cf5cb5d4",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "b235ed833a7b1a7fc88c78d75e1bc508d8b747eb56cc4ba709594c256305516c"

@@ -416,6 +416,42 @@
     },
     {
       "family": "path",
+      "id": "linux",
+      "major": 1,
+      "namespace": "path.opengamevcs",
+      "owner": "OGVCS-004",
+      "productionWriteAllowed": true,
+      "state": "ratified"
+    },
+    {
+      "family": "path",
+      "id": "macos",
+      "major": 1,
+      "namespace": "path.opengamevcs",
+      "owner": "OGVCS-004",
+      "productionWriteAllowed": true,
+      "state": "ratified"
+    },
+    {
+      "family": "path",
+      "id": "portable",
+      "major": 1,
+      "namespace": "path.opengamevcs",
+      "owner": "OGVCS-004",
+      "productionWriteAllowed": true,
+      "state": "ratified"
+    },
+    {
+      "family": "path",
+      "id": "windows",
+      "major": 1,
+      "namespace": "path.opengamevcs",
+      "owner": "OGVCS-004",
+      "productionWriteAllowed": true,
+      "state": "ratified"
+    },
+    {
+      "family": "path",
       "id": "opaque",
       "major": 1,
       "namespace": "path.test",

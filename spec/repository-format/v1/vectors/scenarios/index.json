@@ -4579,7 +4579,7 @@
             "bytes": 285,
             "mediaType": "application/json",
             "path": "scenarios/outputs/registry-conformance-mode.json",
-            "sha256": "cee083f3aa53fdef1b32c905b0d5c510f21b9c894ad4f41c6606944c68885db9"
+            "sha256": "012daee49900d56151844e3ce3948d7ef48c179827b3425211233df4999b00b5"
           },
           "summarySha256": "d5ece6cdfa1884f765eb08959f41927561e0a0c5b91d2fb32065608c5cfe6d6c"
         },
@@ -4625,7 +4625,7 @@
             "bytes": 284,
             "mediaType": "application/json",
             "path": "scenarios/outputs/registry-deprecated-read.json",
-            "sha256": "3b29055eccda49ae0f2b83c7b692e37023229eb0c07ae67cc3cbd085e92cbcaa"
+            "sha256": "7e42aa07f156490a7ad74217ca59ef897d1bd010ea5bb7b5ea8897a11ff6cfc0"
           },
           "summarySha256": "dd82a183593ec984f0ab218d6fd94dd0fe2686ee442e74fd1bb11189fb4d2bc0"
         },
@@ -4711,7 +4711,7 @@
             "bytes": 288,
             "mediaType": "application/json",
             "path": "scenarios/outputs/registry-ratified-read-write.json",
-            "sha256": "b07c5aaf4751600d7e0cce10f6549e46342f28680680f426e79498f3b911d82d"
+            "sha256": "174f5278c0cfa6842cb8e7d76253ac8e42dc2733ccfd6903542a7e3d11e60087"
           },
           "summarySha256": "d5ece6cdfa1884f765eb08959f41927561e0a0c5b91d2fb32065608c5cfe6d6c"
         },
@@ -4777,7 +4777,7 @@
             "bytes": 295,
             "mediaType": "application/json",
             "path": "scenarios/outputs/registry-unknown-extension-preserve.json",
-            "sha256": "48db39a80d30f1578ccb2953f53ff48b9ea0ad1f1ec0b104b75329c7c66ae95d"
+            "sha256": "655bb53e4c59af6f84a5a1b10e6bb9ee4e7aabf0344ebb1682a13401d2d34500"
           },
           "summarySha256": "6c322567344b46f9e2846218c7a0952ce74d32ef9089dd4de3bddd8b8e8f8cff"
         },
@@ -4823,7 +4823,7 @@
             "bytes": 292,
             "mediaType": "application/json",
             "path": "scenarios/outputs/registry-unknown-feature-forward.json",
-            "sha256": "e43a08516f331695f380d92bf7e375fdb74f6c33a2a6badf280582c9c4123e15"
+            "sha256": "ff3632d0d73fc9606360081eb79ebbe493b3d468e73982acfd47945ca1cb83f7"
           },
           "summarySha256": "997bce81917b3bc2af8bffed75783c96b2bd97d97311c15163297c911478c560"
         },

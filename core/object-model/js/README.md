@@ -292,6 +292,13 @@ identity/schema checks, history and tree validation, replay, conflict/group
 checks, complete lifetime validation, and provenance checks without mutating
 that context.
 
+Ratified `path.opengamevcs/*@1` descriptors require the OGVCS-004 adapter.
+Pass its `objectModelPathProfileValidator` as `validatePathProfile` to
+`expandTree`, then run OGVCS-004 whole-set materialization preflight for case
+and platform collisions. The object-model core fails closed with
+`PATH_PROFILE_INVALID` when a ratified external path profile is selected but
+no adapter is supplied; registry-family validation alone is not a path proof.
+
 Decoded maps are JavaScript `Map` instances, binary strings are independent
 `Uint8Array` values, and integers outside the safe JavaScript number range are
 `bigint`. Encoders accept only safe integer `number` values or `bigint` values.

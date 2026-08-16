@@ -98,7 +98,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
@@ -124,7 +124,7 @@
       "bytes": 6223,
       "mediaType": "application/json",
       "path": "scenarios/definitions/fileid-delete-recreate-reuse.json",
-      "sha256": "b1e2ce89a9965da2cdcec31dfeceb12079d9896f8da6546f17737ff489156744"
+      "sha256": "2d4271855a41478ce1b78cf45946c004ac81d528bae1d126c6be19d5a9e4b30d"
     }
   ],
   "operation": "replay-change-set",
@@ -137,7 +137,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/fileid-delete-recreate-reuse.json",
-        "definitionSha256": "b1e2ce89a9965da2cdcec31dfeceb12079d9896f8da6546f17737ff489156744",
+        "definitionSha256": "2d4271855a41478ce1b78cf45946c004ac81d528bae1d126c6be19d5a9e4b30d",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "e54d4c1c53e21fdb0e27f466a442b87f82458668cfa82226b72cb4a750ded92b"

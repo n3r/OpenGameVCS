@@ -134,7 +134,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
@@ -160,7 +160,7 @@
       "bytes": 8322,
       "mediaType": "application/json",
       "path": "scenarios/definitions/fileid-restore-source-forgery.json",
-      "sha256": "4d7cc61f9fe6db920f42a4f9ccaed630d1f0817ccbe9ec0939b8c2f56c648c91"
+      "sha256": "ef64e072433e5643da32f219f132913f501aeabf3596dd6ac2a6ae222d1fe7df"
     }
   ],
   "operation": "replay-change-set",
@@ -173,7 +173,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/fileid-restore-source-forgery.json",
-        "definitionSha256": "4d7cc61f9fe6db920f42a4f9ccaed630d1f0817ccbe9ec0939b8c2f56c648c91",
+        "definitionSha256": "ef64e072433e5643da32f219f132913f501aeabf3596dd6ac2a6ae222d1fe7df",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "bc841003cd10d9a45e46d34dc143b02a2a08e5716b7e82cb2b359639e2686cf1"

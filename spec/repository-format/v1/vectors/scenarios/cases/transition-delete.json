@@ -98,7 +98,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
@@ -131,7 +131,7 @@
       "bytes": 8344,
       "mediaType": "application/json",
       "path": "scenarios/definitions/transition-delete.json",
-      "sha256": "d3137714530e1a631d08a7b9e8b03cc3ac11edf1776e6c788d85f21df3be774e"
+      "sha256": "9837c9739f4b93c6bb2e19fe0f09d37087add2330db670df3c48203b13293b30"
     }
   ],
   "operation": "replay-change-set",
@@ -143,7 +143,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/transition-delete.json",
-        "definitionSha256": "d3137714530e1a631d08a7b9e8b03cc3ac11edf1776e6c788d85f21df3be774e",
+        "definitionSha256": "9837c9739f4b93c6bb2e19fe0f09d37087add2330db670df3c48203b13293b30",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "4fe47a1ab15bbb8f5e38bd5a4584bf3960151156211a7f061acdc44d116ac632"

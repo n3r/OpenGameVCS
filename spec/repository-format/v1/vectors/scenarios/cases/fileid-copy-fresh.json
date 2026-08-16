@@ -98,7 +98,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
@@ -138,7 +138,7 @@
       "bytes": 6433,
       "mediaType": "application/json",
       "path": "scenarios/definitions/fileid-copy-fresh.json",
-      "sha256": "bb91736cf631c1f0f61784ee615b8badab0f410dd6219d213229128efc4bf6b6"
+      "sha256": "8ed701dab90da2394ed0f7f9a8b032c7e09be998279ca145f69251a123fd24c2"
     }
   ],
   "operation": "replay-change-set",
@@ -151,7 +151,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/fileid-copy-fresh.json",
-        "definitionSha256": "bb91736cf631c1f0f61784ee615b8badab0f410dd6219d213229128efc4bf6b6",
+        "definitionSha256": "8ed701dab90da2394ed0f7f9a8b032c7e09be998279ca145f69251a123fd24c2",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "3069eed3a0ac96694c55b5d7210b5f8169da3e2bd19a3ff52e1d1197a5e540b3"

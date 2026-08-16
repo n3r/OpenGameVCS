@@ -116,7 +116,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 2,
@@ -141,7 +141,7 @@
       "bytes": 6516,
       "mediaType": "application/json",
       "path": "scenarios/definitions/error-object-reference-format-unsupported.json",
-      "sha256": "c2ce0e1001eb876156fcacd602884df30685eb85a6b329a87a5b33f29ebba1f6"
+      "sha256": "8559da57242fd90b947fcdf287c63b8206d9abdc341c2f9d07f2ef8602ea6a1f"
     }
   ],
   "operation": "validate-object",
@@ -153,7 +153,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/error-object-reference-format-unsupported.json",
-        "definitionSha256": "c2ce0e1001eb876156fcacd602884df30685eb85a6b329a87a5b33f29ebba1f6",
+        "definitionSha256": "8559da57242fd90b947fcdf287c63b8206d9abdc341c2f9d07f2ef8602ea6a1f",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "7b1b9eec6ec26dbd41cc511e22870fff111e076196caaecb5f30f8dfd820e8a5"

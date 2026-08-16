@@ -116,7 +116,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 3,
@@ -130,7 +130,7 @@
         "bytes": 284,
         "mediaType": "application/json",
         "path": "scenarios/outputs/registry-deprecated-read.json",
-        "sha256": "3b29055eccda49ae0f2b83c7b692e37023229eb0c07ae67cc3cbd085e92cbcaa"
+        "sha256": "7e42aa07f156490a7ad74217ca59ef897d1bd010ea5bb7b5ea8897a11ff6cfc0"
       },
       "summarySha256": "dd82a183593ec984f0ab218d6fd94dd0fe2686ee442e74fd1bb11189fb4d2bc0"
     },
@@ -148,7 +148,7 @@
       "bytes": 6540,
       "mediaType": "application/json",
       "path": "scenarios/definitions/registry-deprecated-read.json",
-      "sha256": "e841ee284b5faadee899f013488ad2c4ee1b503ac48292e06925ef675d9353c4"
+      "sha256": "ff6cbbe5e6a2429f27b7b28ab271fdf3b740f01977cc0e6b867ec588ef4462b8"
     }
   ],
   "operation": "validate-object",
@@ -161,7 +161,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/registry-deprecated-read.json",
-        "definitionSha256": "e841ee284b5faadee899f013488ad2c4ee1b503ac48292e06925ef675d9353c4",
+        "definitionSha256": "ff6cbbe5e6a2429f27b7b28ab271fdf3b740f01977cc0e6b867ec588ef4462b8",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "147e72c40f6e1a1effb980df52610be7430283431e72691893211474152e0179"

@@ -116,7 +116,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 3,
@@ -141,7 +141,7 @@
       "bytes": 6581,
       "mediaType": "application/json",
       "path": "scenarios/definitions/registry-deprecated-write.json",
-      "sha256": "41d5e8ff7a5b04a77da443ea04d267d2de800961b12b59b20657da477b4af3d5"
+      "sha256": "0ab607dfe1379587ad12866c476c94f615138615c9b69124940be0bd064034c4"
     }
   ],
   "operation": "validate-object",
@@ -154,7 +154,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/registry-deprecated-write.json",
-        "definitionSha256": "41d5e8ff7a5b04a77da443ea04d267d2de800961b12b59b20657da477b4af3d5",
+        "definitionSha256": "0ab607dfe1379587ad12866c476c94f615138615c9b69124940be0bd064034c4",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "27a723f8dfe3bb388e5c6cf124905828a01e36a7ab493f05d4337c89ec681870"

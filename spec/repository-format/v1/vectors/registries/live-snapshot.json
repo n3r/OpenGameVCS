@@ -42,9 +42,9 @@
       "sha256": "10985000d57ed0b00510160aa850f4e59b6ae37cb7bc2c01485e8205d2eb1d53"
     },
     {
-      "bytes": 13089,
+      "bytes": 13922,
       "path": "registries/profiles.json",
-      "sha256": "c1b73db84b76a8206de18731cfc476de384597d1ac562eaf2934c274e735cd23"
+      "sha256": "b1e4543b1f7a3556e90763a294ba90ac633ff4b078de79b390daa25b82edbdc4"
     },
     {
       "bytes": 1641,
@@ -62,7 +62,7 @@
       "sha256": "73a2bf4a4e2b3d3216bae9ef1e16991648f44dc4b46aa048c0f34b736a6d7d98"
     }
   ],
-  "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+  "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
   "registryVersion": 1,
   "schema": "ogvcs.repository-format.v1.registry-set-snapshot.v1"
 }

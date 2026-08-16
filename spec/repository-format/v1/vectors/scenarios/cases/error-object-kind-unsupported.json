@@ -116,7 +116,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 2,
@@ -141,7 +141,7 @@
       "bytes": 6480,
       "mediaType": "application/json",
       "path": "scenarios/definitions/error-object-kind-unsupported.json",
-      "sha256": "282e3e6185a5a1bbce59d11f98c01ba73ca5d8a6c1b1b4f82174bc33513958d0"
+      "sha256": "83d0a984877727aa981d0c927349122a7184d6b9ba0a8696a2c2542a0b4348b0"
     }
   ],
   "operation": "validate-object",
@@ -153,7 +153,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/error-object-kind-unsupported.json",
-        "definitionSha256": "282e3e6185a5a1bbce59d11f98c01ba73ca5d8a6c1b1b4f82174bc33513958d0",
+        "definitionSha256": "83d0a984877727aa981d0c927349122a7184d6b9ba0a8696a2c2542a0b4348b0",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "806e29b4d84a2eea37863042c64abe2e8c91019a8e54a753d020543281c1399b"

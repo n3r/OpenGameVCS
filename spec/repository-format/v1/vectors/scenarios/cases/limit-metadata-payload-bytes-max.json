@@ -116,7 +116,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 2,
@@ -142,7 +142,7 @@
       "bytes": 6637,
       "mediaType": "application/json",
       "path": "scenarios/definitions/limit-metadata-payload-bytes-max.json",
-      "sha256": "c3ba4b67213986c066bb840aa3421b7b4ea130074e7acf2c0f91a77e4aebec0e"
+      "sha256": "759add91b76f4655645097e9f6e6478c5c27e50f91068d03ae12df02ee9ab03d"
     }
   ],
   "operation": "validate-object",
@@ -155,7 +155,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/limit-metadata-payload-bytes-max.json",
-        "definitionSha256": "c3ba4b67213986c066bb840aa3421b7b4ea130074e7acf2c0f91a77e4aebec0e",
+        "definitionSha256": "759add91b76f4655645097e9f6e6478c5c27e50f91068d03ae12df02ee9ab03d",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "f69604b7168c5c1ea2660b92af52d2abd063044d24b918bd07599acfcee1a7c9"

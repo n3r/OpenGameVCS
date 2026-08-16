@@ -195,7 +195,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
@@ -228,7 +228,7 @@
       "bytes": 10785,
       "mediaType": "application/json",
       "path": "scenarios/definitions/conflict-divergent-move-unresolved-shelf.json",
-      "sha256": "8df2824131004564435d5e50c3e7ebfe790f1432804ae7e6d63b35a165d374d1"
+      "sha256": "838d767d2bbe71edda60034f1d10d7d9a30b982c08e97f5bac887acb031ea8a8"
     }
   ],
   "operation": "validate-object",
@@ -240,7 +240,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/conflict-divergent-move-unresolved-shelf.json",
-        "definitionSha256": "8df2824131004564435d5e50c3e7ebfe790f1432804ae7e6d63b35a165d374d1",
+        "definitionSha256": "838d767d2bbe71edda60034f1d10d7d9a30b982c08e97f5bac887acb031ea8a8",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "5e26334cfc61e95cd70d511c267fe98ab7a19ac6036ab34f47e708932a56ee31"

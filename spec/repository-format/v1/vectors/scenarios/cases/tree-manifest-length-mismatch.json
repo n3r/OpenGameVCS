@@ -44,7 +44,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
@@ -70,7 +70,7 @@
       "bytes": 3496,
       "mediaType": "application/json",
       "path": "scenarios/definitions/tree-manifest-length-mismatch.json",
-      "sha256": "b29c981da95119131f6a3aa1ea91ba4ba091ed55e16aee502e7c81626208d9d1"
+      "sha256": "c2e530803faf81eefee2956fd9eefe2fcdd5fbcc5141ff8ca4111bd2e239d7d6"
     }
   ],
   "operation": "validate-object",
@@ -83,7 +83,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/tree-manifest-length-mismatch.json",
-        "definitionSha256": "b29c981da95119131f6a3aa1ea91ba4ba091ed55e16aee502e7c81626208d9d1",
+        "definitionSha256": "c2e530803faf81eefee2956fd9eefe2fcdd5fbcc5141ff8ca4111bd2e239d7d6",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "72e0f164c4b0af28f0f47d3002a0bc4fc11aa4dfb927fc4b57ac32850cb0bb05"

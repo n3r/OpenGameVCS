@@ -107,7 +107,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
@@ -140,7 +140,7 @@
       "bytes": 6724,
       "mediaType": "application/json",
       "path": "scenarios/definitions/group-create.json",
-      "sha256": "63afa9dc52b3deec76c0d70abc9ce38c03b1f24ffb785019f74aa658d1b2b863"
+      "sha256": "2363f15ca92770381652e8d56d492af985c16dcd1115e8829acf41b046a79370"
     }
   ],
   "operation": "replay-change-set",
@@ -152,7 +152,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/group-create.json",
-        "definitionSha256": "63afa9dc52b3deec76c0d70abc9ce38c03b1f24ffb785019f74aa658d1b2b863",
+        "definitionSha256": "2363f15ca92770381652e8d56d492af985c16dcd1115e8829acf41b046a79370",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "f79f739f6c18d4bd99575b8f299c224fa29d59c3c737b05bea0738b4174cab61"

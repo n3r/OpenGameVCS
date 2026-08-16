@@ -116,7 +116,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 3,
@@ -138,7 +138,7 @@
       "bytes": 7539,
       "mediaType": "application/json",
       "path": "scenarios/definitions/error-fixture-schema-unsupported.json",
-      "sha256": "0eaf2f7a5be2d6bb446ed7847f15e20bb2efb182ae1b411972dd22d064d8afd5"
+      "sha256": "51558b430b7eeac037276433276ab72c5a351a922123f4c602602762ebe81620"
     }
   ],
   "operation": "adapt-fixture",
@@ -151,7 +151,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/error-fixture-schema-unsupported.json",
-        "definitionSha256": "0eaf2f7a5be2d6bb446ed7847f15e20bb2efb182ae1b411972dd22d064d8afd5",
+        "definitionSha256": "51558b430b7eeac037276433276ab72c5a351a922123f4c602602762ebe81620",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "7918bcb9d802cfbcd6dd6fe29052f4345969c2c34d9f24c74e96b6de51fdcd35"

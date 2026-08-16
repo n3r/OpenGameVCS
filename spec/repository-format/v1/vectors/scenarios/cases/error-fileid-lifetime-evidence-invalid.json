@@ -91,7 +91,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
@@ -117,7 +117,7 @@
       "bytes": 6267,
       "mediaType": "application/json",
       "path": "scenarios/definitions/error-fileid-lifetime-evidence-invalid.json",
-      "sha256": "c49faf002048a5c1779dff16ee602a768aa9ae4e884a48f8ab35d271220827b7"
+      "sha256": "261c7fecfe2f294814698a3d475c2dfbccd48dca32ec09e1625d39509cb5017d"
     }
   ],
   "operation": "validate-repository",
@@ -129,7 +129,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/error-fileid-lifetime-evidence-invalid.json",
-        "definitionSha256": "c49faf002048a5c1779dff16ee602a768aa9ae4e884a48f8ab35d271220827b7",
+        "definitionSha256": "261c7fecfe2f294814698a3d475c2dfbccd48dca32ec09e1625d39509cb5017d",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "b93d6ffc265d04362f5ea5bc9a5d0ae44115e07621ada39fb36cb45380b76491"

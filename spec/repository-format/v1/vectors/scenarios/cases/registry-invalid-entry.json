@@ -116,7 +116,7 @@
     ],
     "registrySnapshot": {
       "formatVersion": 1,
-      "registrySetSha256": "6f7a67eb9616cf380d67fec07d5483abb361ef1fbee05227a6f07f39f27f8585",
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
       "registryVersion": 1
     },
     "requestedLayer": 3,
@@ -141,7 +141,7 @@
       "bytes": 6557,
       "mediaType": "application/json",
       "path": "scenarios/definitions/registry-invalid-entry.json",
-      "sha256": "16aeb4d62f44b2acfffa27d5fd561e484823419e3d2c0d4397258490395af17f"
+      "sha256": "d40a80cd2083b4f307a2d7fc2e158231c768be785cdd5e00fe10b671160eab7c"
     }
   ],
   "operation": "validate-object",
@@ -154,7 +154,7 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/registry-invalid-entry.json",
-        "definitionSha256": "16aeb4d62f44b2acfffa27d5fd561e484823419e3d2c0d4397258490395af17f",
+        "definitionSha256": "d40a80cd2083b4f307a2d7fc2e158231c768be785cdd5e00fe10b671160eab7c",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "b19000854882058b21f542ee13fe82b984fe3a65bc04dc0e599639ca7a61161a"
