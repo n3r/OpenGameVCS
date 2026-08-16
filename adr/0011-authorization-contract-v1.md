@@ -1,6 +1,6 @@
 # ADR-0011: Authorization contract v1
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-08-16
 **Owners:** OGVCS-003, implemented by OGVCS-009 and consumed by OGVCS-041
 

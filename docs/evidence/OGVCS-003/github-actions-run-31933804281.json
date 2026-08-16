@@ -1,0 +1,110 @@
+{
+  "schema": "ogvcs.authorization.completion-evidence/v1",
+  "evidenceDate": "2026-08-16",
+  "status": "complete",
+  "license": "MIT",
+  "sourceRevision": "dcaae7e2c3cb966e9698cf86ee52ecc81f6381d3",
+  "contract": {
+    "version": "1.0.0",
+    "manifestSha256": "3fb4dd4a89eb914f93a589b013bda8afcf4744c0d27171ee5849ca3b7bf62447",
+    "registrySetSha256": "293f9ab0be023a9ded33326d04a8314080bda56e7c70dd18d0cca38b70bed9cc",
+    "resultsSha256": "6cf806951e198e71a616ed72362c7db5aedfb25230c3dd492fec897799d88c1f",
+    "schemas": 10,
+    "registries": 13,
+    "policies": 2,
+    "decisionVectors": 40,
+    "abuseVectors": 30,
+    "grantVectors": 16,
+    "roadmapPrds": 45
+  },
+  "github": {
+    "repository": "n3r/OpenGameVCS",
+    "runId": 31933804281,
+    "runUrl": "https://github.com/n3r/OpenGameVCS/actions/runs/31933804281",
+    "conclusion": "success",
+    "createdAt": "2026-08-16T07:24:46Z",
+    "completedAt": "2026-08-16T07:25:55Z",
+    "jobs": [
+      {
+        "id": 95132548930,
+        "name": "Packed conformance (macos-latest)",
+        "conclusion": "success"
+      },
+      {
+        "id": 95132548943,
+        "name": "Packed conformance (ubuntu-latest)",
+        "conclusion": "success"
+      },
+      {
+        "id": 95132548987,
+        "name": "Packed conformance (windows-latest)",
+        "conclusion": "success"
+      },
+      {
+        "id": 95132642377,
+        "name": "Compare Linux, macOS, and Windows reports",
+        "conclusion": "success"
+      }
+    ],
+    "artifacts": [
+      {
+        "id": 9260055908,
+        "name": "authorization-contract-Linux",
+        "sizeBytes": 66297,
+        "githubArchiveDigest": "sha256:70ca3b65df20d2400ef0aa7b89e2743ccd2781877b61e9002f2d9de8767aee85",
+        "expiresAt": "2026-09-15T07:25:03Z"
+      },
+      {
+        "id": 9260057802,
+        "name": "authorization-contract-macOS",
+        "sizeBytes": 66297,
+        "githubArchiveDigest": "sha256:25d76245f0907a27275cbc7d0f710db682013062327c2496154dc813f55afcfd",
+        "expiresAt": "2026-09-15T07:25:12Z"
+      },
+      {
+        "id": 9260062905,
+        "name": "authorization-contract-Windows",
+        "sizeBytes": 66297,
+        "githubArchiveDigest": "sha256:25ce5b4e0271394fd6e5941fa8c72759372f1e65ddb1077790ea1da9a99b21fc",
+        "expiresAt": "2026-09-15T07:25:37Z"
+      }
+    ]
+  },
+  "packedConformance": {
+    "reports": 6,
+    "vectorsPerReport": 30,
+    "failedPerReport": 0,
+    "result": "equal",
+    "packages": [
+      {
+        "name": "@opengamevcs/authorization-contract-v1",
+        "version": "1.0.0",
+        "filename": "opengamevcs-authorization-contract-v1-1.0.0.tgz",
+        "sha256": "766078f881bba7bd7f4e3657f506ce8270992667c425ec8054cf506e13170770"
+      },
+      {
+        "name": "@opengamevcs/authorization-contract",
+        "version": "1.0.0",
+        "filename": "opengamevcs-authorization-contract-1.0.0.tgz",
+        "sha256": "e28a0da4310b2bcdb12acdf6d39c55dea5221bdef451b15a601aaf63939b43c7"
+      }
+    ],
+    "reportArtifacts": [
+      {
+        "adapter": "reference-fixture",
+        "filename": "reference-report.json",
+        "sha256": "e17eae166c192b59fa371664fe5c53a575047a9a6f8ad59af770b0345827222a"
+      },
+      {
+        "adapter": "external-adapter",
+        "filename": "external-adapter-report.json",
+        "sha256": "269404d5d471e242e2074b8b920982d3d39c6bcc6c928ae0960fe2bc3f958d98"
+      }
+    ]
+  },
+  "exactScale": {
+    "executed": false,
+    "decision": "deferred-to-final-r0-campaign",
+    "reason": "Million-entry and logical-1-TiB cases belong to OGVCS-002 and are not OGVCS-003 acceptance requirements."
+  }
+}

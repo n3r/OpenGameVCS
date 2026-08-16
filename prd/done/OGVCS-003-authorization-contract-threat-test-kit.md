@@ -1,6 +1,6 @@
 # OGVCS-003 — Authorization contract package and threat test kit
 
-**Status:** In development
+**Status:** Done
 **Release:** R0 — Engineering Foundation  
 **Priority:** P0  
 **Owner:** Codex and OpenGameVCS maintainers
@@ -108,8 +108,13 @@ This is a ratified contract. Changes use a new version and dual-evaluation test 
 
 ## Completion evidence
 
-- Implementation changes:
-- Test and benchmark results:
-- Security/reliability review:
-- Documentation/runbooks:
-- Rollout result:
+- Implementation changes: the frozen [`dcaae7e` product source](https://github.com/n3r/OpenGameVCS/commit/dcaae7e2c3cb966e9698cf86ee52ecc81f6381d3) and [detailed changelog](../../docs/changelog/OGVCS-003.md) deliver the language-neutral contract, JavaScript package, schemas, generated bindings, immutable registries, policies, grants, authorized views, sandbox contract, runner, and packed CI proof.
+- Test and benchmark results: the [validation evidence packet](../../docs/evidence/OGVCS-003/README.md) records the bounded local presubmit, offline package installation, all 30 abuse vectors through both runner paths, and exact Linux/macOS/Windows report and archive comparison. Per maintainer direction, no million-entry or logical-1-TiB workload was run; neither is an OGVCS-003 acceptance requirement.
+- Security/reliability review: the [independent critical review](../../docs/reviews/OGVCS-003-critical-review.md) records the initial gaps, adversarial remediation, trust-boundary approval, acceptance map, sole owned medium timing residual, and no unresolved P0/P1/P2 implementation or CI defect.
+- Documentation/runbooks: [ADR-0011](../../adr/0011-authorization-contract-v1.md) and the [complete documentation/evidence index](../../docs/evidence/OGVCS-003/README.md) cover the threat model, privacy review, operations, runner protocol, sandbox enforcement, versioning, revocation, failure, compatibility, and rollback.
+- Rollout result: [GitHub Actions run 31933804281](https://github.com/n3r/OpenGameVCS/actions/runs/31933804281) passed at the exact frozen product source on Ubuntu, macOS, and Windows; its comparator independently re-hashed the retained MIT-licensed packages and required byte-identical reference/external-adapter results.
+- OGVCS-003-AC-01: the [independent security-review verdict](../../docs/reviews/OGVCS-003-critical-review.md#acceptance-verdict) approves the frozen trust boundaries and confirms that every critical/high threat has an executable mitigation; the one accepted medium timing risk names its owner, roadmap item, expiry, and controls.
+- OGVCS-003-AC-02: the [abuse coverage evidence](../../docs/evidence/OGVCS-003/README.md#acceptance-map) binds all required guessed-hash, replay, mixed-visibility, search, event, export, deduplication, sandbox, preview, and revocation categories to 30 executed vectors.
+- OGVCS-003-AC-03: the [roadmap-surface registry evidence](../../docs/evidence/OGVCS-003/README.md#acceptance-map) maps all 45 PRDs to exact public/protected classification, resource types, permissions, and audit behavior, with independent mutation checks.
+- OGVCS-003-AC-04: the [policy decision evidence](../../docs/evidence/OGVCS-003/README.md#acceptance-map) independently reproduces all 40 golden decisions for the internal-team and restricted-outsourcer policies using deny-overrides and privacy-safe codes.
+- OGVCS-003-AC-05: the [privacy-review acceptance evidence](../../docs/evidence/OGVCS-003/README.md#acceptance-map) documents identity/audit data, purpose, retention, access, minimization, redaction, authorized-view construction, subject controls, and the review outcome.

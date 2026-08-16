@@ -14,4 +14,4 @@ This directory records accepted cross-cutting decisions behind the normative beh
 | [0008](0008-format-v1-deterministic-cbor-and-object-identity.md) | Proposed | Deterministic CBOR, object IDs, layered validation, and hard format limits |
 | [0009](0009-format-v1-object-graph-and-fileid-validation.md) | Proposed | Immutable graph, transition replay, groups, conflicts, and FileID proof |
 | [0010](0010-core-profile-registries-and-logical-bundle-boundary.md) | Proposed | Core/path/chunk/export ownership and additive profile registries |
-| [0011](0011-authorization-contract-v1.md) | Proposed | Authorization decision, authorized-view, transfer-grant, audit, and threat-contract v1 |
+| [0011](0011-authorization-contract-v1.md) | Accepted | Authorization decision, authorized-view, transfer-grant, audit, and threat-contract v1 |

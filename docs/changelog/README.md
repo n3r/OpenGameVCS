@@ -5,3 +5,4 @@ Each completed PRD has one durable, human-readable delivery record in this direc
 ## Completed deliveries
 
 - [OGVCS-001 — Deterministic workload fixture generator](OGVCS-001.md)
+- [OGVCS-003 — Authorization contract package and threat test kit](OGVCS-003.md)
