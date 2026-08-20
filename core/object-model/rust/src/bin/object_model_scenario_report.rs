@@ -9,8 +9,8 @@ use std::{
 
 use ogvcs_object_model::{
     allocate_file_id_with, decode_canonical, decode_metadata, encode_and_verify_content_manifest_stream,
-    encode_canonical, encode_metadata, encode_ordered_tree, encode_ordered_tree_with_features,
-    encode_tree_with_scratch, encode_tree_with_scratch_and_features, evaluate_hard_limit,
+    encode_canonical, encode_metadata, encode_ordered_tree_with_features,
+    encode_tree_with_scratch_and_features, evaluate_hard_limit,
     expand_tree, expand_tree_with_path_profile_validator, logical_record_id, object_id,
     replay_change_set, scan_metadata, validate_abstract_reference_graph, validate_asset_groups_with_limits,
     validate_bundle_claim, validate_conflict_set, validate_file_id_allocation,
@@ -26,8 +26,9 @@ use ogvcs_object_model::{
     ManifestStreamPart, ObjectKind, ObjectRef, Operation, PathCaseMode, PathProfileDecision,
     PathProfileValidator, ProfileRef, Registry, RegistryEntry, RegistryState, RepositoryContext,
     RepositoryLimits, RepositoryObjectLookup, RepositoryState, Result, TreeFileIdScratchIndex,
-    TreeScratchMetrics, TreeStreamEntry, TreeStreamLimits, ValidationMode, ValidationStage, HARD_LIMIT_NAMES,
-    REGISTRY_FILES, Cbor, MetadataDecodeOptions, MetadataEncodeOptions,
+    TreeScratchMetrics, TreeStreamEntry, TreeStreamLimits, TypedDigest, ValidationMode,
+    ValidationStage, HARD_LIMIT_NAMES, REGISTRY_FILES, Cbor, MetadataDecodeOptions,
+    MetadataEncodeOptions,
 };
 use serde_json::{json, Map, Value};
 

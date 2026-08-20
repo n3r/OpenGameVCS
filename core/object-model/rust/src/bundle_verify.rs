@@ -2386,49 +2386,6 @@ fn analyze_logical_record(
     Ok(())
 }
 
-pub(crate) fn validate_bundle_object_for_write(
-    kind: ObjectKind,
-    value: &Cbor,
-    registry: &Registry,
-    operation: Operation,
-) -> Result<u64> {
-    let mut edges = 0u64;
-    let mut emit = |_reference: ObjectRef| {
-        edges = edges
-            .checked_add(1)
-            .ok_or_else(|| Error::new(ErrorCode::BundleBudgetExceeded))?;
-        Ok(())
-    };
-    visit_validated_object_references(kind, value, registry, operation, &mut emit)?;
-    Ok(edges)
-}
-
-pub(crate) fn validate_bundle_logical_record_for_write(
-    record_type: u16,
-    value: &Cbor,
-    registry: &Registry,
-    operation: Operation,
-) -> Result<u64> {
-    let mut deferred = DeferredSemanticError::new(true);
-    let mut edges = 0u64;
-    let mut emit = |_reference: ObjectRef| {
-        edges = edges
-            .checked_add(1)
-            .ok_or_else(|| Error::new(ErrorCode::BundleBudgetExceeded))?;
-        Ok(())
-    };
-    analyze_logical_record(
-        record_type,
-        value,
-        registry,
-        operation,
-        &mut deferred,
-        &mut emit,
-    )?;
-    deferred.finish()?;
-    Ok(edges)
-}
-
 pub(crate) fn visit_schema_logical_record_references(
     record_type: u16,
     value: &Cbor,

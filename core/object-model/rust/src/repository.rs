@@ -5206,6 +5206,7 @@ fn configured_rule_has_unique_external_profile(
     Ok(false)
 }
 
+#[cfg(test)]
 fn validate_role_counts(
     counts: &BTreeMap<ProfileRef, usize>,
     rules: &[GroupRoleCardinality],
@@ -5242,6 +5243,7 @@ fn validate_role_counts_guarded(
     Ok(())
 }
 
+#[cfg(test)]
 fn validate_builtin_role_counts(
     profile: &ProfileRef,
     counts: &BTreeMap<ProfileRef, usize>,
