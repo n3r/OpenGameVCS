@@ -7,6 +7,10 @@ import test from 'node:test';
 
 const CRATE_ROOT = resolve(import.meta.dirname, '..');
 const BUILDER = join(import.meta.dirname, 'build-offline-distribution.mjs');
+// Windows performs two complete offline Cargo builds substantially more slowly
+// than Linux/macOS on the hosted runner. Keep a finite platform allowance while
+// retaining the workflow's stricter 45-minute outer deadline.
+const TEST_TIMEOUT_MS = process.platform === 'win32' ? 600_000 : 300_000;
 
 function run(args) {
   return new Promise((resolvePromise, rejectPromise) => {
@@ -61,7 +65,7 @@ function firstDifference(left, right, path = '$') {
 }
 
 test('offline distribution is reproducible, self-verifying, and fail-closed', {
-  timeout: 300_000
+  timeout: TEST_TIMEOUT_MS
 }, async t => {
   const temporaryRoot = await temporary(t);
   const versionMatch = /^version\s*=\s*"([^"]+)"/mu.exec(
