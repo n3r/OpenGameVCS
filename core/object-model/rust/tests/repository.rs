@@ -80,6 +80,30 @@ fn lookup_entries(document: &Value) -> BTreeMap<ObjectRef, Vec<u8>> {
         .collect()
 }
 
+fn minimum_validate_all_memory(entries: &BTreeMap<ObjectRef, Vec<u8>>) -> usize {
+    let mut lower = 0;
+    let mut upper = RepositoryLimits::default().max_memory_bytes;
+    while lower < upper {
+        let ceiling = lower + (upper - lower) / 2;
+        let result = RepositoryObjectLookup::new(
+            entries.clone(),
+            Registry::load_directory(REGISTRY_ROOT).unwrap(),
+            ValidationMode::Conformance,
+            RepositoryLimits {
+                max_memory_bytes: ceiling,
+                ..RepositoryLimits::default()
+            },
+        )
+        .and_then(|lookup| lookup.validate_all());
+        match result {
+            Ok(()) => upper = ceiling,
+            Err(error) if error.code == ErrorCode::LimitMemory => lower = ceiling + 1,
+            Err(error) => panic!("valid lookup failed outside its memory ceiling: {error:?}"),
+        }
+    }
+    lower
+}
+
 fn decoded_entry(entries: &BTreeMap<ObjectRef, Vec<u8>>, reference: ObjectRef) -> Cbor {
     decode_canonical(entries.get(&reference).unwrap(), Limits::METADATA).unwrap()
 }
@@ -945,14 +969,19 @@ fn tree_expansion_releases_public_output_accounting_but_bounds_internal_construc
     assert_eq!(second.entries, expanded.entries);
     assert_eq!(probe.resource_summary().retained_bytes, before);
 
-    let constrained = load_lookup(
-        &document,
+    let entries = lookup_entries(&document);
+    let validated_floor = minimum_validate_all_memory(&entries);
+    let constrained = RepositoryObjectLookup::new(
+        entries,
+        Registry::load_directory(REGISTRY_ROOT).unwrap(),
+        ValidationMode::Conformance,
         RepositoryLimits {
-            max_memory_bytes: before + 511,
+            max_memory_bytes: validated_floor + 511,
             max_scratch_bytes: usize::MAX,
             ..RepositoryLimits::default()
         },
-    );
+    )
+    .unwrap();
     constrained.validate_all().unwrap();
     let error = expand_tree(
         tree,
@@ -1969,12 +1998,13 @@ fn historical_replay_evicts_long_chain_states_under_a_reduced_memory_ceiling() {
     drop(probe);
 
     let lifetime = records(&document, "lifetimeRecords");
+    let validated_floor = minimum_validate_all_memory(&entries);
     let lookup = RepositoryObjectLookup::new(
         entries.clone(),
         Registry::load_directory(REGISTRY_ROOT).unwrap(),
         ValidationMode::Conformance,
         RepositoryLimits {
-            max_memory_bytes: validated_retained + 64 * 1024,
+            max_memory_bytes: validated_floor + 64 * 1024,
             ..RepositoryLimits::default()
         },
     )
@@ -1997,7 +2027,7 @@ fn historical_replay_evicts_long_chain_states_under_a_reduced_memory_ceiling() {
         Registry::load_directory(REGISTRY_ROOT).unwrap(),
         ValidationMode::Conformance,
         RepositoryLimits {
-            max_memory_bytes: validated_retained + 511,
+            max_memory_bytes: validated_floor + 511,
             ..RepositoryLimits::default()
         },
     )
