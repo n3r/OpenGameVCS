@@ -816,11 +816,7 @@ fn repository_lookup_separates_explicit_layer_two_from_semantic_authority() {
         kind: ObjectKind::ContentManifest,
         digest: [0; 32],
     };
-    let descriptor = ObjectRef {
-        kind: ObjectKind::RepositoryDescriptor,
-        digest: [0; 32],
-    };
-    let error = verify_manifest(missing, &layer_two, descriptor).unwrap_err();
+    let error = verify_manifest(missing, &layer_two).unwrap_err();
     assert_eq!(
         (error.code, error.layer, error.stage),
         (
@@ -2128,7 +2124,8 @@ fn resource_guards_report_edge_scratch_and_time_limits() {
             ..RepositoryLimits::default()
         },
     )
-    .unwrap_err();
+    .err()
+    .unwrap();
     assert_eq!(timed_error.code, ErrorCode::LimitTime);
     assert_eq!(timed_error.layer, 1);
 

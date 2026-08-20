@@ -27,8 +27,8 @@ use ogvcs_object_model::{
     Operation, PathCaseMode, PathProfileDecision, PathProfileValidator, ProfileRef, Registry,
     RegistryEntry, RegistryState, RepositoryContext, RepositoryLimits, RepositoryObjectLookup,
     RepositoryState, Result, TreeFileIdScratchIndex, TreeScratchMetrics, TreeStreamEntry,
-    TreeStreamLimits, TypedDigest, ValidationMode, ValidationStage, HARD_LIMIT_NAMES,
-    REGISTRY_FILES,
+    TreeFileIdIndex, TreeFileIdTransaction, TreeStreamLimits, TypedDigest, ValidationMode,
+    ValidationStage, HARD_LIMIT_NAMES, REGISTRY_FILES,
 };
 use serde_json::{json, Map, Value};
 
@@ -2593,11 +2593,10 @@ impl Runner {
                 };
                 let run = |ceiling: usize| -> Result<()> {
                     let scratch = TempDirectory::new("tree-index-probe")?;
-                    let mut index =
-                        TreeFileIdScratchIndex::new(&scratch.path, ceiling, 8 * 1024 * 1024, None)?;
+                    let mut index = CompositeTreeFileIdIndex::new(&scratch.path)?;
                     verify_tree_stream(
-                        Cursor::new(&failure_bytes),
-                        expected(&failure_bytes)?,
+                        Cursor::new(&recovery_bytes),
+                        expected(&recovery_bytes)?,
                         descriptor,
                         &self.registry,
                         Operation::ConformanceWrite,
@@ -2610,14 +2609,8 @@ impl Runner {
                     Ok(())
                 };
                 let minimum = minimum_successful_ceiling(&run)?;
-                let reduced = minimum.saturating_sub(1);
                 let scratch = TempDirectory::new("tree-index-reuse")?;
-                let mut index = TreeFileIdScratchIndex::new(
-                    &scratch.path,
-                    reduced.max(16),
-                    8 * 1024 * 1024,
-                    None,
-                )?;
+                let mut index = CompositeTreeFileIdIndex::new(&scratch.path)?;
                 let before = index.scratch_metrics();
                 let failure = verify_tree_stream(
                     Cursor::new(&failure_bytes),
@@ -2627,12 +2620,15 @@ impl Runner {
                     Operation::ConformanceWrite,
                     &mut index,
                     TreeStreamLimits {
-                        max_memory_bytes: reduced,
+                        max_memory_bytes: minimum,
                         ..TreeStreamLimits::default()
                     },
                 )
                 .unwrap_err();
-                verify_tree_stream(
+                if failure.code != ErrorCode::LimitMemory || index.retained_len() != 0 {
+                    return Err(configured_preflight_error());
+                }
+                let recovered = verify_tree_stream(
                     Cursor::new(&recovery_bytes),
                     expected(&recovery_bytes)?,
                     descriptor,
@@ -2640,12 +2636,15 @@ impl Runner {
                     Operation::ConformanceWrite,
                     &mut index,
                     TreeStreamLimits {
-                        max_memory_bytes: reduced,
+                        max_memory_bytes: minimum,
                         ..TreeStreamLimits::default()
                     },
                 )?;
                 let after = index.scratch_metrics();
-                if after.files_created < before.files_created {
+                if recovered.entries != 1
+                    || index.retained_len() != 1
+                    || after.files_created < before.files_created
+                {
                     return Err(configured_preflight_error());
                 }
                 Ok((
@@ -3125,6 +3124,108 @@ struct RecipeEntropy {
     repeat: bool,
 }
 
+// The resource scenario needs one public index instance whose scratch state and
+// caller target are both transactional under the verifier's remaining memory
+// admission. The scratch side is deliberately kept to one FileID so the full
+// tree reaches a later retained-target admission failure; the one-entry retry
+// then proves that both halves were aborted and reopened on the same instance.
+const COMPOSITE_PROBE_SCRATCH_MEMORY_BYTES: usize = std::mem::size_of::<[u8; 16]>();
+
+struct CompositeTreeFileIdIndex {
+    retained: BTreeSet<[u8; 16]>,
+    scratch: TreeFileIdScratchIndex,
+}
+
+impl CompositeTreeFileIdIndex {
+    fn new(scratch_directory: &Path) -> Result<Self> {
+        Ok(Self {
+            retained: BTreeSet::new(),
+            scratch: TreeFileIdScratchIndex::new(
+                scratch_directory,
+                COMPOSITE_PROBE_SCRATCH_MEMORY_BYTES,
+                8 * 1024 * 1024,
+                None,
+            )?,
+        })
+    }
+
+    fn retained_len(&self) -> usize {
+        self.retained.len()
+    }
+
+    fn scratch_metrics(&self) -> TreeScratchMetrics {
+        self.scratch.scratch_metrics()
+    }
+}
+
+impl TreeFileIdIndex for CompositeTreeFileIdIndex {
+    fn begin(
+        &mut self,
+        maximum_items: u64,
+        max_memory_bytes: usize,
+    ) -> Result<Box<dyn TreeFileIdTransaction + '_>> {
+        let retained_memory = max_memory_bytes
+            .checked_sub(COMPOSITE_PROBE_SCRATCH_MEMORY_BYTES)
+            .ok_or_else(|| Error::new(ErrorCode::LimitMemory))?;
+        let scratch = self
+            .scratch
+            .begin(maximum_items, COMPOSITE_PROBE_SCRATCH_MEMORY_BYTES)?;
+        let retained = self.retained.begin(maximum_items, retained_memory)?;
+        Ok(Box::new(CompositeTreeFileIdTransaction {
+            scratch: Some(scratch),
+            retained: Some(retained),
+        }))
+    }
+}
+
+struct CompositeTreeFileIdTransaction<'a> {
+    scratch: Option<Box<dyn TreeFileIdTransaction + 'a>>,
+    retained: Option<Box<dyn TreeFileIdTransaction + 'a>>,
+}
+
+impl TreeFileIdTransaction for CompositeTreeFileIdTransaction<'_> {
+    fn insert(&mut self, file_id: [u8; 16]) -> Result<()> {
+        self.scratch
+            .as_deref_mut()
+            .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))?
+            .insert(file_id)?;
+        self.retained
+            .as_deref_mut()
+            .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))?
+            .insert(file_id)
+    }
+
+    fn finish(&mut self) -> Result<()> {
+        self.scratch
+            .as_deref_mut()
+            .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))?
+            .finish()?;
+        self.retained
+            .as_deref_mut()
+            .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))?
+            .finish()
+    }
+
+    fn commit(mut self: Box<Self>) -> Result<()> {
+        if let Some(transaction) = self.scratch.take() {
+            transaction.commit()?;
+        }
+        if let Some(transaction) = self.retained.take() {
+            transaction.commit()?;
+        }
+        Ok(())
+    }
+
+    fn abort(mut self: Box<Self>) {
+        if let Some(transaction) = self.scratch.take() {
+            transaction.abort();
+        }
+        if let Some(transaction) = self.retained.take() {
+            transaction.abort();
+        }
+    }
+}
+
 impl EntropySource for RecipeEntropy {
     fn fill(&mut self, bytes: &mut [u8]) -> std::io::Result<()> {
         let call = self.calls;
@@ -3330,14 +3431,6 @@ fn write_operation(request: &Value) -> Result<Operation> {
         Operation::ProductionWrite => Ok(Operation::ProductionWrite),
         Operation::Read => Err(configured_preflight_error()),
     }
-}
-
-fn validation_mode(operation: Operation) -> Result<ValidationMode> {
-    Ok(match operation {
-        Operation::Read => ValidationMode::Read,
-        Operation::ConformanceWrite => ValidationMode::Conformance,
-        Operation::ProductionWrite => ValidationMode::Production,
-    })
 }
 
 fn repository_validation_mode(request: &Value) -> Result<ValidationMode> {
