@@ -893,6 +893,43 @@ fn compact_lookup_metadata_is_decoded_only_within_remaining_memory() {
 }
 
 #[test]
+fn lookup_working_memory_reservation_is_scoped() {
+    let lookup = RepositoryObjectLookup::new(
+        [],
+        Registry::bundled(),
+        ValidationMode::Conformance,
+        RepositoryLimits::default(),
+    )
+    .unwrap();
+    let baseline = lookup.resource_summary();
+    {
+        let _reservation = lookup.reserve_working_memory(1).unwrap();
+        assert_eq!(
+            lookup.resource_summary().retained_bytes,
+            baseline.retained_bytes + 1
+        );
+    }
+    assert_eq!(lookup.resource_summary(), baseline);
+
+    let constrained = RepositoryObjectLookup::new(
+        [],
+        Registry::bundled(),
+        ValidationMode::Conformance,
+        RepositoryLimits {
+            max_memory_bytes: 0,
+            ..RepositoryLimits::default()
+        },
+    )
+    .unwrap();
+    let constrained_baseline = constrained.resource_summary();
+    assert_eq!(
+        constrained.reserve_working_memory(1).err().unwrap().code,
+        ErrorCode::LimitMemory
+    );
+    assert_eq!(constrained.resource_summary(), constrained_baseline);
+}
+
+#[test]
 fn tree_expansion_releases_public_output_accounting_but_bounds_internal_construction() {
     let document = scenario("transition-create");
     let descriptor = reference(&document["context"]["repositoryDescriptor"]);

@@ -26,8 +26,8 @@ use ogvcs_object_model::{
     ManifestStreamPart, MetadataDecodeOptions, MetadataEncodeOptions, ObjectKind, ObjectRef,
     Operation, PathCaseMode, PathProfileDecision, PathProfileValidator, ProfileRef, Registry,
     RegistryEntry, RegistryState, RepositoryContext, RepositoryLimits, RepositoryObjectLookup,
-    RepositoryState, Result, TreeFileIdScratchIndex, TreeScratchMetrics, TreeStreamEntry,
-    TreeFileIdIndex, TreeFileIdTransaction, TreeStreamLimits, TypedDigest, ValidationMode,
+    RepositoryState, Result, TreeFileIdIndex, TreeFileIdScratchIndex, TreeFileIdTransaction,
+    TreeScratchMetrics, TreeStreamEntry, TreeStreamLimits, TypedDigest, ValidationMode,
     ValidationStage, HARD_LIMIT_NAMES, REGISTRY_FILES,
 };
 use serde_json::{json, Map, Value};
@@ -2773,7 +2773,7 @@ impl Runner {
             self.registry.clone(),
             ValidationMode::Conformance,
             RepositoryLimits {
-                max_memory_bytes: reduced,
+                max_memory_bytes: minimum,
                 ..RepositoryLimits::default()
             },
         )?;
@@ -2786,15 +2786,18 @@ impl Runner {
         context.lifetime_records = &lifetime;
         context.working_lifetime_additions = &working;
         context.import_mappings = &mappings;
+        let baseline = lookup.resource_summary();
+        let pressure = lookup.reserve_working_memory(1)?;
         let failure = validate_repository_candidate(candidate, &context).unwrap_err();
-        if entries != before {
+        drop(pressure);
+        if failure.code != ErrorCode::LimitMemory
+            || entries != before
+            || lookup.resource_summary() != baseline
+        {
             return Err(Error::new(ErrorCode::LimitMemory));
         }
-        validate_repository_candidate(
-            object_ref_json(context_value(scenario, "designatedRoot")?)?,
-            &context,
-        )?;
-        if entries != before {
+        validate_repository_candidate(candidate, &context)?;
+        if entries != before || lookup.resource_summary() != baseline {
             return Err(Error::new(ErrorCode::LimitMemory));
         }
         Ok((

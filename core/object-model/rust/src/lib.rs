@@ -78,9 +78,9 @@ pub use repository::{
     GroupRoleCardinality, GroupValidationSummary, ImportDecision, ImportMapping, ImportRequest,
     ImportState, LifetimeOrigin, LifetimeRecord, ManifestSummary, PathCaseMode,
     PathProfileDecision, PathProfileValidator, ProvenanceGraphSummary, ReplaySummary,
-    RepositoryContext, RepositoryLimits, RepositoryObjectLookup, RepositoryState,
-    RepositoryValidationSummary, ResolvedObject, ResourceSummary, SemanticObjectValidation,
-    SnapshotGraphSummary, TreeExpansion, ValidationMode,
+    RepositoryContext, RepositoryLimits, RepositoryMemoryReservation, RepositoryObjectLookup,
+    RepositoryState, RepositoryValidationSummary, ResolvedObject, ResourceSummary,
+    SemanticObjectValidation, SnapshotGraphSummary, TreeExpansion, ValidationMode,
 };
 pub use schema::{
     scan_metadata, scan_metadata_with_hard_limits, validate_conflict_preimage,

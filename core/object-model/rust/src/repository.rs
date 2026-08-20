@@ -208,8 +208,9 @@ impl ResourceGuard {
         if retained > self.limits.max_memory_bytes {
             return Err(Error::new(ErrorCode::LimitMemory));
         }
+        self.check_time()?;
         self.summary.retained_bytes = retained;
-        self.check_time()
+        Ok(())
     }
 
     fn release_derived(&mut self, bytes: usize) {
@@ -243,6 +244,24 @@ impl ResourceGuard {
             self.summary.edges = edges;
             self.summary.scratch_bytes = scratch_bytes;
         }
+    }
+}
+
+/// A caller-owned working-memory reservation against a repository lookup's
+/// shared configured ceiling. Dropping the value releases the reservation.
+///
+/// This is intended for bounded compositions whose caller retains additional
+/// working state while invoking a repository operation. It prevents each
+/// component from independently treating the full lookup ceiling as available.
+#[must_use = "the reservation is released when dropped"]
+pub struct RepositoryMemoryReservation {
+    guard: Rc<RefCell<ResourceGuard>>,
+    bytes: usize,
+}
+
+impl Drop for RepositoryMemoryReservation {
+    fn drop(&mut self) {
+        self.guard.borrow_mut().release_derived(self.bytes);
     }
 }
 
@@ -360,6 +379,16 @@ impl RepositoryObjectLookup {
 
     pub fn resource_summary(&self) -> ResourceSummary {
         self.guard.borrow().summary
+    }
+
+    /// Reserves caller-retained working memory against this lookup's shared
+    /// configured memory ceiling until the returned value is dropped.
+    pub fn reserve_working_memory(&self, bytes: usize) -> Result<RepositoryMemoryReservation> {
+        self.reserve_derived(bytes)?;
+        Ok(RepositoryMemoryReservation {
+            guard: Rc::clone(&self.guard),
+            bytes,
+        })
     }
 
     pub fn resolve(&self, reference: ObjectRef) -> Result<ResolvedObject> {
