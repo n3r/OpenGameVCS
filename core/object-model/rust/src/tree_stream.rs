@@ -1366,6 +1366,7 @@ where
     result
 }
 
+#[allow(clippy::too_many_arguments)]
 fn encode_prepared_tree<W, F>(
     writer: W,
     repository_descriptor: ObjectRef,

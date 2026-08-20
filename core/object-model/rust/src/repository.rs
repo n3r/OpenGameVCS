@@ -2641,7 +2641,7 @@ fn schedule_replay_change_set(
             }
         }
         if optional_field(operation, 10)
-            .map(|value| uint(value))
+            .map(uint)
             .transpose()?
             == Some(1)
         {
@@ -3181,6 +3181,7 @@ fn validate_lifetime_and_imports_operation(
     result
 }
 
+#[allow(clippy::too_many_arguments)]
 fn validate_lifetime_and_imports_inner(
     context: &RepositoryContext<'_>,
     change_set_reference: Option<ObjectRef>,
@@ -3624,12 +3625,12 @@ pub fn validate_conflict_set(
     })
 }
 
-fn validate_conflict_set_owned<'a>(
+fn validate_conflict_set_owned(
     reference: Option<ObjectRef>,
-    lookup: &'a RepositoryObjectLookup,
+    lookup: &RepositoryObjectLookup,
     descriptor: ObjectRef,
     published: bool,
-) -> Result<ReservedConflictSummary<'a>> {
+) -> Result<ReservedConflictSummary<'_>> {
     lookup.require_repository_semantics()?;
     let Some(reference) = reference else {
         return Ok(ReservedConflictSummary {
@@ -4701,7 +4702,7 @@ fn validate_shelf_revision_operation(
         let shelf = metadata_value(&shelf_object)?;
         snapshot_workspace.ensure(base_reference, None)?;
         let base = snapshot_workspace.consume(base_reference)?.state;
-        let conflict_reference = optional_field(&shelf, 24).map(object_ref).transpose()?;
+        let conflict_reference = optional_field(shelf, 24).map(object_ref).transpose()?;
         let conflicts = validate_conflict_set_owned(
             conflict_reference,
             context.lookup,
@@ -4720,7 +4721,7 @@ fn validate_shelf_revision_operation(
                     })
             })
             .transpose()?;
-        let change_reference = object_ref(field(&shelf, 21)?)?;
+        let change_reference = object_ref(field(shelf, 21)?)?;
         let change_object = context
             .lookup
             .resolve_expected(change_reference, ObjectKind::ChangeSet)?;
@@ -4740,8 +4741,8 @@ fn validate_shelf_revision_operation(
         )?;
         compare_state_to_roots(
             &replayed.state,
-            object_ref(field(&shelf, 22)?)?,
-            optional_field(&shelf, 23).map(object_ref).transpose()?,
+            object_ref(field(shelf, 22)?)?,
+            optional_field(shelf, 23).map(object_ref).transpose()?,
             &context,
         )?;
         validate_resolution_operation_counts(
@@ -4749,7 +4750,7 @@ fn validate_shelf_revision_operation(
             metadata_value(&change_object)?,
             context.lookup,
         )?;
-        let provenance = optional_field(&shelf, 29)
+        let provenance = optional_field(shelf, 29)
             .map(|values| {
                 array(values)?
                     .iter()
@@ -4794,11 +4795,11 @@ fn validate_shelf_chain(
             .lookup
             .resolve_expected(current, ObjectKind::ShelfRevision)?;
         let shelf = metadata_value(&shelf_object)?;
-        if object_ref(field(&shelf, 16)?)? != context.descriptor {
+        if object_ref(field(shelf, 16)?)? != context.descriptor {
             return Err(Error::new(ErrorCode::RepositoryDescriptorMismatch));
         }
-        let revision = uint(field(&shelf, 18)?)?;
-        let previous = optional_field(&shelf, 19).map(object_ref).transpose()?;
+        let revision = uint(field(shelf, 18)?)?;
+        let previous = optional_field(shelf, 19).map(object_ref).transpose()?;
         if (revision == 1) != previous.is_none() {
             return Err(Error::new(ErrorCode::ShelfChainInvalid));
         }
@@ -4813,9 +4814,9 @@ fn validate_shelf_chain(
             .lookup
             .edge(previous_ref, ObjectKind::ShelfRevision)?;
         let previous_value = metadata_value(&previous_object)?;
-        let previous_revision = uint(field(&previous_value, 18)?)?;
-        if object_ref(field(&previous_value, 16)?)? != context.descriptor
-            || field(&previous_value, 17)? != field(&shelf, 17)?
+        let previous_revision = uint(field(previous_value, 18)?)?;
+        if object_ref(field(previous_value, 16)?)? != context.descriptor
+            || field(previous_value, 17)? != field(shelf, 17)?
             || previous_revision.checked_add(1) != Some(revision)
         {
             return Err(Error::new(ErrorCode::ShelfChainInvalid));
@@ -4928,6 +4929,7 @@ pub fn validate_asset_groups_with_limits(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn validate_asset_groups_inner(
     groups: &BTreeMap<[u8; 16], AssetGroup>,
     file_ids: &BTreeMap<FileId, Vec<String>>,
