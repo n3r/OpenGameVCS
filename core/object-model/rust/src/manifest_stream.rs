@@ -3,6 +3,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use crate::registry::require_write_operation;
 use crate::{
     hard_limits::{
         enforce_hard_limit_context, MAX_CHUNK_BYTES, MAX_LOGICAL_FILE_BYTES, MAX_MANIFEST_CHUNKS,
@@ -11,7 +12,6 @@ use crate::{
     Error, ErrorCode, ObjectHashWriter, ObjectKind, ObjectRef, Operation, ProfileRef, Registry,
     RegistryAssignment, Result, Sha256Writer, ValidationStage,
 };
-use crate::registry::require_write_operation;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ManifestStreamPart {

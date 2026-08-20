@@ -1030,7 +1030,9 @@ fn scanner_value_bytes(limits: &LogicalBundleVerifyLimits) -> usize {
 }
 
 fn scanner_capture_bytes(limits: &LogicalBundleVerifyLimits) -> usize {
-    let remaining = limits.max_memory_bytes.saturating_sub(resident_base(limits));
+    let remaining = limits
+        .max_memory_bytes
+        .saturating_sub(resident_base(limits));
     remaining
         .saturating_sub(scanner_value_bytes(limits))
         .min(BundleLimits::HARD.max_capture_bytes)
@@ -2394,14 +2396,7 @@ pub(crate) fn visit_schema_logical_record_references(
     emit: &mut dyn FnMut(ObjectRef) -> Result<()>,
 ) -> Result<()> {
     let mut deferred = DeferredSemanticError::new(false);
-    analyze_logical_record(
-        record_type,
-        value,
-        registry,
-        operation,
-        &mut deferred,
-        emit,
-    )
+    analyze_logical_record(record_type, value, registry, operation, &mut deferred, emit)
 }
 
 pub(crate) fn visit_validated_logical_record_references(
@@ -2412,14 +2407,7 @@ pub(crate) fn visit_validated_logical_record_references(
     emit: &mut dyn FnMut(ObjectRef) -> Result<()>,
 ) -> Result<()> {
     let mut deferred = DeferredSemanticError::new(true);
-    analyze_logical_record(
-        record_type,
-        value,
-        registry,
-        operation,
-        &mut deferred,
-        emit,
-    )?;
+    analyze_logical_record(record_type, value, registry, operation, &mut deferred, emit)?;
     deferred.finish()
 }
 

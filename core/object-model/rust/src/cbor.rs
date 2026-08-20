@@ -6,7 +6,8 @@ use crate::{
         enforce_hard_limit_context, MAX_BUNDLE_ITEM_BYTES, MAX_CBOR_NESTING,
         MAX_GENERIC_VALUE_BYTES, MAX_MANIFEST_CHUNKS, MAX_METADATA_BYTES,
     },
-    unicode_age::is_unicode_15, Error, ErrorCode, Result, ValidationStage,
+    unicode_age::is_unicode_15,
+    Error, ErrorCode, Result, ValidationStage,
 };
 use unicode_normalization::is_nfc;
 

@@ -143,9 +143,7 @@ impl PathProfileValidator for TestPathProfileValidator {
     }
 }
 
-fn ratified_path_tree_lookup(
-    two_entries: bool,
-) -> (RepositoryObjectLookup, ObjectRef, ObjectRef) {
+fn ratified_path_tree_lookup(two_entries: bool) -> (RepositoryObjectLookup, ObjectRef, ObjectRef) {
     let document = scenario("tree-path-profile");
     let mut entries = lookup_entries(&document);
     let old_descriptor = reference(&document["context"]["repositoryDescriptor"]);
@@ -810,11 +808,9 @@ fn repository_lookup_separates_explicit_layer_two_from_semantic_authority() {
         )
     );
 
-    let layer_two = RepositoryObjectLookup::new_layer2(
-        std::iter::empty(),
-        RepositoryLimits::default(),
-    )
-    .unwrap();
+    let layer_two =
+        RepositoryObjectLookup::new_layer2(std::iter::empty(), RepositoryLimits::default())
+            .unwrap();
     layer_two.validate_all().unwrap();
     let missing = ObjectRef {
         kind: ObjectKind::ContentManifest,
@@ -913,7 +909,8 @@ fn tree_expansion_releases_public_output_accounting_but_bounds_internal_construc
         .unwrap();
     let tree = ObjectRef::from_cbor(cbor_field(snapshot.value.as_deref().unwrap(), 18)).unwrap();
     let before = probe.resource_summary().retained_bytes;
-    let expanded = expand_tree(tree, &probe, descriptor, false, PathCaseMode::CaseSensitive).unwrap();
+    let expanded =
+        expand_tree(tree, &probe, descriptor, false, PathCaseMode::CaseSensitive).unwrap();
     assert!(!expanded.entries.is_empty());
     assert_eq!(probe.resource_summary().retained_bytes, before);
     let second = expand_tree(tree, &probe, descriptor, false, PathCaseMode::CaseSensitive).unwrap();
@@ -1108,12 +1105,8 @@ fn ratified_path_profile_collision_keys_are_bounded_and_unique() {
 #[test]
 fn repository_candidate_propagates_the_ratified_path_profile_validator() {
     let (lookup, candidate, descriptor) = ratified_empty_repository();
-    let context = RepositoryContext::new(
-        &lookup,
-        descriptor,
-        candidate,
-        PathCaseMode::CaseSensitive,
-    );
+    let context =
+        RepositoryContext::new(&lookup, descriptor, candidate, PathCaseMode::CaseSensitive);
     assert_eq!(
         validate_repository_candidate(candidate, &context)
             .unwrap_err()
@@ -1129,12 +1122,7 @@ fn repository_candidate_propagates_the_ratified_path_profile_validator() {
     let context = RepositoryContext {
         path_profile_validator: Some(&validator),
         path_case_mode: PathCaseMode::CaseSensitive,
-        ..RepositoryContext::new(
-            &lookup,
-            descriptor,
-            candidate,
-            PathCaseMode::CaseSensitive,
-        )
+        ..RepositoryContext::new(&lookup, descriptor, candidate, PathCaseMode::CaseSensitive)
     };
     let summary = validate_repository_candidate(candidate, &context).unwrap();
     assert_eq!((summary.entries, summary.groups), (0, 0));

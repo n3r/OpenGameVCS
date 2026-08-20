@@ -104,7 +104,11 @@ impl FrozenBundle {
         let scratch = Scratch::new();
         let verified = verify_logical_bundle_stream(
             Cursor::new(bytes),
-            LogicalBundleVerifyOptions::semantic(scratch.path(), &registry, Operation::ConformanceWrite),
+            LogicalBundleVerifyOptions::semantic(
+                scratch.path(),
+                &registry,
+                Operation::ConformanceWrite,
+            ),
         )
         .unwrap();
         assert_eq!(verified.bytes as usize, bytes.len());

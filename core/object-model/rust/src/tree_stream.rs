@@ -9,16 +9,18 @@ use std::{
 
 use unicode_normalization::is_nfc;
 
+use crate::registry::require_write_operation;
 use crate::{
     file_identity::FileIdentity,
     hard_limits::{
         enforce_hard_limit_context, MAX_CHUNK_BYTES, MAX_LOGICAL_FILE_BYTES, MAX_METADATA_BYTES,
         MAX_PATH_SEGMENT_BYTES, MAX_TREE_ENTRIES,
     },
-    sha256, unicode_age::is_unicode_15, Error, ErrorCode, ObjectHashWriter, ObjectKind, ObjectRef,
-    Operation, ProfileRef, Registry, RegistryAssignment, Result, Sha256Writer, ValidationStage,
+    sha256,
+    unicode_age::is_unicode_15,
+    Error, ErrorCode, ObjectHashWriter, ObjectKind, ObjectRef, Operation, ProfileRef, Registry,
+    RegistryAssignment, Result, Sha256Writer, ValidationStage,
 };
-use crate::registry::require_write_operation;
 const RUN_MAGIC: &[u8; 12] = b"OGVCS-RUN\0\x01\0";
 const ID_RUN_MAGIC: &[u8; 12] = b"OGVCS-FID\0\x01\0";
 const MAX_PRIVATE_ENTRY_BYTES: usize = 2_048;
@@ -190,7 +192,12 @@ impl TreeFileIdTransaction for SetFileIdTransaction<'_> {
     }
 
     fn finish(&mut self) -> Result<()> {
-        if self.duplicate || self.pending.iter().any(|file_id| self.target.contains(file_id)) {
+        if self.duplicate
+            || self
+                .pending
+                .iter()
+                .any(|file_id| self.target.contains(file_id))
+        {
             Err(Error::new(ErrorCode::FileIdDuplicateInTree))
         } else {
             Ok(())
@@ -580,11 +587,12 @@ pub fn verify_tree_stream<R: Read>(
     let mut previous_feature = 0u32;
     for _ in 0..required_features {
         budget.check_time()?;
-        let feature = u32::try_from(input.head(0)?)
-            .map_err(|_| Error::new(ErrorCode::SchemaFieldInvalid))?;
+        let feature =
+            u32::try_from(input.head(0)?).map_err(|_| Error::new(ErrorCode::SchemaFieldInvalid))?;
         if feature == 0 || feature <= previous_feature {
-            return Err(Error::new(ErrorCode::SchemaFieldInvalid)
-                .with_stage(ValidationStage::KnownSchema));
+            return Err(
+                Error::new(ErrorCode::SchemaFieldInvalid).with_stage(ValidationStage::KnownSchema)
+            );
         }
         observe_deferred_lifecycle(
             &mut deferred_lifecycle,
@@ -621,8 +629,9 @@ pub fn verify_tree_stream<R: Read>(
         budget.check_time()?;
         let entry_fields = input.head(5)?;
         if entry_fields < 7 {
-            return Err(Error::new(ErrorCode::SchemaFieldInvalid)
-                .with_stage(ValidationStage::KnownSchema));
+            return Err(
+                Error::new(ErrorCode::SchemaFieldInvalid).with_stage(ValidationStage::KnownSchema)
+            );
         }
         input.exact_uint(0)?;
         let basename = input.text(
@@ -674,8 +683,7 @@ pub fn verify_tree_stream<R: Read>(
             input.skip_item(1)?;
             observe_known_schema(
                 &mut deferred_known_schema,
-                Error::new(ErrorCode::SchemaFieldUnknown)
-                    .with_stage(ValidationStage::KnownSchema),
+                Error::new(ErrorCode::SchemaFieldUnknown).with_stage(ValidationStage::KnownSchema),
             )?;
         }
 
@@ -727,10 +735,7 @@ pub fn verify_tree_stream<R: Read>(
         file_id_transaction.abort();
         return Err(error);
     }
-    observe_deferred_lifecycle(
-        &mut deferred_lifecycle,
-        file_id_transaction.finish(),
-    )?;
+    observe_deferred_lifecycle(&mut deferred_lifecycle, file_id_transaction.finish())?;
     if let Some(error) = deferred_lifecycle {
         file_id_transaction.abort();
         return Err(error);
@@ -881,8 +886,8 @@ impl<'a, R: Read> RawTreeReader<'a, R> {
         match major {
             0 | 1 => Ok(()),
             2 | 3 => {
-                let length = usize::try_from(value)
-                    .map_err(|_| Error::new(ErrorCode::LimitValueBytes))?;
+                let length =
+                    usize::try_from(value).map_err(|_| Error::new(ErrorCode::LimitValueBytes))?;
                 if length > self.budget.limits.max_memory_bytes {
                     return Err(Error::new(ErrorCode::LimitMemory));
                 }
@@ -1053,7 +1058,9 @@ where
         declared_entries,
         || {
             loop {
-                let Some(entry) = iterator.next() else { return Ok(None); };
+                let Some(entry) = iterator.next() else {
+                    return Ok(None);
+                };
                 raw_seen = raw_seen
                     .checked_add(1)
                     .ok_or_else(|| Error::new(ErrorCode::LimitCount))?;
@@ -1067,17 +1074,12 @@ where
                             .with_stage(ValidationStage::KnownSchema),
                     )?;
                 }
-                observe_entry_lifecycle(
-                    &mut deferred_lifecycle,
-                    &entry,
-                    registry,
-                    operation,
-                )?;
+                observe_entry_lifecycle(&mut deferred_lifecycle, &entry, registry, operation)?;
                 match prepare_entry(entry, &budget) {
                     Ok(prepared) => break Ok(Some(prepared)),
-                    Err(error) => observe_known_schema(
-                        &mut deferred_known_schema.borrow_mut(), error,
-                    )?,
+                    Err(error) => {
+                        observe_known_schema(&mut deferred_known_schema.borrow_mut(), error)?
+                    }
                 }
             }
         },
@@ -1092,10 +1094,7 @@ where
             &mut deferred_lifecycle,
             validate_required_features(required_features, registry, operation, &budget),
         )?;
-        observe_deferred_lifecycle(
-            &mut deferred_lifecycle,
-            file_id_transaction.finish(),
-        )?;
+        observe_deferred_lifecycle(&mut deferred_lifecycle, file_id_transaction.finish())?;
         if let Some(error) = deferred_lifecycle {
             file_id_transaction.abort();
             return Err(error);
@@ -1177,7 +1176,9 @@ where
             required_features,
             0,
             || loop {
-                let Some(entry) = iterator.next() else { return Ok(None); };
+                let Some(entry) = iterator.next() else {
+                    return Ok(None);
+                };
                 raw_seen = raw_seen
                     .checked_add(1)
                     .ok_or_else(|| Error::new(ErrorCode::LimitCount))?;
@@ -1187,17 +1188,12 @@ where
                     Error::new(ErrorCode::SchemaFieldInvalid)
                         .with_stage(ValidationStage::KnownSchema),
                 )?;
-                observe_entry_lifecycle(
-                    &mut deferred_lifecycle,
-                    &entry,
-                    registry,
-                    operation,
-                )?;
+                observe_entry_lifecycle(&mut deferred_lifecycle, &entry, registry, operation)?;
                 match prepare_entry(entry, &budget) {
                     Ok(prepared) => break Ok(Some(prepared)),
-                    Err(error) => observe_known_schema(
-                        &mut deferred_known_schema.borrow_mut(), error,
-                    )?,
+                    Err(error) => {
+                        observe_known_schema(&mut deferred_known_schema.borrow_mut(), error)?
+                    }
                 }
             },
             &budget,
@@ -1252,16 +1248,10 @@ where
         if count > declared_entries {
             observe_known_schema(
                 &mut deferred_known_schema.borrow_mut(),
-                Error::new(ErrorCode::SchemaFieldInvalid)
-                    .with_stage(ValidationStage::KnownSchema),
+                Error::new(ErrorCode::SchemaFieldInvalid).with_stage(ValidationStage::KnownSchema),
             )?;
         }
-        observe_entry_lifecycle(
-            &mut deferred_lifecycle,
-            &entry,
-            registry,
-            operation,
-        )?;
+        observe_entry_lifecycle(&mut deferred_lifecycle, &entry, registry, operation)?;
         let prepared = match prepare_entry(entry, &budget) {
             Ok(prepared) => prepared,
             Err(error) => {
@@ -1286,8 +1276,7 @@ where
     if count != declared_entries {
         observe_known_schema(
             &mut deferred_known_schema.borrow_mut(),
-            Error::new(ErrorCode::SchemaFieldInvalid)
-                .with_stage(ValidationStage::KnownSchema),
+            Error::new(ErrorCode::SchemaFieldInvalid).with_stage(ValidationStage::KnownSchema),
         )?;
     }
     if let Some(error) = deferred_known_schema.borrow().clone() {
@@ -1298,10 +1287,7 @@ where
         &mut deferred_lifecycle,
         validate_required_features(required_features, registry, operation, &budget),
     )?;
-    observe_deferred_lifecycle(
-        &mut deferred_lifecycle,
-        file_id_transaction.finish(),
-    )?;
+    observe_deferred_lifecycle(&mut deferred_lifecycle, file_id_transaction.finish())?;
     if !records.is_empty() {
         runs.push(workspace.write_sorted_run(&mut records, &budget)?);
     }
@@ -1420,8 +1406,7 @@ where
         if seen > declared_entries {
             observe_known_schema(
                 &mut known_schema.borrow_mut(),
-                Error::new(ErrorCode::SchemaFieldInvalid)
-                    .with_stage(ValidationStage::KnownSchema),
+                Error::new(ErrorCode::SchemaFieldInvalid).with_stage(ValidationStage::KnownSchema),
             )?;
             continue;
         }
@@ -1465,10 +1450,7 @@ where
     })
 }
 
-fn prepare_entry(
-    entry: TreeStreamEntry,
-    budget: &Budget,
-) -> Result<PreparedEntry> {
+fn prepare_entry(entry: TreeStreamEntry, budget: &Budget) -> Result<PreparedEntry> {
     budget.check_time()?;
     let name = entry.basename.as_bytes();
     budget.check_basename(name.len())?;

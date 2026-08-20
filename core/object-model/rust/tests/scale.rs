@@ -811,10 +811,7 @@ fn manifest_rejects_shape_identity_replay_and_resource_failures() {
     assert_eq!(error.code, ErrorCode::LimitCount);
     assert_eq!(error.layer, 2);
 
-    for (parts, declared_parts) in [
-        (Vec::new(), 1),
-        (vec![valid_part, valid_part], 1),
-    ] {
+    for (parts, declared_parts) in [(Vec::new(), 1), (vec![valid_part, valid_part], 1)] {
         let error = encode_content_manifest_stream(
             io::sink(),
             declared_parts,

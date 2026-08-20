@@ -8,27 +8,27 @@ use std::{
 };
 
 use ogvcs_object_model::{
-    allocate_file_id_with, decode_canonical, decode_metadata, encode_and_verify_content_manifest_stream,
-    encode_canonical, encode_metadata, encode_ordered_tree_with_features,
-    encode_tree_with_scratch_and_features, evaluate_hard_limit,
+    allocate_file_id_with, decode_canonical, decode_metadata,
+    encode_and_verify_content_manifest_stream, encode_canonical, encode_metadata,
+    encode_ordered_tree_with_features, encode_tree_with_scratch_and_features, evaluate_hard_limit,
     expand_tree, expand_tree_with_path_profile_validator, logical_record_id, object_id,
-    replay_change_set, scan_metadata, validate_abstract_reference_graph, validate_asset_groups_with_limits,
-    validate_bundle_claim, validate_conflict_set, validate_file_id_allocation,
-    validate_import_request, validate_lifetime_and_imports, validate_logical_record,
-    validate_metadata_schema, validate_metadata_schema_with_limits, validate_provenance_graph,
-    validate_repository_candidate, validate_semantic_object,
+    replay_change_set, scan_metadata, validate_abstract_reference_graph,
+    validate_asset_groups_with_limits, validate_bundle_claim, validate_conflict_set,
+    validate_file_id_allocation, validate_import_request, validate_lifetime_and_imports,
+    validate_logical_record, validate_metadata_schema, validate_metadata_schema_with_limits,
+    validate_provenance_graph, validate_repository_candidate, validate_semantic_object,
     validate_shelf_revision, validate_snapshot_graph, verify_logical_bundle_stream,
     verify_manifest, verify_tree_stream, visit_logical_bundle, AssetGroup, BundleItemInfo,
-    BundleLimits, BundleTranscriptHashWriter, BundleVisitor, EntropySource, Error, ErrorCode, FileId,
-    FileIdAllocationRequest, ImportMapping, ImportRequest, ImportState, LifetimeOrigin,
+    BundleLimits, BundleTranscriptHashWriter, BundleVisitor, Cbor, EntropySource, Error, ErrorCode,
+    FileId, FileIdAllocationRequest, ImportMapping, ImportRequest, ImportState, LifetimeOrigin,
     LifetimeRecord, Limits, LogicalBundleBudget, LogicalBundleVerifyOptions,
     LogicalBundleWriteOptions, LogicalBundleWritePlan, LogicalBundleWriter, ManifestStreamLimits,
-    ManifestStreamPart, ObjectKind, ObjectRef, Operation, PathCaseMode, PathProfileDecision,
-    PathProfileValidator, ProfileRef, Registry, RegistryEntry, RegistryState, RepositoryContext,
-    RepositoryLimits, RepositoryObjectLookup, RepositoryState, Result, TreeFileIdScratchIndex,
-    TreeScratchMetrics, TreeStreamEntry, TreeStreamLimits, TypedDigest, ValidationMode,
-    ValidationStage, HARD_LIMIT_NAMES, REGISTRY_FILES, Cbor, MetadataDecodeOptions,
-    MetadataEncodeOptions,
+    ManifestStreamPart, MetadataDecodeOptions, MetadataEncodeOptions, ObjectKind, ObjectRef,
+    Operation, PathCaseMode, PathProfileDecision, PathProfileValidator, ProfileRef, Registry,
+    RegistryEntry, RegistryState, RepositoryContext, RepositoryLimits, RepositoryObjectLookup,
+    RepositoryState, Result, TreeFileIdScratchIndex, TreeScratchMetrics, TreeStreamEntry,
+    TreeStreamLimits, TypedDigest, ValidationMode, ValidationStage, HARD_LIMIT_NAMES,
+    REGISTRY_FILES,
 };
 use serde_json::{json, Map, Value};
 
@@ -268,7 +268,11 @@ impl Runner {
             let scratch = TempDirectory::new("conformance-bundle").map_err(display_error)?;
             let summary = verify_logical_bundle_stream(
                 Cursor::new(self.bytes(path)?),
-                LogicalBundleVerifyOptions::semantic(&scratch.path, &self.registry, Operation::ConformanceWrite),
+                LogicalBundleVerifyOptions::semantic(
+                    &scratch.path,
+                    &self.registry,
+                    Operation::ConformanceWrite,
+                ),
             )
             .map_err(display_error)?;
             bundle_rows.push(json!({
@@ -380,7 +384,7 @@ impl Runner {
                     Ok(highest_layer) => {
                         json!({"highestLayer": highest_layer, "result": "accept"})
                     }
-                    Err(error) => diagnostic_outcome(id, error)?
+                    Err(error) => diagnostic_outcome(id, error)?,
                 }
             };
             let expected = normalized_expected(
@@ -502,7 +506,8 @@ impl Runner {
             self.execute_allocate(scenario, input)?;
             return Ok(3);
         }
-        if operation == "canonical-scan" && value_string(input, "mediaType")? == "application/json" {
+        if operation == "canonical-scan" && value_string(input, "mediaType")? == "application/json"
+        {
             let request = self.result_json(value_string(input, "path")?)?;
             if value_string(&request, "api")? == "canonical-scan"
                 && value_string(&request, "schema")?
@@ -560,7 +565,13 @@ impl Runner {
                 ObjectKind::Tree => {
                     let descriptor =
                         object_ref_json(context_value(scenario, "repositoryDescriptor")?)?;
-                    expand_tree(reference, &lookup, descriptor, true, path_case_mode(scenario)?)?;
+                    expand_tree(
+                        reference,
+                        &lookup,
+                        descriptor,
+                        true,
+                        path_case_mode(scenario)?,
+                    )?;
                 }
                 ObjectKind::ShelfRevision => {
                     let lifetime = parse_lifetime_records(scenario, "lifetimeRecords")?;
@@ -603,7 +614,9 @@ impl Runner {
                 }
                 let reference = ObjectRef::from_str(value_string(mutation, "reference")?)?;
                 let replacement = self.result_bytes(value_string(mutation, "sourceArtifact")?)?;
-                let Some(entry) = entries.iter_mut().find(|(current, _)| *current == reference)
+                let Some(entry) = entries
+                    .iter_mut()
+                    .find(|(current, _)| *current == reference)
                 else {
                     return Err(configured_preflight_error());
                 };
@@ -640,10 +653,8 @@ impl Runner {
                 )?;
             }
             "replay-change-set" => {
-                let descriptor = ObjectRef::from_str(value_string(
-                    &request,
-                    "repositoryDescriptor",
-                )?)?;
+                let descriptor =
+                    ObjectRef::from_str(value_string(&request, "repositoryDescriptor")?)?;
                 let tree = ObjectRef::from_str(value_string(
                     field_value(&request, "baseState")?,
                     "tree",
@@ -658,13 +669,8 @@ impl Runner {
                     ValidationMode::Conformance,
                     RepositoryLimits::default(),
                 )?;
-                let expanded = expand_tree(
-                    tree,
-                    &setup,
-                    descriptor,
-                    false,
-                    path_case_mode(scenario)?,
-                )?;
+                let expanded =
+                    expand_tree(tree, &setup, descriptor, false, path_case_mode(scenario)?)?;
                 let base = RepositoryState {
                     entries: expanded.entries,
                     groups: BTreeMap::new(),
@@ -684,10 +690,7 @@ impl Runner {
                 validate_conflict_set(
                     Some(ObjectRef::from_str(value_string(&request, "conflictSet")?)?),
                     &lookup,
-                    ObjectRef::from_str(value_string(
-                        &request,
-                        "repositoryDescriptor",
-                    )?)?,
+                    ObjectRef::from_str(value_string(&request, "repositoryDescriptor")?)?,
                     false,
                 )?;
             }
@@ -703,14 +706,10 @@ impl Runner {
                 validate_provenance_graph(&roots, &lookup, &forbidden)?;
             }
             "validate-snapshot-graph" => {
-                context.descriptor = ObjectRef::from_str(value_string(
-                    &request,
-                    "repositoryDescriptor",
-                )?)?;
-                context.designated_root = ObjectRef::from_str(value_string(
-                    &request,
-                    "designatedRoot",
-                )?)?;
+                context.descriptor =
+                    ObjectRef::from_str(value_string(&request, "repositoryDescriptor")?)?;
+                context.designated_root =
+                    ObjectRef::from_str(value_string(&request, "designatedRoot")?)?;
                 validate_snapshot_graph(
                     ObjectRef::from_str(value_string(&request, "candidateSnapshot")?)?,
                     &context,
@@ -771,10 +770,8 @@ impl Runner {
         let descriptor = object_ref_json(context_value(scenario, "repositoryDescriptor")?)?;
         let mut base = RepositoryState::default();
         if let Some(base_reference) = cbor_optional_field(change_value, 17) {
-            let base_snapshot = setup.resolve_expected(
-                ObjectRef::from_cbor(base_reference)?,
-                ObjectKind::Snapshot,
-            )?;
+            let base_snapshot = setup
+                .resolve_expected(ObjectRef::from_cbor(base_reference)?, ObjectKind::Snapshot)?;
             let base_value = base_snapshot
                 .value
                 .as_deref()
@@ -821,7 +818,9 @@ impl Runner {
             change_set,
             &base,
             &context,
-            conflict.as_ref().and_then(|resolved| resolved.value.as_deref()),
+            conflict
+                .as_ref()
+                .and_then(|resolved| resolved.value.as_deref()),
         )?;
         if base != before {
             return Err(configured_preflight_error());
@@ -892,16 +891,16 @@ impl Runner {
                     .map_err(|_| Error::new(ErrorCode::BundleBudgetExceeded))?;
             }
             if let Some(value) = limits.get("maxValueBytes").and_then(Value::as_u64) {
-                configured.max_value_bytes = usize::try_from(value)
-                    .map_err(|_| Error::new(ErrorCode::LimitValueBytes))?;
+                configured.max_value_bytes =
+                    usize::try_from(value).map_err(|_| Error::new(ErrorCode::LimitValueBytes))?;
             }
             if let Some(value) = limits.get("maxCaptureBytes").and_then(Value::as_u64) {
-                configured.max_capture_bytes = usize::try_from(value)
-                    .map_err(|_| Error::new(ErrorCode::LimitMemory))?;
+                configured.max_capture_bytes =
+                    usize::try_from(value).map_err(|_| Error::new(ErrorCode::LimitMemory))?;
             }
             if let Some(value) = limits.get("maxNesting").and_then(Value::as_u64) {
-                configured.max_nesting = usize::try_from(value)
-                    .map_err(|_| Error::new(ErrorCode::LimitNesting))?;
+                configured.max_nesting =
+                    usize::try_from(value).map_err(|_| Error::new(ErrorCode::LimitNesting))?;
             }
             if let Some(value) = limits.get("maxItems").and_then(Value::as_u64) {
                 configured.max_items = usize::try_from(value)
@@ -926,7 +925,11 @@ impl Runner {
             return Err(Error::new(ErrorCode::SchemaFieldInvalid));
         }
         let scratch = TempDirectory::new("configured")?;
-        let mut options = LogicalBundleVerifyOptions::semantic(&scratch.path, &self.registry, Operation::ConformanceWrite);
+        let mut options = LogicalBundleVerifyOptions::semantic(
+            &scratch.path,
+            &self.registry,
+            Operation::ConformanceWrite,
+        );
         if let Some(value) = limits.get("maxMemoryBytes").and_then(Value::as_u64) {
             options.limits.max_memory_bytes =
                 usize::try_from(value).map_err(|_| Error::new(ErrorCode::LimitMemory))?;
@@ -965,7 +968,8 @@ impl Runner {
             values
                 .iter()
                 .map(|value| {
-                    value.as_str()
+                    value
+                        .as_str()
                         .ok_or_else(configured_preflight_error)
                         .and_then(|path| self.result_bytes(path))
                 })
@@ -1084,15 +1088,18 @@ impl Runner {
         let source = decode_bundle_items(&self.result_bytes(value_string(&request, "source")?)?)?;
         let source_objects = source
             .iter()
-            .filter(|item| cbor_field(item, 1).and_then(cbor_uint).is_ok_and(|value| value == 2))
+            .filter(|item| {
+                cbor_field(item, 1)
+                    .and_then(cbor_uint)
+                    .is_ok_and(|value| value == 2)
+            })
             .collect::<Vec<_>>();
         let mut mutations = json_array_result(&request, "objectMutations")?.clone();
         mutations.sort_by_key(|mutation| mutation.get("outputOrdinal").and_then(Value::as_u64));
         let mut objects = Vec::with_capacity(mutations.len());
         for mutation in mutations {
-            let (mut reference, payload) = if let Some(source_artifact) = mutation
-                .get("sourceArtifact")
-                .and_then(Value::as_str)
+            let (mut reference, payload) = if let Some(source_artifact) =
+                mutation.get("sourceArtifact").and_then(Value::as_str)
             {
                 (
                     ObjectRef {
@@ -1315,14 +1322,17 @@ impl Runner {
         match value_string(&request, "surface")? {
             "bundle-visitor" => self.execute_bundle_visitor_surface(&request),
             "logical-record-map-raw" => self.execute_logical_record_raw_surface(&request),
-            "tree-file" | "tree-schema-decoder" | "metadata-decoder"
-            | "bundle-memory-verifier" | "bundle-stream-verifier" => {
-                self.execute_codec_surface(&request, authority.as_ref())
-            }
-            "metadata-encoder" | "tree-ordered" | "tree-sorted" | "content-manifest"
-            | "bundle-ordered" | "bundle-memory-encoder" => {
-                self.execute_emitter_surface(&request, authority.as_ref())
-            }
+            "tree-file"
+            | "tree-schema-decoder"
+            | "metadata-decoder"
+            | "bundle-memory-verifier"
+            | "bundle-stream-verifier" => self.execute_codec_surface(&request, authority.as_ref()),
+            "metadata-encoder"
+            | "tree-ordered"
+            | "tree-sorted"
+            | "content-manifest"
+            | "bundle-ordered"
+            | "bundle-memory-encoder" => self.execute_emitter_surface(&request, authority.as_ref()),
             _ => self.execute_repository_mode_surface(&request, scenario, authority),
         }
     }
@@ -1362,11 +1372,7 @@ impl Runner {
         Ok(2)
     }
 
-    fn execute_codec_surface(
-        &self,
-        request: &Value,
-        authority: Option<&Registry>,
-    ) -> Result<u8> {
+    fn execute_codec_surface(&self, request: &Value, authority: Option<&Registry>) -> Result<u8> {
         let layer_two = request.get("registry").and_then(Value::as_str) == Some("absent")
             && request.get("semanticProfiles").and_then(Value::as_bool) == Some(false)
             && !request
@@ -1414,37 +1420,40 @@ impl Runner {
         if !semantic {
             if request.get("registry").and_then(Value::as_str) != Some("bundled") {
                 if let Some(registry) = authority {
-                let operation = codec_operation(request)?;
-                match surface {
-                    "tree-file" => {
-                        let mut file_ids = BTreeSet::new();
-                        verify_tree_stream(
-                            Cursor::new(Vec::<u8>::new()),
-                            ObjectRef { kind: ObjectKind::Tree, digest: [0; 32] },
-                            ObjectRef {
-                                kind: ObjectKind::RepositoryDescriptor,
-                                digest: [0; 32],
-                            },
-                            registry,
-                            operation,
-                            &mut file_ids,
-                            TreeStreamLimits::default(),
-                        )?;
-                        return Ok(3);
-                    }
-                    "bundle-memory-verifier" | "bundle-stream-verifier" => {
-                        let summary = verify_logical_bundle_stream(
-                            Cursor::new(Vec::<u8>::new()),
-                            LogicalBundleVerifyOptions::semantic(
-                                Path::new(""),
+                    let operation = codec_operation(request)?;
+                    match surface {
+                        "tree-file" => {
+                            let mut file_ids = BTreeSet::new();
+                            verify_tree_stream(
+                                Cursor::new(Vec::<u8>::new()),
+                                ObjectRef {
+                                    kind: ObjectKind::Tree,
+                                    digest: [0; 32],
+                                },
+                                ObjectRef {
+                                    kind: ObjectKind::RepositoryDescriptor,
+                                    digest: [0; 32],
+                                },
                                 registry,
                                 operation,
-                            ),
-                        )?;
-                        return Ok(summary.highest_layer);
+                                &mut file_ids,
+                                TreeStreamLimits::default(),
+                            )?;
+                            return Ok(3);
+                        }
+                        "bundle-memory-verifier" | "bundle-stream-verifier" => {
+                            let summary = verify_logical_bundle_stream(
+                                Cursor::new(Vec::<u8>::new()),
+                                LogicalBundleVerifyOptions::semantic(
+                                    Path::new(""),
+                                    registry,
+                                    operation,
+                                ),
+                            )?;
+                            return Ok(summary.highest_layer);
+                        }
+                        _ => {}
                     }
-                    _ => {}
-                }
                 }
             }
             return Err(configured_preflight_error());
@@ -1455,7 +1464,8 @@ impl Runner {
         match surface {
             "tree-schema-decoder" => Err(configured_preflight_error()),
             "tree-file" => {
-                let descriptor = ObjectRef::from_str(value_string(request, "repositoryDescriptor")?)?;
+                let descriptor =
+                    ObjectRef::from_str(value_string(request, "repositoryDescriptor")?)?;
                 let expected = ObjectRef {
                     kind: ObjectKind::Tree,
                     digest: object_id(ObjectKind::Tree, &source)?,
@@ -1484,18 +1494,17 @@ impl Runner {
         }
     }
 
-    fn execute_emitter_surface(
-        &self,
-        request: &Value,
-        authority: Option<&Registry>,
-    ) -> Result<u8> {
+    fn execute_emitter_surface(&self, request: &Value, authority: Option<&Registry>) -> Result<u8> {
         let surface = value_string(request, "surface")?;
         let Some(registry) = authority else {
             return Err(configured_preflight_error());
         };
         let operation = codec_operation(request)?;
         let configured = request.get("registry").and_then(Value::as_str) == Some("bundled")
-            && matches!(operation, Operation::ConformanceWrite | Operation::ProductionWrite);
+            && matches!(
+                operation,
+                Operation::ConformanceWrite | Operation::ProductionWrite
+            );
         if !configured {
             return self.execute_emitter_preflight(surface, registry, operation);
         }
@@ -1540,7 +1549,10 @@ impl Runner {
                 let mut file_ids = BTreeSet::new();
                 encode_ordered_tree_with_features(
                     Vec::new(),
-                    ObjectRef { kind: ObjectKind::RepositoryDescriptor, digest: [0; 32] },
+                    ObjectRef {
+                        kind: ObjectKind::RepositoryDescriptor,
+                        digest: [0; 32],
+                    },
                     &[],
                     0,
                     Vec::<TreeStreamEntry>::new(),
@@ -1555,7 +1567,10 @@ impl Runner {
                 let mut metrics = TreeScratchMetrics::default();
                 encode_tree_with_scratch_and_features(
                     Vec::new(),
-                    ObjectRef { kind: ObjectKind::RepositoryDescriptor, digest: [0; 32] },
+                    ObjectRef {
+                        kind: ObjectKind::RepositoryDescriptor,
+                        digest: [0; 32],
+                    },
                     &[],
                     0,
                     Vec::<TreeStreamEntry>::new(),
@@ -1569,9 +1584,10 @@ impl Runner {
             }
             "content-manifest" => {
                 let profile = ProfileRef::from_str("chunking.test/external-boundaries@1")?;
-                let mut source = |_index: u64,
-                                  _part: &ManifestStreamPart,
-                                  _consume: &mut dyn FnMut(&[u8]) -> Result<()>| Ok(());
+                let mut source =
+                    |_index: u64,
+                     _part: &ManifestStreamPart,
+                     _consume: &mut dyn FnMut(&[u8]) -> Result<()>| Ok(());
                 encode_and_verify_content_manifest_stream(
                     Vec::new(),
                     0,
@@ -1629,8 +1645,8 @@ impl Runner {
             .iter()
             .map(tree_stream_entry_cbor)
             .collect::<Result<Vec<_>>>()?;
-        let declared = u64::try_from(entries.len())
-            .map_err(|_| Error::new(ErrorCode::LimitCount))?;
+        let declared =
+            u64::try_from(entries.len()).map_err(|_| Error::new(ErrorCode::LimitCount))?;
         match surface {
             "tree-ordered" => {
                 let mut file_ids = BTreeSet::new();
@@ -1688,9 +1704,10 @@ impl Runner {
             return Err(Error::new(ErrorCode::SchemaFieldInvalid));
         }
         let digest = TypedDigest::from_cbor(cbor_field(&value, 17)?)?;
-        let mut chunk_source = |_index: u64,
-                                _part: &ManifestStreamPart,
-                                _consume: &mut dyn FnMut(&[u8]) -> Result<()>| Ok(());
+        let mut chunk_source =
+            |_index: u64,
+             _part: &ManifestStreamPart,
+             _consume: &mut dyn FnMut(&[u8]) -> Result<()>| Ok(());
         encode_and_verify_content_manifest_stream(
             Vec::new(),
             u64::try_from(parts.len()).map_err(|_| Error::new(ErrorCode::LimitCount))?,
@@ -1797,12 +1814,7 @@ impl Runner {
             path_case_mode(scenario)?
         };
         if request.get("semanticProfiles").and_then(Value::as_bool) == Some(false) {
-            return self.execute_repository_layer2_rejection(
-                surface,
-                request,
-                scenario,
-                case_mode,
-            );
+            return self.execute_repository_layer2_rejection(surface, request, scenario, case_mode);
         }
         if request.get("registry").and_then(Value::as_str) != Some("bundled")
             || request.get("semanticProfiles").and_then(Value::as_bool) != Some(true)
@@ -1836,18 +1848,12 @@ impl Runner {
                 .map(|(reference, source)| {
                     Ok((
                         object_ref_json(reference)?,
-                        self.result_bytes(
-                            source.as_str().ok_or_else(configured_preflight_error)?,
-                        )?,
+                        self.result_bytes(source.as_str().ok_or_else(configured_preflight_error)?)?,
                     ))
                 })
                 .collect::<Result<Vec<_>>>()?;
-            let lookup = RepositoryObjectLookup::new(
-                entries,
-                registry,
-                mode,
-                RepositoryLimits::default(),
-            )?;
+            let lookup =
+                RepositoryObjectLookup::new(entries, registry, mode, RepositoryLimits::default())?;
             lookup.validate_all()?;
             return Ok(3);
         }
@@ -1900,12 +1906,8 @@ impl Runner {
                 let working =
                     parse_lifetime_records_from(import_context, "workingLifetimeAdditions")?;
                 let mappings = parse_import_mappings_from(import_context)?;
-                let mut context = RepositoryContext::new(
-                    &lookup,
-                    descriptor,
-                    descriptor,
-                    case_mode,
-                );
+                let mut context =
+                    RepositoryContext::new(&lookup, descriptor, descriptor, case_mode);
                 context.lifetime_records = &lifetime;
                 context.working_lifetime_additions = &working;
                 context.import_mappings = &mappings;
@@ -1941,10 +1943,7 @@ impl Runner {
         let descriptor = ObjectRef::from_str(value_string(request, "repositoryDescriptor")?)?;
         if surface == "asset-groups" {
             let (groups, file_ids) = group_inputs_fixture(request)?;
-            let incomplete = Registry::load(
-                Vec::<RegistryEntry>::new(),
-                Vec::<u32>::new(),
-            )?;
+            let incomplete = Registry::load(Vec::<RegistryEntry>::new(), Vec::<u32>::new())?;
             validate_asset_groups_with_limits(
                 &groups,
                 &file_ids,
@@ -1986,12 +1985,7 @@ impl Runner {
                 )?;
             }
             "import-request" => {
-                let context = RepositoryContext::new(
-                    &lookup,
-                    descriptor,
-                    descriptor,
-                    case_mode,
-                );
+                let context = RepositoryContext::new(&lookup, descriptor, descriptor, case_mode);
                 validate_import_request(
                     &context,
                     &parse_import_request(field_value(request, "importRequest")?)?,
@@ -2042,7 +2036,8 @@ impl Runner {
             return Err(configured_preflight_error());
         }
         let operation = value_string(row, "operation")?;
-        let (failure, route_evidence, component_fit) = if operation == "validate-tree-groups-memory" {
+        let (failure, route_evidence, component_fit) = if operation == "validate-tree-groups-memory"
+        {
             let (failure, evidence) = self.execute_tree_groups_memory(scenario, &request)?;
             (failure, evidence, true)
         } else if operation == "validate-resource-reservation" {
@@ -2090,7 +2085,8 @@ impl Runner {
         match value_string(request, "cluster")? {
             "replay-base" => {
                 let descriptor = reference_of_kind(scenario, ObjectKind::RepositoryDescriptor)?;
-                let tree = ObjectRef::from_str(value_string(field_value(request, "baseState")?, "tree")?)?;
+                let tree =
+                    ObjectRef::from_str(value_string(field_value(request, "baseState")?, "tree")?)?;
                 let change_set = ObjectRef::from_str(value_string(request, "changeSet")?)?;
                 let base_lookup = self.lookup_with_registry(
                     scenario,
@@ -2204,12 +2200,7 @@ impl Runner {
                         descriptor,
                         path_case_mode(scenario)?,
                     );
-                    validate_lifetime_and_imports(
-                        &context,
-                        change_set,
-                        &[],
-                        Some(&working_entries),
-                    )
+                    validate_lifetime_and_imports(&context, change_set, &[], Some(&working_entries))
                 };
                 let minimum = minimum_successful_ceiling(&run)?;
                 let lookup = RepositoryObjectLookup::new(
@@ -2304,22 +2295,15 @@ impl Runner {
                 ))
             }
             "graph-workspace-indexes" => {
-                let graph_scenario = self.result_json(
-                    "scenarios/cases/tree-groups-combined-memory.json",
-                )?;
+                let graph_scenario =
+                    self.result_json("scenarios/cases/tree-groups-combined-memory.json")?;
                 let graph_entries = self.lookup_entries(&graph_scenario)?;
-                let descriptor = object_ref_json(context_value(
-                    &graph_scenario,
-                    "repositoryDescriptor",
-                )?)?;
-                let snapshot = object_ref_json(context_value(
-                    &graph_scenario,
-                    "candidateSnapshot",
-                )?)?;
-                let designated_root = object_ref_json(context_value(
-                    &graph_scenario,
-                    "designatedRoot",
-                )?)?;
+                let descriptor =
+                    object_ref_json(context_value(&graph_scenario, "repositoryDescriptor")?)?;
+                let snapshot =
+                    object_ref_json(context_value(&graph_scenario, "candidateSnapshot")?)?;
+                let designated_root =
+                    object_ref_json(context_value(&graph_scenario, "designatedRoot")?)?;
                 let run = |ceiling: usize| -> Result<()> {
                     let lookup = RepositoryObjectLookup::new(
                         graph_entries.clone(),
@@ -2366,17 +2350,14 @@ impl Runner {
                 ))
             }
             "conflict-group-indexes" => {
-                let conflict_scenario = self.result_json(
-                    "scenarios/cases/conflict-choice-base.json",
-                )?;
+                let conflict_scenario =
+                    self.result_json("scenarios/cases/conflict-choice-base.json")?;
                 let conflict_entries = self.lookup_entries(&conflict_scenario)?;
                 let conflict_reference = ObjectRef::from_str(
                     "ogvcs:v1:conflict-set:sha256:562aa353fa3bfcf681e7e4a218f66c9f3c1157c490508cb81f4320f271be25cf",
                 )?;
-                let descriptor = object_ref_json(context_value(
-                    &conflict_scenario,
-                    "repositoryDescriptor",
-                )?)?;
+                let descriptor =
+                    object_ref_json(context_value(&conflict_scenario, "repositoryDescriptor")?)?;
                 let run_conflict = |ceiling: usize| -> Result<()> {
                     let lookup = RepositoryObjectLookup::new(
                         conflict_entries.clone(),
@@ -2443,14 +2424,8 @@ impl Runner {
                 Ok((
                     conflict_failure,
                     vec![
-                        resource_route_evidence(
-                            "validate-conflict-set",
-                            "same-authority-instance",
-                        ),
-                        resource_route_evidence(
-                            "validate-asset-groups",
-                            "stateless-reinvoke",
-                        ),
+                        resource_route_evidence("validate-conflict-set", "same-authority-instance"),
+                        resource_route_evidence("validate-asset-groups", "stateless-reinvoke"),
                     ],
                 ))
             }
@@ -2481,10 +2456,9 @@ impl Runner {
                 }
                 let malformed_bytes = encode_canonical(&malformed_value)?;
                 let malformed = scan_metadata(&malformed_bytes, Limits::METADATA)?;
-                let schema_failure = validate_metadata_schema_with_limits(&malformed, 511)
-                    .unwrap_err();
-                let recovery = validate_metadata_schema_with_limits(&malformed, 512)
-                    .unwrap_err();
+                let schema_failure =
+                    validate_metadata_schema_with_limits(&malformed, 511).unwrap_err();
+                let recovery = validate_metadata_schema_with_limits(&malformed, 512).unwrap_err();
                 if recovery.code != ErrorCode::SchemaFieldUnknown
                     || recovery.layer != 2
                     || recovery.stage != ValidationStage::KnownSchema
@@ -2500,10 +2474,7 @@ impl Runner {
                             "repository-object-lookup-validate-all",
                             "stateless-reinvoke",
                         ),
-                        resource_route_evidence(
-                            "validate-known-schema",
-                            "stateless-reinvoke",
-                        ),
+                        resource_route_evidence("validate-known-schema", "stateless-reinvoke"),
                     ],
                 ))
             }
@@ -2590,25 +2561,29 @@ impl Runner {
                 ))
             }
             "tree-stream-transaction-composite-memory" => {
-                if request.pointer("/memoryCeiling/derivation").and_then(Value::as_str)
+                if request
+                    .pointer("/memoryCeiling/derivation")
+                    .and_then(Value::as_str)
                     != Some("one-byte-below-reader-current-entry-and-fileid-index-composite-v1")
-                    || request.pointer("/memoryCeiling/indexCapacity").and_then(Value::as_str)
+                    || request
+                        .pointer("/memoryCeiling/indexCapacity")
+                        .and_then(Value::as_str)
                         != Some("remaining-composite-budget-not-full-operation-ceiling")
-                    || request.pointer("/transaction/targetBytesUnchanged").and_then(Value::as_bool)
+                    || request
+                        .pointer("/transaction/targetBytesUnchanged")
+                        .and_then(Value::as_bool)
                         != Some(true)
-                    || request.pointer("/transaction/scratchIndexReusableAfterAbortDrop").and_then(Value::as_bool)
+                    || request
+                        .pointer("/transaction/scratchIndexReusableAfterAbortDrop")
+                        .and_then(Value::as_bool)
                         != Some(true)
                 {
                     return Err(configured_preflight_error());
                 }
-                let failure_bytes = self.result_bytes(value_string(
-                    field_value(request, "failure")?,
-                    "source",
-                )?)?;
-                let recovery_bytes = self.result_bytes(value_string(
-                    field_value(request, "recovery")?,
-                    "source",
-                )?)?;
+                let failure_bytes =
+                    self.result_bytes(value_string(field_value(request, "failure")?, "source")?)?;
+                let recovery_bytes =
+                    self.result_bytes(value_string(field_value(request, "recovery")?, "source")?)?;
                 let descriptor = reference_of_kind(scenario, ObjectKind::RepositoryDescriptor)?;
                 let expected = |bytes: &[u8]| -> Result<ObjectRef> {
                     Ok(ObjectRef {
@@ -2618,12 +2593,8 @@ impl Runner {
                 };
                 let run = |ceiling: usize| -> Result<()> {
                     let scratch = TempDirectory::new("tree-index-probe")?;
-                    let mut index = TreeFileIdScratchIndex::new(
-                        &scratch.path,
-                        ceiling,
-                        8 * 1024 * 1024,
-                        None,
-                    )?;
+                    let mut index =
+                        TreeFileIdScratchIndex::new(&scratch.path, ceiling, 8 * 1024 * 1024, None)?;
                     verify_tree_stream(
                         Cursor::new(&failure_bytes),
                         expected(&failure_bytes)?,
@@ -2757,13 +2728,7 @@ impl Runner {
                 .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))?,
             18,
         )?)?;
-        expand_tree(
-            tree,
-            &lookup,
-            descriptor,
-            false,
-            path_case_mode(scenario)?,
-        )?;
+        expand_tree(tree, &lookup, descriptor, false, path_case_mode(scenario)?)?;
         drop(lookup);
 
         let lookup = RepositoryObjectLookup::new(
@@ -3021,7 +2986,11 @@ impl Runner {
             let scratch = TempDirectory::new("truncation")?;
             let actual = verify_logical_bundle_stream(
                 Cursor::new(&complete[..prefix]),
-                LogicalBundleVerifyOptions::semantic(&scratch.path, &self.registry, Operation::ConformanceWrite),
+                LogicalBundleVerifyOptions::semantic(
+                    &scratch.path,
+                    &self.registry,
+                    Operation::ConformanceWrite,
+                ),
             )
             .unwrap_err();
             require_same_error(actual, &expected)?;
@@ -3122,7 +3091,11 @@ impl Runner {
                     let scratch = TempDirectory::new("mutation")?;
                     if verify_logical_bundle_stream(
                         Cursor::new(changed),
-                        LogicalBundleVerifyOptions::semantic(&scratch.path, &self.registry, Operation::ConformanceWrite),
+                        LogicalBundleVerifyOptions::semantic(
+                            &scratch.path,
+                            &self.registry,
+                            Operation::ConformanceWrite,
+                        ),
                     )
                     .is_ok()
                     {
@@ -3446,10 +3419,7 @@ fn parse_import_mappings_from(value: &Value) -> Result<Vec<ImportMapping>> {
                     mapping,
                     "sourceNamespaceDigest",
                 )?)?,
-                source_identity_digest: hex_array(value_string(
-                    mapping,
-                    "sourceIdentityDigest",
-                )?)?,
+                source_identity_digest: hex_array(value_string(mapping, "sourceIdentityDigest")?)?,
                 file_id: file_id_json(field_value(mapping, "fileId")?)?,
                 state: match value_string(mapping, "state")? {
                     "reserved" => ImportState::Reserved,
@@ -3463,7 +3433,12 @@ fn parse_import_mappings_from(value: &Value) -> Result<Vec<ImportMapping>> {
         .collect()
 }
 
-fn group_fixture(value: &Value) -> Result<(BTreeMap<[u8; 16], AssetGroup>, BTreeMap<FileId, Vec<String>>)> {
+fn group_fixture(
+    value: &Value,
+) -> Result<(
+    BTreeMap<[u8; 16], AssetGroup>,
+    BTreeMap<FileId, Vec<String>>,
+)> {
     let id: [u8; 16] = hex_array(value_string(value, "groupId")?)?;
     let file_ids = json_array_result(value, "fileIds")?
         .iter()
@@ -3483,8 +3458,7 @@ fn group_fixture(value: &Value) -> Result<(BTreeMap<[u8; 16], AssetGroup>, BTree
             ])
         })
         .collect();
-    let external_profile =
-        ProfileRef::from_str(value_string(value, "externalKeyProfile")?)?;
+    let external_profile = ProfileRef::from_str(value_string(value, "externalKeyProfile")?)?;
     let raw = Cbor::Map(vec![
         (Cbor::UInt(0), Cbor::Bytes(id.to_vec())),
         (
@@ -3515,7 +3489,10 @@ fn group_fixture(value: &Value) -> Result<(BTreeMap<[u8; 16], AssetGroup>, BTree
 
 fn group_inputs_fixture(
     request: &Value,
-) -> Result<(BTreeMap<[u8; 16], AssetGroup>, BTreeMap<FileId, Vec<String>>)> {
+) -> Result<(
+    BTreeMap<[u8; 16], AssetGroup>,
+    BTreeMap<FileId, Vec<String>>,
+)> {
     let fixtures = if let Some(values) = request.get("groupInputs").and_then(Value::as_array) {
         values.as_slice()
     } else {
@@ -3562,11 +3539,7 @@ fn append_snapshot_entries(
         .get_mut("entries")
         .and_then(Value::as_array_mut)
         .ok_or_else(|| Error::new(ErrorCode::RegistryInvalid))?;
-    for source in source
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-    {
+    for source in source.and_then(Value::as_array).into_iter().flatten() {
         let mut entry = source.clone();
         if add_owner {
             entry
@@ -3606,7 +3579,12 @@ fn append_feature_entries(document: &mut Value, source: Option<&Value>) -> Resul
         .and_then(Value::as_array_mut)
         .ok_or_else(|| Error::new(ErrorCode::RegistryInvalid))?;
     entries.extend(additions);
-    entries.sort_by_key(|entry| entry.get("code").and_then(Value::as_u64).unwrap_or(u64::MAX));
+    entries.sort_by_key(|entry| {
+        entry
+            .get("code")
+            .and_then(Value::as_u64)
+            .unwrap_or(u64::MAX)
+    });
     let highest = entries
         .iter()
         .filter_map(|entry| entry.get("code").and_then(Value::as_u64))
@@ -3666,10 +3644,12 @@ fn cbor_optional_field(value: &Cbor, key: u64) -> Option<&Cbor> {
     let Cbor::Map(fields) = value else {
         return None;
     };
-    fields.iter().find_map(|(candidate, value)| match candidate {
-        Cbor::UInt(candidate) if *candidate == key => Some(value),
-        _ => None,
-    })
+    fields
+        .iter()
+        .find_map(|(candidate, value)| match candidate {
+            Cbor::UInt(candidate) if *candidate == key => Some(value),
+            _ => None,
+        })
 }
 
 fn cbor_uint(value: &Cbor) -> Result<u64> {
@@ -3708,7 +3688,10 @@ fn cbor_array(value: &Cbor) -> Result<&[Cbor]> {
 
 fn asset_groups_from_payload(
     payload: &[u8],
-) -> Result<(BTreeMap<[u8; 16], AssetGroup>, BTreeMap<FileId, Vec<String>>)> {
+) -> Result<(
+    BTreeMap<[u8; 16], AssetGroup>,
+    BTreeMap<FileId, Vec<String>>,
+)> {
     let object = scan_metadata(payload, Limits::METADATA)?;
     if validate_metadata_schema(&object)? != ObjectKind::AssetGroupSet {
         return Err(Error::new(ErrorCode::SchemaFieldInvalid));
@@ -3718,7 +3701,10 @@ fn asset_groups_from_payload(
 
 fn asset_groups_from_value(
     value: &Cbor,
-) -> Result<(BTreeMap<[u8; 16], AssetGroup>, BTreeMap<FileId, Vec<String>>)> {
+) -> Result<(
+    BTreeMap<[u8; 16], AssetGroup>,
+    BTreeMap<FileId, Vec<String>>,
+)> {
     let Cbor::Array(values) = cbor_field(value, 17)? else {
         return Err(Error::new(ErrorCode::SchemaFieldInvalid));
     };
@@ -4083,10 +4069,7 @@ fn normalized_expected(value: &Value) -> std::result::Result<Value, String> {
     }
 }
 
-fn diagnostic_outcome(
-    scenario_id: &str,
-    error: Error,
-) -> std::result::Result<Value, String> {
+fn diagnostic_outcome(scenario_id: &str, error: Error) -> std::result::Result<Value, String> {
     if !error.is_registered_site() {
         return Err(format!(
             "{scenario_id}: unregistered diagnostic site {}@{}:{}",

@@ -713,7 +713,11 @@ fn descriptor(f: &Fields<'_>, limits: HardLimitCeilings) -> Result<()> {
     common(f, 6, &[16, 17, 18, 19], &[20], limits)?;
     id128(f.get(16)?)?;
     profile_in(f.get(17)?, &["path"])?;
-    sorted_profiles(f.get(18)?, true, &["content-policy", "fixture-content-policy"])?;
+    sorted_profiles(
+        f.get(18)?,
+        true,
+        &["content-policy", "fixture-content-policy"],
+    )?;
     sorted_profiles(f.get(19)?, false, &["group", "fixture-group"])?;
     if let Some(v) = f.opt(20) {
         let a = array(v)?;

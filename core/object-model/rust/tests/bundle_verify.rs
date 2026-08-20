@@ -76,7 +76,11 @@ fn verify(name: &str) -> Result<ogvcs_object_model::LogicalBundleVerifySummary, 
     let registry = Registry::bundled();
     let result = verify_logical_bundle_stream(
         Cursor::new(read(&format!("logical-bundles/{name}.cborseq"))),
-        LogicalBundleVerifyOptions::semantic(scratch.path(), &registry, Operation::ConformanceWrite),
+        LogicalBundleVerifyOptions::semantic(
+            scratch.path(),
+            &registry,
+            Operation::ConformanceWrite,
+        ),
     )
     .map_err(|error| error.code);
     scratch.assert_empty();
@@ -320,7 +324,11 @@ fn embedded_bundle_object_refs_are_layer_one_but_standalone_refs_remain_layer_tw
                 invalid_reference,
                 valid.clone(),
             )),
-            LogicalBundleVerifyOptions::semantic(scratch.path(), &registry, Operation::ConformanceWrite),
+            LogicalBundleVerifyOptions::semantic(
+                scratch.path(),
+                &registry,
+                Operation::ConformanceWrite,
+            ),
         )
         .unwrap_err();
         assert_eq!(
@@ -346,7 +354,11 @@ fn embedded_bundle_object_refs_are_layer_one_but_standalone_refs_remain_layer_tw
             unknown_reference,
             valid.clone(),
         )),
-        LogicalBundleVerifyOptions::semantic(scratch.path(), &registry, Operation::ConformanceWrite),
+        LogicalBundleVerifyOptions::semantic(
+            scratch.path(),
+            &registry,
+            Operation::ConformanceWrite,
+        ),
     )
     .unwrap_err();
     assert_eq!(
@@ -389,7 +401,11 @@ fn embedded_bundle_object_refs_are_layer_one_but_standalone_refs_remain_layer_tw
                 object_reference,
                 root_reference,
             )),
-            LogicalBundleVerifyOptions::semantic(scratch.path(), &registry, Operation::ConformanceWrite),
+            LogicalBundleVerifyOptions::semantic(
+                scratch.path(),
+                &registry,
+                Operation::ConformanceWrite,
+            ),
         )
         .unwrap_err();
         assert_eq!((error.code, error.layer), (expected, 1), "{label}");
@@ -404,7 +420,11 @@ fn embedded_bundle_object_refs_are_layer_one_but_standalone_refs_remain_layer_tw
             valid.clone(),
             Cbor::Bool(false),
         )),
-        LogicalBundleVerifyOptions::semantic(scratch.path(), &registry, Operation::ConformanceWrite),
+        LogicalBundleVerifyOptions::semantic(
+            scratch.path(),
+            &registry,
+            Operation::ConformanceWrite,
+        ),
     )
     .unwrap_err();
     assert_eq!(
@@ -477,7 +497,11 @@ fn malformed_bundle_item_maps_are_sequence_errors_for_direct_and_spooled_readers
         let scratch = Scratch::new(label);
         let error = verify_logical_bundle_stream(
             Cursor::new(authenticated_single_object_bundle(item, root.clone())),
-            LogicalBundleVerifyOptions::semantic(scratch.path(), &registry, Operation::ConformanceWrite),
+            LogicalBundleVerifyOptions::semantic(
+                scratch.path(),
+                &registry,
+                Operation::ConformanceWrite,
+            ),
         )
         .unwrap_err();
         assert_eq!(
@@ -570,11 +594,7 @@ fn supplied_closure_has_explicit_layer_two_and_semantic_entry_points() {
     let scratch = Scratch::new("partial-authority-preflight");
     let error = verify_logical_bundle_stream(
         MustNotRead,
-        LogicalBundleVerifyOptions::semantic(
-            scratch.path(),
-            &partial,
-            Operation::ConformanceWrite,
-        ),
+        LogicalBundleVerifyOptions::semantic(scratch.path(), &partial, Operation::ConformanceWrite),
     )
     .unwrap_err();
     assert_eq!(
@@ -626,7 +646,11 @@ fn missing_required_object_or_logical_root_is_a_layer_two_shape_failure() {
     let registry = Registry::bundled();
     let error = verify_logical_bundle_stream(
         Cursor::new(read("logical-bundles/scenario-bundle-root-invalid.cborseq")),
-        LogicalBundleVerifyOptions::semantic(scratch.path(), &registry, Operation::ConformanceWrite),
+        LogicalBundleVerifyOptions::semantic(
+            scratch.path(),
+            &registry,
+            Operation::ConformanceWrite,
+        ),
     )
     .unwrap_err();
     assert_eq!(
@@ -676,7 +700,11 @@ fn sequence_order_failure_outranks_an_earlier_duplicate_identity() {
     assert_eq!(
         verify_logical_bundle_stream(
             Cursor::new(changed),
-            LogicalBundleVerifyOptions::semantic(scratch.path(), &registry, Operation::ConformanceWrite),
+            LogicalBundleVerifyOptions::semantic(
+                scratch.path(),
+                &registry,
+                Operation::ConformanceWrite
+            ),
         )
         .unwrap_err()
         .code,
@@ -712,7 +740,11 @@ fn sequence_order_failure_outranks_too_small_sender_declarations() {
     let registry = Registry::bundled();
     let error = verify_logical_bundle_stream(
         Cursor::new(changed),
-        LogicalBundleVerifyOptions::semantic(scratch.path(), &registry, Operation::ConformanceWrite),
+        LogicalBundleVerifyOptions::semantic(
+            scratch.path(),
+            &registry,
+            Operation::ConformanceWrite,
+        ),
     )
     .unwrap_err();
     assert_eq!(
@@ -742,7 +774,11 @@ fn opaque_sequence_pass_outranks_object_ref_and_root_schema_failures() {
     let registry = Registry::bundled();
     let error = verify_logical_bundle_stream(
         Cursor::new(values.iter().flat_map(encoded).collect::<Vec<_>>()),
-        LogicalBundleVerifyOptions::semantic(scratch.path(), &registry, Operation::ConformanceWrite),
+        LogicalBundleVerifyOptions::semantic(
+            scratch.path(),
+            &registry,
+            Operation::ConformanceWrite,
+        ),
     )
     .unwrap_err();
     assert_eq!(
@@ -766,7 +802,11 @@ fn opaque_sequence_pass_outranks_object_ref_and_root_schema_failures() {
     let scratch = Scratch::new("invalid-root-before-stale-trailer");
     let error = verify_logical_bundle_stream(
         Cursor::new(stale.iter().flat_map(encoded).collect::<Vec<_>>()),
-        LogicalBundleVerifyOptions::semantic(scratch.path(), &registry, Operation::ConformanceWrite),
+        LogicalBundleVerifyOptions::semantic(
+            scratch.path(),
+            &registry,
+            Operation::ConformanceWrite,
+        ),
     )
     .unwrap_err();
     assert_eq!(
@@ -795,7 +835,11 @@ fn opaque_sequence_pass_outranks_object_ref_and_root_schema_failures() {
     let scratch = Scratch::new("invalid-root-before-duplicate");
     let error = verify_logical_bundle_stream(
         Cursor::new(authenticated),
-        LogicalBundleVerifyOptions::semantic(scratch.path(), &registry, Operation::ConformanceWrite),
+        LogicalBundleVerifyOptions::semantic(
+            scratch.path(),
+            &registry,
+            Operation::ConformanceWrite,
+        ),
     )
     .unwrap_err();
     assert_eq!(
@@ -865,7 +909,11 @@ fn known_schema_errors_are_ranked_across_all_authenticated_objects() {
     let registry = Registry::bundled();
     let error = verify_logical_bundle_stream(
         Cursor::new(authenticated),
-        LogicalBundleVerifyOptions::semantic(scratch.path(), &registry, Operation::ConformanceWrite),
+        LogicalBundleVerifyOptions::semantic(
+            scratch.path(),
+            &registry,
+            Operation::ConformanceWrite,
+        ),
     )
     .unwrap_err();
     assert_eq!(
@@ -923,7 +971,11 @@ fn authenticated_declared_accounting_outranks_closure_and_deferred_registry_erro
         let registry = Registry::bundled();
         let error = verify_logical_bundle_stream(
             Cursor::new(authenticated),
-            LogicalBundleVerifyOptions::semantic(scratch.path(), &registry, Operation::ConformanceWrite),
+            LogicalBundleVerifyOptions::semantic(
+                scratch.path(),
+                &registry,
+                Operation::ConformanceWrite,
+            ),
         )
         .unwrap_err();
         assert_eq!(
@@ -958,7 +1010,11 @@ fn selected_header_identity_payload_and_trailer_mutations_never_validate() {
         assert!(
             verify_logical_bundle_stream(
                 Cursor::new(changed),
-                LogicalBundleVerifyOptions::semantic(scratch.path(), &registry, Operation::ConformanceWrite),
+                LogicalBundleVerifyOptions::semantic(
+                    scratch.path(),
+                    &registry,
+                    Operation::ConformanceWrite
+                ),
             )
             .is_err(),
             "mutation at {position}"
@@ -974,7 +1030,11 @@ fn file_entry_point_and_all_proper_prefixes_are_bounded_and_cleaned() {
     let registry = Registry::bundled();
     let result = verify_logical_bundle_file(
         source,
-        LogicalBundleVerifyOptions::semantic(scratch.path(), &registry, Operation::ConformanceWrite),
+        LogicalBundleVerifyOptions::semantic(
+            scratch.path(),
+            &registry,
+            Operation::ConformanceWrite,
+        ),
     )
     .unwrap();
     assert_eq!(result.bytes, 666);
@@ -985,7 +1045,11 @@ fn file_entry_point_and_all_proper_prefixes_are_bounded_and_cleaned() {
         let scratch = Scratch::new("prefix");
         let error = verify_logical_bundle_stream(
             Cursor::new(&bytes[..prefix]),
-            LogicalBundleVerifyOptions::semantic(scratch.path(), &registry, Operation::ConformanceWrite),
+            LogicalBundleVerifyOptions::semantic(
+                scratch.path(),
+                &registry,
+                Operation::ConformanceWrite,
+            ),
         )
         .unwrap_err();
         assert!(
@@ -1006,7 +1070,11 @@ fn configured_memory_scratch_time_and_sequence_limits_are_typed_and_cleaned() {
     let registry = Registry::bundled();
 
     let scratch = Scratch::new("memory-limit");
-    let mut options = LogicalBundleVerifyOptions::semantic(scratch.path(), &registry, Operation::ConformanceWrite);
+    let mut options = LogicalBundleVerifyOptions::semantic(
+        scratch.path(),
+        &registry,
+        Operation::ConformanceWrite,
+    );
     options.limits.max_decoded_item_bytes = 32;
     assert_eq!(
         verify_logical_bundle_stream(Cursor::new(&bytes), options)
@@ -1022,7 +1090,11 @@ fn configured_memory_scratch_time_and_sequence_limits_are_typed_and_cleaned() {
         ("index-limit", 2u8),
     ] {
         let scratch = Scratch::new(label);
-        let mut options = LogicalBundleVerifyOptions::semantic(scratch.path(), &registry, Operation::ConformanceWrite);
+        let mut options = LogicalBundleVerifyOptions::semantic(
+            scratch.path(),
+            &registry,
+            Operation::ConformanceWrite,
+        );
         match configure {
             0 => options.limits.objects = 1,
             1 => options.limits.traversal_edges = 2,
@@ -1039,7 +1111,11 @@ fn configured_memory_scratch_time_and_sequence_limits_are_typed_and_cleaned() {
     }
 
     let scratch = Scratch::new("scratch-limit");
-    let mut options = LogicalBundleVerifyOptions::semantic(scratch.path(), &registry, Operation::ConformanceWrite);
+    let mut options = LogicalBundleVerifyOptions::semantic(
+        scratch.path(),
+        &registry,
+        Operation::ConformanceWrite,
+    );
     options.limits.max_scratch_bytes = 64;
     assert_eq!(
         verify_logical_bundle_stream(Cursor::new(&bytes), options)
@@ -1050,7 +1126,11 @@ fn configured_memory_scratch_time_and_sequence_limits_are_typed_and_cleaned() {
     scratch.assert_empty();
 
     let scratch = Scratch::new("time-limit");
-    let mut options = LogicalBundleVerifyOptions::semantic(scratch.path(), &registry, Operation::ConformanceWrite);
+    let mut options = LogicalBundleVerifyOptions::semantic(
+        scratch.path(),
+        &registry,
+        Operation::ConformanceWrite,
+    );
     options.limits.max_elapsed = Some(Duration::ZERO);
     assert_eq!(
         verify_logical_bundle_stream(Cursor::new(&bytes), options)
@@ -1061,7 +1141,11 @@ fn configured_memory_scratch_time_and_sequence_limits_are_typed_and_cleaned() {
     scratch.assert_empty();
 
     let scratch = Scratch::new("base-memory-limit");
-    let mut options = LogicalBundleVerifyOptions::semantic(scratch.path(), &registry, Operation::ConformanceWrite);
+    let mut options = LogicalBundleVerifyOptions::semantic(
+        scratch.path(),
+        &registry,
+        Operation::ConformanceWrite,
+    );
     options.limits.max_memory_bytes = 4_095;
     assert_eq!(
         verify_logical_bundle_stream(Cursor::new(&bytes), options)
@@ -1072,7 +1156,11 @@ fn configured_memory_scratch_time_and_sequence_limits_are_typed_and_cleaned() {
     scratch.assert_empty();
 
     let scratch = Scratch::new("sequence-limit");
-    let mut options = LogicalBundleVerifyOptions::semantic(scratch.path(), &registry, Operation::ConformanceWrite);
+    let mut options = LogicalBundleVerifyOptions::semantic(
+        scratch.path(),
+        &registry,
+        Operation::ConformanceWrite,
+    );
     options.limits.sequence_bytes = bytes.len() as u64 - 1;
     assert_eq!(
         verify_logical_bundle_stream(Cursor::new(&bytes), options)
@@ -1122,7 +1210,11 @@ fn compact_item_decode_uses_only_memory_remaining_after_spool_buffers() {
 
     let scratch = Scratch::new("compact-item-memory");
     let registry = Registry::bundled();
-    let mut options = LogicalBundleVerifyOptions::semantic(scratch.path(), &registry, Operation::ConformanceWrite);
+    let mut options = LogicalBundleVerifyOptions::semantic(
+        scratch.path(),
+        &registry,
+        Operation::ConformanceWrite,
+    );
     options.limits.max_memory_bytes = 80_000;
     options.limits.max_run_bytes = 4_096;
     options.limits.max_open_runs = 2;
@@ -1143,7 +1235,11 @@ fn verifier_checks_elapsed_time_after_a_slow_returning_read() {
     };
     let scratch = Scratch::new("slow-returning-read");
     let registry = Registry::bundled();
-    let mut options = LogicalBundleVerifyOptions::semantic(scratch.path(), &registry, Operation::ConformanceWrite);
+    let mut options = LogicalBundleVerifyOptions::semantic(
+        scratch.path(),
+        &registry,
+        Operation::ConformanceWrite,
+    );
     options.limits.max_elapsed = Some(Duration::from_millis(25));
     let error = verify_logical_bundle_stream(reader, options).unwrap_err();
     assert!(calls.get() > 0);
@@ -1157,7 +1253,11 @@ fn chunk_payloads_stream_without_consuming_the_decoded_item_budget() {
     let bundle = single_chunk_bundle(&payload);
     let scratch = Scratch::new("streamed-chunk");
     let registry = Registry::bundled();
-    let mut options = LogicalBundleVerifyOptions::semantic(scratch.path(), &registry, Operation::ConformanceWrite);
+    let mut options = LogicalBundleVerifyOptions::semantic(
+        scratch.path(),
+        &registry,
+        Operation::ConformanceWrite,
+    );
     options.limits.max_decoded_item_bytes = 128;
     options.limits.max_scratch_bytes = 2 * 1024 * 1024;
     let summary = verify_logical_bundle_stream(Cursor::new(bundle), options).unwrap();
@@ -1171,11 +1271,8 @@ fn production_mode_rejects_conformance_only_bundle_profiles() {
     let bytes = read("logical-bundles/valid-supplied-closure.cborseq");
     let scratch = Scratch::new("production-profile");
     let registry = Registry::bundled();
-    let options = LogicalBundleVerifyOptions::semantic(
-        scratch.path(),
-        &registry,
-        Operation::ProductionWrite,
-    );
+    let options =
+        LogicalBundleVerifyOptions::semantic(scratch.path(), &registry, Operation::ProductionWrite);
     assert_eq!(
         verify_logical_bundle_stream(Cursor::new(bytes), options)
             .unwrap_err()
@@ -1190,7 +1287,11 @@ fn invalid_limit_configuration_is_not_treated_as_input_failure() {
     let bytes = read("logical-bundles/scenario-bundle-zero-sections.cborseq");
     let registry = Registry::bundled();
     let scratch = Scratch::new("bad-config");
-    let mut options = LogicalBundleVerifyOptions::semantic(scratch.path(), &registry, Operation::ConformanceWrite);
+    let mut options = LogicalBundleVerifyOptions::semantic(
+        scratch.path(),
+        &registry,
+        Operation::ConformanceWrite,
+    );
     options.limits = LogicalBundleVerifyLimits {
         max_open_runs: 1,
         ..LogicalBundleVerifyLimits::default()
@@ -1209,7 +1310,11 @@ fn invalid_limit_configuration_is_not_treated_as_input_failure() {
     );
 
     let scratch = Scratch::new("open-run-cap");
-    let mut options = LogicalBundleVerifyOptions::semantic(scratch.path(), &registry, Operation::ConformanceWrite);
+    let mut options = LogicalBundleVerifyOptions::semantic(
+        scratch.path(),
+        &registry,
+        Operation::ConformanceWrite,
+    );
     options.limits.max_open_runs = usize::MAX;
     verify_logical_bundle_stream(
         Cursor::new(read(
@@ -1298,7 +1403,11 @@ fn file_and_scratch_boundaries_are_configured_resource_preflight() {
     ] {
         let error = verify_logical_bundle_file(
             path,
-            LogicalBundleVerifyOptions::semantic(&scratch_path, &registry, Operation::ConformanceWrite),
+            LogicalBundleVerifyOptions::semantic(
+                &scratch_path,
+                &registry,
+                Operation::ConformanceWrite,
+            ),
         )
         .unwrap_err();
         assert_eq!(
@@ -1316,7 +1425,11 @@ fn file_and_scratch_boundaries_are_configured_resource_preflight() {
         Cursor::new(read(
             "logical-bundles/scenario-bundle-zero-sections.cborseq",
         )),
-        LogicalBundleVerifyOptions::semantic(&missing_scratch, &registry, Operation::ConformanceWrite),
+        LogicalBundleVerifyOptions::semantic(
+            &missing_scratch,
+            &registry,
+            Operation::ConformanceWrite,
+        ),
     )
     .unwrap_err();
     assert_eq!(

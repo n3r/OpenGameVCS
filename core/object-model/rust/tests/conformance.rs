@@ -1,4 +1,8 @@
-use std::{collections::BTreeSet, io::{Cursor, Read}, str::FromStr};
+use std::{
+    collections::BTreeSet,
+    io::{Cursor, Read},
+    str::FromStr,
+};
 
 use ogvcs_object_model::*;
 
@@ -338,11 +342,8 @@ fn canonical_text_uses_the_frozen_unicode_15_repertoire_before_nfc() {
         "unicode-age-newer-canonical",
         "unicode-age-frozen-unassigned",
     ] {
-        let error = decode_canonical(
-            &read(&format!("malformed/{name}.cbor")),
-            Limits::METADATA,
-        )
-        .unwrap_err();
+        let error = decode_canonical(&read(&format!("malformed/{name}.cbor")), Limits::METADATA)
+            .unwrap_err();
         assert_eq!(error.code, ErrorCode::CborNonCanonical, "{name}");
     }
     assert_eq!(

@@ -8,6 +8,7 @@ use std::{
 
 use serde_json::{Map as JsonMap, Value as JsonValue};
 
+use crate::unicode_age::is_unicode_15;
 use crate::{
     bundle_verify::{visit_schema_object_references, visit_validated_object_references},
     conflict_id, encode_canonical,
@@ -19,7 +20,6 @@ use crate::{
     FileId, HardLimitCeilings, Limits, MetadataObject, ObjectKind, ObjectRef, Operation,
     ProfileRef, Registry, RegistryAssignment, Result, Sha256Writer, ValidationStage,
 };
-use crate::unicode_age::is_unicode_15;
 use unicode_normalization::is_nfc;
 const IMPORT_MAPPING_DOMAIN: &[u8] = b"OpenGameVCS import mapping\0";
 
@@ -386,10 +386,8 @@ impl RepositoryObjectLookup {
         }
         if let Some(cached) = self.cache.borrow().get(&reference).cloned() {
             if self.semantic_profiles && !cached.semantic_validated {
-                let semantic_validated = self.validate_resolved_semantics(
-                    reference,
-                    cached.object.value.as_deref(),
-                )?;
+                let semantic_validated =
+                    self.validate_resolved_semantics(reference, cached.object.value.as_deref())?;
                 if semantic_validated {
                     if let Some(entry) = self.cache.borrow_mut().get_mut(&reference) {
                         entry.semantic_validated = true;
@@ -508,9 +506,7 @@ impl RepositoryObjectLookup {
 
     fn defer_registry_error(&self, error: Error) -> Result<bool> {
         let mut state = self.operation_state.borrow_mut();
-        if state.depth == 0
-            || error.layer != 3
-            || error.stage != ValidationStage::RegistrySemantics
+        if state.depth == 0 || error.layer != 3 || error.stage != ValidationStage::RegistrySemantics
         {
             return Err(error);
         }
@@ -796,9 +792,7 @@ impl RepositoryObjectLookup {
                 if let Some(deferred) = state.deferred_registry_error.take() {
                     match &result {
                         Ok(_) => result = Err(deferred),
-                        Err(current)
-                            if deferred.precedence_key() < current.precedence_key() =>
-                        {
+                        Err(current) if deferred.precedence_key() < current.precedence_key() => {
                             result = Err(deferred);
                         }
                         Err(_) => {}
@@ -964,10 +958,8 @@ fn verify_manifest_operation(
     let mut lookup_error = None;
     for part in parts {
         let chunk_ref = object_ref(field(part, 0)?)?;
-        let _ = collect_lookup_result(
-            &mut lookup_error,
-            lookup.edge(chunk_ref, ObjectKind::Chunk),
-        )?;
+        let _ =
+            collect_lookup_result(&mut lookup_error, lookup.edge(chunk_ref, ObjectKind::Chunk))?;
     }
     finish_lookup_selection(lookup_error)?;
     lookup.finish_registry_phase()?;
@@ -1242,11 +1234,7 @@ fn cbor_argument_header_len(value: u64) -> usize {
 /// Measure canonical CBOR without first materializing an encoded buffer.
 /// Every retained node is also a deadline checkpoint, so scratch preflight
 /// cannot become an unbounded traversal in its own right.
-fn cbor_encoded_len(
-    value: &Cbor,
-    lookup: &RepositoryObjectLookup,
-    depth: usize,
-) -> Result<usize> {
+fn cbor_encoded_len(value: &Cbor, lookup: &RepositoryObjectLookup, depth: usize) -> Result<usize> {
     lookup.checkpoint()?;
     if depth > 256 {
         return Err(Error::new(ErrorCode::LimitNesting));
@@ -1345,10 +1333,7 @@ pub enum PathCaseMode {
 }
 
 impl PathProfileDecision {
-    pub fn accepted(
-        repository_key: impl Into<String>,
-        platform_key: impl Into<String>,
-    ) -> Self {
+    pub fn accepted(repository_key: impl Into<String>, platform_key: impl Into<String>) -> Self {
         Self::Accepted {
             repository_key: repository_key.into(),
             platform_key: platform_key.into(),
@@ -1435,12 +1420,7 @@ fn expand_tree_owned(
 ) -> Result<ReservedTreeExpansion> {
     lookup.require_repository_semantics()?;
     expect_ref_kind(descriptor_reference, ObjectKind::RepositoryDescriptor)?;
-    preflight_tree_closure(
-        root_reference,
-        lookup,
-        descriptor_reference,
-        verify_content,
-    )?;
+    preflight_tree_closure(root_reference, lookup, descriptor_reference, verify_content)?;
     lookup.finish_registry_phase()?;
     let descriptor_object =
         lookup.resolve_expected(descriptor_reference, ObjectKind::RepositoryDescriptor)?;
@@ -1457,11 +1437,7 @@ fn expand_tree_owned(
         .grow_by(cbor_retained_cost(field(descriptor, 17)?, 0)?.saturating_add(256))?;
     let path_profile = profile_ref(field(descriptor, 17)?)?;
     require_path_profile_validator(&path_profile, case_mode, validator)?;
-    let allowed_content = charged_profile_set(
-        field(descriptor, 18)?,
-        lookup,
-        &mut result.memory,
-    )?;
+    let allowed_content = charged_profile_set(field(descriptor, 18)?, lookup, &mut result.memory)?;
     let allowed_chunks = optional_field(descriptor, 20)
         .map(|value| charged_profile_set(value, lookup, &mut result.memory))
         .transpose()?
@@ -1512,10 +1488,9 @@ fn preflight_tree_closure(
         }
         memory.grow_by(derived_value_cost(34)?)?;
         visited.insert(reference);
-        let Some(object) = collect_lookup_result(
-            &mut lookup_error,
-            lookup.edge(reference, ObjectKind::Tree),
-        )? else {
+        let Some(object) =
+            collect_lookup_result(&mut lookup_error, lookup.edge(reference, ObjectKind::Tree))?
+        else {
             continue;
         };
         let tree = metadata_value(&object)?;
@@ -1545,10 +1520,7 @@ fn preflight_tree_closure(
                         lookup.checkpoint()?;
                         let _ = collect_lookup_result(
                             &mut lookup_error,
-                            lookup.edge(
-                                object_ref(field(part, 0)?)?,
-                                ObjectKind::Chunk,
-                            ),
+                            lookup.edge(object_ref(field(part, 0)?)?, ObjectKind::Chunk),
                         )?;
                     }
                 }
@@ -1692,8 +1664,11 @@ fn remember_path_profile_key(
     // JSON Schema maxLength counts Unicode scalar values. A Rust String is
     // already valid scalar UTF-8; the byte precheck bounds the subsequent
     // allocation-free scalar count (four bytes per scalar maximum).
-    if key.is_empty() || key.len() > 32_768 * 4 || !is_unicode_15(&key) ||
-        key.chars().count() > 32_768 {
+    if key.is_empty()
+        || key.len() > 32_768 * 4
+        || !is_unicode_15(&key)
+        || key.chars().count() > 32_768
+    {
         return Err(Error::new(ErrorCode::PathProfileInvalid));
     }
     if keys.contains(&key) {
@@ -2450,11 +2425,11 @@ fn preflight_replay_closure(
         let Some(object) = collect_lookup_result(
             &mut lookup_error,
             context.lookup.edge(reference, reference.kind),
-        )? else {
+        )?
+        else {
             continue;
         };
-        if reference.kind == ObjectKind::Chunk
-            || reference.kind == ObjectKind::RepositoryDescriptor
+        if reference.kind == ObjectKind::Chunk || reference.kind == ObjectKind::RepositoryDescriptor
         {
             continue;
         }
@@ -2479,10 +2454,7 @@ fn preflight_replay_closure(
                         &mut memory,
                     )?;
                 }
-                for (field_number, kind) in [
-                    (18, ObjectKind::Tree),
-                    (19, ObjectKind::ChangeSet),
-                ] {
+                for (field_number, kind) in [(18, ObjectKind::Tree), (19, ObjectKind::ChangeSet)] {
                     schedule_replay_reference(
                         object_ref(field(value, field_number)?)?,
                         kind,
@@ -3127,17 +3099,8 @@ fn validate_import_request_operation(
     context: &RepositoryContext<'_>,
     request: &ImportRequest,
 ) -> Result<ImportDecision> {
-    validate_lifetime_and_imports_inner(
-        context,
-        None,
-        &[],
-        None,
-        &[],
-        true,
-        false,
-        Some(request),
-    )?
-    .ok_or_else(|| Error::new(ErrorCode::FileIdImportMappingConflict))
+    validate_lifetime_and_imports_inner(context, None, &[], None, &[], true, false, Some(request))?
+        .ok_or_else(|| Error::new(ErrorCode::FileIdImportMappingConflict))
 }
 
 pub fn validate_lifetime_and_imports(
@@ -3148,12 +3111,7 @@ pub fn validate_lifetime_and_imports(
 ) -> Result<()> {
     context.lookup.require_repository_semantics()?;
     context.lookup.with_operation(|| {
-        validate_lifetime_and_imports_operation(
-            context,
-            change_set_reference,
-            allocations,
-            entries,
-        )
+        validate_lifetime_and_imports_operation(context, change_set_reference, allocations, entries)
     })
 }
 
@@ -3989,13 +3947,16 @@ fn validate_snapshot_graph_operation(
         let Some(snapshot) = collect_lookup_result(
             &mut lookup_error,
             snapshot_object(reference, context.lookup),
-        )? else {
+        )?
+        else {
             continue;
         };
         let descriptor = object_ref(field(&snapshot, 16)?)?;
         let _ = collect_lookup_result(
             &mut lookup_error,
-            context.lookup.edge(descriptor, ObjectKind::RepositoryDescriptor),
+            context
+                .lookup
+                .edge(descriptor, ObjectKind::RepositoryDescriptor),
         )?;
         let raw_parents = array(field(&snapshot, 17)?)?;
         memory.grow_by(derived_value_cost(raw_parents.len().saturating_mul(34))?)?;
@@ -4116,10 +4077,8 @@ fn validate_provenance_graph_operation(
         }
         memory.grow_by(derived_value_cost(69)?)?;
         reached.insert(reference);
-        let Some(object) = collect_lookup_result(
-            &mut lookup_error,
-            lookup.edge_any(reference),
-        )? else {
+        let Some(object) = collect_lookup_result(&mut lookup_error, lookup.edge_any(reference))?
+        else {
             continue;
         };
         let mut inputs = Vec::new();
@@ -4330,7 +4289,10 @@ struct ReservedPostorder {
     _memory: OwnedDerivedMemory,
 }
 
-fn snapshot_postorder(root: ObjectRef, context: &RepositoryContext<'_>) -> Result<ReservedPostorder> {
+fn snapshot_postorder(
+    root: ObjectRef,
+    context: &RepositoryContext<'_>,
+) -> Result<ReservedPostorder> {
     let mut memory = OwnedDerivedMemory::empty(context.lookup);
     let mut colors = BTreeMap::<ObjectRef, u8>::new();
     let mut ordered = Vec::new();
@@ -4625,10 +4587,9 @@ fn preflight_candidate_closure(
         }
         memory.grow_by(derived_value_cost(34)?)?;
         reached.insert(reference);
-        let Some(object) = collect_lookup_result(
-            &mut lookup_error,
-            context.lookup.edge_any(reference),
-        )? else {
+        let Some(object) =
+            collect_lookup_result(&mut lookup_error, context.lookup.edge_any(reference))?
+        else {
             continue;
         };
         if let Some(value) = object.value.as_ref() {
@@ -4678,9 +4639,9 @@ fn validate_shelf_revision_operation(
     context.lookup.finish_registry_phase()?;
     expect_ref_kind(reference, ObjectKind::ShelfRevision)?;
     let mut chain = validate_shelf_chain(reference, &context)?;
-    chain
-        .memory
-        .grow_by(derived_value_cost(chain.references.len().saturating_mul(34))?)?;
+    chain.memory.grow_by(derived_value_cost(
+        chain.references.len().saturating_mul(34),
+    )?)?;
     let base_roots = chain
         .references
         .iter()
@@ -4976,11 +4937,7 @@ fn validate_asset_groups_inner(
         validate_group_profile_family(registry, &group.profile, &["group", "fixture-group"])?;
         for (_, role) in &group.members {
             resource_checkpoint(resource_guard)?;
-            validate_group_profile_family(
-                registry,
-                role,
-                &["group-role", "fixture-group-role"],
-            )?;
+            validate_group_profile_family(registry, role, &["group-role", "fixture-group-role"])?;
         }
         for (scheme, _) in &group.external_keys {
             resource_checkpoint(resource_guard)?;
@@ -4998,10 +4955,9 @@ fn validate_asset_groups_inner(
             .chain(group.members.iter().map(|(_, role)| role))
             .chain(group.external_keys.iter().map(|(scheme, _)| scheme))
         {
-            if let Err(error) = registry.check_assignment(
-                RegistryAssignment::Profile(profile),
-                operation,
-            ) {
+            if let Err(error) =
+                registry.check_assignment(RegistryAssignment::Profile(profile), operation)
+            {
                 observe_lookup_error(&mut lifecycle_error, error);
             }
         }
@@ -5067,24 +5023,17 @@ fn validate_asset_groups_inner(
             }
             *role_counts.entry(role.clone()).or_default() += 1;
         }
-        let configured = find_configured_group_rule(
-            configured_rules,
-            &group.profile,
-            resource_guard,
-        )?;
+        let configured =
+            find_configured_group_rule(configured_rules, &group.profile, resource_guard)?;
         if let Some(rule) = configured {
-            if let Err(error) = validate_role_counts_guarded(
-                &role_counts,
-                &rule.roles,
-                resource_guard,
-            ) {
+            if let Err(error) =
+                validate_role_counts_guarded(&role_counts, &rule.roles, resource_guard)
+            {
                 observe_group_error(&mut best_error, error)?;
             }
-        } else if let Err(error) = validate_builtin_role_counts_guarded(
-            &group.profile,
-            &role_counts,
-            resource_guard,
-        ) {
+        } else if let Err(error) =
+            validate_builtin_role_counts_guarded(&group.profile, &role_counts, resource_guard)
+        {
             observe_group_error(&mut best_error, error)?;
         }
         for (scheme, value) in &group.external_keys {
@@ -5102,11 +5051,9 @@ fn validate_asset_groups_inner(
                 memory.grow_by(derived_value_cost(key_bytes)?)?;
             }
             let configured_rule_unique = match configured {
-                Some(rule) => configured_rule_has_unique_external_profile(
-                    rule,
-                    scheme,
-                    resource_guard,
-                )?,
+                Some(rule) => {
+                    configured_rule_has_unique_external_profile(rule, scheme, resource_guard)?
+                }
                 None => false,
             };
             if scheme.to_string() != "fixture-key.opengamevcs.test/synthetic-guid@2"
@@ -5649,13 +5596,12 @@ mod tests {
                 import_mapping_key: None,
             },
         ];
-        let mut context =
-            RepositoryContext::new(
-                &lookup,
-                descriptor,
-                test_reference(ObjectKind::Snapshot, 3),
-                PathCaseMode::CaseSensitive,
-            );
+        let mut context = RepositoryContext::new(
+            &lookup,
+            descriptor,
+            test_reference(ObjectKind::Snapshot, 3),
+            PathCaseMode::CaseSensitive,
+        );
         context.working_lifetime_additions = &working;
         validate_lifetime_and_imports(&context, change_set, &allocations, None).unwrap();
 
@@ -5689,13 +5635,12 @@ mod tests {
             first_operation: 0,
             import_mapping_key: None,
         }];
-        let mut context =
-            RepositoryContext::new(
-                &lookup,
-                descriptor,
-                test_reference(ObjectKind::Snapshot, 3),
-                PathCaseMode::CaseSensitive,
-            );
+        let mut context = RepositoryContext::new(
+            &lookup,
+            descriptor,
+            test_reference(ObjectKind::Snapshot, 3),
+            PathCaseMode::CaseSensitive,
+        );
         context.lifetime_records = &prior;
         let error = validate_lifetime_and_imports(
             &context,
@@ -5760,13 +5705,12 @@ mod tests {
             RepositoryLimits::default(),
         )
         .unwrap();
-        let context =
-            RepositoryContext::new(
-                &lookup,
-                descriptor,
-                test_reference(ObjectKind::Snapshot, 4),
-                PathCaseMode::CaseSensitive,
-            );
+        let context = RepositoryContext::new(
+            &lookup,
+            descriptor,
+            test_reference(ObjectKind::Snapshot, 4),
+            PathCaseMode::CaseSensitive,
+        );
         assert_eq!(
             replay_change_set(
                 change_reference,
@@ -5918,8 +5862,8 @@ mod tests {
                 &Registry::bundled(),
                 ValidationMode::Conformance,
             )
-                .unwrap_err()
-                .code,
+            .unwrap_err()
+            .code,
             ErrorCode::GroupMemberInvalid
         );
     }

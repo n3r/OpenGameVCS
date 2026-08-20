@@ -9,7 +9,8 @@ use crate::{
         MAX_BUNDLE_TOTAL_ITEMS, MAX_CBOR_NESTING, MAX_CHUNK_BYTES, MAX_GENERIC_VALUE_BYTES,
         MAX_MANIFEST_CHUNKS, MAX_METADATA_BYTES,
     },
-    unicode_age::is_unicode_15, Error, ErrorCode, Result, ValidationStage,
+    unicode_age::is_unicode_15,
+    Error, ErrorCode, Result, ValidationStage,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -601,12 +602,9 @@ fn scan_value<R: Read, V: BundleVisitor>(
                 reader.capture_start()?;
                 scan_value(reader, depth + 1)?;
                 let key = reader.capture_end()?;
-                if previous
-                    .as_ref()
-                    .is_some_and(|previous| {
-                        canonical_cmp(previous.as_slice(), key.as_slice()) != Ordering::Less
-                    })
-                {
+                if previous.as_ref().is_some_and(|previous| {
+                    canonical_cmp(previous.as_slice(), key.as_slice()) != Ordering::Less
+                }) {
                     reader.release_capture(key);
                     if let Some(previous) = previous.take() {
                         reader.release_capture(previous);

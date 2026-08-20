@@ -11,8 +11,8 @@ use std::{
 use ogvcs_object_model::{
     decode_canonical, logical_record_id, object_id, opaque_object_digest, Cbor, ErrorCode, Limits,
     LogicalBundleBudget, LogicalBundleWriteLimits, LogicalBundleWriteOptions,
-    LogicalBundleWritePlan, LogicalBundleWriter, ObjectKind, ObjectRef, Operation, ProfileRef, Registry,
-    TypedDigest, ValidationStage,
+    LogicalBundleWritePlan, LogicalBundleWriter, ObjectKind, ObjectRef, Operation, ProfileRef,
+    Registry, TypedDigest, ValidationStage,
 };
 
 const VECTOR_ROOT: &str = "../../../spec/repository-format/v1/vectors";
@@ -269,7 +269,10 @@ fn writer_rejects_malformed_id_order_duplicate_count_and_root_inputs() {
             .code,
         ErrorCode::BundleSequenceInvalid
     );
-    assert_eq!(writer.finish().unwrap_err().code, ErrorCode::BundleSequenceInvalid);
+    assert_eq!(
+        writer.finish().unwrap_err().code,
+        ErrorCode::BundleSequenceInvalid
+    );
 
     let mut output = Vec::new();
     let mut writer = LogicalBundleWriter::new(
@@ -519,7 +522,10 @@ fn writer_checks_root_profile_family_and_write_mode_before_emission() {
             &ProfileRef::from_str("path.test/opaque@1").unwrap(),
         )
         .unwrap();
-    assert_eq!(writer.finish().unwrap_err().code, ErrorCode::SchemaFieldInvalid);
+    assert_eq!(
+        writer.finish().unwrap_err().code,
+        ErrorCode::SchemaFieldInvalid
+    );
 
     let options = LogicalBundleWriteOptions::new(&registry, Operation::ProductionWrite);
     let mut writer = LogicalBundleWriter::new(Vec::new(), roomy_plan(1, 0, 1), options).unwrap();
@@ -604,7 +610,10 @@ fn writer_ranks_complete_section_order_identity_schema_and_lifecycle() {
     writer.write_object_root(objects[1].0, &role()).unwrap();
     assert_eq!(
         writer
-            .write_object_root(objects[0].0, &ProfileRef::from_str("bundle-role.test/root@1").unwrap())
+            .write_object_root(
+                objects[0].0,
+                &ProfileRef::from_str("bundle-role.test/root@1").unwrap()
+            )
             .unwrap_err()
             .code,
         ErrorCode::BundleSequenceInvalid
@@ -656,10 +665,7 @@ impl Write for ObservedWriter {
 fn bundle_writer_rejects_read_and_partial_authority_before_sink_output() {
     for (registry, operation) in [
         (Registry::bundled(), Operation::Read),
-        (
-            Registry::load([], []).unwrap(),
-            Operation::ConformanceWrite,
-        ),
+        (Registry::load([], []).unwrap(), Operation::ConformanceWrite),
     ] {
         let observed = Rc::new(RefCell::new(Vec::new()));
         let error = LogicalBundleWriter::new(

@@ -19,6 +19,7 @@ use crate::hard_limits::{
     MAX_CBOR_NESTING, MAX_CHUNK_BYTES, MAX_GENERIC_VALUE_BYTES, MAX_MANIFEST_CHUNKS,
     MAX_METADATA_BYTES,
 };
+use crate::registry::require_write_operation;
 use crate::{
     bundle_verify::{
         visit_schema_logical_record_references, visit_schema_object_references,
@@ -29,7 +30,6 @@ use crate::{
     Cbor, Error, ErrorCode, Limits, ObjectKind, ObjectRef, Operation, ProfileRef, Registry,
     RegistryAssignment, Result, TypedDigest, ValidationStage,
 };
-use crate::registry::require_write_operation;
 const DEFAULT_MAX_MEMORY_BYTES: usize = 67_108_864;
 const DEFAULT_MAX_ELAPSED: Duration = Duration::from_secs(600);
 const FIXED_WRITER_MEMORY_BYTES: usize = 4_096;
@@ -1010,8 +1010,9 @@ fn validate_write_item_shape(
 
 fn raw_logical_record_type(value: &Cbor) -> Result<u16> {
     let Cbor::Map(fields) = value else {
-        return Err(Error::new(ErrorCode::SchemaFieldInvalid)
-            .with_stage(ValidationStage::KnownSchema));
+        return Err(
+            Error::new(ErrorCode::SchemaFieldInvalid).with_stage(ValidationStage::KnownSchema)
+        );
     };
     let value = fields
         .iter()
@@ -1020,8 +1021,9 @@ fn raw_logical_record_type(value: &Cbor) -> Result<u16> {
             Error::new(ErrorCode::SchemaFieldInvalid).with_stage(ValidationStage::KnownSchema)
         })?;
     let Cbor::UInt(value) = value else {
-        return Err(Error::new(ErrorCode::SchemaFieldInvalid)
-            .with_stage(ValidationStage::KnownSchema));
+        return Err(
+            Error::new(ErrorCode::SchemaFieldInvalid).with_stage(ValidationStage::KnownSchema)
+        );
     };
     u16::try_from(*value)
         .ok()

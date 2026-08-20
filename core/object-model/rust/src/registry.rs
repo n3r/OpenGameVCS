@@ -97,7 +97,10 @@ pub enum Operation {
 }
 
 pub(crate) fn require_write_operation(operation: Operation) -> Result<()> {
-    if matches!(operation, Operation::ConformanceWrite | Operation::ProductionWrite) {
+    if matches!(
+        operation,
+        Operation::ConformanceWrite | Operation::ProductionWrite
+    ) {
         Ok(())
     } else {
         Err(Error::new(ErrorCode::SchemaFieldInvalid)
