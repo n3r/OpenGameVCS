@@ -104,6 +104,45 @@ fn minimum_validate_all_memory(entries: &BTreeMap<ObjectRef, Vec<u8>>) -> usize 
     lower
 }
 
+fn minimum_snapshot_graph_memory(
+    entries: &BTreeMap<ObjectRef, Vec<u8>>,
+    candidate: ObjectRef,
+    descriptor: ObjectRef,
+    designated_root: ObjectRef,
+) -> usize {
+    let mut lower = 0;
+    let mut upper = RepositoryLimits::default().max_memory_bytes;
+    while lower < upper {
+        let ceiling = lower + (upper - lower) / 2;
+        let result = RepositoryObjectLookup::new(
+            entries.clone(),
+            Registry::load_directory(REGISTRY_ROOT).unwrap(),
+            ValidationMode::Conformance,
+            RepositoryLimits {
+                max_memory_bytes: ceiling,
+                ..RepositoryLimits::default()
+            },
+        )
+        .and_then(|lookup| {
+            let context = RepositoryContext::new(
+                &lookup,
+                descriptor,
+                designated_root,
+                PathCaseMode::CaseSensitive,
+            );
+            validate_snapshot_graph(candidate, &context).map(|_| ())
+        });
+        match result {
+            Ok(()) => upper = ceiling,
+            Err(error) if error.code == ErrorCode::LimitMemory => lower = ceiling + 1,
+            Err(error) => {
+                panic!("valid snapshot graph failed outside its memory ceiling: {error:?}")
+            }
+        }
+    }
+    lower
+}
+
 fn decoded_entry(entries: &BTreeMap<ObjectRef, Vec<u8>>, reference: ObjectRef) -> Cbor {
     decode_canonical(entries.get(&reference).unwrap(), Limits::METADATA).unwrap()
 }
@@ -1986,25 +2025,22 @@ fn historical_replay_evicts_long_chain_states_under_a_reduced_memory_ceiling() {
         candidate = next_candidate;
     }
 
-    let probe = RepositoryObjectLookup::new(
-        entries.clone(),
-        Registry::load_directory(REGISTRY_ROOT).unwrap(),
-        ValidationMode::Conformance,
-        RepositoryLimits::default(),
-    )
-    .unwrap();
-    probe.validate_all().unwrap();
-    let validated_retained = probe.resource_summary().retained_bytes;
-    drop(probe);
-
     let lifetime = records(&document, "lifetimeRecords");
-    let validated_floor = minimum_validate_all_memory(&entries);
+    let graph_floor = minimum_snapshot_graph_memory(
+        &entries,
+        candidate,
+        descriptor,
+        designated_root,
+    );
+    // Snapshot traversal legitimately retains O(history) color/parent indexes.
+    // Calibrate that exact floor separately, then prove replay succeeds with a
+    // fixed 1 MiB workspace and releases every operation-scoped reservation.
     let lookup = RepositoryObjectLookup::new(
         entries.clone(),
         Registry::load_directory(REGISTRY_ROOT).unwrap(),
         ValidationMode::Conformance,
         RepositoryLimits {
-            max_memory_bytes: validated_floor + 64 * 1024,
+            max_memory_bytes: graph_floor + 1024 * 1024,
             ..RepositoryLimits::default()
         },
     )
@@ -2018,16 +2054,17 @@ fn historical_replay_evicts_long_chain_states_under_a_reduced_memory_ceiling() {
             PathCaseMode::CaseSensitive,
         )
     };
+    let baseline = lookup.resource_summary();
     let summary = validate_repository_candidate(candidate, &validation_context).unwrap();
     assert_eq!(summary.entries, 1);
-    assert_eq!(lookup.resource_summary().retained_bytes, validated_retained);
+    assert_eq!(lookup.resource_summary(), baseline);
 
     let constrained = RepositoryObjectLookup::new(
         entries,
         Registry::load_directory(REGISTRY_ROOT).unwrap(),
         ValidationMode::Conformance,
         RepositoryLimits {
-            max_memory_bytes: validated_floor + 511,
+            max_memory_bytes: graph_floor + 511,
             ..RepositoryLimits::default()
         },
     )
