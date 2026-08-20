@@ -2883,7 +2883,8 @@ fn is_ancestor(
         }
         memory.grow_by(derived_value_cost(34)?)?;
         seen.insert(current);
-        for parent in array(field(&snapshot_object(current, lookup)?, 17)?)? {
+        let snapshot = snapshot_object(current, lookup)?;
+        for parent in array(field(snapshot.as_ref(), 17)?)? {
             let parent = object_ref(parent)?;
             if parent == ancestor {
                 return Ok(true);

@@ -67,7 +67,7 @@ pub struct MetadataEncodeSummary {
 /// Reads and validates one canonical metadata object. The complete registry
 /// authority and lifecycle operation are validated before the first read.
 pub fn decode_metadata<R: Read>(
-    mut reader: R,
+    reader: R,
     options: MetadataDecodeOptions<'_>,
 ) -> Result<MetadataDecodeSummary> {
     options.registry.require_complete_authority()?;

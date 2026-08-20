@@ -1305,8 +1305,6 @@ where
     if !records.is_empty() {
         runs.push(workspace.write_sorted_run(&mut records, &budget)?);
     }
-    let file_id_metrics = file_ids.scratch_metrics();
-
     while runs.len() > 1 {
         budget.check_time()?;
         workspace.metrics.merge_passes = workspace.metrics.merge_passes.saturating_add(1);
@@ -1343,6 +1341,7 @@ where
             return Err(error);
         }
         file_id_transaction.commit()?;
+        let file_id_metrics = file_ids.scratch_metrics();
         *scratch_metrics = TreeScratchMetrics {
             peak_bytes: workspace
                 .metrics
