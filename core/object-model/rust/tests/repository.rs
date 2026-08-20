@@ -113,11 +113,6 @@ impl TestPathProfileValidator {
             calls: std::cell::Cell::new(0),
         }
     }
-
-    fn with_case_mode(mut self, case_mode: PathCaseMode) -> Self {
-        self.case_mode = case_mode;
-        self
-    }
 }
 
 impl PathProfileValidator for TestPathProfileValidator {

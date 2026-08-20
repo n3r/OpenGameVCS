@@ -3262,6 +3262,10 @@ fn validate_lifetime_and_imports_inner(
         .chain(context.working_lifetime_additions.iter())
     {
         context.lookup.checkpoint()?;
+        if record.first_change_set.kind != ObjectKind::ChangeSet {
+            return Err(Error::new(ErrorCode::ObjectReferenceKindMismatch)
+                .with_stage(ValidationStage::KnownSchema));
+        }
         match context
             .lookup
             .resolve_expected(record.first_change_set, ObjectKind::ChangeSet)
@@ -5569,46 +5573,87 @@ mod tests {
     }
 
     fn allocation(descriptor: ObjectRef, file_id: FileId, sequence: u64) -> AllocationEvidence {
+        let raw = Cbor::Map(vec![
+            (
+                Cbor::UInt(0),
+                Cbor::Array(vec![Cbor::Text(format!("{sequence}.bin"))]),
+            ),
+            (Cbor::UInt(1), Cbor::UInt(2)),
+            (Cbor::UInt(2), file_id.to_cbor()),
+            (Cbor::UInt(3), Cbor::UInt(2)),
+            (
+                Cbor::UInt(4),
+                test_reference(ObjectKind::ContentManifest, sequence as u8).to_cbor(),
+            ),
+            (Cbor::UInt(5), Cbor::UInt(0)),
+            (
+                Cbor::UInt(6),
+                ProfileRef::new("content-policy.test", "allow", 1)
+                    .unwrap()
+                    .to_cbor(),
+            ),
+        ]);
+        let proof = Cbor::Map(vec![
+            (Cbor::UInt(0), descriptor.to_cbor()),
+            (Cbor::UInt(1), Cbor::UInt(1)),
+        ]);
         AllocationEvidence {
             sequence,
             operation_code: 1,
-            after: EntryState {
-                path: vec![format!("{sequence}.bin")],
-                kind: 2,
-                file_id,
-                mode: 2,
-                target: None,
-                logical_size: 0,
-                content_policy: ProfileRef::new("content-policy.test", "allow", 1).unwrap(),
-                raw: Cbor::Map(vec![]),
-            },
-            operation: Cbor::Map(vec![(
-                Cbor::UInt(5),
-                Cbor::Map(vec![
-                    (Cbor::UInt(0), descriptor.to_cbor()),
-                    (Cbor::UInt(1), Cbor::UInt(1)),
-                ]),
-            )]),
+            after: EntryState::from_cbor(&raw).unwrap(),
+            operation: Cbor::Map(vec![
+                (Cbor::UInt(0), Cbor::UInt(sequence)),
+                (Cbor::UInt(1), Cbor::UInt(1)),
+                (Cbor::UInt(3), raw),
+                (Cbor::UInt(5), proof),
+            ]),
         }
+    }
+
+    fn allocation_change_set(
+        descriptor: ObjectRef,
+        allocations: &[AllocationEvidence],
+    ) -> (ObjectRef, Vec<u8>) {
+        let change_set = Cbor::Map(vec![
+            (Cbor::UInt(0), Cbor::UInt(1)),
+            (Cbor::UInt(1), Cbor::UInt(4)),
+            (Cbor::UInt(2), Cbor::Array(Vec::new())),
+            (Cbor::UInt(16), descriptor.to_cbor()),
+            (
+                Cbor::UInt(18),
+                Cbor::Array(
+                    allocations
+                        .iter()
+                        .map(|allocation| allocation.operation.clone())
+                        .collect(),
+                ),
+            ),
+        ]);
+        let payload = encode_canonical(&change_set).unwrap();
+        let reference = ObjectRef {
+            kind: ObjectKind::ChangeSet,
+            digest: object_id(ObjectKind::ChangeSet, &payload).unwrap(),
+        };
+        (reference, payload)
     }
 
     #[test]
     fn working_lifetime_additions_are_file_id_keyed_and_unique() {
         let descriptor = test_reference(ObjectKind::RepositoryDescriptor, 1);
-        let change_set = test_reference(ObjectKind::ChangeSet, 2);
-        let lookup = RepositoryObjectLookup::new(
-            [],
-            Registry::bundled(),
-            ValidationMode::Conformance,
-            RepositoryLimits::default(),
-        )
-        .unwrap();
         let first = FileId::new([0x11; 16]).unwrap();
         let second = FileId::new([0x22; 16]).unwrap();
         let allocations = vec![
             allocation(descriptor, second, 0),
             allocation(descriptor, first, 1),
         ];
+        let (change_set, change_set_payload) = allocation_change_set(descriptor, &allocations);
+        let lookup = RepositoryObjectLookup::new(
+            [(change_set, change_set_payload)],
+            Registry::bundled(),
+            ValidationMode::Conformance,
+            RepositoryLimits::default(),
+        )
+        .unwrap();
         let working = vec![
             LifetimeRecord {
                 file_id: first,
@@ -5648,10 +5693,12 @@ mod tests {
     fn already_consumed_native_allocation_outranks_foreign_proof() {
         let descriptor = test_reference(ObjectKind::RepositoryDescriptor, 1);
         let foreign_descriptor = test_reference(ObjectKind::RepositoryDescriptor, 9);
-        let change_set = test_reference(ObjectKind::ChangeSet, 2);
         let file_id = FileId::new([0x55; 16]).unwrap();
+        let prior_allocation = allocation(descriptor, file_id, 0);
+        let (change_set, change_set_payload) =
+            allocation_change_set(descriptor, &[prior_allocation]);
         let lookup = RepositoryObjectLookup::new(
-            [],
+            [(change_set, change_set_payload)],
             Registry::bundled(),
             ValidationMode::Conformance,
             RepositoryLimits::default(),
@@ -5660,7 +5707,7 @@ mod tests {
         let prior = [LifetimeRecord {
             file_id,
             origin: LifetimeOrigin::NativeCreate,
-            first_change_set: test_reference(ObjectKind::ChangeSet, 8),
+            first_change_set: change_set,
             first_operation: 0,
             import_mapping_key: None,
         }];
@@ -5682,7 +5729,7 @@ mod tests {
     }
 
     #[test]
-    fn declared_transition_invalid_outranks_missing_source_state() {
+    fn missing_source_state_outranks_declared_transition_invalid() {
         let descriptor = test_reference(ObjectKind::RepositoryDescriptor, 1);
         let file_id = FileId::new([0x61; 16]).unwrap();
         let entry = |name: &str, target_byte: u8| {
@@ -5749,7 +5796,7 @@ mod tests {
             )
             .unwrap_err()
             .code,
-            ErrorCode::ChangeSetTransitionInvalid
+            ErrorCode::ObjectReferenceMissing
         );
     }
 

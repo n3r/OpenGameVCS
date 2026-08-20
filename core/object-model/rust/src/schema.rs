@@ -650,7 +650,9 @@ fn tree(f: &Fields<'_>, limits: HardLimitCeilings) -> Result<()> {
         observe_schema_result(&mut best, &target);
         let size = e.get(5).and_then(|value| logical_length(value, limits));
         observe_schema_result(&mut best, &size);
-        let content_profile = e.get(6).and_then(profile);
+        let content_profile = e
+            .get(6)
+            .and_then(|value| profile_in(value, &["content-policy", "fixture-content-policy"]));
         observe_schema_result(&mut best, &content_profile);
         if let (Ok(kind), Ok(mode), Ok(size)) = (kind, mode, size) {
             if kind != mode || kind == 1 && size != 0 {

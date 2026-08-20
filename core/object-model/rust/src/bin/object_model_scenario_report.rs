@@ -1,4 +1,5 @@
 use std::{
+    cell::Cell,
     collections::{BTreeMap, BTreeSet},
     fs,
     io::Cursor,
@@ -565,13 +566,20 @@ impl Runner {
                 ObjectKind::Tree => {
                     let descriptor =
                         object_ref_json(context_value(scenario, "repositoryDescriptor")?)?;
-                    expand_tree(
+                    let adapter = RecipePathProfileValidator::from_scenario(scenario)?;
+                    expand_tree_with_path_profile_validator(
                         reference,
                         &lookup,
                         descriptor,
                         true,
                         path_case_mode(scenario)?,
+                        adapter
+                            .as_ref()
+                            .map(|adapter| adapter as &dyn PathProfileValidator),
                     )?;
+                    if let Some(adapter) = &adapter {
+                        adapter.assert_complete()?;
+                    }
                 }
                 ObjectKind::ShelfRevision => {
                     let lifetime = parse_lifetime_records(scenario, "lifetimeRecords")?;
@@ -629,6 +637,22 @@ impl Runner {
             mode,
             RepositoryLimits::default(),
         )?;
+        let api = value_string(&request, "api")?;
+        // Provenance validation is an exact graph route and does not require
+        // a repository descriptor/candidate context. Do not reject a valid
+        // provenance-only carrier while constructing unrelated authority.
+        if api == "validate-provenance-graph" {
+            let roots = json_array_result(&request, "roots")?
+                .iter()
+                .map(object_ref_json)
+                .collect::<Result<Vec<_>>>()?;
+            let forbidden = json_array_result(&request, "forbidden")?
+                .iter()
+                .map(object_ref_json)
+                .collect::<Result<Vec<_>>>()?;
+            validate_provenance_graph(&roots, &lookup, &forbidden)?;
+            return Ok(3);
+        }
         let lifetime = parse_lifetime_records(scenario, "lifetimeRecords")?;
         let working = parse_lifetime_records(scenario, "workingLifetimeAdditions")?;
         let mappings = parse_import_mappings(scenario)?;
@@ -636,7 +660,7 @@ impl Runner {
         if let Some(value) = request.get("callerVerifyContent").and_then(Value::as_bool) {
             context.verify_content = value;
         }
-        match value_string(&request, "api")? {
+        match api {
             "expand-tree" => {
                 expand_tree(
                     ObjectRef::from_str(value_string(&request, "tree")?)?,
@@ -693,17 +717,6 @@ impl Runner {
                     ObjectRef::from_str(value_string(&request, "repositoryDescriptor")?)?,
                     false,
                 )?;
-            }
-            "validate-provenance-graph" => {
-                let roots = json_array_result(&request, "roots")?
-                    .iter()
-                    .map(object_ref_json)
-                    .collect::<Result<Vec<_>>>()?;
-                let forbidden = json_array_result(&request, "forbidden")?
-                    .iter()
-                    .map(object_ref_json)
-                    .collect::<Result<Vec<_>>>()?;
-                validate_provenance_graph(&roots, &lookup, &forbidden)?;
             }
             "validate-snapshot-graph" => {
                 context.descriptor =
@@ -825,6 +838,10 @@ impl Runner {
         if base != before {
             return Err(configured_preflight_error());
         }
+        // Replay is the public route under test. The carried candidate is the
+        // independent authenticated statement of the expected result roots;
+        // bind the replay result to it just as the JavaScript report does.
+        validate_repository_candidate(candidate, &context)?;
         Ok(3)
     }
 
@@ -1402,6 +1419,9 @@ impl Runner {
                 }
                 _ => Err(configured_preflight_error()),
             };
+        }
+        if request.get("semanticProfiles").and_then(Value::as_bool) == Some(false) {
+            return Err(configured_preflight_error());
         }
         if surface == "metadata-decoder" {
             let registry = authority.ok_or_else(configured_preflight_error)?;
@@ -2893,9 +2913,10 @@ impl Runner {
             let encoded = documents
                 .iter()
                 .map(|(name, document)| {
-                    serde_json::to_vec_pretty(document)
-                        .map(|bytes| (*name, bytes))
-                        .map_err(|_| Error::new(ErrorCode::RegistryInvalid))
+                    let mut bytes = serde_json::to_vec_pretty(document)
+                        .map_err(|_| Error::new(ErrorCode::RegistryInvalid))?;
+                    bytes.push(b'\n');
+                    Ok((*name, bytes))
                 })
                 .collect::<Result<Vec<_>>>()?;
             let borrowed = encoded
@@ -3305,8 +3326,8 @@ fn decode_bundle_items(source: &[u8]) -> Result<Vec<Cbor>> {
 struct RecipePathProfileValidator {
     profile: ProfileRef,
     case_mode: PathCaseMode,
-    segments: Vec<String>,
-    decision: PathProfileDecision,
+    invocations: Vec<(Vec<String>, PathProfileDecision)>,
+    next: Cell<usize>,
 }
 
 impl RecipePathProfileValidator {
@@ -3321,21 +3342,7 @@ impl RecipePathProfileValidator {
                 PathCaseMode::CaseSensitive => PathCaseMode::CaseFolded,
                 PathCaseMode::CaseFolded => PathCaseMode::CaseSensitive,
             });
-        let decision = field_value(adapter, "decision")?;
-        let decision = if decision.get("accepted").and_then(Value::as_bool) == Some(true) {
-            match (
-                decision.get("repositoryKey").and_then(Value::as_str),
-                decision.get("platformKey").and_then(Value::as_str),
-            ) {
-                (Some(repository_key), Some(platform_key)) => PathProfileDecision::accepted(
-                    repository_key.to_owned(),
-                    platform_key.to_owned(),
-                ),
-                _ => PathProfileDecision::rejected(),
-            }
-        } else {
-            PathProfileDecision::rejected()
-        };
+        let decision = path_profile_decision(field_value(adapter, "decision")?);
         let segments = json_array_result(request, "segments")?
             .iter()
             .map(|value| value_string_value(value).map(str::to_owned))
@@ -3343,9 +3350,45 @@ impl RecipePathProfileValidator {
         Ok(Self {
             profile: ProfileRef::from_str(value_string(adapter, "profile")?)?,
             case_mode,
-            segments,
-            decision,
+            invocations: vec![(segments, decision)],
+            next: Cell::new(0),
         })
+    }
+
+    fn from_scenario(scenario: &Value) -> Result<Option<Self>> {
+        let Some(adapter) = scenario
+            .get("context")
+            .and_then(|context| context.get("pathProfileValidator"))
+        else {
+            return Ok(None);
+        };
+        let invocations = json_array_result(adapter, "invocations")?
+            .iter()
+            .map(|invocation| {
+                let segments = json_array_result(invocation, "segments")?
+                    .iter()
+                    .map(|value| value_string_value(value).map(str::to_owned))
+                    .collect::<Result<Vec<_>>>()?;
+                Ok((
+                    segments,
+                    path_profile_decision(field_value(invocation, "decision")?),
+                ))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(Some(Self {
+            profile: ProfileRef::from_str(value_string(adapter, "profile")?)?,
+            case_mode: path_case_mode_value(field_value(adapter, "caseMode")?)?,
+            invocations,
+            next: Cell::new(0),
+        }))
+    }
+
+    fn assert_complete(&self) -> Result<()> {
+        if self.next.get() == self.invocations.len() {
+            Ok(())
+        } else {
+            Err(configured_preflight_error())
+        }
     }
 }
 
@@ -3359,11 +3402,31 @@ impl PathProfileValidator for RecipePathProfileValidator {
     }
 
     fn validate(&self, segments: &[String]) -> PathProfileDecision {
-        if segments == self.segments {
-            self.decision.clone()
-        } else {
-            PathProfileDecision::rejected()
+        let index = self.next.get();
+        self.next.set(index.saturating_add(1));
+        self.invocations
+            .get(index)
+            .filter(|(expected, _)| expected == segments)
+            .map_or_else(PathProfileDecision::rejected, |(_, decision)| {
+                decision.clone()
+            })
+    }
+}
+
+fn path_profile_decision(value: &Value) -> PathProfileDecision {
+    if value.get("accepted").and_then(Value::as_bool) == Some(true) {
+        match (
+            value.get("repositoryKey").and_then(Value::as_str),
+            value.get("platformKey").and_then(Value::as_str),
+        ) {
+            (Some(repository_key), Some(platform_key)) => PathProfileDecision::accepted(
+                repository_key.to_owned(),
+                platform_key.to_owned(),
+            ),
+            _ => PathProfileDecision::rejected(),
         }
+    } else {
+        PathProfileDecision::rejected()
     }
 }
 
@@ -3614,9 +3677,10 @@ fn registry_from_documents(documents: &BTreeMap<&str, Value>) -> Result<Registry
     let encoded = documents
         .iter()
         .map(|(name, document)| {
-            serde_json::to_vec_pretty(document)
-                .map(|bytes| (*name, bytes))
-                .map_err(|_| Error::new(ErrorCode::RegistryInvalid))
+            let mut bytes = serde_json::to_vec_pretty(document)
+                .map_err(|_| Error::new(ErrorCode::RegistryInvalid))?;
+            bytes.push(b'\n');
+            Ok((*name, bytes))
         })
         .collect::<Result<Vec<_>>>()?;
     let borrowed = encoded

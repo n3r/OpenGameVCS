@@ -1059,6 +1059,13 @@ where
         || {
             loop {
                 let Some(entry) = iterator.next() else {
+                    if raw_seen != declared_entries {
+                        observe_known_schema(
+                            &mut deferred_known_schema.borrow_mut(),
+                            Error::new(ErrorCode::SchemaFieldInvalid)
+                                .with_stage(ValidationStage::KnownSchema),
+                        )?;
+                    }
                     return Ok(None);
                 };
                 raw_seen = raw_seen
@@ -1177,6 +1184,13 @@ where
             0,
             || loop {
                 let Some(entry) = iterator.next() else {
+                    if raw_seen != 0 {
+                        observe_known_schema(
+                            &mut deferred_known_schema.borrow_mut(),
+                            Error::new(ErrorCode::SchemaFieldInvalid)
+                                .with_stage(ValidationStage::KnownSchema),
+                        )?;
+                    }
                     return Ok(None);
                 };
                 raw_seen = raw_seen
@@ -1429,12 +1443,6 @@ where
             .checked_add(entry.logical_size)
             .ok_or_else(|| Error::new(ErrorCode::LimitLogicalBytes))?;
         sink.bytes(&entry.encoded)?;
-    }
-    if seen != declared_entries {
-        observe_known_schema(
-            &mut known_schema.borrow_mut(),
-            Error::new(ErrorCode::SchemaFieldInvalid).with_stage(ValidationStage::KnownSchema),
-        )?;
     }
     let (object_ref, payload_bytes) = sink.finish()?;
     if let Some(error) = known_schema.borrow().clone() {
