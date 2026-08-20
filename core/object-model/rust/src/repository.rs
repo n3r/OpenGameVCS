@@ -5588,7 +5588,7 @@ mod tests {
             (Cbor::UInt(5), Cbor::UInt(0)),
             (
                 Cbor::UInt(6),
-                ProfileRef::new("content-policy.test", "allow", 1)
+                ProfileRef::new("content-policy.test", "opaque", 1)
                     .unwrap()
                     .to_cbor(),
             ),
