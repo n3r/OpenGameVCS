@@ -3419,10 +3419,9 @@ fn path_profile_decision(value: &Value) -> PathProfileDecision {
             value.get("repositoryKey").and_then(Value::as_str),
             value.get("platformKey").and_then(Value::as_str),
         ) {
-            (Some(repository_key), Some(platform_key)) => PathProfileDecision::accepted(
-                repository_key.to_owned(),
-                platform_key.to_owned(),
-            ),
+            (Some(repository_key), Some(platform_key)) => {
+                PathProfileDecision::accepted(repository_key.to_owned(), platform_key.to_owned())
+            }
             _ => PathProfileDecision::rejected(),
         }
     } else {
