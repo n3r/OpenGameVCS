@@ -1,6 +1,6 @@
 # OGVCS-002 — Core object library and open repository format
 
-**Validation candidate:** 2026-08-20
+**Validation candidate:** 2026-08-21
 
 **Release:** R0 — Engineering Foundation
 
@@ -159,18 +159,24 @@ rows, zero failures, and result SHA-256
 `7eeb9091263530ac5f8703adb58de71f536d96f9a541f914b7b9f6e50864d153`.
 
 Rust has 550 applicable rows: 548 executable and the same two exact-scale
-inventory rows; 23 JavaScript host-object rows are explicitly not applicable.
-The Rust implementation and reporter have been statically closed against the
-same authority, but this workstation does not have the Rust toolchain. Pinned
-Rust 1.82 compilation, formatting, clippy, packaging, and the fresh Linux,
-macOS, and Windows comparison remain the ordinary hosted proof for this
-candidate and must pass before the PRD advances to `Validation`.
+inventory rows; 23 JavaScript-only fixture-adapter, host-shape, and
+unrepresentable raw rows are explicitly not applicable.
+Candidate commit `3aba34da7c75a1fc9120476873ee90e382aaab80` runs under pinned
+Rust 1.82 and Node 22 on Linux, macOS, and Windows. The hosted gate compiles,
+formats, lints, packages, and tests Rust; installs and tests the JavaScript
+package; verifies reproducible offline distributions; executes both reporters;
+and requires byte-identical shared results across all six platform reports.
+Linux additionally rebuilds and runs the fixture, JavaScript, format, and Rust
+archives in a clean offline consumer.
 
-Generator replay, independent vector auditing, specification validation,
-mutation/truncation execution, JavaScript source/package suites, offline package
-tests, protocol predecessor generation, and diff hygiene pass locally. Exact
-package and hosted identities are recorded in the evidence packet after the
-ordinary three-platform workflow completes.
+The first fresh three-platform attempt exposed a Windows main-thread stack
+overflow in the deep-tree semantic walk. That traversal now uses a
+resource-charged explicit stack while preserving depth-first error order and
+edge accounting. Subsequent attempts proved that two complete offline Cargo
+builds exceed both five- and ten-minute Windows allowances without a semantic
+failure. The final candidate retains a finite fifteen-minute platform allowance
+under the workflow's 45-minute outer deadline. Exact run, job, report, and
+archive identities are recorded in the validation evidence packet.
 
 ## Deliberately deferred exact-scale evidence
 

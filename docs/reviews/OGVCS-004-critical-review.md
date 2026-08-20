@@ -56,11 +56,12 @@ outside-workspace references. The first candidate run had exposed a Windows
 npm file-mode assumption; the correction was reviewed, regression-tested, and
 proved by the successful replacement run.
 
-One roadmap dependency remains. OGVCS-002 is still in development because the
-maintainer deferred its exact one-million-tree and logical-1-TiB runs to the
-final R0 campaign. The roadmap correctly forbids marking dependent OGVCS-004
-Done before that predecessor. This missing predecessor evidence is not hidden
-or replaced by a smaller-scale claim.
+One roadmap dependency remains. OGVCS-002 is now in Validation with its bounded
+ordinary candidate proved, but the maintainer deferred its exact
+one-million-tree and logical-1-TiB runs to the final R0 campaign. The roadmap
+correctly forbids marking dependent OGVCS-004 Done before that predecessor.
+This missing predecessor evidence is not hidden or replaced by a smaller-scale
+claim.
 
 ## Acceptance verdict
 

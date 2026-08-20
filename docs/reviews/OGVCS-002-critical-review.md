@@ -1,89 +1,108 @@
 # OGVCS-002 critical review
 
-- **Review date:** 2026-08-16
-- **Reviewer:** Independent Codex subagent (`ogvcs002_final_critical_review`)
+- **Review date:** 2026-08-21
+- **Reviewer:** Independent Codex review agent (`ogvcs002_final_critical_review`)
 - **Initial verdict:** Not acceptance-ready
-- **Settled implementation verdict:** No residual P0 codec or specification defect found
-- **Freeze verdict:** No-freeze until deferred exact scale, durable final publication, and ratification are complete
+- **Settled ordinary-candidate verdict:** No live P0 or P1 defect found
+- **Lifecycle verdict:** Advance to `Validation`; do not move to `Done` before the two maintainer-deferred exact-scale proofs and durable final publication
 
 ## Scope and method
 
-The reviewer independently examined the PRD, architecture, ADRs, normative prose,
-CDDL, registries, JSON Schemas, vector generator and auditor, both codecs, public
-CLI, fixture adapter, packages, offline distribution, scenario reporters, and CI.
-Review used malformed and mixed-failure inputs, reduced resource limits, stalled
-and mutable caller boundaries, replaced scratch files, and incomplete repository
-graphs. JavaScript and Rust were compared only at public boundaries.
+The review covered the PRD, architecture, ADRs 0008–0010, normative prose,
+CDDL, schemas, registries, hard limits, error precedence, vector generator and
+independent auditor, JavaScript and Rust libraries, public CLI, OGVCS-001
+fixture adapter, scenario reporters, package manifests, offline distribution,
+and the three-platform workflow.
 
-Inventory rows, duplicated expected values, detached limit helpers, and source-only
-unit tests were not treated as cross-language proof. Rejections were evaluated as
-the normative `(code, layer, stage)` triple. The exact million-entry and logical
-1-TiB workloads were deliberately excluded from ordinary review and remain a
-separately authorized hosted gate.
+The reviewer used hostile and combined-invalid inputs, reversed occurrence
+orders, missing and corrupt sibling references, reduced count/memory/scratch
+ceilings, deadline failures, mutable and callback-bearing caller boundaries,
+replaced scratch files, incomplete repository graphs, and forward/reverse
+writer cases. Rejections were evaluated as the complete normative
+`(code, layer, stage)` result. Inventory rows, synthetic expected-error returns,
+fresh-instance retries, or tests that did not invoke the named public route were
+not accepted as evidence.
+
+The exact million-entry tree and logical-1-TiB workloads were excluded by the
+maintainer's explicit decision. They remain authenticated inventory rows for
+the final R0 campaign and are not replaced by reduced-scale claims.
+
+## Frozen authority and ordinary proof
+
+The frozen manifest is
+`2d0acb01a01b64c23d883d855d2802d939a8dc99622f2774de07af1c8af8d2b9`.
+It binds 2,815 artifacts, 573 scenarios, 486 requirements/acceptance
+obligations, 81 errors, 94 legal error sites, ten ordered stages, 58,520 bit
+mutations, and 7,303 proper-prefix truncations. The scenario-index and coverage
+digests are respectively
+`9602b91fcac449cb420e718739e5a1a1a2059ec7872422e7bf3cdd72c727c078`
+and `c5aeef73d2da337a3a250fd8c035adffb69adf33eccf30c6d42189969b83a1bf`.
+
+JavaScript executes 571 rows with two exact-scale inventory rows and no
+failures; its results SHA-256 is
+`7eeb9091263530ac5f8703adb58de71f536d96f9a541f914b7b9f6e50864d153`.
+Rust has 550 applicable rows: 548 execute, the same two remain inventory, and
+23 JavaScript-only fixture-adapter, host-shape, and unrepresentable raw carriers
+are N/A. All 550 shared rows, including the two common inventory declarations,
+compare through one normalized cross-language projection.
+
+Candidate commit `3aba34da7c75a1fc9120476873ee90e382aaab80` is the ordinary
+hosted proof in
+[run 32420451840](https://github.com/n3r/OpenGameVCS/actions/runs/32420451840).
+Pinned Node 22 and Rust 1.82 jobs pass on Linux, macOS, and Windows; the Linux
+job additionally creates and runs clean packed/offline fixture, JavaScript,
+format, and Rust artifacts. The six deterministic platform reports compare
+identically. The exact-scale job is skipped by design.
 
 ## Confirmed findings and remediation
 
 | Area | Initial gap | Settled remediation |
 |---|---|---|
-| Diagnostic authority | Errors lacked a complete machine mapping to layers/stages, and public reports omitted stage. | `errors.json` freezes 81 codes, 94 legal sites, and 10 stages. Both APIs and scenario reports expose and compare the exact triple. |
-| Scenario evidence | The inventory mislabeled layers and the report executed only a small JavaScript subset. | The corpus has 235 envelopes. JavaScript executes 233; Rust executes 228 and marks five adapter-only rows N/A; only two exact-scale rows remain inventory. All 230 shared rows compare identically. |
-| Registries | Loaders incompletely bound files, shapes, immutable assignments, discovery, limits, and lifecycle. | Both loaders bind all 12 registries, enforce exact additive shapes and frozen assignments with bounded same-handle reads, expose every family, and share operation-aware lifecycle semantics. |
-| Canonical encoding | Hostile nesting, map-key work, async caller mutation, and configured memory could escape typed bounds. | Depth/memory preflight, working-set charging, configured-budget propagation, and mutation/deadline regressions fail without trusted partial output. |
-| Scratch integrity | Closed external-sort runs could be replaced before merge. | Both languages bind private workspaces, same-handle identity, and whole-run digests for name and FileID runs. |
-| Graph and replay | Ancestor/shelf states and side-parent closure were trusted; decoded caches were mutable; replay retained unbounded states. | Every reachable snapshot/shelf revision is replayed, all edge families resolve, cache results cannot be mutated, and derived states are reserved and evicted. |
-| Repository precedence | FileID, group, conflict, snapshot, tree, and manifest validators often returned traversal-order errors. | Bounded phase passes and same-stage collectors select the frozen catalogue winner; dual-fault regressions cover every repaired family. |
-| Logical bundles | Sequence, identity, transcript, closure, declarations, lifecycle, and resources were ordered differently across entry points/languages. | Both verifiers use the same phase order, compare authenticated accounting before later layers, rank bundle-wide schema errors, and bound semantic indexes/state. |
-| Fixture adapter | Consumed bytes, ledger collisions, target FileID state, callbacks, filesystem waits, paths, and retry publication were incompletely bound. | Exact ledger schemas, target-consumption checks, post-read digests, deadline-raced promise boundaries, path limits, hostile-key handling, and unchanged-state failure tests cover all five fixture profiles. |
-| Offline boundary | Source reports did not prove packed implementations and the exact JS tarball was deleted. | The packed gate installs fixture/JS/format tarballs offline, packages Rust, compares shared outcomes, records SHA-256, and retains all four exact archives. |
-| Licensing | Package metadata disagreed and first-party artifacts omitted a license. | The maintainer selected MIT; the workspace, fixture, JS, Rust, format, crate, npm tarballs, and offline distribution now ship and verify identical MIT text. |
-| CI provenance | Actions used mutable tags and roadmap contract/checker paths did not trigger CI. | External actions are pinned to verified full SHAs; both trigger filters include all roadmap lifecycle sources. |
-
-## Settled local proof
-
-The ordinary root presubmit, JavaScript package, Rust tests under the declared
-Rust 1.82 minimum, formatting, `clippy -D warnings`, packaging, offline
-distribution, specification/vector checks, and source/packed comparison pass.
-The selected MIT license is byte-identical across the repository and every
-first-party packed/offline artifact, with package-contract assertions.
-The independent audit reports 1,236 artifacts, 148 obligations, 235 scenarios,
-58,520 mutations per language, 7,303 truncations per language, and 50 executable
-max/max-plus-one cases across 25 hard-limit families.
-
-Clean commit `6295cb54b29bc5a9ac6dadf34bc2c52a337eba49` passed
-[hosted run 31927048636](https://github.com/n3r/OpenGameVCS/actions/runs/31927048636).
-Linux, macOS, and Windows completed their ordinary JavaScript/Rust suites, and
-the six reports compared identically at shared conformance SHA-256
-`14b34af82edc216f2d406f66cb21fe877c6e9d1c0e33b62c807ff9fbe88a15a6`.
-The Linux packed gate retained and independently bound all four archives; the
-exact scale job was unscheduled and is recorded as skipped.
-
-## Remaining blockers
-
-| Severity | Blocker | Required closure |
-|---|---|---|
-| P1 | The million-entry and logical-1-TiB cases are the only inventory rows. | Per the maintainer's 2026-08-16 decision, defer them to the final R0 campaign; then run the gated release-scale workflow and retain time, peak RSS, scratch, counts, identities, and the JS/Rust comparison. |
-| P1 | Final publication and completion/changelog/status/ADR ratification cannot yet be honest. | Close the scale gate, publish the final versioned artifacts with durable retention, update this verdict and changelog, ratify ADR-0008/0009/0010, and only then move the PRD to `done`. |
+| Diagnostic authority | Implementations and vectors could disagree on layers, stages, or traversal-selected failures. | `errors.json` freezes 81 codes, 94 legal sites, ten stages, and catalogue precedence; every executed rejection compares the exact triple. |
+| Scenario honesty | Rows were previously credited without executing every declared route, retrying the same authority, or representing Rust-applicable bytes. | Both reporters dispatch named public APIs, record per-route observed recovery, enforce applicability, and share all representable malformed wire carriers. |
+| Registry authority | Partial, forged, family-wrong, or lifecycle-ineligible assignments could be consulted after semantic work began. | Same-handle complete registry loading, whole-input family passes, deferred/ranked lifecycle selection, and explicit phase checkpoints prevent semantic callbacks under invalid authority. |
+| Repository closure | Manifest, tree, replay, conflict, snapshot, shelf, provenance, lifetime/import, and candidate routes interleaved later-layer semantics with missing/corrupt references. | Exact route-scoped closure collectors complete and rank lower layers first; full candidate validation additionally authenticates every supplied object. |
+| FileID/import state | Prior mappings, descriptor binding, mapping keys, recovery, and transaction counters were incompletely authenticated or reusable. | Exact serialized/plain boundaries, family/lifecycle checks, cross-repository proofs, operation-scoped cache/counter rollback, and same-instance recovery tests close the state contract. |
+| Streaming writers | Count/order/identity/schema/lifecycle selection depended on occurrence order and some rejected staging writers remained retryable. | Complete bounded preflight/collectors select the frozen winner; resource stops remain terminal; rejected staging attempts are poisoned and cannot later commit. |
+| Tree and manifest resources | FileID indexes, scratch state, provider failures, and nested tree traversal could exceed aggregate limits or mutate caller state. | Shared composite admission, reusable transactions, full provider-error ranking, and explicit bounded tree stacks replace independent budgets and native recursion. |
+| Logical bundles | Section order, identity, schema, lifecycle, closure, map-key capture memory, and scratch integrity differed across APIs/languages. | Both codecs use the same staged precedence; active/retained captures and replacement transients are charged; scratch runs bind same-handle identity and whole-run digests. |
+| JavaScript hostile inputs | Proxies, accessors, sparse arrays, hostile iterables, and configuration callbacks could run before inert validation. | Exact data snapshots and branded adapter boundaries reject caller code with typed preflight errors. |
+| Package/offline boundary | Source-only results, mutable action tags, incomplete archive retention, and inconsistent licenses weakened reproducibility. | Actions use pinned SHAs; clean offline consumers exercise exact archives; distribution manifests bind dependencies/licenses; the maintainer-selected MIT text is identical throughout. |
+| Hosted portability | The first fresh Windows run overflowed its native stack on the bounded deep-tree route; later runs exposed five- and ten-minute test timeouts for two offline Cargo builds. | Rust semantic expansion now uses a resource-charged explicit DFS stack. Windows receives a finite fifteen-minute offline-test allowance beneath the 45-minute job ceiling; the replacement three-OS run passes. |
 
 ## Acceptance verdict
 
-| AC | Current verdict | Basis |
+| AC | Verdict | Basis |
 |---|---|---|
-| AC-01 | Hosted candidate pass | Source and packed goldens agree across Linux, macOS, and Windows at the clean candidate revision. |
-| AC-02 | **Incomplete** | Exact one-million-entry and below-1-GiB evidence has not run. |
-| AC-03 | Pass locally | Both implementations execute all 58,520 mutations. |
-| AC-04 | Pass locally | The installed adapter runs five corpora; native semantic cases run separately. |
-| AC-05 | Pass locally | No private service/import is required; every first-party package and offline artifact ships the selected MIT license. |
-| AC-06 | Pass locally | All root/parent/merge/closure and abstract-cycle cases execute. |
-| AC-07 | Pass locally | FileID allocation, transition, restore, import, and concurrency cases execute. |
-| AC-08 | Pass locally | Malformed, truncation, hostile-resource, and boundary routes are typed and bounded. |
-| AC-09 | **Incomplete** | Ordinary manifests pass; exact logical-1-TiB evidence has not run. |
-| AC-10 | Pass locally | Bundle ordering, identity, transcript, accounting, closure, and claim boundaries agree. |
-| AC-11 | Pass locally | Registry shape, immutability, lifecycle, and forward-preservation agree. |
-| AC-12 | Hosted candidate pass | OS-entropy, zero, collision, and exhaustion cases pass in both languages across Linux, macOS, and Windows. |
+| AC-01 | Pass | Clean-room JavaScript and Rust golden/object/bundle/reference results and shared scenario outcomes agree in source and packed runs across three OSes. |
+| AC-02 | **Deferred/incomplete** | Ordered and bounded-sort paths pass ordinary tests, but the exact million-entry, below-1-GiB RSS proof was explicitly deferred. |
+| AC-03 | Pass | The independent corpus executes all 58,520 systematic mutations and rejects or changes authenticated identity. |
+| AC-04 | Pass | The installed adapter runs all five fixture profiles; native restore/import/proof/root/shelf/conflict cases execute through their public routes. |
+| AC-05 | Pass | Inspection and verification require no private service, database schema, credential, or proprietary module; all first-party artifacts use MIT. |
+| AC-06 | Pass | Root/parent/merge/closure cases and the typed abstract-cycle harness agree with frozen precedence. |
+| AC-07 | Pass | Allocation, transition, restore, import, collision, concurrency, rollback, and same-authority recovery cases execute. |
+| AC-08 | Pass | Malformed, truncation, hard-limit, configured-resource, callback, scratch-replacement, and combined-invalid cases fail deterministically without trusted partial state. |
+| AC-09 | **Partially pass; exact scale deferred** | Empty/repeated/multi/corrupt/ceiling/profile/annotation cases agree; the exact logical-1-TiB stream remains unexecuted by decision. |
+| AC-10 | Pass | Bundle order, identity, transcript, accounting, closure, resource, and forbidden-claim boundaries agree. |
+| AC-11 | Pass | Registry schema, immutability, lifecycle, family, unknown-feature, and lossless optional-extension behavior agree. |
+| AC-12 | Pass | OS entropy, zero rejection, injected collisions, and exhaustion pass in both languages on Linux, macOS, and Windows. |
+
+## Deferred Done gates
+
+- Run and retain the exact `tree-million-entries` and `manifest-one-tib`
+  reports during the final R0 campaign, including wall time, peak RSS, scratch
+  high-water, processed counts/bytes, identities, and cross-language comparison.
+- Publish the final versioned packages and evidence under durable release
+  retention. The current GitHub artifacts are validation evidence, not final
+  release publication.
+
+ADRs 0008, 0009, and 0010 are already `Accepted`; their design status is not a
+remaining blocker. Format v1 nevertheless remains an unratified validation
+candidate until the two acceptance gaps and final publication close.
 
 ## Recommendation
 
-Do not freeze or move OGVCS-002 to `prd/done` yet. The clean MIT-licensed ordinary
-candidate and three-platform comparison pass. Run the deliberately deferred
-final-R0 exact-scale campaign, publish the final artifacts durably, and complete
-the ratification records before an Accepted/Done recommendation.
+Advance OGVCS-002 from `In development` to `Validation`. Preserve the frozen
+authority and keep production writer ratification disabled. Do not move the PRD
+to `prd/done` until the maintainer-authorized final R0 exact-scale campaign and
+durable publication both pass.

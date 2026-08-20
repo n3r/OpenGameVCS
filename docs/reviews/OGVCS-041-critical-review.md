@@ -79,11 +79,12 @@ additions. These are documented boundaries, not hidden compatibility claims.
 Hosted workflow run
 [31967884476](https://github.com/n3r/OpenGameVCS/actions/runs/31967884476)
 passed on Ubuntu, macOS, and Windows; its final comparator proved identical
-packages, source, and all six 360-row reports. OGVCS-002 is still in development
-because the maintainer deferred its one-million-entry tree and logical-1-TiB
-tests to the final R0 campaign, and OGVCS-004 consequently remains in
-Validation. The roadmap correctly prevents OGVCS-041 from becoming Done or its
-1.0.0 contract from being ratified while those dependencies remain open.
+packages, source, and all six 360-row reports. OGVCS-002 is now in Validation
+with its bounded ordinary candidate proved, but the maintainer deferred its
+one-million-entry tree and logical-1-TiB tests to the final R0 campaign;
+OGVCS-004 consequently remains in Validation. The roadmap correctly prevents
+OGVCS-041 from becoming Done or its 1.0.0 contract from being ratified while
+those dependencies remain open.
 
 ## Recommendation
 

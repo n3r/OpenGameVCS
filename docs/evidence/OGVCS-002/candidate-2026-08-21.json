@@ -1,0 +1,201 @@
+{
+  "schema": "ogvcs.object-model.candidate-evidence/v1",
+  "evidenceDate": "2026-08-21",
+  "status": "candidate",
+  "license": "MIT",
+  "sourceRevision": "3aba34da7c75a1fc9120476873ee90e382aaab80",
+  "authority": {
+    "formatVersion": 1,
+    "referenceVectorManifestSha256": "2d0acb01a01b64c23d883d855d2802d939a8dc99622f2774de07af1c8af8d2b9",
+    "scenarioIndexSha256": "9602b91fcac449cb420e718739e5a1a1a2059ec7872422e7bf3cdd72c727c078",
+    "coverageMatrixSha256": "c5aeef73d2da337a3a250fd8c035adffb69adf33eccf30c6d42189969b83a1bf",
+    "generatorSourceSha256": "3ef48c1c30469adaa13583e987af46fd1d2f8d04cec72e29a5f8a6ffcd3da95d",
+    "independentAuditorSha256": "365d22c6f7727ed6cbb49a66fcb0eddc6c4b6739e7e15c134d26fdd5bcb25b01",
+    "unicodeCompactTableSha256": "f720e60157290e8714986679b54f8f49ce2c863146873dc5bda491d2d44a38b2",
+    "unicodeDerivedAgeSourceSha256": "7570877e0fa197c45338f7c41a02636da4e14c8dba6a3611a01cd30bf329d5ca",
+    "registryIndexSha256": "e775a50d12ad2a53a32ef9f073e3686d25ff9892b8d9a1e89f1fc62508e1add8",
+    "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
+    "registryCount": 12,
+    "artifactCount": 2815,
+    "scenarioCount": 573,
+    "coverageObligationCount": 486,
+    "errorCodeCount": 81,
+    "legalErrorSiteCount": 94,
+    "validationStageCount": 10,
+    "bitMutationCount": 58520,
+    "properPrefixTruncationCount": 7303,
+    "applicability": {
+      "shared": 550,
+      "javascriptOnly": 23,
+      "rustOnly": 0
+    }
+  },
+  "github": {
+    "repository": "n3r/OpenGameVCS",
+    "runId": 32420451840,
+    "runUrl": "https://github.com/n3r/OpenGameVCS/actions/runs/32420451840",
+    "conclusion": "success",
+    "createdAt": "2026-08-20T21:38:56Z",
+    "completedAt": "2026-08-20T22:16:16Z",
+    "jobs": [
+      {
+        "id": 96591112548,
+        "name": "Conformance (ubuntu-latest)",
+        "conclusion": "success"
+      },
+      {
+        "id": 96591112872,
+        "name": "Conformance (macos-latest)",
+        "conclusion": "success"
+      },
+      {
+        "id": 96591112928,
+        "name": "Conformance (windows-latest)",
+        "conclusion": "success"
+      },
+      {
+        "id": 96600325373,
+        "name": "Compare JavaScript and Rust on Linux, macOS, and Windows",
+        "conclusion": "success"
+      },
+      {
+        "id": 96600382442,
+        "name": "Bounded scale evidence (Linux)",
+        "conclusion": "skipped"
+      }
+    ],
+    "artifacts": [
+      {
+        "id": 9426536926,
+        "name": "object-model-conformance-comparison",
+        "sizeBytes": 702,
+        "githubArchiveDigest": "sha256:8429cfaa090b4b1c24867e0f84d2754f42135ffd6caa73fb46c7124d197b8702",
+        "expiresAt": "2026-09-19T22:16:12Z"
+      },
+      {
+        "id": 9426529626,
+        "name": "object-model-conformance-Windows",
+        "sizeBytes": 20375,
+        "githubArchiveDigest": "sha256:453c768846bca874beaee682beab957f5b68e8e7e4af9c5130729609d37dfce3",
+        "expiresAt": "2026-09-19T22:15:55Z"
+      },
+      {
+        "id": 9426145872,
+        "name": "object-model-packed-conformance-Linux",
+        "sizeBytes": 1493449,
+        "githubArchiveDigest": "sha256:a01123b73dc08411fb00879bfd9c4d419a4bff88dfdebb21b948556e30be3f0e",
+        "expiresAt": "2026-09-19T22:02:22Z"
+      },
+      {
+        "id": 9426145071,
+        "name": "object-model-conformance-Linux",
+        "sizeBytes": 20366,
+        "githubArchiveDigest": "sha256:de6d5460fbc2a8f5b84daf309a026be6559b005476e8f1a0bebe9b3d398c959a",
+        "expiresAt": "2026-09-19T22:02:20Z"
+      },
+      {
+        "id": 9426001092,
+        "name": "ogvcs-object-model-rust-offline-Linux",
+        "sizeBytes": 6670318,
+        "githubArchiveDigest": "sha256:9eb2814484e7bd6aabe5e11943608398d345e1587bd59382126c2e8f8cd0d934",
+        "expiresAt": "2026-09-19T21:57:12Z"
+      },
+      {
+        "id": 9425999367,
+        "name": "ogvcs-repository-format-v1",
+        "sizeBytes": 843028,
+        "githubArchiveDigest": "sha256:bf1cea256be932940ba0e1b26fdab7f3961068645e6c518d6ae10fc2b2f1c1c8",
+        "expiresAt": "2026-09-19T21:57:10Z"
+      },
+      {
+        "id": 9425915635,
+        "name": "object-model-conformance-macOS",
+        "sizeBytes": 20366,
+        "githubArchiveDigest": "sha256:e8cc3c4cf3479b31c810bfe407d4e886dfb27b6ad28c324fb85d0d5310cee60e",
+        "expiresAt": "2026-09-19T21:54:16Z"
+      }
+    ],
+    "remediationRuns": [
+      {
+        "runId": 32411834375,
+        "conclusion": "failure",
+        "finding": "Windows main-thread stack overflow in recursive deep-tree semantics"
+      },
+      {
+        "runId": 32414508236,
+        "conclusion": "failure",
+        "finding": "Windows offline-distribution proof exceeded the five-minute step allowance"
+      },
+      {
+        "runId": 32417134496,
+        "conclusion": "failure",
+        "finding": "Windows offline-distribution proof exceeded the ten-minute step allowance"
+      }
+    ]
+  },
+  "conformance": {
+    "result": "identical",
+    "sharedScenarios": 550,
+    "sharedConformanceSha256": "51d671c4622c14c29aa5b291cc49c4832dc598589438560e2d5e633bab21785a",
+    "javascript": {
+      "executed": 571,
+      "failed": 0,
+      "inventoryOnly": 2,
+      "notApplicable": 0,
+      "scenarioResultsSha256": "7eeb9091263530ac5f8703adb58de71f536d96f9a541f914b7b9f6e50864d153",
+      "implementationConformanceSha256": "bafc5f21123cfb1d5a953f3fe035c43741931755b6ac0a41c0356f5d1d52bd07"
+    },
+    "rust": {
+      "executed": 548,
+      "failed": 0,
+      "inventoryOnly": 2,
+      "notApplicable": 23,
+      "scenarioResultsSha256": "56a2ae15e69c4e3e0cac954fd7655c79692cde5119ee92c52ffaeba6b68b2dee",
+      "implementationConformanceSha256": "408f8c1e22a2385adde5753c77075ec5677acedcbc70ba31ef51a1b4d30fd877"
+    }
+  },
+  "packedConformance": {
+    "result": "identical",
+    "artifacts": [
+      {
+        "filename": "opengamevcs-fixture-generator-1.0.0.tgz",
+        "name": "@opengamevcs/fixture-generator",
+        "version": "1.0.0",
+        "sha256": "3096bb6418a774e8f0757377e4b0453adae5e53ad8c37a2a51563d4c77634b93"
+      },
+      {
+        "filename": "opengamevcs-object-model-0.1.0.tgz",
+        "name": "@opengamevcs/object-model",
+        "version": "0.1.0",
+        "sha256": "009275ba22ced3fe973ee5b160ce088e25e0c2d6668068fc95e7a4174ec69f9a"
+      },
+      {
+        "filename": "opengamevcs-repository-format-v1-0.1.0.tgz",
+        "name": "@opengamevcs/repository-format-v1",
+        "version": "0.1.0",
+        "sha256": "6f11a958b1a7723df8bea1affbd5a274566d5cbef4fb5ec8ab56e71572059cea"
+      },
+      {
+        "filename": "ogvcs-object-model-0.1.0.crate",
+        "name": "ogvcs-object-model",
+        "version": "0.1.0",
+        "sha256": "77cce81e26dc5a65b2bc28b87ed3eafb27b22e8b37a6fe7a61a5d06b32a5cc6a"
+      }
+    ]
+  },
+  "exactScale": {
+    "decision": "deferred-to-final-r0-campaign",
+    "executed": false,
+    "jobId": 96600382442,
+    "jobConclusion": "skipped",
+    "scenarios": [
+      "tree-million-entries",
+      "manifest-one-tib"
+    ]
+  },
+  "remainingCompletionGates": [
+    "Run and retain the exact one-million-entry and logical-1-TiB campaign.",
+    "Publish the final versioned artifacts with durable retention.",
+    "Reconcile final scale and publication evidence before moving OGVCS-002 from Validation to Done or enabling production format-v1 writes."
+  ]
+}

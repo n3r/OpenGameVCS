@@ -1,13 +1,13 @@
 # OGVCS-002 — Core object library and open repository format
 
-**Status:** In development
+**Status:** Validation
 **Release:** R0 — Engineering Foundation  
 **Priority:** P0  
 **Owner:** Codex and OpenGameVCS maintainers
 **Depends on:** OGVCS-001  
 **Blocks:** OGVCS-004, OGVCS-005, OGVCS-006, OGVCS-007, OGVCS-017, OGVCS-020, OGVCS-029, OGVCS-033, OGVCS-036, OGVCS-041
 **Source:** [ADR-0008 deterministic CBOR and object identity](../../adr/0008-format-v1-deterministic-cbor-and-object-identity.md)
-**Last updated:** 2026-08-16
+**Last updated:** 2026-08-21
 
 ## Outcome
 
@@ -129,17 +129,25 @@ Format v1 remains draft while readers, writers, registries, and vectors are unde
 
 ## Completion evidence
 
-The implementation and ordinary conformance candidate is MIT-licensed and passes
-local source/packed checks plus clean hosted Linux, macOS, and Windows comparison
-at commit `6295cb54b29bc5a9ac6dadf34bc2c52a337eba49`; see
-[`docs/evidence/OGVCS-002/`](../../docs/evidence/OGVCS-002/). By maintainer
-decision on 2026-08-16, the exact one-million-entry tree and logical-1-TiB
-manifest jobs are deferred to the final R0 campaign and were not run. Status
-remains In development and the final evidence fields below remain intentionally
-open until those acceptance runs, final publication, and ratification complete.
+The MIT-licensed implementation and frozen ordinary conformance authority are
+merged and ready for validation. Candidate commit
+`3aba34da7c75a1fc9120476873ee90e382aaab80` is exercised by the pinned Rust
+1.82/Node 22 Linux, macOS, and Windows workflow, including packed/offline
+consumers and deterministic cross-language reports. The authority contains
+2,815 authenticated artifacts and 573 scenarios; 571 JavaScript and 548 Rust
+rows execute, the same two exact-scale rows remain inventory-only, and 23
+JavaScript-only fixture-adapter, host-shape, and unrepresentable raw carriers
+are honestly N/A in Rust.
 
-- Implementation changes:
-- Test and benchmark results:
-- Security/reliability review:
-- Documentation/runbooks:
-- Rollout result:
+By maintainer decision, this validation milestone did not run the exact
+one-million-entry tree or logical-1-TiB manifest. They remain reserved for the
+final R0 campaign. Consequently AC-02 and the exact-scale portion of AC-09 are
+still incomplete, final artifacts are not yet ratified for production writing,
+and this PRD remains in `todo` with `Status: Validation` rather than moving to
+`done`.
+
+- Implementation changes: [Detailed candidate changelog](../../docs/changelog/OGVCS-002.md)
+- Test and benchmark results: [Validation evidence packet](../../docs/evidence/OGVCS-002/README.md)
+- Security/reliability review: [Independent critical review](../../docs/reviews/OGVCS-002-critical-review.md)
+- Documentation/runbooks: [Accepted ADRs 0008–0010](../../adr/README.md) and the [validation evidence index](../../docs/evidence/OGVCS-002/README.md)
+- Rollout result: [Hosted ordinary proof and deferred exact-scale boundary](../../docs/evidence/OGVCS-002/README.md#deferred-done-gates)
