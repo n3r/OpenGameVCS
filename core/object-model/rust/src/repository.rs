@@ -1471,13 +1471,11 @@ fn expand_tree_owned(
         .map(|value| charged_profile_set(value, lookup, &mut result.memory))
         .transpose()?
         .unwrap_or_default();
-    let mut visiting = BTreeSet::new();
     let mut repository_keys = BTreeSet::new();
     let mut platform_keys = BTreeSet::new();
     let mut path_profile_memory = OwnedDerivedMemory::empty(lookup);
     walk_tree(
         root_reference,
-        &[],
         lookup,
         descriptor_reference,
         &path_profile,
@@ -1488,7 +1486,6 @@ fn expand_tree_owned(
         &mut repository_keys,
         &mut platform_keys,
         &mut path_profile_memory,
-        &mut visiting,
         &mut result,
     )?;
     Ok(result)
@@ -1559,10 +1556,22 @@ fn preflight_tree_closure(
     finish_lookup_selection(lookup_error)
 }
 
+#[derive(Clone, Copy, Debug)]
+enum TreeWalkFrame {
+    Enter {
+        tree_reference: ObjectRef,
+        prefix_file_id: Option<FileId>,
+    },
+    Entries {
+        tree_reference: ObjectRef,
+        prefix_file_id: Option<FileId>,
+        next_entry: usize,
+    },
+}
+
 #[allow(clippy::too_many_arguments)]
 fn walk_tree(
     tree_reference: ObjectRef,
-    prefix: &[String],
     lookup: &RepositoryObjectLookup,
     descriptor_reference: ObjectRef,
     path_profile: &ProfileRef,
@@ -1573,25 +1582,80 @@ fn walk_tree(
     repository_keys: &mut BTreeSet<String>,
     platform_keys: &mut BTreeSet<String>,
     path_profile_memory: &mut OwnedDerivedMemory,
-    visiting: &mut BTreeSet<ObjectRef>,
     result: &mut ReservedTreeExpansion,
 ) -> Result<()> {
-    if visiting.contains(&tree_reference) {
-        // Ordinary byte-valid object cycles require a hash fixed point, but a
-        // defensive implementation still bounds and rejects traversal cycles.
-        return Err(Error::new(ErrorCode::ProvenanceCycle));
-    }
-    path_profile_memory.grow_by(derived_value_cost(34)?)?;
-    visiting.insert(tree_reference);
-    let object = lookup.edge(tree_reference, ObjectKind::Tree)?;
-    let tree = metadata_value(&object)?;
-    if object_ref(field(tree, 16)?)? != descriptor_reference {
-        return Err(Error::new(ErrorCode::RepositoryDescriptorMismatch));
-    }
-    for raw_entry in array(field(tree, 17)?)? {
-        lookup.checkpoint()?;
+    // The normative path limit also bounds the DFS stack. Charge its complete
+    // capacity before allocating it so deeply nested hostile trees cannot
+    // consume either the native call stack or unaccounted working memory.
+    let frame_capacity = usize::try_from(MAX_PATH_SEGMENTS)
+        .map_err(|_| Error::new(ErrorCode::LimitMemory))?
+        .checked_add(2)
+        .ok_or_else(|| Error::new(ErrorCode::LimitMemory))?;
+    path_profile_memory.grow_by(
+        frame_capacity
+            .checked_mul(std::mem::size_of::<TreeWalkFrame>())
+            .ok_or_else(|| Error::new(ErrorCode::LimitMemory))?,
+    )?;
+    let mut frames = Vec::new();
+    frames
+        .try_reserve_exact(frame_capacity)
+        .map_err(|_| Error::new(ErrorCode::LimitMemory))?;
+    frames.push(TreeWalkFrame::Enter {
+        tree_reference,
+        prefix_file_id: None,
+    });
+    let mut visiting = BTreeSet::new();
+
+    while let Some(frame) = frames.pop() {
+        let (tree_reference, prefix_file_id, next_entry) = match frame {
+            TreeWalkFrame::Enter {
+                tree_reference,
+                prefix_file_id,
+            } => {
+                if visiting.contains(&tree_reference) {
+                    // Ordinary byte-valid object cycles require a hash fixed
+                    // point, but reject defensively without recursive calls.
+                    return Err(Error::new(ErrorCode::ProvenanceCycle));
+                }
+                path_profile_memory.grow_by(derived_value_cost(34)?)?;
+                visiting.insert(tree_reference);
+                let object = lookup.edge(tree_reference, ObjectKind::Tree)?;
+                let tree = metadata_value(&object)?;
+                if object_ref(field(tree, 16)?)? != descriptor_reference {
+                    return Err(Error::new(ErrorCode::RepositoryDescriptorMismatch));
+                }
+                (tree_reference, prefix_file_id, 0)
+            }
+            TreeWalkFrame::Entries {
+                tree_reference,
+                prefix_file_id,
+                next_entry,
+            } => (tree_reference, prefix_file_id, next_entry),
+        };
+
+        // Entering the tree accounted for its edge. Reuse the operation cache
+        // while resuming the iterator so each declared edge is still counted
+        // exactly once.
+        let object = lookup.resolve_expected(tree_reference, ObjectKind::Tree)?;
+        let tree = metadata_value(&object)?;
+        let entries = array(field(tree, 17)?)?;
+        let Some(raw_entry) = entries.get(next_entry) else {
+            visiting.remove(&tree_reference);
+            continue;
+        };
+
         // Reserve the parsed EntryState plus both retained path-map views from
         // the caller-owned CBOR before `from_tree_entry` performs any clone.
+        let prefix = prefix_file_id
+            .map(|file_id| {
+                result
+                    .file_ids
+                    .get(&file_id)
+                    .map(Vec::as_slice)
+                    .ok_or_else(|| Error::new(ErrorCode::ChangeSetTransitionInvalid))
+            })
+            .transpose()?
+            .unwrap_or_default();
         let prefix_retained = path_retained_cost(prefix)?
             .checked_mul(3)
             .ok_or_else(|| Error::new(ErrorCode::LimitMemory))?;
@@ -1624,22 +1688,15 @@ fn walk_tree(
         result.file_ids.insert(state.file_id, state.path.clone());
         result.entries.insert(state.path.clone(), state.clone());
         if state.kind == 1 {
-            walk_tree(
-                target,
-                &state.path,
-                lookup,
-                descriptor_reference,
-                path_profile,
-                allowed_content,
-                allowed_chunks,
-                verify_content,
-                path_profile_validator,
-                repository_keys,
-                platform_keys,
-                path_profile_memory,
-                visiting,
-                result,
-            )?;
+            frames.push(TreeWalkFrame::Entries {
+                tree_reference,
+                prefix_file_id,
+                next_entry: next_entry + 1,
+            });
+            frames.push(TreeWalkFrame::Enter {
+                tree_reference: target,
+                prefix_file_id: Some(state.file_id),
+            });
         } else {
             let manifest_object = lookup.edge(target, ObjectKind::ContentManifest)?;
             let manifest = metadata_value(&manifest_object)?;
@@ -1656,9 +1713,13 @@ fn walk_tree(
                     .with_layer(3)
                     .with_stage(ValidationStage::RepositorySemantics));
             }
+            frames.push(TreeWalkFrame::Entries {
+                tree_reference,
+                prefix_file_id,
+                next_entry: next_entry + 1,
+            });
         }
     }
-    visiting.remove(&tree_reference);
     Ok(())
 }
 
