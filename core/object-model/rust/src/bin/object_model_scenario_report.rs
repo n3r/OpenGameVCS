@@ -1007,8 +1007,10 @@ impl Runner {
             };
             consume(chunks.get(index).ok_or_else(configured_preflight_error)?)
         };
-        let mut limits = ManifestStreamLimits::default();
-        limits.max_parts = value_u64(&request, "maxItems")?;
+        let limits = ManifestStreamLimits {
+            max_parts: value_u64(&request, "maxItems")?,
+            ..ManifestStreamLimits::default()
+        };
         encode_and_verify_content_manifest_stream(
             Vec::new(),
             declared,
@@ -1053,8 +1055,10 @@ impl Runner {
             .collect::<Result<Vec<_>>>()?;
         let descriptor = ObjectRef::from_str(value_string(&request, "descriptor")?)?;
         let declared = decimal_u64(value_string(&request, "entryCount")?)?;
-        let mut limits = TreeStreamLimits::default();
-        limits.max_entries = value_u64(&request, "maxItems")?;
+        let limits = TreeStreamLimits {
+            max_entries: value_u64(&request, "maxItems")?,
+            ..TreeStreamLimits::default()
+        };
         match value_string(&request, "ordering")? {
             "ordered" => {
                 let mut file_ids = BTreeSet::new();
@@ -1546,7 +1550,7 @@ impl Runner {
             "bundle-ordered" | "bundle-memory-encoder" => {
                 self.execute_bundle_emitter(&source, registry, operation)
             }
-            _ => return Err(configured_preflight_error()),
+            _ => Err(configured_preflight_error()),
         }
     }
 
@@ -3591,12 +3595,12 @@ fn parse_import_mappings_from(value: &Value) -> Result<Vec<ImportMapping>> {
         .collect()
 }
 
-fn group_fixture(
-    value: &Value,
-) -> Result<(
+type AssetGroupFixture = (
     BTreeMap<[u8; 16], AssetGroup>,
     BTreeMap<FileId, Vec<String>>,
-)> {
+);
+
+fn group_fixture(value: &Value) -> Result<AssetGroupFixture> {
     let id: [u8; 16] = hex_array(value_string(value, "groupId")?)?;
     let file_ids = json_array_result(value, "fileIds")?
         .iter()
@@ -3645,12 +3649,7 @@ fn group_fixture(
     Ok((groups, paths))
 }
 
-fn group_inputs_fixture(
-    request: &Value,
-) -> Result<(
-    BTreeMap<[u8; 16], AssetGroup>,
-    BTreeMap<FileId, Vec<String>>,
-)> {
+fn group_inputs_fixture(request: &Value) -> Result<AssetGroupFixture> {
     let fixtures = if let Some(values) = request.get("groupInputs").and_then(Value::as_array) {
         values.as_slice()
     } else {
@@ -3845,12 +3844,7 @@ fn cbor_array(value: &Cbor) -> Result<&[Cbor]> {
     }
 }
 
-fn asset_groups_from_payload(
-    payload: &[u8],
-) -> Result<(
-    BTreeMap<[u8; 16], AssetGroup>,
-    BTreeMap<FileId, Vec<String>>,
-)> {
+fn asset_groups_from_payload(payload: &[u8]) -> Result<AssetGroupFixture> {
     let object = scan_metadata(payload, Limits::METADATA)?;
     if validate_metadata_schema(&object)? != ObjectKind::AssetGroupSet {
         return Err(Error::new(ErrorCode::SchemaFieldInvalid));
@@ -3858,12 +3852,7 @@ fn asset_groups_from_payload(
     asset_groups_from_value(object.value())
 }
 
-fn asset_groups_from_value(
-    value: &Cbor,
-) -> Result<(
-    BTreeMap<[u8; 16], AssetGroup>,
-    BTreeMap<FileId, Vec<String>>,
-)> {
+fn asset_groups_from_value(value: &Cbor) -> Result<AssetGroupFixture> {
     let Cbor::Array(values) = cbor_field(value, 17)? else {
         return Err(Error::new(ErrorCode::SchemaFieldInvalid));
     };
