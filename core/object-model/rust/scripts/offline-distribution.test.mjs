@@ -10,7 +10,7 @@ const BUILDER = join(import.meta.dirname, 'build-offline-distribution.mjs');
 // Windows performs two complete offline Cargo builds substantially more slowly
 // than Linux/macOS on the hosted runner. Keep a finite platform allowance while
 // retaining the workflow's stricter 45-minute outer deadline.
-const TEST_TIMEOUT_MS = process.platform === 'win32' ? 600_000 : 300_000;
+const TEST_TIMEOUT_MS = process.platform === 'win32' ? 900_000 : 300_000;
 
 function run(args) {
   return new Promise((resolvePromise, rejectPromise) => {
