@@ -312,8 +312,18 @@ fn tree_rejects_order_shape_and_all_configured_resource_stops() {
         TreeStreamLimits::default(),
     )
     .unwrap_err();
-    assert_eq!(hard_limit_error.code, ErrorCode::LimitCount);
-    assert_eq!(hard_limit_error.layer, 2);
+    assert_eq!(
+        (
+            hard_limit_error.code,
+            hard_limit_error.layer,
+            hard_limit_error.stage
+        ),
+        (
+            ErrorCode::LimitCount,
+            1,
+            ValidationStage::ConfiguredResourcePreflight
+        )
+    );
     for (entries, declared) in [(Vec::new(), 1), (vec![regular_entry(1)], 0)] {
         let mut file_ids = BTreeSet::new();
         let count_error = encode_ordered_tree(
@@ -808,8 +818,14 @@ fn manifest_rejects_shape_identity_replay_and_resource_failures() {
         ManifestStreamLimits::default(),
     )
     .unwrap_err();
-    assert_eq!(error.code, ErrorCode::LimitCount);
-    assert_eq!(error.layer, 2);
+    assert_eq!(
+        (error.code, error.layer, error.stage),
+        (
+            ErrorCode::LimitCount,
+            1,
+            ValidationStage::ConfiguredResourcePreflight
+        )
+    );
 
     for (parts, declared_parts) in [(Vec::new(), 1), (vec![valid_part, valid_part], 1)] {
         let error = encode_content_manifest_stream(
