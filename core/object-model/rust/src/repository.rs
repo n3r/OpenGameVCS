@@ -2640,11 +2640,7 @@ fn schedule_replay_change_set(
                 schedule_replay_entry_target(state, context, scheduled, stack, memory)?;
             }
         }
-        if optional_field(operation, 10)
-            .map(uint)
-            .transpose()?
-            == Some(1)
-        {
+        if optional_field(operation, 10).map(uint).transpose()? == Some(1) {
             if let Some(state) = optional_field(operation, 11) {
                 schedule_replay_entry_target(state, context, scheduled, stack, memory)?;
             }
