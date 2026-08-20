@@ -1,0 +1,111 @@
+{
+  "context": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 12,
+          "mediaType": "application/octet-stream",
+          "path": "objects/01-chunk.bin",
+          "sha256": "36fcc2e9442be1071c275604af6e41bd93875c743dc2fdaa6037662df74c5894"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5"
+      },
+      {
+        "artifact": {
+          "bytes": 183,
+          "mediaType": "application/cbor",
+          "path": "objects/02-content-manifest.cbor",
+          "sha256": "b635d76c8dd9f29c2862ae0e22077c70d157f68d4595861c09fb38bdf47c456b"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+      },
+      {
+        "artifact": {
+          "bytes": 274,
+          "mediaType": "application/cbor",
+          "path": "objects/06-repository-descriptor.cbor",
+          "sha256": "677905a883b1f4ddd87fea27b5afc0293cccd2d2ea29cc4884e758e4a071b6e9"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+      },
+      {
+        "artifact": {
+          "bytes": 261,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-missing-child-before-duplicate-fileid/tree.cbor",
+          "sha256": "5fd8620ba92312749e273204fcc39ef03edc6285b2e7a70ecdbc3457b9f8729f"
+        },
+        "ref": "ogvcs:v1:tree:sha256:77d1dc7dc86c7dca1657f4aaba8ec36ff1225a57e65a53dcce4aa3e9fa6b2e9d"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
+      "registryVersion": 1
+    },
+    "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+    "requestedLayer": 2,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "expected": {
+    "code": "OBJECT_REFERENCE_MISSING",
+    "layer": 2,
+    "result": "reject",
+    "stage": "closure-and-reference-resolution"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "inputs": [
+    {
+      "bytes": 425,
+      "mediaType": "application/json",
+      "path": "scenarios/operations/tree-missing-child-before-duplicate-fileid.json",
+      "sha256": "88252c71c0df779275ef5ba6f7d52331e8c6e2b866bc08a616743a80f11144c1"
+    },
+    {
+      "bytes": 4098,
+      "mediaType": "application/json",
+      "path": "scenarios/definitions/tree-missing-child-before-duplicate-fileid.json",
+      "sha256": "3cfdff9c680f0614a26486d79fdbf8976e327a738e1a1a8190cc8a46eb35eb9a"
+    }
+  ],
+  "operation": "validate-repository-route",
+  "requirementIds": [
+    "OGVCS-002-AC-08",
+    "OGVCS-002-AC-11",
+    "OGVCS-002-FR-04",
+    "OGVCS-002-FR-06",
+    "OGVCS-002-FR-09",
+    "OGVCS-002-FR-11",
+    "OGVCS-002-FR-13",
+    "OGVCS-002-NFR-01",
+    "OGVCS-002-NFR-04"
+  ],
+  "resources": {
+    "recipe": {
+      "generator": "ogvcs.repository-validation-scenario-constructor/v1",
+      "parameters": {
+        "definition": "scenarios/definitions/tree-missing-child-before-duplicate-fileid.json",
+        "definitionSha256": "3cfdff9c680f0614a26486d79fdbf8976e327a738e1a1a8190cc8a46eb35eb9a",
+        "runtimeHighWaterMarks": "not-asserted"
+      },
+      "seed": "cf569b6f57b83a29bff31969dc54c5261a7c1793e84a44b222b8a8e2875e359b"
+    },
+    "summary": {
+      "bytes": 5253,
+      "indexEntries": 0,
+      "items": 4,
+      "peakMemoryBytes": 0,
+      "scratchBytes": 0,
+      "summarySha256": "40fc0a92995acdd90cab5abe0a69a2da823eae60030b23daa9a6bd9a4a9db9c0",
+      "traversalEdges": 0
+    }
+  },
+  "scenarioId": "tree-missing-child-before-duplicate-fileid",
+  "schemaVersion": "ogvcs.repository-format/validation-scenario/v1"
+}

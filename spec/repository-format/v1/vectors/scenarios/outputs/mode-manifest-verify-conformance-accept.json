@@ -1,0 +1,7 @@
+{
+  "resultFamily": "manifest",
+  "rootState": "accepted-exact-constructor-result",
+  "scenarioId": "mode-manifest-verify-conformance-accept",
+  "schema": "ogvcs.repository-format.v1.scenario-output.v1",
+  "stableOutputIdentity": "ogvcs:v1:content-manifest:sha256:82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+}

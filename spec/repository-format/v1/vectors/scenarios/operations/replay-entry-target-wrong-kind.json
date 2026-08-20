@@ -1,0 +1,11 @@
+{
+  "api": "replay-change-set",
+  "authorityContext": "scenario.context",
+  "baseState": {
+    "groups": "empty",
+    "tree": "ogvcs:v1:tree:sha256:a458f2bc72d5816dc3f7ee2cc8580eaaaed9a0208588ee66d18ea78f0c255c81"
+  },
+  "changeSet": "ogvcs:v1:change-set:sha256:4f2b4cd1933cc6538d4ce8fb43c65454355497ae77523be6675462e1e4bcfe20",
+  "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+  "schema": "ogvcs.repository-format.v1.repository-route-input.v1"
+}

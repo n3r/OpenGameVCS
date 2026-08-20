@@ -133,8 +133,9 @@ Profile families are context-checked, not interchangeable strings:
 | annotation payload, bundle root, fixture event | `annotation-payload`, `bundle-root-role`, `fixture-event` |
 
 Using a registered profile from the wrong family is `SCHEMA_FIELD_INVALID`.
-Every currently assigned profile is conformance-only; semantic production mode
-therefore rejects it even when the family is correct.
+The four `path.opengamevcs/*@1` assignments are ratified and owned by
+OGVCS-004; all OGVCS-002 test profiles are conformance-only and semantic
+production mode rejects them even when the family is correct.
 
 ### 3.1 Repository descriptor — kind 6
 
@@ -224,6 +225,20 @@ Descriptor-bound tree expansion additionally applies the core `PathValue`
 segment-count and joined-byte ceilings to every composed root-relative entry
 path. This graph check does not add slash-joined text to canonical tree bytes
 and does not perform the platform/collision rules owned by the path profile.
+For a ratified `path.opengamevcs/*@1` selection, the caller MUST supply a path
+validator pinned to the descriptor's exact namespace, identifier, major, and
+the authenticated repository context's `case-sensitive` or `case-folded`
+case mode. Case mode is external repository policy in R0; it is not a
+repository-descriptor field and does not enter any format-v1 object preimage.
+The validator's input repeats that exact profile and case-mode pin with each
+complete core-valid root-relative segment array, in traversal
+order. An accepted decision includes both nonempty opaque repository and
+platform collision keys, each bounded to the OGVCS-004 32,768-character
+maximum; a rejected decision contains neither key. Missing or mismatched
+validators, a rejected or malformed decision, or any repeated returned key is `PATH_PROFILE_INVALID` at layer 3 in
+`repository-semantics`. The validator is required even when the expanded tree
+is empty, although an empty tree produces zero path invocations. This callback
+contract invokes but does not redefine OGVCS-004 path semantics.
 
 Every named entry, including a directory, has a nonzero FileID. The fully
 expanded snapshot tree MUST contain each FileID exactly once. Hard links and
@@ -575,9 +590,36 @@ RepositoryContext {
   fileid_registry: lookup(FileID -> immutable LifetimeRecord),
   working_lifetime_additions: ordered LifetimeRecord additions,
   import_mappings: lookup(mapping key -> FileID),
-  validation_mode: conformance | production
+  validation_mode: conformance | production,
+  case_mode: case-sensitive | case-folded,
+  registry_snapshot: complete validated twelve-document registry set,
+  path_profile_validator: optional exact ratified-profile callback
 }
 ```
+
+`read` is a registry-assignment operation, not a repository-validation mode.
+Missing, wrong-typed, `read`, or otherwise unknown validation modes fail with
+`SCHEMA_FIELD_INVALID` at layer 1 in `configured-resource-preflight`. A lookup
+may be used for layer-1/2 framing, identity, and known-schema work without a
+registry; every repository operation claiming layer 3 requires the complete
+registry snapshot above, an explicit validation mode and case mode, and enabled
+semantic-profile processing. The standalone asset-group validator is a
+layer-3 repository operation for this purpose: group, role, and external-key
+profiles are family-checked and passed through registry lifecycle before group
+cardinality, membership, or uniqueness rules.
+It first freezes the complete caller-controlled group/member/external-key shape
+and family pass across the whole input. Only inert built-in maps and arrays are
+admitted; accessors, proxies, non-map records, and wrong-family profiles are
+`SCHEMA_FIELD_INVALID` at layer 2 before the first lifecycle decision. Native
+host exceptions and caller code are never part of the wire error surface. This
+inert-shape rule covers the outer groups container and every nested member and
+external-key array, not only each individual group map; rejecting a hostile
+container MUST NOT invoke its iterator, accessor, or Proxy traps.
+The same preflight applies to the public validator's top-level configured
+options and profile-rule authority: they are copied only from inert closed
+records, and a Proxy, accessor, or hostile nested collection is
+`SCHEMA_FIELD_INVALID` at layer 1 in `configured-resource-preflight` without
+invoking caller code.
 
 The temporal instant is always immediately before the candidate snapshot. The
 candidate snapshot bytes and its new outbound objects are present in the
@@ -600,6 +642,53 @@ Validation proceeds in this order:
 7. Check permanent FileID lifetime/import evidence.
 8. In production mode reject every conformance-only profile.
 
+Every public route completes its entire applicable lower-layer pass before it
+selects an error from a later layer. The route scope is exact, rather than an
+invitation for a helper to validate unrelated objects:
+
+- whole-lookup `validateAll` checks each supplied object's framing, declared
+  identity, known schema, and registry assignments, but does not follow
+  outbound references;
+- manifest verification follows the manifest's ordered chunk references;
+- tree expansion follows the selected descriptor, recursive child trees, and
+  content manifests, plus manifest chunks only when content verification is
+  enabled;
+- change-set replay follows the operation and allocation/proof references it
+  consumes; restore proof closure includes the referenced ancestry, source
+  snapshot tree/group state, and reached content;
+- standalone conflict validation follows the descriptor and direct entry-side
+  targets, not the targets' content graph;
+- snapshot-graph validation follows snapshots and parents plus their descriptor
+  and ChangeSet references, but does not inherit full candidate validation;
+- provenance validation follows provenance inputs transitively;
+- shelf validation is always content-complete for the exact reached shelf
+  closure and does not validate unrelated supplied lookup objects; and
+- repository-candidate validation covers the complete supplied and candidate
+  closure and is always content-complete.
+
+An absent reached edge does not terminate the lower-layer pass while other
+already-enumerated reached siblings remain. The validator accumulates failures
+across those siblings and selects the frozen global winner after the pass: a
+supplied sibling whose bytes do not match its declared ObjectRef is
+`OBJECT_ID_MISMATCH` at layer 1 even when an earlier or later sibling is absent
+and would independently be `OBJECT_REFERENCE_MISSING` at layer 2. Edge order
+does not change that result. Children are enqueued only after their parent
+successfully resolves, so this rule does not speculate through an absent or
+identity-corrupt object.
+
+Candidate closure includes the candidate ChangeSet's declared base edge
+independently of the candidate snapshot's parent-zero edge. A syntactically
+valid but absent declared base is `OBJECT_REFERENCE_MISSING` at layer 2 even
+when parent zero is present; the later base-equality rule cannot hide that
+missing dependency.
+
+The shelf and repository-candidate APIs therefore require content verification
+to be enabled. A caller-supplied false selector is `SCHEMA_FIELD_INVALID` at
+layer 1 in `configured-resource-preflight`, before object access. With the
+required true selector, a missing reached chunk is `OBJECT_REFERENCE_MISSING`
+at layer 2. Partial tree/replay helpers may retain their explicitly declared
+partial-content selector; they do not weaken the high-level routes.
+
 A lifetime record is repository-scoped immutable evidence of the first
 consumption only. Its origin is exactly native-create, native-copy, or import;
 it names the first change-set ObjectRef and operation sequence, and import also
@@ -615,6 +704,22 @@ means permanently consumed. `reserved/materialized/published` applies only to
 the separate import mapping workflow.
 Cross-repository rejection applies to descriptors, source proofs, mappings, and
 transitions.
+
+The lifetime `firstChangeSet` lookup is an evidence check, not a general graph
+closure claim. A syntactically valid kind-4 reference absent from the supplied
+evidence lookup is `FILEID_LIFETIME_EVIDENCE_INVALID` at layer 3. A wrong-kind
+typed reference, declared ObjectID mismatch, or invalid ChangeSet schema still
+retains its ordinary layer-1/2 result. A present valid ChangeSet is also subject
+to registry lifecycle before lifetime semantics. This exception is confined to
+the evidence helper and does not change ordinary closure-missing results.
+
+Before any registry or repository-semantic decision, the public lifetime/import
+validator freezes and validates the complete plain-object shape of every
+`lifetimeRecords`, `importMappings`, and `workingLifetimeAdditions` row. A
+malformed row is `SCHEMA_FIELD_INVALID` at layer 2 even when an earlier row
+would later cause a duplicate-lifetime or import-mapping conflict at layer 3;
+property or row order cannot change that result. This whole-input pass accepts
+only inert exact data records and never invokes caller accessors or proxies.
 
 A tombstone is the branch-relative historical delete operation naming the
 exact prior FileID and state. It is not a global `deleted` registry status,
@@ -638,6 +743,32 @@ collision has one winner; every loser leaves its branch/reference unchanged.
 This document validates the proof/result shape but does not define the database
 or transaction protocol.
 
+At the serialized logical-record boundary, `fileid-lifetime-record` and
+`import-mapping-record` are exact canonical maps. Field 0 is exactly format 1;
+field 1 is exactly record type 4 or 5 respectively. A wrong selector is
+`SCHEMA_FIELD_INVALID` at layer 2 in `known-schema`. Any additional field,
+including 22 or 999, is `SCHEMA_FIELD_UNKNOWN` at that same site; field 22 is
+not an import-mapping key. These checks apply to the decoded Map before any
+plain repository-context conversion or lifetime semantics.
+
+Every prior import mapping in the plain repository-context API and conformance
+scenario carries both its exact repository-descriptor ObjectRef and the
+declared mapping key derived from that descriptor and tuple; neither may be
+inferred from ambient context. The serialized `import-mapping-record` remains
+the CDDL map with fields 0, 1, and 16 through 21: its mapping key is derived and
+is not a new field 22. Validators family-check every
+prior importer profile across the complete input before applying registry
+lifecycle, and only then evaluate import/lifetime semantics. Import-request
+validation completes the known-schema pass across every supplied prior
+lifetime record, import mapping, and working addition before applying the
+request importer's lifecycle; property or row order cannot change that winner.
+A self-consistent
+mapping key, mapping record, and lifetime proof bound to a different repository
+is `FILEID_CROSS_REPOSITORY_PROOF`. `FILEID_IMPORT_MAPPING_CONFLICT` is reserved
+for a same-repository tuple/key/FileID disagreement. The same ordering and
+binding apply when prior mappings are consumed by direct lifetime validation,
+an import request, or full candidate validation.
+
 ## 11. Hard limits
 
 In addition to the field-specific limits above, CBOR nesting is at most 32.
@@ -645,6 +776,47 @@ Configured object, byte, time, memory, and scratch limits MAY be smaller and
 produce the corresponding resource error. Encoders MUST know exact container
 counts or use bounded external sorting; decoders MUST not allocate from an
 untrusted declared length before checking all hard and configured limits.
+Every caller-supplied lifetime record, working addition, import mapping, replay
+state entry, expanded-tree entry, group, membership index row, and collision key
+is charged before it is retained or cloned. Snapshot/provenance ancestry,
+shelf, abstract-graph, conflict, and group workspaces charge every retained
+node, edge, state clone, cardinality row, and lookup index before construction.
+A failure leaves caller state unchanged; a lookup remains reusable after a
+bounded validation failure. Whole-lookup schema-error selection retains only a
+bounded ranked candidate rather than every invalid diagnostic. Internal
+repository consumers may hold tree, group, membership, and collision indexes simultaneously only while
+their combined reservation is live, and release them in a `finally`-equivalent
+path. A public standalone tree expansion transfers a bounded result to its
+caller and releases the operation reservation before returning; it exposes no
+callable lease. This output boundary does not permit a high-level validator to
+omit its own simultaneous working-set reservation.
+File-backed tree validation reserves the reader buffer, current decoded entry,
+and `TreeFileIdIndex` as one composite working set. An index implementation does
+not receive the full operation ceiling independently. A late failure aborts or
+drops its scratch transaction, leaves the caller target bytes unchanged, and
+returns the index and scratch store to a state in which the same index instance
+can validate a fitting retry. Conformance evidence must execute the reduced
+composite ceiling and report the unchanged target, same-index retry, and
+scratch-index reuse; separate per-component maxima are not proof of the
+composite bound.
+Resource conformance rows MUST report an ordered `routeEvidence` observation
+for every public route declared by the recipe. Each observation records
+`noPartialState: true`, `succeeded: true`, and exactly one recovery kind:
+`same-authority-instance`, `stateless-reinvoke`, or
+`fresh-operation-after-deadline`. Same-authority recovery reuses the exact
+lookup, context, and guard instance that observed the bounded failure;
+stateless recovery invokes the same public stateless route again; deadline
+recovery uses a fresh operation because an expired guard remains terminal.
+When the row exercises an operation-scoped edge or scratch counter, its route
+observation additionally reports `counterBaselineRestored: true`; this value
+is produced only after the same guard returns to its exact pre-operation
+counter baseline after both the failed operation and its fitting recovery.
+Recipe flags and route names alone are inventory metadata, not execution
+evidence.
+The combined tree/group memory row MUST also execute each tree-only and
+group-only component under the same reduced ceiling and report
+`eachComponentAloneFit: true`; its recovery kind is
+`same-authority-instance`. Deriving either value from the recipe is forbidden.
 
 Stable failure `(code, layer, stage)` sites are defined in
 [`errors.json`](errors.json). Logical
@@ -654,7 +826,10 @@ bundle ordering, closure, and integrity are defined in
 
 ## 12. Intentionally unresolved outside this slice
 
-- Ratified production path-profile behavior and case-collision keys.
+- Host filesystem execution, persistence, and policy selection around the
+  ratified OGVCS-004 path profiles. Their path validity and collision-key
+  behavior is already normative in OGVCS-004 and is invoked through the exact
+  callback boundary above.
 - Ratified production chunking profiles and boundary algorithms.
 - Ratified production content-policy, group/role/key, identity, policy,
   provenance, attestation/signature, annotation, bundle-role, path, and

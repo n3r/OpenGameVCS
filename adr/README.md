@@ -11,9 +11,9 @@ This directory records accepted cross-cutting decisions behind the normative beh
 | [0005](0005-early-public-protocol-baseline.md) | Accepted | Freeze a minimal public protocol before R1 service work |
 | [0006](0006-local-agent-security-boundary.md) | Accepted | Early local agent and explicit same-user threat boundary |
 | [0007](0007-fixture-profile-v2.md) | Accepted | Replace the deficient fixture profile v1 draft with v2 |
-| [0008](0008-format-v1-deterministic-cbor-and-object-identity.md) | Proposed | Deterministic CBOR, object IDs, layered validation, and hard format limits |
-| [0009](0009-format-v1-object-graph-and-fileid-validation.md) | Proposed | Immutable graph, transition replay, groups, conflicts, and FileID proof |
-| [0010](0010-core-profile-registries-and-logical-bundle-boundary.md) | Proposed | Core/path/chunk/export ownership and additive profile registries |
+| [0008](0008-format-v1-deterministic-cbor-and-object-identity.md) | Accepted | Deterministic CBOR, object IDs, layered validation, and hard format limits |
+| [0009](0009-format-v1-object-graph-and-fileid-validation.md) | Accepted | Immutable graph, transition replay, groups, conflicts, and FileID proof |
+| [0010](0010-core-profile-registries-and-logical-bundle-boundary.md) | Accepted | Core/path/chunk/export ownership and additive profile registries |
 | [0011](0011-authorization-contract-v1.md) | Accepted | Authorization decision, authorized-view, transfer-grant, audit, and threat-contract v1 |
 | [0012](0012-path-and-workspace-filesystem-contract-v1.md) | Accepted | Unicode case folding, platform profiles, confined mutation, and watcher recovery |
 | [0013](0013-protocol-v1-transport-schema-and-generation.md) | Accepted | TLS 1.3 HTTP/1.1 JSON control, range/resume carrier, negotiation, and generated models |

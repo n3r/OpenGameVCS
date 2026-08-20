@@ -1,0 +1,67 @@
+{
+  "api": "validate-operation-mode",
+  "importRequest": {
+    "importerProfile": "importer.test/fixture-adapter@1",
+    "operation": "import-file-id",
+    "requestedFileId": "77777777777777777777777777777777",
+    "schema": "ogvcs.repository-format.v1.fileid-operation-input.v1",
+    "sourceIdentityDigest": "7272727272727272727272727272727272727272727272727272727272727272",
+    "sourceNamespaceDigest": "7171717171717171717171717171717171717171717171717171717171717171"
+  },
+  "mode": "production",
+  "objectLookup": "scenario.context.objectLookup",
+  "rawLifetimeContextOrders": [
+    {
+      "importMappings": [
+        {
+          "descriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+          "fileId": "73737373737373737373737373737373",
+          "importerProfile": "importer.test/fixture-adapter@1",
+          "mappingKey": "bfc8dc1a980e10425ed9fa86e6730157f9f87c02d93bcfb7faa40de1e5e6035c",
+          "sourceIdentityDigest": "7272727272727272727272727272727272727272727272727272727272727272",
+          "sourceNamespaceDigest": "7171717171717171717171717171717171717171717171717171717171717171",
+          "state": "materialized"
+        },
+        {
+          "fileId": "73737373737373737373737373737373",
+          "importerProfile": "importer.test/fixture-adapter@1",
+          "mappingKey": "bfc8dc1a980e10425ed9fa86e6730157f9f87c02d93bcfb7faa40de1e5e6035c",
+          "sourceIdentityDigest": "7272727272727272727272727272727272727272727272727272727272727272",
+          "sourceNamespaceDigest": "7171717171717171717171717171717171717171717171717171717171717171",
+          "state": "materialized"
+        }
+      ],
+      "lifetimeRecords": [],
+      "workingLifetimeAdditions": []
+    },
+    {
+      "importMappings": [
+        {
+          "fileId": "73737373737373737373737373737373",
+          "importerProfile": "importer.test/fixture-adapter@1",
+          "mappingKey": "bfc8dc1a980e10425ed9fa86e6730157f9f87c02d93bcfb7faa40de1e5e6035c",
+          "sourceIdentityDigest": "7272727272727272727272727272727272727272727272727272727272727272",
+          "sourceNamespaceDigest": "7171717171717171717171717171717171717171717171717171717171717171",
+          "state": "materialized"
+        },
+        {
+          "descriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+          "fileId": "73737373737373737373737373737373",
+          "importerProfile": "importer.test/fixture-adapter@1",
+          "mappingKey": "bfc8dc1a980e10425ed9fa86e6730157f9f87c02d93bcfb7faa40de1e5e6035c",
+          "sourceIdentityDigest": "7272727272727272727272727272727272727272727272727272727272727272",
+          "sourceNamespaceDigest": "7171717171717171717171717171717171717171717171717171717171717171",
+          "state": "materialized"
+        }
+      ],
+      "lifetimeRecords": [],
+      "workingLifetimeAdditions": []
+    }
+  ],
+  "registry": "bundled",
+  "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+  "requestedLayer": 3,
+  "schema": "ogvcs.repository-format.v1.operation-mode-input.v1",
+  "semanticProfiles": true,
+  "surface": "import-request-context-raw"
+}

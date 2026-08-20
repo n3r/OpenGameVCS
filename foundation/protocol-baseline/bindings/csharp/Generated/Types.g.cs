@@ -8,7 +8,7 @@ namespace OpenGameVcs.Protocol.V1;
 public static class ProtocolConstants
 {
     public const string ContractVersion = "1.0.0-rc.1";
-    public const string ContractManifestSha256 = "41bfebd0524458a669324e055c9849aff40f5a55bd5b8b47f1891516910ebffe";
+    public const string ContractManifestSha256 = "1d02d4a858a5b3292511bcaccdb6d9619eaa3e2a8f95f8b89dbee73743de19d4";
     public const string ProtocolVersion = "ogvcs.control.https-json@1";
     public const string MessageSchemaVersion = "ogvcs.protocol.schema@1";
     public const string AuthorizationContract = "ogvcs.authorization@1";

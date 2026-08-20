@@ -6,11 +6,13 @@ import { resolve } from 'node:path';
 import { encodeCanonical } from './cbor.js';
 import { fail, OgvcsError } from './errors.js';
 import { allocateFileId } from './fileid.js';
+import { hardLimitMaximum } from './hard-limits.js';
 import { hashLogicalRecord, hashObject } from './hash.js';
 import { loadBundledRegistry } from './registry.js';
 import { validateAssetGroups } from './repository.js';
 import { encodeMetadata, validateLogicalRecord } from './schema.js';
 import { Digest, FileId, ObjectRef, ProfileRef, toHex } from './types.js';
+import { isUnicode15String } from './unicode-age.js';
 
 const MAX_CONTROL_BYTES = 2 * 1024 * 1024;
 const MAX_GROUP_BYTES = 128 * 1024 * 1024;
@@ -27,10 +29,12 @@ const ADAPTER_HARD_LIMITS = Object.freeze({
   inventoryRecords: 100_000,
   operationRecords: 100_000,
   groups: 100_000,
+  groupMemberships: 1_000_000,
   mappings: 300_000,
   objects: 500_000,
   manifestParts: 65_536,
   treeNodes: 200_000,
+  maxWorkingBytes: 256 * 1024 * 1024,
   durationMilliseconds: 10 * 60 * 1000
 });
 const LEDGER_SCHEMA = 'ogvcs.fixture-adapter/ledger/v1';
@@ -64,6 +68,7 @@ class AdapterBudget {
     this.limits = limits;
     this.started = process.hrtime.bigint();
     this.inputBytes = 0;
+    this.workingBytes = 0;
     this.controller = new AbortController();
   }
   remainingNanoseconds() {
@@ -116,6 +121,14 @@ class AdapterBudget {
     if (!Number.isSafeInteger(value) || value < 0 || value > maximum) fail('LIMIT_COUNT', {
       layer: 1, stage: 'configured-resource-preflight'
     });
+    this.checkTime();
+  }
+  reserveWorking(bytes) {
+    if (!Number.isSafeInteger(bytes) || bytes < 0 ||
+        bytes > this.limits.maxWorkingBytes - this.workingBytes) {
+      fail('LIMIT_MEMORY', { layer: 1 });
+    }
+    this.workingBytes += bytes;
     this.checkTime();
   }
 }
@@ -195,11 +208,36 @@ function profileMap(namespace, id, major) { return profile(namespace, id, major)
 function profileSort(values) {
   return [...values].sort((left, right) => Buffer.compare(Buffer.from(encodeCanonical(left)), Buffer.from(encodeCanonical(right))));
 }
+function canonicalCompare(left, right) {
+  return Buffer.compare(Buffer.from(encodeCanonical(left)), Buffer.from(encodeCanonical(right)));
+}
+function orderedBundleObjects(values) {
+  return [...values].sort((left, right) => canonicalCompare(left.ref.toMap(), right.ref.toMap()));
+}
+function orderedBundleLogicalRecords(values) {
+  return [...values].sort((left, right) => {
+    const leftType = Number(left.get(1));
+    const rightType = Number(right.get(1));
+    if (leftType !== rightType) return leftType - rightType;
+    return Buffer.compare(
+      Buffer.from(hashLogicalRecord(leftType, left).bytes),
+      Buffer.from(hashLogicalRecord(rightType, right).bytes)
+    );
+  });
+}
+function orderedBundleRoots(values) {
+  return [...values].sort((left, right) => {
+    if (left.kind !== right.kind) return left.kind - right.kind;
+    const identity = canonicalCompare(left.identity.toMap(), right.identity.toMap());
+    return identity !== 0 ? identity : canonicalCompare(left.role.toMap(), right.role.toMap());
+  });
+}
 function exactObject(value, keys, code = 'FIXTURE_SEMANTIC_INVALID') {
   if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).sort().join('\0') !== [...keys].sort().join('\0')) fixtureFail(code);
 }
 function portableSegments(value) {
-  if (typeof value !== 'string' || value.normalize('NFC') !== value || value.startsWith('/') || value.includes('\\') || value.includes('\0')) fixtureFail();
+  if (typeof value !== 'string' || !isUnicode15String(value) || value.normalize('NFC') !== value ||
+      value.startsWith('/') || value.includes('\\') || value.includes('\0')) fixtureFail();
   const utf8 = Buffer.from(value, 'utf8');
   if (utf8.toString('utf8') !== value || utf8.length > MAX_PORTABLE_PATH_BYTES ||
       value.length > MAX_PORTABLE_PATH_UTF16_UNITS) fixtureFail();
@@ -218,6 +256,7 @@ async function readRegularBounded(filePath, maximum, budget, fileSystem) {
     const stat = await budget.wait(signal => handle.stat({ signal }));
     if (!stat.isFile() || stat.size > maximum) fixtureFail();
     budget?.addInputBytes(stat.size);
+    budget?.reserveWorking(stat.size);
     const bytes = new Uint8Array(stat.size);
     let offset = 0;
     while (offset < bytes.length) {
@@ -235,6 +274,9 @@ async function readRegularBounded(filePath, maximum, budget, fileSystem) {
 
 async function readJson(filePath, maximum, budget, fileSystem) {
   const bytes = await readRegularBounded(filePath, maximum, budget, fileSystem);
+  // Bound the decoded JS graph before TextDecoder/JSON.parse can expand a
+  // compact hostile document into many small strings, arrays, and objects.
+  budget.reserveWorking(bytes.length * 15 + 512);
   try { return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); } catch { fixtureFail(); }
 }
 
@@ -247,12 +289,16 @@ async function readNdjson(filePath, maximumRecords, budget, fileSystem) {
   try {
     const stat = await budget.wait(signal => handle.stat({ signal })); if (!stat.isFile()) fixtureFail();
     budget.addInputBytes(stat.size);
+    budget.reserveWorking(2 * 64 * 1024);
     const input = Buffer.allocUnsafe(64 * 1024);
     const line = Buffer.allocUnsafe(MAX_NDJSON_LINE_BYTES);
     const decoder = new TextDecoder('utf-8', { fatal: true });
     let position = 0; let length = 0;
     const finishLine = () => {
       if (length === 0) fixtureFail();
+      // This covers the retained raw line, record wrapper, decoded string and
+      // worst-case small-container expansion before JSON.parse is invoked.
+      budget.reserveWorking(length * 16 + 256);
       const raw = Buffer.from(line.subarray(0, length));
       let value;
       try { value = JSON.parse(decoder.decode(raw)); } catch { fixtureFail(); }
@@ -288,8 +334,14 @@ function cloneLedger(value) {
   if (value === undefined) return undefined;
   try { return structuredClone(value); } catch { fixtureFail('FIXTURE_MAPPING_MISSING'); }
 }
-function sortedRecord(value) { return Object.fromEntries(Object.entries(value).sort(([left], [right]) => left.localeCompare(right, 'en'))); }
-function setOwn(record, key, value) {
+function sortedRecord(value, budget) {
+  let count = 0;
+  for (const key in value) if (Object.hasOwn(value, key)) count += 1;
+  budget.reserveWorking(count * 32 + 128);
+  return Object.fromEntries(Object.entries(value).sort(([left], [right]) => left.localeCompare(right, 'en')));
+}
+function setOwn(record, key, value, budget) {
+  budget.reserveWorking((key.length * 2 + (typeof value === 'string' ? value.length * 2 : 0) + 192) * 4);
   Object.defineProperty(record, key, { configurable: true, enumerable: true, value, writable: true });
 }
 
@@ -301,7 +353,8 @@ function shallowMapping(value) {
 }
 
 function boundedMappingKey(value, code = 'FIXTURE_MAPPING_MISSING') {
-  if (typeof value !== 'string' || value.length < 1 || value.normalize('NFC') !== value ||
+  if (typeof value !== 'string' || value.length < 1 || !isUnicode15String(value) ||
+      value.normalize('NFC') !== value ||
       value.includes('\0') || Buffer.byteLength(value, 'utf8') > MAX_PORTABLE_PATH_BYTES) {
     fixtureFail(code);
   }
@@ -318,6 +371,23 @@ function validateLedgerBeforeClone(value, requirements, limits, budget) {
     Object.keys(value.groupIds).length, limits.mappings);
   budget.count(Object.keys(value.revisionSnapshots).length, limits.operationRecords);
   budget.count(Object.keys(value.importMappings).length, limits.inventoryRecords);
+  // Reserve all cloned/sorted/persisted/returned ledger views before the first
+  // structured clone. Four copies conservatively cover the live clone, sort
+  // workspace, persistence callback value, and public returned snapshot.
+  let ledgerBytes = 2_048;
+  const addText = text => {
+    const bytes = typeof text === 'string' ? text.length * 2 + 96 : 128;
+    if (!Number.isSafeInteger(bytes) || bytes > Number.MAX_SAFE_INTEGER - ledgerBytes) {
+      fail('LIMIT_MEMORY', { layer: 1 });
+    }
+    ledgerBytes += bytes;
+  };
+  addText(value.schemaVersion); addText(value.requestDigest); addText(value.repositoryId);
+  for (const field of dictionaries) for (const key in value[field]) {
+    if (!Object.hasOwn(value[field], key)) continue;
+    addText(key); addText(value[field][key]);
+  }
+  budget.reserveWorking(ledgerBytes * 4);
   if (value.schemaVersion !== LEDGER_SCHEMA || value.requestDigest !== requirements.requestDigest ||
       !/^[0-9a-f]{64}$/.test(value.requestDigest) ||
       (value.repositoryId !== null && typeof value.repositoryId !== 'string')) {
@@ -360,13 +430,24 @@ function mappingRequirements(manifest, inventory, groups, budget) {
   for (const record of inventory) {
     const parts = portableSegments(record.logicalPath);
     for (let count = 1; count < parts.length; count++) {
-      directories.add(parts.slice(0, count).join('/'));
+      const directory = parts.slice(0, count).join('/');
+      if (!directories.has(directory)) budget.reserveWorking(192 + directory.length * 2);
+      directories.add(directory);
       budget.count(directories.size, budget.limits.treeNodes);
     }
   }
-  const files = new Set(inventory.map(record => record.fileId));
-  const groupIds = new Set(groups.map(group => group.id));
+  const files = new Set();
+  for (const record of inventory) {
+    if (!files.has(record.fileId)) budget.reserveWorking(192 + record.fileId.length * 2);
+    files.add(record.fileId);
+  }
+  const groupIds = new Set();
+  for (const group of groups) {
+    if (!groupIds.has(group.id)) budget.reserveWorking(192 + group.id.length * 2);
+    groupIds.add(group.id);
+  }
   budget.count(directories.size + files.size + groupIds.size, budget.limits.mappings);
+  budget.reserveWorking((directories.size + files.size + groupIds.size) * 16 + 512);
   return {
     directories: [...directories].sort((left, right) => Buffer.compare(Buffer.from(left), Buffer.from(right))),
     files: [...files].sort(),
@@ -463,6 +544,7 @@ export async function prepareFixtureAdapterLedger(input, options = {}) {
   let ledger = cloneLedger(options.ledger);
   let changed = false;
   if (ledger === undefined) {
+    budget.reserveWorking(2_048);
     ledger = { schemaVersion: LEDGER_SCHEMA, requestDigest: requirements.requestDigest,
       repositoryId: null, directoryIds: {}, fileIds: {}, groupIds: {}, revisionSnapshots: {}, importMappings: {} };
     changed = true;
@@ -511,32 +593,32 @@ export async function prepareFixtureAdapterLedger(input, options = {}) {
   for (const path of requirements.directories) if (!Object.hasOwn(ledger.directoryIds, path)) {
     const allocated = await allocatedHex(options.allocateId, options.allocationEntropy, 'directory', path, usedFiles,
       fileId => checkTarget(fileId, 'directory', `${requirements.requestDigest}:${path}`), budget);
-    setOwn(ledger.directoryIds, path, allocated); changed = true;
+    setOwn(ledger.directoryIds, path, allocated, budget); changed = true;
   }
   for (const source of requirements.files) {
     hexBytes(source, 16, 'FIXTURE_SEMANTIC_INVALID');
     if (!Object.hasOwn(ledger.fileIds, source)) {
       const allocated = await allocatedHex(options.allocateId, options.allocationEntropy, 'file', source, usedFiles,
         fileId => checkTarget(fileId, 'import', `${requirements.requestDigest}:${source}`), budget);
-      setOwn(ledger.fileIds, source, allocated); changed = true;
+      setOwn(ledger.fileIds, source, allocated, budget); changed = true;
     }
     const mappingKey = `${requirements.requestDigest}:${source}`;
     if (Object.hasOwn(ledger.importMappings, mappingKey)) {
       if (ledger.importMappings[mappingKey] !== ledger.fileIds[source]) fixtureFail('FIXTURE_MAPPING_MISSING');
     } else {
-      setOwn(ledger.importMappings, mappingKey, ledger.fileIds[source]); changed = true;
+      setOwn(ledger.importMappings, mappingKey, ledger.fileIds[source], budget); changed = true;
     }
   }
   for (const source of requirements.groups) if (!Object.hasOwn(ledger.groupIds, source)) {
     const allocated = await allocatedHex(options.allocateId, options.allocationEntropy,
       'group', source, usedGroups, undefined, budget);
-    setOwn(ledger.groupIds, source, allocated); changed = true;
+    setOwn(ledger.groupIds, source, allocated, budget); changed = true;
   }
-  ledger.directoryIds = sortedRecord(ledger.directoryIds);
-  ledger.fileIds = sortedRecord(ledger.fileIds);
-  ledger.groupIds = sortedRecord(ledger.groupIds);
-  ledger.revisionSnapshots = sortedRecord(ledger.revisionSnapshots);
-  ledger.importMappings = sortedRecord(ledger.importMappings);
+  ledger.directoryIds = sortedRecord(ledger.directoryIds, budget);
+  ledger.fileIds = sortedRecord(ledger.fileIds, budget);
+  ledger.groupIds = sortedRecord(ledger.groupIds, budget);
+  ledger.revisionSnapshots = sortedRecord(ledger.revisionSnapshots, budget);
+  ledger.importMappings = sortedRecord(ledger.importMappings, budget);
   if (changed) {
     if (typeof options.persistLedger !== 'function') fixtureFail('FIXTURE_MAPPING_MISSING');
     await budget.wait(signal => options.persistLedger(structuredClone(ledger), { signal }));
@@ -599,6 +681,7 @@ async function loadVerifiedFixture(destination, options, limits, budget) {
       inventory.digest !== manifest.inventory.digest || operationChainDigest(operations.records) !== manifest.digests.operations ||
       manifest.counts?.paths !== inventory.records.length || manifest.counts?.files !== inventory.records.length ||
       manifest.counts?.operations !== operations.records.length || manifest.counts?.groups !== groups.length) fixtureFail();
+  budget.reserveWorking(inventory.records.length * 16 + 256);
   return { destination, directory, groups, inventory: inventory.records.map(item => item.value), manifest,
     operationLines: operations.records, request, verification, verifier: verify, workload };
 }
@@ -651,6 +734,7 @@ function createEmitter(registry, options, limits, budget) {
     budget.count(objects.size + 1, limits.objects);
     const retained = OBJECT_REFERENCE_OVERHEAD + (external ? 0 : payload.length);
     if (retained > maximum - retainedBytes) fail('LIMIT_MEMORY', { layer: 1 });
+    budget.reserveWorking(retained + key.length * 2 + 192);
     retainedBytes += retained;
     if (external) {
       await budget.wait(signal => external.write({ kind, payload: payload.slice(), reference }, { signal }));
@@ -743,7 +827,7 @@ async function contentManifest(record, fixture, descriptorReference, emitter, re
   }
   if (!source?.[Symbol.asyncIterator] && !source?.[Symbol.iterator]) fixtureFail('FIXTURE_CONTENT_UNAVAILABLE');
   const whole = createHash('sha256'); const parts = []; let boundaryIndex = 0;
-  let target = boundaries[0] ?? 0; let chunk = Buffer.alloc(target); let filled = 0; let total = 0;
+  let target = boundaries[0] ?? 0; budget.reserveWorking(target + 128); let chunk = Buffer.alloc(target); let filled = 0; let total = 0;
   const iterator = source[Symbol.asyncIterator]?.() ?? source[Symbol.iterator]?.();
   let exhausted = false;
   try {
@@ -762,8 +846,9 @@ async function contentManifest(record, fixture, descriptorReference, emitter, re
         chunk.set(bytes.subarray(offset, offset + take), filled); filled += take; offset += take;
         if (filled === target) {
           const reference = await emitter.emit(1, chunk);
+          budget.reserveWorking(384);
           parts.push(new Map([[0, reference.toMap()], [1, target]]));
-          boundaryIndex++; target = boundaries[boundaryIndex] ?? 0; chunk = Buffer.alloc(target); filled = 0;
+          boundaryIndex++; target = boundaries[boundaryIndex] ?? 0; budget.reserveWorking(target + 128); chunk = Buffer.alloc(target); filled = 0;
         }
       }
       budget.checkTime();
@@ -782,31 +867,36 @@ async function contentManifest(record, fixture, descriptorReference, emitter, re
   if (total !== logicalBytes || boundaryIndex !== boundaries.length || actual !== expectedDigest) fixtureFail('FIXTURE_CONTENT_UNAVAILABLE');
   const manifest = new Map([[0, 1], [1, 2], [2, []], [16, logicalBytes], [17, digestMap(hexBytes(expectedDigest, 32, 'FIXTURE_CONTENT_UNAVAILABLE'))],
     [18, profileMap('chunking.test', 'external-boundaries', 1)], [19, parts]]);
-  const payload = encodeMetadata(manifest, { registry }); return emitter.emit(2, payload);
+  const payload = encodeMetadata(manifest, { registry, operation: 'conformance' });
+  return emitter.emit(2, payload);
 }
 
 function treeModel(inventory, manifests, ledger, limits, budget) {
+  budget.reserveWorking(512);
   const root = { directories: new Map(), files: [] };
   let nodes = 1;
   for (const record of inventory) {
     const parts = portableSegments(record.logicalPath); let node = root;
     for (const segment of parts.slice(0, -1)) {
       if (!node.directories.has(segment)) {
+        budget.reserveWorking(512 + segment.length * 2);
         node.directories.set(segment, { directories: new Map(), files: [] });
         budget.count(++nodes, limits.treeNodes);
       }
       node = node.directories.get(segment);
     }
+    budget.reserveWorking(384 + parts.at(-1).length * 2);
     node.files.push({ basename: parts.at(-1), record, reference: manifests.get(record.logicalPath) });
     budget.count(++nodes, limits.treeNodes);
   }
   return root;
 }
 
-async function emitTree(node, prefix, descriptor, ledger, emitter, registry) {
+async function emitTree(node, prefix, descriptor, ledger, emitter, registry, budget) {
+  budget.reserveWorking((node.directories.size + node.files.length) * 384 + 128);
   const entries = [];
   for (const [basename, child] of node.directories) {
-    const path = [...prefix, basename]; const reference = await emitTree(child, path, descriptor, ledger, emitter, registry);
+    const path = [...prefix, basename]; const reference = await emitTree(child, path, descriptor, ledger, emitter, registry, budget);
     entries.push(new Map([[0, basename], [1, 1], [2, hexBytes(ledger.directoryIds[path.join('/')], 16)], [3, 1], [4, reference.toMap()], [5, 0], [6, profileMap('content-policy.test', 'opaque', 1)]]));
   }
   for (const item of node.files) {
@@ -816,20 +906,38 @@ async function emitTree(node, prefix, descriptor, ledger, emitter, registry) {
   }
   entries.sort((left, right) => Buffer.compare(Buffer.from(left.get(0)), Buffer.from(right.get(0))));
   const value = new Map([[0, 1], [1, 3], [2, []], [16, descriptor.toMap()], [17, entries]]);
-  return emitter.emit(3, encodeMetadata(value, { registry }));
+  return emitter.emit(3, encodeMetadata(value, { registry, operation: 'conformance' }));
 }
 
-function groupObjects(fixture, ledger) {
+function groupObjects(fixture, ledger, registry, budget) {
+  let aggregateMemberships = 0;
+  for (const relationship of fixture.groups) {
+    budget.checkTime();
+    if (!relationship || typeof relationship.id !== 'string' || typeof relationship.kind !== 'string' ||
+        !Array.isArray(relationship.members) || relationship.members.length === 0) fixtureFail();
+    budget.count(relationship.members.length, hardLimitMaximum('asset-group-members'));
+    if (relationship.members.length > Number.MAX_SAFE_INTEGER - aggregateMemberships) {
+      fail('LIMIT_COUNT', { layer: 1, stage: 'configured-resource-preflight' });
+    }
+    aggregateMemberships += relationship.members.length;
+    budget.count(aggregateMemberships, budget.limits.groupMemberships);
+  }
+  // Cover member Maps, per-group sort arrays, synthetic-guid Sets, and the
+  // final group/index projections before any relationship is materialized.
+  budget.reserveWorking(fixture.inventory.length * 512 + fixture.groups.length * 512 +
+    aggregateMemberships * 768 + 256);
   const byPath = new Map(fixture.inventory.map(record => [record.logicalPath, record]));
   const fileIds = new Map();
   for (const record of fixture.inventory) fileIds.set(fileIdText(hexBytes(ledger.fileIds[record.fileId], 16)), record.logicalPath);
   const groups = [];
   for (const relationship of fixture.groups) {
-    if (!relationship || typeof relationship.id !== 'string' || typeof relationship.kind !== 'string' || !Array.isArray(relationship.members) || relationship.members.length === 0) fixtureFail();
-    const members = relationship.members.map(path => {
+    const members = [];
+    for (const path of relationship.members) {
+      budget.checkTime();
       const record = byPath.get(path); if (!record) fixtureFail();
-      return new Map([[0, hexBytes(ledger.fileIds[record.fileId], 16)], [1, roleProfile(relationship.kind, record.role)]]);
-    });
+      members.push(new Map([[0, hexBytes(ledger.fileIds[record.fileId], 16)],
+        [1, roleProfile(relationship.kind, record.role)]]));
+    }
     members.sort((left, right) => {
       const profileOrder = Buffer.compare(Buffer.from(encodeCanonical(left.get(1))), Buffer.from(encodeCanonical(right.get(1))));
       return profileOrder || Buffer.compare(Buffer.from(left.get(0)), Buffer.from(right.get(0)));
@@ -837,24 +945,34 @@ function groupObjects(fixture, ledger) {
     const first = byPath.get(relationship.members[0]);
     const group = new Map([[0, hexBytes(ledger.groupIds[relationship.id], 16)], [1, groupProfile(relationship.kind)],
       [2, hexBytes(ledger.fileIds[first.fileId], 16)], [3, members]]);
-    const synthetic = [...new Set(relationship.members.map(path => byPath.get(path)?.syntheticGuid).filter(Boolean))];
+    const syntheticSet = new Set();
+    for (const path of relationship.members) {
+      budget.checkTime();
+      const value = byPath.get(path)?.syntheticGuid;
+      if (value !== undefined) syntheticSet.add(value);
+    }
+    const synthetic = [...syntheticSet];
     if (synthetic.length > 1) fixtureFail();
     if (synthetic.length === 1) group.set(4, [new Map([[0, profileMap('fixture-key.opengamevcs.test', 'synthetic-guid', 2)], [1, hexBytes(synthetic[0], 16)]])]);
     groups.push(group);
   }
   groups.sort((left, right) => Buffer.compare(Buffer.from(left.get(0)), Buffer.from(right.get(0))));
-  validateAssetGroups(new Map(groups.map(group => [toHex(group.get(0)), group])), fileIds);
+  validateAssetGroups(new Map(groups.map(group => [toHex(group.get(0)), group])), fileIds, {
+    registry,
+    mode: 'conformance'
+  });
   return groups;
 }
 
 function fixtureEvents(fixture, registry, limits, budget) {
   budget.count(fixture.operationLines.length, limits.operationRecords);
+  budget.reserveWorking(fixture.operationLines.length * 512 + 256);
   const scenario = digestMap(hexBytes(fixture.manifest.operationScenario.digest, 32));
   return fixture.operationLines.map(({ raw, value }, sequence) => {
     if (value.sequence !== sequence || typeof value.kind !== 'string') fixtureFail();
     const record = new Map([[0, 1], [1, 9], [16, scenario], [17, sequence],
       [18, profileMap('fixture-event.opengamevcs.test', 'operation', 2)], [19, digestMap(sha256(raw))], [20, value.kind]]);
-    validateLogicalRecord(record, { registry }); return record;
+    validateLogicalRecord(record, { registry, operation: 'conformance' }); return record;
   });
 }
 
@@ -883,23 +1001,35 @@ export async function adaptFixture(destination, options = {}) {
   const emitter = createEmitter(registry, options, limits, budget);
   try {
     const contentProfiles = new Map([['content-policy.test/opaque@1', profileMap('content-policy.test', 'opaque', 1)]]);
-    for (const record of fixture.inventory) contentProfiles.set(`fixture-content.opengamevcs.test/${record.role}@2`, contentPolicy(record.role));
+    for (const record of fixture.inventory) {
+      budget.reserveWorking(384 + record.role.length * 4);
+      contentProfiles.set(`fixture-content.opengamevcs.test/${record.role}@2`, contentPolicy(record.role));
+    }
+    budget.reserveWorking(fixture.groups.length * 384 + 128);
     const groupProfiles = new Map(fixture.groups.map(group => [`fixture-group.opengamevcs.test/${group.kind}@2`, groupProfile(group.kind)]));
     const descriptorValue = new Map([[0, 1], [1, 6], [2, []], [16, hexBytes(prepared.ledger.repositoryId, 16)],
       [17, profileMap('path.test', 'opaque', 1)], [18, profileSort(contentProfiles.values())], [19, profileSort(groupProfiles.values())],
       [20, [profileMap('chunking.test', 'external-boundaries', 1)]]]);
-    const descriptor = await emitter.emit(6, encodeMetadata(descriptorValue, { registry }));
+    const descriptor = await emitter.emit(6, encodeMetadata(descriptorValue, {
+      registry,
+      operation: 'conformance'
+    }));
     const manifests = new Map();
     for (const record of fixture.inventory) {
+      budget.reserveWorking(384 + record.logicalPath.length * 2);
       manifests.set(record.logicalPath, await contentManifest(record, fixture, descriptor, emitter, registry, options, limits, budget));
     }
-    const rootTree = await emitTree(treeModel(fixture.inventory, manifests, prepared.ledger, limits, budget), [], descriptor, prepared.ledger, emitter, registry);
-    const groupValues = groupObjects(fixture, prepared.ledger); let groupSet;
+    const rootTree = await emitTree(treeModel(fixture.inventory, manifests, prepared.ledger, limits, budget), [], descriptor, prepared.ledger, emitter, registry, budget);
+    const groupValues = groupObjects(fixture, prepared.ledger, registry, budget); let groupSet;
     if (groupValues.length > 0) {
       const value = new Map([[0, 1], [1, 5], [2, []], [16, descriptor.toMap()], [17, groupValues]]);
-      groupSet = await emitter.emit(5, encodeMetadata(value, { registry }));
+      groupSet = await emitter.emit(5, encodeMetadata(value, {
+        registry,
+        operation: 'conformance'
+      }));
     }
     const logicalRecords = fixtureEvents(fixture, registry, limits, budget);
+    budget.reserveWorking((logicalRecords.length + 2) * 384 + 256);
     const roots = [{ kind: 1, identity: rootTree, role: profile('bundle-role.test', 'root', 1) }];
     if (groupSet) roots.push({ kind: 1, identity: groupSet, role: profile('bundle-role.test', 'root', 1) });
     for (const record of logicalRecords) roots.push({
@@ -923,8 +1053,10 @@ export async function adaptFixture(destination, options = {}) {
     // from turning staged adapter output into trusted output.
     await reverifyFixture(fixture, options, budget);
     await emitter.commit(summary);
-    return Object.freeze({ descriptor, groupSet, ledger: prepared.ledger, logicalRecords,
-      objects: Object.freeze([...emitter.objects.values()]), roots: Object.freeze(roots), rootTree, summary });
+    return Object.freeze({ descriptor, groupSet, ledger: prepared.ledger,
+      logicalRecords: Object.freeze(orderedBundleLogicalRecords(logicalRecords)),
+      objects: Object.freeze(orderedBundleObjects(emitter.objects.values())),
+      roots: Object.freeze(orderedBundleRoots(roots)), rootTree, summary });
   } catch (error) {
     emitter.abort(error);
     throw error;

@@ -1,6 +1,7 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [],
     "lifetimeRecords": [],
     "mode": "conformance",
@@ -143,7 +144,7 @@
         "path": "scenarios/outputs/bundle-logical-reference-preservation.json",
         "sha256": "e786e3aa5f9a71a409e119df1b326e2fde223423a8d1ba0c4ed6360368711b94"
       },
-      "summarySha256": "53a833d3494f1770707d9a7374b8b74d145c55d107b3d547b94ef097c975c369"
+      "summarySha256": "4182d318c8dc100b70b62de44c3e589b5b9d012208ae0f27482d1a0655fb4589"
     },
     "result": "accept"
   },
@@ -156,10 +157,10 @@
       "sha256": "a1b9df51f5ce5e6b12214f1777929f74daa64df36ea921ecc68c4b704a7cae7e"
     },
     {
-      "bytes": 7317,
+      "bytes": 7351,
       "mediaType": "application/json",
       "path": "scenarios/definitions/bundle-logical-reference-preservation.json",
-      "sha256": "b6cdff259f5ac28ce6583260fb556e14ba9012dadc0754c774776f3c11605c71"
+      "sha256": "1228476c493d16c6a59e553d9fa92a2f453b7cd353525df4f12d153869719c7a"
     }
   ],
   "operation": "validate-bundle",
@@ -172,18 +173,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/bundle-logical-reference-preservation.json",
-        "definitionSha256": "b6cdff259f5ac28ce6583260fb556e14ba9012dadc0754c774776f3c11605c71",
+        "definitionSha256": "1228476c493d16c6a59e553d9fa92a2f453b7cd353525df4f12d153869719c7a",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "a3890064d1611f2e077dce6426f0a73797b69b9fcbb02bfec11e6d2fd20c626b"
     },
     "summary": {
-      "bytes": 14330,
+      "bytes": 14364,
       "indexEntries": 0,
       "items": 21,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "53a833d3494f1770707d9a7374b8b74d145c55d107b3d547b94ef097c975c369",
+      "summarySha256": "4182d318c8dc100b70b62de44c3e589b5b9d012208ae0f27482d1a0655fb4589",
       "traversalEdges": 0
     }
   },

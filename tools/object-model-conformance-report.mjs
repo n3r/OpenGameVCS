@@ -73,7 +73,7 @@ async function objectSummary(registry) {
       throw new Error(`object identity mismatch for ${vector.name}`);
     }
     if (vector.kind !== 1) {
-      const scanned = scanMetadata(payload, { registry });
+      const scanned = scanMetadata(payload);
       if (scanned.kind !== vector.kind || scanned.highestLayer < 1) {
         throw new Error(`object framing mismatch for ${vector.name}`);
       }
@@ -90,8 +90,8 @@ async function logicalRecordSummary(registry) {
   const rows = [];
   for (const vector of vectors) {
     const payload = new Uint8Array(await readFile(join(VECTORS, vector.payloadPath)));
-    const decoded = validateLogicalRecord(decodeCanonical(payload), { registry });
-    const digest = hashLogicalRecord(decoded.type, payload, { registry: registry.logicalRecordTypes });
+    const decoded = validateLogicalRecord(decodeCanonical(payload), { registry, operation: 'conformance' });
+    const digest = hashLogicalRecord(decoded.type, payload, { registry: registry.logicalRecordTypeCodes });
     const digestHex = Buffer.from(digest.bytes).toString('hex');
     const expected = vector.identity ?? vector.logicalRecordId ?? vector.recordId ?? vector.digest;
     if (expected !== undefined && digestHex !== expected) {
@@ -111,7 +111,7 @@ async function bundleSummary(registry) {
   const rows = [];
   for (const name of names) {
     const payload = new Uint8Array(await readFile(join(VECTORS, name)));
-    const result = verifyLogicalBundle(payload, { registry });
+    const result = verifyLogicalBundle(payload, { registry, operation: 'conformance' });
     rows.push({
       bytes: result.bytes,
       indexEntries: result.indexEntries,

@@ -1,0 +1,7 @@
+{
+  "resultFamily": "tree",
+  "rootState": "accepted-exact-constructor-result",
+  "scenarioId": "tree-ratified-path-profile-empty-accept",
+  "schema": "ogvcs.repository-format.v1.scenario-output.v1",
+  "stableOutputIdentity": "ogvcs:v1:tree:sha256:1b9fdcb22f6d73a4792c4a9537f30362bd04d84fe793b05e442e1e696b9c955e"
+}

@@ -1,0 +1,54 @@
+{
+  "api": "write-logical-bundle",
+  "maxMemoryBytes": 67108864,
+  "objectMutations": [
+    {
+      "outputOrdinal": 0,
+      "sourceOrdinal": 1
+    },
+    {
+      "outputOrdinal": 1,
+      "sourceOrdinal": 2
+    }
+  ],
+  "operation": "production-write",
+  "outputDisposition": {
+    "inMemoryResult": "absent",
+    "orderedStagingSink": "aborted-discard",
+    "successCommit": false
+  },
+  "plan": {
+    "budget": {
+      "indexEntries": 2,
+      "largestItemBytes": 10000,
+      "sequenceBytes": 100000,
+      "traversalEdges": 100
+    },
+    "logicalRecordCount": 0,
+    "objectCount": 2,
+    "rootCount": 2
+  },
+  "registry": "bundled",
+  "registryFixture": {
+    "path": "registries/index.json",
+    "scenarioId": "registry-conformance-production"
+  },
+  "rootInputs": [
+    {
+      "identity": "ogvcs:v1:tree:sha256:9458b24239ce71b75b1c6ab857883d66a6eab3f0f6f4e9afab15371af1d4bf19",
+      "kind": 1,
+      "roleProfile": "bundle-role.test/root@1"
+    },
+    {
+      "identity": "ogvcs:v1:content-manifest:sha256:82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12",
+      "kind": 1,
+      "roleProfile": "profile-state.test/bundle-root-ratified@1"
+    }
+  ],
+  "schema": "ogvcs.repository-format.v1.logical-bundle-writer-input.v1",
+  "source": "logical-bundles/valid-all-families.cborseq",
+  "writerSurfaces": [
+    "bundle-memory-encoder",
+    "bundle-ordered"
+  ]
+}

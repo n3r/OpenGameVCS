@@ -1,0 +1,8 @@
+{
+  "api": "validate-operation-mode",
+  "operation": "conformance",
+  "registry": "absent",
+  "schema": "ogvcs.repository-format.v1.operation-mode-input.v1",
+  "source": "objects/03-tree.cbor",
+  "surface": "metadata-encoder"
+}

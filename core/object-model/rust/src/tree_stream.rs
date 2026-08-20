@@ -1,4 +1,5 @@
 use std::{
+    cell::RefCell,
     collections::BTreeSet,
     fs::{File, OpenOptions},
     io::{BufReader, Read, Seek, SeekFrom, Write},
@@ -14,12 +15,27 @@ use crate::{
         enforce_hard_limit_context, MAX_CHUNK_BYTES, MAX_LOGICAL_FILE_BYTES, MAX_METADATA_BYTES,
         MAX_PATH_SEGMENT_BYTES, MAX_TREE_ENTRIES,
     },
-    sha256, Error, ErrorCode, ObjectHashWriter, ObjectKind, ObjectRef, Operation, ProfileRef,
-    Registry, RegistryAssignment, Result, Sha256Writer, ValidationStage,
+    sha256, unicode_age::is_unicode_15, Error, ErrorCode, ObjectHashWriter, ObjectKind, ObjectRef,
+    Operation, ProfileRef, Registry, RegistryAssignment, Result, Sha256Writer, ValidationStage,
 };
+use crate::registry::require_write_operation;
 const RUN_MAGIC: &[u8; 12] = b"OGVCS-RUN\0\x01\0";
 const ID_RUN_MAGIC: &[u8; 12] = b"OGVCS-FID\0\x01\0";
 const MAX_PRIVATE_ENTRY_BYTES: usize = 2_048;
+// Conservative retained charge for one FileID plus the BTree node, allocator
+// metadata, and balancing links used by the built-in transactional adapter.
+const FILE_ID_INDEX_NODE_BYTES: usize = 64;
+const TREE_STREAM_FIXED_MEMORY_BYTES: usize = 16 * 1024;
+
+fn tree_stream_live_memory_bytes(limits: &TreeStreamLimits) -> Result<usize> {
+    // A raw verifier/ordered writer simultaneously retains the reader/hash
+    // workspace, the preceding basename, the current basename, and one
+    // prepared entry while its FileID is staged in the external index.
+    TREE_STREAM_FIXED_MEMORY_BYTES
+        .checked_add(limits.max_path_segment_bytes.saturating_mul(2))
+        .and_then(|bytes| bytes.checked_add(MAX_PRIVATE_ENTRY_BYTES))
+        .ok_or_else(|| Error::new(ErrorCode::LimitMemory))
+}
 
 fn hex_lower(bytes: &[u8]) -> String {
     const DIGITS: &[u8; 16] = b"0123456789abcdef";
@@ -105,25 +121,90 @@ pub struct TreeScratchMetrics {
     pub merge_passes: u32,
 }
 
-/// Exact uniqueness service used by the ordered tree path. Implementations
-/// must retain or externally sort every observed value until `finish` returns;
-/// probabilistic filters do not satisfy this contract.
-pub trait TreeFileIdIndex {
+/// One atomic FileID-index attempt. `finish` proves uniqueness without
+/// publishing caller-visible state; `commit` publishes only after every lower
+/// validation layer and ranked lifecycle decision has succeeded. Dropping or
+/// aborting a transaction leaves the underlying index unchanged.
+pub trait TreeFileIdTransaction {
     fn insert(&mut self, file_id: [u8; 16]) -> Result<()>;
     fn finish(&mut self) -> Result<()>;
+    fn commit(self: Box<Self>) -> Result<()>;
+    fn abort(self: Box<Self>);
+}
+
+/// Exact transactional uniqueness service used by tree readers and writers.
+/// Implementations must retain or externally sort every observed value until
+/// commit; probabilistic filters do not satisfy this contract.
+pub trait TreeFileIdIndex {
+    fn begin(
+        &mut self,
+        maximum_items: u64,
+        max_memory_bytes: usize,
+    ) -> Result<Box<dyn TreeFileIdTransaction + '_>>;
 }
 
 impl TreeFileIdIndex for BTreeSet<[u8; 16]> {
+    fn begin(
+        &mut self,
+        maximum_items: u64,
+        max_memory_bytes: usize,
+    ) -> Result<Box<dyn TreeFileIdTransaction + '_>> {
+        Ok(Box::new(SetFileIdTransaction {
+            target: self,
+            pending: BTreeSet::new(),
+            duplicate: false,
+            maximum_items,
+            max_memory_bytes,
+        }))
+    }
+}
+
+struct SetFileIdTransaction<'a> {
+    target: &'a mut BTreeSet<[u8; 16]>,
+    pending: BTreeSet<[u8; 16]>,
+    duplicate: bool,
+    maximum_items: u64,
+    max_memory_bytes: usize,
+}
+
+impl TreeFileIdTransaction for SetFileIdTransaction<'_> {
     fn insert(&mut self, file_id: [u8; 16]) -> Result<()> {
-        if BTreeSet::insert(self, file_id) {
-            Ok(())
-        } else {
-            Err(Error::new(ErrorCode::FileIdDuplicateInTree))
+        if self.pending.contains(&file_id) || self.target.contains(&file_id) {
+            self.duplicate = true;
+            return Ok(());
         }
+        let next_count = self
+            .pending
+            .len()
+            .checked_add(1)
+            .ok_or_else(|| Error::new(ErrorCode::LimitMemory))?;
+        if u64::try_from(next_count).unwrap_or(u64::MAX) > self.maximum_items
+            || next_count
+                .checked_mul(FILE_ID_INDEX_NODE_BYTES)
+                .is_none_or(|bytes| bytes > self.max_memory_bytes)
+        {
+            return Err(Error::new(ErrorCode::LimitMemory));
+        }
+        self.pending.insert(file_id);
+        Ok(())
     }
 
     fn finish(&mut self) -> Result<()> {
+        if self.duplicate || self.pending.iter().any(|file_id| self.target.contains(file_id)) {
+            Err(Error::new(ErrorCode::FileIdDuplicateInTree))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn commit(mut self: Box<Self>) -> Result<()> {
+        self.finish()?;
+        self.target.append(&mut self.pending);
         Ok(())
+    }
+
+    fn abort(self: Box<Self>) {
+        drop(self);
     }
 }
 
@@ -134,9 +215,11 @@ pub struct TreeFileIdScratchIndex {
     buffered: Vec<[u8; 16]>,
     runs: Vec<RunFile>,
     maximum_buffered: usize,
+    configured_maximum_buffered: usize,
     started: Instant,
     max_elapsed: Option<Duration>,
     finished: bool,
+    duplicate: bool,
 }
 
 impl TreeFileIdScratchIndex {
@@ -152,12 +235,14 @@ impl TreeFileIdScratchIndex {
         }
         Ok(Self {
             workspace: ScratchWorkspace::new(scratch_directory, max_scratch_bytes)?,
-            buffered: Vec::with_capacity(maximum_buffered.min(65_536)),
+            buffered: Vec::new(),
             runs: Vec::new(),
             maximum_buffered,
+            configured_maximum_buffered: maximum_buffered,
             started: Instant::now(),
             max_elapsed,
             finished: false,
+            duplicate: false,
         })
     }
 
@@ -177,54 +262,152 @@ impl TreeFileIdScratchIndex {
 
     fn flush(&mut self) -> Result<()> {
         if !self.buffered.is_empty() {
+            self.buffered.sort_unstable();
+            let before = self.buffered.len();
+            self.buffered.dedup();
+            self.duplicate |= self.buffered.len() != before;
             self.runs
                 .push(self.workspace.write_id_run(&mut self.buffered)?);
+        }
+        Ok(())
+    }
+
+    fn abort_attempt(&mut self) {
+        self.buffered.clear();
+        self.buffered.shrink_to_fit();
+        self.runs.clear();
+        for path in std::mem::take(&mut self.workspace.files) {
+            let _ = std::fs::remove_file(path);
+        }
+        self.workspace.live_bytes = 0;
+        if self.workspace.directory_present {
+            let _ = std::fs::remove_dir(&self.workspace.directory);
+            self.workspace.directory_present = false;
+        }
+        self.finished = true;
+        self.duplicate = false;
+    }
+
+    fn reset_attempt(&mut self, max_memory_bytes: usize) -> Result<()> {
+        if self.workspace.directory_present {
+            self.abort_attempt();
+        }
+        create_private_directory(&self.workspace.directory)?;
+        self.workspace.directory_present = true;
+        self.workspace.files.clear();
+        self.workspace.live_bytes = 0;
+        self.buffered.clear();
+        self.runs.clear();
+        self.duplicate = false;
+        self.started = Instant::now();
+        self.finished = false;
+        self.maximum_buffered = self
+            .configured_maximum_buffered
+            .min(max_memory_bytes / std::mem::size_of::<[u8; 16]>());
+        if self.maximum_buffered == 0 {
+            self.abort_attempt();
+            return Err(Error::new(ErrorCode::LimitMemory));
         }
         Ok(())
     }
 }
 
 impl TreeFileIdIndex for TreeFileIdScratchIndex {
-    fn insert(&mut self, file_id: [u8; 16]) -> Result<()> {
+    fn begin(
+        &mut self,
+        _maximum_items: u64,
+        max_memory_bytes: usize,
+    ) -> Result<Box<dyn TreeFileIdTransaction + '_>> {
         if self.finished {
+            self.reset_attempt(max_memory_bytes)?;
+        } else {
+            self.maximum_buffered = self
+                .configured_maximum_buffered
+                .min(max_memory_bytes / std::mem::size_of::<[u8; 16]>());
+            if self.maximum_buffered == 0 {
+                return Err(Error::new(ErrorCode::LimitMemory));
+            }
+        }
+        Ok(Box::new(ScratchFileIdTransaction {
+            index: self,
+            completed: false,
+        }))
+    }
+}
+
+struct ScratchFileIdTransaction<'a> {
+    index: &'a mut TreeFileIdScratchIndex,
+    completed: bool,
+}
+
+impl TreeFileIdTransaction for ScratchFileIdTransaction<'_> {
+    fn insert(&mut self, file_id: [u8; 16]) -> Result<()> {
+        if self.index.finished {
             return Err(Error::new(ErrorCode::SchemaFieldInvalid));
         }
-        self.check_time()?;
-        if self.buffered.len() == self.maximum_buffered {
-            self.flush()?;
+        self.index.check_time()?;
+        if self.index.buffered.len() == self.index.maximum_buffered {
+            self.index.flush()?;
         }
-        self.buffered.push(file_id);
+        self.index
+            .buffered
+            .try_reserve_exact(1)
+            .map_err(|_| Error::new(ErrorCode::LimitMemory))?;
+        self.index.buffered.push(file_id);
         Ok(())
     }
 
     fn finish(&mut self) -> Result<()> {
-        if self.finished {
+        if self.index.finished {
             return Ok(());
         }
-        self.flush()?;
-        while self.runs.len() > 1 {
-            self.check_time()?;
-            self.workspace.metrics.merge_passes =
-                self.workspace.metrics.merge_passes.saturating_add(1);
-            let mut next = Vec::with_capacity(self.runs.len().div_ceil(2));
-            let mut input = std::mem::take(&mut self.runs).into_iter();
+        self.index.flush()?;
+        while self.index.runs.len() > 1 {
+            self.index.check_time()?;
+            self.index.workspace.metrics.merge_passes =
+                self.index.workspace.metrics.merge_passes.saturating_add(1);
+            let mut next = Vec::with_capacity(self.index.runs.len().div_ceil(2));
+            let mut input = std::mem::take(&mut self.index.runs).into_iter();
             while let Some(left) = input.next() {
                 if let Some(right) = input.next() {
-                    next.push(self.workspace.merge_id_runs(left, right)?);
+                    next.push(self.index.workspace.merge_id_runs(left, right)?);
                 } else {
                     next.push(left);
                 }
             }
-            self.runs = next;
+            self.index.runs = next;
         }
-        if let Some(final_run) = self.runs.pop() {
+        if let Some(final_run) = self.index.runs.pop() {
             let reader = IdRunReader::open(&final_run)?;
             reader.finish()?;
-            self.workspace.remove_run(&final_run)?;
+            self.index.workspace.remove_run(&final_run)?;
         }
-        self.workspace.close()?;
-        self.finished = true;
+        self.index.workspace.close()?;
+        self.index.finished = true;
+        if self.index.duplicate {
+            Err(Error::new(ErrorCode::FileIdDuplicateInTree))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn commit(mut self: Box<Self>) -> Result<()> {
+        self.finish()?;
+        self.completed = true;
         Ok(())
+    }
+
+    fn abort(mut self: Box<Self>) {
+        self.index.abort_attempt();
+        self.completed = true;
+    }
+}
+
+impl Drop for ScratchFileIdTransaction<'_> {
+    fn drop(&mut self) {
+        if !self.completed {
+            self.index.abort_attempt();
+        }
     }
 }
 
@@ -260,7 +443,7 @@ impl Budget {
             count,
             self.limits.max_entries,
             ErrorCode::LimitCount,
-            2,
+            1,
         )
     }
 
@@ -369,8 +552,10 @@ pub fn verify_tree_stream<R: Read>(
     file_ids: &mut dyn TreeFileIdIndex,
     limits: TreeStreamLimits,
 ) -> Result<TreeStreamSummary> {
+    registry.require_complete_authority()?;
     let budget = Budget::new(limits)?;
-    if budget.limits.max_memory_bytes < 16 * 1024 {
+    let live_memory = tree_stream_live_memory_bytes(&budget.limits)?;
+    if budget.limits.max_memory_bytes < live_memory {
         return Err(Error::new(ErrorCode::LimitMemory));
     }
     if expected_object.kind != ObjectKind::Tree
@@ -379,7 +564,11 @@ pub fn verify_tree_stream<R: Read>(
         return Err(Error::new(ErrorCode::ObjectReferenceKindMismatch)
             .with_stage(ValidationStage::KnownSchema));
     }
-    validate_tree_assignments(registry, operation)?;
+    let mut deferred_lifecycle = None;
+    observe_deferred_lifecycle(
+        &mut deferred_lifecycle,
+        validate_tree_assignments(registry, operation),
+    )?;
     let mut input = RawTreeReader::new(reader, &budget);
     input.exact_container(5, 5)?;
     input.exact_uint(0)?;
@@ -387,23 +576,54 @@ pub fn verify_tree_stream<R: Read>(
     input.exact_uint(1)?;
     input.exact_uint(3)?;
     input.exact_uint(2)?;
-    input.exact_container(4, 0)?;
+    let required_features = input.head(4)?;
+    let mut previous_feature = 0u32;
+    for _ in 0..required_features {
+        budget.check_time()?;
+        let feature = u32::try_from(input.head(0)?)
+            .map_err(|_| Error::new(ErrorCode::SchemaFieldInvalid))?;
+        if feature == 0 || feature <= previous_feature {
+            return Err(Error::new(ErrorCode::SchemaFieldInvalid)
+                .with_stage(ValidationStage::KnownSchema));
+        }
+        observe_deferred_lifecycle(
+            &mut deferred_lifecycle,
+            registry
+                .check_assignment(RegistryAssignment::RequiredFeature(feature), operation)
+                .map(|_| ()),
+        )?;
+        previous_feature = feature;
+    }
     input.exact_uint(16)?;
     let actual_descriptor = input.object_ref()?;
     if actual_descriptor != repository_descriptor {
-        return Err(Error::new(ErrorCode::RepositoryDescriptorMismatch));
+        observe_deferred_lifecycle(
+            &mut deferred_lifecycle,
+            Err(Error::new(ErrorCode::RepositoryDescriptorMismatch)),
+        )?;
     }
     input.exact_uint(17)?;
     let entries = input.head(4)?;
     budget.check_count(entries)?;
+    let index_memory = budget
+        .limits
+        .max_memory_bytes
+        .checked_sub(live_memory)
+        .ok_or_else(|| Error::new(ErrorCode::LimitMemory))?;
+    let mut file_id_transaction = file_ids.begin(entries, index_memory)?;
 
     let mut previous = Vec::new();
+    let mut deferred_known_schema = None;
     let mut directories = 0u64;
     let mut nondirectories = 0u64;
     let mut logical_bytes = 0u64;
     for _ in 0..entries {
         budget.check_time()?;
-        input.exact_container(5, 7)?;
+        let entry_fields = input.head(5)?;
+        if entry_fields < 7 {
+            return Err(Error::new(ErrorCode::SchemaFieldInvalid)
+                .with_stage(ValidationStage::KnownSchema));
+        }
         input.exact_uint(0)?;
         let basename = input.text(
             budget.limits.max_path_segment_bytes,
@@ -416,10 +636,16 @@ pub fn verify_tree_stream<R: Read>(
             || basename.as_bytes().contains(&b'/')
             || basename.as_bytes().contains(&0)
         {
-            return Err(Error::new(ErrorCode::PathCoreInvalid));
+            observe_known_schema(
+                &mut deferred_known_schema,
+                Error::new(ErrorCode::PathCoreInvalid),
+            )?;
         }
         if !previous.is_empty() && previous.as_slice() >= basename.as_bytes() {
-            return Err(Error::new(ErrorCode::TreeEntryOrderInvalid));
+            observe_known_schema(
+                &mut deferred_known_schema,
+                Error::new(ErrorCode::TreeEntryOrderInvalid),
+            )?;
         }
         previous = basename.into_bytes();
 
@@ -428,9 +654,13 @@ pub fn verify_tree_stream<R: Read>(
         input.exact_uint(2)?;
         let file_id = input.fixed_bytes::<16>()?;
         if file_id == [0; 16] {
-            return Err(Error::new(ErrorCode::FileIdZero));
+            observe_known_schema(
+                &mut deferred_known_schema,
+                Error::new(ErrorCode::FileIdZero),
+            )?;
+        } else {
+            file_id_transaction.insert(file_id)?;
         }
-        file_ids.insert(file_id)?;
         input.exact_uint(3)?;
         let mode = input.head(0)?;
         input.exact_uint(4)?;
@@ -439,10 +669,22 @@ pub fn verify_tree_stream<R: Read>(
         let logical_size = input.head(0)?;
         input.exact_uint(6)?;
         let profile = input.profile()?;
+        for _ in 7..entry_fields {
+            input.head(0)?;
+            input.skip_item(1)?;
+            observe_known_schema(
+                &mut deferred_known_schema,
+                Error::new(ErrorCode::SchemaFieldUnknown)
+                    .with_stage(ValidationStage::KnownSchema),
+            )?;
+        }
 
         budget.check_logical(logical_size)?;
         if !(1..=4).contains(&kind) || mode != kind || (kind == 1 && logical_size != 0) {
-            return Err(Error::new(ErrorCode::TreeEntryTargetInvalid));
+            observe_known_schema(
+                &mut deferred_known_schema,
+                Error::new(ErrorCode::TreeEntryTargetInvalid),
+            )?;
         }
         let expected_target = if kind == 1 {
             ObjectKind::Tree
@@ -450,25 +692,50 @@ pub fn verify_tree_stream<R: Read>(
             ObjectKind::ContentManifest
         };
         if target.kind != expected_target {
-            return Err(Error::new(ErrorCode::ObjectReferenceKindMismatch)
-                .with_stage(ValidationStage::KnownSchema));
+            observe_known_schema(
+                &mut deferred_known_schema,
+                Error::new(ErrorCode::ObjectReferenceKindMismatch)
+                    .with_stage(ValidationStage::KnownSchema),
+            )?;
         }
-        validate_tree_entry_assignments(kind, mode, target.kind, registry, operation)?;
-        validate_content_profile(&profile, registry, operation)?;
+        observe_deferred_lifecycle(
+            &mut deferred_lifecycle,
+            validate_tree_entry_assignments(kind, mode, target.kind, registry, operation),
+        )?;
+        observe_deferred_lifecycle(
+            &mut deferred_lifecycle,
+            validate_content_profile(&profile, registry, operation),
+        )?;
         if kind == 1 {
             directories += 1;
         } else {
             nondirectories += 1;
         }
-        logical_bytes = logical_bytes
-            .checked_add(logical_size)
-            .ok_or_else(|| Error::new(ErrorCode::LimitLogicalBytes))?;
+        match logical_bytes.checked_add(logical_size) {
+            Some(value) => logical_bytes = value,
+            None => observe_known_schema(
+                &mut deferred_known_schema,
+                Error::new(ErrorCode::LimitLogicalBytes),
+            )?,
+        }
     }
-    file_ids.finish()?;
     let (actual_object, payload_bytes) = input.finish()?;
     if actual_object != expected_object {
         return Err(Error::new(ErrorCode::ObjectIdMismatch));
     }
+    if let Some(error) = deferred_known_schema {
+        file_id_transaction.abort();
+        return Err(error);
+    }
+    observe_deferred_lifecycle(
+        &mut deferred_lifecycle,
+        file_id_transaction.finish(),
+    )?;
+    if let Some(error) = deferred_lifecycle {
+        file_id_transaction.abort();
+        return Err(error);
+    }
+    file_id_transaction.commit()?;
     Ok(TreeStreamSummary {
         object_ref: actual_object,
         entries,
@@ -575,6 +842,73 @@ impl<'a, R: Read> RawTreeReader<'a, R> {
         Ok(())
     }
 
+    fn skip_item(&mut self, depth: usize) -> Result<()> {
+        if depth > 32 {
+            return Err(Error::new(ErrorCode::LimitNesting));
+        }
+        let offset = self.bytes as usize;
+        let initial = self.raw_byte()?;
+        let major = initial >> 5;
+        let additional = initial & 31;
+        if major == 6 || additional == 31 {
+            return Err(Error::at(ErrorCode::CborNonCanonical, offset));
+        }
+        let value = if additional < 24 {
+            u64::from(additional)
+        } else {
+            let length = match additional {
+                24 => 1,
+                25 => 2,
+                26 => 4,
+                27 => 8,
+                _ => return Err(Error::at(ErrorCode::CborNonCanonical, offset)),
+            };
+            let mut bytes = [0u8; 8];
+            self.raw_exact(&mut bytes[8 - length..])?;
+            let value = u64::from_be_bytes(bytes);
+            let minimal = match length {
+                1 => value >= 24,
+                2 => value > 0xff,
+                4 => value > 0xffff,
+                8 => value > 0xffff_ffff,
+                _ => false,
+            };
+            if !minimal {
+                return Err(Error::at(ErrorCode::CborNonCanonical, offset));
+            }
+            value
+        };
+        match major {
+            0 | 1 => Ok(()),
+            2 | 3 => {
+                let length = usize::try_from(value)
+                    .map_err(|_| Error::new(ErrorCode::LimitValueBytes))?;
+                if length > self.budget.limits.max_memory_bytes {
+                    return Err(Error::new(ErrorCode::LimitMemory));
+                }
+                for _ in 0..length {
+                    self.raw_byte()?;
+                }
+                Ok(())
+            }
+            4 => {
+                for _ in 0..value {
+                    self.skip_item(depth + 1)?;
+                }
+                Ok(())
+            }
+            5 => {
+                for _ in 0..value {
+                    self.skip_item(depth + 1)?;
+                    self.skip_item(depth + 1)?;
+                }
+                Ok(())
+            }
+            7 if additional == 20 || additional == 21 => Ok(()),
+            _ => Err(Error::at(ErrorCode::CborNonCanonical, offset)),
+        }
+    }
+
     fn fixed_bytes<const N: usize>(&mut self) -> Result<[u8; N]> {
         if self.head(2)? != N as u64 {
             return Err(Error::new(ErrorCode::SchemaFieldInvalid));
@@ -596,7 +930,7 @@ impl<'a, R: Read> RawTreeReader<'a, R> {
         let mut bytes = vec![0u8; length];
         self.raw_exact(&mut bytes)?;
         let text = String::from_utf8(bytes).map_err(|_| Error::new(ErrorCode::CborNonCanonical))?;
-        if !is_nfc(&text) {
+        if !is_unicode_15(&text) || !is_nfc(&text) {
             return Err(Error::new(ErrorCode::CborNonCanonical));
         }
         Ok(text)
@@ -659,23 +993,118 @@ where
     W: Write,
     I: IntoIterator<Item = TreeStreamEntry>,
 {
-    let budget = Budget::new(limits)?;
-    budget.check_count(declared_entries)?;
-    validate_tree_assignments(registry, operation)?;
-    let mut iterator = entries.into_iter();
-    encode_prepared_tree(
+    encode_ordered_tree_with_features(
         writer,
         repository_descriptor,
+        &[],
+        declared_entries,
+        entries,
+        registry,
+        operation,
+        file_ids,
+        limits,
+    )
+}
+
+/// Feature-aware form of [`encode_ordered_tree`]. The supplied required
+/// features are lifecycle-checked and emitted in strict ascending order.
+#[allow(clippy::too_many_arguments)]
+pub fn encode_ordered_tree_with_features<W, I>(
+    writer: W,
+    repository_descriptor: ObjectRef,
+    required_features: &[u32],
+    declared_entries: u64,
+    entries: I,
+    registry: &Registry,
+    operation: Operation,
+    file_ids: &mut dyn TreeFileIdIndex,
+    limits: TreeStreamLimits,
+) -> Result<TreeStreamSummary>
+where
+    W: Write,
+    I: IntoIterator<Item = TreeStreamEntry>,
+{
+    registry.require_complete_authority()?;
+    require_write_operation(operation)?;
+    let budget = Budget::new(limits)?;
+    let live_memory = tree_stream_live_memory_bytes(&budget.limits)?;
+    if budget.limits.max_memory_bytes < live_memory {
+        return Err(Error::new(ErrorCode::LimitMemory));
+    }
+    budget.check_count(declared_entries)?;
+    let mut deferred_lifecycle = None;
+    observe_deferred_lifecycle(
+        &mut deferred_lifecycle,
+        validate_tree_assignments(registry, operation),
+    )?;
+    let mut iterator = entries.into_iter();
+    let deferred_known_schema = RefCell::new(None);
+    let mut raw_seen = 0u64;
+    let index_memory = budget
+        .limits
+        .max_memory_bytes
+        .checked_sub(live_memory)
+        .ok_or_else(|| Error::new(ErrorCode::LimitMemory))?;
+    let mut file_id_transaction = file_ids.begin(declared_entries, index_memory)?;
+    let result = encode_prepared_tree(
+        writer,
+        repository_descriptor,
+        required_features,
         declared_entries,
         || {
-            iterator
-                .next()
-                .map(|entry| prepare_entry(entry, registry, operation, &budget))
-                .transpose()
+            loop {
+                let Some(entry) = iterator.next() else { return Ok(None); };
+                raw_seen = raw_seen
+                    .checked_add(1)
+                    .ok_or_else(|| Error::new(ErrorCode::LimitCount))?;
+                // Count the caller's raw items before decoding/preparing one.
+                // An invalid item cannot bypass the configured item ceiling.
+                budget.check_count(raw_seen)?;
+                if raw_seen > declared_entries {
+                    observe_known_schema(
+                        &mut deferred_known_schema.borrow_mut(),
+                        Error::new(ErrorCode::SchemaFieldInvalid)
+                            .with_stage(ValidationStage::KnownSchema),
+                    )?;
+                }
+                observe_entry_lifecycle(
+                    &mut deferred_lifecycle,
+                    &entry,
+                    registry,
+                    operation,
+                )?;
+                match prepare_entry(entry, &budget) {
+                    Ok(prepared) => break Ok(Some(prepared)),
+                    Err(error) => observe_known_schema(
+                        &mut deferred_known_schema.borrow_mut(), error,
+                    )?,
+                }
+            }
         },
         &budget,
-        Some(file_ids),
-    )
+        &deferred_known_schema,
+        Some(file_id_transaction.as_mut()),
+    );
+    // The required-feature lifecycle is item-derived layer three. A bounded
+    // declared-count/shape failure from the iterator must win first.
+    if result.is_ok() {
+        observe_deferred_lifecycle(
+            &mut deferred_lifecycle,
+            validate_required_features(required_features, registry, operation, &budget),
+        )?;
+        observe_deferred_lifecycle(
+            &mut deferred_lifecycle,
+            file_id_transaction.finish(),
+        )?;
+        if let Some(error) = deferred_lifecycle {
+            file_id_transaction.abort();
+            return Err(error);
+        }
+        file_id_transaction.commit()?;
+    } else {
+        file_id_transaction.abort();
+    }
+    result
 }
 
 /// Validates unordered entries, writes deterministic bounded-memory sort runs
@@ -697,25 +1126,93 @@ where
     W: Write,
     I: IntoIterator<Item = TreeStreamEntry>,
 {
-    *scratch_metrics = TreeScratchMetrics::default();
+    encode_tree_with_scratch_and_features(
+        writer,
+        repository_descriptor,
+        &[],
+        declared_entries,
+        entries,
+        registry,
+        operation,
+        scratch_directory,
+        limits,
+        scratch_metrics,
+    )
+}
+
+/// Feature-aware form of [`encode_tree_with_scratch`].
+#[allow(clippy::too_many_arguments)]
+pub fn encode_tree_with_scratch_and_features<W, I>(
+    writer: W,
+    repository_descriptor: ObjectRef,
+    required_features: &[u32],
+    declared_entries: u64,
+    entries: I,
+    registry: &Registry,
+    operation: Operation,
+    scratch_directory: &Path,
+    limits: TreeStreamLimits,
+    scratch_metrics: &mut TreeScratchMetrics,
+) -> Result<TreeStreamSummary>
+where
+    W: Write,
+    I: IntoIterator<Item = TreeStreamEntry>,
+{
+    registry.require_complete_authority()?;
+    require_write_operation(operation)?;
     let budget = Budget::new(limits)?;
     budget.check_count(declared_entries)?;
-    validate_tree_assignments(registry, operation)?;
+    let mut deferred_lifecycle = None;
+    observe_deferred_lifecycle(
+        &mut deferred_lifecycle,
+        validate_tree_assignments(registry, operation),
+    )?;
     if declared_entries == 0 {
         let mut iterator = entries.into_iter();
+        let deferred_known_schema = RefCell::new(None);
+        let mut raw_seen = 0u64;
         let result = encode_prepared_tree(
             writer,
             repository_descriptor,
+            required_features,
             0,
-            || {
-                iterator
-                    .next()
-                    .map(|entry| prepare_entry(entry, registry, operation, &budget))
-                    .transpose()
+            || loop {
+                let Some(entry) = iterator.next() else { return Ok(None); };
+                raw_seen = raw_seen
+                    .checked_add(1)
+                    .ok_or_else(|| Error::new(ErrorCode::LimitCount))?;
+                budget.check_count(raw_seen)?;
+                observe_known_schema(
+                    &mut deferred_known_schema.borrow_mut(),
+                    Error::new(ErrorCode::SchemaFieldInvalid)
+                        .with_stage(ValidationStage::KnownSchema),
+                )?;
+                observe_entry_lifecycle(
+                    &mut deferred_lifecycle,
+                    &entry,
+                    registry,
+                    operation,
+                )?;
+                match prepare_entry(entry, &budget) {
+                    Ok(prepared) => break Ok(Some(prepared)),
+                    Err(error) => observe_known_schema(
+                        &mut deferred_known_schema.borrow_mut(), error,
+                    )?,
+                }
             },
             &budget,
+            &deferred_known_schema,
             None,
         );
+        if result.is_ok() {
+            observe_deferred_lifecycle(
+                &mut deferred_lifecycle,
+                validate_required_features(required_features, registry, operation, &budget),
+            )?;
+            if let Some(error) = deferred_lifecycle {
+                return Err(error);
+            }
+        }
         return result;
     }
 
@@ -739,10 +1236,12 @@ where
         id_scratch_limit,
         budget.limits.max_elapsed,
     )?;
+    let mut file_id_transaction = file_ids.begin(declared_entries, id_memory_limit)?;
     let mut runs = Vec::new();
     let mut records = Vec::<PreparedEntry>::new();
     let mut retained = 0usize;
     let mut count = 0u64;
+    let deferred_known_schema = RefCell::new(None);
 
     for entry in entries {
         budget.check_time()?;
@@ -751,12 +1250,26 @@ where
             .ok_or_else(|| Error::new(ErrorCode::LimitCount))?;
         budget.check_count(count)?;
         if count > declared_entries {
-            return Err(
-                Error::new(ErrorCode::SchemaFieldInvalid).with_stage(ValidationStage::KnownSchema)
-            );
+            observe_known_schema(
+                &mut deferred_known_schema.borrow_mut(),
+                Error::new(ErrorCode::SchemaFieldInvalid)
+                    .with_stage(ValidationStage::KnownSchema),
+            )?;
         }
-        let prepared = prepare_entry(entry, registry, operation, &budget)?;
-        file_ids.insert(prepared.file_id)?;
+        observe_entry_lifecycle(
+            &mut deferred_lifecycle,
+            &entry,
+            registry,
+            operation,
+        )?;
+        let prepared = match prepare_entry(entry, &budget) {
+            Ok(prepared) => prepared,
+            Err(error) => {
+                observe_known_schema(&mut deferred_known_schema.borrow_mut(), error)?;
+                continue;
+            }
+        };
+        file_id_transaction.insert(prepared.file_id)?;
         let cost = prepared.retained_cost();
         if cost > name_memory_limit {
             return Err(Error::new(ErrorCode::LimitMemory));
@@ -771,14 +1284,27 @@ where
         records.push(prepared);
     }
     if count != declared_entries {
-        return Err(
-            Error::new(ErrorCode::SchemaFieldInvalid).with_stage(ValidationStage::KnownSchema)
-        );
+        observe_known_schema(
+            &mut deferred_known_schema.borrow_mut(),
+            Error::new(ErrorCode::SchemaFieldInvalid)
+                .with_stage(ValidationStage::KnownSchema),
+        )?;
     }
+    if let Some(error) = deferred_known_schema.borrow().clone() {
+        file_id_transaction.abort();
+        return Err(error);
+    }
+    observe_deferred_lifecycle(
+        &mut deferred_lifecycle,
+        validate_required_features(required_features, registry, operation, &budget),
+    )?;
+    observe_deferred_lifecycle(
+        &mut deferred_lifecycle,
+        file_id_transaction.finish(),
+    )?;
     if !records.is_empty() {
         runs.push(workspace.write_sorted_run(&mut records, &budget)?);
     }
-    file_ids.finish()?;
     let file_id_metrics = file_ids.scratch_metrics();
 
     while runs.len() > 1 {
@@ -803,13 +1329,20 @@ where
     let result = encode_prepared_tree(
         writer,
         repository_descriptor,
+        required_features,
         declared_entries,
         || reader.next_record(),
         &budget,
+        &deferred_known_schema,
         None,
     );
     if result.is_ok() {
         reader.finish()?;
+        if let Some(error) = deferred_lifecycle {
+            file_id_transaction.abort();
+            return Err(error);
+        }
+        file_id_transaction.commit()?;
         *scratch_metrics = TreeScratchMetrics {
             peak_bytes: workspace
                 .metrics
@@ -828,6 +1361,8 @@ where
                 .merge_passes
                 .saturating_add(file_id_metrics.merge_passes),
         };
+    } else {
+        file_id_transaction.abort();
     }
     result
 }
@@ -835,10 +1370,12 @@ where
 fn encode_prepared_tree<W, F>(
     writer: W,
     repository_descriptor: ObjectRef,
+    required_features: &[u32],
     declared_entries: u64,
     mut next: F,
     budget: &Budget,
-    mut file_ids: Option<&mut dyn TreeFileIdIndex>,
+    known_schema: &RefCell<Option<Error>>,
+    mut file_ids: Option<&mut dyn TreeFileIdTransaction>,
 ) -> Result<TreeStreamSummary>
 where
     W: Write,
@@ -858,7 +1395,13 @@ where
     sink.head(0, 1)?;
     sink.head(0, 3)?;
     sink.head(0, 2)?;
-    sink.head(4, 0)?;
+    sink.head(
+        4,
+        u64::try_from(required_features.len()).map_err(|_| Error::new(ErrorCode::LimitCount))?,
+    )?;
+    for feature in required_features {
+        sink.head(0, u64::from(*feature))?;
+    }
     sink.head(0, 16)?;
     write_object_ref(&mut sink, repository_descriptor)?;
     sink.head(0, 17)?;
@@ -874,13 +1417,20 @@ where
         seen = seen
             .checked_add(1)
             .ok_or_else(|| Error::new(ErrorCode::LimitCount))?;
+        budget.check_count(seen)?;
         if seen > declared_entries {
-            return Err(
-                Error::new(ErrorCode::SchemaFieldInvalid).with_stage(ValidationStage::KnownSchema)
-            );
+            observe_known_schema(
+                &mut known_schema.borrow_mut(),
+                Error::new(ErrorCode::SchemaFieldInvalid)
+                    .with_stage(ValidationStage::KnownSchema),
+            )?;
+            continue;
         }
         if !previous.is_empty() && previous.as_slice() >= entry.key.as_slice() {
-            return Err(Error::new(ErrorCode::TreeEntryOrderInvalid));
+            observe_known_schema(
+                &mut known_schema.borrow_mut(),
+                Error::new(ErrorCode::TreeEntryOrderInvalid),
+            )?;
         }
         previous = entry.key;
         if let Some(index) = file_ids.as_deref_mut() {
@@ -897,14 +1447,15 @@ where
         sink.bytes(&entry.encoded)?;
     }
     if seen != declared_entries {
-        return Err(
-            Error::new(ErrorCode::SchemaFieldInvalid).with_stage(ValidationStage::KnownSchema)
-        );
-    }
-    if let Some(index) = file_ids {
-        index.finish()?;
+        observe_known_schema(
+            &mut known_schema.borrow_mut(),
+            Error::new(ErrorCode::SchemaFieldInvalid).with_stage(ValidationStage::KnownSchema),
+        )?;
     }
     let (object_ref, payload_bytes) = sink.finish()?;
+    if let Some(error) = known_schema.borrow().clone() {
+        return Err(error);
+    }
     Ok(TreeStreamSummary {
         object_ref,
         entries: seen,
@@ -917,14 +1468,13 @@ where
 
 fn prepare_entry(
     entry: TreeStreamEntry,
-    registry: &Registry,
-    operation: Operation,
     budget: &Budget,
 ) -> Result<PreparedEntry> {
     budget.check_time()?;
     let name = entry.basename.as_bytes();
     budget.check_basename(name.len())?;
     if name.is_empty()
+        || !is_unicode_15(&entry.basename)
         || !is_nfc(&entry.basename)
         || entry.basename == "."
         || entry.basename == ".."
@@ -952,15 +1502,6 @@ fn prepare_entry(
         return Err(Error::new(ErrorCode::ObjectReferenceKindMismatch)
             .with_stage(ValidationStage::KnownSchema));
     }
-    validate_tree_entry_assignments(
-        u64::from(entry.entry_kind),
-        u64::from(entry.portable_mode),
-        entry.target.kind,
-        registry,
-        operation,
-    )?;
-    validate_content_profile(&entry.content_policy, registry, operation)?;
-
     let mut encoded = Vec::with_capacity(128 + name.len());
     push_head(&mut encoded, 5, 7);
     push_head(&mut encoded, 0, 0);
@@ -993,6 +1534,57 @@ fn prepare_entry(
     Ok(prepared)
 }
 
+fn observe_entry_lifecycle(
+    best: &mut Option<Error>,
+    entry: &TreeStreamEntry,
+    registry: &Registry,
+    operation: Operation,
+) -> Result<()> {
+    observe_deferred_lifecycle(
+        best,
+        validate_tree_entry_assignments(
+            u64::from(entry.entry_kind),
+            u64::from(entry.portable_mode),
+            entry.target.kind,
+            registry,
+            operation,
+        ),
+    )?;
+    observe_deferred_lifecycle(
+        best,
+        validate_content_profile(&entry.content_policy, registry, operation),
+    )
+}
+
+fn observe_deferred_lifecycle(best: &mut Option<Error>, result: Result<()>) -> Result<()> {
+    let Err(error) = result else {
+        return Ok(());
+    };
+    if error.layer < 3 {
+        return Err(error);
+    }
+    if best
+        .as_ref()
+        .is_none_or(|current| error.precedence_key() < current.precedence_key())
+    {
+        *best = Some(error);
+    }
+    Ok(())
+}
+
+fn observe_known_schema(best: &mut Option<Error>, error: Error) -> Result<()> {
+    if error.layer != 2 {
+        return Err(error);
+    }
+    if best
+        .as_ref()
+        .is_none_or(|current| error.precedence_key() < current.precedence_key())
+    {
+        *best = Some(error);
+    }
+    Ok(())
+}
+
 fn tree_limit(
     name: &'static str,
     value: u64,
@@ -1001,6 +1593,26 @@ fn tree_limit(
     layer: u8,
 ) -> Result<()> {
     enforce_hard_limit_context(name, value, configured, code, layer).map(|_| ())
+}
+
+fn validate_required_features(
+    features: &[u32],
+    registry: &Registry,
+    operation: Operation,
+    budget: &Budget,
+) -> Result<()> {
+    let mut previous = 0u32;
+    for feature in features {
+        budget.check_time()?;
+        if *feature == 0 || *feature <= previous {
+            return Err(
+                Error::new(ErrorCode::SchemaFieldInvalid).with_stage(ValidationStage::KnownSchema)
+            );
+        }
+        registry.check_assignment(RegistryAssignment::RequiredFeature(*feature), operation)?;
+        previous = *feature;
+    }
+    Ok(())
 }
 
 fn validate_tree_assignments(registry: &Registry, operation: Operation) -> Result<()> {

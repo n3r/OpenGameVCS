@@ -1,0 +1,12 @@
+{
+  "api": "validate-provenance-graph",
+  "authorityContext": "scenario.context",
+  "forbidden": [
+    "ogvcs:v1:content-manifest:sha256:82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+  ],
+  "roots": [
+    "ogvcs:v1:provenance:sha256:7b98184d5db8e8935d1c6bf6198d81eb2862630bdc5a9dda2fc3136a67f7547d",
+    "ogvcs:v1:provenance:sha256:0cfc71d2e0c22d22c3f96ba1a45dedd12a2c26427ac59c90116737ccb3ec2053"
+  ],
+  "schema": "ogvcs.repository-format.v1.repository-route-input.v1"
+}

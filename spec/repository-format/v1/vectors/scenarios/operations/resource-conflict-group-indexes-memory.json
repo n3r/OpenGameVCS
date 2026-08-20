@@ -1,0 +1,35 @@
+{
+  "api": "validate-resource-reservation",
+  "assertNoPartialState": true,
+  "cluster": "conflict-group-indexes",
+  "conflictFixture": {
+    "reference": "ogvcs:v1:conflict-set:sha256:562aa353fa3bfcf681e7e4a218f66c9f3c1157c490508cb81f4320f271be25cf",
+    "scenario": "conflict-choice-base"
+  },
+  "evidenceRequired": {
+    "noPartialState": true,
+    "routeEvidence": [
+      {
+        "noPartialState": true,
+        "recoveryKind": "same-authority-instance",
+        "route": "validate-conflict-set",
+        "succeeded": true
+      },
+      {
+        "noPartialState": true,
+        "recoveryKind": "stateless-reinvoke",
+        "route": "validate-asset-groups",
+        "succeeded": true
+      }
+    ]
+  },
+  "fixture": "bounded-reduced-retention-v1",
+  "memoryCeiling": {
+    "derivation": "one-byte-below-conservative-retained-cost-v1"
+  },
+  "routes": [
+    "validate-conflict-set",
+    "validate-asset-groups"
+  ],
+  "schema": "ogvcs.repository-format.v1.resource-reservation-input.v1"
+}

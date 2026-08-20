@@ -105,7 +105,7 @@ impl FromStr for ObjectRef {
         // 63-byte registered kind token plus the frozen framing and SHA-256
         // hex representation. Reject before splitting or retaining parts.
         if text.len() > 144 {
-            return Err(Error::new(ErrorCode::ObjectReferenceFormatUnsupported));
+            return Err(Error::new(ErrorCode::SchemaFieldInvalid));
         }
         let mut parts = text.split(':');
         if parts.next() != Some("ogvcs") || parts.next() != Some("v1") {

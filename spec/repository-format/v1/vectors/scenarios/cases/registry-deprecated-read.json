@@ -1,6 +1,7 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [],
     "lifetimeRecords": [],
     "mode": "conformance",
@@ -132,23 +133,23 @@
         "path": "scenarios/outputs/registry-deprecated-read.json",
         "sha256": "7e42aa07f156490a7ad74217ca59ef897d1bd010ea5bb7b5ea8897a11ff6cfc0"
       },
-      "summarySha256": "dd82a183593ec984f0ab218d6fd94dd0fe2686ee442e74fd1bb11189fb4d2bc0"
+      "summarySha256": "6c2b36301ea49faf48b2b77578f61b6745adf080a54cf1b26ef4c5e7bfd6c19b"
     },
     "result": "accept"
   },
   "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
   "inputs": [
     {
-      "bytes": 5085,
+      "bytes": 5090,
       "mediaType": "application/json",
       "path": "registries/index.json",
-      "sha256": "752004fcd3e74233fc6d08173a726f3c0bd76d4a3f45ea3fe2c40287a594df06"
+      "sha256": "e775a50d12ad2a53a32ef9f073e3686d25ff9892b8d9a1e89f1fc62508e1add8"
     },
     {
-      "bytes": 6540,
+      "bytes": 6574,
       "mediaType": "application/json",
       "path": "scenarios/definitions/registry-deprecated-read.json",
-      "sha256": "ff6cbbe5e6a2429f27b7b28ab271fdf3b740f01977cc0e6b867ec588ef4462b8"
+      "sha256": "c9a97891f5f2b444aa305a03ced4b3a77465dd6aab4ae9ea6209d89db95c0321"
     }
   ],
   "operation": "validate-object",
@@ -161,18 +162,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/registry-deprecated-read.json",
-        "definitionSha256": "ff6cbbe5e6a2429f27b7b28ab271fdf3b740f01977cc0e6b867ec588ef4462b8",
+        "definitionSha256": "c9a97891f5f2b444aa305a03ced4b3a77465dd6aab4ae9ea6209d89db95c0321",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "147e72c40f6e1a1effb980df52610be7430283431e72691893211474152e0179"
     },
     "summary": {
-      "bytes": 16848,
+      "bytes": 16887,
       "indexEntries": 0,
       "items": 12,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "dd82a183593ec984f0ab218d6fd94dd0fe2686ee442e74fd1bb11189fb4d2bc0",
+      "summarySha256": "6c2b36301ea49faf48b2b77578f61b6745adf080a54cf1b26ef4c5e7bfd6c19b",
       "traversalEdges": 0
     }
   },

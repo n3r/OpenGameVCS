@@ -3,15 +3,17 @@ import { lstat, open, realpath, unlink } from 'node:fs/promises';
 import { createHash, randomBytes } from 'node:crypto';
 import { resolve, join } from 'node:path';
 import { encodeCanonical } from './cbor.js';
-import { fail, isOgvcsError } from './errors.js';
+import { compareErrorPrecedence, fail, isOgvcsError, OgvcsError } from './errors.js';
 import { createObjectHashWriter } from './hash.js';
 import { configuredHardLimit, enforceHardLimit, hardLimitMaximum } from './hard-limits.js';
 import { profileDecision, registryAssignmentDecision } from './registry.js';
 import { validateKnownSchema } from './schema.js';
 import { FileId, KIND_NAMES, ObjectRef, ProfileRef } from './types.js';
+import { isUnicode15String } from './unicode-age.js';
+import { registryValidationContext, writerValidationContext } from './validation-mode.js';
 import {
   ResourceGuard, asCount, asLimit, cborHeader, checkedBigUint, compareBytes,
-  exactMap, guardedAsyncIterable, toAsyncIterable, writeFully
+  guardedAsyncIterable, toAsyncIterable, writeFully
 } from './scale-util.js';
 
 const MAX_TREE_ENTRIES = hardLimitMaximum('tree-entries');
@@ -28,6 +30,11 @@ const RUN_HEADER_BYTES = 38;
 const RUN_RECORD_OVERHEAD = 96;
 const FILE_ID_INDEX_OVERHEAD = 64;
 const MAX_DEFAULT_MEMORY_INDEX_ITEMS = 100_000;
+// The raw reader retains its current read buffer while one decoded/prepared
+// TreeEntry is live. FileID indexes receive only the remainder of the caller's
+// operation ceiling so those simultaneous allocations cannot each claim the
+// full maxMemoryBytes independently.
+const TREE_ENTRY_WORKING_BYTES = 16_384;
 
 function namesFor(registry) { return registry?.kindNames ?? KIND_NAMES; }
 
@@ -37,11 +44,37 @@ function descriptorMap(value, registry) {
   return ref.toMap();
 }
 
-function profileMap(value, registry, operation) {
+function observeRegistry(options, callback) {
+  try { return callback(); }
+  catch (error) {
+    if (!(error instanceof OgvcsError) || error.layer !== 3 || error.stage !== 'registry-semantics') throw error;
+    if (!options.registryFailure || compareErrorPrecedence(error, options.registryFailure) < 0) {
+      options.registryFailure = error;
+    }
+    return undefined;
+  }
+}
+
+function throwRegistry(options) { if (options.registryFailure) throw options.registryFailure; }
+
+function observeRepositoryError(options, error) {
+  if (!(error instanceof OgvcsError) || error.layer !== 3 || error.stage !== 'repository-semantics') {
+    throw error;
+  }
+  if (!options.repositoryFailure || compareErrorPrecedence(error, options.repositoryFailure) < 0) {
+    options.repositoryFailure = error;
+  }
+}
+
+function throwRepository(options) {
+  if (options.repositoryFailure) throw options.repositoryFailure;
+}
+
+function profileMap(value, registry, operation, options) {
   const ref = value instanceof ProfileRef ? value : ProfileRef.fromMap(value);
   if (registry) {
-    const decision = profileDecision(registry, ref, operation);
-    if (!CONTENT_FAMILIES.has(decision.family)) fail('SCHEMA_FIELD_INVALID', { layer: 2 });
+    const decision = observeRegistry(options, () => profileDecision(registry, ref, operation));
+    if (decision && !CONTENT_FAMILIES.has(decision.family)) fail('SCHEMA_FIELD_INVALID', { layer: 2 });
   }
   return { ref, map: ref.toMap() };
 }
@@ -63,7 +96,7 @@ function encodeResident(value, options, remaining = options.maxMemoryBytes, over
 }
 
 function basenameBytes(value, options) {
-  if (typeof value !== 'string' || value.normalize('NFC') !== value || value === '.' || value === '..' ||
+  if (typeof value !== 'string' || !isUnicode15String(value) || value.normalize('NFC') !== value || value === '.' || value === '..' ||
       value.includes('/') || value.includes('\0')) fail('PATH_CORE_INVALID', { layer: 2 });
   const bytes = textEncoder.encode(value);
   let roundTrip;
@@ -75,8 +108,20 @@ function basenameBytes(value, options) {
   return bytes;
 }
 
+function exactTreeEntryMap(value) {
+  if (!(value instanceof Map)) fail('SCHEMA_FIELD_INVALID', { layer: 2 });
+  for (const key of value.keys()) {
+    if (!Number.isInteger(key) || key < 0 || key > 6) {
+      fail('SCHEMA_FIELD_UNKNOWN', { layer: 2, stage: 'known-schema' });
+    }
+  }
+  if (value.size !== 7 || [0, 1, 2, 3, 4, 5, 6].some(key => !value.has(key))) {
+    fail('SCHEMA_FIELD_INVALID', { layer: 2 });
+  }
+}
+
 function validateEntry(value, options) {
-  exactMap(value, [0, 1, 2, 3, 4, 5, 6]);
+  exactTreeEntryMap(value);
   const name = basenameBytes(value.get(0), options);
   const kind = value.get(1);
   const mode = value.get(3);
@@ -84,9 +129,12 @@ function validateEntry(value, options) {
     fail('TREE_ENTRY_TARGET_INVALID', { layer: 2 });
   }
   if (options.registry) {
-    registryAssignmentDecision(options.registry, 'entry-kinds', kind, options.operation);
-    registryAssignmentDecision(options.registry, 'entry-modes', mode, options.operation);
-    registryAssignmentDecision(options.registry, 'hash-algorithms', 1, options.operation);
+    observeRegistry(options, () =>
+      registryAssignmentDecision(options.registry, 'entry-kinds', kind, options.operation));
+    observeRegistry(options, () =>
+      registryAssignmentDecision(options.registry, 'entry-modes', mode, options.operation));
+    observeRegistry(options, () =>
+      registryAssignmentDecision(options.registry, 'hash-algorithms', 1, options.operation));
   }
   const fileId = new FileId(value.get(2)).bytes;
   const target = ObjectRef.fromMap(value.get(4), namesFor(options.registry));
@@ -94,13 +142,14 @@ function validateEntry(value, options) {
   if (target.kind !== targetKind) {
     fail('OBJECT_REFERENCE_KIND_MISMATCH', { layer: 2, stage: 'known-schema' });
   }
-  if (options.registry) registryAssignmentDecision(options.registry, 'object-kinds', targetKind, options.operation);
+  if (options.registry) observeRegistry(options, () =>
+    registryAssignmentDecision(options.registry, 'object-kinds', targetKind, options.operation));
   enforceHardLimit(undefined, 'logical-file-bytes', value.get(5), {
     maximum: options.hardLimits?.['logical-file-bytes'], code: 'LIMIT_LOGICAL_BYTES', layer: 2
   });
   const logicalSize = checkedBigUint(value.get(5), MAX_LOGICAL_BYTES, 'LIMIT_LOGICAL_BYTES');
   if (kind === 1 && logicalSize !== 0n) fail('TREE_ENTRY_TARGET_INVALID', { layer: 2 });
-  profileMap(value.get(6), options.registry, options.operation);
+  profileMap(value.get(6), options.registry, options.operation, options);
   const encoded = encodeResident(value, options, options.maxMemoryBytes, {
     maxValueBytes: MAX_GENERIC_VALUE_BYTES,
     maxContainerItems: 16
@@ -127,17 +176,21 @@ function treePrefix(options) {
   pushValue(16); pushValue(descriptorValue); pushValue(17); push(cborHeader(4, entryCount));
   const common = new Map([[0, 1], [1, 3], [2, requiredFeatures], [16, descriptorValue], [17, []]]);
   if (extensions !== undefined) common.set(3, extensions);
-  validateKnownSchema(common, 3, { registry, operation, hardLimits: options.hardLimits });
+  validateKnownSchema(common, 3, { semantic: false, hardLimits: options.hardLimits });
+  if (registry) observeRegistry(options, () => validateKnownSchema(common, 3, {
+    registry, operation, hardLimits: options.hardLimits
+  }));
   return pieces;
 }
 
 function optionsFor(input) {
+  const semantic = writerValidationContext(input.operation, input.registry);
   const maxItems = Math.min(
     configuredHardLimit('tree-entries', input.hardLimits?.['tree-entries']),
     configuredHardLimit('tree-entries', asLimit(input.maxItems, MAX_TREE_ENTRIES))
   );
   enforceHardLimit(undefined, 'tree-entries', input.entryCount, {
-    maximum: maxItems, code: 'LIMIT_COUNT', layer: 2
+    maximum: maxItems, code: 'LIMIT_COUNT', layer: 1, stage: 'configured-resource-preflight'
   });
   const entryCount = asCount(input.entryCount, maxItems);
   const maxBytes = Math.min(
@@ -149,8 +202,9 @@ function optionsFor(input) {
   guard.time();
   if (!Array.isArray(input.requiredFeatures ?? [])) fail('SCHEMA_FIELD_INVALID', { layer: 2 });
   return {
-    ...input, entryCount, maxItems, maxBytes, maxMemoryBytes, guard,
-    requiredFeatures: input.requiredFeatures ?? [], operation: input.operation ?? 'conformance'
+    ...input, ...semantic, entryCount, maxItems, maxBytes, maxMemoryBytes, guard,
+    registryFailure: undefined,
+    requiredFeatures: input.requiredFeatures ?? []
   };
 }
 
@@ -197,22 +251,48 @@ function createEmitter(options) {
 function memoryFileIdIndex(options) {
   if (options.entryCount > MAX_DEFAULT_MEMORY_INDEX_ITEMS) fail('LIMIT_MEMORY', { layer: 1 });
   const ids = new Set();
+  let duplicate = false;
+  let maximumBytes = options.maxMemoryBytes;
   return {
+    async begin(_expectedCount, { maxMemoryBytes } = {}) {
+      ids.clear();
+      duplicate = false;
+      maximumBytes = asLimit(maxMemoryBytes, options.maxMemoryBytes);
+      if (maximumBytes < FILE_ID_INDEX_OVERHEAD && options.entryCount > 0) {
+        fail('LIMIT_MEMORY', { layer: 1 });
+      }
+    },
     async add(value) {
       const key = Buffer.from(value).toString('hex');
-      if (ids.has(key)) fail('FILEID_DUPLICATE_IN_TREE', { layer: 3 });
-      options.guard.memory((ids.size + 1) * FILE_ID_INDEX_OVERHEAD);
+      if (ids.has(key)) { duplicate = true; return; }
+      const retained = (ids.size + 1) * FILE_ID_INDEX_OVERHEAD;
+      if (retained > maximumBytes) fail('LIMIT_MEMORY', { layer: 1 });
       ids.add(key);
     },
-    async finish() { const count = ids.size; ids.clear(); return { count, peakScratchBytes: 0, runCount: 0 }; },
-    async abort() { ids.clear(); }
+    async finish() {
+      const count = ids.size;
+      ids.clear();
+      if (duplicate) fail('FILEID_DUPLICATE_IN_TREE', { layer: 3 });
+      return { count, peakScratchBytes: 0, runCount: 0 };
+    },
+    async abort() { ids.clear(); duplicate = false; }
   };
 }
 
 function suppliedFileIdIndex(value) {
-  if (!value || typeof value.add !== 'function' || typeof value.finish !== 'function' ||
+  if (!value || typeof value.begin !== 'function' || typeof value.add !== 'function' || typeof value.finish !== 'function' ||
       typeof value.abort !== 'function') fail('SCHEMA_FIELD_INVALID', { layer: 2 });
   return value;
+}
+
+async function beginFileIdIndex(fileIds, expectedCount, guard, maxMemoryBytes) {
+  await guard.wait(signal => fileIds.begin(expectedCount, { signal, maxMemoryBytes }));
+}
+
+function remainingFileIdMemory(maxMemoryBytes, concurrentBytes) {
+  if (!Number.isSafeInteger(concurrentBytes) || concurrentBytes < 0 ||
+      concurrentBytes > maxMemoryBytes) fail('LIMIT_MEMORY', { layer: 1 });
+  return maxMemoryBytes - concurrentBytes;
 }
 
 async function abortFileIdIndex(fileIds, guard) {
@@ -239,11 +319,22 @@ export async function writeOrderedTree(input) {
   const options = optionsFor(input ?? {});
   const entries = toAsyncIterable(options.entries);
   const fileIds = options.fileIdIndex === undefined ? memoryFileIdIndex(options) : suppliedFileIdIndex(options.fileIdIndex);
+  const fileIdMemoryBytes = remainingFileIdMemory(
+    options.maxMemoryBytes, TREE_ENTRY_WORKING_BYTES
+  );
   const prefix = treePrefix(options);
   const emitter = createEmitter(options);
   const stats = emptyStats();
   let previous;
+  let knownSchemaFailure;
+  const observeKnownSchema = error => {
+    if (!(error instanceof OgvcsError) || error.layer !== 2) throw error;
+    if (!knownSchemaFailure || compareErrorPrecedence(error, knownSchemaFailure) < 0) {
+      knownSchemaFailure = error;
+    }
+  };
   try {
+    await beginFileIdIndex(fileIds, options.entryCount, options.guard, fileIdMemoryBytes);
     await emitPrefix(emitter, prefix, options.guard);
     for await (const raw of guardedAsyncIterable(entries, options.guard)) {
       options.guard.time();
@@ -251,22 +342,45 @@ export async function writeOrderedTree(input) {
       if (stats.count > options.maxItems) {
         fail('LIMIT_COUNT', { layer: 1, stage: 'configured-resource-preflight' });
       }
-      if (stats.count > options.entryCount) fail('SCHEMA_FIELD_INVALID', { layer: 2 });
-      const entry = validateEntry(raw, options);
+      if (stats.count > options.entryCount) observeKnownSchema(new OgvcsError(
+        'SCHEMA_FIELD_INVALID', { layer: 2, stage: 'known-schema' }
+      ));
+      let entry;
+      try { entry = validateEntry(raw, options); }
+      catch (error) { observeKnownSchema(error); continue; }
       options.guard.memory(entry.encoded.length + entry.name.length + RUN_RECORD_OVERHEAD);
-      if (previous && compareBytes(previous, entry.name) >= 0) fail('TREE_ENTRY_ORDER_INVALID', { layer: 2 });
+      if (previous && compareBytes(previous, entry.name) >= 0) observeKnownSchema(new OgvcsError(
+        'TREE_ENTRY_ORDER_INVALID', { layer: 2, stage: 'known-schema' }
+      ));
       previous = entry.name.slice();
-      const accepted = await options.guard.wait(signal => fileIds.add(entry.fileId, { signal }));
-      if (accepted === false) fail('FILEID_DUPLICATE_IN_TREE', { layer: 3 });
+      let accepted;
+      try {
+        accepted = await options.guard.wait(signal => fileIds.add(entry.fileId, { signal }));
+      } catch (error) {
+        observeRepositoryError(options, error);
+      }
+      if (accepted === false) {
+        observeRepositoryError(options, new OgvcsError('FILEID_DUPLICATE_IN_TREE', { layer: 3 }));
+      }
       stats.logicalBytes += entry.logicalSize;
       stats.kinds[entry.kind] += 1;
       await emitter.emit(entry.encoded);
     }
-    if (stats.count !== options.entryCount) fail('SCHEMA_FIELD_INVALID', { layer: 2 });
-    const uniqueness = await options.guard.wait(signal => fileIds.finish(stats.count, { signal }));
-    if (uniqueness === false || (uniqueness?.count !== undefined && uniqueness.count !== stats.count)) {
-      fail('FILEID_DUPLICATE_IN_TREE', { layer: 3 });
+    if (stats.count !== options.entryCount) observeKnownSchema(new OgvcsError(
+      'SCHEMA_FIELD_INVALID', { layer: 2, stage: 'known-schema' }
+    ));
+    if (knownSchemaFailure) throw knownSchemaFailure;
+    throwRegistry(options);
+    let uniqueness;
+    try {
+      uniqueness = await options.guard.wait(signal => fileIds.finish(stats.count, { signal }));
+    } catch (error) {
+      observeRepositoryError(options, error);
     }
+    if (uniqueness === false || (uniqueness?.count !== undefined && uniqueness.count !== stats.count)) {
+      observeRepositoryError(options, new OgvcsError('FILEID_DUPLICATE_IN_TREE', { layer: 3 }));
+    }
+    throwRepository(options);
     const finished = emitter.finish();
     return Object.freeze({
       objectRef: finished.reference,
@@ -653,7 +767,9 @@ async function appendId(space, run, id) {
   run.count += 1;
 }
 
-async function mergeIdRuns(runs, guard, consume) {
+async function mergeIdRuns(runs, guard, consume, onDuplicate = () => {
+  fail('FILEID_DUPLICATE_IN_TREE', { layer: 3 });
+}) {
   const readers = [];
   const heap = new IdHeap();
   let previous;
@@ -668,7 +784,12 @@ async function mergeIdRuns(runs, guard, consume) {
     while (heap.values.length > 0) {
       guard.time();
       const item = heap.pop();
-      if (previous && compareBytes(previous, item.id) === 0) fail('FILEID_DUPLICATE_IN_TREE', { layer: 3 });
+      if (previous && compareBytes(previous, item.id) === 0) {
+        onDuplicate();
+        const id = await readers[item.readerIndex].next();
+        if (id) heap.push({ id, readerIndex: item.readerIndex });
+        continue;
+      }
       previous = item.id.slice();
       await consume(item.id);
       const id = await readers[item.readerIndex].next();
@@ -680,9 +801,11 @@ async function mergeIdRuns(runs, guard, consume) {
 }
 
 class DiskFileIdIndex {
-  constructor(space, guard, { maxRunBytes, maxOpenRuns }) {
+  constructor(space, guard, { maxRunBytes, maxOpenRuns, guardFactory }) {
     this.space = space;
     this.guard = guard;
+    this.guardFactory = guardFactory;
+    this.configuredMaxRunBytes = maxRunBytes;
     this.maxRunBytes = maxRunBytes;
     this.maxOpenRuns = maxOpenRuns;
     this.buffer = [];
@@ -691,6 +814,21 @@ class DiskFileIdIndex {
     this.count = 0;
     this.initialRuns = 0;
     this.finished = false;
+    this.duplicate = false;
+  }
+
+  async begin(_expectedCount, { signal, maxMemoryBytes } = {}) {
+    if (signal?.aborted) throw signal.reason ?? new OgvcsError('LIMIT_TIME', { layer: 1 });
+    if (this.buffer.length > 0 || this.runs.length > 0 || this.paths.size > 0 || this.count > 0) {
+      await this.abort();
+    }
+    const admitted = asLimit(maxMemoryBytes, this.guard.maxMemoryBytes);
+    if (admitted < FILE_ID_INDEX_OVERHEAD) fail('LIMIT_MEMORY', { layer: 1 });
+    this.guard = this.guardFactory?.(admitted) ?? this.guard;
+    this.maxRunBytes = Math.min(this.configuredMaxRunBytes, admitted);
+    if (this.maxRunBytes < FILE_ID_INDEX_OVERHEAD) fail('LIMIT_MEMORY', { layer: 1 });
+    this.finished = false;
+    this.duplicate = false;
   }
 
   async add(value) {
@@ -708,9 +846,13 @@ class DiskFileIdIndex {
   async flush() {
     if (this.buffer.length === 0) return;
     this.buffer.sort(compareBytes);
-    for (let index = 1; index < this.buffer.length; index += 1) {
-      if (compareBytes(this.buffer[index - 1], this.buffer[index]) === 0) fail('FILEID_DUPLICATE_IN_TREE', { layer: 3 });
+    const unique = [];
+    for (const id of this.buffer) {
+      if (unique.length > 0 && compareBytes(unique.at(-1), id) === 0) {
+        this.duplicate = true;
+      } else unique.push(id);
     }
+    this.buffer = unique;
     const created = await this.space.create();
     const run = { ...created, size: 0, count: 0 };
     this.paths.add(run.path);
@@ -731,7 +873,8 @@ class DiskFileIdIndex {
     const output = { ...created, size: 0, count: 0 };
     this.paths.add(output.path);
     try {
-      await mergeIdRuns(group, this.guard, id => appendId(this.space, output, id));
+      await mergeIdRuns(group, this.guard, id => appendId(this.space, output, id),
+        () => { this.duplicate = true; });
       await closeRun(output);
       for (const run of group) {
         await this.space.remove(run.path);
@@ -757,13 +900,23 @@ class DiskFileIdIndex {
         }
         this.runs = next;
       }
-      if (this.runs.length > 0) await mergeIdRuns(this.runs, this.guard, async () => {});
+      if (this.runs.length > 0) await mergeIdRuns(this.runs, this.guard, async () => {},
+        () => { this.duplicate = true; });
       for (const run of this.runs) {
         await this.space.remove(run.path);
         this.paths.delete(run.path);
       }
       if (expectedCount !== undefined && expectedCount !== this.count) fail('SCHEMA_FIELD_INVALID', { layer: 2 });
-      return { count: this.count, peakScratchBytes: this.space.peak, runCount: this.initialRuns };
+      if (this.duplicate) fail('FILEID_DUPLICATE_IN_TREE', { layer: 3 });
+      const result = { count: this.count, peakScratchBytes: this.space.peak, runCount: this.initialRuns };
+      this.buffer = [];
+      this.runs = [];
+      this.paths.clear();
+      this.count = 0;
+      this.initialRuns = 0;
+      this.duplicate = false;
+      this.maxRunBytes = this.configuredMaxRunBytes;
+      return result;
     } catch (error) {
       await this.abort().catch(() => {});
       throw error;
@@ -776,6 +929,12 @@ class DiskFileIdIndex {
       await this.space.remove(path).catch(() => {});
       this.paths.delete(path);
     }
+    this.runs = [];
+    this.count = 0;
+    this.initialRuns = 0;
+    this.duplicate = false;
+    this.finished = false;
+    this.maxRunBytes = this.configuredMaxRunBytes;
   }
 }
 
@@ -791,9 +950,12 @@ export async function createDiskFileIdIndex(input = {}) {
   if (maxRunBytes > maxMemoryBytes || maxOpenRuns < 2) {
     fail('SCHEMA_FIELD_INVALID', { layer: 2 });
   }
-  const guard = new ResourceGuard({ maxTimeMs: input.maxTimeMs, maxMemoryBytes });
+  const guardFactory = attemptMaximum => new ResourceGuard({
+    maxTimeMs: input.maxTimeMs, maxMemoryBytes: attemptMaximum
+  });
+  const guard = guardFactory(maxMemoryBytes);
   const space = new ScratchSpace(directory, asLimit(input.maxScratchBytes, 268_435_456));
-  return new DiskFileIdIndex(space, guard, { maxRunBytes, maxOpenRuns });
+  return new DiskFileIdIndex(space, guard, { maxRunBytes, maxOpenRuns, guardFactory });
 }
 
 /**
@@ -819,13 +981,22 @@ export async function writeSortedTree(input) {
   let buffer = [];
   let resident = 0;
   let initialRuns = 0;
+  let knownSchemaFailure;
+  const observeKnownSchema = error => {
+    if (!(error instanceof OgvcsError) || error.layer !== 2) throw error;
+    if (!knownSchemaFailure || compareErrorPrecedence(error, knownSchemaFailure) < 0) {
+      knownSchemaFailure = error;
+    }
+  };
 
   const flush = async () => {
     if (buffer.length === 0) return;
     buffer.sort((left, right) => compareBytes(left.name, right.name));
     for (let index = 1; index < buffer.length; index += 1) {
       if (compareBytes(buffer[index - 1].name, buffer[index].name) === 0) {
-        fail('TREE_ENTRY_ORDER_INVALID', { layer: 2 });
+        observeKnownSchema(new OgvcsError(
+          'TREE_ENTRY_ORDER_INVALID', { layer: 2, stage: 'known-schema' }
+        ));
       }
     }
     const created = await space.create();
@@ -850,11 +1021,23 @@ export async function writeSortedTree(input) {
       if (stats.count > options.maxItems) {
         fail('LIMIT_COUNT', { layer: 1, stage: 'configured-resource-preflight' });
       }
-      if (stats.count > options.entryCount) fail('SCHEMA_FIELD_INVALID', { layer: 2 });
-      const entry = validateEntry(raw, options);
+      if (stats.count > options.entryCount) observeKnownSchema(new OgvcsError(
+        'SCHEMA_FIELD_INVALID', { layer: 2, stage: 'known-schema' }
+      ));
+      let entry;
+      try { entry = validateEntry(raw, options); }
+      catch (error) { observeKnownSchema(error); continue; }
       const memory = entry.name.length + entry.encoded.length + RUN_RECORD_OVERHEAD;
       options.guard.memory(memory);
-      await options.guard.wait(signal => fileIds.add(entry.fileId, { signal }));
+      let accepted;
+      try {
+        accepted = await options.guard.wait(signal => fileIds.add(entry.fileId, { signal }));
+      } catch (error) {
+        observeRepositoryError(options, error);
+      }
+      if (accepted === false) {
+        observeRepositoryError(options, new OgvcsError('FILEID_DUPLICATE_IN_TREE', { layer: 3 }));
+      }
       if (buffer.length > 0 && resident + memory > nameRunBytes) await flush();
       if (memory > nameRunBytes) fail('LIMIT_MEMORY', { layer: 1 });
       buffer.push(entry);
@@ -863,20 +1046,48 @@ export async function writeSortedTree(input) {
       stats.logicalBytes += entry.logicalSize;
       stats.kinds[entry.kind] += 1;
     }
-    if (stats.count !== options.entryCount) fail('SCHEMA_FIELD_INVALID', { layer: 2 });
+    if (stats.count !== options.entryCount) observeKnownSchema(new OgvcsError(
+      'SCHEMA_FIELD_INVALID', { layer: 2, stage: 'known-schema' }
+    ));
     await flush();
-    while (runs.length > maxOpenRuns) {
+    // Collapse to one run before any layer-three work. This also discovers
+    // duplicate sort keys across run boundaries, so the complete layer-two
+    // catalogue can be selected independently of occurrence order.
+    while (runs.length > 1) {
       const next = [];
       for (let offset = 0; offset < runs.length; offset += maxOpenRuns) {
         const group = runs.slice(offset, offset + maxOpenRuns);
-        next.push(group.length === 1 ? group[0] : await writeMergedRun(space, group, options.guard));
+        if (group.length === 1) next.push(group[0]);
+        else {
+          try { next.push(await writeMergedRun(space, group, options.guard)); }
+          catch (error) {
+            observeKnownSchema(error);
+            throw knownSchemaFailure;
+          }
+        }
       }
       runs.splice(0, runs.length, ...next);
     }
+    // Finish the bounded raw-item and global-sort scan before selecting a
+    // layer-two failure. In particular, catalogue precedence must not depend
+    // on whether a wrong-family profile or wrong-kind target occurred first.
+    if (knownSchemaFailure) throw knownSchemaFailure;
 
-    const uniqueness = await options.guard.wait(signal => fileIds.finish(stats.count, { signal }));
+    let uniqueness;
+    try {
+      uniqueness = await options.guard.wait(signal => fileIds.finish(stats.count, { signal }));
+    } catch (error) {
+      observeRepositoryError(options, error);
+    }
+    if (uniqueness === false || (uniqueness?.count !== undefined && uniqueness.count !== stats.count)) {
+      observeRepositoryError(options, new OgvcsError('FILEID_DUPLICATE_IN_TREE', { layer: 3 }));
+    }
 
     const prefix = treePrefix(options);
+    // The complete declared count/order/schema pass outranks any item or
+    // required-feature lifecycle failure collected during the scan.
+    throwRegistry(options);
+    throwRepository(options);
     const emitter = createEmitter(options);
     await emitPrefix(emitter, prefix, options.guard);
     if (runs.length > 0) await mergeRuns(runs, options.guard, record => emitter.emit(record.encoded));
@@ -1015,7 +1226,8 @@ class CanonicalFileReader {
       this.reserveDecoded(Number(header.value) * 2 + 32);
       let value;
       try { value = this.decoder.decode(bytes); } catch (cause) { fail('CBOR_NON_CANONICAL', { layer: 1, offset: header.offset, cause }); }
-      if (textEncoder.encode(value).length !== bytes.length || value.normalize('NFC') !== value) {
+      if (textEncoder.encode(value).length !== bytes.length || !isUnicode15String(value) ||
+          value.normalize('NFC') !== value) {
         fail('CBOR_NON_CANONICAL', { layer: 1, offset: header.offset });
       }
       return value;
@@ -1075,6 +1287,14 @@ async function expectedIntegerKey(reader, expected) {
  * A disk FileID index is required above the bounded in-memory threshold.
  */
 export async function verifyTreeFile(filePath, input = {}) {
+  if (input.semantic === false) {
+    fail('SCHEMA_FIELD_INVALID', { layer: 1, stage: 'configured-resource-preflight' });
+  }
+  const semantic = registryValidationContext(input.operation, input.registry);
+  if (semantic.registry === undefined) {
+    fail('SCHEMA_FIELD_INVALID', { layer: 1, stage: 'configured-resource-preflight' });
+  }
+  input = { ...input, ...semantic };
   const maxItems = Math.min(
     configuredHardLimit('tree-entries', input.hardLimits?.['tree-entries']),
     configuredHardLimit('tree-entries', asLimit(input.maxItems, MAX_TREE_ENTRIES))
@@ -1096,8 +1316,11 @@ export async function verifyTreeFile(filePath, input = {}) {
       layer: 1, stage: 'configured-resource-preflight'
     });
     if (stat.size > maxBytes) fail('LIMIT_METADATA_BYTES', { layer: 1 });
-    const options = { ...input, maxItems, maxBytes, maxMemoryBytes, readChunkBytes, guard,
-      operation: input.operation ?? 'conformance' };
+    const options = { ...input, maxItems, maxBytes, maxMemoryBytes, readChunkBytes, guard };
+    const fileIdMemoryBytes = remainingFileIdMemory(
+      maxMemoryBytes,
+      Math.min(readChunkBytes, stat.size) + TREE_ENTRY_WORKING_BYTES
+    );
     const reader = new CanonicalFileReader(handle, stat, options);
     const top = await reader.header();
     if (top.major !== 5 || (top.value !== 5n && top.value !== 6n)) fail('SCHEMA_FIELD_INVALID', { layer: 2 });
@@ -1118,35 +1341,68 @@ export async function verifyTreeFile(filePath, input = {}) {
     const expected = input.descriptor instanceof ObjectRef ? input.descriptor :
       ObjectRef.fromMap(input.descriptor, namesFor(options.registry));
     if (embedded.kind !== 6 || expected.kind !== 6 || embedded.toString() !== expected.toString()) {
-      fail('REPOSITORY_DESCRIPTOR_MISMATCH', { layer: 3 });
+      observeRepositoryError(options, new OgvcsError('REPOSITORY_DESCRIPTOR_MISMATCH', { layer: 3 }));
     }
     await expectedIntegerKey(reader, 17);
     const entryCount = await reader.arrayCount(maxItems);
     const common = new Map([[0, 1], [1, 3], [2, requiredFeatures], [16, descriptor], [17, []]]);
     if (extensions !== undefined) common.set(3, extensions);
+    // Establish the complete frozen layer-two tree shape before consulting
+    // required-feature/profile lifecycle. Entry ordering and final identity
+    // therefore cannot be hidden by an earlier layer-three assignment.
     validateKnownSchema(common, 3, {
-      registry: options.registry, operation: options.operation, hardLimits: options.hardLimits
+      semantic: false, hardLimits: options.hardLimits
     });
 
     const fileIds = input.fileIdIndex === undefined ? memoryFileIdIndex({ ...options, entryCount }) :
       suppliedFileIdIndex(input.fileIdIndex);
     const stats = emptyStats();
     let previous;
+    let knownSchemaFailure;
+    const observeKnownSchema = error => {
+      if (!(error instanceof OgvcsError) || error.layer !== 2) throw error;
+      if (!knownSchemaFailure || compareErrorPrecedence(error, knownSchemaFailure) < 0) {
+        knownSchemaFailure = error;
+      }
+    };
     try {
+      await beginFileIdIndex(fileIds, entryCount, guard, fileIdMemoryBytes);
       for (let index = 0; index < entryCount; index += 1) {
         guard.time();
-        const entry = validateEntry(await reader.item(), options);
-        if (previous && compareBytes(previous, entry.name) >= 0) fail('TREE_ENTRY_ORDER_INVALID', { layer: 2 });
+        let entry;
+        try { entry = validateEntry(await reader.item(), options); }
+        catch (error) { observeKnownSchema(error); continue; }
+        if (previous && compareBytes(previous, entry.name) >= 0) observeKnownSchema(new OgvcsError(
+          'TREE_ENTRY_ORDER_INVALID', { layer: 2, stage: 'known-schema' }
+        ));
         previous = entry.name.slice();
-        const accepted = await guard.wait(signal => fileIds.add(entry.fileId, { signal }));
-        if (accepted === false) fail('FILEID_DUPLICATE_IN_TREE', { layer: 3 });
+        let accepted;
+        try {
+          accepted = await guard.wait(signal => fileIds.add(entry.fileId, { signal }));
+        } catch (error) {
+          observeRepositoryError(options, error);
+        }
+        if (accepted === false) {
+          observeRepositoryError(options, new OgvcsError('FILEID_DUPLICATE_IN_TREE', { layer: 3 }));
+        }
         addStats(stats, entry);
       }
-      const uniqueness = await guard.wait(signal => fileIds.finish(entryCount, { signal }));
-      if (uniqueness === false || (uniqueness?.count !== undefined && uniqueness.count !== entryCount)) {
-        fail('FILEID_DUPLICATE_IN_TREE', { layer: 3 });
-      }
       const reference = await reader.finish();
+      if (knownSchemaFailure) throw knownSchemaFailure;
+      observeRegistry(options, () => validateKnownSchema(common, 3, {
+        registry: options.registry, operation: options.operation, hardLimits: options.hardLimits
+      }));
+      throwRegistry(options);
+      let uniqueness;
+      try {
+        uniqueness = await guard.wait(signal => fileIds.finish(entryCount, { signal }));
+      } catch (error) {
+        observeRepositoryError(options, error);
+      }
+      if (uniqueness === false || (uniqueness?.count !== undefined && uniqueness.count !== entryCount)) {
+        observeRepositoryError(options, new OgvcsError('FILEID_DUPLICATE_IN_TREE', { layer: 3 }));
+      }
+      throwRepository(options);
       return Object.freeze({
         objectRef: reference,
         summary: stableSummary(reference, stats, stat.size),

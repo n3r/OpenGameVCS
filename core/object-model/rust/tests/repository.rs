@@ -95,6 +95,171 @@ fn encoded_entry(kind: ObjectKind, value: &Cbor) -> (ObjectRef, Vec<u8>) {
     )
 }
 
+struct TestPathProfileValidator {
+    profile: ProfileRef,
+    case_mode: PathCaseMode,
+    accepted: bool,
+    constant_keys: bool,
+    calls: std::cell::Cell<usize>,
+}
+
+impl TestPathProfileValidator {
+    fn new(profile: ProfileRef, accepted: bool, constant_keys: bool) -> Self {
+        Self {
+            profile,
+            case_mode: PathCaseMode::CaseSensitive,
+            accepted,
+            constant_keys,
+            calls: std::cell::Cell::new(0),
+        }
+    }
+
+    fn with_case_mode(mut self, case_mode: PathCaseMode) -> Self {
+        self.case_mode = case_mode;
+        self
+    }
+}
+
+impl PathProfileValidator for TestPathProfileValidator {
+    fn profile(&self) -> &ProfileRef {
+        &self.profile
+    }
+
+    fn case_mode(&self) -> PathCaseMode {
+        self.case_mode
+    }
+
+    fn validate(&self, segments: &[String]) -> PathProfileDecision {
+        self.calls.set(self.calls.get() + 1);
+        if !self.accepted {
+            return PathProfileDecision::rejected();
+        }
+        let key = if self.constant_keys {
+            "same-key".to_owned()
+        } else {
+            segments.join("/")
+        };
+        PathProfileDecision::accepted(format!("repository:{key}"), format!("platform:{key}"))
+    }
+}
+
+fn ratified_path_tree_lookup(
+    two_entries: bool,
+) -> (RepositoryObjectLookup, ObjectRef, ObjectRef) {
+    let document = scenario("tree-path-profile");
+    let mut entries = lookup_entries(&document);
+    let old_descriptor = reference(&document["context"]["repositoryDescriptor"]);
+    let mut descriptor = decoded_entry(&entries, old_descriptor);
+    replace_cbor_field(
+        &mut descriptor,
+        17,
+        ProfileRef::from_str("path.opengamevcs/portable@1")
+            .unwrap()
+            .to_cbor(),
+    );
+    let (descriptor, descriptor_payload) =
+        encoded_entry(ObjectKind::RepositoryDescriptor, &descriptor);
+
+    let old_tree = entries
+        .keys()
+        .copied()
+        .find(|reference| reference.kind == ObjectKind::Tree)
+        .unwrap();
+    let mut tree = decoded_entry(&entries, old_tree);
+    replace_cbor_field(&mut tree, 16, descriptor.to_cbor());
+    if two_entries {
+        let Cbor::Array(tree_entries) = cbor_field(&tree, 17) else {
+            panic!("tree entries")
+        };
+        let mut additional = tree_entries[0].clone();
+        replace_cbor_field(&mut additional, 0, Cbor::Text("another".to_owned()));
+        replace_cbor_field(&mut additional, 2, Cbor::Bytes(vec![0x44; 16]));
+        let Cbor::Map(fields) = &mut tree else {
+            panic!("tree map")
+        };
+        let Cbor::Array(tree_entries) = &mut fields
+            .iter_mut()
+            .find(|(key, _)| *key == Cbor::UInt(17))
+            .unwrap()
+            .1
+        else {
+            panic!("tree entries")
+        };
+        tree_entries.insert(0, additional);
+    }
+    let (tree, tree_payload) = encoded_entry(ObjectKind::Tree, &tree);
+
+    entries.remove(&old_descriptor);
+    entries.remove(&old_tree);
+    entries.insert(descriptor, descriptor_payload);
+    entries.insert(tree, tree_payload);
+    let lookup = RepositoryObjectLookup::new(
+        entries,
+        Registry::load_directory(REGISTRY_ROOT).unwrap(),
+        ValidationMode::Conformance,
+        RepositoryLimits::default(),
+    )
+    .unwrap();
+    (lookup, tree, descriptor)
+}
+
+fn ratified_empty_repository() -> (RepositoryObjectLookup, ObjectRef, ObjectRef) {
+    let document = scenario("history-zero-parent-root");
+    let entries = lookup_entries(&document);
+    let old_descriptor = reference(&document["context"]["repositoryDescriptor"]);
+    let old_tree = entries
+        .keys()
+        .copied()
+        .find(|reference| reference.kind == ObjectKind::Tree)
+        .unwrap();
+    let old_change = entries
+        .keys()
+        .copied()
+        .find(|reference| reference.kind == ObjectKind::ChangeSet)
+        .unwrap();
+    let old_snapshot = entries
+        .keys()
+        .copied()
+        .find(|reference| reference.kind == ObjectKind::Snapshot)
+        .unwrap();
+
+    let mut descriptor_value = decoded_entry(&entries, old_descriptor);
+    replace_cbor_field(
+        &mut descriptor_value,
+        17,
+        ProfileRef::from_str("path.opengamevcs/portable@1")
+            .unwrap()
+            .to_cbor(),
+    );
+    let (descriptor, descriptor_payload) =
+        encoded_entry(ObjectKind::RepositoryDescriptor, &descriptor_value);
+    let mut tree_value = decoded_entry(&entries, old_tree);
+    replace_cbor_field(&mut tree_value, 16, descriptor.to_cbor());
+    let (tree, tree_payload) = encoded_entry(ObjectKind::Tree, &tree_value);
+    let mut change_value = decoded_entry(&entries, old_change);
+    replace_cbor_field(&mut change_value, 16, descriptor.to_cbor());
+    let (change, change_payload) = encoded_entry(ObjectKind::ChangeSet, &change_value);
+    let mut snapshot_value = decoded_entry(&entries, old_snapshot);
+    replace_cbor_field(&mut snapshot_value, 16, descriptor.to_cbor());
+    replace_cbor_field(&mut snapshot_value, 18, tree.to_cbor());
+    replace_cbor_field(&mut snapshot_value, 19, change.to_cbor());
+    let (snapshot, snapshot_payload) = encoded_entry(ObjectKind::Snapshot, &snapshot_value);
+
+    let lookup = RepositoryObjectLookup::new(
+        [
+            (descriptor, descriptor_payload),
+            (tree, tree_payload),
+            (change, change_payload),
+            (snapshot, snapshot_payload),
+        ],
+        Registry::load_directory(REGISTRY_ROOT).unwrap(),
+        ValidationMode::Conformance,
+        RepositoryLimits::default(),
+    )
+    .unwrap();
+    (lookup, snapshot, descriptor)
+}
+
 fn replace_array_reference(value: &mut Cbor, field_key: u64, old: ObjectRef, new: ObjectRef) {
     let Cbor::Array(values) = cbor_field(value, field_key) else {
         panic!("reference array")
@@ -160,6 +325,7 @@ fn parse_lifetime(value: &Value) -> LifetimeRecord {
 
 fn parse_mapping(value: &Value) -> ImportMapping {
     ImportMapping {
+        descriptor: reference(&value["descriptor"]),
         importer_profile: ProfileRef::from_str(value["importerProfile"].as_str().unwrap()).unwrap(),
         source_namespace_digest: hex(value["sourceNamespaceDigest"].as_str().unwrap()),
         source_identity_digest: hex(value["sourceIdentityDigest"].as_str().unwrap()),
@@ -170,9 +336,7 @@ fn parse_mapping(value: &Value) -> ImportMapping {
             "published" => ImportState::Published,
             _ => panic!("state"),
         },
-        declared_mapping_key: value
-            .get("mappingKey")
-            .map(|value| hex(value.as_str().unwrap())),
+        declared_mapping_key: hex(value["mappingKey"].as_str().unwrap()),
     }
 }
 
@@ -205,6 +369,7 @@ fn context<'a>(
         lookup,
         reference(&document["context"]["repositoryDescriptor"]),
         reference(&document["context"]["designatedRoot"]),
+        PathCaseMode::CaseSensitive,
     );
     result.lifetime_records = lifetime_records;
     result.working_lifetime_additions = working;
@@ -370,6 +535,7 @@ fn lookup_manifest_and_tree_are_identity_checked_and_bounded() {
         &lookup,
         reference(&document["context"]["repositoryDescriptor"]),
         true,
+        PathCaseMode::CaseSensitive,
     )
     .unwrap();
     assert_eq!(expanded.entries.len(), 1);
@@ -416,6 +582,7 @@ fn lookup_manifest_and_tree_are_identity_checked_and_bounded() {
                 &nested_lookup,
                 reference(&document["context"]["repositoryDescriptor"]),
                 false,
+                PathCaseMode::CaseSensitive,
             )
             .unwrap_err()
             .code,
@@ -604,6 +771,71 @@ fn duplicate_lookup_entries_are_counted_and_deadline_checked_before_coalescing()
 }
 
 #[test]
+fn repository_lookup_separates_explicit_layer_two_from_semantic_authority() {
+    let unread = std::iter::from_fn(|| -> Option<(ObjectRef, Vec<u8>)> {
+        panic!("authority must be rejected before consuming repository objects")
+    });
+    let partial = Registry::load([], []).unwrap();
+    let error = RepositoryObjectLookup::new(
+        unread,
+        partial,
+        ValidationMode::Conformance,
+        RepositoryLimits::default(),
+    )
+    .err()
+    .unwrap();
+    assert_eq!(
+        (error.code, error.layer, error.stage),
+        (
+            ErrorCode::SchemaFieldInvalid,
+            1,
+            ValidationStage::ConfiguredResourcePreflight,
+        )
+    );
+
+    let error = RepositoryObjectLookup::new(
+        std::iter::empty(),
+        Registry::bundled(),
+        ValidationMode::Read,
+        RepositoryLimits::default(),
+    )
+    .err()
+    .unwrap();
+    assert_eq!(
+        (error.code, error.layer, error.stage),
+        (
+            ErrorCode::SchemaFieldInvalid,
+            1,
+            ValidationStage::ConfiguredResourcePreflight,
+        )
+    );
+
+    let layer_two = RepositoryObjectLookup::new_layer2(
+        std::iter::empty(),
+        RepositoryLimits::default(),
+    )
+    .unwrap();
+    layer_two.validate_all().unwrap();
+    let missing = ObjectRef {
+        kind: ObjectKind::ContentManifest,
+        digest: [0; 32],
+    };
+    let descriptor = ObjectRef {
+        kind: ObjectKind::RepositoryDescriptor,
+        digest: [0; 32],
+    };
+    let error = verify_manifest(missing, &layer_two, descriptor).unwrap_err();
+    assert_eq!(
+        (error.code, error.layer, error.stage),
+        (
+            ErrorCode::SchemaFieldInvalid,
+            1,
+            ValidationStage::ConfiguredResourcePreflight,
+        )
+    );
+}
+
+#[test]
 fn compact_lookup_metadata_is_decoded_only_within_remaining_memory() {
     let payload = encode_canonical_with_limits(
         &Cbor::Map(vec![
@@ -669,7 +901,7 @@ fn compact_lookup_metadata_is_decoded_only_within_remaining_memory() {
 }
 
 #[test]
-fn tree_expansion_reserves_retained_maps_against_memory_not_scratch() {
+fn tree_expansion_releases_public_output_accounting_but_bounds_internal_construction() {
     let document = scenario("transition-create");
     let descriptor = reference(&document["context"]["repositoryDescriptor"]);
 
@@ -681,22 +913,30 @@ fn tree_expansion_reserves_retained_maps_against_memory_not_scratch() {
         .unwrap();
     let tree = ObjectRef::from_cbor(cbor_field(snapshot.value.as_deref().unwrap(), 18)).unwrap();
     let before = probe.resource_summary().retained_bytes;
-    let expanded = expand_tree(tree, &probe, descriptor, false).unwrap();
-    let expansion_bytes = probe.resource_summary().retained_bytes - before;
-    assert!(expansion_bytes > 0);
-    drop(expanded);
+    let expanded = expand_tree(tree, &probe, descriptor, false, PathCaseMode::CaseSensitive).unwrap();
+    assert!(!expanded.entries.is_empty());
+    assert_eq!(probe.resource_summary().retained_bytes, before);
+    let second = expand_tree(tree, &probe, descriptor, false, PathCaseMode::CaseSensitive).unwrap();
+    assert_eq!(second.entries, expanded.entries);
     assert_eq!(probe.resource_summary().retained_bytes, before);
 
     let constrained = load_lookup(
         &document,
         RepositoryLimits {
-            max_memory_bytes: before + expansion_bytes - 1,
+            max_memory_bytes: before + 511,
             max_scratch_bytes: usize::MAX,
             ..RepositoryLimits::default()
         },
     );
     constrained.validate_all().unwrap();
-    let error = expand_tree(tree, &constrained, descriptor, false).unwrap_err();
+    let error = expand_tree(
+        tree,
+        &constrained,
+        descriptor,
+        false,
+        PathCaseMode::CaseSensitive,
+    )
+    .unwrap_err();
     assert_eq!((error.code, error.layer), (ErrorCode::LimitMemory, 1));
 }
 
@@ -709,10 +949,198 @@ fn expand_tree_dispatches_the_descriptor_path_profile_on_complete_paths() {
         &lookup,
         reference(&document["context"]["repositoryDescriptor"]),
         false,
+        PathCaseMode::CaseSensitive,
     )
     .unwrap_err();
     assert_eq!(error.code, ErrorCode::PathProfileInvalid);
     assert_eq!(error.layer, 3);
+
+    let profile = ProfileRef::from_str("path.test/reject-reserved@1").unwrap();
+    let validator = TestPathProfileValidator::new(profile, true, false);
+    let error = expand_tree_with_path_profile_validator(
+        first_reference(&document, ObjectKind::Tree),
+        &lookup,
+        reference(&document["context"]["repositoryDescriptor"]),
+        false,
+        PathCaseMode::CaseSensitive,
+        Some(&validator),
+    )
+    .unwrap_err();
+    assert_eq!(error.code, ErrorCode::PathProfileInvalid);
+    assert_eq!(validator.calls.get(), 0);
+
+    let production = RepositoryObjectLookup::new(
+        lookup_entries(&document),
+        Registry::load_directory(REGISTRY_ROOT).unwrap(),
+        ValidationMode::Production,
+        RepositoryLimits::default(),
+    )
+    .unwrap();
+    assert_eq!(
+        expand_tree(
+            first_reference(&document, ObjectKind::Tree),
+            &production,
+            reference(&document["context"]["repositoryDescriptor"]),
+            false,
+            PathCaseMode::CaseSensitive,
+        )
+        .unwrap_err()
+        .code,
+        ErrorCode::ProfileConformanceOnly
+    );
+}
+
+#[test]
+fn ratified_path_profiles_require_an_exact_pinned_validator() {
+    let (lookup, tree, descriptor) = ratified_path_tree_lookup(false);
+    let absent = expand_tree(
+        tree,
+        &lookup,
+        descriptor,
+        false,
+        PathCaseMode::CaseSensitive,
+    )
+    .unwrap_err();
+    assert_eq!(
+        (absent.code, absent.layer, absent.stage),
+        (
+            ErrorCode::PathProfileInvalid,
+            3,
+            ValidationStage::RepositorySemantics
+        )
+    );
+
+    let mismatched = TestPathProfileValidator::new(
+        ProfileRef::from_str("path.opengamevcs/linux@1").unwrap(),
+        true,
+        false,
+    );
+    assert_eq!(
+        expand_tree_with_path_profile_validator(
+            tree,
+            &lookup,
+            descriptor,
+            false,
+            PathCaseMode::CaseSensitive,
+            Some(&mismatched),
+        )
+        .unwrap_err()
+        .code,
+        ErrorCode::PathProfileInvalid
+    );
+    assert_eq!(mismatched.calls.get(), 0);
+
+    let profile = ProfileRef::from_str("path.opengamevcs/portable@1").unwrap();
+    let wrong_mode = TestPathProfileValidator::new(profile.clone(), true, false);
+    assert_eq!(
+        expand_tree_with_path_profile_validator(
+            tree,
+            &lookup,
+            descriptor,
+            false,
+            PathCaseMode::CaseFolded,
+            Some(&wrong_mode),
+        )
+        .unwrap_err()
+        .code,
+        ErrorCode::PathProfileInvalid
+    );
+    assert_eq!(wrong_mode.calls.get(), 0);
+
+    let rejected = TestPathProfileValidator::new(profile.clone(), false, false);
+    assert_eq!(
+        expand_tree_with_path_profile_validator(
+            tree,
+            &lookup,
+            descriptor,
+            false,
+            PathCaseMode::CaseSensitive,
+            Some(&rejected),
+        )
+        .unwrap_err()
+        .code,
+        ErrorCode::PathProfileInvalid
+    );
+    assert_eq!(rejected.calls.get(), 1);
+
+    let accepted = TestPathProfileValidator::new(profile, true, false);
+    let expanded = expand_tree_with_path_profile_validator(
+        tree,
+        &lookup,
+        descriptor,
+        false,
+        PathCaseMode::CaseSensitive,
+        Some(&accepted),
+    )
+    .unwrap();
+    assert_eq!(expanded.entries.len(), 1);
+    assert_eq!(accepted.calls.get(), 1);
+}
+
+#[test]
+fn ratified_path_profile_collision_keys_are_bounded_and_unique() {
+    let (lookup, tree, descriptor) = ratified_path_tree_lookup(true);
+    let validator = TestPathProfileValidator::new(
+        ProfileRef::from_str("path.opengamevcs/portable@1").unwrap(),
+        true,
+        true,
+    );
+    let error = expand_tree_with_path_profile_validator(
+        tree,
+        &lookup,
+        descriptor,
+        false,
+        PathCaseMode::CaseSensitive,
+        Some(&validator),
+    )
+    .unwrap_err();
+    assert_eq!(
+        (error.code, error.layer, error.stage),
+        (
+            ErrorCode::PathProfileInvalid,
+            3,
+            ValidationStage::RepositorySemantics
+        )
+    );
+    assert_eq!(validator.calls.get(), 2);
+}
+
+#[test]
+fn repository_candidate_propagates_the_ratified_path_profile_validator() {
+    let (lookup, candidate, descriptor) = ratified_empty_repository();
+    let context = RepositoryContext::new(
+        &lookup,
+        descriptor,
+        candidate,
+        PathCaseMode::CaseSensitive,
+    );
+    assert_eq!(
+        validate_repository_candidate(candidate, &context)
+            .unwrap_err()
+            .code,
+        ErrorCode::PathProfileInvalid
+    );
+
+    let validator = TestPathProfileValidator::new(
+        ProfileRef::from_str("path.opengamevcs/portable@1").unwrap(),
+        true,
+        false,
+    );
+    let context = RepositoryContext {
+        path_profile_validator: Some(&validator),
+        path_case_mode: PathCaseMode::CaseSensitive,
+        ..RepositoryContext::new(
+            &lookup,
+            descriptor,
+            candidate,
+            PathCaseMode::CaseSensitive,
+        )
+    };
+    let summary = validate_repository_candidate(candidate, &context).unwrap();
+    assert_eq!((summary.entries, summary.groups), (0, 0));
+    // Empty trees still require an exact adapter pin, but have no composed
+    // path on which to invoke it.
+    assert_eq!(validator.calls.get(), 0);
 }
 
 #[test]
@@ -825,6 +1253,7 @@ fn manifest_tree_and_history_failures_keep_their_semantic_codes() {
             &duplicate_lookup,
             reference(&duplicate["context"]["repositoryDescriptor"]),
             true,
+            PathCaseMode::CaseSensitive,
         )
         .unwrap_err()
         .code,
@@ -923,6 +1352,7 @@ fn import_retry_conflict_and_native_collision_are_deterministic() {
             &lookup,
             reference(&document["context"]["repositoryDescriptor"]),
             first_reference(&document, ObjectKind::Snapshot),
+            PathCaseMode::CaseSensitive,
         );
         context.lifetime_records = &lifetime;
         context.working_lifetime_additions = &working;
@@ -962,6 +1392,7 @@ fn import_retry_conflict_and_native_collision_are_deterministic() {
         &lookup,
         reference(&document["context"]["repositoryDescriptor"]),
         first_reference(&document, ObjectKind::Snapshot),
+        PathCaseMode::CaseSensitive,
     );
     context.lifetime_records = &lifetime;
     context.working_lifetime_additions = &working;
@@ -1013,6 +1444,7 @@ fn import_retry_conflict_and_native_collision_are_deterministic() {
         &in_flight_lookup,
         reference(&in_flight_document["context"]["repositoryDescriptor"]),
         first_reference(&in_flight_document, ObjectKind::Snapshot),
+        PathCaseMode::CaseSensitive,
     );
     in_flight_context.working_lifetime_additions = &in_flight_working;
     let mut unrelated = ImportRequest {
@@ -1201,7 +1633,12 @@ fn history_shelves_provenance_and_abstract_cycles_are_bounded() {
         .map(|entry| reference(&entry["ref"]))
         .find(|reference| reference.kind == ObjectKind::Snapshot)
         .unwrap();
-    let mut shelf_context = RepositoryContext::new(&shelf_lookup, descriptor, designated_root);
+    let mut shelf_context = RepositoryContext::new(
+        &shelf_lookup,
+        descriptor,
+        designated_root,
+        PathCaseMode::CaseSensitive,
+    );
     shelf_context.lifetime_records = &lifetime;
     shelf_context.working_lifetime_additions = &working;
     shelf_context.import_mappings = &imported;
@@ -1319,7 +1756,12 @@ fn snapshot_root_validity_outranks_cross_repository_descriptor_mismatch() {
         RepositoryLimits::default(),
     )
     .unwrap();
-    let context = RepositoryContext::new(&lookup, descriptor, designated_root);
+    let context = RepositoryContext::new(
+        &lookup,
+        descriptor,
+        designated_root,
+        PathCaseMode::CaseSensitive,
+    );
     let error = validate_snapshot_graph(second_root_ref, &context).unwrap_err();
     assert_eq!(
         (error.code, error.layer),
@@ -1361,7 +1803,12 @@ fn snapshot_root_validity_outranks_cross_repository_descriptor_mismatch() {
         RepositoryLimits::default(),
     )
     .unwrap();
-    let context = RepositoryContext::new(&lookup, descriptor, designated_root);
+    let context = RepositoryContext::new(
+        &lookup,
+        descriptor,
+        designated_root,
+        PathCaseMode::CaseSensitive,
+    );
     let error = validate_snapshot_graph(new_candidate, &context).unwrap_err();
     assert_eq!(
         (error.code, error.layer),
@@ -1409,6 +1856,7 @@ fn repository_validation_replays_ancestor_results_and_side_parent_closure() {
         &lookup,
         reference(&document["context"]["repositoryDescriptor"]),
         new_root,
+        PathCaseMode::CaseSensitive,
     );
     validation_context.lifetime_records = &lifetime;
     validation_context.working_lifetime_additions = &working;
@@ -1517,7 +1965,12 @@ fn historical_replay_evicts_long_chain_states_under_a_reduced_memory_ceiling() {
     .unwrap();
     let validation_context = RepositoryContext {
         lifetime_records: &lifetime,
-        ..RepositoryContext::new(&lookup, descriptor, designated_root)
+        ..RepositoryContext::new(
+            &lookup,
+            descriptor,
+            designated_root,
+            PathCaseMode::CaseSensitive,
+        )
     };
     let summary = validate_repository_candidate(candidate, &validation_context).unwrap();
     assert_eq!(summary.entries, 1);
@@ -1535,7 +1988,12 @@ fn historical_replay_evicts_long_chain_states_under_a_reduced_memory_ceiling() {
     .unwrap();
     let constrained_context = RepositoryContext {
         lifetime_records: &lifetime,
-        ..RepositoryContext::new(&constrained, descriptor, designated_root)
+        ..RepositoryContext::new(
+            &constrained,
+            descriptor,
+            designated_root,
+            PathCaseMode::CaseSensitive,
+        )
     };
     assert_eq!(
         validate_repository_candidate(candidate, &constrained_context)
@@ -1585,7 +2043,12 @@ fn shelf_validation_replays_every_prior_revision() {
     let imported = mappings(&document);
     let descriptor = ObjectRef::from_cbor(cbor_field(&latest, 16)).unwrap();
     let designated_root = first_reference(&document, ObjectKind::Snapshot);
-    let mut validation_context = RepositoryContext::new(&lookup, descriptor, designated_root);
+    let mut validation_context = RepositoryContext::new(
+        &lookup,
+        descriptor,
+        designated_root,
+        PathCaseMode::CaseSensitive,
+    );
     validation_context.lifetime_records = &lifetime;
     validation_context.working_lifetime_additions = &working;
     validation_context.import_mappings = &imported;
@@ -1657,8 +2120,18 @@ fn resource_guards_report_edge_scratch_and_time_limits() {
         .code,
         ErrorCode::LimitTime
     );
+    let preflight = validate_abstract_reference_graph(
+        &serde_json::Value::Null,
+        RepositoryLimits {
+            max_time: Some(Duration::ZERO),
+            ..RepositoryLimits::default()
+        },
+    )
+    .unwrap_err();
+    assert_eq!(preflight.code, ErrorCode::LimitTime);
+    assert_eq!(preflight.layer, 1);
 
-    let timed_lookup = RepositoryObjectLookup::new(
+    let timed_error = RepositoryObjectLookup::new(
         [],
         Registry::bundled(),
         ValidationMode::Conformance,
@@ -1667,41 +2140,9 @@ fn resource_guards_report_edge_scratch_and_time_limits() {
             ..RepositoryLimits::default()
         },
     )
-    .unwrap();
-    let lifetime = [LifetimeRecord {
-        file_id: FileId::new([0x33; 16]).unwrap(),
-        origin: LifetimeOrigin::NativeCreate,
-        first_change_set: ObjectRef {
-            kind: ObjectKind::ChangeSet,
-            digest: [3; 32],
-        },
-        first_operation: 0,
-        import_mapping_key: None,
-    }];
-    let mut timed_context = RepositoryContext::new(
-        &timed_lookup,
-        ObjectRef {
-            kind: ObjectKind::RepositoryDescriptor,
-            digest: [1; 32],
-        },
-        ObjectRef {
-            kind: ObjectKind::Snapshot,
-            digest: [2; 32],
-        },
-    );
-    timed_context.lifetime_records = &lifetime;
-    let error = validate_lifetime_and_imports(
-        &timed_context,
-        ObjectRef {
-            kind: ObjectKind::ChangeSet,
-            digest: [3; 32],
-        },
-        &[],
-        None,
-    )
     .unwrap_err();
-    assert_eq!(error.code, ErrorCode::LimitTime);
-    assert_eq!(error.layer, 1);
+    assert_eq!(timed_error.code, ErrorCode::LimitTime);
+    assert_eq!(timed_error.layer, 1);
 
     let unreachable_edges = serde_json::json!({
         "schemaVersion": "ogvcs.repository-format/abstract-reference-graph/v1",
@@ -1743,6 +2184,59 @@ fn resource_guards_report_edge_scratch_and_time_limits() {
         .code,
         ErrorCode::LimitMemory
     );
+}
+
+#[test]
+fn abstract_graph_symbolic_edges_are_charged_before_copying() {
+    let long_target = "a".repeat(32_768);
+    let graph = serde_json::json!({
+        "schemaVersion": "ogvcs.repository-format/abstract-reference-graph/v1",
+        "assumedValidation": "canonical-framing-schema-and-identity-prevalidated",
+        "graphKind": "snapshot-parent",
+        "roots": ["node-a"],
+        "nodes": [
+            {"id":"node-a","type":"snapshot","edges":[{"kind":"parent","target":long_target}]}
+        ]
+    });
+    let error = validate_abstract_reference_graph(
+        &graph,
+        RepositoryLimits {
+            max_memory_bytes: 1,
+            max_scratch_bytes: usize::MAX,
+            ..RepositoryLimits::default()
+        },
+    )
+    .unwrap_err();
+    assert_eq!(error.code, ErrorCode::LimitMemory);
+
+    let long_node = "a".repeat(32_768);
+    for graph in [
+        serde_json::json!({
+            "schemaVersion": "ogvcs.repository-format/abstract-reference-graph/v1",
+            "assumedValidation": "canonical-framing-schema-and-identity-prevalidated",
+            "graphKind": "snapshot-parent",
+            "roots": [long_node],
+            "nodes": [{"id":long_node,"type":"snapshot","edges":[]}]
+        }),
+        serde_json::json!({
+            "schemaVersion": "ogvcs.repository-format/abstract-reference-graph/v1",
+            "assumedValidation": "canonical-framing-schema-and-identity-prevalidated",
+            "graphKind": "snapshot-parent",
+            "roots": [long_node],
+            "nodes": [{"id":"node-a","type":"snapshot","edges":[]}]
+        }),
+    ] {
+        let error = validate_abstract_reference_graph(
+            &graph,
+            RepositoryLimits {
+                max_memory_bytes: 5_000,
+                max_scratch_bytes: usize::MAX,
+                ..RepositoryLimits::default()
+            },
+        )
+        .unwrap_err();
+        assert_eq!(error.code, ErrorCode::LimitMemory);
+    }
 }
 
 #[test]

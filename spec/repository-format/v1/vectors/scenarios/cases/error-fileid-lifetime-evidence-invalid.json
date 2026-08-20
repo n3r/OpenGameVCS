@@ -2,6 +2,7 @@
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
     "candidateSnapshot": "ogvcs:v1:snapshot:sha256:bc08f5fc0b18186fac6a86342159432e7f958c2aa507b3cfd604145511443b4b",
+    "caseMode": "case-sensitive",
     "designatedRoot": "ogvcs:v1:snapshot:sha256:1f12d26a139da2787ec41777f591ad2a7b52708a237691099ced6c23d9bb40ab",
     "importMappings": [],
     "lifetimeRecords": [],
@@ -114,10 +115,10 @@
       "sha256": "25cb4e9673927b516eadeb5d0a6d0833ba9e5c06a125fa50772c1f453dbe77b1"
     },
     {
-      "bytes": 6267,
+      "bytes": 6301,
       "mediaType": "application/json",
       "path": "scenarios/definitions/error-fileid-lifetime-evidence-invalid.json",
-      "sha256": "261c7fecfe2f294814698a3d475c2dfbccd48dca32ec09e1625d39509cb5017d"
+      "sha256": "d346eb6e5664c4c8c1683d586751ded7751b908a3d090a13f532bb94ef8394d3"
     }
   ],
   "operation": "validate-repository",
@@ -129,18 +130,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/error-fileid-lifetime-evidence-invalid.json",
-        "definitionSha256": "261c7fecfe2f294814698a3d475c2dfbccd48dca32ec09e1625d39509cb5017d",
+        "definitionSha256": "d346eb6e5664c4c8c1683d586751ded7751b908a3d090a13f532bb94ef8394d3",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "b93d6ffc265d04362f5ea5bc9a5d0ae44115e07621ada39fb36cb45380b76491"
     },
     "summary": {
-      "bytes": 7969,
+      "bytes": 8003,
       "indexEntries": 0,
       "items": 9,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "b889e35c5133b2b3f01bfe67dddcf159f679067797f4162d98b3bc1b69d21e2a",
+      "summarySha256": "42c98277009cae35079b9552467a7c25f72d47cffd04d96d110734f642884266",
       "traversalEdges": 0
     }
   },

@@ -1,0 +1,13 @@
+{
+  "api": "verify-manifest",
+  "authorityContext": "scenario.context",
+  "lookupMutations": [
+    {
+      "action": "replace-payload-preserve-reference",
+      "reference": "ogvcs:v1:chunk:sha256:fdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfd",
+      "sourceArtifact": "objects/01-chunk.bin"
+    }
+  ],
+  "manifest": "ogvcs:v1:content-manifest:sha256:8e69f389f3cad3f572a6f39c20bad82bb486ad50da2a54eb5b3b17d472018c15",
+  "schema": "ogvcs.repository-format.v1.repository-route-input.v1"
+}

@@ -106,7 +106,7 @@
         "result": "reject",
         "stage": "registry-semantics"
       },
-      "operation": "read-or-write",
+      "operation": "read",
       "profile": "profile-state.test/reserved@1",
       "scenarioId": "registry-reserved",
       "snapshot": "old"
@@ -116,7 +116,7 @@
         "highestLayer": 3,
         "result": "accept"
       },
-      "operation": "read-or-new-write",
+      "operation": "read-or-production-write",
       "profile": "profile-state.test/ratified@1",
       "scenarioId": "registry-ratified-read-write",
       "snapshot": "old"
@@ -138,7 +138,7 @@
         "result": "reject",
         "stage": "registry-semantics"
       },
-      "operation": "new-write",
+      "operation": "production-write",
       "profile": "profile-state.test/deprecated@1",
       "scenarioId": "registry-deprecated-write",
       "snapshot": "old"

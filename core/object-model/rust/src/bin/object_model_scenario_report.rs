@@ -8,16 +8,26 @@ use std::{
 };
 
 use ogvcs_object_model::{
-    allocate_file_id_with, decode_canonical, evaluate_hard_limit, expand_tree, logical_record_id,
-    object_id, scan_metadata, validate_abstract_reference_graph, validate_bundle_claim,
-    validate_conflict_set, validate_file_id_allocation, validate_import_request,
-    validate_logical_record, validate_metadata_schema, validate_repository_candidate,
-    validate_semantic_object, validate_shelf_revision, verify_logical_bundle_stream,
-    verify_manifest, EntropySource, Error, ErrorCode, FileId, FileIdAllocationRequest,
-    ImportMapping, ImportRequest, ImportState, LifetimeOrigin, LifetimeRecord, Limits,
-    LogicalBundleVerifyOptions, ObjectKind, ObjectRef, Operation, ProfileRef, Registry,
-    RegistryEntry, RegistryState, RepositoryContext, RepositoryLimits, RepositoryObjectLookup,
-    Result, ValidationMode, ValidationStage, HARD_LIMIT_NAMES, REGISTRY_FILES,
+    allocate_file_id_with, decode_canonical, decode_metadata, encode_and_verify_content_manifest_stream,
+    encode_canonical, encode_metadata, encode_ordered_tree, encode_ordered_tree_with_features,
+    encode_tree_with_scratch, encode_tree_with_scratch_and_features, evaluate_hard_limit,
+    expand_tree, expand_tree_with_path_profile_validator, logical_record_id, object_id,
+    replay_change_set, scan_metadata, validate_abstract_reference_graph, validate_asset_groups_with_limits,
+    validate_bundle_claim, validate_conflict_set, validate_file_id_allocation,
+    validate_import_request, validate_lifetime_and_imports, validate_logical_record,
+    validate_metadata_schema, validate_metadata_schema_with_limits, validate_provenance_graph,
+    validate_repository_candidate, validate_semantic_object,
+    validate_shelf_revision, validate_snapshot_graph, verify_logical_bundle_stream,
+    verify_manifest, verify_tree_stream, visit_logical_bundle, AssetGroup, BundleItemInfo,
+    BundleLimits, BundleTranscriptHashWriter, BundleVisitor, EntropySource, Error, ErrorCode, FileId,
+    FileIdAllocationRequest, ImportMapping, ImportRequest, ImportState, LifetimeOrigin,
+    LifetimeRecord, Limits, LogicalBundleBudget, LogicalBundleVerifyOptions,
+    LogicalBundleWriteOptions, LogicalBundleWritePlan, LogicalBundleWriter, ManifestStreamLimits,
+    ManifestStreamPart, ObjectKind, ObjectRef, Operation, PathCaseMode, PathProfileDecision,
+    PathProfileValidator, ProfileRef, Registry, RegistryEntry, RegistryState, RepositoryContext,
+    RepositoryLimits, RepositoryObjectLookup, RepositoryState, Result, TreeFileIdScratchIndex,
+    TreeScratchMetrics, TreeStreamEntry, TreeStreamLimits, ValidationMode, ValidationStage, HARD_LIMIT_NAMES,
+    REGISTRY_FILES, Cbor, MetadataDecodeOptions, MetadataEncodeOptions,
 };
 use serde_json::{json, Map, Value};
 
@@ -257,7 +267,7 @@ impl Runner {
             let scratch = TempDirectory::new("conformance-bundle").map_err(display_error)?;
             let summary = verify_logical_bundle_stream(
                 Cursor::new(self.bytes(path)?),
-                LogicalBundleVerifyOptions::new(&scratch.path, &self.registry),
+                LogicalBundleVerifyOptions::semantic(&scratch.path, &self.registry, Operation::ConformanceWrite),
             )
             .map_err(display_error)?;
             bundle_rows.push(json!({
@@ -359,23 +369,17 @@ impl Runner {
                 continue;
             }
             let scenario = self.json(json_string(indexed, "artifact")?)?;
-            let actual = match self.execute_concrete(indexed, &scenario) {
-                Ok(highest_layer) => json!({"highestLayer": highest_layer, "result": "accept"}),
-                Err(error) => {
-                    if !error.is_registered_site() {
-                        return Err(format!(
-                            "{id}: unregistered diagnostic site {}@{}:{}",
-                            error.code.as_str(),
-                            error.layer,
-                            error.stage.as_str()
-                        ));
+            let actual = if operation == "validate-resource-reservation"
+                || operation == "validate-tree-groups-memory"
+            {
+                self.execute_resource_actual(indexed, &scenario)
+                    .map_err(|error| format!("{id}: {}", display_error(error)))?
+            } else {
+                match self.execute_concrete(indexed, &scenario) {
+                    Ok(highest_layer) => {
+                        json!({"highestLayer": highest_layer, "result": "accept"})
                     }
-                    json!({
-                        "code": error.code.as_str(),
-                        "layer": error.layer,
-                        "result": "reject",
-                        "stage": error.stage.as_str()
-                    })
+                    Err(error) => diagnostic_outcome(id, error)?
                 }
             };
             let expected = normalized_expected(
@@ -449,6 +453,27 @@ impl Runner {
             self.execute_malformed_recipe()?;
             return Ok(1);
         }
+        if operation == "validate-operation-mode" {
+            return self.execute_operation_mode(scenario);
+        }
+        if operation == "write-content-manifest" {
+            return self.execute_manifest_writer(scenario);
+        }
+        if operation == "write-tree" {
+            return self.execute_tree_writer(scenario);
+        }
+        if operation == "write-logical-bundle" {
+            return self.execute_logical_bundle_writer(scenario);
+        }
+        if operation == "validate-path-profile-decision" {
+            return self.execute_path_profile_decision(scenario);
+        }
+        if operation == "validate-typed-reference-authority" {
+            return self.execute_typed_reference_authority(scenario);
+        }
+        if operation == "validate-repository-route" {
+            return self.execute_repository_route(scenario);
+        }
         let input = primary_input(scenario)?;
         if materialization == "executable-configured-resource-constructor" {
             return self.execute_configured_resource(scenario, input);
@@ -459,12 +484,10 @@ impl Runner {
             return Ok(3);
         }
         if operation == "validate-bundle" {
+            let scratch = TempDirectory::new("bundle")?;
             return self.execute_bundle(
                 value_string(input, "path")?,
-                LogicalBundleVerifyOptions::new(
-                    &TempDirectory::new("bundle")?.path,
-                    &self.registry,
-                ),
+                LogicalBundleVerifyOptions::layer2(&scratch.path),
             );
         }
         if operation == "validate-abstract-reference-graph" {
@@ -477,6 +500,20 @@ impl Runner {
         if operation == "allocate-file-id" {
             self.execute_allocate(scenario, input)?;
             return Ok(3);
+        }
+        if operation == "canonical-scan" && value_string(input, "mediaType")? == "application/json" {
+            let request = self.result_json(value_string(input, "path")?)?;
+            if value_string(&request, "api")? == "canonical-scan"
+                && value_string(&request, "schema")?
+                    == "ogvcs.repository-format.v1.canonical-scan-input.v1"
+                && value_string(&request, "surface")? == "generic-cbor-item"
+            {
+                decode_canonical(
+                    &self.result_bytes(value_string(&request, "source")?)?,
+                    Limits::METADATA,
+                )?;
+                return Ok(1);
+            }
         }
         let lookup = self.lookup(scenario, RepositoryLimits::default())?;
         if operation == "canonical-scan" {
@@ -499,7 +536,10 @@ impl Runner {
             validate_import_request(&context, &request)?;
             return Ok(3);
         }
-        if operation == "validate-repository" || operation == "replay-change-set" {
+        if operation == "replay-change-set" {
+            return self.execute_replay_change_set(scenario);
+        }
+        if operation == "validate-repository" {
             let lifetime = parse_lifetime_records(scenario, "lifetimeRecords")?;
             let working = parse_lifetime_records(scenario, "workingLifetimeAdditions")?;
             let mappings = parse_import_mappings(scenario)?;
@@ -519,7 +559,7 @@ impl Runner {
                 ObjectKind::Tree => {
                     let descriptor =
                         object_ref_json(context_value(scenario, "repositoryDescriptor")?)?;
-                    expand_tree(reference, &lookup, descriptor, true)?;
+                    expand_tree(reference, &lookup, descriptor, true, path_case_mode(scenario)?)?;
                 }
                 ObjectKind::ShelfRevision => {
                     let lifetime = parse_lifetime_records(scenario, "lifetimeRecords")?;
@@ -541,6 +581,249 @@ impl Runner {
         } else {
             let object = scan_metadata(&self.result_bytes(path)?, Limits::METADATA)?;
             validate_semantic_object(&object, &self.registry, ValidationMode::Conformance)?;
+        }
+        Ok(3)
+    }
+
+    fn execute_repository_route(&self, scenario: &Value) -> Result<u8> {
+        let request = self.operation_request(scenario)?;
+        if value_string(&request, "schema")?
+            != "ogvcs.repository-format.v1.repository-route-input.v1"
+            || value_string(&request, "authorityContext")? != "scenario.context"
+        {
+            return Err(configured_preflight_error());
+        }
+        let mode = scenario_validation_mode(scenario)?;
+        let mut entries = self.lookup_entries(scenario)?;
+        if let Some(mutations) = request.get("lookupMutations").and_then(Value::as_array) {
+            for mutation in mutations {
+                if value_string(mutation, "action")? != "replace-payload-preserve-reference" {
+                    return Err(configured_preflight_error());
+                }
+                let reference = ObjectRef::from_str(value_string(mutation, "reference")?)?;
+                let replacement = self.result_bytes(value_string(mutation, "sourceArtifact")?)?;
+                let Some(entry) = entries.iter_mut().find(|(current, _)| *current == reference)
+                else {
+                    return Err(configured_preflight_error());
+                };
+                entry.1 = replacement;
+            }
+        }
+        let lookup = RepositoryObjectLookup::new(
+            entries,
+            self.registry.clone(),
+            mode,
+            RepositoryLimits::default(),
+        )?;
+        let lifetime = parse_lifetime_records(scenario, "lifetimeRecords")?;
+        let working = parse_lifetime_records(scenario, "workingLifetimeAdditions")?;
+        let mappings = parse_import_mappings(scenario)?;
+        let mut context = repository_context(scenario, &lookup, &lifetime, &working, &mappings)?;
+        if let Some(value) = request.get("callerVerifyContent").and_then(Value::as_bool) {
+            context.verify_content = value;
+        }
+        match value_string(&request, "api")? {
+            "expand-tree" => {
+                expand_tree(
+                    ObjectRef::from_str(value_string(&request, "tree")?)?,
+                    &lookup,
+                    ObjectRef::from_str(value_string(&request, "repositoryDescriptor")?)?,
+                    request.get("verifyContent").and_then(Value::as_bool) == Some(true),
+                    path_case_mode_value(field_value(&request, "caseMode")?)?,
+                )?;
+            }
+            "verify-manifest" => {
+                verify_manifest(
+                    ObjectRef::from_str(value_string(&request, "manifest")?)?,
+                    &lookup,
+                )?;
+            }
+            "replay-change-set" => {
+                let descriptor = ObjectRef::from_str(value_string(
+                    &request,
+                    "repositoryDescriptor",
+                )?)?;
+                let tree = ObjectRef::from_str(value_string(
+                    field_value(&request, "baseState")?,
+                    "tree",
+                )?)?;
+                // Base-state materialization is authenticated setup, not part
+                // of the route whose production lifecycle ordering is under
+                // test. Use a separate conformance lookup so setup cannot hide
+                // a later replay closure failure.
+                let setup = self.lookup_with_registry(
+                    scenario,
+                    self.registry.clone(),
+                    ValidationMode::Conformance,
+                    RepositoryLimits::default(),
+                )?;
+                let expanded = expand_tree(
+                    tree,
+                    &setup,
+                    descriptor,
+                    false,
+                    path_case_mode(scenario)?,
+                )?;
+                let base = RepositoryState {
+                    entries: expanded.entries,
+                    groups: BTreeMap::new(),
+                };
+                let before = base.clone();
+                replay_change_set(
+                    ObjectRef::from_str(value_string(&request, "changeSet")?)?,
+                    &base,
+                    &context,
+                    None,
+                )?;
+                if base != before {
+                    return Err(configured_preflight_error());
+                }
+            }
+            "validate-conflict-set" => {
+                validate_conflict_set(
+                    Some(ObjectRef::from_str(value_string(&request, "conflictSet")?)?),
+                    &lookup,
+                    ObjectRef::from_str(value_string(
+                        &request,
+                        "repositoryDescriptor",
+                    )?)?,
+                    false,
+                )?;
+            }
+            "validate-provenance-graph" => {
+                let roots = json_array_result(&request, "roots")?
+                    .iter()
+                    .map(object_ref_json)
+                    .collect::<Result<Vec<_>>>()?;
+                let forbidden = json_array_result(&request, "forbidden")?
+                    .iter()
+                    .map(object_ref_json)
+                    .collect::<Result<Vec<_>>>()?;
+                validate_provenance_graph(&roots, &lookup, &forbidden)?;
+            }
+            "validate-snapshot-graph" => {
+                context.descriptor = ObjectRef::from_str(value_string(
+                    &request,
+                    "repositoryDescriptor",
+                )?)?;
+                context.designated_root = ObjectRef::from_str(value_string(
+                    &request,
+                    "designatedRoot",
+                )?)?;
+                validate_snapshot_graph(
+                    ObjectRef::from_str(value_string(&request, "candidateSnapshot")?)?,
+                    &context,
+                )?;
+            }
+            "validate-lifetime-and-imports" => {
+                let change_set = lifetime
+                    .first()
+                    .or_else(|| working.first())
+                    .map(|record| record.first_change_set)
+                    .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))?;
+                validate_lifetime_and_imports(&context, change_set, &[], None)?;
+            }
+            "validate-import-request" => {
+                validate_import_request(
+                    &context,
+                    &parse_import_request(field_value(&request, "importRequest")?)?,
+                )?;
+            }
+            "validate-shelf-revision" => {
+                validate_shelf_revision(
+                    ObjectRef::from_str(value_string(&request, "shelfRevision")?)?,
+                    &context,
+                )?;
+            }
+            "validate-repository-candidate" => {
+                validate_repository_candidate(
+                    ObjectRef::from_str(value_string(&request, "candidateSnapshot")?)?,
+                    &context,
+                )?;
+            }
+            _ => return Err(configured_preflight_error()),
+        }
+        Ok(3)
+    }
+
+    fn execute_replay_change_set(&self, scenario: &Value) -> Result<u8> {
+        let mode = scenario_validation_mode(scenario)?;
+        let entries = self.lookup_entries(scenario)?;
+        let setup = RepositoryObjectLookup::new(
+            entries.clone(),
+            self.registry.clone(),
+            ValidationMode::Conformance,
+            RepositoryLimits::default(),
+        )?;
+        let candidate = object_ref_json(context_value(scenario, "candidateSnapshot")?)?;
+        let snapshot = setup.resolve_expected(candidate, ObjectKind::Snapshot)?;
+        let snapshot_value = snapshot
+            .value
+            .as_deref()
+            .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))?;
+        let change_set = ObjectRef::from_cbor(cbor_field(snapshot_value, 19)?)?;
+        let change = setup.resolve_expected(change_set, ObjectKind::ChangeSet)?;
+        let change_value = change
+            .value
+            .as_deref()
+            .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))?;
+        let descriptor = object_ref_json(context_value(scenario, "repositoryDescriptor")?)?;
+        let mut base = RepositoryState::default();
+        if let Some(base_reference) = cbor_optional_field(change_value, 17) {
+            let base_snapshot = setup.resolve_expected(
+                ObjectRef::from_cbor(base_reference)?,
+                ObjectKind::Snapshot,
+            )?;
+            let base_value = base_snapshot
+                .value
+                .as_deref()
+                .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))?;
+            let expanded = expand_tree(
+                ObjectRef::from_cbor(cbor_field(base_value, 18)?)?,
+                &setup,
+                descriptor,
+                true,
+                path_case_mode(scenario)?,
+            )?;
+            base.entries = expanded.entries;
+            if let Some(groups_reference) = cbor_optional_field(base_value, 20) {
+                let groups = setup.resolve_expected(
+                    ObjectRef::from_cbor(groups_reference)?,
+                    ObjectKind::AssetGroupSet,
+                )?;
+                base.groups = asset_groups_from_value(
+                    groups
+                        .value
+                        .as_deref()
+                        .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))?,
+                )?
+                .0;
+            }
+        }
+        let before = base.clone();
+        let lookup = RepositoryObjectLookup::new(
+            entries,
+            self.registry.clone(),
+            mode,
+            RepositoryLimits::default(),
+        )?;
+        let lifetime = parse_lifetime_records(scenario, "lifetimeRecords")?;
+        let working = parse_lifetime_records(scenario, "workingLifetimeAdditions")?;
+        let mappings = parse_import_mappings(scenario)?;
+        let context = repository_context(scenario, &lookup, &lifetime, &working, &mappings)?;
+        let conflict = cbor_optional_field(snapshot_value, 28)
+            .map(ObjectRef::from_cbor)
+            .transpose()?
+            .map(|reference| setup.resolve_expected(reference, ObjectKind::ConflictSet))
+            .transpose()?;
+        replay_change_set(
+            change_set,
+            &base,
+            &context,
+            conflict.as_ref().and_then(|resolved| resolved.value.as_deref()),
+        )?;
+        if base != before {
+            return Err(configured_preflight_error());
         }
         Ok(3)
     }
@@ -588,17 +871,61 @@ impl Runner {
         let recipe = recipe
             .pointer("/exactConstructorValues/configuredResource")
             .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))?;
-        if value_string(recipe, "api")? != "verify-logical-bundle-stream"
-            || value_string(recipe, "source")? != value_string(input, "path")?
-        {
+        if value_string(recipe, "source")? != value_string(input, "path")? {
             return Err(Error::new(ErrorCode::SchemaFieldInvalid));
         }
-        let scratch = TempDirectory::new("configured")?;
-        let mut options = LogicalBundleVerifyOptions::new(&scratch.path, &self.registry);
+        let api = value_string(recipe, "api")?;
         let limits = recipe
             .get("limits")
             .and_then(Value::as_object)
             .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))?;
+        let source = self.result_bytes(value_string(recipe, "source")?)?;
+        if api == "visit-logical-bundle" {
+            let mut configured = BundleLimits::HARD;
+            if let Some(value) = limits.get("maxSequenceBytes").and_then(Value::as_u64) {
+                configured.max_sequence_bytes = usize::try_from(value)
+                    .map_err(|_| Error::new(ErrorCode::BundleBudgetExceeded))?;
+            }
+            if let Some(value) = limits.get("maxItemBytes").and_then(Value::as_u64) {
+                configured.max_item_bytes = usize::try_from(value)
+                    .map_err(|_| Error::new(ErrorCode::BundleBudgetExceeded))?;
+            }
+            if let Some(value) = limits.get("maxValueBytes").and_then(Value::as_u64) {
+                configured.max_value_bytes = usize::try_from(value)
+                    .map_err(|_| Error::new(ErrorCode::LimitValueBytes))?;
+            }
+            if let Some(value) = limits.get("maxCaptureBytes").and_then(Value::as_u64) {
+                configured.max_capture_bytes = usize::try_from(value)
+                    .map_err(|_| Error::new(ErrorCode::LimitMemory))?;
+            }
+            if let Some(value) = limits.get("maxNesting").and_then(Value::as_u64) {
+                configured.max_nesting = usize::try_from(value)
+                    .map_err(|_| Error::new(ErrorCode::LimitNesting))?;
+            }
+            if let Some(value) = limits.get("maxItems").and_then(Value::as_u64) {
+                configured.max_items = usize::try_from(value)
+                    .map_err(|_| Error::new(ErrorCode::BundleBudgetExceeded))?;
+            }
+            let mut visitor = NoopBundleVisitor;
+            visit_logical_bundle(Cursor::new(source), &mut visitor, configured)?;
+            return Ok(1);
+        }
+        if api == "create-bundle-transcript-hash-writer" {
+            let maximum = limits
+                .get("maxBytes")
+                .and_then(Value::as_u64)
+                .and_then(|value| usize::try_from(value).ok())
+                .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))?;
+            let mut writer = BundleTranscriptHashWriter::new(maximum);
+            writer.update(&source)?;
+            writer.finish()?;
+            return Ok(1);
+        }
+        if api != "verify-logical-bundle-stream" {
+            return Err(Error::new(ErrorCode::SchemaFieldInvalid));
+        }
+        let scratch = TempDirectory::new("configured")?;
+        let mut options = LogicalBundleVerifyOptions::semantic(&scratch.path, &self.registry, Operation::ConformanceWrite);
         if let Some(value) = limits.get("maxMemoryBytes").and_then(Value::as_u64) {
             options.limits.max_memory_bytes =
                 usize::try_from(value).map_err(|_| Error::new(ErrorCode::LimitMemory))?;
@@ -609,11 +936,1084 @@ impl Runner {
         if let Some(value) = limits.get("maxTimeMs").and_then(Value::as_u64) {
             options.limits.max_elapsed = Some(Duration::from_millis(value));
         }
-        self.execute_bundle(value_string(recipe, "source")?, options)
+        let summary = verify_logical_bundle_stream(Cursor::new(source), options)?;
+        Ok(summary.highest_layer)
     }
 
-    fn lookup(&self, scenario: &Value, limits: RepositoryLimits) -> Result<RepositoryObjectLookup> {
-        let entries = context_array(scenario, "objectLookup")?
+    fn execute_manifest_writer(&self, scenario: &Value) -> Result<u8> {
+        let request = self.operation_request(scenario)?;
+        if value_string(&request, "api")? != "write-content-manifest"
+            || value_string(&request, "registry")? != "bundled"
+        {
+            return Err(configured_preflight_error());
+        }
+        let registry = self.lifecycle_registry(&request)?;
+        let operation = write_operation(&request)?;
+        let parts = json_array_result(&request, "parts")?
+            .iter()
+            .map(|part| {
+                Ok(ManifestStreamPart {
+                    chunk: ObjectRef::from_str(value_string(part, "chunk")?)?,
+                    length: decimal_u64(value_string(part, "length")?)?,
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let declared = decimal_u64(value_string(&request, "declaredParts")?)?;
+        let chunk_profile = ProfileRef::from_str(value_string(&request, "chunkProfile")?)?;
+        let chunks = if let Some(values) = request.get("chunkArtifacts").and_then(Value::as_array) {
+            values
+                .iter()
+                .map(|value| {
+                    value.as_str()
+                        .ok_or_else(configured_preflight_error)
+                        .and_then(|path| self.result_bytes(path))
+                })
+                .collect::<Result<Vec<_>>>()?
+        } else {
+            vec![self.result_bytes(value_string(&request, "chunkArtifact")?)?]
+        };
+        if chunks.len() != 1 && chunks.len() != parts.len() {
+            return Err(configured_preflight_error());
+        }
+        let mut source = |index: u64,
+                          _part: &ManifestStreamPart,
+                          consume: &mut dyn FnMut(&[u8]) -> Result<()>| {
+            let index = if chunks.len() == 1 {
+                0
+            } else {
+                usize::try_from(index).map_err(|_| Error::new(ErrorCode::LimitCount))?
+            };
+            consume(chunks.get(index).ok_or_else(configured_preflight_error)?)
+        };
+        let mut limits = ManifestStreamLimits::default();
+        limits.max_parts = value_u64(&request, "maxItems")?;
+        encode_and_verify_content_manifest_stream(
+            Vec::new(),
+            declared,
+            || parts.clone(),
+            &chunk_profile,
+            decimal_u64(value_string(&request, "logicalLength")?)?,
+            hex_array(value_string(&request, "wholeFileSha256")?)?,
+            &mut source,
+            &registry,
+            operation,
+            limits,
+        )?;
+        Ok(3)
+    }
+
+    fn execute_tree_writer(&self, scenario: &Value) -> Result<u8> {
+        let request = self.operation_request(scenario)?;
+        if value_string(&request, "api")? != "write-tree"
+            || value_string(&request, "registry")? != "bundled"
+        {
+            return Err(configured_preflight_error());
+        }
+        let registry = self.lifecycle_registry(&request)?;
+        let operation = write_operation(&request)?;
+        let required_features = request
+            .get("requiredFeatures")
+            .and_then(Value::as_array)
+            .map(|features| {
+                features
+                    .iter()
+                    .map(|feature| {
+                        u32::try_from(feature.as_u64().ok_or_else(configured_preflight_error)?)
+                            .map_err(|_| configured_preflight_error())
+                    })
+                    .collect::<Result<Vec<_>>>()
+            })
+            .transpose()?
+            .unwrap_or_default();
+        let entries = json_array_result(&request, "entries")?
+            .iter()
+            .map(tree_stream_entry)
+            .collect::<Result<Vec<_>>>()?;
+        let descriptor = ObjectRef::from_str(value_string(&request, "descriptor")?)?;
+        let declared = decimal_u64(value_string(&request, "entryCount")?)?;
+        let mut limits = TreeStreamLimits::default();
+        limits.max_entries = value_u64(&request, "maxItems")?;
+        match value_string(&request, "ordering")? {
+            "ordered" => {
+                let mut file_ids = BTreeSet::new();
+                encode_ordered_tree_with_features(
+                    Vec::new(),
+                    descriptor,
+                    &required_features,
+                    declared,
+                    entries,
+                    &registry,
+                    operation,
+                    &mut file_ids,
+                    limits,
+                )?;
+            }
+            "sorted" => {
+                let scratch = TempDirectory::new("tree-writer")?;
+                let mut metrics = TreeScratchMetrics::default();
+                encode_tree_with_scratch_and_features(
+                    Vec::new(),
+                    descriptor,
+                    &required_features,
+                    declared,
+                    entries,
+                    &registry,
+                    operation,
+                    &scratch.path,
+                    limits,
+                    &mut metrics,
+                )?;
+            }
+            _ => return Err(configured_preflight_error()),
+        }
+        Ok(3)
+    }
+
+    fn execute_logical_bundle_writer(&self, scenario: &Value) -> Result<u8> {
+        let request = self.operation_request(scenario)?;
+        if value_string(&request, "api")? != "write-logical-bundle"
+            || value_string(&request, "registry")? != "bundled"
+            || !json_array_result(&request, "writerSurfaces")?
+                .iter()
+                .any(|surface| surface.as_str() == Some("bundle-ordered"))
+        {
+            return Err(configured_preflight_error());
+        }
+        let registry = self.lifecycle_registry(&request)?;
+        let source = decode_bundle_items(&self.result_bytes(value_string(&request, "source")?)?)?;
+        let source_objects = source
+            .iter()
+            .filter(|item| cbor_field(item, 1).and_then(cbor_uint).is_ok_and(|value| value == 2))
+            .collect::<Vec<_>>();
+        let mut mutations = json_array_result(&request, "objectMutations")?.clone();
+        mutations.sort_by_key(|mutation| mutation.get("outputOrdinal").and_then(Value::as_u64));
+        let mut objects = Vec::with_capacity(mutations.len());
+        for mutation in mutations {
+            let (mut reference, payload) = if let Some(source_artifact) = mutation
+                .get("sourceArtifact")
+                .and_then(Value::as_str)
+            {
+                (
+                    ObjectRef {
+                        kind: ObjectKind::from_code(value_u64(&mutation, "kind")?)?,
+                        digest: [0; 32],
+                    },
+                    self.result_bytes(source_artifact)?,
+                )
+            } else {
+                let source_ordinal = usize::try_from(value_u64(&mutation, "sourceOrdinal")?)
+                    .map_err(|_| configured_preflight_error())?;
+                let item = *source_objects
+                    .get(source_ordinal)
+                    .ok_or_else(configured_preflight_error)?;
+                (
+                    ObjectRef::from_cbor(cbor_field(item, 3)?)?,
+                    cbor_bytes(cbor_field(item, 4)?)?.to_vec(),
+                )
+            };
+            if let Some(digest) = mutation
+                .get("replaceDeclaredDigest")
+                .and_then(Value::as_str)
+            {
+                reference.digest = hex_array(digest)?;
+            }
+            if mutation.get("replaceKind").is_some() {
+                // Unknown numeric kinds are intentionally a JavaScript-only
+                // carrier because Rust's ObjectKind makes them unconstructible.
+                return Err(configured_preflight_error());
+            }
+            objects.push((reference, payload));
+        }
+        let mut logical_inputs = request
+            .get("logicalRecordInputs")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        logical_inputs.sort_by_key(|input| input.get("outputOrdinal").and_then(Value::as_u64));
+        let logical_records = logical_inputs
+            .iter()
+            .map(|input| {
+                decode_canonical(
+                    &self.result_bytes(value_string(input, "sourceArtifact")?)?,
+                    Limits::METADATA,
+                )
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let roots = request
+            .get("rootInputs")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|input| {
+                if value_u64(&input, "kind")? != 1 {
+                    return Err(configured_preflight_error());
+                }
+                Ok((
+                    ObjectRef::from_str(value_string(&input, "identity")?)?,
+                    ProfileRef::from_str(value_string(&input, "roleProfile")?)?,
+                ))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let plan_value = field_value(&request, "plan")?;
+        let budget = field_value(plan_value, "budget")?;
+        let plan = LogicalBundleWritePlan {
+            object_count: value_u64(plan_value, "objectCount")?,
+            logical_record_count: value_u64(plan_value, "logicalRecordCount")?,
+            root_count: value_u64(plan_value, "rootCount")?,
+            budget: LogicalBundleBudget {
+                sequence_bytes: value_u64(budget, "sequenceBytes")?,
+                largest_item_bytes: value_u64(budget, "largestItemBytes")?,
+                traversal_edges: value_u64(budget, "traversalEdges")?,
+                index_entries: value_u64(budget, "indexEntries")?,
+            },
+        };
+        let mut options = LogicalBundleWriteOptions::new(&registry, write_operation(&request)?);
+        options.limits.max_memory_bytes = usize::try_from(value_u64(&request, "maxMemoryBytes")?)
+            .map_err(|_| configured_preflight_error())?;
+        let mut staging = Vec::new();
+        let mut writer = LogicalBundleWriter::new(&mut staging, plan, options)?;
+        for (reference, payload) in objects {
+            writer.write_object(reference, &payload)?;
+        }
+        for record in &logical_records {
+            writer.write_logical_record(record)?;
+        }
+        for (identity, role) in &roots {
+            writer.write_object_root(*identity, role)?;
+        }
+        writer.finish()?;
+        Ok(3)
+    }
+
+    fn execute_path_profile_decision(&self, scenario: &Value) -> Result<u8> {
+        let request = self.operation_request(scenario)?;
+        if value_string(&request, "api")? != "validate-path-profile-decision" {
+            return Err(configured_preflight_error());
+        }
+        let lookup = self.lookup(scenario, RepositoryLimits::default())?;
+        let tree = context_array(scenario, "objectLookup")?
+            .iter()
+            .filter_map(|entry| entry.get("ref"))
+            .map(object_ref_json)
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .find(|reference| reference.kind == ObjectKind::Tree)
+            .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))?;
+        let adapter = RecipePathProfileValidator::from_request(&request)?;
+        expand_tree_with_path_profile_validator(
+            tree,
+            &lookup,
+            object_ref_json(context_value(scenario, "repositoryDescriptor")?)?,
+            false,
+            path_case_mode_value(field_value(&request, "caseMode")?)?,
+            Some(&adapter),
+        )?;
+        Ok(3)
+    }
+
+    fn execute_typed_reference_authority(&self, scenario: &Value) -> Result<u8> {
+        let request = self.operation_request(scenario)?;
+        match value_string(&request, "case")? {
+            "arbitrary-kind-map-relabel" => Err(configured_preflight_error()),
+            "duplicate-kind-token" => {
+                let mut documents = self.registry_documents()?;
+                mutate_registry_documents(
+                    &mut documents,
+                    field_value(&request, "registryMutation")?,
+                )?;
+                registry_from_documents(&documents)?;
+                Ok(3)
+            }
+            "durable-text-overlength-colon-dense" => {
+                if value_u64(&request, "maximumBytes")? != 144
+                    || value_string(&request, "text")?.len() <= 144
+                {
+                    return Err(configured_preflight_error());
+                }
+                ObjectRef::from_str(value_string(&request, "text")?)?;
+                Ok(2)
+            }
+            _ => Err(configured_preflight_error()),
+        }
+    }
+
+    fn operation_request(&self, scenario: &Value) -> Result<Value> {
+        let input = operation_input(scenario)?;
+        self.result_json(value_string(input, "path")?)
+    }
+
+    fn registry_documents(&self) -> Result<BTreeMap<&'static str, Value>> {
+        let mut documents = BTreeMap::new();
+        for file in REGISTRY_FILES {
+            documents.insert(
+                file,
+                read_json_at(&self.registries.join(file))
+                    .map_err(|_| Error::new(ErrorCode::RegistryInvalid))?,
+            );
+        }
+        Ok(documents)
+    }
+
+    fn operation_registry(&self, request: &Value) -> Result<Option<Registry>> {
+        match request.get("registry").and_then(Value::as_str) {
+            None | Some("absent") => Ok(None),
+            Some("partial" | "forged") => Ok(Some(Registry::load(
+                Vec::<RegistryEntry>::new(),
+                Vec::<u32>::new(),
+            )?)),
+            Some("bundled") => self.lifecycle_registry(request).map(Some),
+            Some(_) => Err(configured_preflight_error()),
+        }
+    }
+
+    fn lifecycle_registry(&self, request: &Value) -> Result<Registry> {
+        let Some(fixture) = request.get("registryFixture") else {
+            return Ok(self.registry.clone());
+        };
+        let index = self.result_json(value_string(fixture, "path")?)?;
+        let scenario_id = value_string(fixture, "scenarioId")?;
+        let recipe = json_array_result(&index, "cases")?
+            .iter()
+            .find(|entry| entry.get("scenarioId").and_then(Value::as_str) == Some(scenario_id))
+            .ok_or_else(|| Error::new(ErrorCode::RegistryInvalid))?;
+        let snapshot = self.result_json(&format!(
+            "registries/{}-snapshot.json",
+            value_string(recipe, "snapshot")?
+        ))?;
+        let mut documents = self.registry_documents()?;
+        append_snapshot_entries(
+            documents
+                .get_mut("profiles.json")
+                .ok_or_else(|| Error::new(ErrorCode::RegistryInvalid))?,
+            snapshot.pointer("/profiles/entries"),
+            true,
+        )?;
+        append_snapshot_entries(
+            documents
+                .get_mut("extensions.json")
+                .ok_or_else(|| Error::new(ErrorCode::RegistryInvalid))?,
+            snapshot.pointer("/extensions/entries"),
+            false,
+        )?;
+        append_feature_entries(
+            documents
+                .get_mut("required-features.json")
+                .ok_or_else(|| Error::new(ErrorCode::RegistryInvalid))?,
+            snapshot.pointer("/requiredFeatures/entries"),
+        )?;
+        registry_from_documents(&documents)
+    }
+
+    fn execute_operation_mode(&self, scenario: &Value) -> Result<u8> {
+        let request = self.operation_request(scenario)?;
+        if value_string(&request, "api")? != "validate-operation-mode" {
+            return Err(configured_preflight_error());
+        }
+        let authority = self.operation_registry(&request)?;
+        match value_string(&request, "surface")? {
+            "bundle-visitor" => self.execute_bundle_visitor_surface(&request),
+            "logical-record-map-raw" => self.execute_logical_record_raw_surface(&request),
+            "tree-file" | "tree-schema-decoder" | "metadata-decoder"
+            | "bundle-memory-verifier" | "bundle-stream-verifier" => {
+                self.execute_codec_surface(&request, authority.as_ref())
+            }
+            "metadata-encoder" | "tree-ordered" | "tree-sorted" | "content-manifest"
+            | "bundle-ordered" | "bundle-memory-encoder" => {
+                self.execute_emitter_surface(&request, authority.as_ref())
+            }
+            _ => self.execute_repository_mode_surface(&request, scenario, authority),
+        }
+    }
+
+    fn execute_bundle_visitor_surface(&self, request: &Value) -> Result<u8> {
+        if request.get("registry").and_then(Value::as_str) != Some("absent")
+            || request.get("semanticProfiles").and_then(Value::as_bool) != Some(false)
+            || request
+                .as_object()
+                .is_some_and(|object| object.contains_key("mode"))
+        {
+            return Err(configured_preflight_error());
+        }
+        let mut visitor = NoopBundleVisitor;
+        visit_logical_bundle(
+            Cursor::new(self.result_bytes(value_string(request, "source")?)?),
+            &mut visitor,
+            BundleLimits::HARD,
+        )?;
+        Ok(2)
+    }
+
+    fn execute_logical_record_raw_surface(&self, request: &Value) -> Result<u8> {
+        if request.get("registry").and_then(Value::as_str) != Some("absent")
+            || request.get("semanticProfiles").and_then(Value::as_bool) != Some(false)
+            || request.get("requestedLayer").and_then(Value::as_u64) != Some(2)
+            || request
+                .as_object()
+                .is_some_and(|object| object.contains_key("mode"))
+        {
+            return Err(configured_preflight_error());
+        }
+        validate_logical_record(
+            &self.result_bytes(value_string(request, "source")?)?,
+            Limits::METADATA,
+        )?;
+        Ok(2)
+    }
+
+    fn execute_codec_surface(
+        &self,
+        request: &Value,
+        authority: Option<&Registry>,
+    ) -> Result<u8> {
+        let layer_two = request.get("registry").and_then(Value::as_str) == Some("absent")
+            && request.get("semanticProfiles").and_then(Value::as_bool) == Some(false)
+            && !request
+                .as_object()
+                .is_some_and(|object| object.contains_key("semanticCallback"))
+            && !request
+                .as_object()
+                .is_some_and(|object| object.contains_key("operation"));
+        let semantic = request.get("registry").and_then(Value::as_str) == Some("bundled")
+            && request.get("semanticProfiles").and_then(Value::as_bool) != Some(false);
+        let surface = value_string(request, "surface")?;
+        if layer_two {
+            let source = self.result_bytes(value_string(request, "source")?)?;
+            return match surface {
+                "metadata-decoder" | "tree-schema-decoder" => {
+                    let object = scan_metadata(&source, Limits::METADATA)?;
+                    validate_metadata_schema(&object)?;
+                    Ok(2)
+                }
+                "bundle-memory-verifier" | "bundle-stream-verifier" => {
+                    let scratch = TempDirectory::new("mode-bundle-layer2")?;
+                    let summary = verify_logical_bundle_stream(
+                        Cursor::new(source),
+                        LogicalBundleVerifyOptions::layer2(&scratch.path),
+                    )?;
+                    Ok(summary.highest_layer)
+                }
+                _ => Err(configured_preflight_error()),
+            };
+        }
+        if surface == "metadata-decoder" {
+            let registry = authority.ok_or_else(configured_preflight_error)?;
+            let operation = codec_operation(request)?;
+            let source = if semantic {
+                self.result_bytes(value_string(request, "source")?)?
+            } else {
+                Vec::new()
+            };
+            let summary = decode_metadata(
+                Cursor::new(source),
+                MetadataDecodeOptions::new(registry, operation),
+            )?;
+            return Ok(summary.highest_layer);
+        }
+        if !semantic {
+            if request.get("registry").and_then(Value::as_str) != Some("bundled") {
+                if let Some(registry) = authority {
+                let operation = codec_operation(request)?;
+                match surface {
+                    "tree-file" => {
+                        let mut file_ids = BTreeSet::new();
+                        verify_tree_stream(
+                            Cursor::new(Vec::<u8>::new()),
+                            ObjectRef { kind: ObjectKind::Tree, digest: [0; 32] },
+                            ObjectRef {
+                                kind: ObjectKind::RepositoryDescriptor,
+                                digest: [0; 32],
+                            },
+                            registry,
+                            operation,
+                            &mut file_ids,
+                            TreeStreamLimits::default(),
+                        )?;
+                        return Ok(3);
+                    }
+                    "bundle-memory-verifier" | "bundle-stream-verifier" => {
+                        let summary = verify_logical_bundle_stream(
+                            Cursor::new(Vec::<u8>::new()),
+                            LogicalBundleVerifyOptions::semantic(
+                                Path::new(""),
+                                registry,
+                                operation,
+                            ),
+                        )?;
+                        return Ok(summary.highest_layer);
+                    }
+                    _ => {}
+                }
+                }
+            }
+            return Err(configured_preflight_error());
+        }
+        let registry = authority.ok_or_else(configured_preflight_error)?;
+        let operation = codec_operation(request)?;
+        let source = self.result_bytes(value_string(request, "source")?)?;
+        match surface {
+            "tree-schema-decoder" => Err(configured_preflight_error()),
+            "tree-file" => {
+                let descriptor = ObjectRef::from_str(value_string(request, "repositoryDescriptor")?)?;
+                let expected = ObjectRef {
+                    kind: ObjectKind::Tree,
+                    digest: object_id(ObjectKind::Tree, &source)?,
+                };
+                let mut file_ids = BTreeSet::new();
+                verify_tree_stream(
+                    Cursor::new(source),
+                    expected,
+                    descriptor,
+                    registry,
+                    operation,
+                    &mut file_ids,
+                    TreeStreamLimits::default(),
+                )?;
+                Ok(3)
+            }
+            "bundle-memory-verifier" | "bundle-stream-verifier" => {
+                let scratch = TempDirectory::new("mode-bundle-semantic")?;
+                let summary = verify_logical_bundle_stream(
+                    Cursor::new(source),
+                    LogicalBundleVerifyOptions::semantic(&scratch.path, registry, operation),
+                )?;
+                Ok(summary.highest_layer)
+            }
+            _ => Err(configured_preflight_error()),
+        }
+    }
+
+    fn execute_emitter_surface(
+        &self,
+        request: &Value,
+        authority: Option<&Registry>,
+    ) -> Result<u8> {
+        let surface = value_string(request, "surface")?;
+        let Some(registry) = authority else {
+            return Err(configured_preflight_error());
+        };
+        let operation = codec_operation(request)?;
+        let configured = request.get("registry").and_then(Value::as_str) == Some("bundled")
+            && matches!(operation, Operation::ConformanceWrite | Operation::ProductionWrite);
+        if !configured {
+            return self.execute_emitter_preflight(surface, registry, operation);
+        }
+        let source = self.result_bytes(value_string(request, "source")?)?;
+        match surface {
+            "metadata-encoder" => {
+                let value = decode_canonical(&source, Limits::METADATA)?;
+                let summary = encode_metadata(
+                    &value,
+                    Vec::new(),
+                    MetadataEncodeOptions::new(registry, operation),
+                )?;
+                Ok(summary.highest_layer)
+            }
+            "tree-ordered" | "tree-sorted" => {
+                self.execute_tree_emitter(surface, &source, registry, operation)
+            }
+            "content-manifest" => self.execute_manifest_emitter(&source, registry, operation),
+            "bundle-ordered" | "bundle-memory-encoder" => {
+                self.execute_bundle_emitter(&source, registry, operation)
+            }
+            _ => return Err(configured_preflight_error()),
+        }
+    }
+
+    fn execute_emitter_preflight(
+        &self,
+        surface: &str,
+        registry: &Registry,
+        operation: Operation,
+    ) -> Result<u8> {
+        match surface {
+            "metadata-encoder" => {
+                let summary = encode_metadata(
+                    &Cbor::UInt(0),
+                    Vec::new(),
+                    MetadataEncodeOptions::new(registry, operation),
+                )?;
+                Ok(summary.highest_layer)
+            }
+            "tree-ordered" => {
+                let mut file_ids = BTreeSet::new();
+                encode_ordered_tree_with_features(
+                    Vec::new(),
+                    ObjectRef { kind: ObjectKind::RepositoryDescriptor, digest: [0; 32] },
+                    &[],
+                    0,
+                    Vec::<TreeStreamEntry>::new(),
+                    registry,
+                    operation,
+                    &mut file_ids,
+                    TreeStreamLimits::default(),
+                )?;
+                Ok(3)
+            }
+            "tree-sorted" => {
+                let mut metrics = TreeScratchMetrics::default();
+                encode_tree_with_scratch_and_features(
+                    Vec::new(),
+                    ObjectRef { kind: ObjectKind::RepositoryDescriptor, digest: [0; 32] },
+                    &[],
+                    0,
+                    Vec::<TreeStreamEntry>::new(),
+                    registry,
+                    operation,
+                    Path::new(""),
+                    TreeStreamLimits::default(),
+                    &mut metrics,
+                )?;
+                Ok(3)
+            }
+            "content-manifest" => {
+                let profile = ProfileRef::from_str("chunking.test/external-boundaries@1")?;
+                let mut source = |_index: u64,
+                                  _part: &ManifestStreamPart,
+                                  _consume: &mut dyn FnMut(&[u8]) -> Result<()>| Ok(());
+                encode_and_verify_content_manifest_stream(
+                    Vec::new(),
+                    0,
+                    Vec::<ManifestStreamPart>::new,
+                    &profile,
+                    0,
+                    ogvcs_object_model::sha256(&[]),
+                    &mut source,
+                    registry,
+                    operation,
+                    ManifestStreamLimits::default(),
+                )?;
+                Ok(3)
+            }
+            "bundle-ordered" | "bundle-memory-encoder" => {
+                let plan = LogicalBundleWritePlan {
+                    object_count: 0,
+                    logical_record_count: 0,
+                    root_count: 0,
+                    budget: LogicalBundleBudget {
+                        sequence_bytes: 0,
+                        largest_item_bytes: 0,
+                        traversal_edges: 0,
+                        index_entries: 0,
+                    },
+                };
+                LogicalBundleWriter::new(
+                    Vec::new(),
+                    plan,
+                    LogicalBundleWriteOptions::new(registry, operation),
+                )?;
+                Ok(3)
+            }
+            _ => Err(configured_preflight_error()),
+        }
+    }
+
+    fn execute_tree_emitter(
+        &self,
+        surface: &str,
+        source: &[u8],
+        registry: &Registry,
+        operation: Operation,
+    ) -> Result<u8> {
+        let value = decode_canonical(source, Limits::METADATA)?;
+        let descriptor = ObjectRef::from_cbor(cbor_field(&value, 16)?)?;
+        let features = cbor_array(cbor_field(&value, 2)?)?
+            .iter()
+            .map(|value| {
+                u32::try_from(cbor_uint(value)?)
+                    .map_err(|_| Error::new(ErrorCode::SchemaFieldInvalid))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let entries = cbor_array(cbor_field(&value, 17)?)?
+            .iter()
+            .map(tree_stream_entry_cbor)
+            .collect::<Result<Vec<_>>>()?;
+        let declared = u64::try_from(entries.len())
+            .map_err(|_| Error::new(ErrorCode::LimitCount))?;
+        match surface {
+            "tree-ordered" => {
+                let mut file_ids = BTreeSet::new();
+                encode_ordered_tree_with_features(
+                    Vec::new(),
+                    descriptor,
+                    &features,
+                    declared,
+                    entries,
+                    registry,
+                    operation,
+                    &mut file_ids,
+                    TreeStreamLimits::default(),
+                )?;
+            }
+            "tree-sorted" => {
+                let scratch = TempDirectory::new("mode-tree-emitter")?;
+                let mut metrics = TreeScratchMetrics::default();
+                encode_tree_with_scratch_and_features(
+                    Vec::new(),
+                    descriptor,
+                    &features,
+                    declared,
+                    entries,
+                    registry,
+                    operation,
+                    &scratch.path,
+                    TreeStreamLimits::default(),
+                    &mut metrics,
+                )?;
+            }
+            _ => return Err(configured_preflight_error()),
+        }
+        Ok(3)
+    }
+
+    fn execute_manifest_emitter(
+        &self,
+        source: &[u8],
+        registry: &Registry,
+        operation: Operation,
+    ) -> Result<u8> {
+        let value = decode_canonical(source, Limits::METADATA)?;
+        let profile = ProfileRef::from_cbor(cbor_field(&value, 18)?)?;
+        let parts = cbor_array(cbor_field(&value, 19)?)?
+            .iter()
+            .map(|part| {
+                Ok(ManifestStreamPart {
+                    chunk: ObjectRef::from_cbor(cbor_field(part, 0)?)?,
+                    length: cbor_uint(cbor_field(part, 1)?)?,
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        if !parts.is_empty() {
+            return Err(Error::new(ErrorCode::SchemaFieldInvalid));
+        }
+        let digest = TypedDigest::from_cbor(cbor_field(&value, 17)?)?;
+        let mut chunk_source = |_index: u64,
+                                _part: &ManifestStreamPart,
+                                _consume: &mut dyn FnMut(&[u8]) -> Result<()>| Ok(());
+        encode_and_verify_content_manifest_stream(
+            Vec::new(),
+            u64::try_from(parts.len()).map_err(|_| Error::new(ErrorCode::LimitCount))?,
+            || parts.clone(),
+            &profile,
+            cbor_uint(cbor_field(&value, 16)?)?,
+            *digest.digest(),
+            &mut chunk_source,
+            registry,
+            operation,
+            ManifestStreamLimits::default(),
+        )?;
+        Ok(3)
+    }
+
+    fn execute_bundle_emitter(
+        &self,
+        source: &[u8],
+        registry: &Registry,
+        operation: Operation,
+    ) -> Result<u8> {
+        let items = decode_bundle_items(source)?;
+        let header = items
+            .first()
+            .ok_or_else(|| Error::new(ErrorCode::BundleSequenceInvalid))?;
+        let budget = cbor_field(header, 6)?;
+        let plan = LogicalBundleWritePlan {
+            object_count: cbor_uint(cbor_field(header, 3)?)?,
+            logical_record_count: cbor_uint(cbor_field(header, 4)?)?,
+            root_count: cbor_uint(cbor_field(header, 5)?)?,
+            budget: LogicalBundleBudget {
+                sequence_bytes: cbor_uint(cbor_field(budget, 0)?)?,
+                largest_item_bytes: cbor_uint(cbor_field(budget, 1)?)?,
+                traversal_edges: cbor_uint(cbor_field(budget, 2)?)?,
+                index_entries: cbor_uint(cbor_field(budget, 3)?)?,
+            },
+        };
+        let mut writer = LogicalBundleWriter::new(
+            Vec::new(),
+            plan,
+            LogicalBundleWriteOptions::new(registry, operation),
+        )?;
+        for item in items.iter().skip(1).take(items.len().saturating_sub(2)) {
+            match cbor_uint(cbor_field(item, 1)?)? {
+                2 => {
+                    let reference = ObjectRef::from_cbor(cbor_field(item, 3)?)?;
+                    writer.write_object(reference, cbor_bytes(cbor_field(item, 4)?)?)?;
+                }
+                3 => {
+                    writer.write_logical_record(cbor_field(item, 4)?)?;
+                }
+                4 => {
+                    let role = ProfileRef::from_cbor(cbor_field(item, 5)?)?;
+                    match cbor_uint(cbor_field(item, 3)?)? {
+                        1 => writer.write_object_root(
+                            ObjectRef::from_cbor(cbor_field(item, 4)?)?,
+                            &role,
+                        )?,
+                        2 => writer.write_logical_record_root(
+                            TypedDigest::from_cbor(cbor_field(item, 4)?)?,
+                            &role,
+                        )?,
+                        _ => return Err(Error::new(ErrorCode::BundleRootInvalid)),
+                    }
+                }
+                _ => return Err(Error::new(ErrorCode::BundleSequenceInvalid)),
+            }
+        }
+        writer.finish()?;
+        Ok(3)
+    }
+
+    fn execute_repository_mode_surface(
+        &self,
+        request: &Value,
+        scenario: &Value,
+        authority: Option<Registry>,
+    ) -> Result<u8> {
+        let surface = value_string(request, "surface")?;
+        if surface == "repository-lookup-layer2" {
+            if request.get("registry").and_then(Value::as_str) != Some("absent")
+                || request.get("semanticProfiles").and_then(Value::as_bool) != Some(false)
+                || request
+                    .as_object()
+                    .is_some_and(|object| object.contains_key("mode"))
+            {
+                return Err(configured_preflight_error());
+            }
+            let mut limits = RepositoryLimits::default();
+            if let Some(value) = request.pointer("/limits/maxTimeMs").and_then(Value::as_u64) {
+                limits.max_time = Some(Duration::from_millis(value));
+            }
+            RepositoryObjectLookup::new_layer2([], limits)?;
+            return Ok(2);
+        }
+        let mode = repository_validation_mode(request)?;
+        let case_mode = if surface == "tree-expand" {
+            path_case_mode_value(
+                request
+                    .get("caseMode")
+                    .ok_or_else(configured_preflight_error)?,
+            )?
+        } else {
+            path_case_mode(scenario)?
+        };
+        if request.get("semanticProfiles").and_then(Value::as_bool) == Some(false) {
+            return self.execute_repository_layer2_rejection(
+                surface,
+                request,
+                scenario,
+                case_mode,
+            );
+        }
+        if request.get("registry").and_then(Value::as_str) != Some("bundled")
+            || request.get("semanticProfiles").and_then(Value::as_bool) != Some(true)
+        {
+            if let Some(registry) = authority {
+                // Exercise the public complete-authority gate without touching
+                // scenario object bytes.
+                RepositoryObjectLookup::new([], registry, mode, RepositoryLimits::default())?;
+            }
+            return Err(configured_preflight_error());
+        }
+        let registry = authority.ok_or_else(configured_preflight_error)?;
+        if mode == ValidationMode::Read {
+            RepositoryObjectLookup::new(
+                Vec::<(ObjectRef, Vec<u8>)>::new(),
+                registry,
+                mode,
+                RepositoryLimits::default(),
+            )?;
+            return Ok(3);
+        }
+        if surface == "repository-lookup-validate-all" {
+            let order = json_array_result(request, "lookupOrder")?;
+            let sources = json_array_result(request, "sources")?;
+            if order.len() != sources.len() {
+                return Err(configured_preflight_error());
+            }
+            let entries = order
+                .iter()
+                .zip(sources)
+                .map(|(reference, source)| {
+                    Ok((
+                        object_ref_json(reference)?,
+                        self.result_bytes(
+                            source.as_str().ok_or_else(configured_preflight_error)?,
+                        )?,
+                    ))
+                })
+                .collect::<Result<Vec<_>>>()?;
+            let lookup = RepositoryObjectLookup::new(
+                entries,
+                registry,
+                mode,
+                RepositoryLimits::default(),
+            )?;
+            lookup.validate_all()?;
+            return Ok(3);
+        }
+        let lookup = self.lookup_with_registry(
+            scenario,
+            registry.clone(),
+            mode,
+            RepositoryLimits::default(),
+        )?;
+        let descriptor = ObjectRef::from_str(value_string(request, "repositoryDescriptor")?)?;
+        match surface {
+            "tree-expand" => {
+                expand_tree(
+                    ObjectRef::from_str(value_string(request, "tree")?)?,
+                    &lookup,
+                    descriptor,
+                    false,
+                    case_mode,
+                )?;
+            }
+            "manifest-verify" => {
+                verify_manifest(
+                    ObjectRef::from_str(value_string(request, "manifest")?)?,
+                    &lookup,
+                )?;
+            }
+            "repository-candidate" => {
+                let lifetime_context = field_value(request, "lifetimeContext")?;
+                let lifetime = parse_lifetime_records_from(lifetime_context, "lifetimeRecords")?;
+                let working =
+                    parse_lifetime_records_from(lifetime_context, "workingLifetimeAdditions")?;
+                let mappings = parse_import_mappings_from(lifetime_context)?;
+                let mut context = RepositoryContext::new(
+                    &lookup,
+                    descriptor,
+                    ObjectRef::from_str(value_string(request, "designatedRoot")?)?,
+                    case_mode,
+                );
+                context.lifetime_records = &lifetime;
+                context.working_lifetime_additions = &working;
+                context.import_mappings = &mappings;
+                validate_repository_candidate(
+                    ObjectRef::from_str(value_string(request, "candidateSnapshot")?)?,
+                    &context,
+                )?;
+            }
+            "import-request" => {
+                let import_context = field_value(request, "importContext")?;
+                let lifetime = parse_lifetime_records_from(import_context, "lifetimeRecords")?;
+                let working =
+                    parse_lifetime_records_from(import_context, "workingLifetimeAdditions")?;
+                let mappings = parse_import_mappings_from(import_context)?;
+                let mut context = RepositoryContext::new(
+                    &lookup,
+                    descriptor,
+                    descriptor,
+                    case_mode,
+                );
+                context.lifetime_records = &lifetime;
+                context.working_lifetime_additions = &working;
+                context.import_mappings = &mappings;
+                validate_import_request(
+                    &context,
+                    &parse_import_request(field_value(request, "importRequest")?)?,
+                )?;
+            }
+            "asset-groups" => {
+                let (groups, file_ids) = group_inputs_fixture(request)?;
+                validate_asset_groups_with_limits(
+                    &groups,
+                    &file_ids,
+                    &[],
+                    &[],
+                    &registry,
+                    mode,
+                    RepositoryLimits::default(),
+                )?;
+            }
+            _ => return Err(configured_preflight_error()),
+        }
+        Ok(3)
+    }
+
+    fn execute_repository_layer2_rejection(
+        &self,
+        surface: &str,
+        request: &Value,
+        _scenario: &Value,
+        case_mode: PathCaseMode,
+    ) -> Result<u8> {
+        let descriptor = ObjectRef::from_str(value_string(request, "repositoryDescriptor")?)?;
+        if surface == "asset-groups" {
+            let (groups, file_ids) = group_inputs_fixture(request)?;
+            let incomplete = Registry::load(
+                Vec::<RegistryEntry>::new(),
+                Vec::<u32>::new(),
+            )?;
+            validate_asset_groups_with_limits(
+                &groups,
+                &file_ids,
+                &[],
+                &[],
+                &incomplete,
+                ValidationMode::Conformance,
+                RepositoryLimits::default(),
+            )?;
+            return Ok(3);
+        }
+        let lookup = RepositoryObjectLookup::new_layer2([], RepositoryLimits::default())?;
+        match surface {
+            "tree-expand" => {
+                expand_tree(
+                    ObjectRef::from_str(value_string(request, "tree")?)?,
+                    &lookup,
+                    descriptor,
+                    false,
+                    case_mode,
+                )?;
+            }
+            "manifest-verify" => {
+                verify_manifest(
+                    ObjectRef::from_str(value_string(request, "manifest")?)?,
+                    &lookup,
+                )?;
+            }
+            "repository-candidate" => {
+                let context = RepositoryContext::new(
+                    &lookup,
+                    descriptor,
+                    ObjectRef::from_str(value_string(request, "designatedRoot")?)?,
+                    case_mode,
+                );
+                validate_repository_candidate(
+                    ObjectRef::from_str(value_string(request, "candidateSnapshot")?)?,
+                    &context,
+                )?;
+            }
+            "import-request" => {
+                let context = RepositoryContext::new(
+                    &lookup,
+                    descriptor,
+                    descriptor,
+                    case_mode,
+                );
+                validate_import_request(
+                    &context,
+                    &parse_import_request(field_value(request, "importRequest")?)?,
+                )?;
+            }
+            _ => return Err(configured_preflight_error()),
+        }
+        Ok(3)
+    }
+
+    fn lookup_with_registry(
+        &self,
+        scenario: &Value,
+        registry: Registry,
+        mode: ValidationMode,
+        limits: RepositoryLimits,
+    ) -> Result<RepositoryObjectLookup> {
+        let entries = self.lookup_entries(scenario)?;
+        RepositoryObjectLookup::new(entries, registry, mode, limits)
+    }
+
+    fn lookup_entries(&self, scenario: &Value) -> Result<Vec<(ObjectRef, Vec<u8>)>> {
+        context_array(scenario, "objectLookup")?
             .iter()
             .map(|entry| {
                 Ok((
@@ -621,13 +2021,824 @@ impl Runner {
                     self.result_bytes(value_string(field_value(entry, "artifact")?, "path")?)?,
                 ))
             })
-            .collect::<Result<Vec<_>>>()?;
+            .collect()
+    }
+
+    fn lookup(&self, scenario: &Value, limits: RepositoryLimits) -> Result<RepositoryObjectLookup> {
+        let entries = self.lookup_entries(scenario)?;
         RepositoryObjectLookup::new(
             entries,
             self.registry.clone(),
             ValidationMode::Conformance,
             limits,
         )
+    }
+
+    fn execute_resource_actual(&self, row: &Value, scenario: &Value) -> Result<Value> {
+        let request = self.operation_request(scenario)?;
+        let expected_evidence = field_value(field_value(row, "expected")?, "evidence")?;
+        if request.get("evidenceRequired") != Some(expected_evidence) {
+            return Err(configured_preflight_error());
+        }
+        let operation = value_string(row, "operation")?;
+        let (failure, route_evidence, component_fit) = if operation == "validate-tree-groups-memory" {
+            let (failure, evidence) = self.execute_tree_groups_memory(scenario, &request)?;
+            (failure, evidence, true)
+        } else if operation == "validate-resource-reservation" {
+            let (failure, evidence) = self.execute_resource_reservation(scenario, &request)?;
+            (failure, evidence, false)
+        } else {
+            return Err(configured_preflight_error());
+        };
+        let evidence = if component_fit {
+            json!({
+                "eachComponentAloneFit": true,
+                "noPartialState": true,
+                "routeEvidence": route_evidence
+            })
+        } else {
+            json!({
+                "noPartialState": true,
+                "routeEvidence": route_evidence
+            })
+        };
+        if &evidence != expected_evidence || !failure.is_registered_site() {
+            return Err(configured_preflight_error());
+        }
+        Ok(json!({
+            "code": failure.code.as_str(),
+            "evidence": evidence,
+            "layer": failure.layer,
+            "result": "reject",
+            "stage": failure.stage.as_str()
+        }))
+    }
+
+    fn execute_resource_reservation(
+        &self,
+        scenario: &Value,
+        request: &Value,
+    ) -> Result<(Error, Vec<Value>)> {
+        if value_string(request, "api")? != "validate-resource-reservation"
+            || request.get("assertNoPartialState").and_then(Value::as_bool) != Some(true)
+            || request.get("routes").and_then(Value::as_array).is_none()
+        {
+            return Err(configured_preflight_error());
+        }
+        let entries = self.lookup_entries(scenario)?;
+        match value_string(request, "cluster")? {
+            "replay-base" => {
+                let descriptor = reference_of_kind(scenario, ObjectKind::RepositoryDescriptor)?;
+                let tree = ObjectRef::from_str(value_string(field_value(request, "baseState")?, "tree")?)?;
+                let change_set = ObjectRef::from_str(value_string(request, "changeSet")?)?;
+                let base_lookup = self.lookup_with_registry(
+                    scenario,
+                    self.registry.clone(),
+                    ValidationMode::Conformance,
+                    RepositoryLimits {
+                        max_memory_bytes: 67_108_864,
+                        ..RepositoryLimits::default()
+                    },
+                )?;
+                let expanded = expand_tree(
+                    tree,
+                    &base_lookup,
+                    descriptor,
+                    false,
+                    path_case_mode(scenario)?,
+                )?;
+                let base = RepositoryState {
+                    entries: expanded.entries,
+                    groups: BTreeMap::new(),
+                };
+                let before = base.clone();
+                let run = |ceiling: usize| -> Result<()> {
+                    let lookup = RepositoryObjectLookup::new(
+                        entries.clone(),
+                        self.registry.clone(),
+                        ValidationMode::Conformance,
+                        RepositoryLimits {
+                            max_memory_bytes: ceiling,
+                            ..RepositoryLimits::default()
+                        },
+                    )?;
+                    let context = RepositoryContext::new(
+                        &lookup,
+                        descriptor,
+                        descriptor,
+                        path_case_mode(scenario)?,
+                    );
+                    replay_change_set(change_set, &base, &context, None)?;
+                    Ok(())
+                };
+                let minimum = minimum_successful_ceiling(&run)?;
+                let lookup = RepositoryObjectLookup::new(
+                    entries.clone(),
+                    self.registry.clone(),
+                    ValidationMode::Conformance,
+                    RepositoryLimits {
+                        max_memory_bytes: minimum.saturating_sub(1),
+                        ..RepositoryLimits::default()
+                    },
+                )?;
+                let context = RepositoryContext::new(
+                    &lookup,
+                    descriptor,
+                    descriptor,
+                    path_case_mode(scenario)?,
+                );
+                let failure = replay_change_set(change_set, &base, &context, None).unwrap_err();
+                if base != before {
+                    return Err(Error::new(ErrorCode::LimitMemory));
+                }
+                let recovery_base = RepositoryState::default();
+                let recovery_before = recovery_base.clone();
+                replay_change_set(change_set, &recovery_base, &context, None)?;
+                if base != before || recovery_base != recovery_before {
+                    return Err(Error::new(ErrorCode::LimitMemory));
+                }
+                Ok((
+                    failure,
+                    vec![resource_route_evidence(
+                        "replay-change-set",
+                        "same-authority-instance",
+                    )],
+                ))
+            }
+            "fileid-lifetime-import-indexes" => {
+                let descriptor = reference_of_kind(scenario, ObjectKind::RepositoryDescriptor)?;
+                let change_set = reference_of_kind(scenario, ObjectKind::ChangeSet)?;
+                let tree = reference_of_kind(scenario, ObjectKind::Tree)?;
+                let expansion_lookup = self.lookup_with_registry(
+                    scenario,
+                    self.registry.clone(),
+                    ValidationMode::Conformance,
+                    RepositoryLimits {
+                        max_memory_bytes: 67_108_864,
+                        ..RepositoryLimits::default()
+                    },
+                )?;
+                let working_entries = expand_tree(
+                    tree,
+                    &expansion_lookup,
+                    descriptor,
+                    false,
+                    path_case_mode(scenario)?,
+                )?
+                .entries;
+                let before = working_entries.clone();
+                let run = |ceiling: usize| -> Result<()> {
+                    let lookup = RepositoryObjectLookup::new(
+                        Vec::<(ObjectRef, Vec<u8>)>::new(),
+                        self.registry.clone(),
+                        ValidationMode::Conformance,
+                        RepositoryLimits {
+                            max_memory_bytes: ceiling,
+                            ..RepositoryLimits::default()
+                        },
+                    )?;
+                    let context = RepositoryContext::new(
+                        &lookup,
+                        descriptor,
+                        descriptor,
+                        path_case_mode(scenario)?,
+                    );
+                    validate_lifetime_and_imports(
+                        &context,
+                        change_set,
+                        &[],
+                        Some(&working_entries),
+                    )
+                };
+                let minimum = minimum_successful_ceiling(&run)?;
+                let lookup = RepositoryObjectLookup::new(
+                    Vec::<(ObjectRef, Vec<u8>)>::new(),
+                    self.registry.clone(),
+                    ValidationMode::Conformance,
+                    RepositoryLimits {
+                        max_memory_bytes: minimum.saturating_sub(1),
+                        ..RepositoryLimits::default()
+                    },
+                )?;
+                let context = RepositoryContext::new(
+                    &lookup,
+                    descriptor,
+                    descriptor,
+                    path_case_mode(scenario)?,
+                );
+                let failure = validate_lifetime_and_imports(
+                    &context,
+                    change_set,
+                    &[],
+                    Some(&working_entries),
+                )
+                .unwrap_err();
+                validate_lifetime_and_imports(&context, change_set, &[], None)?;
+                if working_entries != before {
+                    return Err(Error::new(ErrorCode::LimitMemory));
+                }
+                Ok((
+                    failure,
+                    vec![resource_route_evidence(
+                        "validate-lifetime-and-imports",
+                        "same-authority-instance",
+                    )],
+                ))
+            }
+            "fileid-import-many-mappings-deadline" => {
+                let descriptor = reference_of_kind(scenario, ObjectKind::RepositoryDescriptor)?;
+                let change_set = reference_of_kind(scenario, ObjectKind::ChangeSet)?;
+                let working = (1u8..=64)
+                    .map(|index| {
+                        Ok(LifetimeRecord {
+                            file_id: FileId::new([index; 16])?,
+                            origin: LifetimeOrigin::NativeCreate,
+                            first_change_set: change_set,
+                            first_operation: 0,
+                            import_mapping_key: None,
+                        })
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                let import_request = ImportRequest {
+                    importer_profile: ProfileRef::from_str("importer.test/fixture-adapter@1")?,
+                    source_namespace_digest: [0x71; 32],
+                    source_identity_digest: [0x72; 32],
+                    requested_file_id: FileId::new([0xff; 16])?,
+                };
+                let run = |maximum: Option<Duration>| -> Result<()> {
+                    let lookup = RepositoryObjectLookup::new(
+                        entries.clone(),
+                        self.registry.clone(),
+                        ValidationMode::Conformance,
+                        RepositoryLimits {
+                            max_time: maximum,
+                            ..RepositoryLimits::default()
+                        },
+                    )?;
+                    let mut context = RepositoryContext::new(
+                        &lookup,
+                        descriptor,
+                        descriptor,
+                        path_case_mode(scenario)?,
+                    );
+                    context.working_lifetime_additions = &working;
+                    validate_import_request(&context, &import_request)?;
+                    Ok(())
+                };
+                let before = working.clone();
+                let failure = run(Some(Duration::ZERO)).unwrap_err();
+                if working != before {
+                    return Err(Error::new(ErrorCode::LimitTime));
+                }
+                run(Some(Duration::from_secs(600)))?;
+                if working != before {
+                    return Err(Error::new(ErrorCode::LimitTime));
+                }
+                Ok((
+                    failure,
+                    vec![resource_route_evidence(
+                        "validate-import-request",
+                        "fresh-operation-after-deadline",
+                    )],
+                ))
+            }
+            "graph-workspace-indexes" => {
+                let graph_scenario = self.result_json(
+                    "scenarios/cases/tree-groups-combined-memory.json",
+                )?;
+                let graph_entries = self.lookup_entries(&graph_scenario)?;
+                let descriptor = object_ref_json(context_value(
+                    &graph_scenario,
+                    "repositoryDescriptor",
+                )?)?;
+                let snapshot = object_ref_json(context_value(
+                    &graph_scenario,
+                    "candidateSnapshot",
+                )?)?;
+                let designated_root = object_ref_json(context_value(
+                    &graph_scenario,
+                    "designatedRoot",
+                )?)?;
+                let run = |ceiling: usize| -> Result<()> {
+                    let lookup = RepositoryObjectLookup::new(
+                        graph_entries.clone(),
+                        self.registry.clone(),
+                        ValidationMode::Conformance,
+                        RepositoryLimits {
+                            max_memory_bytes: ceiling,
+                            ..RepositoryLimits::default()
+                        },
+                    )?;
+                    let context = RepositoryContext::new(
+                        &lookup,
+                        descriptor,
+                        designated_root,
+                        path_case_mode(&graph_scenario)?,
+                    );
+                    validate_snapshot_graph(snapshot, &context)?;
+                    Ok(())
+                };
+                let minimum = minimum_successful_ceiling(&run)?;
+                let lookup = RepositoryObjectLookup::new(
+                    graph_entries,
+                    self.registry.clone(),
+                    ValidationMode::Conformance,
+                    RepositoryLimits {
+                        max_memory_bytes: minimum.saturating_sub(1),
+                        ..RepositoryLimits::default()
+                    },
+                )?;
+                let context = RepositoryContext::new(
+                    &lookup,
+                    descriptor,
+                    designated_root,
+                    path_case_mode(&graph_scenario)?,
+                );
+                let failure = validate_snapshot_graph(snapshot, &context).unwrap_err();
+                validate_snapshot_graph(designated_root, &context)?;
+                Ok((
+                    failure,
+                    vec![resource_route_evidence(
+                        "validate-snapshot-graph",
+                        "same-authority-instance",
+                    )],
+                ))
+            }
+            "conflict-group-indexes" => {
+                let conflict_scenario = self.result_json(
+                    "scenarios/cases/conflict-choice-base.json",
+                )?;
+                let conflict_entries = self.lookup_entries(&conflict_scenario)?;
+                let conflict_reference = ObjectRef::from_str(
+                    "ogvcs:v1:conflict-set:sha256:562aa353fa3bfcf681e7e4a218f66c9f3c1157c490508cb81f4320f271be25cf",
+                )?;
+                let descriptor = object_ref_json(context_value(
+                    &conflict_scenario,
+                    "repositoryDescriptor",
+                )?)?;
+                let run_conflict = |ceiling: usize| -> Result<()> {
+                    let lookup = RepositoryObjectLookup::new(
+                        conflict_entries.clone(),
+                        self.registry.clone(),
+                        ValidationMode::Conformance,
+                        RepositoryLimits {
+                            max_memory_bytes: ceiling,
+                            ..RepositoryLimits::default()
+                        },
+                    )?;
+                    validate_conflict_set(Some(conflict_reference), &lookup, descriptor, false)?;
+                    Ok(())
+                };
+                let conflict_minimum = minimum_successful_ceiling(&run_conflict)?;
+                let conflict_lookup = RepositoryObjectLookup::new(
+                    conflict_entries,
+                    self.registry.clone(),
+                    ValidationMode::Conformance,
+                    RepositoryLimits {
+                        max_memory_bytes: conflict_minimum.saturating_sub(1),
+                        ..RepositoryLimits::default()
+                    },
+                )?;
+                let conflict_failure = validate_conflict_set(
+                    Some(conflict_reference),
+                    &conflict_lookup,
+                    descriptor,
+                    false,
+                )
+                .unwrap_err();
+                validate_conflict_set(None, &conflict_lookup, descriptor, false)?;
+
+                let (groups, file_ids) = asset_groups_from_payload(
+                    &self.result_bytes("objects/05-asset-group-set.cbor")?,
+                )?;
+                let before = groups.clone();
+                let run = |ceiling: usize| {
+                    validate_asset_groups_with_limits(
+                        &groups,
+                        &file_ids,
+                        &[],
+                        &[],
+                        &self.registry,
+                        ValidationMode::Conformance,
+                        RepositoryLimits {
+                            max_memory_bytes: ceiling,
+                            ..RepositoryLimits::default()
+                        },
+                    )
+                    .map(|_| ())
+                };
+                let minimum = minimum_successful_ceiling(&run)?;
+                let group_failure = run(minimum.saturating_sub(1)).unwrap_err();
+                if groups != before {
+                    return Err(Error::new(ErrorCode::LimitMemory));
+                }
+                run(minimum)?;
+                if groups != before {
+                    return Err(Error::new(ErrorCode::LimitMemory));
+                }
+                if group_failure.code != conflict_failure.code {
+                    return Err(configured_preflight_error());
+                }
+                Ok((
+                    conflict_failure,
+                    vec![
+                        resource_route_evidence(
+                            "validate-conflict-set",
+                            "same-authority-instance",
+                        ),
+                        resource_route_evidence(
+                            "validate-asset-groups",
+                            "stateless-reinvoke",
+                        ),
+                    ],
+                ))
+            }
+            "many-invalid-error-selection" => {
+                let run = |ceiling: usize| -> Result<()> {
+                    let lookup = RepositoryObjectLookup::new(
+                        entries.clone(),
+                        self.registry.clone(),
+                        ValidationMode::Conformance,
+                        RepositoryLimits {
+                            max_memory_bytes: ceiling,
+                            ..RepositoryLimits::default()
+                        },
+                    )?;
+                    lookup.validate_all()
+                };
+                let minimum = minimum_successful_ceiling(&run)?;
+                let failure = run(minimum.saturating_sub(1)).unwrap_err();
+                run(minimum)?;
+                let original = self.result_bytes("objects/03-tree.cbor")?;
+                let scanned = scan_metadata(&original, Limits::METADATA)?;
+                let mut malformed_value = scanned.value().clone();
+                let Cbor::Map(fields) = &mut malformed_value else {
+                    return Err(configured_preflight_error());
+                };
+                for field in 100u64..164 {
+                    fields.push((Cbor::UInt(field), Cbor::UInt(field)));
+                }
+                let malformed_bytes = encode_canonical(&malformed_value)?;
+                let malformed = scan_metadata(&malformed_bytes, Limits::METADATA)?;
+                let schema_failure = validate_metadata_schema_with_limits(&malformed, 511)
+                    .unwrap_err();
+                let recovery = validate_metadata_schema_with_limits(&malformed, 512)
+                    .unwrap_err();
+                if recovery.code != ErrorCode::SchemaFieldUnknown
+                    || recovery.layer != 2
+                    || recovery.stage != ValidationStage::KnownSchema
+                    || encode_canonical(malformed.value())? != malformed_bytes
+                    || schema_failure.code != failure.code
+                {
+                    return Err(configured_preflight_error());
+                }
+                Ok((
+                    failure,
+                    vec![
+                        resource_route_evidence(
+                            "repository-object-lookup-validate-all",
+                            "stateless-reinvoke",
+                        ),
+                        resource_route_evidence(
+                            "validate-known-schema",
+                            "stateless-reinvoke",
+                        ),
+                    ],
+                ))
+            }
+            "lookup-edge-counter-rollback" | "lookup-scratch-counter-rollback" => {
+                if request
+                    .get("assertCounterBaselineAfterFailure")
+                    .and_then(Value::as_bool)
+                    != Some(true)
+                    || request
+                        .get("assertCounterBaselineAfterRecovery")
+                        .and_then(Value::as_bool)
+                        != Some(true)
+                {
+                    return Err(configured_preflight_error());
+                }
+                let cluster = value_string(request, "cluster")?;
+                let configured = field_value(request, "configuredLimit")?;
+                let mut limits = RepositoryLimits::default();
+                let (field, value) = (
+                    value_string(configured, "field")?,
+                    usize::try_from(value_u64(configured, "value")?)
+                        .map_err(|_| configured_preflight_error())?,
+                );
+                let (route, expected) = if cluster == "lookup-edge-counter-rollback" {
+                    if field != "maxEdges" || value != 1 {
+                        return Err(configured_preflight_error());
+                    }
+                    limits.max_edges = value;
+                    ("expand-tree-edge-budget", ErrorCode::LimitCount)
+                } else {
+                    if field != "maxScratchBytes" || value != 64 {
+                        return Err(configured_preflight_error());
+                    }
+                    limits.max_scratch_bytes = value;
+                    ("expand-tree-scratch-budget", ErrorCode::LimitScratch)
+                };
+                let lookup = RepositoryObjectLookup::new(
+                    entries,
+                    self.registry.clone(),
+                    ValidationMode::Conformance,
+                    limits,
+                )?;
+                let descriptor = reference_of_kind(scenario, ObjectKind::RepositoryDescriptor)?;
+                let baseline = lookup.resource_summary();
+                let failure = expand_tree(
+                    ObjectRef::from_str(value_string(request, "failureTree")?)?,
+                    &lookup,
+                    descriptor,
+                    false,
+                    path_case_mode(scenario)?,
+                )
+                .unwrap_err();
+                if failure.code != expected || lookup.resource_summary() != baseline {
+                    return Err(configured_preflight_error());
+                }
+                let recovery = field_value(request, "recovery")?;
+                match value_string(recovery, "api")? {
+                    "verify-manifest" => {
+                        verify_manifest(
+                            ObjectRef::from_str(value_string(recovery, "reference")?)?,
+                            &lookup,
+                        )?;
+                    }
+                    "expand-tree" => {
+                        expand_tree(
+                            ObjectRef::from_str(value_string(recovery, "recoveryTree")?)?,
+                            &lookup,
+                            descriptor,
+                            false,
+                            path_case_mode(scenario)?,
+                        )?;
+                    }
+                    _ => return Err(configured_preflight_error()),
+                }
+                if lookup.resource_summary() != baseline {
+                    return Err(configured_preflight_error());
+                }
+                Ok((
+                    failure,
+                    vec![resource_route_evidence_with_counter(
+                        route,
+                        "same-authority-instance",
+                    )],
+                ))
+            }
+            "tree-stream-transaction-composite-memory" => {
+                if request.pointer("/memoryCeiling/derivation").and_then(Value::as_str)
+                    != Some("one-byte-below-reader-current-entry-and-fileid-index-composite-v1")
+                    || request.pointer("/memoryCeiling/indexCapacity").and_then(Value::as_str)
+                        != Some("remaining-composite-budget-not-full-operation-ceiling")
+                    || request.pointer("/transaction/targetBytesUnchanged").and_then(Value::as_bool)
+                        != Some(true)
+                    || request.pointer("/transaction/scratchIndexReusableAfterAbortDrop").and_then(Value::as_bool)
+                        != Some(true)
+                {
+                    return Err(configured_preflight_error());
+                }
+                let failure_bytes = self.result_bytes(value_string(
+                    field_value(request, "failure")?,
+                    "source",
+                )?)?;
+                let recovery_bytes = self.result_bytes(value_string(
+                    field_value(request, "recovery")?,
+                    "source",
+                )?)?;
+                let descriptor = reference_of_kind(scenario, ObjectKind::RepositoryDescriptor)?;
+                let expected = |bytes: &[u8]| -> Result<ObjectRef> {
+                    Ok(ObjectRef {
+                        kind: ObjectKind::Tree,
+                        digest: object_id(ObjectKind::Tree, bytes)?,
+                    })
+                };
+                let run = |ceiling: usize| -> Result<()> {
+                    let scratch = TempDirectory::new("tree-index-probe")?;
+                    let mut index = TreeFileIdScratchIndex::new(
+                        &scratch.path,
+                        ceiling,
+                        8 * 1024 * 1024,
+                        None,
+                    )?;
+                    verify_tree_stream(
+                        Cursor::new(&failure_bytes),
+                        expected(&failure_bytes)?,
+                        descriptor,
+                        &self.registry,
+                        Operation::ConformanceWrite,
+                        &mut index,
+                        TreeStreamLimits {
+                            max_memory_bytes: ceiling,
+                            ..TreeStreamLimits::default()
+                        },
+                    )?;
+                    Ok(())
+                };
+                let minimum = minimum_successful_ceiling(&run)?;
+                let reduced = minimum.saturating_sub(1);
+                let scratch = TempDirectory::new("tree-index-reuse")?;
+                let mut index = TreeFileIdScratchIndex::new(
+                    &scratch.path,
+                    reduced.max(16),
+                    8 * 1024 * 1024,
+                    None,
+                )?;
+                let before = index.scratch_metrics();
+                let failure = verify_tree_stream(
+                    Cursor::new(&failure_bytes),
+                    expected(&failure_bytes)?,
+                    descriptor,
+                    &self.registry,
+                    Operation::ConformanceWrite,
+                    &mut index,
+                    TreeStreamLimits {
+                        max_memory_bytes: reduced,
+                        ..TreeStreamLimits::default()
+                    },
+                )
+                .unwrap_err();
+                verify_tree_stream(
+                    Cursor::new(&recovery_bytes),
+                    expected(&recovery_bytes)?,
+                    descriptor,
+                    &self.registry,
+                    Operation::ConformanceWrite,
+                    &mut index,
+                    TreeStreamLimits {
+                        max_memory_bytes: reduced,
+                        ..TreeStreamLimits::default()
+                    },
+                )?;
+                let after = index.scratch_metrics();
+                if after.files_created < before.files_created {
+                    return Err(configured_preflight_error());
+                }
+                Ok((
+                    failure,
+                    vec![json!({
+                        "compositeMemoryBounded": true,
+                        "indexInstanceReused": true,
+                        "noPartialState": true,
+                        "recoveryKind": "same-authority-instance",
+                        "route": "verify-tree-file-stream",
+                        "scratchIndexReusableAfterAbort": true,
+                        "succeeded": true,
+                        "targetUnchanged": true
+                    })],
+                ))
+            }
+            _ => Err(configured_preflight_error()),
+        }
+    }
+
+    fn execute_tree_groups_memory(
+        &self,
+        scenario: &Value,
+        request: &Value,
+    ) -> Result<(Error, Vec<Value>)> {
+        if value_string(request, "api")? != "validate-tree-groups-memory"
+            || request.pointer("/memoryCeiling/derivation").and_then(Value::as_str)
+                != Some("one-byte-below-simultaneous-retained-tree-group-membership-and-collision-index")
+            || request.pointer("/memoryCeiling/requireEachComponentAloneToFit").and_then(Value::as_bool)
+                != Some(true)
+        {
+            return Err(configured_preflight_error());
+        }
+        let entries = self.lookup_entries(scenario)?;
+        let before = entries.clone();
+        let candidate = object_ref_json(context_value(scenario, "candidateSnapshot")?)?;
+        let descriptor = object_ref_json(context_value(scenario, "repositoryDescriptor")?)?;
+        let lifetime = parse_lifetime_records(scenario, "lifetimeRecords")?;
+        let working = parse_lifetime_records(scenario, "workingLifetimeAdditions")?;
+        let mappings = parse_import_mappings(scenario)?;
+        let run_composite = |ceiling: usize| -> Result<()> {
+            let lookup = RepositoryObjectLookup::new(
+                entries.clone(),
+                self.registry.clone(),
+                ValidationMode::Conformance,
+                RepositoryLimits {
+                    max_memory_bytes: ceiling,
+                    ..RepositoryLimits::default()
+                },
+            )?;
+            let mut context = RepositoryContext::new(
+                &lookup,
+                descriptor,
+                object_ref_json(context_value(scenario, "designatedRoot")?)?,
+                path_case_mode(scenario)?,
+            );
+            context.lifetime_records = &lifetime;
+            context.working_lifetime_additions = &working;
+            context.import_mappings = &mappings;
+            validate_repository_candidate(candidate, &context)?;
+            Ok(())
+        };
+        let minimum = minimum_successful_ceiling(&run_composite)?;
+        let reduced = minimum.saturating_sub(1);
+
+        let lookup = RepositoryObjectLookup::new(
+            entries.clone(),
+            self.registry.clone(),
+            ValidationMode::Conformance,
+            RepositoryLimits {
+                max_memory_bytes: reduced,
+                ..RepositoryLimits::default()
+            },
+        )?;
+        let snapshot = lookup.resolve_expected(candidate, ObjectKind::Snapshot)?;
+        let tree = ObjectRef::from_cbor(cbor_field(
+            snapshot
+                .value
+                .as_deref()
+                .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))?,
+            18,
+        )?)?;
+        expand_tree(
+            tree,
+            &lookup,
+            descriptor,
+            false,
+            path_case_mode(scenario)?,
+        )?;
+        drop(lookup);
+
+        let lookup = RepositoryObjectLookup::new(
+            entries.clone(),
+            self.registry.clone(),
+            ValidationMode::Conformance,
+            RepositoryLimits {
+                max_memory_bytes: reduced,
+                ..RepositoryLimits::default()
+            },
+        )?;
+        let snapshot = lookup.resolve_expected(candidate, ObjectKind::Snapshot)?;
+        let group_set = ObjectRef::from_cbor(cbor_field(
+            snapshot
+                .value
+                .as_deref()
+                .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))?,
+            20,
+        )?)?;
+        let resolved = lookup.resolve_expected(group_set, ObjectKind::AssetGroupSet)?;
+        let (groups, file_ids) = asset_groups_from_value(
+            resolved
+                .value
+                .as_deref()
+                .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))?,
+        )?;
+        validate_asset_groups_with_limits(
+            &groups,
+            &file_ids,
+            &[],
+            &[],
+            &self.registry,
+            ValidationMode::Conformance,
+            RepositoryLimits {
+                max_memory_bytes: reduced,
+                ..RepositoryLimits::default()
+            },
+        )?;
+        drop(lookup);
+
+        let lookup = RepositoryObjectLookup::new(
+            entries.clone(),
+            self.registry.clone(),
+            ValidationMode::Conformance,
+            RepositoryLimits {
+                max_memory_bytes: reduced,
+                ..RepositoryLimits::default()
+            },
+        )?;
+        let mut context = RepositoryContext::new(
+            &lookup,
+            descriptor,
+            object_ref_json(context_value(scenario, "designatedRoot")?)?,
+            path_case_mode(scenario)?,
+        );
+        context.lifetime_records = &lifetime;
+        context.working_lifetime_additions = &working;
+        context.import_mappings = &mappings;
+        let failure = validate_repository_candidate(candidate, &context).unwrap_err();
+        if entries != before {
+            return Err(Error::new(ErrorCode::LimitMemory));
+        }
+        validate_repository_candidate(
+            object_ref_json(context_value(scenario, "designatedRoot")?)?,
+            &context,
+        )?;
+        if entries != before {
+            return Err(Error::new(ErrorCode::LimitMemory));
+        }
+        Ok((
+            failure,
+            vec![resource_route_evidence(
+                "validate-tree-groups-memory",
+                "same-authority-instance",
+            )],
+        ))
     }
 
     fn execute_allocate(&self, scenario: &Value, input: &Value) -> Result<()> {
@@ -809,7 +3020,7 @@ impl Runner {
             let scratch = TempDirectory::new("truncation")?;
             let actual = verify_logical_bundle_stream(
                 Cursor::new(&complete[..prefix]),
-                LogicalBundleVerifyOptions::new(&scratch.path, &self.registry),
+                LogicalBundleVerifyOptions::semantic(&scratch.path, &self.registry, Operation::ConformanceWrite),
             )
             .unwrap_err();
             require_same_error(actual, &expected)?;
@@ -910,7 +3121,7 @@ impl Runner {
                     let scratch = TempDirectory::new("mutation")?;
                     if verify_logical_bundle_stream(
                         Cursor::new(changed),
-                        LogicalBundleVerifyOptions::new(&scratch.path, &self.registry),
+                        LogicalBundleVerifyOptions::semantic(&scratch.path, &self.registry, Operation::ConformanceWrite),
                     )
                     .is_ok()
                     {
@@ -978,6 +3189,554 @@ impl Drop for TempDirectory {
     }
 }
 
+struct NoopBundleVisitor;
+
+impl BundleVisitor for NoopBundleVisitor {}
+
+#[derive(Default)]
+struct BundleBoundaryVisitor {
+    items: Vec<BundleItemInfo>,
+}
+
+impl BundleVisitor for BundleBoundaryVisitor {
+    fn item_end(&mut self, info: BundleItemInfo) -> Result<()> {
+        self.items.push(info);
+        Ok(())
+    }
+}
+
+fn decode_bundle_items(source: &[u8]) -> Result<Vec<Cbor>> {
+    let mut visitor = BundleBoundaryVisitor::default();
+    visit_logical_bundle(Cursor::new(source), &mut visitor, BundleLimits::HARD)?;
+    visitor
+        .items
+        .into_iter()
+        .map(|item| {
+            let end = item
+                .offset
+                .checked_add(item.bytes)
+                .ok_or_else(|| Error::new(ErrorCode::BundleBudgetExceeded))?;
+            let bytes = source
+                .get(item.offset..end)
+                .ok_or_else(|| Error::new(ErrorCode::CborTruncated))?;
+            decode_canonical(bytes, Limits::BUNDLE_ITEM)
+        })
+        .collect()
+}
+
+struct RecipePathProfileValidator {
+    profile: ProfileRef,
+    case_mode: PathCaseMode,
+    segments: Vec<String>,
+    decision: PathProfileDecision,
+}
+
+impl RecipePathProfileValidator {
+    fn from_request(request: &Value) -> Result<Self> {
+        let adapter = field_value(request, "adapter")?;
+        let requested_case_mode = path_case_mode_value(field_value(request, "caseMode")?)?;
+        let case_mode = adapter
+            .get("caseMode")
+            .map(path_case_mode_value)
+            .transpose()?
+            .unwrap_or(match requested_case_mode {
+                PathCaseMode::CaseSensitive => PathCaseMode::CaseFolded,
+                PathCaseMode::CaseFolded => PathCaseMode::CaseSensitive,
+            });
+        let decision = field_value(adapter, "decision")?;
+        let decision = if decision.get("accepted").and_then(Value::as_bool) == Some(true) {
+            match (
+                decision.get("repositoryKey").and_then(Value::as_str),
+                decision.get("platformKey").and_then(Value::as_str),
+            ) {
+                (Some(repository_key), Some(platform_key)) => PathProfileDecision::accepted(
+                    repository_key.to_owned(),
+                    platform_key.to_owned(),
+                ),
+                _ => PathProfileDecision::rejected(),
+            }
+        } else {
+            PathProfileDecision::rejected()
+        };
+        let segments = json_array_result(request, "segments")?
+            .iter()
+            .map(|value| value_string_value(value).map(str::to_owned))
+            .collect::<Result<Vec<_>>>()?;
+        Ok(Self {
+            profile: ProfileRef::from_str(value_string(adapter, "profile")?)?,
+            case_mode,
+            segments,
+            decision,
+        })
+    }
+}
+
+impl PathProfileValidator for RecipePathProfileValidator {
+    fn profile(&self) -> &ProfileRef {
+        &self.profile
+    }
+
+    fn case_mode(&self) -> PathCaseMode {
+        self.case_mode
+    }
+
+    fn validate(&self, segments: &[String]) -> PathProfileDecision {
+        if segments == self.segments {
+            self.decision.clone()
+        } else {
+            PathProfileDecision::rejected()
+        }
+    }
+}
+
+fn configured_preflight_error() -> Error {
+    Error::new(ErrorCode::SchemaFieldInvalid)
+        .with_layer(1)
+        .with_stage(ValidationStage::ConfiguredResourcePreflight)
+}
+
+fn resource_route_evidence(route: &str, recovery_kind: &str) -> Value {
+    json!({
+        "noPartialState": true,
+        "recoveryKind": recovery_kind,
+        "route": route,
+        "succeeded": true
+    })
+}
+
+fn resource_route_evidence_with_counter(route: &str, recovery_kind: &str) -> Value {
+    json!({
+        "counterBaselineRestored": true,
+        "noPartialState": true,
+        "recoveryKind": recovery_kind,
+        "route": route,
+        "succeeded": true
+    })
+}
+
+fn operation_input(scenario: &Value) -> Result<&Value> {
+    scenario
+        .get("inputs")
+        .and_then(Value::as_array)
+        .and_then(|inputs| {
+            inputs.iter().find(|input| {
+                input
+                    .get("path")
+                    .and_then(Value::as_str)
+                    .is_some_and(|path| path.starts_with("scenarios/operations/"))
+            })
+        })
+        .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))
+}
+
+fn decimal_u64(value: &str) -> Result<u64> {
+    if value.is_empty()
+        || (value.len() > 1 && value.starts_with('0'))
+        || !value.bytes().all(|byte| byte.is_ascii_digit())
+    {
+        return Err(Error::new(ErrorCode::SchemaFieldInvalid));
+    }
+    value
+        .parse::<u64>()
+        .map_err(|_| Error::new(ErrorCode::SchemaFieldInvalid))
+}
+
+fn codec_operation(request: &Value) -> Result<Operation> {
+    match request.get("operation").and_then(Value::as_str) {
+        Some("read") => Ok(Operation::Read),
+        Some("conformance") => Ok(Operation::ConformanceWrite),
+        Some("production-write") => Ok(Operation::ProductionWrite),
+        _ => Err(configured_preflight_error()),
+    }
+}
+
+fn write_operation(request: &Value) -> Result<Operation> {
+    match codec_operation(request)? {
+        Operation::ConformanceWrite => Ok(Operation::ConformanceWrite),
+        Operation::ProductionWrite => Ok(Operation::ProductionWrite),
+        Operation::Read => Err(configured_preflight_error()),
+    }
+}
+
+fn validation_mode(operation: Operation) -> Result<ValidationMode> {
+    Ok(match operation {
+        Operation::Read => ValidationMode::Read,
+        Operation::ConformanceWrite => ValidationMode::Conformance,
+        Operation::ProductionWrite => ValidationMode::Production,
+    })
+}
+
+fn repository_validation_mode(request: &Value) -> Result<ValidationMode> {
+    match request.get("mode").and_then(Value::as_str) {
+        Some("read") => Ok(ValidationMode::Read),
+        Some("conformance") => Ok(ValidationMode::Conformance),
+        Some("production") => Ok(ValidationMode::Production),
+        _ => Err(configured_preflight_error()),
+    }
+}
+
+fn path_case_mode_value(value: &Value) -> Result<PathCaseMode> {
+    match value.as_str() {
+        Some("case-sensitive") => Ok(PathCaseMode::CaseSensitive),
+        Some("case-folded") => Ok(PathCaseMode::CaseFolded),
+        _ => Err(configured_preflight_error()),
+    }
+}
+
+fn tree_stream_entry(value: &Value) -> Result<TreeStreamEntry> {
+    Ok(TreeStreamEntry {
+        basename: value_string(value, "name")?.to_owned(),
+        entry_kind: u8::try_from(value_u64(value, "kind")?)
+            .map_err(|_| Error::new(ErrorCode::SchemaFieldInvalid))?,
+        file_id: hex_array(value_string(value, "fileId")?)?,
+        portable_mode: u8::try_from(value_u64(value, "mode")?)
+            .map_err(|_| Error::new(ErrorCode::SchemaFieldInvalid))?,
+        target: ObjectRef::from_str(value_string(value, "target")?)?,
+        logical_size: decimal_u64(value_string(value, "logicalSize")?)?,
+        content_policy: ProfileRef::from_str(value_string(value, "contentPolicy")?)?,
+    })
+}
+
+fn tree_stream_entry_cbor(value: &Cbor) -> Result<TreeStreamEntry> {
+    Ok(TreeStreamEntry {
+        basename: cbor_text(cbor_field(value, 0)?)?.to_owned(),
+        entry_kind: u8::try_from(cbor_uint(cbor_field(value, 1)?)?)
+            .map_err(|_| Error::new(ErrorCode::SchemaFieldInvalid))?,
+        file_id: cbor_fixed_bytes(cbor_field(value, 2)?)?,
+        portable_mode: u8::try_from(cbor_uint(cbor_field(value, 3)?)?)
+            .map_err(|_| Error::new(ErrorCode::SchemaFieldInvalid))?,
+        target: ObjectRef::from_cbor(cbor_field(value, 4)?)?,
+        logical_size: cbor_uint(cbor_field(value, 5)?)?,
+        content_policy: ProfileRef::from_cbor(cbor_field(value, 6)?)?,
+    })
+}
+
+fn parse_lifetime_records_from(value: &Value, key: &str) -> Result<Vec<LifetimeRecord>> {
+    json_array_result(value, key)?
+        .iter()
+        .map(|record| {
+            Ok(LifetimeRecord {
+                file_id: file_id_json(field_value(record, "fileId")?)?,
+                origin: match value_string(record, "origin")? {
+                    "native-create" => LifetimeOrigin::NativeCreate,
+                    "native-copy" => LifetimeOrigin::NativeCopy,
+                    "import" => LifetimeOrigin::Import,
+                    _ => return Err(Error::new(ErrorCode::SchemaFieldInvalid)),
+                },
+                first_change_set: object_ref_json(field_value(record, "firstChangeSet")?)?,
+                first_operation: value_u64(record, "firstOperation")?,
+                import_mapping_key: record
+                    .get("importMappingKey")
+                    .map(|value| value_string_value(value).and_then(hex_array))
+                    .transpose()?,
+            })
+        })
+        .collect()
+}
+
+fn parse_import_mappings_from(value: &Value) -> Result<Vec<ImportMapping>> {
+    json_array_result(value, "importMappings")?
+        .iter()
+        .map(|mapping| {
+            Ok(ImportMapping {
+                descriptor: object_ref_json(field_value(mapping, "descriptor")?)?,
+                importer_profile: ProfileRef::from_str(value_string(mapping, "importerProfile")?)?,
+                source_namespace_digest: hex_array(value_string(
+                    mapping,
+                    "sourceNamespaceDigest",
+                )?)?,
+                source_identity_digest: hex_array(value_string(
+                    mapping,
+                    "sourceIdentityDigest",
+                )?)?,
+                file_id: file_id_json(field_value(mapping, "fileId")?)?,
+                state: match value_string(mapping, "state")? {
+                    "reserved" => ImportState::Reserved,
+                    "materialized" => ImportState::Materialized,
+                    "published" => ImportState::Published,
+                    _ => return Err(Error::new(ErrorCode::SchemaFieldInvalid)),
+                },
+                declared_mapping_key: hex_array(value_string(mapping, "mappingKey")?)?,
+            })
+        })
+        .collect()
+}
+
+fn group_fixture(value: &Value) -> Result<(BTreeMap<[u8; 16], AssetGroup>, BTreeMap<FileId, Vec<String>>)> {
+    let id: [u8; 16] = hex_array(value_string(value, "groupId")?)?;
+    let file_ids = json_array_result(value, "fileIds")?
+        .iter()
+        .map(file_id_json)
+        .collect::<Result<Vec<_>>>()?;
+    let primary = *file_ids
+        .first()
+        .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))?;
+    let role = ProfileRef::from_str(value_string(value, "roleProfile")?)?;
+    let members = file_ids
+        .iter()
+        .copied()
+        .map(|file_id| {
+            Cbor::Map(vec![
+                (Cbor::UInt(0), file_id.to_cbor()),
+                (Cbor::UInt(1), role.to_cbor()),
+            ])
+        })
+        .collect();
+    let external_profile =
+        ProfileRef::from_str(value_string(value, "externalKeyProfile")?)?;
+    let raw = Cbor::Map(vec![
+        (Cbor::UInt(0), Cbor::Bytes(id.to_vec())),
+        (
+            Cbor::UInt(1),
+            ProfileRef::from_str(value_string(value, "groupProfile")?)?.to_cbor(),
+        ),
+        (Cbor::UInt(2), primary.to_cbor()),
+        (Cbor::UInt(3), Cbor::Array(members)),
+        (
+            Cbor::UInt(4),
+            Cbor::Array(vec![Cbor::Map(vec![
+                (Cbor::UInt(0), external_profile.to_cbor()),
+                (
+                    Cbor::UInt(1),
+                    Cbor::Bytes(hex_vec(value_string(value, "externalKeyValueHex")?)?),
+                ),
+            ])]),
+        ),
+    ]);
+    let group = AssetGroup::from_cbor(&raw)?;
+    let groups = BTreeMap::from([(id, group)]);
+    let paths = file_ids
+        .into_iter()
+        .map(|file_id| (file_id, vec!["fixture".to_owned()]))
+        .collect();
+    Ok((groups, paths))
+}
+
+fn group_inputs_fixture(
+    request: &Value,
+) -> Result<(BTreeMap<[u8; 16], AssetGroup>, BTreeMap<FileId, Vec<String>>)> {
+    let fixtures = if let Some(values) = request.get("groupInputs").and_then(Value::as_array) {
+        values.as_slice()
+    } else {
+        std::slice::from_ref(field_value(request, "groupInput")?)
+    };
+    let mut groups = BTreeMap::new();
+    let mut file_ids = BTreeMap::new();
+    for fixture in fixtures {
+        let (next_groups, next_file_ids) = group_fixture(fixture)?;
+        for (id, group) in next_groups {
+            if groups.insert(id, group).is_some() {
+                return Err(Error::new(ErrorCode::SchemaFieldInvalid));
+            }
+        }
+        for (file_id, path) in next_file_ids {
+            file_ids.entry(file_id).or_insert(path);
+        }
+    }
+    Ok((groups, file_ids))
+}
+
+fn registry_from_documents(documents: &BTreeMap<&str, Value>) -> Result<Registry> {
+    let encoded = documents
+        .iter()
+        .map(|(name, document)| {
+            serde_json::to_vec_pretty(document)
+                .map(|bytes| (*name, bytes))
+                .map_err(|_| Error::new(ErrorCode::RegistryInvalid))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let borrowed = encoded
+        .iter()
+        .map(|(name, bytes)| (*name, bytes.as_slice()))
+        .collect::<Vec<_>>();
+    Registry::from_json_files(&borrowed)
+}
+
+fn append_snapshot_entries(
+    document: &mut Value,
+    source: Option<&Value>,
+    add_owner: bool,
+) -> Result<()> {
+    let entries = document
+        .get_mut("entries")
+        .and_then(Value::as_array_mut)
+        .ok_or_else(|| Error::new(ErrorCode::RegistryInvalid))?;
+    for source in source
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        let mut entry = source.clone();
+        if add_owner {
+            entry
+                .as_object_mut()
+                .ok_or_else(|| Error::new(ErrorCode::RegistryInvalid))?
+                .entry("owner")
+                .or_insert_with(|| Value::String("OGVCS-002".to_owned()));
+        }
+        entries.push(entry);
+    }
+    entries.sort_by(|left, right| {
+        let left_key = (
+            left.get("namespace").and_then(Value::as_str).unwrap_or(""),
+            left.get("id").and_then(Value::as_str).unwrap_or(""),
+            left.get("major").and_then(Value::as_u64).unwrap_or(0),
+        );
+        let right_key = (
+            right.get("namespace").and_then(Value::as_str).unwrap_or(""),
+            right.get("id").and_then(Value::as_str).unwrap_or(""),
+            right.get("major").and_then(Value::as_u64).unwrap_or(0),
+        );
+        left_key.cmp(&right_key)
+    });
+    Ok(())
+}
+
+fn append_feature_entries(document: &mut Value, source: Option<&Value>) -> Result<()> {
+    let additions = source
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    if additions.is_empty() {
+        return Ok(());
+    }
+    let entries = document
+        .get_mut("entries")
+        .and_then(Value::as_array_mut)
+        .ok_or_else(|| Error::new(ErrorCode::RegistryInvalid))?;
+    entries.extend(additions);
+    entries.sort_by_key(|entry| entry.get("code").and_then(Value::as_u64).unwrap_or(u64::MAX));
+    let highest = entries
+        .iter()
+        .filter_map(|entry| entry.get("code").and_then(Value::as_u64))
+        .max()
+        .ok_or_else(|| Error::new(ErrorCode::RegistryInvalid))?;
+    document["unassigned"] = if highest < u64::from(u32::MAX) {
+        json!([{"from": highest + 1, "to": u32::MAX}])
+    } else {
+        json!([])
+    };
+    Ok(())
+}
+
+fn minimum_successful_ceiling<F>(callback: &F) -> Result<usize>
+where
+    F: Fn(usize) -> Result<()>,
+{
+    let mut low = 0usize;
+    let mut high = 67_108_864usize;
+    callback(high)?;
+    while low < high {
+        let middle = low + (high - low) / 2;
+        match callback(middle) {
+            Ok(()) => high = middle,
+            Err(error) if error.code == ErrorCode::LimitMemory => low = middle + 1,
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(low)
+}
+
+fn reference_of_kind(scenario: &Value, kind: ObjectKind) -> Result<ObjectRef> {
+    context_array(scenario, "objectLookup")?
+        .iter()
+        .filter_map(|entry| entry.get("ref"))
+        .map(object_ref_json)
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
+        .find(|reference| reference.kind == kind)
+        .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))
+}
+
+fn cbor_field(value: &Cbor, key: u64) -> Result<&Cbor> {
+    let Cbor::Map(fields) = value else {
+        return Err(Error::new(ErrorCode::SchemaFieldInvalid));
+    };
+    fields
+        .iter()
+        .find_map(|(candidate, value)| match candidate {
+            Cbor::UInt(candidate) if *candidate == key => Some(value),
+            _ => None,
+        })
+        .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))
+}
+
+fn cbor_optional_field(value: &Cbor, key: u64) -> Option<&Cbor> {
+    let Cbor::Map(fields) = value else {
+        return None;
+    };
+    fields.iter().find_map(|(candidate, value)| match candidate {
+        Cbor::UInt(candidate) if *candidate == key => Some(value),
+        _ => None,
+    })
+}
+
+fn cbor_uint(value: &Cbor) -> Result<u64> {
+    match value {
+        Cbor::UInt(value) => Ok(*value),
+        _ => Err(Error::new(ErrorCode::SchemaFieldInvalid)),
+    }
+}
+
+fn cbor_text(value: &Cbor) -> Result<&str> {
+    match value {
+        Cbor::Text(value) => Ok(value),
+        _ => Err(Error::new(ErrorCode::SchemaFieldInvalid)),
+    }
+}
+
+fn cbor_bytes(value: &Cbor) -> Result<&[u8]> {
+    match value {
+        Cbor::Bytes(value) => Ok(value),
+        _ => Err(Error::new(ErrorCode::SchemaFieldInvalid)),
+    }
+}
+
+fn cbor_fixed_bytes<const N: usize>(value: &Cbor) -> Result<[u8; N]> {
+    cbor_bytes(value)?
+        .try_into()
+        .map_err(|_| Error::new(ErrorCode::SchemaFieldInvalid))
+}
+
+fn cbor_array(value: &Cbor) -> Result<&[Cbor]> {
+    match value {
+        Cbor::Array(value) => Ok(value),
+        _ => Err(Error::new(ErrorCode::SchemaFieldInvalid)),
+    }
+}
+
+fn asset_groups_from_payload(
+    payload: &[u8],
+) -> Result<(BTreeMap<[u8; 16], AssetGroup>, BTreeMap<FileId, Vec<String>>)> {
+    let object = scan_metadata(payload, Limits::METADATA)?;
+    if validate_metadata_schema(&object)? != ObjectKind::AssetGroupSet {
+        return Err(Error::new(ErrorCode::SchemaFieldInvalid));
+    }
+    asset_groups_from_value(object.value())
+}
+
+fn asset_groups_from_value(
+    value: &Cbor,
+) -> Result<(BTreeMap<[u8; 16], AssetGroup>, BTreeMap<FileId, Vec<String>>)> {
+    let Cbor::Array(values) = cbor_field(value, 17)? else {
+        return Err(Error::new(ErrorCode::SchemaFieldInvalid));
+    };
+    let mut groups = BTreeMap::new();
+    let mut file_ids = BTreeMap::new();
+    for value in values {
+        let group = AssetGroup::from_cbor(value)?;
+        for (file_id, _) in &group.members {
+            file_ids
+                .entry(*file_id)
+                .or_insert_with(|| vec!["fixture".to_owned()]);
+        }
+        if groups.insert(group.id, group).is_some() {
+            return Err(Error::new(ErrorCode::SchemaFieldInvalid));
+        }
+    }
+    Ok((groups, file_ids))
+}
+
 fn primary_input(scenario: &Value) -> Result<&Value> {
     scenario
         .get("inputs")
@@ -1039,12 +3798,35 @@ fn repository_context<'a>(
                 .find(|reference| reference.kind == ObjectKind::Snapshot)
         })
         .unwrap_or(descriptor);
-    let mut context = RepositoryContext::new(lookup, descriptor, designated_root);
+    let mut context = RepositoryContext::new(
+        lookup,
+        descriptor,
+        designated_root,
+        path_case_mode(scenario)?,
+    );
     context.lifetime_records = lifetime;
     context.working_lifetime_additions = working;
     context.import_mappings = mappings;
     context.verify_content = true;
     Ok(context)
+}
+
+fn scenario_validation_mode(scenario: &Value) -> Result<ValidationMode> {
+    match context_value(scenario, "mode")?.as_str() {
+        Some("conformance") => Ok(ValidationMode::Conformance),
+        Some("production") => Ok(ValidationMode::Production),
+        _ => Err(configured_preflight_error()),
+    }
+}
+
+fn path_case_mode(scenario: &Value) -> Result<PathCaseMode> {
+    match context_value(scenario, "caseMode")?.as_str() {
+        Some("case-sensitive") => Ok(PathCaseMode::CaseSensitive),
+        Some("case-folded") => Ok(PathCaseMode::CaseFolded),
+        _ => Err(Error::new(ErrorCode::SchemaFieldInvalid)
+            .with_layer(1)
+            .with_stage(ValidationStage::ConfiguredResourcePreflight)),
+    }
 }
 
 fn parse_lifetime_records(scenario: &Value, key: &str) -> Result<Vec<LifetimeRecord>> {
@@ -1075,6 +3857,7 @@ fn parse_import_mappings(scenario: &Value) -> Result<Vec<ImportMapping>> {
         .iter()
         .map(|value| {
             Ok(ImportMapping {
+                descriptor: object_ref_json(field_value(value, "descriptor")?)?,
                 importer_profile: ProfileRef::from_str(value_string(value, "importerProfile")?)
                     .map_err(|_| Error::new(ErrorCode::SchemaFieldInvalid))?,
                 source_namespace_digest: hex_array(value_string(value, "sourceNamespaceDigest")?)?,
@@ -1086,10 +3869,7 @@ fn parse_import_mappings(scenario: &Value) -> Result<Vec<ImportMapping>> {
                     "published" => ImportState::Published,
                     _ => return Err(Error::new(ErrorCode::SchemaFieldInvalid)),
                 },
-                declared_mapping_key: value
-                    .get("mappingKey")
-                    .map(|value| value_string_value(value).and_then(hex_array))
-                    .transpose()?,
+                declared_mapping_key: hex_array(value_string(value, "mappingKey")?)?,
             })
         })
         .collect()
@@ -1152,11 +3932,11 @@ fn registry_from_snapshot(snapshot: &Value) -> Result<Registry> {
 
 fn registry_operations(value: &str) -> Result<Vec<Operation>> {
     Ok(match value {
-        "read-or-write" | "read-or-new-write" => {
+        "read-or-production-write" => {
             vec![Operation::Read, Operation::ProductionWrite]
         }
         "read" => vec![Operation::Read],
-        "new-write" | "production-write" => vec![Operation::ProductionWrite],
+        "production-write" => vec![Operation::ProductionWrite],
         "conformance" => vec![Operation::ConformanceWrite],
         _ => return Err(Error::new(ErrorCode::SchemaFieldInvalid)),
     })
@@ -1261,11 +4041,17 @@ fn artifact_metadata(
 
 fn normalized_expected(value: &Value) -> std::result::Result<Value, String> {
     match json_string(value, "result")? {
-        "accept" => Ok(json!({
-            "highestLayer": value.get("highestLayer").and_then(Value::as_u64)
-                .ok_or_else(|| "accepted outcome has no highestLayer".to_owned())?,
-            "result": "accept"
-        })),
+        "accept" => {
+            let mut outcome = json!({
+                "highestLayer": value.get("highestLayer").and_then(Value::as_u64)
+                    .ok_or_else(|| "accepted outcome has no highestLayer".to_owned())?,
+                "result": "accept"
+            });
+            if let Some(evidence) = value.get("evidence") {
+                outcome["evidence"] = evidence.clone();
+            }
+            Ok(outcome)
+        }
         "reject" => {
             let code_name = json_string(value, "code")?;
             let code = error_code(code_name).map_err(display_error)?;
@@ -1281,15 +4067,39 @@ fn normalized_expected(value: &Value) -> std::result::Result<Value, String> {
                     "rejected outcome uses unregistered site {code_name}@{layer}:{stage_name}"
                 ));
             }
-            Ok(json!({
+            let mut outcome = json!({
                 "code": code_name,
                 "layer": layer,
                 "result": "reject",
                 "stage": stage_name
-            }))
+            });
+            if let Some(evidence) = value.get("evidence") {
+                outcome["evidence"] = evidence.clone();
+            }
+            Ok(outcome)
         }
         other => Err(format!("unsupported expected result {other}")),
     }
+}
+
+fn diagnostic_outcome(
+    scenario_id: &str,
+    error: Error,
+) -> std::result::Result<Value, String> {
+    if !error.is_registered_site() {
+        return Err(format!(
+            "{scenario_id}: unregistered diagnostic site {}@{}:{}",
+            error.code.as_str(),
+            error.layer,
+            error.stage.as_str()
+        ));
+    }
+    Ok(json!({
+        "code": error.code.as_str(),
+        "layer": error.layer,
+        "result": "reject",
+        "stage": error.stage.as_str()
+    }))
 }
 
 fn expected_error(value: &Value) -> Result<Error> {
@@ -1402,6 +4212,24 @@ fn hex_array<const N: usize>(value: &str) -> Result<[u8; N]> {
         *slot = nibble(pair[0])? << 4 | nibble(pair[1])?;
     }
     Ok(output)
+}
+
+fn hex_vec(value: &str) -> Result<Vec<u8>> {
+    if value.len() % 2 != 0 {
+        return Err(Error::new(ErrorCode::SchemaFieldInvalid));
+    }
+    value
+        .as_bytes()
+        .chunks_exact(2)
+        .map(|pair| {
+            let nibble = |byte| match byte {
+                b'0'..=b'9' => Ok(byte - b'0'),
+                b'a'..=b'f' => Ok(byte - b'a' + 10),
+                _ => Err(Error::new(ErrorCode::SchemaFieldInvalid)),
+            };
+            Ok(nibble(pair[0])? << 4 | nibble(pair[1])?)
+        })
+        .collect()
 }
 
 fn hex_lower(bytes: &[u8]) -> String {

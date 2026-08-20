@@ -1,0 +1,10 @@
+{
+  "api": "validate-operation-mode",
+  "operation": "read",
+  "registry": "absent",
+  "requestedLayer": 2,
+  "schema": "ogvcs.repository-format.v1.operation-mode-input.v1",
+  "semanticProfiles": false,
+  "source": "objects/03-tree.cbor",
+  "surface": "tree-schema-decoder"
+}

@@ -1,0 +1,100 @@
+{
+  "context": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "candidateSnapshot": "ogvcs:v1:snapshot:sha256:89ca4f666e08515d4a42a808539e4186d72e794d0af72ca52c25f5174ee9c852",
+    "caseMode": "case-sensitive",
+    "designatedRoot": "ogvcs:v1:snapshot:sha256:89ca4f666e08515d4a42a808539e4186d72e794d0af72ca52c25f5174ee9c852",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "production",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 274,
+          "mediaType": "application/cbor",
+          "path": "objects/06-repository-descriptor.cbor",
+          "sha256": "677905a883b1f4ddd87fea27b5afc0293cccd2d2ea29cc4884e758e4a071b6e9"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+      },
+      {
+        "artifact": {
+          "bytes": 364,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/snapshot-graph-missing-change-before-profile-lifecycle/candidate.cbor",
+          "sha256": "c0fa449a9070c24c4f39a4808ec5523076b0b14286a08deaf3c96f61befec637"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:89ca4f666e08515d4a42a808539e4186d72e794d0af72ca52c25f5174ee9c852"
+      },
+      {
+        "artifact": {
+          "bytes": 52,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/snapshot-graph-missing-change-before-profile-lifecycle/empty-tree.cbor",
+          "sha256": "f0515d605a2c20abf9f321474bc861964b20faeaebbc41a2d8316ae4ffe2bb2b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a458f2bc72d5816dc3f7ee2cc8580eaaaed9a0208588ee66d18ea78f0c255c81"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
+      "registryVersion": 1
+    },
+    "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+    "requestedLayer": 2,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "expected": {
+    "code": "OBJECT_REFERENCE_MISSING",
+    "layer": 2,
+    "result": "reject",
+    "stage": "closure-and-reference-resolution"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "inputs": [
+    {
+      "bytes": 510,
+      "mediaType": "application/json",
+      "path": "scenarios/operations/snapshot-graph-missing-change-before-profile-lifecycle.json",
+      "sha256": "b0a991e8648deee6ef3c94e3ec9560b2a9e075bc07cf82682a4dcc7d4a4cad16"
+    },
+    {
+      "bytes": 4239,
+      "mediaType": "application/json",
+      "path": "scenarios/definitions/snapshot-graph-missing-change-before-profile-lifecycle.json",
+      "sha256": "bb9361d94b4674e9fe9b28f758dba8c117900455b65b19e097761fc0994207a2"
+    }
+  ],
+  "operation": "validate-repository-route",
+  "requirementIds": [
+    "OGVCS-002-AC-08",
+    "OGVCS-002-FR-09",
+    "OGVCS-002-FR-11",
+    "OGVCS-002-NFR-01",
+    "OGVCS-002-NFR-04"
+  ],
+  "resources": {
+    "recipe": {
+      "generator": "ogvcs.repository-validation-scenario-constructor/v1",
+      "parameters": {
+        "definition": "scenarios/definitions/snapshot-graph-missing-change-before-profile-lifecycle.json",
+        "definitionSha256": "bb9361d94b4674e9fe9b28f758dba8c117900455b65b19e097761fc0994207a2",
+        "runtimeHighWaterMarks": "not-asserted"
+      },
+      "seed": "55a176ed85357214d592cfd2f950421fce70e639a728af25fb05ee6975a7e15a"
+    },
+    "summary": {
+      "bytes": 5439,
+      "indexEntries": 0,
+      "items": 3,
+      "peakMemoryBytes": 0,
+      "scratchBytes": 0,
+      "summarySha256": "8ceb9f347c77eabf732d4706befbc6a654be86e10ff6afdf3e808deb7175df25",
+      "traversalEdges": 0
+    }
+  },
+  "scenarioId": "snapshot-graph-missing-change-before-profile-lifecycle",
+  "schemaVersion": "ogvcs.repository-format/validation-scenario/v1"
+}

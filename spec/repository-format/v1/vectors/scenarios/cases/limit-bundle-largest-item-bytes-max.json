@@ -1,6 +1,7 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [],
     "lifetimeRecords": [],
     "mode": "conformance",
@@ -143,7 +144,7 @@
         "path": "scenarios/outputs/limit-bundle-largest-item-bytes-max.json",
         "sha256": "3fd4db1f43b6cd57cf8ac3cb608b74266e97339189664f302a6a0910b70d975f"
       },
-      "summarySha256": "2e7aa75c0c430aadf22165361799eeaf7e7ddbc7413e6ce9ffe7b84d4e0fee37"
+      "summarySha256": "72df10bbab48ff204ea82b003f0f6e727a5e89b0c1e49ec995a4b91e92c94051"
     },
     "result": "accept"
   },
@@ -156,10 +157,10 @@
       "sha256": "a1b9df51f5ce5e6b12214f1777929f74daa64df36ea921ecc68c4b704a7cae7e"
     },
     {
-      "bytes": 7054,
+      "bytes": 7088,
       "mediaType": "application/json",
       "path": "scenarios/definitions/limit-bundle-largest-item-bytes-max.json",
-      "sha256": "a1be63114627479a43acf89adbe9d983b64ca661f465c7b7ef17520903ae0c96"
+      "sha256": "0701ca6207a7c87f001126ad7a4183a8cf0f47081d6c3105ca0b1746486cbe95"
     }
   ],
   "operation": "validate-bundle",
@@ -172,18 +173,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/limit-bundle-largest-item-bytes-max.json",
-        "definitionSha256": "a1be63114627479a43acf89adbe9d983b64ca661f465c7b7ef17520903ae0c96",
+        "definitionSha256": "0701ca6207a7c87f001126ad7a4183a8cf0f47081d6c3105ca0b1746486cbe95",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "751f3bbb86aa2592097a28133d8bf2687ce534a9786619de767242a7153e1397"
     },
     "summary": {
-      "bytes": 12943,
+      "bytes": 12977,
       "indexEntries": 0,
       "items": 12,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "2e7aa75c0c430aadf22165361799eeaf7e7ddbc7413e6ce9ffe7b84d4e0fee37",
+      "summarySha256": "72df10bbab48ff204ea82b003f0f6e727a5e89b0c1e49ec995a4b91e92c94051",
       "traversalEdges": 0
     }
   },

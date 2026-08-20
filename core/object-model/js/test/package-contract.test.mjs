@@ -70,7 +70,11 @@ test('packed public package and fixture peer install and run offline without rep
     'registries/profiles.json',
     'src/bundle-scratch.js',
     'src/bundle-spool.js',
-    'src/index.js'
+    'src/index.js',
+    'unicode/age-15.0.0-intervals.json',
+    'unicode/DerivedAge-15.0.0.txt',
+    'unicode/UNICODE-LICENSE.txt',
+    'unicode/NOTICE.md'
   ]) assert.equal(fileNames.has(required), true, `packed artifact omitted ${required}`);
   assert.equal([...fileNames].some(name => name.startsWith('test/')), false);
 
@@ -96,7 +100,9 @@ test('packed public package and fixture peer install and run offline without rep
   const formatFileNames = new Set(formatPackResult[0].files.map(file => file.path));
   for (const required of [
     'index.mjs', 'LICENSE', 'repository-format.cddl', 'registries/object-kinds.json',
-    'vectors/manifest.json', 'vectors/logical-bundles/valid-supplied-closure.cborseq'
+    'vectors/manifest.json', 'vectors/logical-bundles/valid-supplied-closure.cborseq',
+    'vectors/unicode/age-15.0.0-intervals.json', 'unicode/DerivedAge-15.0.0.txt',
+    'unicode/UNICODE-LICENSE.txt', 'unicode/NOTICE.md'
   ]) assert.equal(formatFileNames.has(required), true, `packed format artifact omitted ${required}`);
 
   await writeFile(join(consumer, 'package.json'), '{"private":true,"type":"module"}\n', 'utf8');
@@ -107,6 +113,21 @@ test('packed public package and fixture peer install and run offline without rep
   assert.equal(installed.code, 0, installed.stderr || installed.stdout);
 
   const packageRoot = join(consumer, 'node_modules', '@opengamevcs', 'object-model');
+  const formatRoot = join(consumer, 'node_modules', '@opengamevcs', 'repository-format-v1');
+  for (const name of [
+    'DerivedAge-15.0.0.txt', 'UNICODE-LICENSE.txt', 'NOTICE.md'
+  ]) {
+    assert.deepEqual(
+      await readFile(join(packageRoot, 'unicode', name)),
+      await readFile(join(formatRoot, 'unicode', name)),
+      `installed Unicode authority differs for ${name}`
+    );
+  }
+  assert.deepEqual(
+    await readFile(join(packageRoot, 'unicode', 'age-15.0.0-intervals.json')),
+    await readFile(join(formatRoot, 'vectors', 'unicode', 'age-15.0.0-intervals.json')),
+    'installed compact Unicode authority differs'
+  );
   for (const example of ['reference-roundtrip.mjs', 'registry-inspection.mjs']) {
     const result = await run(process.execPath, [join(packageRoot, 'examples', example)], { cwd: consumer, env: environment });
     assert.equal(result.code, 0, result.stderr || result.stdout);
@@ -134,7 +155,7 @@ await copyFile(new URL('logical-bundles/valid-supplied-closure.cborseq', vectors
 const registry = await loadBundledRegistry();
 const result = await verifyLogicalBundleFile(process.argv[2], {
   registry,
-  mode: 'conformance',
+  operation: 'conformance',
   scratchDirectory: process.argv[3],
   maxMemoryBytes: 16_777_216,
   maxScratchBytes: 16_777_216
@@ -151,6 +172,7 @@ process.stdout.write(JSON.stringify({ objectCount: result.objectCount, status: '
     join(packageRoot, 'bin', 'ogvcs-object.mjs'),
     'bundle', 'verify', bundlePath,
     '--scratch', scratchPath,
+    '--operation', 'conformance',
     '--max-memory-bytes', '16777216',
     '--max-scratch-bytes', '16777216'
   ], { cwd: consumer, env: environment });

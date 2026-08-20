@@ -15,6 +15,7 @@ import { registryAssignmentDecision } from './registry.js';
 import { decodeMetadata, validateBundleItem, validateKnownSchema, validateLogicalRecord } from './schema.js';
 import { ResourceGuard, asLimit, compareBytes } from './scale-util.js';
 import { Digest, KIND_NAMES, ObjectRef, ProfileRef, equalBytes, toHex } from './types.js';
+import { codecValidationContext } from './validation-mode.js';
 
 const BUNDLE_LIMIT_NAMES = Object.freeze({
   sequenceBytes: 'bundle-sequence-bytes',
@@ -107,12 +108,18 @@ function configured(options) {
   const containerItems = configuredHardLimit('manifest-chunks', options.hardLimits?.['manifest-chunks']);
   const scannerValueBytes = Math.min(genericValueBytes,
     Math.max(1, Math.floor((maxMemoryBytes - residentBaseBytes) / 4)));
+  // A scanner value may coexist with its decoded/text projections and every
+  // active or retained canonical map-key capture. Give captures one explicit
+  // share of the same aggregate remainder; the visitor accounts capacities
+  // (including transient replacement buffers) within this share.
+  const scannerCaptureBytes = scannerValueBytes;
   if (maxOpenRuns < 2 || readChunkBytes < 1 || maxDecodedItemBytes < 1) {
     fail('SCHEMA_FIELD_INVALID', { layer: 1, stage: 'configured-resource-preflight' });
   }
   return {
     ...limits, maxMemoryBytes, maxScratchBytes, maxDecodedItemBytes, maxRunBytes,
     maxOpenRuns, readChunkBytes, writeBufferBytes, residentBaseBytes, scannerValueBytes,
+    scannerCaptureBytes,
     chunkBytes, metadataBytes, genericValueBytes, nestingDepth, containerItems, guard
   };
 }
@@ -360,6 +367,7 @@ async function spoolInput(input, scratch, limits) {
     maxChunkBytes: limits.chunkBytes,
     maxMetadataBytes: limits.metadataBytes,
     maxValueBytes: limits.scannerValueBytes,
+    maxCaptureBytes: limits.scannerCaptureBytes,
     maxContainerItems: limits.containerItems,
     maxNesting: Math.max(1, limits.nestingDepth),
     payloadChunkBytes: limits.readChunkBytes,
@@ -555,7 +563,7 @@ async function preflightLayerOne(spooled, scratch, limits, state, names, registr
       maxContainerItems: limits.containerItems,
       maxDepth: Math.max(1, limits.nestingDepth)
     });
-    const writer = createLogicalRecordHashWriter(recordType.type, { registry: new Set([recordType.type]) });
+    const writer = createLogicalRecordHashWriter(recordType.type);
     writer.update(encoded);
     const actual = writer.finish();
     if (!equalBytes(identity, actual.bytes)) {
@@ -609,7 +617,7 @@ async function findObject(index, ref) {
 
 async function processSpooled(spooled, scratch, limits, options) {
   const names = options.registry?.kindNames ?? KIND_NAMES;
-  const operation = options.mode === 'production' ? 'production-write' : 'conformance';
+  const operation = options.operation;
   const first = await readItemIndex(scratch, spooled.itemFile, 0);
   if (first.type !== 1) fail('BUNDLE_SEQUENCE_INVALID', { layer: 1 });
   const header = (await readItem(scratch, spooled.inputFile, first, limits)).value;
@@ -624,15 +632,15 @@ async function processSpooled(spooled, scratch, limits, options) {
   const knownSchema = deferredStageCollector(2, 'known-schema');
   const registrySemantics = deferredStageCollector(3, 'registry-semantics');
   const headerValidation = knownSchema.observe(() => validateBundleItem(header, {
-    registry: options.registry, hardLimits: options.hardLimits, operation, semantic: false
+    hardLimits: options.hardLimits, semantic: false
   }));
-  if (headerValidation) registrySemantics.observe(() => validateBundleItem(header, {
+  if (options.registry && headerValidation) registrySemantics.observe(() => validateBundleItem(header, {
     registry: options.registry, hardLimits: options.hardLimits, operation
   }));
   const trailerValidation = knownSchema.observe(() => validateBundleItem(trailer, {
-    registry: options.registry, hardLimits: options.hardLimits, operation, semantic: false
+    hardLimits: options.hardLimits, semantic: false
   }));
-  if (trailerValidation) registrySemantics.observe(() => validateBundleItem(trailer, {
+  if (options.registry && trailerValidation) registrySemantics.observe(() => validateBundleItem(trailer, {
     registry: options.registry, hardLimits: options.hardLimits, operation
   }));
 
@@ -679,9 +687,7 @@ async function processSpooled(spooled, scratch, limits, options) {
       const fixedDecodeBytes = limits.residentBaseBytes + payload.length * 2;
       limits.guard.memory(fixedDecodeBytes);
       const decoded = knownSchema.observe(() => decodeMetadata(payload, {
-        registry: options.registry,
         hardLimits: options.hardLimits,
-        operation,
         semantic: false,
         maxWorkingBytes: limits.maxMemoryBytes - fixedDecodeBytes
       }));
@@ -690,7 +696,7 @@ async function processSpooled(spooled, scratch, limits, options) {
         if (!sameKind) knownSchema.observe(() => fail('OBJECT_REFERENCE_KIND_MISMATCH', {
           layer: 2, stage: 'known-schema', offset: envelope.payloadOffset
         }));
-        registrySemantics.observe(() => validateKnownSchema(decoded.value, decoded.kind, {
+        if (options.registry) registrySemantics.observe(() => validateKnownSchema(decoded.value, decoded.kind, {
           registry: options.registry, hardLimits: options.hardLimits, operation
         }));
         if (sameKind) for (const child of iterateObjectReferences(envelope.ref.kind, decoded.value)) {
@@ -723,18 +729,18 @@ async function processSpooled(spooled, scratch, limits, options) {
     if (item.type !== expectedType(itemIndex, state)) fail('BUNDLE_SEQUENCE_INVALID', { layer: 1, offset: item.offset });
     const { value } = await readItem(scratch, spooled.inputFile, item, limits);
     const itemValidation = knownSchema.observe(() => validateBundleItem(value, {
-      registry: options.registry, hardLimits: options.hardLimits, operation, semantic: false
+      hardLimits: options.hardLimits, semantic: false
     }));
-    if (itemValidation) registrySemantics.observe(() => validateBundleItem(value, {
+    if (options.registry && itemValidation) registrySemantics.observe(() => validateBundleItem(value, {
       registry: options.registry, hardLimits: options.hardLimits, operation
     }));
     if (uint(value.get(2)) !== BigInt(ordinal)) fail('BUNDLE_SEQUENCE_INVALID', { layer: 1, offset: item.offset });
     const identity = Digest.fromMap(value.get(3));
     const record = value.get(4);
     const validation = knownSchema.observe(() => validateLogicalRecord(record, {
-      registry: options.registry, hardLimits: options.hardLimits, operation, semantic: false
+      hardLimits: options.hardLimits, semantic: false
     }));
-    if (validation) registrySemantics.observe(() => validateLogicalRecord(record, {
+    if (options.registry && validation) registrySemantics.observe(() => validateLogicalRecord(record, {
       registry: options.registry, hardLimits: options.hardLimits, operation
     }));
     await logicalSorter.add(logicalLookupRecord(identity, ordinal));
@@ -762,9 +768,9 @@ async function processSpooled(spooled, scratch, limits, options) {
     if (item.type !== expectedType(itemIndex, state)) fail('BUNDLE_SEQUENCE_INVALID', { layer: 1, offset: item.offset });
     const { value } = await readItem(scratch, spooled.inputFile, item, limits);
     const validation = knownSchema.observe(() => validateBundleItem(value, {
-      registry: options.registry, hardLimits: options.hardLimits, operation, semantic: false
+      hardLimits: options.hardLimits, semantic: false
     }));
-    if (validation) registrySemantics.observe(() => validateBundleItem(value, {
+    if (options.registry && validation) registrySemantics.observe(() => validateBundleItem(value, {
       registry: options.registry, hardLimits: options.hardLimits, operation
     }));
     if (uint(value.get(2)) !== BigInt(ordinal)) fail('BUNDLE_SEQUENCE_INVALID', { layer: 1, offset: item.offset });
@@ -868,7 +874,7 @@ async function processSpooled(spooled, scratch, limits, options) {
 
   registrySemantics.throwSelected();
   return Object.freeze({
-    highestLayer: 2,
+    highestLayer: options.registry ? 3 : 2,
     bytes: spooled.bytes,
     items: spooled.items,
     objectCount: state.objectCount,
@@ -892,6 +898,8 @@ async function processSpooled(spooled, scratch, limits, options) {
  * caller supplied; all private files are removed on success or failure.
  */
 export async function verifyLogicalBundleStream(input, options = {}) {
+  const semantic = codecValidationContext(options);
+  options = { ...options, ...semantic };
   if (options.semanticValidator !== undefined) {
     fail('SCHEMA_FIELD_INVALID', { layer: 1, stage: 'configured-resource-preflight' });
   }
@@ -936,6 +944,8 @@ async function* fileParts(handle, initial, limits) {
 
 /** Same-handle, no-follow regular-file wrapper for the spooled verifier. */
 export async function verifyLogicalBundleFile(path, options = {}) {
+  const semantic = codecValidationContext(options);
+  options = { ...options, ...semantic };
   if (typeof path !== 'string' || path.length === 0) {
     fail('SCHEMA_FIELD_INVALID', { layer: 1, stage: 'configured-resource-preflight' });
   }

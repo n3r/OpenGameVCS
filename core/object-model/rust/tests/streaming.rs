@@ -313,6 +313,52 @@ fn declared_object_item(kind: u64, length: u32) -> Vec<u8> {
     out
 }
 
+fn nested_map_key_item(depth: usize) -> Vec<u8> {
+    let mut value = Cbor::UInt(0);
+    for _ in 0..depth {
+        value = Cbor::Map(vec![(value, Cbor::UInt(0))]);
+    }
+    encode_canonical_with_limits(
+        &Cbor::Map(vec![
+            (Cbor::UInt(0), Cbor::UInt(1)),
+            (Cbor::UInt(1), Cbor::UInt(3)),
+            (Cbor::UInt(2), Cbor::UInt(0)),
+            (Cbor::UInt(3), Cbor::Bytes(vec![0; 32])),
+            (Cbor::UInt(4), value),
+        ]),
+        Limits::BUNDLE_ITEM,
+    )
+    .unwrap()
+}
+
+#[test]
+fn bundle_reader_admits_aggregate_nested_map_key_capture_capacity_before_allocation() {
+    let encoded = nested_map_key_item(8);
+    let reduced = BundleLimits {
+        max_value_bytes: 64,
+        max_capture_bytes: 511,
+        max_nesting: 10,
+        ..BundleLimits::HARD
+    };
+    let mut visitor = CountingVisitor::default();
+    let error = visit_logical_bundle(Cursor::new(&encoded), &mut visitor, reduced).unwrap_err();
+    assert_eq!(error.code, ErrorCode::LimitMemory);
+    assert_eq!(error.layer, 1);
+    assert_eq!(error.stage, ValidationStage::ConfiguredResourcePreflight);
+
+    let admitted = BundleLimits {
+        max_capture_bytes: 512,
+        ..reduced
+    };
+    assert_eq!(
+        visit_logical_bundle(Cursor::new(&encoded), &mut visitor, admitted).unwrap(),
+        BundleSummary {
+            items: 1,
+            bytes: encoded.len(),
+        }
+    );
+}
+
 #[test]
 fn bundle_read_visitor_streams_payload_and_distinguishes_contextual_limits() {
     let payload: Vec<u8> = (0..170_000).map(|index| (index % 251) as u8).collect();

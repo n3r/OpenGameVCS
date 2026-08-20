@@ -1,0 +1,41 @@
+{
+  "api": "validate-resource-reservation",
+  "assertNoPartialState": true,
+  "cluster": "many-invalid-error-selection",
+  "diagnosticWorkspace": {
+    "assertInputUnchanged": true,
+    "derivation": "one-byte-below-conservative-retained-cost-v1",
+    "recoveryExpected": {
+      "code": "SCHEMA_FIELD_UNKNOWN",
+      "layer": 2,
+      "stage": "known-schema"
+    },
+    "unknownFieldCount": 64
+  },
+  "evidenceRequired": {
+    "noPartialState": true,
+    "routeEvidence": [
+      {
+        "noPartialState": true,
+        "recoveryKind": "stateless-reinvoke",
+        "route": "repository-object-lookup-validate-all",
+        "succeeded": true
+      },
+      {
+        "noPartialState": true,
+        "recoveryKind": "stateless-reinvoke",
+        "route": "validate-known-schema",
+        "succeeded": true
+      }
+    ]
+  },
+  "fixture": "bounded-reduced-retention-v1",
+  "memoryCeiling": {
+    "derivation": "one-byte-below-conservative-retained-cost-v1"
+  },
+  "routes": [
+    "repository-object-lookup-validate-all",
+    "validate-known-schema"
+  ],
+  "schema": "ogvcs.repository-format.v1.resource-reservation-input.v1"
+}

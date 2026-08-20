@@ -59,7 +59,8 @@ test('CLI inspects, identifies, and verifies a metadata object', async () => {
   assert.equal(identified.exitCode, CLI_EXIT.success);
   assert.equal(identified.value.result.objectRef, inspected.value.result.objectRef);
 
-  const verified = await invoke(['verify', 'object', vector.payloadPath, '--ref', inspected.value.result.objectRef]);
+  const verified = await invoke(['verify', 'object', vector.payloadPath, '--ref', inspected.value.result.objectRef,
+    '--operation', 'conformance']);
   assert.equal(verified.exitCode, CLI_EXIT.success);
   assert.equal(verified.value.result.highestLayer, 3);
   assert.equal(verified.value.result.status, 'valid');
@@ -68,7 +69,7 @@ test('CLI inspects, identifies, and verifies a metadata object', async () => {
     ['inspect', vector.payloadPath, '--max-memory-bytes', '1'],
     ['id', vector.payloadPath, '--kind', 'tree', '--max-memory-bytes', '1'],
     ['verify', 'object', vector.payloadPath, '--ref', inspected.value.result.objectRef,
-      '--max-memory-bytes', '1']
+      '--operation', 'conformance', '--max-memory-bytes', '1']
   ]) {
     const limited = await invoke(args);
     assert.equal(limited.exitCode, CLI_EXIT.resource);
@@ -92,7 +93,7 @@ test('CLI verifies a canonical tree through the bounded raw-file path', async t 
   t.after(() => rm(directory, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 }));
   const descriptor = 'ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545';
   const verified = await invoke(['tree', 'verify', 'objects/03-tree.cbor', '--descriptor', descriptor,
-    '--scratch', directory, '--max-memory-bytes', '1048576']);
+    '--scratch', directory, '--operation', 'conformance', '--max-memory-bytes', '1048576']);
   assert.equal(verified.exitCode, CLI_EXIT.success);
   assert.equal(verified.value.command, 'tree verify');
   assert.equal(verified.value.result.kind, 3);
@@ -111,10 +112,10 @@ test('CLI verifies supplied closure through the bounded regular-file path and re
   t.after(() => rm(directory, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 }));
   const valid = await invoke([
     'bundle', 'verify', 'logical-bundles/valid-supplied-closure.cborseq', '--scratch', directory,
-    '--max-memory-bytes', '16777216', '--max-scratch-bytes', '16777216'
+    '--operation', 'conformance', '--max-memory-bytes', '16777216', '--max-scratch-bytes', '16777216'
   ]);
   assert.equal(valid.exitCode, CLI_EXIT.success);
-  assert.equal(valid.value.result.highestLayer, 2);
+  assert.equal(valid.value.result.highestLayer, 3);
   assert.equal(valid.value.result.objectCount, 2);
   assert.equal(valid.value.result.format, 'logical-bundle-v1');
   assert.equal(valid.value.result.claim, 'supplied-closure');
@@ -124,7 +125,7 @@ test('CLI verifies supplied closure through the bounded regular-file path and re
 
   const invalid = await invoke([
     'bundle', 'verify', 'logical-bundles/invalid-closure-missing.cborseq', '--scratch', directory,
-    '--max-scratch-bytes', '16777216'
+    '--operation', 'conformance', '--max-scratch-bytes', '16777216'
   ]);
   assert.equal(invalid.exitCode, CLI_EXIT.invalid);
   assert.equal(invalid.value.ok, false);

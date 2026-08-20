@@ -1,0 +1,14 @@
+{
+  "api": "validate-operation-mode",
+  "expectedProfileFamily": "chunking",
+  "operation": "production-write",
+  "profile": "profile-state.test/chunking-conformance@1",
+  "registry": "bundled",
+  "registryFixture": {
+    "path": "registries/index.json",
+    "scenarioId": "registry-conformance-production"
+  },
+  "schema": "ogvcs.repository-format.v1.operation-mode-input.v1",
+  "source": "lifecycle/manifest-chunking-conformance.cbor",
+  "surface": "content-manifest"
+}

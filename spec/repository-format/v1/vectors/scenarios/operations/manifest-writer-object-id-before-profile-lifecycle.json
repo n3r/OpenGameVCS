@@ -1,0 +1,26 @@
+{
+  "api": "write-content-manifest",
+  "chunkArtifact": "lifecycle/chunk-object-id-mismatch.bin",
+  "chunkProfile": "profile-state.test/chunking-conformance@1",
+  "declaredParts": "1",
+  "logicalLength": "12",
+  "maxItems": 1,
+  "operation": "production-write",
+  "outputDisposition": {
+    "orderedStagingSink": "aborted-discard",
+    "successCommit": false
+  },
+  "parts": [
+    {
+      "chunk": "ogvcs:v1:chunk:sha256:944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5",
+      "length": "12"
+    }
+  ],
+  "registry": "bundled",
+  "registryFixture": {
+    "path": "registries/index.json",
+    "scenarioId": "registry-conformance-production"
+  },
+  "schema": "ogvcs.repository-format.v1.manifest-writer-input.v1",
+  "wholeFileSha256": "9033b2344e924d278334018b2b9d51a3357f827016320f41a0ca294973474d9e"
+}

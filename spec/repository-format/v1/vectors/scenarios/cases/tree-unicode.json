@@ -1,6 +1,7 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [],
     "lifetimeRecords": [],
     "mode": "conformance",
@@ -61,7 +62,7 @@
         "path": "scenarios/outputs/tree-unicode.json",
         "sha256": "76e67d880f3b46fe686d5fdce0d393d59a3062a9f3c43ebaf9ff75da660d2ffd"
       },
-      "summarySha256": "c933f3459ecebd147c7de1be7a1b1ece5d94fa7f777a26255b9ccbd195c313a0"
+      "summarySha256": "782275488516a3fc86484cb12651258e0914987bc983a305db3ae3aa94dc6bb8"
     },
     "result": "accept"
   },
@@ -74,10 +75,10 @@
       "sha256": "a1ec18e7659618fff0ed09652ad59b62661d2a49c9c75a0478c9fd9f44cea334"
     },
     {
-      "bytes": 3413,
+      "bytes": 3447,
       "mediaType": "application/json",
       "path": "scenarios/definitions/tree-unicode.json",
-      "sha256": "16dd791160ccaaf9bc60da07b63612188a9be9563ebc310bcfb3fac5d2c69d23"
+      "sha256": "73faa4ad987fc1a37801eef461e7ecfd4b7aee5721ceca44e827985f104d2e74"
     }
   ],
   "operation": "validate-object",
@@ -89,18 +90,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/tree-unicode.json",
-        "definitionSha256": "16dd791160ccaaf9bc60da07b63612188a9be9563ebc310bcfb3fac5d2c69d23",
+        "definitionSha256": "73faa4ad987fc1a37801eef461e7ecfd4b7aee5721ceca44e827985f104d2e74",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "0da66229fbf00fa60200ba24295a8be4e32ac8a45a235d4b084ae09b284cda58"
     },
     "summary": {
-      "bytes": 4261,
+      "bytes": 4295,
       "indexEntries": 0,
       "items": 4,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "c933f3459ecebd147c7de1be7a1b1ece5d94fa7f777a26255b9ccbd195c313a0",
+      "summarySha256": "782275488516a3fc86484cb12651258e0914987bc983a305db3ae3aa94dc6bb8",
       "traversalEdges": 0
     }
   },

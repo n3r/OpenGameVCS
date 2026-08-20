@@ -1,6 +1,7 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [],
     "lifetimeRecords": [],
     "mode": "conformance",
@@ -132,7 +133,7 @@
         "path": "scenarios/outputs/mutation-systematic-single-bit.json",
         "sha256": "0bb5dcec24426f8d162043f9b7fa625062bb0f0c7c87d235db58ceb8bf59d6ed"
       },
-      "summarySha256": "98dc7b8fe441002e8c4811b1fc9d3f9bf61ee19caf92778761e0b5876b34be93"
+      "summarySha256": "73aa53665edb7d2926e2b85f2f2f127c7d84ed9d9045211c3ba2ed2a50c0c783"
     },
     "result": "accept"
   },
@@ -145,10 +146,10 @@
       "sha256": "1c08ca75955d354fb9b4adc96e3bd8b80584c912fdf0dc539f0a2630e94923b5"
     },
     {
-      "bytes": 6613,
+      "bytes": 6647,
       "mediaType": "application/json",
       "path": "scenarios/definitions/mutation-systematic-single-bit.json",
-      "sha256": "a8aa69302bebf02e8c01222e0e7941fa65fc8018faf3c0cb466d99c9e06448bd"
+      "sha256": "8f79d5e8be39829eda219cd94810fcab3e312ddcd08986045d6b746363f10ffd"
     }
   ],
   "operation": "canonical-scan",
@@ -161,18 +162,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/mutation-systematic-single-bit.json",
-        "definitionSha256": "a8aa69302bebf02e8c01222e0e7941fa65fc8018faf3c0cb466d99c9e06448bd",
+        "definitionSha256": "8f79d5e8be39829eda219cd94810fcab3e312ddcd08986045d6b746363f10ffd",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "236b5d67a2b52141640721f1dbae6fe5434d13ad2694e2e1b9a7ccd88d30da54"
     },
     "summary": {
-      "bytes": 19420,
+      "bytes": 19454,
       "indexEntries": 0,
       "items": 12,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "98dc7b8fe441002e8c4811b1fc9d3f9bf61ee19caf92778761e0b5876b34be93",
+      "summarySha256": "73aa53665edb7d2926e2b85f2f2f127c7d84ed9d9045211c3ba2ed2a50c0c783",
       "traversalEdges": 0
     }
   },

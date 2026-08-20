@@ -2,6 +2,7 @@
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
     "candidateSnapshot": "ogvcs:v1:snapshot:sha256:ae3e77701478512c656fd9f982dfc02285a43165fe811c51c5dd87023e6412f1",
+    "caseMode": "case-sensitive",
     "designatedRoot": "ogvcs:v1:snapshot:sha256:81f9465991e41cc08f3466d7b5054fc5553727ca2138e9815f1972b2fa7a6da8",
     "importMappings": [],
     "lifetimeRecords": [
@@ -145,10 +146,10 @@
       "sha256": "b60489e8788d1a27d714b47406389b522c5c275aa2ea56608fac2a03d1a02262"
     },
     {
-      "bytes": 7576,
+      "bytes": 7610,
       "mediaType": "application/json",
       "path": "scenarios/definitions/group-external-key-duplicate.json",
-      "sha256": "e666d822367581a137aed5195bf1f9a3dc8312d683f26530ad9e319f886579b1"
+      "sha256": "322a95a7abba7ebbea96ebf71ff72354737a66c151abec98458449c2cafcee75"
     }
   ],
   "operation": "validate-repository",
@@ -161,18 +162,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/group-external-key-duplicate.json",
-        "definitionSha256": "e666d822367581a137aed5195bf1f9a3dc8312d683f26530ad9e319f886579b1",
+        "definitionSha256": "322a95a7abba7ebbea96ebf71ff72354737a66c151abec98458449c2cafcee75",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "3497821e28c5153b20dd07a79c7bba71526628b4a6d8c921571103527c088386"
     },
     "summary": {
-      "bytes": 11012,
+      "bytes": 11046,
       "indexEntries": 0,
       "items": 11,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "9533cc295f629e3504ec8149bd6d705f38a00f8d80192ee00d5629865669637b",
+      "summarySha256": "9c57a81cf241069557538e9191dc60a3e716f9acdff3f4c4ac45c1be22599b1d",
       "traversalEdges": 0
     }
   },

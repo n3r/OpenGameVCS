@@ -29,6 +29,55 @@ async function* fragmented(bytes, width = 1) {
   for (let offset = 0; offset < bytes.length; offset += width) yield bytes.subarray(offset, offset + width);
 }
 
+function authenticatedObjectBundle(objects, role) {
+  const ordered = [...objects].sort((left, right) => Buffer.compare(
+    encodeCanonical(left.ref.toMap()), encodeCanonical(right.ref.toMap())
+  ));
+  const objectItems = ordered.map((item, ordinal) => new Map([
+    [0, 1], [1, 2], [2, ordinal], [3, item.ref.toMap()], [4, item.payload]
+  ]));
+  const rootItems = ordered.map((item, ordinal) => new Map([
+    [0, 1], [1, 4], [2, ordinal], [3, 1], [4, item.ref.toMap()], [5, role.toMap()]
+  ]));
+  let sequenceBytes = 0;
+  let largestItemBytes = 0;
+  for (let iteration = 0; iteration < 12; iteration += 1) {
+    const header = new Map([
+      [0, 1], [1, 1], [2, 1], [3, ordered.length], [4, 0], [5, ordered.length],
+      [6, new Map([[0, sequenceBytes], [1, largestItemBytes], [2, 0], [3, ordered.length]])]
+    ]);
+    const prefix = [header, ...objectItems, ...rootItems].map(encodeCanonical);
+    const trailer = encodeCanonical(new Map([
+      [0, 1], [1, 5], [2, ordered.length], [3, 0], [4, ordered.length],
+      [5, prefix.length + 1], [6, hashBundleTranscript(prefix).toMap()]
+    ]));
+    const all = [...prefix, trailer];
+    const nextBytes = all.reduce((sum, item) => sum + item.length, 0);
+    const nextLargest = Math.max(...all.map(item => item.length));
+    if (nextBytes === sequenceBytes && nextLargest === largestItemBytes) return Buffer.concat(all);
+    sequenceBytes = nextBytes;
+    largestItemBytes = nextLargest;
+  }
+  assert.fail('bundle accounting failed to converge');
+}
+
+function orderedBundleSections(objects, roots) {
+  const orderedObjects = [...objects].sort((left, right) => Buffer.compare(
+    encodeCanonical(left.ref.toMap()), encodeCanonical(right.ref.toMap())
+  ));
+  const orderedRoots = [...roots].sort((left, right) => {
+    const kind = left.kind - right.kind;
+    if (kind !== 0) return kind;
+    const identity = Buffer.compare(
+      encodeCanonical(left.identity.toMap()), encodeCanonical(right.identity.toMap())
+    );
+    return identity !== 0 ? identity : Buffer.compare(
+      encodeCanonical(left.role.toMap()), encodeCanonical(right.role.toMap())
+    );
+  });
+  return { objects: orderedObjects, roots: orderedRoots };
+}
+
 async function waitFor(directory, predicate, maximum = 2_000) {
   const started = Date.now();
   while (Date.now() - started < maximum) {
@@ -44,12 +93,12 @@ test('spooled stream and same-handle file verification match every valid bundle 
   const registry = await loadBundledRegistry();
   for (const name of ['valid-supplied-closure', 'valid-all-families', 'scenario-bundle-zero-sections']) {
     const payload = await bundle(name);
-    const expected = verifyLogicalBundle(payload, { registry, mode: 'conformance' });
+    const expected = verifyLogicalBundle(payload, { registry, operation: 'conformance' });
     const streamed = await verifyLogicalBundleStream(fragmented(payload, 7), {
       scratchDirectory: directory,
       maxScratchBytes: 16_777_216,
       registry,
-      mode: 'conformance'
+      operation: 'conformance'
     });
     assert.deepEqual(coreResult(streamed), expected, name);
     assert.ok(streamed.metrics.peakScratchBytes > 0);
@@ -63,7 +112,7 @@ test('spooled stream and same-handle file verification match every valid bundle 
       scratchDirectory: directory,
       maxScratchBytes: 16_777_216,
       registry,
-      mode: 'conformance'
+      operation: 'conformance'
     });
     assert.deepEqual(coreResult(fromFile), expected, `${name} file`);
     await rm(path);
@@ -86,14 +135,17 @@ test('successful closure lookup spans many bounded external-sort merge runs', as
     objects.push({ ref, payload });
     roots.push({ kind: 1, identity: ref, role });
   }
-  const encoded = encodeLogicalBundle({ objects, roots }, { registry, mode: 'conformance' });
+  const encoded = encodeLogicalBundle(
+    orderedBundleSections(objects, roots),
+    { registry, operation: 'conformance' }
+  );
   const result = await verifyLogicalBundleStream(fragmented(encoded, 29), {
     scratchDirectory: directory,
     maxScratchBytes: 16_777_216,
     maxRunBytes: 420,
     maxOpenRuns: 4,
     registry,
-    mode: 'conformance'
+    operation: 'conformance'
   });
   assert.equal(result.objectCount, 512);
   assert.equal(result.rootCount, 512);
@@ -120,7 +172,7 @@ test('canonical object ordering is checked independently of ordinals and transcr
       scratchDirectory: directory,
       maxScratchBytes: 16_777_216,
       registry,
-      mode: 'conformance'
+      operation: 'conformance'
     }),
     error => error instanceof OgvcsError && error.code === 'BUNDLE_SEQUENCE_INVALID'
   );
@@ -147,7 +199,7 @@ test('complete sequence ordering precedes an earlier object identity mismatch', 
   trailer.set(6, hashBundleTranscript(prefix).toMap());
   const changed = Buffer.concat([...prefix, encodeCanonical(trailer)]);
   assert.throws(
-    () => verifyLogicalBundle(changed, { registry, mode: 'conformance' }),
+    () => verifyLogicalBundle(changed, { registry, operation: 'conformance' }),
     error => error instanceof OgvcsError && error.code === 'BUNDLE_SEQUENCE_INVALID' && error.layer === 1
   );
   await assert.rejects(
@@ -155,7 +207,7 @@ test('complete sequence ordering precedes an earlier object identity mismatch', 
       scratchDirectory: directory,
       maxScratchBytes: 16_777_216,
       registry,
-      mode: 'conformance'
+      operation: 'conformance'
     }),
     error => error instanceof OgvcsError && error.code === 'BUNDLE_SEQUENCE_INVALID' && error.layer === 1
   );
@@ -184,7 +236,7 @@ test('sequence-order failure outranks an earlier duplicate identity', async t =>
     maxValueBytes: 536_870_912
   }))));
   assert.throws(
-    () => verifyLogicalBundle(changed, { registry, mode: 'conformance' }),
+    () => verifyLogicalBundle(changed, { registry, operation: 'conformance' }),
     error => error instanceof OgvcsError && error.code === 'BUNDLE_SEQUENCE_INVALID' && error.layer === 1
   );
   await assert.rejects(
@@ -192,7 +244,7 @@ test('sequence-order failure outranks an earlier duplicate identity', async t =>
       scratchDirectory: directory,
       maxScratchBytes: 16_777_216,
       registry,
-      mode: 'conformance'
+      operation: 'conformance'
     }),
     error => error instanceof OgvcsError && error.code === 'BUNDLE_SEQUENCE_INVALID' && error.layer === 1
   );
@@ -208,7 +260,7 @@ test('non-map section items fail with the stable sequence error', async t => {
     maxValueBytes: 536_870_912
   }))));
   assert.throws(
-    () => verifyLogicalBundle(changed, { registry, mode: 'conformance' }),
+    () => verifyLogicalBundle(changed, { registry, operation: 'conformance' }),
     error => error instanceof OgvcsError && error.code === 'BUNDLE_SEQUENCE_INVALID' && error.layer === 1
   );
   await assert.rejects(
@@ -216,7 +268,7 @@ test('non-map section items fail with the stable sequence error', async t => {
       scratchDirectory: directory,
       maxScratchBytes: 16_777_216,
       registry,
-      mode: 'conformance'
+      operation: 'conformance'
     }),
     error => error instanceof OgvcsError && error.code === 'BUNDLE_SEQUENCE_INVALID' && error.layer === 1
   );
@@ -248,7 +300,7 @@ test('spooled verification preserves all checked-in malformed-vector codes', asy
         scratchDirectory: directory,
         maxScratchBytes: 16_777_216,
         registry,
-        mode: 'conformance'
+        operation: 'conformance'
       }),
       error => error instanceof OgvcsError && error.code === code,
       name
@@ -274,7 +326,7 @@ test('layer-one transcript authentication precedes later schema failures in both
   ));
   const changed = Buffer.concat([...prefix, encodeCanonical(seed.at(-1))]);
   assert.throws(
-    () => verifyLogicalBundle(changed, { registry, mode: 'conformance' }),
+    () => verifyLogicalBundle(changed, { registry, operation: 'conformance' }),
     error => error instanceof OgvcsError && error.code === 'BUNDLE_TRAILER_MISMATCH' && error.layer === 1
   );
   await assert.rejects(
@@ -282,7 +334,7 @@ test('layer-one transcript authentication precedes later schema failures in both
       scratchDirectory: directory,
       maxScratchBytes: 16_777_216,
       registry,
-      mode: 'conformance'
+      operation: 'conformance'
     }),
     error => error instanceof OgvcsError && error.code === 'BUNDLE_TRAILER_MISMATCH' && error.layer === 1
   );
@@ -301,12 +353,9 @@ test('registry semantic failures are selected globally in catalogue order', asyn
   const objects = payloads.map(payload => ({ ref: hashObject(6, payload), payload }));
   const seed = decodeSequence(await bundle('valid-supplied-closure'), { maxValueBytes: 536_870_912 }).values;
   const role = ProfileRef.fromMap(seed.find(item => item.get?.(1) === 4).get(5));
-  const encoded = encodeLogicalBundle({
-    objects,
-    roots: objects.map(item => ({ kind: 1, identity: item.ref, role }))
-  });
+  const encoded = authenticatedObjectBundle(objects, role);
   assert.throws(
-    () => verifyLogicalBundle(encoded, { registry, mode: 'conformance' }),
+    () => verifyLogicalBundle(encoded, { registry, operation: 'conformance' }),
     error => error instanceof OgvcsError && error.code === 'REQUIRED_FEATURE_UNSUPPORTED' && error.layer === 3
   );
   await assert.rejects(
@@ -314,7 +363,7 @@ test('registry semantic failures are selected globally in catalogue order', asyn
       scratchDirectory: directory,
       maxScratchBytes: 16_777_216,
       registry,
-      mode: 'conformance'
+      operation: 'conformance'
     }),
     error => error instanceof OgvcsError && error.code === 'REQUIRED_FEATURE_UNSUPPORTED' && error.layer === 3
   );
@@ -334,7 +383,7 @@ test('selected header, identity, payload, and trailer bit mutations never valida
         scratchDirectory: directory,
         maxScratchBytes: 16_777_216,
         registry,
-        mode: 'conformance'
+        operation: 'conformance'
       }),
       error => error instanceof OgvcsError,
       `mutation at ${position}`
@@ -363,7 +412,7 @@ test('configured byte, count, traversal, memory, scratch, decode, and time limit
         scratchDirectory: directory,
         maxScratchBytes: 16_777_216,
         registry,
-        mode: 'conformance',
+        operation: 'conformance',
         ...limits
       }),
       error => error instanceof OgvcsError && error.code === code,
@@ -381,7 +430,7 @@ test('one-byte reads succeed while physical truncation is rejected and cleaned',
     scratchDirectory: directory,
     maxScratchBytes: 16_777_216,
     registry,
-    mode: 'conformance'
+    operation: 'conformance'
   });
   assert.equal(result.transcriptDigest, 'c302bd2f60d259e6859ce677e2d2f08133d53236abaa4de82c5fa868b020735c');
   await empty(directory);
@@ -390,7 +439,7 @@ test('one-byte reads succeed while physical truncation is rejected and cleaned',
       scratchDirectory: directory,
       maxScratchBytes: 16_777_216,
       registry,
-      mode: 'conformance'
+      operation: 'conformance'
     }),
     error => error instanceof OgvcsError && ['CBOR_TRUNCATED', 'BUNDLE_SEQUENCE_INVALID'].includes(error.code)
   );
@@ -413,7 +462,7 @@ test('input path replacement after open cannot redirect the same-handle verifier
   const encoded = encodeLogicalBundle({
     objects: [{ ref, payload }],
     roots: [{ kind: 1, identity: ref, role }]
-  }, { registry, mode: 'conformance' });
+  }, { registry, operation: 'conformance' });
   const path = join(directory, 'bundle.cborseq');
   const held = join(directory, 'opened-original.cborseq');
   await writeFile(path, encoded);
@@ -422,7 +471,7 @@ test('input path replacement after open cannot redirect the same-handle verifier
     maxScratchBytes: 16_777_216,
     readChunkBytes: 1_024,
     registry,
-    mode: 'conformance'
+    operation: 'conformance'
   });
   await waitFor(scratch, name => name.includes('-sequence-'));
   await rename(path, held);
@@ -449,14 +498,17 @@ test('scratch run replacement is detected by exact same-file checks', { timeout:
     objects.push({ ref, payload });
     roots.push({ kind: 1, identity: ref, role });
   }
-  const encoded = encodeLogicalBundle({ objects, roots }, { registry, mode: 'conformance' });
+  const encoded = encodeLogicalBundle(
+    orderedBundleSections(objects, roots),
+    { registry, operation: 'conformance' }
+  );
   const verification = verifyLogicalBundleStream(fragmented(encoded, 17), {
     scratchDirectory: scratch,
     maxScratchBytes: 16_777_216,
     maxRunBytes: 42,
     maxOpenRuns: 2,
     registry,
-    mode: 'conformance'
+    operation: 'conformance'
   });
   const run = await waitFor(scratch, name => name.includes('-index-run-'));
   const held = join(directory, 'attacker-held-run');

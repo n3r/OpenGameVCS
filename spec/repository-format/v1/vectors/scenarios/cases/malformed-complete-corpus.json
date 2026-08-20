@@ -1,6 +1,7 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [],
     "lifetimeRecords": [],
     "mode": "conformance",
@@ -132,23 +133,23 @@
         "path": "scenarios/outputs/malformed-complete-corpus.json",
         "sha256": "0a7bfb58b3cdb461196c1b5c4bbfa840366aea25deff2c8f4ff836dac00f2c38"
       },
-      "summarySha256": "112f94c72793fe5c09cffa26f47ca04f08fbe0f60fe145ddeac149f5fdc11c35"
+      "summarySha256": "e28102c1dbfc35b5bf529b7a59f860467c4cf4543c4aa0866aabae94276b8a70"
     },
     "result": "accept"
   },
   "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
   "inputs": [
     {
-      "bytes": 43416,
+      "bytes": 45348,
       "mediaType": "application/json",
       "path": "malformed/index.json",
-      "sha256": "f75ff3d4ef669394cd11c271495438d446fe0860d3da94930c24f7c353c6f774"
+      "sha256": "7c814657503b90404a7add701abf82f74acc791772b2914344e9cc2d107b9f0d"
     },
     {
-      "bytes": 6535,
+      "bytes": 6569,
       "mediaType": "application/json",
       "path": "scenarios/definitions/malformed-complete-corpus.json",
-      "sha256": "1fa8d423c9d97d29b5c689a8b664384078014d1e266bb503d4e4ab7d9317d1f7"
+      "sha256": "a112d8311d48634245714dcc426c11aa2f96cde0e6accd03d9637be9f296c1f3"
     }
   ],
   "operation": "canonical-scan",
@@ -161,18 +162,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/malformed-complete-corpus.json",
-        "definitionSha256": "1fa8d423c9d97d29b5c689a8b664384078014d1e266bb503d4e4ab7d9317d1f7",
+        "definitionSha256": "a112d8311d48634245714dcc426c11aa2f96cde0e6accd03d9637be9f296c1f3",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "cb1473e16f82c26ea95aa2bc8f11f6ead20f88e802f78ebc7e620ff90c6bb7f2"
     },
     "summary": {
-      "bytes": 55174,
+      "bytes": 57140,
       "indexEntries": 0,
       "items": 12,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "112f94c72793fe5c09cffa26f47ca04f08fbe0f60fe145ddeac149f5fdc11c35",
+      "summarySha256": "e28102c1dbfc35b5bf529b7a59f860467c4cf4543c4aa0866aabae94276b8a70",
       "traversalEdges": 0
     }
   },

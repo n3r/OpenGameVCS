@@ -15,6 +15,7 @@
     "LICENSE",
     "index.mjs",
     "registries",
+    "unicode",
     "vectors"
   ],
   "sideEffects": false,

@@ -1,6 +1,7 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [],
     "lifetimeRecords": [],
     "mode": "conformance",
@@ -139,10 +140,10 @@
       "sha256": "4afc13a7c6a28677889543cd877e4451e12868c8ba460f8a01203d09da1ae4e7"
     },
     {
-      "bytes": 6624,
+      "bytes": 6658,
       "mediaType": "application/json",
       "path": "scenarios/definitions/error-fileid-entropy-unavailable.json",
-      "sha256": "0c2db3213c6cda5ede17809faa35207bf6ff7ece1f0c783722cb261cd0c825b1"
+      "sha256": "c14d60a51c8fb23ba5afaa1c1a0a1e2fc4e466efde09536db696995fe3fb287f"
     }
   ],
   "operation": "allocate-file-id",
@@ -154,18 +155,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/error-fileid-entropy-unavailable.json",
-        "definitionSha256": "0c2db3213c6cda5ede17809faa35207bf6ff7ece1f0c783722cb261cd0c825b1",
+        "definitionSha256": "c14d60a51c8fb23ba5afaa1c1a0a1e2fc4e466efde09536db696995fe3fb287f",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "d7ca0358456dc0397148885acc4f4706d0bc561f035463400a207df773eadd9b"
     },
     "summary": {
-      "bytes": 12153,
+      "bytes": 12187,
       "indexEntries": 0,
       "items": 12,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "e90aa9131575e5f4c9d07ecada30ab441db6280491bb2a40e5226b480ed00900",
+      "summarySha256": "27f7a6c17654de920a3d3f4bc0c432a3baf0226f39d2ceb03de38bea56a12205",
       "traversalEdges": 0
     }
   },

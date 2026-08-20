@@ -2,6 +2,7 @@
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
     "candidateSnapshot": "ogvcs:v1:snapshot:sha256:0ac2a723cd60c36716b9b2bb0219806328e6c8be0f2e04e1348dfee16c7f2ae2",
+    "caseMode": "case-sensitive",
     "designatedRoot": "ogvcs:v1:snapshot:sha256:1f12d26a139da2787ec41777f591ad2a7b52708a237691099ced6c23d9bb40ab",
     "importMappings": [],
     "lifetimeRecords": [],
@@ -121,10 +122,10 @@
       "sha256": "7007d997999cda5e31d5ec1d835c4a4a1e1afa827d1801cc18d6ec4ad4b66ed1"
     },
     {
-      "bytes": 6460,
+      "bytes": 6494,
       "mediaType": "application/json",
       "path": "scenarios/definitions/transition-exact-result-mismatch.json",
-      "sha256": "682cf1104a0fe4424ab1dde091e3bb3f89fe40d6b7b89956751f30808ab8f982"
+      "sha256": "e46f60bcb72b0cdcc66cfcbfacefe5cdd7d0f421a4e4b30ad05fa54401ceab1a"
     }
   ],
   "operation": "replay-change-set",
@@ -137,18 +138,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/transition-exact-result-mismatch.json",
-        "definitionSha256": "682cf1104a0fe4424ab1dde091e3bb3f89fe40d6b7b89956751f30808ab8f982",
+        "definitionSha256": "e46f60bcb72b0cdcc66cfcbfacefe5cdd7d0f421a4e4b30ad05fa54401ceab1a",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "881688f674afdc3aa48f6b32be0610e715f6e62e1127419de4706cc1883e6444"
     },
     "summary": {
-      "bytes": 8047,
+      "bytes": 8081,
       "indexEntries": 0,
       "items": 9,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "d9bd1a7b99095f8d8e55d76c5891a42215e63dd56c20eca7c42d4a7d4e8da555",
+      "summarySha256": "da9c14a4a95a547fa4cf4330b36739fd45e3d2ee7547e973823e627d816d37f7",
       "traversalEdges": 0
     }
   },

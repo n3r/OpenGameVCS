@@ -1,0 +1,8 @@
+{
+  "api": "validate-repository-candidate",
+  "authorityContext": "scenario.context",
+  "callerVerifyContent": true,
+  "candidateSnapshot": "ogvcs:v1:snapshot:sha256:739720f5fbe1b8a27536b1340921b4e782ad3cb803107a5a03a27db9ad16b0de",
+  "forceContentComplete": true,
+  "schema": "ogvcs.repository-format.v1.repository-route-input.v1"
+}

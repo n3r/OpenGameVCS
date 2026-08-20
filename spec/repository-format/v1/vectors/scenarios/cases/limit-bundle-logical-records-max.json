@@ -1,6 +1,7 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [],
     "lifetimeRecords": [],
     "mode": "conformance",
@@ -143,7 +144,7 @@
         "path": "scenarios/outputs/limit-bundle-logical-records-max.json",
         "sha256": "e4f22c5a7c49afaabecfa013520cc7df2fe921589db8e3b1dabe79734c011edf"
       },
-      "summarySha256": "26d8f9794f735d20c9d1a181f631ecd21b36a286d2eb35d23c87399aaee362e0"
+      "summarySha256": "dcd9456adaea9f967e3684cb12db3be33a96166c58e7fe3a352453557daa9d8f"
     },
     "result": "accept"
   },
@@ -156,10 +157,10 @@
       "sha256": "a1b9df51f5ce5e6b12214f1777929f74daa64df36ea921ecc68c4b704a7cae7e"
     },
     {
-      "bytes": 7042,
+      "bytes": 7076,
       "mediaType": "application/json",
       "path": "scenarios/definitions/limit-bundle-logical-records-max.json",
-      "sha256": "a21351a98edc8b2d53b46448cc1b48a16041cd073cf7fe346a5c43c23a025815"
+      "sha256": "667c0b9a482536fb438bcbf89abbe65d5d5f7f0ea8fd9d5175e756c19d3166e7"
     }
   ],
   "operation": "validate-bundle",
@@ -172,18 +173,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/limit-bundle-logical-records-max.json",
-        "definitionSha256": "a21351a98edc8b2d53b46448cc1b48a16041cd073cf7fe346a5c43c23a025815",
+        "definitionSha256": "667c0b9a482536fb438bcbf89abbe65d5d5f7f0ea8fd9d5175e756c19d3166e7",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "6f11bbda065b6ec614c5058fa44e0c3f8e972ed03d99c24b3c9d3b0814f9ad11"
     },
     "summary": {
-      "bytes": 12931,
+      "bytes": 12965,
       "indexEntries": 0,
       "items": 12,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "26d8f9794f735d20c9d1a181f631ecd21b36a286d2eb35d23c87399aaee362e0",
+      "summarySha256": "dcd9456adaea9f967e3684cb12db3be33a96166c58e7fe3a352453557daa9d8f",
       "traversalEdges": 0
     }
   },

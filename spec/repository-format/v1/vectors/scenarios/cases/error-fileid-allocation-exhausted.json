@@ -1,6 +1,7 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [],
     "lifetimeRecords": [],
     "mode": "conformance",
@@ -139,10 +140,10 @@
       "sha256": "66f8088833c0f6ffe11413608055513d1aa9f0e01034de253f8984c2bfaeedb3"
     },
     {
-      "bytes": 6627,
+      "bytes": 6661,
       "mediaType": "application/json",
       "path": "scenarios/definitions/error-fileid-allocation-exhausted.json",
-      "sha256": "93508d9a80a51c5bc1308e9761ad67e06c071a165c849281f948821cc13f35e9"
+      "sha256": "3367e8e52f86640f94d38cfacf98ac5311ca2c8a9d045b57e6d2ccfd1b1d89c0"
     }
   ],
   "operation": "allocate-file-id",
@@ -154,18 +155,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/error-fileid-allocation-exhausted.json",
-        "definitionSha256": "93508d9a80a51c5bc1308e9761ad67e06c071a165c849281f948821cc13f35e9",
+        "definitionSha256": "3367e8e52f86640f94d38cfacf98ac5311ca2c8a9d045b57e6d2ccfd1b1d89c0",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "647591e95e15546b3a2d23f002e972b81df44f28b3b2fdf2c29a0fbe16cb7366"
     },
     "summary": {
-      "bytes": 12273,
+      "bytes": 12307,
       "indexEntries": 0,
       "items": 12,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "98155168ab7f3d7401abbb06bff8370e68e068ea5b6060a711a9a6ca0eb1f6fe",
+      "summarySha256": "4f25ddae5aa3154c15b72bfb8c740b6601d9bff07dae39244a9aea826a475763",
       "traversalEdges": 0
     }
   },

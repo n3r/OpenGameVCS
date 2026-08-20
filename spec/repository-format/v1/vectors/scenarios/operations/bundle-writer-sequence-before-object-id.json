@@ -1,0 +1,39 @@
+{
+  "api": "write-logical-bundle",
+  "maxMemoryBytes": 67108864,
+  "objectMutations": [
+    {
+      "outputOrdinal": 0,
+      "sourceOrdinal": 2
+    },
+    {
+      "outputOrdinal": 1,
+      "replaceDeclaredDigest": "0000000000000000000000000000000000000000000000000000000000000000",
+      "sourceOrdinal": 1
+    }
+  ],
+  "operation": "conformance",
+  "outputDisposition": {
+    "inMemoryResult": "absent",
+    "orderedStagingSink": "aborted-discard",
+    "successCommit": false
+  },
+  "plan": {
+    "budget": {
+      "indexEntries": 2,
+      "largestItemBytes": 10000,
+      "sequenceBytes": 100000,
+      "traversalEdges": 100
+    },
+    "logicalRecordCount": 0,
+    "objectCount": 2,
+    "rootCount": 0
+  },
+  "registry": "bundled",
+  "schema": "ogvcs.repository-format.v1.logical-bundle-writer-input.v1",
+  "source": "logical-bundles/valid-all-families.cborseq",
+  "writerSurfaces": [
+    "bundle-memory-encoder",
+    "bundle-ordered"
+  ]
+}

@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto';
 import { encodeCanonical } from './cbor.js';
-import { fail, isOgvcsError } from './errors.js';
+import { compareErrorPrecedence, fail, isOgvcsError, OgvcsError } from './errors.js';
 import { createObjectHashWriter } from './hash.js';
 import { configuredHardLimit, enforceHardLimit, hardLimitMaximum } from './hard-limits.js';
 import { profileDecision, registryAssignmentDecision } from './registry.js';
 import { validateKnownSchema } from './schema.js';
 import { Digest, KIND_NAMES, ObjectRef, ProfileRef, equalBytes } from './types.js';
+import { writerValidationContext } from './validation-mode.js';
 import {
   ResourceGuard, asBytes, asCount, asLimit, cborHeader, checkedBigUint,
   exactMap, guardedAsyncIterable, toAsyncIterable, writeFully
@@ -26,12 +27,21 @@ function digestValue(value) {
   return Digest.fromMap(value);
 }
 
-function chunkProfile(value, registry, operation) {
-  const ref = value instanceof ProfileRef ? value : ProfileRef.fromMap(value);
-  if (registry) {
-    const decision = profileDecision(registry, ref, operation);
-    if (decision.family !== CHUNKING_FAMILY) fail('SCHEMA_FIELD_INVALID', { layer: 2 });
+function observeRegistry(options, callback) {
+  try { return callback(); }
+  catch (error) {
+    if (!(error instanceof OgvcsError) || error.layer !== 3 || error.stage !== 'registry-semantics') throw error;
+    if (!options.registryFailure || compareErrorPrecedence(error, options.registryFailure) < 0) {
+      options.registryFailure = error;
+    }
+    return undefined;
   }
+}
+
+function throwRegistry(options) { if (options.registryFailure) throw options.registryFailure; }
+
+function chunkProfile(value) {
+  const ref = value instanceof ProfileRef ? value : ProfileRef.fromMap(value);
   return ref;
 }
 
@@ -52,12 +62,13 @@ function encodeResident(value, options, remaining = options.maxMemoryBytes, over
 }
 
 function optionsFor(input) {
+  const semantic = writerValidationContext(input.operation, input.registry);
   const maxItems = Math.min(
     configuredHardLimit('manifest-chunks', input.hardLimits?.['manifest-chunks']),
     configuredHardLimit('manifest-chunks', asLimit(input.maxItems, MAX_MANIFEST_PARTS))
   );
   enforceHardLimit(undefined, 'manifest-chunks', input.partCount, {
-    maximum: maxItems, code: 'LIMIT_COUNT', layer: 2
+    maximum: maxItems, code: 'LIMIT_COUNT', layer: 1, stage: 'configured-resource-preflight'
   });
   const partCount = asCount(input.partCount, maxItems);
   const maxBytes = Math.min(
@@ -72,10 +83,10 @@ function optionsFor(input) {
     maximum: input.hardLimits?.['logical-file-bytes'], code: 'LIMIT_LOGICAL_BYTES', layer: 2
   });
   const logicalLength = checkedBigUint(input.logicalLength, MAX_LOGICAL_BYTES, 'LIMIT_LOGICAL_BYTES');
-  const profile = chunkProfile(input.chunkProfile, input.registry, input.operation ?? 'conformance');
+  const profile = chunkProfile(input.chunkProfile);
   return {
-    ...input, maxItems, partCount, maxBytes, maxMemoryBytes, guard, logicalLength, profile,
-    requiredFeatures: input.requiredFeatures ?? [], operation: input.operation ?? 'conformance'
+    ...input, ...semantic, maxItems, partCount, maxBytes, maxMemoryBytes, guard, logicalLength, profile,
+    requiredFeatures: input.requiredFeatures ?? [], registryFailure: undefined
   };
 }
 
@@ -106,8 +117,13 @@ function manifestPrefix(options, digest) {
   const empty = new Map(common);
   empty.set(16, 0);
   empty.set(17, new Digest(1, new Uint8Array(createHash('sha256').digest())).toMap());
-  validateKnownSchema(empty, 2, {
-    registry: options.registry, operation: options.operation, hardLimits: options.hardLimits
+  validateKnownSchema(empty, 2, { semantic: false, hardLimits: options.hardLimits });
+  if (options.registry) observeRegistry(options, () => {
+    const decision = profileDecision(options.registry, options.profile, options.operation);
+    if (decision.family !== CHUNKING_FAMILY) fail('SCHEMA_FIELD_INVALID', { layer: 2 });
+    validateKnownSchema(empty, 2, {
+      registry: options.registry, operation: options.operation, hardLimits: options.hardLimits
+    });
   });
   return pieces;
 }
@@ -119,8 +135,10 @@ function validatePart(value, options) {
     fail('OBJECT_REFERENCE_KIND_MISMATCH', { layer: 2, stage: 'known-schema' });
   }
   if (options.registry) {
-    registryAssignmentDecision(options.registry, 'object-kinds', 1, options.operation);
-    registryAssignmentDecision(options.registry, 'hash-algorithms', 1, options.operation);
+    observeRegistry(options, () =>
+      registryAssignmentDecision(options.registry, 'object-kinds', 1, options.operation));
+    observeRegistry(options, () =>
+      registryAssignmentDecision(options.registry, 'hash-algorithms', 1, options.operation));
   }
   enforceHardLimit(undefined, 'chunk-payload-bytes', value.get(1), {
     maximum: options.hardLimits?.['chunk-payload-bytes'], code: 'MANIFEST_CHUNK_LENGTH_INVALID', layer: 2
@@ -138,6 +156,7 @@ async function iterableFromFactory(parts, pass, guard) {
   if (typeof parts === 'function') {
     return toAsyncIterable(await guard.wait(signal => parts(pass, { signal })));
   }
+  if (Array.isArray(parts)) return toAsyncIterable(parts);
   if (pass !== 1) fail('SCHEMA_FIELD_INVALID', { layer: 2 });
   return toAsyncIterable(parts);
 }
@@ -213,26 +232,49 @@ async function scanParts(options, { pass, verifyContent, consume }) {
   const whole = verifyContent ? createHash('sha256') : undefined;
   const verifier = verifyContent ? new ChunkVerifier(options, whole) : undefined;
   const source = await iterableFromFactory(options.parts, pass, options.guard);
+  let selectedFailure;
+  const observeFailure = error => {
+    if (!(error instanceof OgvcsError) || error.errorClass === 'resource') throw error;
+    if (!selectedFailure || compareErrorPrecedence(error, selectedFailure) < 0) {
+      selectedFailure = error;
+    }
+  };
   for await (const raw of guardedAsyncIterable(source, options.guard)) {
     options.guard.time();
     count += 1;
     if (count > options.maxItems) {
       fail('LIMIT_COUNT', { layer: 1, stage: 'configured-resource-preflight' });
     }
-    if (count > options.partCount) fail('SCHEMA_FIELD_INVALID', { layer: 2 });
-    const part = validatePart(raw, options);
+    if (count > options.partCount) {
+      observeFailure(new OgvcsError('SCHEMA_FIELD_INVALID', {
+        layer: 2, stage: 'known-schema'
+      }));
+    }
+    let part;
+    try { part = validatePart(raw, options); }
+    catch (error) { observeFailure(error); continue; }
     logical += part.length;
-    enforceHardLimit(undefined, 'logical-file-bytes', logical, {
-      maximum: options.hardLimits?.['logical-file-bytes'], code: 'LIMIT_LOGICAL_BYTES', layer: 2
-    });
+    try {
+      enforceHardLimit(undefined, 'logical-file-bytes', logical, {
+        maximum: options.hardLimits?.['logical-file-bytes'], code: 'LIMIT_LOGICAL_BYTES', layer: 2
+      });
+    } catch (error) { observeFailure(error); continue; }
     transcript.update(part.encoded);
-    if (verifier) await verifier.consume(part, count - 1);
+    if (verifier) {
+      try { await verifier.consume(part, count - 1); }
+      catch (error) { observeFailure(error); continue; }
+    }
     if (consume) await consume(part.encoded);
   }
-  if (count !== options.partCount) fail('SCHEMA_FIELD_INVALID', { layer: 2 });
+  if (count !== options.partCount) observeFailure(new OgvcsError('SCHEMA_FIELD_INVALID', {
+    layer: 2, stage: 'known-schema'
+  }));
   if (logical !== options.logicalLength || (options.logicalLength === 0n && count !== 0)) {
-    fail('MANIFEST_LENGTH_MISMATCH', { layer: 2 });
+    observeFailure(new OgvcsError('MANIFEST_LENGTH_MISMATCH', {
+      layer: 2, stage: 'known-schema'
+    }));
   }
+  if (selectedFailure) throw selectedFailure;
   return {
     count,
     logical,
@@ -290,11 +332,27 @@ export async function writeContentManifest(input) {
   if (verifyContent && options.partCount > 0 && typeof options.chunkProvider !== 'function') {
     fail('SCHEMA_FIELD_INVALID', { layer: 2 });
   }
+  const requiresReplay = derive || (verifyContent && options.partCount > 0);
+  if (requiresReplay && !Array.isArray(options.parts) && typeof options.parts !== 'function') {
+    // Content callbacks are reached only after two complete metadata passes.
+    // A one-shot iterable cannot establish that boundary without unbounded
+    // retention, so callers must provide an array or a repeatable factory.
+    fail('SCHEMA_FIELD_INVALID', { layer: 1, stage: 'configured-resource-preflight' });
+  }
+
+  let preflight;
+  if (requiresReplay) {
+    preflight = await scanParts(options, { pass: 1, verifyContent: false });
+    const repeated = await scanParts(options, { pass: 2, verifyContent: false });
+    if (!equalBytes(preflight.transcript, repeated.transcript)) {
+      fail('SCHEMA_FIELD_INVALID', { layer: 2 });
+    }
+  }
 
   let digest;
   let verification;
   if (derive) {
-    verification = await scanParts(options, { pass: 1, verifyContent: true });
+    verification = await scanParts(options, { pass: 3, verifyContent: true });
     digest = new Digest(1, verification.contentDigest);
   } else {
     digest = digestValue(options.wholeFileDigest);
@@ -304,16 +362,18 @@ export async function writeContentManifest(input) {
   options.guard.memory(prefix.reduce((total, part) => total + part.length, 0));
   const emitter = createEmitter(options);
   for (const part of prefix) await emitter.emit(part);
-  const outputPass = derive ? 2 : 1;
+  const outputPass = requiresReplay ? (derive ? 4 : 3) : 1;
   const scanned = await scanParts(options, {
     pass: outputPass,
     verifyContent: !derive && verifyContent,
     consume: part => emitter.emit(part)
   });
 
-  if (derive && !equalBytes(verification.transcript, scanned.transcript)) {
+  if (requiresReplay && (!equalBytes(preflight.transcript, scanned.transcript) ||
+      (derive && !equalBytes(verification.transcript, scanned.transcript)))) {
     fail('SCHEMA_FIELD_INVALID', { layer: 2 });
   }
+  throwRegistry(options);
   if (!derive && verifyContent && !equalBytes(scanned.contentDigest, digest.bytes)) {
     fail('MANIFEST_FILE_DIGEST_MISMATCH', { layer: 3 });
   }

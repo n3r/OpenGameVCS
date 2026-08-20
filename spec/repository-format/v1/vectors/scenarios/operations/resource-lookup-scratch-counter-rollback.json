@@ -1,0 +1,32 @@
+{
+  "api": "validate-resource-reservation",
+  "assertCounterBaselineAfterFailure": true,
+  "assertCounterBaselineAfterRecovery": true,
+  "assertNoPartialState": true,
+  "cluster": "lookup-scratch-counter-rollback",
+  "configuredLimit": {
+    "field": "maxScratchBytes",
+    "value": 64
+  },
+  "evidenceRequired": {
+    "noPartialState": true,
+    "routeEvidence": [
+      {
+        "counterBaselineRestored": true,
+        "noPartialState": true,
+        "recoveryKind": "same-authority-instance",
+        "route": "expand-tree-scratch-budget",
+        "succeeded": true
+      }
+    ]
+  },
+  "failureTree": "ogvcs:v1:tree:sha256:9458b24239ce71b75b1c6ab857883d66a6eab3f0f6f4e9afab15371af1d4bf19",
+  "recovery": {
+    "api": "expand-tree",
+    "recoveryTree": "ogvcs:v1:tree:sha256:79c0b6bc8cd423fd80f877a23fdc4502bc3a4d6a7d2afd42f82a507d72fffbdc"
+  },
+  "routes": [
+    "expand-tree-scratch-budget"
+  ],
+  "schema": "ogvcs.repository-format.v1.resource-reservation-input.v1"
+}

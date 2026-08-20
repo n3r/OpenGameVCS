@@ -1,0 +1,17 @@
+{
+  "api": "validate-operation-mode",
+  "expectedProfileFamily": "path",
+  "objectRef": "ogvcs:v1:repository-descriptor:sha256:709c49efb55c6d4f2fcc6c4ef89beba50efcefce4f03dd26f6cbe4d200fce108",
+  "operation": "read",
+  "profile": "profile-state.test/conformance@1",
+  "registry": "bundled",
+  "registryFixture": {
+    "path": "registries/index.json",
+    "scenarioId": "registry-conformance-mode"
+  },
+  "requestedLayer": 3,
+  "schema": "ogvcs.repository-format.v1.operation-mode-input.v1",
+  "semanticProfiles": true,
+  "source": "lifecycle/descriptor-profile-state-test-conformance-1.cbor",
+  "surface": "metadata-decoder"
+}

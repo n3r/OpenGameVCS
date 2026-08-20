@@ -1,0 +1,17 @@
+{
+  "adapter": {
+    "caseMode": "case-sensitive",
+    "decision": {
+      "accepted": true,
+      "platformKey": "safe"
+    },
+    "profile": "path.opengamevcs/portable@1"
+  },
+  "api": "validate-path-profile-decision",
+  "caseMode": "case-sensitive",
+  "profile": "path.opengamevcs/portable@1",
+  "schema": "ogvcs.repository-format.v1.path-profile-decision-input.v1",
+  "segments": [
+    "safe"
+  ]
+}

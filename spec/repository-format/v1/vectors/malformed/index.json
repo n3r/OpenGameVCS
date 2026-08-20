@@ -221,6 +221,69 @@
       "name": "non-nfc"
     },
     {
+      "artifact": "malformed/unicode-age-newer-composition-pair.cbor",
+      "codePoints": [
+        "U+16D63",
+        "U+16D68"
+      ],
+      "expected": {
+        "code": "CBOR_NON_CANONICAL",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "failureOrder": "reject a scalar outside the frozen Unicode 15.0 Age repertoire before NFC comparison",
+      "hex": "68f096b5a3f096b5a8",
+      "name": "unicode-age-newer-composition-pair"
+    },
+    {
+      "artifact": "malformed/unicode-age-newer-decomposed.cbor",
+      "codePoints": [
+        "U+16D63",
+        "U+16D67",
+        "U+16D67"
+      ],
+      "expected": {
+        "code": "CBOR_NON_CANONICAL",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "failureOrder": "reject a scalar outside the frozen Unicode 15.0 Age repertoire before NFC comparison",
+      "hex": "6cf096b5a3f096b5a7f096b5a7",
+      "name": "unicode-age-newer-decomposed"
+    },
+    {
+      "artifact": "malformed/unicode-age-newer-canonical.cbor",
+      "codePoints": [
+        "U+16D6A"
+      ],
+      "expected": {
+        "code": "CBOR_NON_CANONICAL",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "failureOrder": "reject a scalar outside the frozen Unicode 15.0 Age repertoire before NFC comparison",
+      "hex": "64f096b5aa",
+      "name": "unicode-age-newer-canonical"
+    },
+    {
+      "artifact": "malformed/unicode-age-frozen-unassigned.cbor",
+      "codePoints": [
+        "U+0378"
+      ],
+      "expected": {
+        "code": "CBOR_NON_CANONICAL",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "failureOrder": "reject a scalar outside the frozen Unicode 15.0 Age repertoire before NFC comparison",
+      "hex": "62cdb8",
+      "name": "unicode-age-frozen-unassigned"
+    },
+    {
       "artifact": "malformed/trailing-bytes.cbor",
       "expected": {
         "code": "CBOR_TRAILING_BYTES",

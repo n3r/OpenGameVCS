@@ -10,7 +10,8 @@
     "mutation": "mutations/single-bit.json",
     "registrySnapshot": "registries/live-snapshot.json",
     "scenarios": "scenarios/index.json",
-    "truncation": "mutations/truncation.json"
+    "truncation": "mutations/truncation.json",
+    "unicodeAuthority": "unicode/index.json"
   },
   "normativeSchemas": {
     "abstractReferenceGraph": "../abstract-reference-graph.schema.json",

@@ -1,0 +1,192 @@
+{
+  "algorithm": {
+    "id": "ogvcs.repository-validation-scenario-constructor",
+    "version": 1
+  },
+  "arithmetic": "mathematical nonnegative integers with explicit uint64 decode bounds; no host-width overflow is a semantic test oracle",
+  "detail": "standalone asset-group validation rejects a externalKeyProfile from the wrong registered family before group rules",
+  "exactConstructorValues": {
+    "operationMode": {
+      "api": "validate-operation-mode",
+      "groupInput": {
+        "externalKeyProfile": "group-role.test/member@1",
+        "externalKeyValueHex": "01",
+        "fileIds": [
+          "21212121212121212121212121212121"
+        ],
+        "groupId": "51515151515151515151515151515151",
+        "groupProfile": "group.test/opaque@1",
+        "roleProfile": "group-role.test/member@1"
+      },
+      "mode": "conformance",
+      "objectLookup": "scenario.context.objectLookup",
+      "registry": "bundled",
+      "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+      "requestedLayer": 3,
+      "schema": "ogvcs.repository-format.v1.operation-mode-input.v1",
+      "semanticProfiles": true,
+      "surface": "asset-groups"
+    }
+  },
+  "expectedRootState": {
+    "resultFamily": "repository",
+    "rootState": "unchanged-no-trusted-output",
+    "scenarioId": "group-standalone-wrong-family-external-key-profile",
+    "stableOutputIdentity": "ogvcs:v1:snapshot:sha256:cc4d4a4a7be098bc74f5bb97cfe1eb37d870832dd44c56f0ceac12d65f871290"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "normativeContext": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 211,
+          "mediaType": "application/cbor",
+          "path": "objects/05-asset-group-set.cbor",
+          "sha256": "0eed5e03ee9f3f9466ba31992517605891c7f8518e37d7deafa5a179454cb623"
+        },
+        "ref": "ogvcs:v1:asset-group-set:sha256:3b4641600c6951bfe3c96e4a9ccb28b424b20d8c251db5efcda65fd0c8bd4c7e"
+      },
+      {
+        "artifact": {
+          "bytes": 182,
+          "mediaType": "application/cbor",
+          "path": "objects/10-attestation.cbor",
+          "sha256": "b9b1468f3704b2bb786e123c04c330338a771b43dae13822904c273c6186b654"
+        },
+        "ref": "ogvcs:v1:attestation:sha256:56fdc7943a314d8dcf628508f5abcbde57a9cbc15910eb6fe4527351d2eeec18"
+      },
+      {
+        "artifact": {
+          "bytes": 819,
+          "mediaType": "application/cbor",
+          "path": "objects/04-change-set.cbor",
+          "sha256": "92e3eea8bd2e861dde897b537c8d5af39d53166673b4e4e0ceb34e117b33e103"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:9cda477b4303c876fc79feb4cbd0a5deda70011261bd81fc758b588872040720"
+      },
+      {
+        "artifact": {
+          "bytes": 12,
+          "mediaType": "application/octet-stream",
+          "path": "objects/01-chunk.bin",
+          "sha256": "36fcc2e9442be1071c275604af6e41bd93875c743dc2fdaa6037662df74c5894"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5"
+      },
+      {
+        "artifact": {
+          "bytes": 1980,
+          "mediaType": "application/cbor",
+          "path": "objects/11-conflict-set.cbor",
+          "sha256": "8538781b63e4ba1adfb5f9ae152d24c559109e9f995962066cf58acf014df5f6"
+        },
+        "ref": "ogvcs:v1:conflict-set:sha256:59f7814cfab891685197abebc61ea70cdca2a2328feab3c4cec816d4eabfca07"
+      },
+      {
+        "artifact": {
+          "bytes": 183,
+          "mediaType": "application/cbor",
+          "path": "objects/02-content-manifest.cbor",
+          "sha256": "b635d76c8dd9f29c2862ae0e22077c70d157f68d4595861c09fb38bdf47c456b"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+      },
+      {
+        "artifact": {
+          "bytes": 147,
+          "mediaType": "application/cbor",
+          "path": "objects/09-provenance.cbor",
+          "sha256": "9fdc958c1450b34cf5b83db6cc2873fc78a099ad13e1c26abbfc1e3305d945a9"
+        },
+        "ref": "ogvcs:v1:provenance:sha256:792a6322c62aaf3096be4d5c86e2850b01d8892083f58c3304dc52530c079235"
+      },
+      {
+        "artifact": {
+          "bytes": 274,
+          "mediaType": "application/cbor",
+          "path": "objects/06-repository-descriptor.cbor",
+          "sha256": "677905a883b1f4ddd87fea27b5afc0293cccd2d2ea29cc4884e758e4a071b6e9"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+      },
+      {
+        "artifact": {
+          "bytes": 470,
+          "mediaType": "application/cbor",
+          "path": "objects/08-shelf-revision.cbor",
+          "sha256": "05d9e78f8fe210364b97c7790f0006875b024513ff4e1f5369c71d4e9e95252e"
+        },
+        "ref": "ogvcs:v1:shelf-revision:sha256:552198509e456e40abdce5e9746c5d2f6ed47a639e79c3bb1dd319f4f65fa14f"
+      },
+      {
+        "artifact": {
+          "bytes": 412,
+          "mediaType": "application/cbor",
+          "path": "objects/07-snapshot.cbor",
+          "sha256": "1c71e8db2d215449fcb7e91380245325d001f839252d49385cf4f97514119a50"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:cc4d4a4a7be098bc74f5bb97cfe1eb37d870832dd44c56f0ceac12d65f871290"
+      },
+      {
+        "artifact": {
+          "bytes": 481,
+          "mediaType": "application/cbor",
+          "path": "objects/03-tree.cbor",
+          "sha256": "dbd560e078aa8da76b423c5e2f83a5e795fa601416593802f79c172495859b2b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:9458b24239ce71b75b1c6ab857883d66a6eab3f0f6f4e9afab15371af1d4bf19"
+      },
+      {
+        "artifact": {
+          "bytes": 52,
+          "mediaType": "application/cbor",
+          "path": "objects/03-tree-child.cbor",
+          "sha256": "f0515d605a2c20abf9f321474bc861964b20faeaebbc41a2d8316ae4ffe2bb2b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a458f2bc72d5816dc3f7ee2cc8580eaaaed9a0208588ee66d18ea78f0c255c81"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
+      "registryVersion": 1
+    },
+    "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+    "requestedLayer": 2,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "operation": "validate-operation-mode",
+  "parameters": {},
+  "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
+  "scenarioId": "group-standalone-wrong-family-external-key-profile",
+  "seedHex": "14ade5089b3524ecc697eac642f6748c6e9bf2fe518f9ac3a8755f1ceee52a64",
+  "suppliedResourceCatalogue": {
+    "baseObjectArtifacts": [
+      "objects/05-asset-group-set.cbor",
+      "objects/10-attestation.cbor",
+      "objects/04-change-set.cbor",
+      "objects/01-chunk.bin",
+      "objects/11-conflict-set.cbor",
+      "objects/02-content-manifest.cbor",
+      "objects/09-provenance.cbor",
+      "objects/06-repository-descriptor.cbor",
+      "objects/08-shelf-revision.cbor",
+      "objects/07-snapshot.cbor",
+      "objects/03-tree.cbor",
+      "objects/03-tree-child.cbor"
+    ],
+    "logicalRecordArtifacts": [],
+    "mutationRecipe": "none",
+    "virtualLimitRecipe": "none"
+  },
+  "validation": {
+    "mode": "conformance",
+    "requestedLayer": 2
+  }
+}

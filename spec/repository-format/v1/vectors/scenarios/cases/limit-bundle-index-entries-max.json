@@ -1,6 +1,7 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [],
     "lifetimeRecords": [],
     "mode": "conformance",
@@ -143,7 +144,7 @@
         "path": "scenarios/outputs/limit-bundle-index-entries-max.json",
         "sha256": "a0818ebd7436f7975e58e7a3e1cba226cde0d13cd1011030c55a11f7a79059ab"
       },
-      "summarySha256": "912637f53b3d589b83adb10bd667bce46ca52c176a9b9e04b0f6c505e3b79474"
+      "summarySha256": "7c20838f7d7d3e28b91e9c4f43d326cab059e8d3b0fc98316c627ab33510dacb"
     },
     "result": "accept"
   },
@@ -156,10 +157,10 @@
       "sha256": "a1b9df51f5ce5e6b12214f1777929f74daa64df36ea921ecc68c4b704a7cae7e"
     },
     {
-      "bytes": 7034,
+      "bytes": 7068,
       "mediaType": "application/json",
       "path": "scenarios/definitions/limit-bundle-index-entries-max.json",
-      "sha256": "f7e4b303f3078d164827ec6834a670cf1fedad227c8c9dc8e8db5a33c485ea90"
+      "sha256": "d85af90725e0ca24b9f62fb1872bf0bbcd69f27396f0e2fff42a860258685937"
     }
   ],
   "operation": "validate-bundle",
@@ -172,18 +173,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/limit-bundle-index-entries-max.json",
-        "definitionSha256": "f7e4b303f3078d164827ec6834a670cf1fedad227c8c9dc8e8db5a33c485ea90",
+        "definitionSha256": "d85af90725e0ca24b9f62fb1872bf0bbcd69f27396f0e2fff42a860258685937",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "456649fc5138eb88a7992316ca9abb72df460e738303752e264ac2c082143c85"
     },
     "summary": {
-      "bytes": 12923,
+      "bytes": 12957,
       "indexEntries": 0,
       "items": 12,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "912637f53b3d589b83adb10bd667bce46ca52c176a9b9e04b0f6c505e3b79474",
+      "summarySha256": "7c20838f7d7d3e28b91e9c4f43d326cab059e8d3b0fc98316c627ab33510dacb",
       "traversalEdges": 0
     }
   },

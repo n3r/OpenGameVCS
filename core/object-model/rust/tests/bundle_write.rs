@@ -11,7 +11,7 @@ use std::{
 use ogvcs_object_model::{
     decode_canonical, logical_record_id, object_id, opaque_object_digest, Cbor, ErrorCode, Limits,
     LogicalBundleBudget, LogicalBundleWriteLimits, LogicalBundleWriteOptions,
-    LogicalBundleWritePlan, LogicalBundleWriter, ObjectKind, ObjectRef, ProfileRef, Registry,
+    LogicalBundleWritePlan, LogicalBundleWriter, ObjectKind, ObjectRef, Operation, ProfileRef, Registry,
     TypedDigest, ValidationStage,
 };
 
@@ -134,7 +134,7 @@ fn writer_independently_reproduces_every_valid_checked_in_bundle() {
         let mut writer = LogicalBundleWriter::new(
             &mut supplied,
             plan(2, 1, 2, 666, 236, 16),
-            LogicalBundleWriteOptions::new(&registry),
+            LogicalBundleWriteOptions::new(&registry, Operation::ConformanceWrite),
         )
         .unwrap();
         for (reference, payload) in selected {
@@ -169,7 +169,7 @@ fn writer_independently_reproduces_every_valid_checked_in_bundle() {
         let mut writer = LogicalBundleWriter::new(
             &mut all_families,
             plan(12, 9, 20, 9_056, 2_034, 60),
-            LogicalBundleWriteOptions::new(&registry),
+            LogicalBundleWriteOptions::new(&registry, Operation::ConformanceWrite),
         )
         .unwrap();
         for (reference, payload) in &objects {
@@ -207,7 +207,7 @@ fn writer_independently_reproduces_every_valid_checked_in_bundle() {
         let mut writer = LogicalBundleWriter::new(
             &mut multiple_roots,
             plan(2, 0, 2, 538, 236, 16),
-            LogicalBundleWriteOptions::new(&registry),
+            LogicalBundleWriteOptions::new(&registry, Operation::ConformanceWrite),
         )
         .unwrap();
         for (reference, payload) in selected {
@@ -231,7 +231,7 @@ fn writer_independently_reproduces_every_valid_checked_in_bundle() {
         let mut writer = LogicalBundleWriter::new(
             &mut empty,
             plan(0, 0, 0, 77, 52, 16),
-            LogicalBundleWriteOptions::new(&registry),
+            LogicalBundleWriteOptions::new(&registry, Operation::ConformanceWrite),
         )
         .unwrap();
         writer.finish().unwrap();
@@ -252,7 +252,7 @@ fn writer_rejects_malformed_id_order_duplicate_count_and_root_inputs() {
     let mut writer = LogicalBundleWriter::new(
         &mut output,
         roomy_plan(2, 0, 1),
-        LogicalBundleWriteOptions::new(&registry),
+        LogicalBundleWriteOptions::new(&registry, Operation::ConformanceWrite),
     )
     .unwrap();
     assert_eq!(
@@ -262,6 +262,22 @@ fn writer_rejects_malformed_id_order_duplicate_count_and_root_inputs() {
             .code,
         ErrorCode::BundleSequenceInvalid
     );
+    assert_eq!(
+        writer
+            .write_object(objects[1].0, &objects[1].1)
+            .unwrap_err()
+            .code,
+        ErrorCode::BundleSequenceInvalid
+    );
+    assert_eq!(writer.finish().unwrap_err().code, ErrorCode::BundleSequenceInvalid);
+
+    let mut output = Vec::new();
+    let mut writer = LogicalBundleWriter::new(
+        &mut output,
+        roomy_plan(2, 0, 1),
+        LogicalBundleWriteOptions::new(&registry, Operation::ConformanceWrite),
+    )
+    .unwrap();
     writer.write_object(objects[1].0, &objects[1].1).unwrap();
     assert_eq!(
         writer
@@ -275,7 +291,7 @@ fn writer_rejects_malformed_id_order_duplicate_count_and_root_inputs() {
     let mut writer = LogicalBundleWriter::new(
         &mut output,
         roomy_plan(2, 0, 1),
-        LogicalBundleWriteOptions::new(&registry),
+        LogicalBundleWriteOptions::new(&registry, Operation::ConformanceWrite),
     )
     .unwrap();
     writer.write_object(objects[0].0, &objects[0].1).unwrap();
@@ -290,42 +306,42 @@ fn writer_rejects_malformed_id_order_duplicate_count_and_root_inputs() {
     let mut output = Vec::new();
     let mut writer = LogicalBundleWriter::new(
         &mut output,
-        roomy_plan(1, 0, 1),
-        LogicalBundleWriteOptions::new(&registry),
+        roomy_plan(1, 0, 0),
+        LogicalBundleWriteOptions::new(&registry, Operation::ConformanceWrite),
     )
     .unwrap();
     let mut wrong_reference = objects[0].0;
     wrong_reference.digest[0] ^= 1;
-    assert_eq!(
-        writer
-            .write_object(wrong_reference, &objects[0].1)
-            .unwrap_err()
-            .code,
-        ErrorCode::ObjectIdMismatch
-    );
+    writer.write_object(wrong_reference, &objects[0].1).unwrap();
     assert_eq!(
         writer.finish().unwrap_err().code,
-        ErrorCode::BundleSequenceInvalid
+        ErrorCode::ObjectIdMismatch
     );
 
     let mut output = Vec::new();
     let mut writer = LogicalBundleWriter::new(
         &mut output,
-        roomy_plan(1, 0, 1),
-        LogicalBundleWriteOptions::new(&registry),
+        roomy_plan(1, 0, 0),
+        LogicalBundleWriteOptions::new(&registry, Operation::ConformanceWrite),
     )
     .unwrap();
     let wrong_kind = ObjectRef {
         kind: ObjectKind::Tree,
         digest: opaque_object_digest(ObjectKind::Tree.code(), &objects[1].1).unwrap(),
     };
+    writer.write_object(wrong_kind, &objects[1].1).unwrap();
     assert_eq!(
-        writer
-            .write_object(wrong_kind, &objects[1].1)
-            .unwrap_err()
-            .code,
+        writer.finish().unwrap_err().code,
         ErrorCode::ObjectReferenceKindMismatch
     );
+
+    let mut output = Vec::new();
+    let mut writer = LogicalBundleWriter::new(
+        &mut output,
+        roomy_plan(1, 0, 1),
+        LogicalBundleWriteOptions::new(&registry, Operation::ConformanceWrite),
+    )
+    .unwrap();
 
     let malformed_payload = [0xa1];
     let malformed_reference = ObjectRef {
@@ -346,7 +362,7 @@ fn writer_rejects_malformed_id_order_duplicate_count_and_root_inputs() {
     let mut writer = LogicalBundleWriter::new(
         &mut output,
         roomy_plan(0, 1, 1),
-        LogicalBundleWriteOptions::new(&registry),
+        LogicalBundleWriteOptions::new(&registry, Operation::ConformanceWrite),
     )
     .unwrap();
     assert_eq!(
@@ -362,7 +378,7 @@ fn writer_rejects_malformed_id_order_duplicate_count_and_root_inputs() {
     let mut writer = LogicalBundleWriter::new(
         &mut output,
         roomy_plan(0, 2, 2),
-        LogicalBundleWriteOptions::new(&registry),
+        LogicalBundleWriteOptions::new(&registry, Operation::ConformanceWrite),
     )
     .unwrap();
     writer.write_logical_record(&records[1]).unwrap();
@@ -376,7 +392,7 @@ fn writer_rejects_malformed_id_order_duplicate_count_and_root_inputs() {
     let mut writer = LogicalBundleWriter::new(
         &mut output,
         roomy_plan(0, 0, 2),
-        LogicalBundleWriteOptions::new(&registry),
+        LogicalBundleWriteOptions::new(&registry, Operation::ConformanceWrite),
     )
     .unwrap();
     writer
@@ -401,7 +417,7 @@ fn writer_enforces_declarations_and_configured_resource_ceilings() {
     let error = LogicalBundleWriter::new(
         Vec::new(),
         too_few_indexes,
-        LogicalBundleWriteOptions::new(&registry),
+        LogicalBundleWriteOptions::new(&registry, Operation::ConformanceWrite),
     )
     .err()
     .unwrap();
@@ -417,7 +433,7 @@ fn writer_enforces_declarations_and_configured_resource_ceilings() {
     let error = LogicalBundleWriter::new(
         Vec::new(),
         too_small,
-        LogicalBundleWriteOptions::new(&registry),
+        LogicalBundleWriteOptions::new(&registry, Operation::ConformanceWrite),
     )
     .err()
     .unwrap();
@@ -429,7 +445,7 @@ fn writer_enforces_declarations_and_configured_resource_ceilings() {
         )
     );
 
-    let mut options = LogicalBundleWriteOptions::new(&registry);
+    let mut options = LogicalBundleWriteOptions::new(&registry, Operation::ConformanceWrite);
     options.limits.chunk_bytes = objects[0].1.len() - 1;
     let mut writer = LogicalBundleWriter::new(Vec::new(), roomy_plan(1, 0, 1), options).unwrap();
     assert_eq!(
@@ -445,7 +461,7 @@ fn writer_enforces_declarations_and_configured_resource_ceilings() {
     let mut writer = LogicalBundleWriter::new(
         Vec::new(),
         edge_plan,
-        LogicalBundleWriteOptions::new(&registry),
+        LogicalBundleWriteOptions::new(&registry, Operation::ConformanceWrite),
     )
     .unwrap();
     writer.write_object(objects[0].0, &objects[0].1).unwrap();
@@ -460,7 +476,7 @@ fn writer_enforces_declarations_and_configured_resource_ceilings() {
         )
     );
 
-    let mut options = LogicalBundleWriteOptions::new(&registry);
+    let mut options = LogicalBundleWriteOptions::new(&registry, Operation::ConformanceWrite);
     options.limits = LogicalBundleWriteLimits {
         item_bytes: 100,
         ..LogicalBundleWriteLimits::default()
@@ -493,31 +509,105 @@ fn writer_checks_root_profile_family_and_write_mode_before_emission() {
     let mut writer = LogicalBundleWriter::new(
         Vec::new(),
         roomy_plan(1, 0, 1),
-        LogicalBundleWriteOptions::new(&registry),
+        LogicalBundleWriteOptions::new(&registry, Operation::ConformanceWrite),
     )
     .unwrap();
     writer.write_object(objects[0].0, &objects[0].1).unwrap();
-    assert_eq!(
-        writer
-            .write_object_root(
-                objects[0].0,
-                &ProfileRef::from_str("path.test/opaque@1").unwrap(),
-            )
-            .unwrap_err()
-            .code,
-        ErrorCode::SchemaFieldInvalid
-    );
+    writer
+        .write_object_root(
+            objects[0].0,
+            &ProfileRef::from_str("path.test/opaque@1").unwrap(),
+        )
+        .unwrap();
+    assert_eq!(writer.finish().unwrap_err().code, ErrorCode::SchemaFieldInvalid);
 
-    let mut options = LogicalBundleWriteOptions::new(&registry);
-    options.operation = ogvcs_object_model::Operation::ProductionWrite;
+    let options = LogicalBundleWriteOptions::new(&registry, Operation::ProductionWrite);
     let mut writer = LogicalBundleWriter::new(Vec::new(), roomy_plan(1, 0, 1), options).unwrap();
     writer.write_object(objects[0].0, &objects[0].1).unwrap();
+    writer.write_object_root(objects[0].0, &role()).unwrap();
+    assert_eq!(
+        writer.finish().unwrap_err().code,
+        ErrorCode::ProfileConformanceOnly
+    );
+}
+
+#[test]
+fn writer_ranks_complete_section_order_identity_schema_and_lifecycle() {
+    let registry = Registry::bundled();
+    let objects = all_objects();
+
+    // A safely decoded layer-two object defect is staged so the later
+    // layer-one declared identity failure can be selected at finish.
+    let tree_payload = objects
+        .iter()
+        .find(|(reference, _)| reference.kind == ObjectKind::Tree)
+        .unwrap()
+        .1
+        .clone();
+    let wrong_kind = ObjectRef {
+        kind: ObjectKind::ContentManifest,
+        digest: opaque_object_digest(ObjectKind::ContentManifest.code(), &tree_payload).unwrap(),
+    };
+    let mut bad_identity = ObjectRef {
+        kind: ObjectKind::Tree,
+        digest: opaque_object_digest(ObjectKind::Tree.code(), &tree_payload).unwrap(),
+    };
+    bad_identity.digest = [0xff; 32];
+    let mut writer = LogicalBundleWriter::new(
+        Vec::new(),
+        roomy_plan(2, 0, 0),
+        LogicalBundleWriteOptions::new(&registry, Operation::ConformanceWrite),
+    )
+    .unwrap();
+    writer.write_object(wrong_kind, &tree_payload).unwrap();
+    writer.write_object(bad_identity, &tree_payload).unwrap();
+    let error = writer.finish().unwrap_err();
+    assert_eq!(
+        (error.code, error.layer, error.stage),
+        (
+            ErrorCode::ObjectIdMismatch,
+            1,
+            ValidationStage::DeclaredIdentity
+        )
+    );
+
+    // A hashable record with an early schema defect cannot hide a later
+    // descending logical-record sort key.
+    let mut malformed = logical_records().swap_remove(7);
+    let Cbor::Map(fields) = &mut malformed else {
+        panic!("annotation must be a map");
+    };
+    fields.push((Cbor::UInt(999), Cbor::UInt(1)));
+    let records = logical_records();
+    let mut writer = LogicalBundleWriter::new(
+        Vec::new(),
+        roomy_plan(0, 2, 0),
+        LogicalBundleWriteOptions::new(&registry, Operation::ConformanceWrite),
+    )
+    .unwrap();
+    writer.write_logical_record(&malformed).unwrap();
+    assert_eq!(
+        writer.write_logical_record(&records[6]).unwrap_err().code,
+        ErrorCode::BundleSequenceInvalid
+    );
+
+    // Root-role lifecycle is likewise staged until a later root has had its
+    // phase and canonical order checked.
+    let mut writer = LogicalBundleWriter::new(
+        Vec::new(),
+        roomy_plan(2, 0, 2),
+        LogicalBundleWriteOptions::new(&registry, Operation::ProductionWrite),
+    )
+    .unwrap();
+    writer.write_object(objects[0].0, &objects[0].1).unwrap();
+    writer.write_object(objects[1].0, &objects[1].1).unwrap();
+    writer.write_object_root(objects[1].0, &role()).unwrap();
     assert_eq!(
         writer
-            .write_object_root(objects[0].0, &role())
+            .write_object_root(objects[0].0, &ProfileRef::from_str("bundle-role.test/root@1").unwrap())
             .unwrap_err()
             .code,
-        ErrorCode::ProfileConformanceOnly
+        ErrorCode::BundleSequenceInvalid
     );
 }
 
@@ -562,6 +652,35 @@ impl Write for ObservedWriter {
     }
 }
 
+#[test]
+fn bundle_writer_rejects_read_and_partial_authority_before_sink_output() {
+    for (registry, operation) in [
+        (Registry::bundled(), Operation::Read),
+        (
+            Registry::load([], []).unwrap(),
+            Operation::ConformanceWrite,
+        ),
+    ] {
+        let observed = Rc::new(RefCell::new(Vec::new()));
+        let error = LogicalBundleWriter::new(
+            ObservedWriter(observed.clone()),
+            roomy_plan(0, 0, 0),
+            LogicalBundleWriteOptions::new(&registry, operation),
+        )
+        .err()
+        .unwrap();
+        assert_eq!(
+            (error.code, error.layer, error.stage),
+            (
+                ErrorCode::SchemaFieldInvalid,
+                1,
+                ValidationStage::ConfiguredResourcePreflight,
+            )
+        );
+        assert!(observed.borrow().is_empty());
+    }
+}
+
 #[derive(Clone, Default)]
 struct SlowReturningWriter {
     bytes: Rc<RefCell<Vec<u8>>>,
@@ -587,7 +706,7 @@ fn writer_handles_short_writes_and_poisoning_without_silent_truncation() {
     let mut writer = LogicalBundleWriter::new(
         OneByteWriter::default(),
         plan(0, 0, 0, 77, 52, 16),
-        LogicalBundleWriteOptions::new(&registry),
+        LogicalBundleWriteOptions::new(&registry, Operation::ConformanceWrite),
     )
     .unwrap();
     writer.finish().unwrap();
@@ -600,7 +719,7 @@ fn writer_handles_short_writes_and_poisoning_without_silent_truncation() {
         LogicalBundleWriter::new(
             ZeroWriter,
             plan(0, 0, 0, 77, 52, 16),
-            LogicalBundleWriteOptions::new(&registry),
+            LogicalBundleWriteOptions::new(&registry, Operation::ConformanceWrite),
         )
         .err()
         .unwrap()
@@ -614,7 +733,7 @@ fn writer_checks_elapsed_time_after_a_slow_returning_write() {
     let registry = Registry::bundled();
     let output = SlowReturningWriter::default();
     let observed = output.clone();
-    let mut options = LogicalBundleWriteOptions::new(&registry);
+    let mut options = LogicalBundleWriteOptions::new(&registry, Operation::ConformanceWrite);
     options.limits.max_elapsed = Duration::from_millis(25);
     let error = LogicalBundleWriter::new(output, plan(0, 0, 0, 77, 52, 0), options)
         .err()
@@ -628,7 +747,7 @@ fn writer_checks_elapsed_time_after_a_slow_returning_write() {
 fn writer_enforces_memory_and_time_before_item_emission() {
     let registry = Registry::bundled();
     let conflict = object(ObjectKind::ConflictSet, "objects/11-conflict-set.cbor");
-    let mut options = LogicalBundleWriteOptions::new(&registry);
+    let mut options = LogicalBundleWriteOptions::new(&registry, Operation::ConformanceWrite);
     options.limits.max_memory_bytes = 8_192;
 
     let mut expected_header = Vec::new();
@@ -677,7 +796,7 @@ fn writer_enforces_memory_and_time_before_item_emission() {
 
     let observed = ObservedWriter::default();
     let bytes = Rc::clone(&observed.0);
-    let mut time_options = LogicalBundleWriteOptions::new(&registry);
+    let mut time_options = LogicalBundleWriteOptions::new(&registry, Operation::ConformanceWrite);
     time_options.limits.max_elapsed = Duration::ZERO;
     assert_eq!(
         LogicalBundleWriter::new(observed, roomy_plan(0, 0, 0), time_options)
@@ -701,7 +820,7 @@ fn object_logical_and_root_identities_are_computed_from_exact_canonical_bytes() 
     let mut writer = LogicalBundleWriter::new(
         Vec::new(),
         roomy_plan(2, 1, 2),
-        LogicalBundleWriteOptions::new(&registry),
+        LogicalBundleWriteOptions::new(&registry, Operation::ConformanceWrite),
     )
     .unwrap();
     writer.write_object(objects[0].0, &objects[0].1).unwrap();

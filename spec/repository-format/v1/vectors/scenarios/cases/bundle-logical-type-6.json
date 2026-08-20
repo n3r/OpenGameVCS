@@ -1,6 +1,7 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [],
     "lifetimeRecords": [],
     "mode": "conformance",
@@ -143,7 +144,7 @@
         "path": "scenarios/outputs/bundle-logical-type-6.json",
         "sha256": "cbe2344ef10f7bf031166f875f2bd4e883620847459f92cd44e6b746d03dc3c1"
       },
-      "summarySha256": "7785bc5f5c2e012f659d907f6151bab6ad1e100f04788a1362d930eb9bb5a9c4"
+      "summarySha256": "b460103b6a2507ea7cffc06c35f3352859df38e438cf5cbd0f5913906556e6e7"
     },
     "result": "accept"
   },
@@ -156,10 +157,10 @@
       "sha256": "c64fd07990fd1e7b2b97a802418981cabdf95cfec18b63ba9411af9da5f64990"
     },
     {
-      "bytes": 7286,
+      "bytes": 7320,
       "mediaType": "application/json",
       "path": "scenarios/definitions/bundle-logical-type-6.json",
-      "sha256": "b15572d05690934a94adb950ce5060f90a841fa1ebe37f926cab8cd4e028ff1c"
+      "sha256": "a061a2e0a8eadc6f4d3fbec65f455d9a3b7d33c2fe35f6f00312680e65ed9f39"
     }
   ],
   "operation": "validate-bundle",
@@ -172,18 +173,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/bundle-logical-type-6.json",
-        "definitionSha256": "b15572d05690934a94adb950ce5060f90a841fa1ebe37f926cab8cd4e028ff1c",
+        "definitionSha256": "a061a2e0a8eadc6f4d3fbec65f455d9a3b7d33c2fe35f6f00312680e65ed9f39",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "59cf2fe4aada5b9e617d457751c84739a67fa0a441a00d3bf7c7b23bcaa13002"
     },
     "summary": {
-      "bytes": 22689,
+      "bytes": 22723,
       "indexEntries": 0,
       "items": 21,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "7785bc5f5c2e012f659d907f6151bab6ad1e100f04788a1362d930eb9bb5a9c4",
+      "summarySha256": "b460103b6a2507ea7cffc06c35f3352859df38e438cf5cbd0f5913906556e6e7",
       "traversalEdges": 0
     }
   },

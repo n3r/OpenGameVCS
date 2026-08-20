@@ -1,32 +1,19 @@
 import { encodeCanonical } from './cbor.js';
 import { fail } from './errors.js';
+import { FROZEN_KIND_NAMES, isKindNameAuthority } from './assignment-authority.js';
 
 const PROFILE_TOKEN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 const PROFILE_NAMESPACE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+$/;
 const FILE_ID = /^fid:([0-9a-f]{32})$/;
 
-function readOnlyMap(entries) {
-  const map = new Map(entries);
-  const view = {
-    get size() { return map.size; },
-    get(key) { return map.get(key); },
-    has(key) { return map.has(key); },
-    entries() { return map.entries(); },
-    keys() { return map.keys(); },
-    values() { return map.values(); },
-    forEach(callback, thisArg) {
-      map.forEach((value, key) => callback.call(thisArg, value, key, view));
-    },
-    [Symbol.iterator]() { return map[Symbol.iterator](); }
-  };
-  return Object.freeze(view);
-}
+export const KIND_NAMES = FROZEN_KIND_NAMES;
 
-export const KIND_NAMES = readOnlyMap([
-  [1, 'chunk'], [2, 'content-manifest'], [3, 'tree'], [4, 'change-set'],
-  [5, 'asset-group-set'], [6, 'repository-descriptor'], [7, 'snapshot'],
-  [8, 'shelf-revision'], [9, 'provenance'], [10, 'attestation'], [11, 'conflict-set']
-]);
+function kindAuthority(value) {
+  if (!isKindNameAuthority(value)) {
+    fail('SCHEMA_FIELD_INVALID', { layer: 1, stage: 'configured-resource-preflight' });
+  }
+  return value;
+}
 
 function hexBytes(text) { return Uint8Array.from(text.match(/../g), pair => Number.parseInt(pair, 16)); }
 export function toHex(value) { return Buffer.from(value).toString('hex'); }
@@ -91,6 +78,7 @@ export class ObjectRef {
   #digest;
 
   constructor(kind, digest, registry = KIND_NAMES, { allowUnknownKind = false } = {}) {
+    registry = kindAuthority(registry);
     if (!Number.isInteger(kind) || kind < 1 || kind > 65535) fail('SCHEMA_FIELD_INVALID', { layer: 2 });
     if (!registry.has(kind) && !allowUnknownKind) fail('OBJECT_KIND_UNSUPPORTED', { layer: 2 });
     this.format = 1;
@@ -105,6 +93,7 @@ export class ObjectRef {
   }
   get digest() { return this.#digest.slice(); }
   static parse(text, registry = KIND_NAMES) {
+    registry = kindAuthority(registry);
     // The longest valid form is 144 ASCII bytes with a 63-byte kind token.
     // Reject before split so hostile colon-dense input cannot amplify memory.
     if (typeof text !== 'string' || Buffer.byteLength(text, 'utf8') > 144) {
@@ -119,6 +108,7 @@ export class ObjectRef {
     return new ObjectRef(entry[0], hexBytes(parts[4]), registry);
   }
   static fromMap(value, registry = KIND_NAMES, { allowUnknownKind = false } = {}) {
+    registry = kindAuthority(registry);
     mapShape(value, [0, 1, 2, 3]);
     if (value.get(0) !== 1) fail('OBJECT_REFERENCE_FORMAT_UNSUPPORTED', { layer: 2 });
     if (value.get(2) !== 1) fail('OBJECT_REFERENCE_FORMAT_UNSUPPORTED', { layer: 2 });

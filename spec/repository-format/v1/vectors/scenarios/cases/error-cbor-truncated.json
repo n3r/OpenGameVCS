@@ -1,6 +1,7 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [],
     "lifetimeRecords": [],
     "mode": "conformance",
@@ -138,10 +139,10 @@
       "sha256": "4ba6fbf83ee13f77b7e61de31948933953afd6bb0be6d484855083d7483d462e"
     },
     {
-      "bytes": 6452,
+      "bytes": 6486,
       "mediaType": "application/json",
       "path": "scenarios/definitions/error-cbor-truncated.json",
-      "sha256": "a19e1069c6e02f829fe02b532a4b54015df2508dc63782652cdd966d7059c1bf"
+      "sha256": "9feee9cb61ffb70e3cb32ae363436353977266040f584232eb8bbffd3d7f9cb5"
     }
   ],
   "operation": "canonical-scan",
@@ -153,18 +154,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/error-cbor-truncated.json",
-        "definitionSha256": "a19e1069c6e02f829fe02b532a4b54015df2508dc63782652cdd966d7059c1bf",
+        "definitionSha256": "9feee9cb61ffb70e3cb32ae363436353977266040f584232eb8bbffd3d7f9cb5",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "b01f6508304b0910f74893e3aadaae166283f2d97cfada58a625d2aa860e139b"
     },
     "summary": {
-      "bytes": 11677,
+      "bytes": 11711,
       "indexEntries": 0,
       "items": 12,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "b44852548e6495e30d78ab24a6fd4e7512d386e3054bbe8aae391a386bc7bf0f",
+      "summarySha256": "191f6c3ee93af2d6681c3741606b3f1f0a109368bb7083e9792971da3a8c8fc0",
       "traversalEdges": 0
     }
   },

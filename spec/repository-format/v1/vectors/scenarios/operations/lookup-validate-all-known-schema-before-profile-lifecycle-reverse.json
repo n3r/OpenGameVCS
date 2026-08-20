@@ -1,0 +1,21 @@
+{
+  "api": "validate-operation-mode",
+  "lookupOrder": [
+    "ogvcs:v1:tree:sha256:8d0a6315bc3770fcd6f8572036ac00328ba0d56459e144866a32e3b55a846dfa",
+    "ogvcs:v1:tree:sha256:e3b10ed23408b39a1b8c8320ffbc3de0d1d0ca69bbdef1c27c7e37a383243ed4"
+  ],
+  "mode": "production",
+  "registry": "bundled",
+  "registryFixture": {
+    "path": "registries/index.json",
+    "scenarioId": "registry-conformance-production"
+  },
+  "requestedLayer": 3,
+  "schema": "ogvcs.repository-format.v1.operation-mode-input.v1",
+  "semanticProfiles": true,
+  "sources": [
+    "lifecycle/tree-known-schema-before-profile-lifecycle.cbor",
+    "lifecycle/tree-feature-conformance.cbor"
+  ],
+  "surface": "repository-lookup-validate-all"
+}

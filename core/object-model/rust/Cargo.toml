@@ -14,6 +14,7 @@ categories = ["encoding", "data-structures", "development-tools"]
 include = [
     "src/**",
     "registries/**",
+    "unicode/**",
     "scripts/**",
     "tests/**",
     "build.rs",

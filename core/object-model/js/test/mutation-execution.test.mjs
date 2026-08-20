@@ -52,9 +52,9 @@ test('cross-kind tree-to-conflict mutation returns a stable schema error', async
   const registry = await loadBundledRegistry();
   const changed = new Uint8Array(await read('objects/03-tree.cbor'));
   changed[4] ^= 1 << 3;
-  assert.equal(scanMetadata(changed, { registry }).kind, 11);
+  assert.equal(scanMetadata(changed).kind, 11);
   assert.throws(
-    () => decodeMetadata(changed, { registry, semantic: false }),
+    () => decodeMetadata(changed, { semantic: false }),
     error => error instanceof OgvcsError && error.code === 'SCHEMA_FIELD_INVALID'
   );
 });
@@ -118,11 +118,13 @@ test('all 58,520 frozen single-bit recipes execute through public validation API
 
     if (source.category === 'logical-record') {
       const originalValue = decodeCanonical(original);
-      assert.equal(validateLogicalRecord(originalValue, { registry }).type, indexed.type);
+      assert.equal(validateLogicalRecord(originalValue, {
+        registry, operation: 'conformance'
+      }).type, indexed.type);
       assert.equal(toHex(hashLogicalRecord(indexed.type, original).bytes), source.declaredIdentity);
     } else {
       if (source.category === 'metadata-object') {
-        assert.equal(decodeMetadata(original, { registry, semantic: false }).kind, indexed.kind);
+        assert.equal(decodeMetadata(original, { semantic: false }).kind, indexed.kind);
       }
       assert.equal(toHex(hashObject(indexed.kind, original).digest), source.declaredIdentity);
     }
@@ -136,14 +138,16 @@ test('all 58,520 frozen single-bit recipes execute through public validation API
           actualIdentity = toHex(hashObject(indexed.kind, changed).digest);
         } else if (source.category === 'metadata-object') {
           rejectedByFraming = expectFormatRejection(() => {
-            const decoded = decodeMetadata(changed, { registry, semantic: false });
+            const decoded = decodeMetadata(changed, { semantic: false });
             if (decoded.kind !== indexed.kind) throw new OgvcsError('OBJECT_REFERENCE_KIND_MISMATCH');
             actualIdentity = toHex(hashObject(indexed.kind, changed).digest);
           }, `${source.source}:${byteOffset}:${bitIndex}`);
         } else {
           rejectedByFraming = expectFormatRejection(() => {
             const value = decodeCanonical(changed);
-            const validated = validateLogicalRecord(value, { registry });
+            const validated = validateLogicalRecord(value, {
+              registry, operation: 'conformance'
+            });
             actualIdentity = toHex(hashLogicalRecord(validated.type, changed).bytes);
           }, `${source.source}:${byteOffset}:${bitIndex}`);
         }
@@ -163,7 +167,7 @@ test('all 58,520 frozen single-bit recipes execute through public validation API
   assert.equal(recipe.wholeSequence.category, 'bundle-sequence');
   assert.equal(recipe.wholeSequence.byteLength, bundle.length);
   assert.equal(recipe.wholeSequence.source, 'logical-bundles/valid-supplied-closure.cborseq');
-  assert.equal(verifyLogicalBundle(bundle, { registry, mode: 'conformance' }).items, 7);
+  assert.equal(verifyLogicalBundle(bundle, { registry, operation: 'conformance' }).items, 7);
 
   const { values, slices } = decodeSequence(bundle, { maxBytes: 536_871_424 });
   const offsets = [];
@@ -202,7 +206,7 @@ test('all 58,520 frozen single-bit recipes execute through public validation API
         const absoluteOffset = shape.byteOffset + relativeOffset;
         const changed = mutate(bundle, absoluteOffset, bitIndex);
         assert.equal(expectFormatRejection(
-          () => verifyLogicalBundle(changed, { registry, mode: 'conformance' }),
+          () => verifyLogicalBundle(changed, { registry, operation: 'conformance' }),
           `${shape.category}:${relativeOffset}:${bitIndex}`
         ), true, `${shape.category}:${relativeOffset}:${bitIndex} validated under the original declarations`);
         bundleItemCases += 1;
@@ -215,7 +219,7 @@ test('all 58,520 frozen single-bit recipes execute through public validation API
     for (let bitIndex = 0; bitIndex < 8; bitIndex += 1) {
       const changed = mutate(bundle, byteOffset, bitIndex);
       assert.equal(expectFormatRejection(
-        () => verifyLogicalBundle(changed, { registry, mode: 'conformance' }),
+        () => verifyLogicalBundle(changed, { registry, operation: 'conformance' }),
         `bundle-sequence:${byteOffset}:${bitIndex}`
       ), true, `bundle-sequence:${byteOffset}:${bitIndex} validated under the original trailer`);
       wholeSequenceCases += 1;

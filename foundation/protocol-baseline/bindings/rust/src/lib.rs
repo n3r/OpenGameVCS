@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 
 pub const CONTRACT_VERSION: &str = "1.0.0-rc.1";
-pub const CONTRACT_MANIFEST_SHA256: &str = "41bfebd0524458a669324e055c9849aff40f5a55bd5b8b47f1891516910ebffe";
+pub const CONTRACT_MANIFEST_SHA256: &str = "1d02d4a858a5b3292511bcaccdb6d9619eaa3e2a8f95f8b89dbee73743de19d4";
 pub const PROTOCOL_VERSION: &str = "ogvcs.control.https-json@1";
 pub const MESSAGE_SCHEMA_VERSION: &str = "ogvcs.protocol.schema@1";
 pub const AUTHORIZATION_CONTRACT: &str = "ogvcs.authorization@1";

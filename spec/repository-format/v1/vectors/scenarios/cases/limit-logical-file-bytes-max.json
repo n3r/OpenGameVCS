@@ -1,6 +1,7 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [],
     "lifetimeRecords": [],
     "mode": "conformance",
@@ -132,17 +133,17 @@
         "path": "scenarios/outputs/limit-logical-file-bytes-max.json",
         "sha256": "e1ae10231554eb2889fc9a1027a948d03f2d1fc608b2d36d435daad38fad1794"
       },
-      "summarySha256": "0348818ca2f781ac229a05fcfadb2ddaf0cff4f1da12010e42bd64db6f7ad91f"
+      "summarySha256": "0d08871a547613123099e56d89baa416d89196da615f5580186c76be38934410"
     },
     "result": "accept"
   },
   "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
   "inputs": [
     {
-      "bytes": 6621,
+      "bytes": 6655,
       "mediaType": "application/json",
       "path": "scenarios/definitions/limit-logical-file-bytes-max.json",
-      "sha256": "6453715a79364b97d57664400752ca307f107a4c7cf75ed948fdf39a271997b9"
+      "sha256": "263b02962ab17cf9b6f8685e4513a659b9913acb928c01fb5bee7bdff58a7344"
     }
   ],
   "operation": "validate-object",
@@ -155,18 +156,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/limit-logical-file-bytes-max.json",
-        "definitionSha256": "6453715a79364b97d57664400752ca307f107a4c7cf75ed948fdf39a271997b9",
+        "definitionSha256": "263b02962ab17cf9b6f8685e4513a659b9913acb928c01fb5bee7bdff58a7344",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "20ff641997ffe1e80a423162866ed92dac478f2a4becc6d24b182bfe1c5dc91a"
     },
     "summary": {
-      "bytes": 11844,
+      "bytes": 11878,
       "indexEntries": 0,
       "items": 12,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "0348818ca2f781ac229a05fcfadb2ddaf0cff4f1da12010e42bd64db6f7ad91f",
+      "summarySha256": "0d08871a547613123099e56d89baa416d89196da615f5580186c76be38934410",
       "traversalEdges": 0
     }
   },

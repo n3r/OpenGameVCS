@@ -1,0 +1,16 @@
+{
+  "api": "expand-tree",
+  "authorityContext": "scenario.context",
+  "caseMode": "case-sensitive",
+  "lookupMutations": [
+    {
+      "action": "replace-payload-preserve-reference",
+      "reference": "ogvcs:v1:content-manifest:sha256:fcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfc",
+      "sourceArtifact": "objects/02-content-manifest.cbor"
+    }
+  ],
+  "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+  "schema": "ogvcs.repository-format.v1.repository-route-input.v1",
+  "tree": "ogvcs:v1:tree:sha256:f05d873c68b10c0d9b67adb3b103dbe32d4c0f78b12f17cbe1827995140150cb",
+  "verifyContent": true
+}

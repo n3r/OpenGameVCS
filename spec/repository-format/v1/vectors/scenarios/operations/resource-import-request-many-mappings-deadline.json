@@ -1,0 +1,24 @@
+{
+  "api": "validate-resource-reservation",
+  "assertNoPartialState": true,
+  "cluster": "fileid-import-many-mappings-deadline",
+  "evidenceRequired": {
+    "noPartialState": true,
+    "routeEvidence": [
+      {
+        "noPartialState": true,
+        "recoveryKind": "fresh-operation-after-deadline",
+        "route": "validate-import-request",
+        "succeeded": true
+      }
+    ]
+  },
+  "fixture": "bounded-many-import-mappings-v1",
+  "routes": [
+    "validate-import-request"
+  ],
+  "schema": "ogvcs.repository-format.v1.resource-reservation-input.v1",
+  "timeCeiling": {
+    "derivation": "one-checkpoint-before-final-bounded-mapping-v1"
+  }
+}

@@ -1,6 +1,7 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [],
     "lifetimeRecords": [],
     "mode": "conformance",
@@ -138,10 +139,10 @@
       "sha256": "fd042da871e00a808667891ad5249c631acd89c5490d06c9ca8065a1bd3314f4"
     },
     {
-      "bytes": 6681,
+      "bytes": 6715,
       "mediaType": "application/json",
       "path": "scenarios/definitions/limit-cbor-nesting-depth-max-plus-one.json",
-      "sha256": "d69c008d4150b5d96683a99316699c7974c9cad67b42729e407080baf6a88c24"
+      "sha256": "d8e292939c76b660cf266d6c5026a6d321cc2ac45cd3918e34f49637c240c229"
     }
   ],
   "operation": "validate-object",
@@ -154,18 +155,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/limit-cbor-nesting-depth-max-plus-one.json",
-        "definitionSha256": "d69c008d4150b5d96683a99316699c7974c9cad67b42729e407080baf6a88c24",
+        "definitionSha256": "d8e292939c76b660cf266d6c5026a6d321cc2ac45cd3918e34f49637c240c229",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "6266cc58eca5d03973ff94a1f065586907d16f54abd8182a17379b4557da43f1"
     },
     "summary": {
-      "bytes": 11938,
+      "bytes": 11972,
       "indexEntries": 0,
       "items": 12,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "f68d25b30eb7943db52a84d6a25cc03802dec94c617c43c0173d1c00824b54ba",
+      "summarySha256": "150f734fa3d1057ea0ac74f27e083d99c666a3485a78b0e8daa5bb06d56e9414",
       "traversalEdges": 0
     }
   },

@@ -1,0 +1,14 @@
+{
+  "api": "validate-operation-mode",
+  "operation": "conformance",
+  "registry": "partial",
+  "registryMutation": {
+    "action": "drop-document",
+    "path": "registries/profiles.json"
+  },
+  "requestedLayer": 3,
+  "schema": "ogvcs.repository-format.v1.operation-mode-input.v1",
+  "semanticProfiles": true,
+  "source": "malformed/nonminimal-unsigned.cbor",
+  "surface": "metadata-decoder"
+}

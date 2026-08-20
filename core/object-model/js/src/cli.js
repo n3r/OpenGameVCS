@@ -38,9 +38,9 @@ export const CLI_HELP = `ogvcs-object — OpenGameVCS format-v1 inspector and ve
 Usage:
   ogvcs-object inspect <object-file> [--max-bytes <integer>] [--max-memory-bytes <integer>]
   ogvcs-object id <object-file> --kind <code|token> [--max-bytes <integer>] [--max-memory-bytes <integer>]
-  ogvcs-object verify object <object-file> --ref <ObjectRef> [--max-bytes <integer>] [--max-memory-bytes <integer>]
-  ogvcs-object tree verify <tree-file> --descriptor <ObjectRef> --scratch <directory>
-  ogvcs-object bundle verify <bundle-file> --scratch <directory> [--max-bytes <integer>]
+  ogvcs-object verify object <object-file> --ref <ObjectRef> --operation <read|conformance|production-write> [--max-bytes <integer>] [--max-memory-bytes <integer>]
+  ogvcs-object tree verify <tree-file> --descriptor <ObjectRef> --scratch <directory> --operation <read|conformance|production-write>
+  ogvcs-object bundle verify <bundle-file> --scratch <directory> --operation <read|conformance|production-write> [--max-bytes <integer>]
   ogvcs-object registry list
   ogvcs-object registry profiles
   ogvcs-object registry profile <ProfileRef> [--operation <read|conformance|production-write>]
@@ -82,6 +82,14 @@ function options(args, allowed) {
     flags.set(name, value);
   }
   return { positional, flags };
+}
+
+function requiredLifecycleOperation(flags) {
+  const operation = flags.get('operation');
+  if (!['read', 'conformance', 'production-write'].includes(operation)) {
+    usage('--operation must be read, conformance, or production-write');
+  }
+  return operation;
 }
 
 async function openRegularReadOnly(filePath) {
@@ -214,12 +222,12 @@ function registryCounts(registry) {
 
 async function inspectObject(filePath, registry, limits) {
   const bytes = await readBoundedFile(filePath, limits.maxBytes);
-  const scan = scanMetadata(bytes, metadataOptions(bytes.length, limits, registry));
+  const scan = scanMetadata(bytes, metadataOptions(bytes.length, limits));
   let knownSchema = false;
   if (registry.objectKinds.has(scan.kind)) {
     // Inspection is deliberately structural: callers must be able to inspect
     // and forward objects whose required features are unknown locally.
-    validateKnownSchema(scan.value, scan.kind, { registry, semantic: false });
+    validateKnownSchema(scan.value, scan.kind, { semantic: false });
     knownSchema = true;
   }
   return {
@@ -257,7 +265,7 @@ async function runCommand(argv, cwd) {
       return { command: 'id', result: { bytes: hashed.bytes, kind, objectRef: hashed.reference.toString() } };
     } else {
       const payload = await readBoundedFile(filePath, limits.maxBytes);
-      const decoded = decodeMetadata(payload, { ...metadataOptions(payload.length, limits, registry), semantic: false });
+      const decoded = decodeMetadata(payload, { ...metadataOptions(payload.length, limits), semantic: false });
       if (decoded.kind !== kind) usage('--kind does not match metadata discriminator');
       const writer = createObjectHashWriter(kind, { registry: registry.kindNames });
       writer.update(payload);
@@ -268,8 +276,9 @@ async function runCommand(argv, cwd) {
 
   if (command === 'verify') {
     if (argv[1] !== 'object') usage('verify currently requires the object subcommand');
-    const parsed = options(argv.slice(2), new Set(['ref', 'max-bytes', 'max-memory-bytes']));
+    const parsed = options(argv.slice(2), new Set(['ref', 'operation', 'max-bytes', 'max-memory-bytes']));
     if (parsed.positional.length !== 1 || !parsed.flags.has('ref')) usage('verify object requires one file and --ref');
+    const operation = requiredLifecycleOperation(parsed.flags);
     const reference = ObjectRef.parse(parsed.flags.get('ref'), registry.kindNames);
     const limits = objectLimits(parsed.flags, reference.kind === 1 ? MAX_CHUNK_BYTES : MAX_METADATA_BYTES,
       reference.kind === 1);
@@ -282,7 +291,7 @@ async function runCommand(argv, cwd) {
     } else {
       const payload = await readBoundedFile(filePath, limits.maxBytes);
       verifyObjectId(reference, payload);
-      decoded = decodeMetadata(payload, metadataOptions(payload.length, limits, registry));
+      decoded = decodeMetadata(payload, { ...metadataOptions(payload.length, limits, registry), operation });
       bytes = payload.length;
     }
     return { command: 'verify object', result: {
@@ -296,10 +305,11 @@ async function runCommand(argv, cwd) {
 
   if (command === 'tree') {
     if (argv[1] !== 'verify') usage('tree currently requires the verify subcommand');
-    const parsed = options(argv.slice(2), new Set(['descriptor', 'scratch', 'max-bytes', 'max-memory-bytes', 'max-scratch-bytes']));
+    const parsed = options(argv.slice(2), new Set(['descriptor', 'scratch', 'operation', 'max-bytes', 'max-memory-bytes', 'max-scratch-bytes']));
     if (parsed.positional.length !== 1 || !parsed.flags.has('descriptor') || !parsed.flags.has('scratch')) {
       usage('tree verify requires one file, --descriptor, and --scratch');
     }
+    const operation = requiredLifecycleOperation(parsed.flags);
     const descriptor = ObjectRef.parse(parsed.flags.get('descriptor'), registry.kindNames);
     if (descriptor.kind !== 6) usage('--descriptor must be a repository-descriptor ObjectRef');
     const maximum = parsed.flags.has('max-bytes')
@@ -322,7 +332,7 @@ async function runCommand(argv, cwd) {
       const verified = await verifyTreeFile(resolve(cwd, parsed.positional[0]), {
         descriptor,
         registry,
-        operation: 'conformance',
+        operation,
         fileIdIndex: index,
         maxBytes: maximum,
         maxMemoryBytes
@@ -344,10 +354,12 @@ async function runCommand(argv, cwd) {
     if (argv[1] !== 'verify') usage('bundle currently requires the verify subcommand');
     const parsed = options(argv.slice(2), new Set([
       'scratch', 'max-bytes', 'max-memory-bytes', 'max-scratch-bytes', 'max-time-ms'
+      , 'operation'
     ]));
     if (parsed.positional.length !== 1 || !parsed.flags.has('scratch')) {
       usage('bundle verify requires exactly one bundle file and --scratch');
     }
+    const operation = requiredLifecycleOperation(parsed.flags);
     const maximum = parsed.flags.has('max-bytes')
       ? parsePositiveInteger(parsed.flags.get('max-bytes'), '--max-bytes', MAX_BUNDLE_BYTES)
       : MAX_BUNDLE_BYTES;
@@ -362,7 +374,7 @@ async function runCommand(argv, cwd) {
       : undefined;
     const verified = await verifyLogicalBundleFile(resolve(cwd, parsed.positional[0]), {
       registry,
-      mode: 'conformance',
+      operation,
       scratchDirectory: resolve(cwd, parsed.flags.get('scratch')),
       sequenceBytes: maximum,
       maxMemoryBytes,

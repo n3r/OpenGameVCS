@@ -1,0 +1,14 @@
+{
+  "api": "validate-conflict-set",
+  "authorityContext": "scenario.context",
+  "conflictSet": "ogvcs:v1:conflict-set:sha256:e46e2e78e75f00fc8e19fe3be3932a06137dd7f3cefc247e3f7f689b2f0d1610",
+  "lookupMutations": [
+    {
+      "action": "replace-payload-preserve-reference",
+      "reference": "ogvcs:v1:content-manifest:sha256:fdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfd",
+      "sourceArtifact": "objects/02-content-manifest.cbor"
+    }
+  ],
+  "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+  "schema": "ogvcs.repository-format.v1.repository-route-input.v1"
+}

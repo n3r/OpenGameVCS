@@ -6,7 +6,9 @@ This document is normative for every `conformance-only` entry owned by
 OGVCS-002 in [`registries/profiles.json`](registries/profiles.json). These
 profiles exist solely to make the format, object graph, logical-record, fixture
 adapter, and registry-evolution vectors fully interpretable before production
-profile owners publish ratified behavior.
+profile owners publish ratified behavior. Ratified `path.opengamevcs/*@1`
+entries are deliberately outside this document; OGVCS-004 owns their behavior,
+while `object-model.md` owns only the fail-closed callback boundary.
 
 A validator accepts one of two explicit modes:
 

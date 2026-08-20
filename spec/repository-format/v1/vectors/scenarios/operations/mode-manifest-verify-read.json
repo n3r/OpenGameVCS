@@ -1,0 +1,13 @@
+{
+  "api": "validate-operation-mode",
+  "manifest": "ogvcs:v1:content-manifest:sha256:82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12",
+  "mode": "read",
+  "objectLookup": "scenario.context.objectLookup",
+  "registry": "bundled",
+  "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+  "requestedLayer": 3,
+  "schema": "ogvcs.repository-format.v1.operation-mode-input.v1",
+  "semanticProfiles": true,
+  "source": "objects/02-content-manifest.cbor",
+  "surface": "manifest-verify"
+}

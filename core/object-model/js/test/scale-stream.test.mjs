@@ -6,7 +6,8 @@ import { join, resolve } from 'node:path';
 import test from 'node:test';
 import {
   MANIFEST_STREAM_LIMITS, TREE_STREAM_LIMITS, createDiskFileIdIndex, decodeMetadata, encodeMetadata, hashObject,
-  verifyTreeFile, writeContentManifest, writeOrderedTree, writeSortedTree
+  loadBundledRegistry, verifyTreeFile as verifyTreeFileRaw, writeContentManifest as writeContentManifestRaw,
+  writeOrderedTree as writeOrderedTreeRaw, writeSortedTree as writeSortedTreeRaw
 } from '../src/index.js';
 import { OgvcsError } from '../src/errors.js';
 
@@ -16,6 +17,15 @@ const MANIFEST = new Map([[0, 1], [1, 2], [2, 1], [3, Buffer.from('82fb14ee53937
 const CONTENT_PROFILE = new Map([[0, 'content-policy.test'], [1, 'opaque'], [2, 1]]);
 const CHUNK_PROFILE = new Map([[0, 'chunking.test'], [1, 'external-boundaries'], [2, 1]]);
 const VECTORS = resolve(import.meta.dirname, '../../../../spec/repository-format/v1/vectors');
+const registry = await loadBundledRegistry();
+const writeContentManifest = input => writeContentManifestRaw({
+  registry, operation: 'conformance', ...input
+});
+const writeOrderedTree = input => writeOrderedTreeRaw({ registry, operation: 'conformance', ...input });
+const writeSortedTree = input => writeSortedTreeRaw({ registry, operation: 'conformance', ...input });
+const verifyTreeFile = (path, options = {}) => verifyTreeFileRaw(path, {
+  registry, operation: 'conformance', ...options
+});
 
 function fileId(index) {
   const i = Buffer.alloc(8);
@@ -99,7 +109,7 @@ test('ordered and bounded external-sort tree writers emit identical canonical by
   assert.equal(right.metrics.runCount > 4, true);
   assert.equal(right.metrics.peakScratchBytes > 0, true);
   assert.deepEqual(await readdir(directory), []);
-  const decoded = decodeMetadata(new Uint8Array(ordered.bytes()));
+  const decoded = decodeMetadata(new Uint8Array(ordered.bytes()), { semantic: false });
   assert.equal(decoded.kind, 3);
   assert.equal(decoded.value.get(17).length, 2_000);
   assert.equal(hashObject(3, new Uint8Array(ordered.bytes())).toString(), left.objectRef.toString());
@@ -108,13 +118,15 @@ test('ordered and bounded external-sort tree writers emit identical canonical by
 test('ordered tree writer rejects counts, ordering, duplicates, resource ceilings, and incomplete writers', async () => {
   const discard = () => {};
   await assert.rejects(writeOrderedTree({ descriptor: DESCRIPTOR, entryCount: TREE_STREAM_LIMITS.maxEntries + 1,
-    entries: [], sink: discard }), code('LIMIT_COUNT', 2));
+    entries: [], sink: discard }), code('LIMIT_COUNT', 1));
   await assert.rejects(writeOrderedTree({ descriptor: DESCRIPTOR, entryCount: 2,
     entries: [treeEntry(1), treeEntry(0)], sink: discard }), code('TREE_ENTRY_ORDER_INVALID'));
   await assert.rejects(writeOrderedTree({ descriptor: DESCRIPTOR, entryCount: 2,
     entries: [treeEntry(0), treeEntry(0)], sink: discard }), code('TREE_ENTRY_ORDER_INVALID'));
   await assert.rejects(writeOrderedTree({ descriptor: DESCRIPTOR, entryCount: 1,
     entries: [treeEntry(0), treeEntry(1)], sink: discard }), code('SCHEMA_FIELD_INVALID'));
+  await assert.rejects(writeOrderedTree({ descriptor: DESCRIPTOR, entryCount: 1, maxItems: 1,
+    entries: [treeEntry(0), treeEntry(1)], sink: discard }), code('LIMIT_COUNT', 1));
   await assert.rejects(writeOrderedTree({ descriptor: DESCRIPTOR, entryCount: 2,
     entries: [treeEntry(0), treeEntry(1, { 2: fileId(0) })], sink: discard }), code('FILEID_DUPLICATE_IN_TREE'));
   await assert.rejects(writeOrderedTree({ descriptor: DESCRIPTOR, entryCount: 100_001,
@@ -199,22 +211,49 @@ test('raw tree file verifier hashes and validates incrementally without decoding
     maxMemoryBytes: 65_536, readChunkBytes: 1_024 });
   assert.equal(verified.objectRef.toString(), written.objectRef.toString());
   assert.deepEqual(verified.summary, written.summary);
-  assert.equal(verified.highestLayer, 2);
+  assert.equal(verified.highestLayer, 3);
   await assert.rejects(verifyTreeFile(path, { descriptor: DESCRIPTOR, maxBytes: 1 }), code('LIMIT_METADATA_BYTES'));
   const other = new Map(DESCRIPTOR); other.set(3, new Uint8Array(32).fill(7));
   await assert.rejects(verifyTreeFile(path, { descriptor: other }), code('REPOSITORY_DESCRIPTOR_MISMATCH'));
+});
+
+test('raw tree verifier composes reader and FileID-index memory and reuses an aborted disk index', async t => {
+  const directory = await scratch(t);
+  const fullOutput = collector();
+  await writeOrderedTree({
+    descriptor: DESCRIPTOR, entryCount: 3, entries: orderedEntries(3), sink: fullOutput.sink
+  });
+  const recoveryOutput = collector();
+  await writeOrderedTree({
+    descriptor: DESCRIPTOR, entryCount: 1, entries: orderedEntries(1), sink: recoveryOutput.sink
+  });
+  const fullPath = join(directory, 'full-tree.cbor');
+  const recoveryPath = join(directory, 'recovery-tree.cbor');
+  await writeFile(fullPath, fullOutput.bytes(), { flag: 'wx', mode: 0o600 });
+  await writeFile(recoveryPath, recoveryOutput.bytes(), { flag: 'wx', mode: 0o600 });
+  const index = await createDiskFileIdIndex({
+    scratchDirectory: directory, maxMemoryBytes: 512, maxRunBytes: 256,
+    maxOpenRuns: 4, maxScratchBytes: 10_000
+  });
+  const options = {
+    descriptor: DESCRIPTOR, fileIdIndex: index, maxMemoryBytes: 16_576, readChunkBytes: 128
+  };
+  await assert.rejects(verifyTreeFile(fullPath, options), code('LIMIT_MEMORY', 1));
+  const recovered = await verifyTreeFile(recoveryPath, options);
+  assert.equal(recovered.summary.entryCount, 1);
+  assert.deepEqual((await readdir(directory)).filter(name => name.endsWith('.run')), []);
 });
 
 test('raw tree decoder charges cumulative nested value retention', async t => {
   const directory = await scratch(t);
   const seed = decodeMetadata(new Uint8Array(await readFile(resolve(
     VECTORS, 'objects/03-tree.cbor'
-  )))).value;
+  ))), { semantic: false }).value;
   seed.set(3, new Map([[
     'extension-state.test/opaque@1',
     Array.from({ length: 32 }, () => new Uint8Array(128))
   ]]));
-  const payload = encodeMetadata(seed);
+  const payload = encodeMetadata(seed, { registry, operation: 'conformance' });
   const path = join(directory, 'nested-memory.cbor');
   await writeFile(path, payload, { flag: 'wx', mode: 0o600 });
   await assert.rejects(verifyTreeFile(path, {
@@ -225,6 +264,15 @@ test('raw tree decoder charges cumulative nested value retention', async t => {
 
 test('external sorter enforces scratch bounds and removes all exclusive runs after failures', async t => {
   const directory = await scratch(t);
+  await assert.rejects(writeSortedTree({
+    descriptor: DESCRIPTOR,
+    entryCount: 1,
+    maxItems: 1,
+    entries: [treeEntry(1), treeEntry(0)],
+    sink: () => {},
+    scratchDirectory: directory
+  }), code('LIMIT_COUNT', 1));
+  assert.deepEqual(await readdir(directory), []);
   await assert.rejects(writeSortedTree({
     descriptor: DESCRIPTOR,
     entryCount: 50,
@@ -333,7 +381,10 @@ test('streaming manifest writer verifies repeated chunks and matches the generic
     sink: output.sink
   });
   const expected = encodeMetadata(new Map([[0, 1], [1, 2], [2, []], [16, fixture.logicalLength],
-    [17, fixture.digest], [18, CHUNK_PROFILE], [19, [fixture.part, fixture.part, fixture.part]]]));
+    [17, fixture.digest], [18, CHUNK_PROFILE], [19, [fixture.part, fixture.part, fixture.part]]]), {
+    registry,
+    operation: 'conformance'
+  });
   assert.ok(output.bytes().equals(expected));
   assert.equal(result.objectRef.toString(), hashObject(2, expected).toString());
   assert.deepEqual(result.verification, {
@@ -354,11 +405,11 @@ test('derived-digest manifest mode hashes content once and verifies repeatable m
     logicalLength: fixture.logicalLength,
     chunkProfile: CHUNK_PROFILE,
     partCount: 4,
-    parts(pass) { factories += 1; assert.ok(pass === 1 || pass === 2); return Array(4).fill(fixture.part); },
+    parts(pass) { factories += 1; assert.ok(pass >= 1 && pass <= 4); return Array(4).fill(fixture.part); },
     chunkProvider() { providers += 1; return fixture.chunk; },
     sink: output.sink
   });
-  assert.equal(factories, 2);
+  assert.equal(factories, 4);
   assert.equal(providers, 1);
   assert.ok(result.wholeFileDigest.bytes.every((byte, index) => byte === fixture.digest.get(1)[index]));
   assert.equal(result.verification.contentBytesRead, String(fixture.logicalLength));
@@ -401,9 +452,12 @@ test('manifest writer fails closed on malformed parts, limits, provider bytes, a
       chunkProfile: CHUNK_PROFILE, partCount: 1, parts: [part], sink: discard }), code(expected));
   }
   await assert.rejects(writeContentManifest({ logicalLength: 0, wholeFileDigest: fixture.digest,
-    chunkProfile: CHUNK_PROFILE, partCount: MANIFEST_STREAM_LIMITS.maxParts + 1, parts: [], sink: discard }), code('LIMIT_COUNT', 2));
+    chunkProfile: CHUNK_PROFILE, partCount: MANIFEST_STREAM_LIMITS.maxParts + 1, parts: [], sink: discard }), code('LIMIT_COUNT', 1));
   await assert.rejects(writeContentManifest({ logicalLength: fixture.logicalLength + 1n, wholeFileDigest: fixture.digest,
     chunkProfile: CHUNK_PROFILE, partCount: 2, parts: [fixture.part, fixture.part], sink: discard }), code('MANIFEST_LENGTH_MISMATCH'));
+  await assert.rejects(writeContentManifest({ logicalLength: fixture.chunk.length, wholeFileDigest: fixture.digest,
+    chunkProfile: CHUNK_PROFILE, partCount: 1, maxItems: 1,
+    parts: [fixture.part, fixture.part], sink: discard }), code('LIMIT_COUNT', 1));
   await assert.rejects(writeContentManifest({ logicalLength: fixture.logicalLength, wholeFileDigest: fixture.digest,
     chunkProfile: CHUNK_PROFILE, partCount: 2, parts: [fixture.part, fixture.part],
     chunkProvider: () => fixture.chunk.subarray(1), sink: discard }), code('MANIFEST_CHUNK_LENGTH_INVALID'));
@@ -421,6 +475,30 @@ test('manifest writer fails closed on malformed parts, limits, provider bytes, a
   await assert.rejects(writeContentManifest({ logicalLength: 0, wholeFileDigest: new Map([[0, 1],
     [1, new Uint8Array(createHash('sha256').digest())]]), chunkProfile: CHUNK_PROFILE, partCount: 0,
     parts: [], sink: discard, maxTimeMs: 0 }), code('LIMIT_TIME'));
+});
+
+test('manifest content failures are selected across every independent provider occurrence', async () => {
+  const expectedOne = new Uint8Array(Buffer.from('provider-one'));
+  const expectedTwo = new Uint8Array(Buffer.from('provider-two'));
+  const short = expectedOne.subarray(0, expectedOne.length - 1);
+  const wrong = expectedTwo.slice(); wrong[0] ^= 1;
+  const pair = [
+    { part: new Map([[0, hashObject(1, expectedOne).toMap()], [1, 12]]), bytes: short },
+    { part: new Map([[0, hashObject(1, expectedTwo).toMap()], [1, 12]]), bytes: wrong }
+  ];
+  const digest = new Map([[0, 1], [1, new Uint8Array(createHash('sha256')
+    .update(expectedOne).update(expectedTwo).digest())]]);
+  for (const ordered of [pair, [...pair].reverse()]) {
+    await assert.rejects(writeContentManifest({
+      logicalLength: 24n,
+      wholeFileDigest: digest,
+      chunkProfile: CHUNK_PROFILE,
+      partCount: 2,
+      parts: ordered.map(item => item.part),
+      chunkProvider: (_reference, { index }) => ordered[index].bytes,
+      sink: () => {}
+    }), code('OBJECT_ID_MISMATCH', 1));
+  }
 });
 
 test('empty manifest whole-file SHA-256 is checked without a provider', async () => {

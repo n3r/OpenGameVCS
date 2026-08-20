@@ -5,10 +5,15 @@ import test from 'node:test';
 
 import {
   HARD_LIMIT_NAMES, OgvcsError, createObjectHashWriter, decodeCanonical, encodeCanonical,
-  scanMetadata, validateKnownSchema, writeCanonical, writeOrderedLogicalBundle
+  loadBundledRegistry, scanMetadata, validateKnownSchema, writeCanonical,
+  writeOrderedLogicalBundle as writeOrderedLogicalBundleRaw
 } from '../src/index.js';
 
 const VECTORS = resolve(import.meta.dirname, '../../../../spec/repository-format/v1/vectors');
+const registry = await loadBundledRegistry();
+const writeOrderedLogicalBundle = input => writeOrderedLogicalBundleRaw({
+  registry, operation: 'conformance', ...input
+});
 const object = async name => decodeCanonical(new Uint8Array(await readFile(resolve(VECTORS, 'objects', name))));
 
 function expected(code, layer) {
@@ -96,13 +101,14 @@ test('every frozen hard limit is enforced by a reduced real caller route', async
 
   const manifest = await object('02-content-manifest.cbor');
   assert.throws(() => validateKnownSchema(manifest, 2, {
+    semantic: false,
     hardLimits: { 'logical-file-bytes': Number(manifest.get(16)) - 1 }
   }), expected('LIMIT_LOGICAL_BYTES', 2));
   mark('logical-file-bytes');
 
   {
     const unread = unreadArray(); const value = new Map(manifest); value.set(19, unread.value);
-    assert.throws(() => validateKnownSchema(value, 2, { hardLimits: { 'manifest-chunks': 0 } }),
+    assert.throws(() => validateKnownSchema(value, 2, { semantic: false, hardLimits: { 'manifest-chunks': 0 } }),
       expected('LIMIT_COUNT', 2));
     assert.equal(unread.untouched(), true);
     mark('manifest-chunks');
@@ -111,12 +117,12 @@ test('every frozen hard limit is enforced by a reduced real caller route', async
   const tree = await object('03-tree.cbor');
   {
     const unread = unreadArray(); const value = new Map(tree); value.set(17, unread.value);
-    assert.throws(() => validateKnownSchema(value, 3, { hardLimits: { 'tree-entries': 0 } }),
+    assert.throws(() => validateKnownSchema(value, 3, { semantic: false, hardLimits: { 'tree-entries': 0 } }),
       expected('LIMIT_COUNT', 2));
     assert.equal(unread.untouched(), true);
     mark('tree-entries');
   }
-  assert.throws(() => validateKnownSchema(tree, 3, { hardLimits: { 'path-segment-bytes': 0 } }),
+  assert.throws(() => validateKnownSchema(tree, 3, { semantic: false, hardLimits: { 'path-segment-bytes': 0 } }),
     expected('PATH_CORE_INVALID', 2));
   mark('path-segment-bytes');
 
@@ -125,13 +131,13 @@ test('every frozen hard limit is enforced by a reduced real caller route', async
   ))));
   {
     const unread = unreadArray(); const value = new Map(changeSet); value.set(18, unread.value);
-    assert.throws(() => validateKnownSchema(value, 4, { hardLimits: { 'change-set-operations': 0 } }),
+    assert.throws(() => validateKnownSchema(value, 4, { semantic: false, hardLimits: { 'change-set-operations': 0 } }),
       expected('LIMIT_COUNT', 2));
     assert.equal(unread.untouched(), true);
     mark('change-set-operations');
   }
   for (const name of ['path-segments', 'path-bytes']) {
-    assert.throws(() => validateKnownSchema(changeSet, 4, { hardLimits: { [name]: 0 } }),
+    assert.throws(() => validateKnownSchema(changeSet, 4, { semantic: false, hardLimits: { [name]: 0 } }),
       expected('PATH_CORE_INVALID', 2), name);
     mark(name);
   }
@@ -139,7 +145,7 @@ test('every frozen hard limit is enforced by a reduced real caller route', async
   const groupSet = await object('05-asset-group-set.cbor');
   {
     const unread = unreadArray(); const value = new Map(groupSet); value.set(17, unread.value);
-    assert.throws(() => validateKnownSchema(value, 5, { hardLimits: { 'asset-groups': 0 } }),
+    assert.throws(() => validateKnownSchema(value, 5, { semantic: false, hardLimits: { 'asset-groups': 0 } }),
       expected('LIMIT_COUNT', 2));
     assert.equal(unread.untouched(), true);
     mark('asset-groups');
@@ -147,19 +153,19 @@ test('every frozen hard limit is enforced by a reduced real caller route', async
   {
     const group = new Map(groupSet.get(17)[0]); const unread = unreadArray(); group.set(3, unread.value);
     const value = new Map(groupSet); value.set(17, [group]);
-    assert.throws(() => validateKnownSchema(value, 5, { hardLimits: { 'asset-group-members': 0 } }),
+    assert.throws(() => validateKnownSchema(value, 5, { semantic: false, hardLimits: { 'asset-group-members': 0 } }),
       expected('LIMIT_COUNT', 2));
     assert.equal(unread.untouched(), true);
     mark('asset-group-members');
   }
 
   const snapshot = await object('07-snapshot.cbor');
-  assert.throws(() => validateKnownSchema(snapshot, 7, { hardLimits: { 'snapshot-message-bytes': 0 } }),
+  assert.throws(() => validateKnownSchema(snapshot, 7, { semantic: false, hardLimits: { 'snapshot-message-bytes': 0 } }),
     expected('LIMIT_VALUE_BYTES', 2));
   mark('snapshot-message-bytes');
   {
     const unread = unreadArray(); const value = new Map(snapshot); value.set(17, unread.value);
-    assert.throws(() => validateKnownSchema(value, 7, { hardLimits: { 'snapshot-parents': 0 } }),
+    assert.throws(() => validateKnownSchema(value, 7, { semantic: false, hardLimits: { 'snapshot-parents': 0 } }),
       expected('SNAPSHOT_PARENT_COUNT_INVALID', 2));
     assert.equal(unread.untouched(), true);
     mark('snapshot-parents');

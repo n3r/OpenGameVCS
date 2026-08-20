@@ -1,0 +1,17 @@
+{
+  "api": "validate-operation-mode",
+  "expectedProfileFamily": "path",
+  "objectRef": "ogvcs:v1:repository-descriptor:sha256:4bc81671782f76026966209832fb2ac3153173a688df75524ee0226ea4a3551c",
+  "operation": "production-write",
+  "profile": "profile-state.test/deprecated@1",
+  "registry": "bundled",
+  "registryFixture": {
+    "path": "registries/index.json",
+    "scenarioId": "registry-deprecated-write"
+  },
+  "requestedLayer": 3,
+  "schema": "ogvcs.repository-format.v1.operation-mode-input.v1",
+  "semanticProfiles": true,
+  "source": "lifecycle/bundle-profile-state-test-deprecated-1.cborseq",
+  "surface": "bundle-stream-verifier"
+}

@@ -69,6 +69,58 @@
           "implementationScope"
         ]
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "validate-resource-reservation"
+          }
+        },
+        "required": [
+          "operation"
+        ]
+      },
+      "then": {
+        "properties": {
+          "expected": {
+            "properties": {
+              "evidence": {
+                "$ref": "#/$defs/resourceEvidence"
+              }
+            },
+            "required": [
+              "evidence"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "validate-tree-groups-memory"
+          }
+        },
+        "required": [
+          "operation"
+        ]
+      },
+      "then": {
+        "properties": {
+          "expected": {
+            "properties": {
+              "evidence": {
+                "$ref": "#/$defs/treeGroupsMemoryEvidence"
+              }
+            },
+            "required": [
+              "evidence"
+            ]
+          }
+        }
+      }
     }
   ],
   "properties": {
@@ -110,7 +162,16 @@
         "validate-bundle",
         "validate-bundle-claim",
         "validate-object",
-        "validate-repository"
+        "validate-operation-mode",
+        "validate-path-profile-decision",
+        "validate-repository",
+        "validate-repository-route",
+        "validate-resource-reservation",
+        "validate-tree-groups-memory",
+        "validate-typed-reference-authority",
+        "write-content-manifest",
+        "write-logical-bundle",
+        "write-tree"
       ]
     },
     "resources": {
@@ -180,6 +241,12 @@
         "asOf": {
           "const": "immediately-before-candidate-snapshot"
         },
+        "caseMode": {
+          "enum": [
+            "case-sensitive",
+            "case-folded"
+          ]
+        },
         "candidateSnapshot": {
           "$ref": "#/$defs/objectRefText"
         },
@@ -223,6 +290,9 @@
           },
           "type": "array"
         },
+        "pathProfileValidator": {
+          "$ref": "#/$defs/pathProfileValidator"
+        },
         "registrySnapshot": {
           "additionalProperties": false,
           "properties": {
@@ -252,6 +322,9 @@
         },
         "repositoryDescriptor": {
           "$ref": "#/$defs/objectRefText"
+        },
+        "verifyContent": {
+          "type": "boolean"
         },
         "roots": {
           "items": {
@@ -288,6 +361,7 @@
       },
       "required": [
         "mode",
+        "caseMode",
         "requestedLayer",
         "asOf",
         "registrySnapshot",
@@ -336,6 +410,16 @@
               "pattern": "^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$",
               "type": "string"
             },
+            "evidence": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/resourceEvidence"
+                },
+                {
+                  "$ref": "#/$defs/treeGroupsMemoryEvidence"
+                }
+              ]
+            },
             "layer": {
               "enum": [
                 1,
@@ -378,6 +462,9 @@
     "importMapping": {
       "additionalProperties": false,
       "properties": {
+        "descriptor": {
+          "$ref": "#/$defs/objectRefText"
+        },
         "fileId": {
           "$ref": "#/$defs/fileIdHex"
         },
@@ -402,6 +489,7 @@
         }
       },
       "required": [
+        "descriptor",
         "importerProfile",
         "sourceNamespaceDigest",
         "sourceIdentityDigest",
@@ -489,9 +577,184 @@
       ],
       "type": "object"
     },
+    "pathProfileValidator": {
+      "additionalProperties": false,
+      "properties": {
+        "caseMode": {
+          "enum": [
+            "case-sensitive",
+            "case-folded"
+          ]
+        },
+        "invocations": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "decision": {
+                "oneOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "accepted": {
+                        "const": true
+                      },
+                      "platformKey": {
+                        "maxLength": 32768,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "repositoryKey": {
+                        "maxLength": 32768,
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "accepted",
+                      "repositoryKey",
+                      "platformKey"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "accepted": {
+                        "const": false
+                      }
+                    },
+                    "required": [
+                      "accepted"
+                    ],
+                    "type": "object"
+                  }
+                ]
+              },
+              "segments": {
+                "items": {
+                  "maxLength": 1024,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 256,
+                "minItems": 1,
+                "type": "array"
+              }
+            },
+            "required": [
+              "segments",
+              "decision"
+            ],
+            "type": "object"
+          },
+          "maxItems": 256,
+          "minItems": 0,
+          "type": "array"
+        },
+        "profile": {
+          "$ref": "#/$defs/profileRefText"
+        }
+      },
+      "required": [
+        "profile",
+        "caseMode",
+        "invocations"
+      ],
+      "type": "object"
+    },
     "profileRefText": {
       "pattern": "^[a-z][a-z0-9-]*(?:\\.[a-z][a-z0-9-]*)+/[a-z][a-z0-9-]*@[1-9][0-9]*$",
       "type": "string"
+    },
+    "resourceEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "noPartialState": {
+          "const": true
+        },
+        "routeEvidence": {
+          "items": {
+            "$ref": "#/$defs/resourceRouteEvidence"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "noPartialState",
+        "routeEvidence"
+      ],
+      "type": "object"
+    },
+    "resourceRouteEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "counterBaselineRestored": {
+          "const": true
+        },
+        "compositeMemoryBounded": {
+          "const": true
+        },
+        "indexInstanceReused": {
+          "const": true
+        },
+        "noPartialState": {
+          "const": true
+        },
+        "recoveryKind": {
+          "enum": [
+            "fresh-operation-after-deadline",
+            "same-authority-instance",
+            "stateless-reinvoke"
+          ]
+        },
+        "route": {
+          "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+          "type": "string"
+        },
+        "succeeded": {
+          "const": true
+        },
+        "scratchIndexReusableAfterAbort": {
+          "const": true
+        },
+        "targetUnchanged": {
+          "const": true
+        }
+      },
+      "required": [
+        "route",
+        "noPartialState",
+        "recoveryKind",
+        "succeeded"
+      ],
+      "type": "object"
+    },
+    "treeGroupsMemoryEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "eachComponentAloneFit": {
+          "const": true
+        },
+        "noPartialState": {
+          "const": true
+        },
+        "routeEvidence": {
+          "items": {
+            "$ref": "#/$defs/resourceRouteEvidence"
+          },
+          "maxItems": 1,
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "eachComponentAloneFit",
+        "noPartialState",
+        "routeEvidence"
+      ],
+      "type": "object"
     },
     "resources": {
       "additionalProperties": false,

@@ -12,7 +12,7 @@
 
 namespace opengamevcs::protocol::v1 {
 inline constexpr const char* contract_version = "1.0.0-rc.1";
-inline constexpr const char* contract_manifest_sha256 = "41bfebd0524458a669324e055c9849aff40f5a55bd5b8b47f1891516910ebffe";
+inline constexpr const char* contract_manifest_sha256 = "1d02d4a858a5b3292511bcaccdb6d9619eaa3e2a8f95f8b89dbee73743de19d4";
 inline constexpr const char* protocol_version = "ogvcs.control.https-json@1";
 inline constexpr const char* message_schema_version = "ogvcs.protocol.schema@1";
 inline constexpr const char* authorization_contract = "ogvcs.authorization@1";

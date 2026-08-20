@@ -1,0 +1,8 @@
+{
+  "api": "validate-shelf-revision",
+  "authorityContext": "scenario.context",
+  "callerVerifyContent": true,
+  "forceContentComplete": true,
+  "schema": "ogvcs.repository-format.v1.repository-route-input.v1",
+  "shelfRevision": "ogvcs:v1:shelf-revision:sha256:d7a45cc69735b497354ef7c5d340a851860c2cdbdf668693a91e8ff06d68f7ad"
+}

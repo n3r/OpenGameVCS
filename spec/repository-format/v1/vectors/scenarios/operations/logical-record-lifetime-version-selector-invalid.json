@@ -1,0 +1,9 @@
+{
+  "api": "validate-operation-mode",
+  "registry": "absent",
+  "requestedLayer": 2,
+  "schema": "ogvcs.repository-format.v1.operation-mode-input.v1",
+  "semanticProfiles": false,
+  "source": "schema/logical-record-file-id-lifetime-version-selector-invalid.cbor",
+  "surface": "logical-record-map-raw"
+}

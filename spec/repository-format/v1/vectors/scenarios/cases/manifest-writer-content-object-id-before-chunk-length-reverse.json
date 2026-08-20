@@ -1,0 +1,101 @@
+{
+  "context": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 13,
+          "mediaType": "application/octet-stream",
+          "path": "scenarios/objects/manifest-writer-content-object-id-before-chunk-length-reverse/chunk-0.bin",
+          "sha256": "37c757348e671599102d25f0c58362f5924a94fd313f4478cec8e3139f8886f5"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:8ae03cdb20ee0500d1cc4e9c5403469c318e1a3ec3a31826751650221c3550e1"
+      },
+      {
+        "artifact": {
+          "bytes": 136,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/manifest-writer-content-object-id-before-chunk-length-reverse/manifest.cbor",
+          "sha256": "f28750ac37b12d427f40291640ee2414ff52266134529c48a87be0661f2bb32e"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:c90f74b546e1db00e1d4146909d87d8f43b6c9cc4828094b576e03e5e3656e04"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
+      "registryVersion": 1
+    },
+    "requestedLayer": 1,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "expected": {
+    "code": "OBJECT_ID_MISMATCH",
+    "layer": 1,
+    "result": "reject",
+    "stage": "declared-identity"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "inputs": [
+    {
+      "bytes": 893,
+      "mediaType": "application/json",
+      "path": "scenarios/operations/manifest-writer-content-object-id-before-chunk-length-reverse.json",
+      "sha256": "74634a4fac092cf251fcc246a7f828ca80ddb7249dc9ee78f4c4899e74c2847f"
+    },
+    {
+      "bytes": 12,
+      "mediaType": "application/octet-stream",
+      "path": "writer-inputs/manifest-provider-wrong.bin",
+      "sha256": "8fbce5bea2a9bd00ab7f2d5e5ea3ae9c28c89a2ad59a8783148cf333c93e7c26"
+    },
+    {
+      "bytes": 11,
+      "mediaType": "application/octet-stream",
+      "path": "writer-inputs/manifest-provider-short.bin",
+      "sha256": "2378216a7b104434475e25832d40c5f239611ecc3d9d26551bd97cd4d9174ca7"
+    },
+    {
+      "bytes": 3996,
+      "mediaType": "application/json",
+      "path": "scenarios/definitions/manifest-writer-content-object-id-before-chunk-length-reverse.json",
+      "sha256": "a6701862dd480320d01f6bd22a91831d90e3b819268939f437f6e205b729223b"
+    }
+  ],
+  "operation": "write-content-manifest",
+  "requirementIds": [
+    "OGVCS-002-AC-08",
+    "OGVCS-002-AC-09",
+    "OGVCS-002-FR-09",
+    "OGVCS-002-FR-11",
+    "OGVCS-002-NFR-01",
+    "OGVCS-002-NFR-04"
+  ],
+  "resources": {
+    "recipe": {
+      "generator": "ogvcs.repository-validation-scenario-constructor/v1",
+      "parameters": {
+        "definition": "scenarios/definitions/manifest-writer-content-object-id-before-chunk-length-reverse.json",
+        "definitionSha256": "a6701862dd480320d01f6bd22a91831d90e3b819268939f437f6e205b729223b",
+        "runtimeHighWaterMarks": "not-asserted"
+      },
+      "seed": "8f1725383a10efc2c3be9b97f99d3e0e8a477d6929a3ed44b6ce9b2bc4f218d6"
+    },
+    "summary": {
+      "bytes": 5061,
+      "indexEntries": 0,
+      "items": 2,
+      "peakMemoryBytes": 0,
+      "scratchBytes": 0,
+      "summarySha256": "a02155eb295d1f3c48cc20faf7823ffdbe3da593ebac0057ef2e39452d24e8dd",
+      "traversalEdges": 0
+    }
+  },
+  "scenarioId": "manifest-writer-content-object-id-before-chunk-length-reverse",
+  "schemaVersion": "ogvcs.repository-format/validation-scenario/v1"
+}

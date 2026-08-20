@@ -1,0 +1,17 @@
+{
+  "api": "validate-provenance-graph",
+  "authorityContext": "scenario.context",
+  "forbidden": [],
+  "lookupMutations": [
+    {
+      "action": "replace-payload-preserve-reference",
+      "reference": "ogvcs:v1:provenance:sha256:fcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfc",
+      "sourceArtifact": "objects/09-provenance.cbor"
+    }
+  ],
+  "roots": [
+    "ogvcs:v1:provenance:sha256:fcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfc",
+    "ogvcs:v1:provenance:sha256:fdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfd"
+  ],
+  "schema": "ogvcs.repository-format.v1.repository-route-input.v1"
+}

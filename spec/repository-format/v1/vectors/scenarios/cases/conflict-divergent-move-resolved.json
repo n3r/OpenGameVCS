@@ -2,6 +2,7 @@
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
     "candidateSnapshot": "ogvcs:v1:snapshot:sha256:3ebd2a60c38aad3dd650c5c54788ba07ae7b83c1d09175e5a331811eafa2894f",
+    "caseMode": "case-sensitive",
     "designatedRoot": "ogvcs:v1:snapshot:sha256:cc4d4a4a7be098bc74f5bb97cfe1eb37d870832dd44c56f0ceac12d65f871290",
     "importMappings": [],
     "lifetimeRecords": [
@@ -214,7 +215,7 @@
         "path": "scenarios/outputs/conflict-divergent-move-resolved.json",
         "sha256": "c27b7191937ea890e4316fc1e2a0415c92b2eb335db681d96bc9f6522bcb7567"
       },
-      "summarySha256": "9d17871f9773533ea58902872588fdb3a51a2105ded91718cfa8ff07d13c1dee"
+      "summarySha256": "e6d95777294bf09553c5803297fc44fa8f0ad51a7abee7812a06d21c593f9980"
     },
     "result": "accept"
   },
@@ -227,10 +228,10 @@
       "sha256": "f9efedc9cf82f476d399a9f245b1d907421f9089c9bcfccb44669eb9c1154f66"
     },
     {
-      "bytes": 10877,
+      "bytes": 10911,
       "mediaType": "application/json",
       "path": "scenarios/definitions/conflict-divergent-move-resolved.json",
-      "sha256": "9ce613a4dc7ead80718caa7447be74d3fa0c6879ca312f63cd2e039a12a360b6"
+      "sha256": "ed23c9007e7adaae157f84bf3beb5835a5790799b7723c84f61d30b673944b01"
     }
   ],
   "operation": "validate-repository",
@@ -242,18 +243,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/conflict-divergent-move-resolved.json",
-        "definitionSha256": "9ce613a4dc7ead80718caa7447be74d3fa0c6879ca312f63cd2e039a12a360b6",
+        "definitionSha256": "ed23c9007e7adaae157f84bf3beb5835a5790799b7723c84f61d30b673944b01",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "743a3db4d19459b2a3565044dcf483cacad82bf0c7dffa1804110c46df90efa1"
     },
     "summary": {
-      "bytes": 15710,
+      "bytes": 15744,
       "indexEntries": 0,
       "items": 18,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "9d17871f9773533ea58902872588fdb3a51a2105ded91718cfa8ff07d13c1dee",
+      "summarySha256": "e6d95777294bf09553c5803297fc44fa8f0ad51a7abee7812a06d21c593f9980",
       "traversalEdges": 0
     }
   },

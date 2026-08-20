@@ -9,7 +9,7 @@ use std::{
 use serde_json::{Map as JsonMap, Value as JsonValue};
 
 use crate::{
-    bundle_verify::visit_validated_object_references,
+    bundle_verify::{visit_schema_object_references, visit_validated_object_references},
     conflict_id, encode_canonical,
     hard_limits::{
         enforce_hard_limit_context, MAX_CHUNK_BYTES, MAX_PATH_BYTES, MAX_PATH_SEGMENTS,
@@ -19,6 +19,8 @@ use crate::{
     FileId, HardLimitCeilings, Limits, MetadataObject, ObjectKind, ObjectRef, Operation,
     ProfileRef, Registry, RegistryAssignment, Result, Sha256Writer, ValidationStage,
 };
+use crate::unicode_age::is_unicode_15;
+use unicode_normalization::is_nfc;
 const IMPORT_MAPPING_DOMAIN: &[u8] = b"OpenGameVCS import mapping\0";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -55,6 +57,7 @@ pub fn validate_semantic_object(
     registry: &Registry,
     mode: ValidationMode,
 ) -> Result<SemanticObjectValidation> {
+    registry.require_complete_authority()?;
     let kind = validate_metadata_schema(object)?;
     let mut discard_reference = |_reference: ObjectRef| Ok(());
     visit_validated_object_references(
@@ -112,6 +115,8 @@ struct ResourceGuard {
     limits: RepositoryLimits,
     start: Instant,
     summary: ResourceSummary,
+    operation_depth: usize,
+    operation_baseline: Option<(usize, usize)>,
 }
 
 impl ResourceGuard {
@@ -120,6 +125,8 @@ impl ResourceGuard {
             limits,
             start: Instant::now(),
             summary: ResourceSummary::default(),
+            operation_depth: 0,
+            operation_baseline: None,
         }
     }
 
@@ -127,7 +134,7 @@ impl ResourceGuard {
         if self
             .limits
             .max_time
-            .is_some_and(|maximum| self.start.elapsed() > maximum)
+            .is_some_and(|maximum| maximum.is_zero() || self.start.elapsed() > maximum)
         {
             Err(Error::new(ErrorCode::LimitTime))
         } else {
@@ -212,6 +219,31 @@ impl ResourceGuard {
             .checked_sub(bytes)
             .expect("derived-memory reservations are balanced");
     }
+
+    fn begin_operation(&mut self) {
+        if self.operation_depth == 0 {
+            self.operation_baseline = Some((self.summary.edges, self.summary.scratch_bytes));
+        }
+        self.operation_depth = self
+            .operation_depth
+            .checked_add(1)
+            .expect("repository operation nesting is bounded");
+    }
+
+    fn end_operation(&mut self) {
+        self.operation_depth = self
+            .operation_depth
+            .checked_sub(1)
+            .expect("repository operations are balanced");
+        if self.operation_depth == 0 {
+            let (edges, scratch_bytes) = self
+                .operation_baseline
+                .take()
+                .expect("outer repository operation has a baseline");
+            self.summary.edges = edges;
+            self.summary.scratch_bytes = scratch_bytes;
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -221,15 +253,33 @@ pub struct ResolvedObject {
     pub value: Option<Arc<Cbor>>,
 }
 
+#[derive(Clone, Debug)]
+struct CachedResolvedObject {
+    object: ResolvedObject,
+    semantic_validated: bool,
+    retained_bytes: usize,
+    operation_id: Option<u64>,
+}
+
+#[derive(Default)]
+struct LookupOperationState {
+    depth: usize,
+    deferred_registry_error: Option<Error>,
+    next_operation_id: u64,
+    active_operation_id: Option<u64>,
+}
+
 /// Caller-supplied immutable object lookup. It verifies identity, kind, strict
 /// schema, required features, and profile families before returning an object.
 /// Resource counters are shared by all semantic traversals over the lookup.
 pub struct RepositoryObjectLookup {
     entries: BTreeMap<ObjectRef, Arc<[u8]>>,
-    cache: RefCell<BTreeMap<ObjectRef, ResolvedObject>>,
+    cache: RefCell<BTreeMap<ObjectRef, CachedResolvedObject>>,
     guard: Rc<RefCell<ResourceGuard>>,
     registry: Registry,
     mode: ValidationMode,
+    semantic_profiles: bool,
+    operation_state: RefCell<LookupOperationState>,
 }
 
 impl RepositoryObjectLookup {
@@ -239,8 +289,43 @@ impl RepositoryObjectLookup {
         mode: ValidationMode,
         limits: RepositoryLimits,
     ) -> Result<Self> {
+        registry.require_complete_authority()?;
+        if mode == ValidationMode::Read {
+            return Err(Error::new(ErrorCode::SchemaFieldInvalid)
+                .with_layer(1)
+                .with_stage(ValidationStage::ConfiguredResourcePreflight));
+        }
+        Self::build(entries, registry, mode, true, limits)
+    }
+
+    /// Explicit registry-free lookup capped at framing, identity, and known
+    /// format-v1 schema validation. Repository-semantic entry points reject
+    /// this authority before inspecting their payload.
+    pub fn new_layer2(
+        entries: impl IntoIterator<Item = (ObjectRef, Vec<u8>)>,
+        limits: RepositoryLimits,
+    ) -> Result<Self> {
+        Self::build(
+            entries,
+            Registry::bundled(),
+            ValidationMode::Read,
+            false,
+            limits,
+        )
+    }
+
+    fn build(
+        entries: impl IntoIterator<Item = (ObjectRef, Vec<u8>)>,
+        registry: Registry,
+        mode: ValidationMode,
+        semantic_profiles: bool,
+        limits: RepositoryLimits,
+    ) -> Result<Self> {
         let mut indexed = BTreeMap::<ObjectRef, Arc<[u8]>>::new();
         let mut guard = ResourceGuard::new(limits);
+        // A zero configured duration is an immediate configured-resource
+        // failure even when the caller supplies an empty iterator.
+        guard.check_time()?;
         for (reference, payload) in entries {
             // The supplied iterable is itself untrusted input. Charge and
             // checkpoint every element before coalescing identical entries so
@@ -260,6 +345,8 @@ impl RepositoryObjectLookup {
             guard: Rc::new(RefCell::new(guard)),
             registry,
             mode,
+            semantic_profiles,
+            operation_state: RefCell::new(LookupOperationState::default()),
         })
     }
 
@@ -297,8 +384,19 @@ impl RepositoryObjectLookup {
             return Err(Error::new(ErrorCode::ObjectReferenceKindMismatch)
                 .with_stage(ValidationStage::ClosureAndReferenceResolution));
         }
-        if let Some(cached) = self.cache.borrow().get(&reference) {
-            return Ok(cached.clone());
+        if let Some(cached) = self.cache.borrow().get(&reference).cloned() {
+            if self.semantic_profiles && !cached.semantic_validated {
+                let semantic_validated = self.validate_resolved_semantics(
+                    reference,
+                    cached.object.value.as_deref(),
+                )?;
+                if semantic_validated {
+                    if let Some(entry) = self.cache.borrow_mut().get_mut(&reference) {
+                        entry.semantic_validated = true;
+                    }
+                }
+            }
+            return Ok(cached.object);
         }
         let payload = self
             .entries
@@ -321,24 +419,20 @@ impl RepositoryObjectLookup {
         if object_id(reference.kind, payload.as_ref())? != reference.digest {
             return Err(Error::new(ErrorCode::ObjectIdMismatch));
         }
-        let value = if reference.kind == ObjectKind::Chunk {
-            self.registry.check_assignment_if_present(
-                RegistryAssignment::ObjectKind(reference.kind.code()),
-                self.mode.operation(),
-            )?;
-            self.registry.check_assignment_if_present(
-                RegistryAssignment::HashAlgorithm(1),
-                self.mode.operation(),
-            )?;
-            None
+        let (value, retained) = if reference.kind == ObjectKind::Chunk {
+            // Even a chunk cache entry retains an Arc, key and BTree node.
+            // Charge that fixed index ownership before publishing the entry.
+            let retained = 256usize;
+            self.reserve_derived(retained)?;
+            (None, retained)
         } else {
             let object = self.scan_metadata_with_remaining_memory(payload.as_ref())?;
             if object.framing().numeric_kind != reference.kind.code() {
                 return Err(Error::new(ErrorCode::ObjectReferenceKindMismatch)
                     .with_stage(ValidationStage::KnownSchema));
             }
-            let validation = validate_semantic_object(&object, &self.registry, self.mode)?;
-            if validation.kind != reference.kind {
+            let actual_kind = validate_metadata_schema(&object)?;
+            if actual_kind != reference.kind {
                 return Err(Error::new(ErrorCode::ObjectReferenceKindMismatch)
                     .with_stage(ValidationStage::KnownSchema));
             }
@@ -347,15 +441,81 @@ impl RepositoryObjectLookup {
                 .checked_add(512)
                 .ok_or_else(|| Error::new(ErrorCode::LimitMemory))?;
             self.reserve_derived(retained)?;
-            Some(Arc::new(object.into_value()))
+            (Some(Arc::new(object.into_value())), retained)
         };
         let result = ResolvedObject {
             reference,
             payload,
             value,
         };
-        self.cache.borrow_mut().insert(reference, result.clone());
+        let semantic_validated = if self.semantic_profiles {
+            match self.validate_resolved_semantics(reference, result.value.as_deref()) {
+                Ok(validated) => validated,
+                Err(error) => {
+                    self.release_derived(retained);
+                    return Err(error);
+                }
+            }
+        } else {
+            true
+        };
+        self.cache.borrow_mut().insert(
+            reference,
+            CachedResolvedObject {
+                object: result.clone(),
+                semantic_validated,
+                retained_bytes: retained,
+                operation_id: self.operation_state.borrow().active_operation_id,
+            },
+        );
         Ok(result)
+    }
+
+    fn validate_resolved_semantics(
+        &self,
+        reference: ObjectRef,
+        value: Option<&Cbor>,
+    ) -> Result<bool> {
+        let mut validated = true;
+        for result in [
+            self.registry.check_assignment_if_present(
+                RegistryAssignment::ObjectKind(reference.kind.code()),
+                self.mode.operation(),
+            ),
+            self.registry.check_assignment_if_present(
+                RegistryAssignment::HashAlgorithm(1),
+                self.mode.operation(),
+            ),
+        ] {
+            if let Err(error) = result {
+                validated &= !self.defer_registry_error(error)?;
+            }
+        }
+        if let Some(value) = value {
+            let mut discard_reference = |_reference: ObjectRef| Ok(());
+            if let Err(error) = visit_validated_object_references(
+                reference.kind,
+                value,
+                &self.registry,
+                self.mode.operation(),
+                &mut discard_reference,
+            ) {
+                validated &= !self.defer_registry_error(error)?;
+            }
+        }
+        Ok(validated)
+    }
+
+    fn defer_registry_error(&self, error: Error) -> Result<bool> {
+        let mut state = self.operation_state.borrow_mut();
+        if state.depth == 0
+            || error.layer != 3
+            || error.stage != ValidationStage::RegistrySemantics
+        {
+            return Err(error);
+        }
+        observe_lookup_error(&mut state.deferred_registry_error, error);
+        Ok(true)
     }
 
     pub fn edge(&self, reference: ObjectRef, expected_kind: ObjectKind) -> Result<ResolvedObject> {
@@ -407,9 +567,40 @@ impl RepositoryObjectLookup {
             return Err(error);
         }
 
-        // Schema and semantic validators may safely continue across supplied
-        // entries now that every payload is framed and authenticated. Select
-        // by the frozen catalogue order, not by ObjectRef map order.
+        // Complete the whole-set known-schema phase before consulting any
+        // lifecycle assignment. Otherwise BTree key order could let an early
+        // conformance-only profile hide a later layer-two schema defect.
+        let mut schema_error = None;
+        for (reference, payload) in &self.entries {
+            self.checkpoint()?;
+            if reference.kind == ObjectKind::Chunk {
+                continue;
+            }
+            let object = match self.scan_metadata_with_remaining_memory(payload) {
+                Ok(object) => object,
+                Err(error) if lookup_error_is_terminal(&error) => return Err(error),
+                Err(error) => {
+                    observe_lookup_error(&mut schema_error, error);
+                    continue;
+                }
+            };
+            match validate_metadata_schema(&object) {
+                Ok(kind) if kind == reference.kind => {}
+                Ok(_) => observe_lookup_error(
+                    &mut schema_error,
+                    Error::new(ErrorCode::ObjectReferenceKindMismatch)
+                        .with_stage(ValidationStage::KnownSchema),
+                ),
+                Err(error) if lookup_error_is_terminal(&error) => return Err(error),
+                Err(error) => observe_lookup_error(&mut schema_error, error),
+            }
+        }
+        if let Some(error) = schema_error {
+            return Err(error);
+        }
+
+        // Only after every object has passed L1/L2 do operation-aware registry
+        // semantics run. Select by the frozen catalogue, not ObjectRef order.
         let mut best = None;
         for reference in self.entries.keys().copied() {
             self.checkpoint()?;
@@ -423,7 +614,101 @@ impl RepositoryObjectLookup {
         if let Some(error) = best {
             return Err(error);
         }
+        // When validate_all participates in a larger repository operation,
+        // resolve() defers layer-three registry failures.  This API is itself
+        // a complete schema/registry boundary, so do not return success and
+        // allow repository callbacks to run under an invalid authority.
+        if self.operation_state.borrow().depth > 0 {
+            self.finish_registry_phase()?;
+        }
         Ok(())
+    }
+
+    fn preflight_all_l1_l2(&self) -> Result<()> {
+        let mut framing_error = None;
+        for (reference, payload) in &self.entries {
+            self.checkpoint()?;
+            if reference.kind == ObjectKind::Chunk {
+                let limits = self.guard.borrow().limits;
+                let configured = u64::try_from(limits.max_chunk_bytes)
+                    .unwrap_or(u64::MAX)
+                    .min(limits.hard_limits.maximum("chunk-payload-bytes")?);
+                enforce_hard_limit_context(
+                    "chunk-payload-bytes",
+                    u64::try_from(payload.len()).unwrap_or(u64::MAX),
+                    configured,
+                    ErrorCode::LimitChunkBytes,
+                    1,
+                )?;
+            } else if let Err(error) = self.scan_metadata_with_remaining_memory(payload) {
+                if lookup_error_is_terminal(&error) {
+                    return Err(error);
+                }
+                observe_lookup_error(&mut framing_error, error);
+            }
+            match object_id(reference.kind, payload) {
+                Ok(identity) if identity == reference.digest => {}
+                Ok(_) => observe_lookup_error(
+                    &mut framing_error,
+                    Error::new(ErrorCode::ObjectIdMismatch),
+                ),
+                Err(error) if lookup_error_is_terminal(&error) => return Err(error),
+                Err(error) => observe_lookup_error(&mut framing_error, error),
+            }
+        }
+        if let Some(error) = framing_error {
+            return Err(error);
+        }
+        let mut schema_error = None;
+        for (reference, payload) in &self.entries {
+            self.checkpoint()?;
+            if reference.kind == ObjectKind::Chunk {
+                continue;
+            }
+            let object = match self.scan_metadata_with_remaining_memory(payload) {
+                Ok(object) => object,
+                Err(error) if lookup_error_is_terminal(&error) => return Err(error),
+                Err(error) => {
+                    observe_lookup_error(&mut schema_error, error);
+                    continue;
+                }
+            };
+            match validate_metadata_schema(&object) {
+                Ok(kind) if kind == reference.kind => {}
+                Ok(_) => observe_lookup_error(
+                    &mut schema_error,
+                    Error::new(ErrorCode::ObjectReferenceKindMismatch)
+                        .with_stage(ValidationStage::KnownSchema),
+                ),
+                Err(error) if lookup_error_is_terminal(&error) => return Err(error),
+                Err(error) => observe_lookup_error(&mut schema_error, error),
+            }
+        }
+        if let Some(error) = schema_error {
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    fn finish_all_registry(&self) -> Result<()> {
+        let mut best = None;
+        for reference in self.entries.keys().copied() {
+            self.checkpoint()?;
+            if let Err(error) = self.resolve(reference) {
+                if lookup_error_is_terminal(&error) {
+                    return Err(error);
+                }
+                observe_lookup_error(&mut best, error);
+            }
+        }
+        if let Err(error) = self.finish_registry_phase() {
+            observe_lookup_error(&mut best, error);
+        }
+        if let Some(error) = best {
+            Err(error)
+        } else {
+            Ok(())
+        }
     }
 
     fn scan_metadata_with_remaining_memory(&self, payload: &[u8]) -> Result<MetadataObject> {
@@ -480,6 +765,94 @@ impl RepositoryObjectLookup {
         self.guard.borrow().check_time()
     }
 
+    fn with_operation<T>(&self, callback: impl FnOnce() -> Result<T>) -> Result<T> {
+        let outer = {
+            let mut state = self.operation_state.borrow_mut();
+            let outer = state.depth == 0;
+            if outer {
+                state.deferred_registry_error = None;
+                state.next_operation_id = state
+                    .next_operation_id
+                    .checked_add(1)
+                    .expect("repository operation identifiers are bounded");
+                state.active_operation_id = Some(state.next_operation_id);
+            }
+            state.depth = state
+                .depth
+                .checked_add(1)
+                .expect("repository operation nesting is bounded");
+            outer
+        };
+        self.guard.borrow_mut().begin_operation();
+        let mut result = callback();
+        self.guard.borrow_mut().end_operation();
+        let completed_operation_id = {
+            let mut state = self.operation_state.borrow_mut();
+            state.depth = state
+                .depth
+                .checked_sub(1)
+                .expect("repository operations are balanced");
+            if outer {
+                if let Some(deferred) = state.deferred_registry_error.take() {
+                    match &result {
+                        Ok(_) => result = Err(deferred),
+                        Err(current)
+                            if deferred.precedence_key() < current.precedence_key() =>
+                        {
+                            result = Err(deferred);
+                        }
+                        Err(_) => {}
+                    }
+                }
+                state.active_operation_id.take()
+            } else {
+                None
+            }
+        };
+        // Route-internal decoded objects are operation-scoped. Remove and
+        // release them after either success or failure so same-authority
+        // retries observe the exact pre-operation accounting baseline. Cache
+        // entries created by explicit resolve()/validate_all() outside a
+        // repository operation remain reusable.
+        if let Some(operation_id) = completed_operation_id {
+            let mut released = 0usize;
+            self.cache.borrow_mut().retain(|_, entry| {
+                if entry.operation_id == Some(operation_id) {
+                    released = released.saturating_add(entry.retained_bytes);
+                    false
+                } else {
+                    true
+                }
+            });
+            self.release_derived(released);
+        }
+        result
+    }
+
+    fn finish_registry_phase(&self) -> Result<()> {
+        let mut state = self.operation_state.borrow_mut();
+        if state.depth == 0 {
+            return Err(Error::new(ErrorCode::SchemaFieldInvalid)
+                .with_layer(1)
+                .with_stage(ValidationStage::ConfiguredResourcePreflight));
+        }
+        if let Some(error) = state.deferred_registry_error.take() {
+            Err(error)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn require_repository_semantics(&self) -> Result<()> {
+        if !self.semantic_profiles || self.mode == ValidationMode::Read {
+            Err(Error::new(ErrorCode::SchemaFieldInvalid)
+                .with_layer(1)
+                .with_stage(ValidationStage::ConfiguredResourcePreflight))
+        } else {
+            Ok(())
+        }
+    }
+
     fn hard_limits(&self) -> HardLimitCeilings {
         self.guard.borrow().limits.hard_limits
     }
@@ -493,8 +866,12 @@ struct OwnedDerivedMemory {
 
 impl OwnedDerivedMemory {
     fn empty(lookup: &RepositoryObjectLookup) -> Self {
+        Self::from_guard(&lookup.guard)
+    }
+
+    fn from_guard(guard: &Rc<RefCell<ResourceGuard>>) -> Self {
         Self {
-            guard: Rc::clone(&lookup.guard),
+            guard: Rc::clone(guard),
             bytes: 0,
         }
     }
@@ -541,6 +918,24 @@ fn observe_lookup_error(best: &mut Option<Error>, error: Error) {
     }
 }
 
+fn collect_lookup_result<T>(best: &mut Option<Error>, result: Result<T>) -> Result<Option<T>> {
+    match result {
+        Ok(value) => Ok(Some(value)),
+        Err(error) if lookup_error_is_terminal(&error) => Err(error),
+        Err(error) => {
+            observe_lookup_error(best, error);
+            Ok(None)
+        }
+    }
+}
+
+fn finish_lookup_selection(best: Option<Error>) -> Result<()> {
+    match best {
+        Some(error) => Err(error),
+        None => Ok(()),
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ManifestSummary {
     pub logical_length: u64,
@@ -551,6 +946,14 @@ pub fn verify_manifest(
     reference: ObjectRef,
     lookup: &RepositoryObjectLookup,
 ) -> Result<ManifestSummary> {
+    lookup.require_repository_semantics()?;
+    lookup.with_operation(|| verify_manifest_operation(reference, lookup))
+}
+
+fn verify_manifest_operation(
+    reference: ObjectRef,
+    lookup: &RepositoryObjectLookup,
+) -> Result<ManifestSummary> {
     let object = lookup.resolve_expected(reference, ObjectKind::ContentManifest)?;
     let manifest = metadata_value(&object)?;
     let declared = uint(field(manifest, 16)?)?;
@@ -558,10 +961,16 @@ pub fn verify_manifest(
     // Complete layer-two reference resolution precedes layer-three content
     // agreement. A missing later chunk must not be hidden by an earlier
     // declared/raw-length disagreement.
+    let mut lookup_error = None;
     for part in parts {
         let chunk_ref = object_ref(field(part, 0)?)?;
-        lookup.edge(chunk_ref, ObjectKind::Chunk)?;
+        let _ = collect_lookup_result(
+            &mut lookup_error,
+            lookup.edge(chunk_ref, ObjectKind::Chunk),
+        )?;
     }
+    finish_lookup_selection(lookup_error)?;
+    lookup.finish_registry_phase()?;
     let mut sum = 0u64;
     let mut digest = Sha256Writer::new();
     for part in parts {
@@ -655,12 +1064,14 @@ impl EntryState {
         Self::from_cbor(&Cbor::Map(fields))
     }
 
-    fn encoded_len(&self) -> Result<usize> {
-        Ok(encode_canonical(&self.raw)?.len())
+    fn encoded_len(&self, lookup: &RepositoryObjectLookup) -> Result<usize> {
+        cbor_encoded_len(&self.raw, lookup, 0)
     }
 
     fn retained_cost(&self) -> Result<usize> {
-        derived_value_cost(self.encoded_len()?)
+        cbor_retained_cost(&self.raw, 0)?
+            .checked_add(512)
+            .ok_or_else(|| Error::new(ErrorCode::LimitMemory))
     }
 }
 
@@ -675,7 +1086,9 @@ pub struct AssetGroup {
 }
 
 impl AssetGroup {
-    fn from_cbor(value: &Cbor) -> Result<Self> {
+    /// Parses one already schema-shaped asset-group value for standalone
+    /// registry-authoritative validation.
+    pub fn from_cbor(value: &Cbor) -> Result<Self> {
         let members = array(field(value, 3)?)?
             .iter()
             .map(|member| Ok((file_id(field(member, 0)?)?, profile_ref(field(member, 1)?)?)))
@@ -704,12 +1117,14 @@ impl AssetGroup {
         })
     }
 
-    fn encoded_len(&self) -> Result<usize> {
-        Ok(encode_canonical(&self.raw)?.len())
+    fn encoded_len(&self, lookup: &RepositoryObjectLookup) -> Result<usize> {
+        cbor_encoded_len(&self.raw, lookup, 0)
     }
 
     fn retained_cost(&self) -> Result<usize> {
-        derived_value_cost(self.encoded_len()?)
+        cbor_retained_cost(&self.raw, 0)?
+            .checked_add(512)
+            .ok_or_else(|| Error::new(ErrorCode::LimitMemory))
     }
 }
 
@@ -740,37 +1155,321 @@ fn derived_value_cost(encoded_len: usize) -> Result<usize> {
         .ok_or_else(|| Error::new(ErrorCode::LimitMemory))
 }
 
+fn profile_retained_cost(profile: &ProfileRef) -> Result<usize> {
+    profile
+        .namespace()
+        .len()
+        .checked_add(profile.id().len())
+        .and_then(|bytes| bytes.checked_mul(2))
+        .and_then(|bytes| bytes.checked_add(256))
+        .ok_or_else(|| Error::new(ErrorCode::LimitMemory))
+}
+
+fn path_retained_cost(path: &[String]) -> Result<usize> {
+    path.iter().try_fold(128usize, |total, segment| {
+        segment
+            .len()
+            .checked_mul(2)
+            .and_then(|bytes| bytes.checked_add(64))
+            .and_then(|bytes| total.checked_add(bytes))
+            .ok_or_else(|| Error::new(ErrorCode::LimitMemory))
+    })
+}
+
+fn cbor_retained_cost(value: &Cbor, depth: usize) -> Result<usize> {
+    if depth > 256 {
+        return Err(Error::new(ErrorCode::LimitMemory));
+    }
+    let checked_add = |left: usize, right: usize| {
+        left.checked_add(right)
+            .ok_or_else(|| Error::new(ErrorCode::LimitMemory))
+    };
+    match value {
+        Cbor::UInt(_) | Cbor::NInt(_) | Cbor::Bool(_) => Ok(32),
+        Cbor::Bytes(bytes) => checked_add(
+            bytes
+                .len()
+                .checked_mul(2)
+                .ok_or_else(|| Error::new(ErrorCode::LimitMemory))?,
+            128,
+        ),
+        Cbor::Text(text) => checked_add(
+            text.len()
+                .checked_mul(2)
+                .ok_or_else(|| Error::new(ErrorCode::LimitMemory))?,
+            128,
+        ),
+        Cbor::Array(values) => {
+            let mut total = checked_add(
+                128,
+                values
+                    .len()
+                    .checked_mul(32)
+                    .ok_or_else(|| Error::new(ErrorCode::LimitMemory))?,
+            )?;
+            for item in values {
+                total = checked_add(total, cbor_retained_cost(item, depth + 1)?)?;
+            }
+            Ok(total)
+        }
+        Cbor::Map(entries) => {
+            let mut total = checked_add(
+                256,
+                entries
+                    .len()
+                    .checked_mul(64)
+                    .ok_or_else(|| Error::new(ErrorCode::LimitMemory))?,
+            )?;
+            for (key, item) in entries {
+                total = checked_add(total, cbor_retained_cost(key, depth + 1)?)?;
+                total = checked_add(total, cbor_retained_cost(item, depth + 1)?)?;
+            }
+            Ok(total)
+        }
+    }
+}
+
+fn cbor_argument_header_len(value: u64) -> usize {
+    match value {
+        0..=23 => 1,
+        24..=0xff => 2,
+        0x100..=0xffff => 3,
+        0x1_0000..=0xffff_ffff => 5,
+        _ => 9,
+    }
+}
+
+/// Measure canonical CBOR without first materializing an encoded buffer.
+/// Every retained node is also a deadline checkpoint, so scratch preflight
+/// cannot become an unbounded traversal in its own right.
+fn cbor_encoded_len(
+    value: &Cbor,
+    lookup: &RepositoryObjectLookup,
+    depth: usize,
+) -> Result<usize> {
+    lookup.checkpoint()?;
+    if depth > 256 {
+        return Err(Error::new(ErrorCode::LimitNesting));
+    }
+    let checked_add = |left: usize, right: usize| {
+        left.checked_add(right)
+            .ok_or_else(|| Error::new(ErrorCode::LimitMemory))
+    };
+    match value {
+        Cbor::UInt(value) => Ok(cbor_argument_header_len(*value)),
+        Cbor::NInt(value) => {
+            let argument = u64::try_from(-1i128 - i128::from(*value))
+                .map_err(|_| Error::new(ErrorCode::SchemaFieldInvalid))?;
+            Ok(cbor_argument_header_len(argument))
+        }
+        Cbor::Bool(_) => Ok(1),
+        Cbor::Bytes(bytes) => checked_add(
+            cbor_argument_header_len(
+                u64::try_from(bytes.len()).map_err(|_| Error::new(ErrorCode::LimitMemory))?,
+            ),
+            bytes.len(),
+        ),
+        Cbor::Text(text) => checked_add(
+            cbor_argument_header_len(
+                u64::try_from(text.len()).map_err(|_| Error::new(ErrorCode::LimitMemory))?,
+            ),
+            text.len(),
+        ),
+        Cbor::Array(values) => {
+            let mut total = cbor_argument_header_len(
+                u64::try_from(values.len()).map_err(|_| Error::new(ErrorCode::LimitMemory))?,
+            );
+            for item in values {
+                total = checked_add(total, cbor_encoded_len(item, lookup, depth + 1)?)?;
+            }
+            Ok(total)
+        }
+        Cbor::Map(entries) => {
+            let mut total = cbor_argument_header_len(
+                u64::try_from(entries.len()).map_err(|_| Error::new(ErrorCode::LimitMemory))?,
+            );
+            for (key, item) in entries {
+                total = checked_add(total, cbor_encoded_len(key, lookup, depth + 1)?)?;
+                total = checked_add(total, cbor_encoded_len(item, lookup, depth + 1)?)?;
+            }
+            Ok(total)
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct TreeExpansion {
     pub descriptor: ObjectRef,
     pub entries: BTreeMap<Vec<String>, EntryState>,
     pub file_ids: BTreeMap<FileId, Vec<String>>,
+}
+
+#[derive(Debug)]
+struct ReservedTreeExpansion {
+    descriptor: ObjectRef,
+    entries: BTreeMap<Vec<String>, EntryState>,
+    file_ids: BTreeMap<FileId, Vec<String>>,
     memory: OwnedDerivedMemory,
 }
 
+impl ReservedTreeExpansion {
+    fn into_public(self) -> TreeExpansion {
+        TreeExpansion {
+            descriptor: self.descriptor,
+            entries: self.entries,
+            file_ids: self.file_ids,
+        }
+    }
+}
+
+/// Result returned by an external, version-pinned path-profile validator.
+///
+/// The opaque keys let the selected profile expose repository and platform
+/// collision equivalence without this crate reimplementing those semantics.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum PathProfileDecision {
+    Accepted {
+        repository_key: String,
+        platform_key: String,
+    },
+    Rejected,
+}
+
+/// Authenticated repository case-equivalence mode supplied alongside an
+/// external path-profile adapter. It is repository context, not object
+/// identity, in format v1.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PathCaseMode {
+    CaseSensitive,
+    CaseFolded,
+}
+
+impl PathProfileDecision {
+    pub fn accepted(
+        repository_key: impl Into<String>,
+        platform_key: impl Into<String>,
+    ) -> Self {
+        Self::Accepted {
+            repository_key: repository_key.into(),
+            platform_key: platform_key.into(),
+        }
+    }
+
+    pub const fn rejected() -> Self {
+        Self::Rejected
+    }
+}
+
+/// Synchronous adapter for one exact registered path-profile assignment.
+///
+/// Implementations live in the crate that owns the selected profile. The
+/// returned profile is an exact namespace/id/major pin; a descriptor selecting
+/// any other assignment is rejected without invoking [`Self::validate`].
+pub trait PathProfileValidator {
+    fn profile(&self) -> &ProfileRef;
+    fn case_mode(&self) -> PathCaseMode;
+
+    /// Validates one complete root-relative path after core path validation.
+    fn validate(&self, segments: &[String]) -> PathProfileDecision;
+}
+
+/// Expands a tree without an external path-profile adapter.
+///
+/// This remains sufficient for the built-in `path.test/*@1` conformance
+/// profiles. A ratified/external profile fails closed; use
+/// [`expand_tree_with_path_profile_validator`] for that case.
 pub fn expand_tree(
     root_reference: ObjectRef,
     lookup: &RepositoryObjectLookup,
     descriptor_reference: ObjectRef,
     verify_content: bool,
+    case_mode: PathCaseMode,
 ) -> Result<TreeExpansion> {
+    expand_tree_with_path_profile_validator(
+        root_reference,
+        lookup,
+        descriptor_reference,
+        verify_content,
+        case_mode,
+        None,
+    )
+}
+
+/// Expands a tree and invokes the exact descriptor-selected path profile.
+///
+/// External profile semantics are accepted only when `validator.profile()`
+/// exactly matches the selected namespace, id, and major version. The adapter
+/// is called after core joined-path checks. Accepted decisions must provide
+/// both collision keys. They are kept in bounded derived memory for the
+/// duration of the expansion and must be unique within their respective
+/// domains.
+pub fn expand_tree_with_path_profile_validator(
+    root_reference: ObjectRef,
+    lookup: &RepositoryObjectLookup,
+    descriptor_reference: ObjectRef,
+    verify_content: bool,
+    case_mode: PathCaseMode,
+    validator: Option<&dyn PathProfileValidator>,
+) -> Result<TreeExpansion> {
+    lookup.require_repository_semantics()?;
+    lookup.with_operation(|| {
+        expand_tree_owned(
+            root_reference,
+            lookup,
+            descriptor_reference,
+            verify_content,
+            case_mode,
+            validator,
+        )
+        .map(ReservedTreeExpansion::into_public)
+    })
+}
+
+fn expand_tree_owned(
+    root_reference: ObjectRef,
+    lookup: &RepositoryObjectLookup,
+    descriptor_reference: ObjectRef,
+    verify_content: bool,
+    case_mode: PathCaseMode,
+    validator: Option<&dyn PathProfileValidator>,
+) -> Result<ReservedTreeExpansion> {
+    lookup.require_repository_semantics()?;
     expect_ref_kind(descriptor_reference, ObjectKind::RepositoryDescriptor)?;
+    preflight_tree_closure(
+        root_reference,
+        lookup,
+        descriptor_reference,
+        verify_content,
+    )?;
+    lookup.finish_registry_phase()?;
     let descriptor_object =
         lookup.resolve_expected(descriptor_reference, ObjectKind::RepositoryDescriptor)?;
     let descriptor = metadata_value(&descriptor_object)?;
-    let path_profile = profile_ref(field(descriptor, 17)?)?;
-    let allowed_content = profile_set(field(descriptor, 18)?)?;
-    let allowed_chunks = optional_field(descriptor, 20)
-        .map(profile_set)
-        .transpose()?
-        .unwrap_or_default();
-    let mut result = TreeExpansion {
+    let mut result = ReservedTreeExpansion {
         descriptor: descriptor_reference,
         entries: BTreeMap::new(),
         file_ids: BTreeMap::new(),
         memory: OwnedDerivedMemory::empty(lookup),
     };
+    lookup.checkpoint()?;
+    result
+        .memory
+        .grow_by(cbor_retained_cost(field(descriptor, 17)?, 0)?.saturating_add(256))?;
+    let path_profile = profile_ref(field(descriptor, 17)?)?;
+    require_path_profile_validator(&path_profile, case_mode, validator)?;
+    let allowed_content = charged_profile_set(
+        field(descriptor, 18)?,
+        lookup,
+        &mut result.memory,
+    )?;
+    let allowed_chunks = optional_field(descriptor, 20)
+        .map(|value| charged_profile_set(value, lookup, &mut result.memory))
+        .transpose()?
+        .unwrap_or_default();
     let mut visiting = BTreeSet::new();
+    let mut repository_keys = BTreeSet::new();
+    let mut platform_keys = BTreeSet::new();
+    let mut path_profile_memory = OwnedDerivedMemory::empty(lookup);
     walk_tree(
         root_reference,
         &[],
@@ -780,10 +1479,83 @@ pub fn expand_tree(
         &allowed_content,
         &allowed_chunks,
         verify_content,
+        validator,
+        &mut repository_keys,
+        &mut platform_keys,
+        &mut path_profile_memory,
         &mut visiting,
         &mut result,
     )?;
     Ok(result)
+}
+
+fn preflight_tree_closure(
+    root_reference: ObjectRef,
+    lookup: &RepositoryObjectLookup,
+    descriptor_reference: ObjectRef,
+    verify_content: bool,
+) -> Result<()> {
+    let mut lookup_error = None;
+    let _ = collect_lookup_result(
+        &mut lookup_error,
+        lookup.edge(descriptor_reference, ObjectKind::RepositoryDescriptor),
+    )?;
+    let mut memory = OwnedDerivedMemory::empty(lookup);
+    let mut visited = BTreeSet::new();
+    let mut stack = vec![root_reference];
+    memory.grow_by(derived_value_cost(35)?)?;
+    while let Some(reference) = stack.pop() {
+        lookup.checkpoint()?;
+        expect_ref_kind(reference, ObjectKind::Tree)?;
+        if visited.contains(&reference) {
+            continue;
+        }
+        memory.grow_by(derived_value_cost(34)?)?;
+        visited.insert(reference);
+        let Some(object) = collect_lookup_result(
+            &mut lookup_error,
+            lookup.edge(reference, ObjectKind::Tree),
+        )? else {
+            continue;
+        };
+        let tree = metadata_value(&object)?;
+        let _ = collect_lookup_result(
+            &mut lookup_error,
+            lookup.edge(
+                object_ref(field(tree, 16)?)?,
+                ObjectKind::RepositoryDescriptor,
+            ),
+        )?;
+        for raw_entry in array(field(tree, 17)?)? {
+            lookup.checkpoint()?;
+            let kind = uint(field(raw_entry, 1)?)?;
+            let target = object_ref(field(raw_entry, 4)?)?;
+            if kind == 1 {
+                memory.grow_by(derived_value_cost(35)?)?;
+                stack.push(target);
+            } else {
+                let manifest = collect_lookup_result(
+                    &mut lookup_error,
+                    lookup.edge(target, ObjectKind::ContentManifest),
+                )?;
+                if verify_content && manifest.is_some() {
+                    let manifest = manifest.expect("checked present");
+                    let manifest = metadata_value(&manifest)?;
+                    for part in array(field(manifest, 19)?)? {
+                        lookup.checkpoint()?;
+                        let _ = collect_lookup_result(
+                            &mut lookup_error,
+                            lookup.edge(
+                                object_ref(field(part, 0)?)?,
+                                ObjectKind::Chunk,
+                            ),
+                        )?;
+                    }
+                }
+            }
+        }
+    }
+    finish_lookup_selection(lookup_error)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -796,14 +1568,20 @@ fn walk_tree(
     allowed_content: &BTreeSet<ProfileRef>,
     allowed_chunks: &BTreeSet<ProfileRef>,
     verify_content: bool,
+    path_profile_validator: Option<&dyn PathProfileValidator>,
+    repository_keys: &mut BTreeSet<String>,
+    platform_keys: &mut BTreeSet<String>,
+    path_profile_memory: &mut OwnedDerivedMemory,
     visiting: &mut BTreeSet<ObjectRef>,
-    result: &mut TreeExpansion,
+    result: &mut ReservedTreeExpansion,
 ) -> Result<()> {
-    if !visiting.insert(tree_reference) {
+    if visiting.contains(&tree_reference) {
         // Ordinary byte-valid object cycles require a hash fixed point, but a
         // defensive implementation still bounds and rejects traversal cycles.
         return Err(Error::new(ErrorCode::ProvenanceCycle));
     }
+    path_profile_memory.grow_by(derived_value_cost(34)?)?;
+    visiting.insert(tree_reference);
     let object = lookup.edge(tree_reference, ObjectKind::Tree)?;
     let tree = metadata_value(&object)?;
     if object_ref(field(tree, 16)?)? != descriptor_reference {
@@ -811,9 +1589,27 @@ fn walk_tree(
     }
     for raw_entry in array(field(tree, 17)?)? {
         lookup.checkpoint()?;
+        // Reserve the parsed EntryState plus both retained path-map views from
+        // the caller-owned CBOR before `from_tree_entry` performs any clone.
+        let prefix_retained = path_retained_cost(prefix)?
+            .checked_mul(3)
+            .ok_or_else(|| Error::new(ErrorCode::LimitMemory))?;
+        let retained = cbor_retained_cost(raw_entry, 0)?
+            .checked_mul(3)
+            .and_then(|bytes| bytes.checked_add(prefix_retained))
+            .and_then(|bytes| bytes.checked_add(2_048))
+            .ok_or_else(|| Error::new(ErrorCode::LimitMemory))?;
+        result.memory.grow_by(retained)?;
         let state = EntryState::from_tree_entry(prefix, raw_entry)?;
-        validate_path_profile(path_profile, &state.path)?;
-        lookup.scratch(state.encoded_len()?)?;
+        validate_path_profile(
+            path_profile,
+            &state.path,
+            path_profile_validator,
+            repository_keys,
+            platform_keys,
+            path_profile_memory,
+        )?;
+        lookup.scratch(state.encoded_len(lookup)?)?;
         if result.entries.contains_key(&state.path) {
             return Err(Error::new(ErrorCode::ChangeSetTransitionInvalid));
         }
@@ -824,13 +1620,6 @@ fn walk_tree(
             return Err(Error::new(ErrorCode::RepositoryDescriptorMismatch));
         }
         let target = object_ref(field(raw_entry, 4)?)?;
-        let retained = state
-            .retained_cost()?
-            .checked_mul(3)
-            .ok_or_else(|| Error::new(ErrorCode::LimitMemory))?;
-        // Reserve the two path-map copies and the parsed/raw EntryState before
-        // any of them are retained in the expansion.
-        result.memory.grow_by(retained)?;
         result.file_ids.insert(state.file_id, state.path.clone());
         result.entries.insert(state.path.clone(), state.clone());
         if state.kind == 1 {
@@ -843,6 +1632,10 @@ fn walk_tree(
                 allowed_content,
                 allowed_chunks,
                 verify_content,
+                path_profile_validator,
+                repository_keys,
+                platform_keys,
+                path_profile_memory,
                 visiting,
                 result,
             )?;
@@ -868,21 +1661,84 @@ fn walk_tree(
     Ok(())
 }
 
-fn validate_path_profile(profile: &ProfileRef, path: &[String]) -> Result<()> {
-    if profile.namespace() == "path.opengamevcs" {
-        // Ratified OGVCS-004 profiles require the external version-pinned
-        // collision/platform adapter. This core crate must fail closed rather
-        // than silently claim those semantics were applied.
+fn is_builtin_path_profile(profile: &ProfileRef) -> bool {
+    profile.namespace() == "path.test"
+        && profile.major() == 1
+        && matches!(profile.id(), "opaque" | "reject-reserved")
+}
+
+fn require_path_profile_validator(
+    profile: &ProfileRef,
+    case_mode: PathCaseMode,
+    validator: Option<&dyn PathProfileValidator>,
+) -> Result<()> {
+    if is_builtin_path_profile(profile) {
+        return Ok(());
+    }
+    if validator.is_some_and(|validator| {
+        validator.profile() == profile && validator.case_mode() == case_mode
+    }) {
+        Ok(())
+    } else {
+        Err(Error::new(ErrorCode::PathProfileInvalid))
+    }
+}
+
+fn remember_path_profile_key(
+    key: String,
+    keys: &mut BTreeSet<String>,
+    memory: &mut OwnedDerivedMemory,
+) -> Result<()> {
+    // JSON Schema maxLength counts Unicode scalar values. A Rust String is
+    // already valid scalar UTF-8; the byte precheck bounds the subsequent
+    // allocation-free scalar count (four bytes per scalar maximum).
+    if key.is_empty() || key.len() > 32_768 * 4 || !is_unicode_15(&key) ||
+        key.chars().count() > 32_768 {
         return Err(Error::new(ErrorCode::PathProfileInvalid));
+    }
+    if keys.contains(&key) {
+        return Err(Error::new(ErrorCode::PathProfileInvalid));
+    }
+    memory.grow_by(derived_value_cost(key.len())?)?;
+    keys.insert(key);
+    Ok(())
+}
+
+fn validate_path_profile(
+    profile: &ProfileRef,
+    path: &[String],
+    validator: Option<&dyn PathProfileValidator>,
+    repository_keys: &mut BTreeSet<String>,
+    platform_keys: &mut BTreeSet<String>,
+    memory: &mut OwnedDerivedMemory,
+) -> Result<()> {
+    if profile.namespace() == "path.test" && profile.id() == "opaque" && profile.major() == 1 {
+        return Ok(());
     }
     if profile.namespace() == "path.test"
         && profile.id() == "reject-reserved"
         && profile.major() == 1
-        && path.iter().any(|segment| segment == "reserved")
     {
+        return if path.iter().any(|segment| segment == "reserved") {
+            Err(Error::new(ErrorCode::PathProfileInvalid))
+        } else {
+            Ok(())
+        };
+    }
+    let validator = validator.ok_or_else(|| Error::new(ErrorCode::PathProfileInvalid))?;
+    if validator.profile() != profile {
         return Err(Error::new(ErrorCode::PathProfileInvalid));
     }
-    Ok(())
+    match validator.validate(path) {
+        PathProfileDecision::Rejected => Err(Error::new(ErrorCode::PathProfileInvalid)),
+        PathProfileDecision::Accepted {
+            repository_key,
+            platform_key,
+        } => {
+            remember_path_profile_key(repository_key, repository_keys, memory)?;
+            remember_path_profile_key(platform_key, platform_keys, memory)
+        }
+    }
 }
 
 struct ReservedGroups {
@@ -910,21 +1766,23 @@ fn groups_from_set(
     let descriptor_object =
         lookup.resolve_expected(descriptor_reference, ObjectKind::RepositoryDescriptor)?;
     let descriptor = metadata_value(&descriptor_object)?;
-    let allowed = profile_set(field(descriptor, 19)?)?;
+    let allowed = charged_profile_set(field(descriptor, 19)?, lookup, &mut memory)?;
     let mut groups = BTreeMap::new();
     for value in array(field(set, 17)?)? {
         lookup.checkpoint()?;
+        // `AssetGroup::from_cbor` clones the complete caller-owned record.
+        // Charge both the parsed group and ordered-map node before that clone.
+        memory.grow_by(
+            cbor_retained_cost(value, 0)?
+                .checked_mul(2)
+                .and_then(|bytes| bytes.checked_add(1_024))
+                .ok_or_else(|| Error::new(ErrorCode::LimitMemory))?,
+        )?;
         let group = AssetGroup::from_cbor(value)?;
-        lookup.scratch(group.encoded_len()?)?;
+        lookup.scratch(group.encoded_len(lookup)?)?;
         if !allowed.contains(&group.profile) {
             return Err(Error::new(ErrorCode::RepositoryDescriptorMismatch));
         }
-        memory.grow_by(
-            group
-                .retained_cost()?
-                .checked_mul(2)
-                .ok_or_else(|| Error::new(ErrorCode::LimitMemory))?,
-        )?;
         groups.insert(group.id, group);
     }
     Ok(ReservedGroups { groups, memory })
@@ -966,7 +1824,7 @@ fn uint(value: &Cbor) -> Result<u64> {
 
 fn text(value: &Cbor) -> Result<&str> {
     match value {
-        Cbor::Text(value) => Ok(value),
+        Cbor::Text(value) if is_unicode_15(value) && is_nfc(value) => Ok(value),
         _ => Err(Error::new(ErrorCode::SchemaFieldInvalid)),
     }
 }
@@ -1016,8 +1874,20 @@ fn profile_ref(value: &Cbor) -> Result<ProfileRef> {
     ProfileRef::from_cbor(value)
 }
 
-fn profile_set(value: &Cbor) -> Result<BTreeSet<ProfileRef>> {
-    array(value)?.iter().map(profile_ref).collect()
+fn charged_profile_set(
+    value: &Cbor,
+    lookup: &RepositoryObjectLookup,
+    memory: &mut OwnedDerivedMemory,
+) -> Result<BTreeSet<ProfileRef>> {
+    let mut profiles = BTreeSet::new();
+    for raw in array(value)? {
+        lookup.checkpoint()?;
+        // ProfileRef parsing clones its namespace/id. Reserve the candidate
+        // and ordered-set node before parsing or inserting it.
+        memory.grow_by(cbor_retained_cost(raw, 0)?.saturating_add(256))?;
+        profiles.insert(profile_ref(raw)?);
+    }
+    Ok(profiles)
 }
 
 fn path(value: &Cbor) -> Result<Vec<String>> {
@@ -1126,12 +1996,16 @@ pub enum ImportState {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ImportMapping {
+    /// Repository authority serialized with this opaque/import-state row.
+    /// Canonical CBOR mappings derive this from their authenticated context;
+    /// callers of the typed state API must provide it explicitly.
+    pub descriptor: ObjectRef,
     pub importer_profile: ProfileRef,
     pub source_namespace_digest: [u8; 32],
     pub source_identity_digest: [u8; 32],
     pub file_id: FileId,
     pub state: ImportState,
-    pub declared_mapping_key: Option<[u8; 32]>,
+    pub declared_mapping_key: [u8; 32],
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1181,6 +2055,11 @@ pub struct RepositoryContext<'a> {
     pub require_complete_lifetime: bool,
     pub group_profile_rules: &'a [GroupProfileRule],
     pub unique_external_key_profiles: &'a [ProfileRef],
+    /// Exact-version adapter for the descriptor-selected external path
+    /// profile. Built-in `path.test/*@1` conformance profiles do not use it.
+    pub path_profile_validator: Option<&'a dyn PathProfileValidator>,
+    /// Authenticated case-equivalence mode pinned to the external adapter.
+    pub path_case_mode: PathCaseMode,
 }
 
 impl<'a> RepositoryContext<'a> {
@@ -1188,6 +2067,7 @@ impl<'a> RepositoryContext<'a> {
         lookup: &'a RepositoryObjectLookup,
         descriptor: ObjectRef,
         designated_root: ObjectRef,
+        path_case_mode: PathCaseMode,
     ) -> Self {
         Self {
             lookup,
@@ -1200,6 +2080,8 @@ impl<'a> RepositoryContext<'a> {
             require_complete_lifetime: false,
             group_profile_rules: &[],
             unique_external_key_profiles: &[],
+            path_profile_validator: None,
+            path_case_mode,
         }
     }
 }
@@ -1216,6 +2098,8 @@ fn complete_lifetime_context<'a>(context: &RepositoryContext<'a>) -> RepositoryC
         require_complete_lifetime: true,
         group_profile_rules: context.group_profile_rules,
         unique_external_key_profiles: context.unique_external_key_profiles,
+        path_profile_validator: context.path_profile_validator,
+        path_case_mode: context.path_case_mode,
     }
 }
 
@@ -1240,6 +2124,40 @@ pub fn replay_change_set(
     context: &RepositoryContext<'_>,
     conflict_set: Option<&Cbor>,
 ) -> Result<ReplaySummary> {
+    context.lookup.require_repository_semantics()?;
+    context.lookup.with_operation(|| {
+        replay_change_set_operation(change_set_reference, base, context, conflict_set)
+    })
+}
+
+fn replay_change_set_operation(
+    change_set_reference: ObjectRef,
+    base: &RepositoryState,
+    context: &RepositoryContext<'_>,
+    conflict_set: Option<&Cbor>,
+) -> Result<ReplaySummary> {
+    let base_cost = base.retained_cost()?;
+    let change = context
+        .lookup
+        .resolve_expected(change_set_reference, ObjectKind::ChangeSet)?;
+    let operations = array(field(metadata_value(&change)?, 18)?)?;
+    let change_cost = derived_value_cost(change.payload.len())?;
+    let conflict_cost = conflict_set
+        .map(|value| cbor_retained_cost(value, 0))
+        .transpose()?
+        .unwrap_or(0);
+    let reservation = if operations.is_empty() {
+        base_cost
+    } else {
+        base_cost
+            .checked_add(change_cost)
+            .and_then(|bytes| bytes.checked_add(conflict_cost))
+            .and_then(|bytes| bytes.checked_mul(4))
+            .ok_or_else(|| Error::new(ErrorCode::LimitMemory))?
+    };
+    // Reserve the complete clone/replay workspace before cloning caller-owned
+    // state. The guard is released after the direct operation returns.
+    let _memory = DerivedMemory::reserve(context.lookup, reservation)?;
     replay_change_set_internal(
         change_set_reference,
         base.clone(),
@@ -1325,17 +2243,22 @@ fn replay_change_set_internal(
         .lookup
         .resolve_expected(change_set_reference, ObjectKind::ChangeSet)?;
     let change_set = metadata_value(&object)?;
+    let operations = array(field(change_set, 18)?)?;
+    preflight_replay_closure(change_set, operations, context)?;
+    context.lookup.finish_registry_phase()?;
     if object_ref(field(change_set, 16)?)? != context.descriptor {
         return Err(Error::new(ErrorCode::RepositoryDescriptorMismatch));
     }
-    let operations = array(field(change_set, 18)?)?;
     preflight_change_set_operations(operations, context.lookup)?;
-    let mut lifetime_file_ids = base
-        .entries
-        .values()
-        .map(|entry| entry.file_id)
-        .collect::<BTreeSet<_>>();
-    context.lookup.checkpoint()?;
+    let mut replay_index_memory = OwnedDerivedMemory::empty(context.lookup);
+    let mut immutable_base_file_ids = BTreeSet::new();
+    for entry in base.entries.values() {
+        context.lookup.checkpoint()?;
+        if !immutable_base_file_ids.contains(&entry.file_id) {
+            replay_index_memory.grow_by(derived_value_cost(16)?)?;
+            immutable_base_file_ids.insert(entry.file_id);
+        }
+    }
     let mut state = base;
     context.lookup.checkpoint()?;
     let mut allocations = Vec::new();
@@ -1353,7 +2276,12 @@ fn replay_change_set_internal(
                 let after = EntryState::from_cbor(field(operation, 3)?)?;
                 require_absent(&state.entries, &after.path)?;
                 require_parent(&state.entries, &after.path)?;
-                require_file_id_absent(&state.entries, after.file_id)?;
+                require_file_id_absent(
+                    &state.entries,
+                    after.file_id,
+                    context.lookup,
+                    ErrorCode::FileIdAlreadyConsumed,
+                )?;
                 insert_state(&mut state.entries, after.clone(), context.lookup)?;
                 allocations.push(AllocationEvidence {
                     sequence,
@@ -1374,7 +2302,12 @@ fn replay_change_set_internal(
                 get_exact(&state.entries, &source, ErrorCode::FileIdSourceMismatch)?;
                 require_absent(&state.entries, &after.path)?;
                 require_parent(&state.entries, &after.path)?;
-                require_file_id_absent(&state.entries, after.file_id)?;
+                require_file_id_absent(
+                    &state.entries,
+                    after.file_id,
+                    context.lookup,
+                    ErrorCode::FileIdAlreadyConsumed,
+                )?;
                 insert_state(&mut state.entries, after.clone(), context.lookup)?;
                 allocations.push(AllocationEvidence {
                     sequence,
@@ -1415,6 +2348,15 @@ fn replay_change_set_internal(
                 let after = EntryState::from_cbor(field(operation, 3)?)?;
                 require_absent(&state.entries, &after.path)?;
                 require_parent(&state.entries, &after.path)?;
+                if immutable_base_file_ids.contains(&after.file_id) {
+                    return Err(Error::new(ErrorCode::FileIdRestoreProofInvalid));
+                }
+                require_file_id_absent(
+                    &state.entries,
+                    after.file_id,
+                    context.lookup,
+                    ErrorCode::FileIdRestoreProofInvalid,
+                )?;
                 let base_snapshot = optional_field(change_set, 17)
                     .map(object_ref)
                     .transpose()?
@@ -1428,7 +2370,7 @@ fn replay_change_set_internal(
                 if state.groups.contains_key(&after.id) {
                     return Err(Error::new(ErrorCode::ChangeSetTransitionInvalid));
                 }
-                context.lookup.scratch(after.encoded_len()?)?;
+                context.lookup.scratch(after.encoded_len(context.lookup)?)?;
                 state.groups.insert(after.id, after);
             }
             9 => {
@@ -1437,7 +2379,7 @@ fn replay_change_set_internal(
                 if before.id != after.id || state.groups.get(&before.id) != Some(&before) {
                     return Err(Error::new(ErrorCode::ChangeSetTransitionInvalid));
                 }
-                context.lookup.scratch(after.encoded_len()?)?;
+                context.lookup.scratch(after.encoded_len(context.lookup)?)?;
                 state.groups.insert(after.id, after);
             }
             10 => {
@@ -1453,7 +2395,14 @@ fn replay_change_set_internal(
             _ => return Err(Error::new(ErrorCode::ChangeSetTransitionInvalid)),
         }
     }
-    lifetime_file_ids.extend(state.entries.values().map(|entry| entry.file_id));
+    let mut lifetime_file_ids = immutable_base_file_ids;
+    for entry in state.entries.values() {
+        context.lookup.checkpoint()?;
+        if !lifetime_file_ids.contains(&entry.file_id) {
+            replay_index_memory.grow_by(derived_value_cost(16)?)?;
+            lifetime_file_ids.insert(entry.file_id);
+        }
+    }
     validate_lifetime_and_imports_inner(
         context,
         Some(change_set_reference),
@@ -1462,6 +2411,7 @@ fn replay_change_set_internal(
         &restorations,
         false,
         historical,
+        None,
     )?;
     Ok(ReplaySummary {
         state,
@@ -1470,12 +2420,278 @@ fn replay_change_set_internal(
     })
 }
 
+fn preflight_replay_closure(
+    change_set: &Cbor,
+    operations: &[Cbor],
+    context: &RepositoryContext<'_>,
+) -> Result<()> {
+    let mut scheduled = BTreeSet::new();
+    let mut stack = Vec::new();
+    let mut memory = OwnedDerivedMemory::empty(context.lookup);
+    let mut lookup_error = None;
+    schedule_replay_reference(
+        context.descriptor,
+        ObjectKind::RepositoryDescriptor,
+        context.lookup,
+        &mut scheduled,
+        &mut stack,
+        &mut memory,
+    )?;
+    schedule_replay_change_set(
+        change_set,
+        operations,
+        context,
+        &mut scheduled,
+        &mut stack,
+        &mut memory,
+    )?;
+    while let Some(reference) = stack.pop() {
+        context.lookup.checkpoint()?;
+        let Some(object) = collect_lookup_result(
+            &mut lookup_error,
+            context.lookup.edge(reference, reference.kind),
+        )? else {
+            continue;
+        };
+        if reference.kind == ObjectKind::Chunk
+            || reference.kind == ObjectKind::RepositoryDescriptor
+        {
+            continue;
+        }
+        let value = metadata_value(&object)?;
+        match reference.kind {
+            ObjectKind::Snapshot => {
+                schedule_replay_reference(
+                    object_ref(field(value, 16)?)?,
+                    ObjectKind::RepositoryDescriptor,
+                    context.lookup,
+                    &mut scheduled,
+                    &mut stack,
+                    &mut memory,
+                )?;
+                for parent in array(field(value, 17)?)? {
+                    schedule_replay_reference(
+                        object_ref(parent)?,
+                        ObjectKind::Snapshot,
+                        context.lookup,
+                        &mut scheduled,
+                        &mut stack,
+                        &mut memory,
+                    )?;
+                }
+                for (field_number, kind) in [
+                    (18, ObjectKind::Tree),
+                    (19, ObjectKind::ChangeSet),
+                ] {
+                    schedule_replay_reference(
+                        object_ref(field(value, field_number)?)?,
+                        kind,
+                        context.lookup,
+                        &mut scheduled,
+                        &mut stack,
+                        &mut memory,
+                    )?;
+                }
+                if let Some(groups) = optional_field(value, 20) {
+                    schedule_replay_reference(
+                        object_ref(groups)?,
+                        ObjectKind::AssetGroupSet,
+                        context.lookup,
+                        &mut scheduled,
+                        &mut stack,
+                        &mut memory,
+                    )?;
+                }
+            }
+            ObjectKind::ChangeSet => {
+                schedule_replay_change_set(
+                    value,
+                    array(field(value, 18)?)?,
+                    context,
+                    &mut scheduled,
+                    &mut stack,
+                    &mut memory,
+                )?;
+            }
+            ObjectKind::Tree => {
+                schedule_replay_reference(
+                    object_ref(field(value, 16)?)?,
+                    ObjectKind::RepositoryDescriptor,
+                    context.lookup,
+                    &mut scheduled,
+                    &mut stack,
+                    &mut memory,
+                )?;
+                for raw_entry in array(field(value, 17)?)? {
+                    context.lookup.checkpoint()?;
+                    let kind = if uint(field(raw_entry, 1)?)? == 1 {
+                        ObjectKind::Tree
+                    } else {
+                        ObjectKind::ContentManifest
+                    };
+                    schedule_replay_reference(
+                        object_ref(field(raw_entry, 4)?)?,
+                        kind,
+                        context.lookup,
+                        &mut scheduled,
+                        &mut stack,
+                        &mut memory,
+                    )?;
+                }
+            }
+            ObjectKind::ContentManifest if context.verify_content => {
+                for part in array(field(value, 19)?)? {
+                    context.lookup.checkpoint()?;
+                    schedule_replay_reference(
+                        object_ref(field(part, 0)?)?,
+                        ObjectKind::Chunk,
+                        context.lookup,
+                        &mut scheduled,
+                        &mut stack,
+                        &mut memory,
+                    )?;
+                }
+            }
+            ObjectKind::AssetGroupSet => {
+                schedule_replay_reference(
+                    object_ref(field(value, 16)?)?,
+                    ObjectKind::RepositoryDescriptor,
+                    context.lookup,
+                    &mut scheduled,
+                    &mut stack,
+                    &mut memory,
+                )?;
+            }
+            _ => {}
+        }
+    }
+    finish_lookup_selection(lookup_error)
+}
+
+fn schedule_replay_reference(
+    reference: ObjectRef,
+    expected: ObjectKind,
+    lookup: &RepositoryObjectLookup,
+    scheduled: &mut BTreeSet<ObjectRef>,
+    stack: &mut Vec<ObjectRef>,
+    memory: &mut OwnedDerivedMemory,
+) -> Result<()> {
+    expect_ref_kind(reference, expected)?;
+    if scheduled.contains(&reference) {
+        return Ok(());
+    }
+    lookup.checkpoint()?;
+    memory.grow_by(derived_value_cost(35)?)?;
+    scheduled.insert(reference);
+    stack.push(reference);
+    Ok(())
+}
+
+fn schedule_replay_entry_target(
+    value: &Cbor,
+    context: &RepositoryContext<'_>,
+    scheduled: &mut BTreeSet<ObjectRef>,
+    stack: &mut Vec<ObjectRef>,
+    memory: &mut OwnedDerivedMemory,
+) -> Result<()> {
+    let state = EntryState::from_cbor(value)?;
+    let kind = if state.kind == 1 {
+        ObjectKind::Tree
+    } else {
+        ObjectKind::ContentManifest
+    };
+    if let Some(target) = state.target {
+        schedule_replay_reference(target, kind, context.lookup, scheduled, stack, memory)?;
+    }
+    Ok(())
+}
+
+fn schedule_replay_change_set(
+    change_set: &Cbor,
+    operations: &[Cbor],
+    context: &RepositoryContext<'_>,
+    scheduled: &mut BTreeSet<ObjectRef>,
+    stack: &mut Vec<ObjectRef>,
+    memory: &mut OwnedDerivedMemory,
+) -> Result<()> {
+    schedule_replay_reference(
+        object_ref(field(change_set, 16)?)?,
+        ObjectKind::RepositoryDescriptor,
+        context.lookup,
+        scheduled,
+        stack,
+        memory,
+    )?;
+    if let Some(base) = optional_field(change_set, 17) {
+        schedule_replay_reference(
+            object_ref(base)?,
+            ObjectKind::Snapshot,
+            context.lookup,
+            scheduled,
+            stack,
+            memory,
+        )?;
+    }
+    for operation in operations {
+        context.lookup.checkpoint()?;
+        for key in [2, 3, 4] {
+            if let Some(state) = optional_field(operation, key) {
+                schedule_replay_entry_target(state, context, scheduled, stack, memory)?;
+            }
+        }
+        if optional_field(operation, 10)
+            .map(|value| uint(value))
+            .transpose()?
+            == Some(1)
+        {
+            if let Some(state) = optional_field(operation, 11) {
+                schedule_replay_entry_target(state, context, scheduled, stack, memory)?;
+            }
+        }
+        if let Some(proof) = optional_field(operation, 5) {
+            schedule_replay_reference(
+                object_ref(field(proof, 0)?)?,
+                ObjectKind::RepositoryDescriptor,
+                context.lookup,
+                scheduled,
+                stack,
+                memory,
+            )?;
+        }
+        if uint(field(operation, 1)?)? == 7 {
+            if let Some(proof) = optional_field(operation, 6) {
+                schedule_replay_reference(
+                    object_ref(field(proof, 0)?)?,
+                    ObjectKind::RepositoryDescriptor,
+                    context.lookup,
+                    scheduled,
+                    stack,
+                    memory,
+                )?;
+                for key in [1, 3] {
+                    if let Some(snapshot) = optional_field(proof, key) {
+                        schedule_replay_reference(
+                            object_ref(snapshot)?,
+                            ObjectKind::Snapshot,
+                            context.lookup,
+                            scheduled,
+                            stack,
+                            memory,
+                        )?;
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 fn insert_state(
     entries: &mut BTreeMap<Vec<String>, EntryState>,
     state: EntryState,
     lookup: &RepositoryObjectLookup,
 ) -> Result<()> {
-    lookup.scratch(state.encoded_len()?)?;
+    lookup.scratch(state.encoded_len(lookup)?)?;
     entries.insert(state.path.clone(), state);
     Ok(())
 }
@@ -1514,12 +2730,16 @@ fn require_parent(entries: &BTreeMap<Vec<String>, EntryState>, path: &[String]) 
 fn require_file_id_absent(
     entries: &BTreeMap<Vec<String>, EntryState>,
     file_id: FileId,
+    lookup: &RepositoryObjectLookup,
+    error: ErrorCode,
 ) -> Result<()> {
-    if entries.values().any(|state| state.file_id == file_id) {
-        Err(Error::new(ErrorCode::FileIdAlreadyConsumed))
-    } else {
-        Ok(())
+    for state in entries.values() {
+        lookup.checkpoint()?;
+        if state.file_id == file_id {
+            return Err(Error::new(error));
+        }
     }
+    Ok(())
 }
 
 fn parent_path(path: &[String]) -> &[String] {
@@ -1550,17 +2770,30 @@ fn replace_prefix(
     after: &[String],
     lookup: &RepositoryObjectLookup,
 ) -> Result<()> {
-    let affected = entries
-        .iter()
-        .filter(|(path, _)| *path == before || starts_with_path(path, before))
-        .map(|(path, state)| (path.clone(), state.clone()))
-        .collect::<Vec<_>>();
-    lookup.checkpoint()?;
-    let old_paths = affected
-        .iter()
-        .map(|(path, _)| path.clone())
-        .collect::<BTreeSet<_>>();
-    let mut replacements = Vec::with_capacity(affected.len());
+    let mut workspace = OwnedDerivedMemory::empty(lookup);
+    let mut affected = Vec::new();
+    for (path, state) in entries.iter() {
+        lookup.checkpoint()?;
+        if path == before || starts_with_path(path, before) {
+            let retained = state
+                .retained_cost()?
+                .checked_add(path_retained_cost(path)?)
+                .and_then(|bytes| bytes.checked_add(128))
+                .ok_or_else(|| Error::new(ErrorCode::LimitMemory))?;
+            workspace.grow_by(retained)?;
+            affected.push((path.clone(), state.clone()));
+        }
+    }
+    let mut old_paths = BTreeSet::new();
+    for (path, _) in &affected {
+        lookup.checkpoint()?;
+        let retained = path_retained_cost(path)?
+            .checked_add(128)
+            .ok_or_else(|| Error::new(ErrorCode::LimitMemory))?;
+        workspace.grow_by(retained)?;
+        old_paths.insert(path.clone());
+    }
+    let mut replacements = Vec::new();
     for (_, original) in &affected {
         lookup.checkpoint()?;
         let mut state = original.clone();
@@ -1571,13 +2804,21 @@ fn replace_prefix(
         }
         state.path = next.clone();
         set_numeric_field(&mut state.raw, 0, path_cbor(&next))?;
-        lookup.scratch(state.encoded_len()?)?;
+        lookup.scratch(state.encoded_len(lookup)?)?;
+        let retained = state
+            .retained_cost()?
+            .checked_add(path_retained_cost(&next)?)
+            .and_then(|bytes| bytes.checked_add(128))
+            .ok_or_else(|| Error::new(ErrorCode::LimitMemory))?;
+        workspace.grow_by(retained)?;
         replacements.push((next, state));
     }
     for (path, _) in affected {
+        lookup.checkpoint()?;
         entries.remove(&path);
     }
     for (path, state) in replacements {
+        lookup.checkpoint()?;
         entries.insert(path, state);
     }
     Ok(())
@@ -1615,8 +2856,11 @@ fn same_except(left: &Cbor, right: &Cbor, ignored: &[u64]) -> Result<bool> {
     Ok(filtered(left) == filtered(right))
 }
 
-fn snapshot_object(reference: ObjectRef, lookup: &RepositoryObjectLookup) -> Result<Cbor> {
-    Ok(metadata_value(&lookup.edge(reference, ObjectKind::Snapshot)?)?.clone())
+fn snapshot_object(reference: ObjectRef, lookup: &RepositoryObjectLookup) -> Result<Arc<Cbor>> {
+    lookup
+        .edge(reference, ObjectKind::Snapshot)?
+        .value
+        .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))
 }
 
 fn is_ancestor(
@@ -1630,16 +2874,21 @@ fn is_ancestor(
     }
     let mut seen = BTreeSet::new();
     let mut stack = vec![descendant];
+    let mut memory = OwnedDerivedMemory::empty(lookup);
+    memory.grow_by(derived_value_cost(34)?)?;
     while let Some(current) = stack.pop() {
         lookup.checkpoint()?;
-        if !seen.insert(current) {
+        if seen.contains(&current) {
             continue;
         }
+        memory.grow_by(derived_value_cost(34)?)?;
+        seen.insert(current);
         for parent in array(field(&snapshot_object(current, lookup)?, 17)?)? {
             let parent = object_ref(parent)?;
             if parent == ancestor {
                 return Ok(true);
             }
+            memory.grow_by(derived_value_cost(34)?)?;
             stack.push(parent);
         }
     }
@@ -1660,11 +2909,13 @@ fn state_at_snapshot(
     if object_ref(field(&snapshot, 16)?)? != context.descriptor {
         return Err(Error::new(ErrorCode::FileIdCrossRepositoryProof));
     }
-    let tree = expand_tree(
+    let tree = expand_tree_owned(
         object_ref(field(&snapshot, 18)?)?,
         context.lookup,
         context.descriptor,
         context.verify_content,
+        context.path_case_mode,
+        context.path_profile_validator,
     )?;
     let groups = groups_from_set(
         optional_field(&snapshot, 20).map(object_ref).transpose()?,
@@ -1706,16 +2957,27 @@ fn validate_restore(
         .filter(|state| state.raw == after.raw)
         .ok_or_else(|| Error::new(ErrorCode::FileIdRestoreProofInvalid))?;
     let delete_snapshot = snapshot_object(deleted, context.lookup)?;
+    if object_ref(field(&delete_snapshot, 16)?)? != context.descriptor {
+        return Err(Error::new(ErrorCode::FileIdCrossRepositoryProof));
+    }
     let delete_change = context.lookup.edge(
         object_ref(field(&delete_snapshot, 19)?)?,
         ObjectKind::ChangeSet,
     )?;
-    let contains_delete = array(field(metadata_value(&delete_change)?, 18)?)?
-        .iter()
-        .any(|op| {
-            uint(field(op, 1).unwrap_or(&Cbor::UInt(0))).ok() == Some(6)
-                && optional_field(op, 2).is_some_and(|before| before == &source_state.raw)
-        });
+    let delete_change = metadata_value(&delete_change)?;
+    if object_ref(field(delete_change, 16)?)? != context.descriptor {
+        return Err(Error::new(ErrorCode::FileIdCrossRepositoryProof));
+    }
+    let mut contains_delete = false;
+    for operation in array(field(delete_change, 18)?)? {
+        context.lookup.checkpoint()?;
+        if uint(field(operation, 1).unwrap_or(&Cbor::UInt(0))).ok() == Some(6)
+            && optional_field(operation, 2).is_some_and(|before| before == &source_state.raw)
+        {
+            contains_delete = true;
+            break;
+        }
+    }
     if !contains_delete {
         return Err(Error::new(ErrorCode::FileIdRestoreProofInvalid));
     }
@@ -1729,15 +2991,19 @@ fn replay_merge_resolution(
     lookup: &RepositoryObjectLookup,
 ) -> Result<()> {
     let wanted = digest32(field(operation, 9)?)?;
-    let record = conflict_set
+    let records = conflict_set
         .and_then(|set| optional_field(set, 17))
         .and_then(|records| array(records).ok())
-        .and_then(|records| {
-            records.iter().find(|record| {
-                optional_field(record, 0).and_then(|value| digest32(value).ok()) == Some(wanted)
-            })
-        })
         .ok_or_else(|| Error::new(ErrorCode::ConflictResolutionMismatch))?;
+    let mut record = None;
+    for candidate in records {
+        lookup.checkpoint()?;
+        if optional_field(candidate, 0).and_then(|value| digest32(value).ok()) == Some(wanted) {
+            record = Some(candidate);
+            break;
+        }
+    }
+    let record = record.ok_or_else(|| Error::new(ErrorCode::ConflictResolutionMismatch))?;
     let subject_kind = uint(field(operation, 10)?)?;
     if uint(
         array(field(record, 2)?)?
@@ -1752,7 +3018,7 @@ fn replay_merge_resolution(
         return Err(Error::new(ErrorCode::ConflictResolutionMismatch));
     }
     let choice = uint(field(resolution, 1)?)?;
-    clear_conflict_subject(state, record)?;
+    clear_conflict_subject(state, record, lookup)?;
     if choice == 4 {
         if optional_field(operation, 11).is_some() {
             return Err(Error::new(ErrorCode::ConflictResolutionMismatch));
@@ -1772,13 +3038,17 @@ fn replay_merge_resolution(
         )?;
     } else {
         let group = AssetGroup::from_cbor(side_value)?;
-        lookup.scratch(group.encoded_len()?)?;
+        lookup.scratch(group.encoded_len(lookup)?)?;
         state.groups.insert(group.id, group);
     }
     Ok(())
 }
 
-fn clear_conflict_subject(state: &mut RepositoryState, record: &Cbor) -> Result<()> {
+fn clear_conflict_subject(
+    state: &mut RepositoryState,
+    record: &Cbor,
+    lookup: &RepositoryObjectLookup,
+) -> Result<()> {
     let subject = array(field(record, 2)?)?;
     match uint(
         subject
@@ -1803,6 +3073,12 @@ fn clear_conflict_subject(state: &mut RepositoryState, record: &Cbor) -> Result<
             .map(path)
             .collect::<Result<BTreeSet<_>>>()?;
             let path_collision = uint(field(record, 1)?)? == 8;
+            // Complete all deadline checks before mutating the caller-visible
+            // replay workspace so a deadline failure cannot leave a partial
+            // resolution applied.
+            for _ in state.entries.values() {
+                lookup.checkpoint()?;
+            }
             state.entries.retain(|entry_path, entry| {
                 !paths.contains(entry_path)
                     && (path_collision || !file_ids.contains(&entry.file_id))
@@ -1840,79 +3116,27 @@ pub fn validate_import_request(
     context: &RepositoryContext<'_>,
     request: &ImportRequest,
 ) -> Result<ImportDecision> {
-    let importer = context
+    context.lookup.require_repository_semantics()?;
+    context
         .lookup
-        .registry
-        .profile(&request.importer_profile)
-        .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))?;
-    if importer.family != "importer" {
-        return Err(Error::new(ErrorCode::SchemaFieldInvalid));
-    }
-    context.lookup.registry.check_profile(
-        &request.importer_profile,
-        "importer",
-        context.lookup.mode.operation(),
-    )?;
-    validate_lifetime_and_imports_inner(context, None, &[], None, &[], true, false)?;
-    let requested_mapping = ImportMapping {
-        importer_profile: request.importer_profile.clone(),
-        source_namespace_digest: request.source_namespace_digest,
-        source_identity_digest: request.source_identity_digest,
-        file_id: request.requested_file_id,
-        state: ImportState::Reserved,
-        declared_mapping_key: None,
-    };
-    let requested_key = import_mapping_key(context.descriptor, &requested_mapping)?;
-    let tuple_matches = |mapping: &ImportMapping| {
-        mapping.importer_profile == request.importer_profile
-            && mapping.source_namespace_digest == request.source_namespace_digest
-            && mapping.source_identity_digest == request.source_identity_digest
-    };
-    let mut owner: Option<&ImportMapping> = None;
-    for mapping in context.import_mappings {
-        let actual_key = import_mapping_key(context.descriptor, mapping)?;
-        if mapping
-            .declared_mapping_key
-            .is_some_and(|declared| declared != actual_key)
-        {
-            return Err(Error::new(ErrorCode::FileIdImportMappingConflict));
-        }
-        if tuple_matches(mapping) {
-            if owner.is_some_and(|previous| previous.file_id != mapping.file_id)
-                || mapping.file_id != request.requested_file_id
-            {
-                return Err(Error::new(ErrorCode::FileIdImportMappingConflict));
-            }
-            owner = Some(mapping);
-        } else if mapping.file_id == request.requested_file_id {
-            return Err(Error::new(ErrorCode::FileIdImportMappingConflict));
-        }
-    }
-    if let Some(mapping) = owner {
-        return Ok(ImportDecision {
-            file_id: mapping.file_id,
-            state: mapping.state,
-            retry: true,
-            mapping_key: requested_key,
-        });
-    }
-    if context
-        .lifetime_records
-        .iter()
-        .any(|record| record.file_id == request.requested_file_id)
-        || context
-            .working_lifetime_additions
-            .iter()
-            .any(|record| record.file_id == request.requested_file_id)
-    {
-        return Err(Error::new(ErrorCode::FileIdImportMappingConflict));
-    }
-    Ok(ImportDecision {
-        file_id: request.requested_file_id,
-        state: ImportState::Reserved,
-        retry: false,
-        mapping_key: requested_key,
-    })
+        .with_operation(|| validate_import_request_operation(context, request))
+}
+
+fn validate_import_request_operation(
+    context: &RepositoryContext<'_>,
+    request: &ImportRequest,
+) -> Result<ImportDecision> {
+    validate_lifetime_and_imports_inner(
+        context,
+        None,
+        &[],
+        None,
+        &[],
+        true,
+        false,
+        Some(request),
+    )?
+    .ok_or_else(|| Error::new(ErrorCode::FileIdImportMappingConflict))
 }
 
 pub fn validate_lifetime_and_imports(
@@ -1921,7 +3145,30 @@ pub fn validate_lifetime_and_imports(
     allocations: &[AllocationEvidence],
     entries: Option<&BTreeMap<Vec<String>, EntryState>>,
 ) -> Result<()> {
+    context.lookup.require_repository_semantics()?;
+    context.lookup.with_operation(|| {
+        validate_lifetime_and_imports_operation(
+            context,
+            change_set_reference,
+            allocations,
+            entries,
+        )
+    })
+}
+
+fn validate_lifetime_and_imports_operation(
+    context: &RepositoryContext<'_>,
+    change_set_reference: ObjectRef,
+    allocations: &[AllocationEvidence],
+    entries: Option<&BTreeMap<Vec<String>, EntryState>>,
+) -> Result<()> {
+    let mut file_id_memory = None;
     let file_ids = if let Some(entries) = entries {
+        let bytes = entries
+            .len()
+            .checked_mul(derived_value_cost(16)?)
+            .ok_or_else(|| Error::new(ErrorCode::LimitMemory))?;
+        file_id_memory = Some(DerivedMemory::reserve(context.lookup, bytes)?);
         let mut file_ids = BTreeSet::new();
         for entry in entries.values() {
             context.lookup.checkpoint()?;
@@ -1931,7 +3178,7 @@ pub fn validate_lifetime_and_imports(
     } else {
         None
     };
-    validate_lifetime_and_imports_inner(
+    let result = validate_lifetime_and_imports_inner(
         context,
         Some(change_set_reference),
         allocations,
@@ -1939,7 +3186,11 @@ pub fn validate_lifetime_and_imports(
         &[],
         false,
         false,
+        None,
     )
+    .map(|_| ());
+    drop(file_id_memory);
+    result
 }
 
 fn validate_lifetime_and_imports_inner(
@@ -1950,7 +3201,120 @@ fn validate_lifetime_and_imports_inner(
     restorations: &[EntryState],
     allow_unrelated_working: bool,
     historical: bool,
-) -> Result<()> {
+    import_request: Option<&ImportRequest>,
+) -> Result<Option<ImportDecision>> {
+    let mut workspace_bytes = 2_048usize;
+    let mut add_workspace = |bytes: usize| -> Result<()> {
+        workspace_bytes = workspace_bytes
+            .checked_add(bytes)
+            .ok_or_else(|| Error::new(ErrorCode::LimitMemory))?;
+        Ok(())
+    };
+    for _ in context.lifetime_records {
+        add_workspace(512)?;
+    }
+    for mapping in context.import_mappings {
+        add_workspace(
+            768usize
+                .checked_add(mapping.importer_profile.namespace().len().saturating_mul(2))
+                .and_then(|bytes| {
+                    bytes.checked_add(mapping.importer_profile.id().len().saturating_mul(2))
+                })
+                .ok_or_else(|| Error::new(ErrorCode::LimitMemory))?,
+        )?;
+    }
+    for allocation in allocations {
+        add_workspace(
+            allocation
+                .after
+                .retained_cost()?
+                .checked_add(cbor_retained_cost(&allocation.operation, 0)?)
+                .and_then(|bytes| bytes.checked_add(512))
+                .ok_or_else(|| Error::new(ErrorCode::LimitMemory))?,
+        )?;
+    }
+    for _ in context.working_lifetime_additions {
+        add_workspace(512)?;
+    }
+    for restoration in restorations {
+        add_workspace(restoration.retained_cost()?.saturating_add(256))?;
+    }
+    let _workspace = DerivedMemory::reserve(context.lookup, workspace_bytes)?;
+
+    // Whole-input authority phase: known profile-family assignments and every
+    // syntactically kind-4 lifetime reference are checked before any duplicate,
+    // tuple, or lifetime semantics. Unknown/lifecycle decisions remain L3 and
+    // are ranked only after this complete L2 pass.
+    for mapping in context.import_mappings {
+        context.lookup.checkpoint()?;
+        expect_ref_kind(mapping.descriptor, ObjectKind::RepositoryDescriptor)?;
+        if context
+            .lookup
+            .registry
+            .profile(&mapping.importer_profile)
+            .is_some_and(|entry| entry.family != "importer")
+        {
+            return Err(Error::new(ErrorCode::SchemaFieldInvalid));
+        }
+    }
+    if let Some(request) = import_request {
+        if context
+            .lookup
+            .registry
+            .profile(&request.importer_profile)
+            .is_some_and(|entry| entry.family != "importer")
+        {
+            return Err(Error::new(ErrorCode::SchemaFieldInvalid));
+        }
+    }
+    let mut missing_lifetime_reference = false;
+    for record in context
+        .lifetime_records
+        .iter()
+        .chain(context.working_lifetime_additions.iter())
+    {
+        context.lookup.checkpoint()?;
+        match context
+            .lookup
+            .resolve_expected(record.first_change_set, ObjectKind::ChangeSet)
+        {
+            Ok(_) => {}
+            Err(error) if error.code == ErrorCode::ObjectReferenceMissing => {
+                missing_lifetime_reference = true;
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    let mut registry_error = None;
+    for mapping in context.import_mappings {
+        context.lookup.checkpoint()?;
+        if let Err(error) = context.lookup.registry.check_profile(
+            &mapping.importer_profile,
+            "importer",
+            context.lookup.mode.operation(),
+        ) {
+            observe_lookup_error(&mut registry_error, error);
+        }
+    }
+    if let Some(request) = import_request {
+        if let Err(error) = context.lookup.registry.check_profile(
+            &request.importer_profile,
+            "importer",
+            context.lookup.mode.operation(),
+        ) {
+            observe_lookup_error(&mut registry_error, error);
+        }
+    }
+    if let Err(error) = context.lookup.finish_registry_phase() {
+        observe_lookup_error(&mut registry_error, error);
+    }
+    if let Some(error) = registry_error {
+        return Err(error);
+    }
+    if missing_lifetime_reference {
+        return Err(Error::new(ErrorCode::FileIdLifetimeEvidenceInvalid));
+    }
+
     let mut prior = BTreeMap::new();
     for record in context.lifetime_records {
         context.lookup.checkpoint()?;
@@ -1965,11 +3329,11 @@ fn validate_lifetime_and_imports_inner(
     let mut mapped_files = BTreeMap::<FileId, MappingTuple>::new();
     for mapping in context.import_mappings {
         context.lookup.checkpoint()?;
-        let key = import_mapping_key(context.descriptor, mapping)?;
-        if mapping
-            .declared_mapping_key
-            .is_some_and(|declared| declared != key)
-        {
+        if mapping.descriptor != context.descriptor {
+            return Err(Error::new(ErrorCode::FileIdCrossRepositoryProof));
+        }
+        let key = import_mapping_key(mapping.descriptor, mapping)?;
+        if mapping.declared_mapping_key != key {
             return Err(Error::new(ErrorCode::FileIdImportMappingConflict));
         }
         let tuple = (
@@ -2093,12 +3457,14 @@ fn validate_lifetime_and_imports_inner(
                 return Err(Error::new(ErrorCode::FileIdLifetimeEvidenceInvalid));
             }
         }
-        if (!allow_unrelated_working && working.len() != expected.len())
-            || expected
-                .iter()
-                .any(|(file_id, record)| working.get(file_id).copied() != Some(record))
-        {
+        if !allow_unrelated_working && working.len() != expected.len() {
             return Err(Error::new(ErrorCode::FileIdLifetimeEvidenceInvalid));
+        }
+        for (file_id, record) in &expected {
+            context.lookup.checkpoint()?;
+            if working.get(file_id).copied() != Some(record) {
+                return Err(Error::new(ErrorCode::FileIdLifetimeEvidenceInvalid));
+            }
         }
     }
 
@@ -2114,11 +3480,9 @@ fn validate_lifetime_and_imports_inner(
     }
     for mapping in context.import_mappings {
         context.lookup.checkpoint()?;
-        let key = import_mapping_key(context.descriptor, mapping)?;
-        if !context.lifetime_records.iter().any(|record| {
-            record.file_id == mapping.file_id
-                && record.origin == LifetimeOrigin::Import
-                && record.import_mapping_key == Some(key)
+        let key = import_mapping_key(mapping.descriptor, mapping)?;
+        if !prior.get(&mapping.file_id).is_some_and(|record| {
+            record.origin == LifetimeOrigin::Import && record.import_mapping_key == Some(key)
         }) {
             return Err(Error::new(ErrorCode::FileIdLifetimeEvidenceInvalid));
         }
@@ -2134,17 +3498,64 @@ fn validate_lifetime_and_imports_inner(
             }
         }
     }
-    Ok(())
+    let Some(request) = import_request else {
+        return Ok(None);
+    };
+    let tuple = (
+        request.importer_profile.clone(),
+        request.source_namespace_digest,
+        request.source_identity_digest,
+    );
+    let mut requested_mapping = ImportMapping {
+        descriptor: context.descriptor,
+        importer_profile: request.importer_profile.clone(),
+        source_namespace_digest: request.source_namespace_digest,
+        source_identity_digest: request.source_identity_digest,
+        file_id: request.requested_file_id,
+        state: ImportState::Reserved,
+        declared_mapping_key: [0; 32],
+    };
+    let requested_key = import_mapping_key(context.descriptor, &requested_mapping)?;
+    requested_mapping.declared_mapping_key = requested_key;
+    if let Some((mapping, _)) = mappings.get(&tuple) {
+        if mapping.file_id != request.requested_file_id {
+            return Err(Error::new(ErrorCode::FileIdImportMappingConflict));
+        }
+        return Ok(Some(ImportDecision {
+            file_id: mapping.file_id,
+            state: mapping.state,
+            retry: true,
+            mapping_key: requested_key,
+        }));
+    }
+    if mapped_files.contains_key(&request.requested_file_id)
+        || prior.contains_key(&request.requested_file_id)
+        || working.contains_key(&request.requested_file_id)
+    {
+        return Err(Error::new(ErrorCode::FileIdImportMappingConflict));
+    }
+    Ok(Some(ImportDecision {
+        file_id: request.requested_file_id,
+        state: ImportState::Reserved,
+        retry: false,
+        mapping_key: requested_key,
+    }))
 }
 
 fn validate_lifetime_record(
     record: &LifetimeRecord,
     context: &RepositoryContext<'_>,
 ) -> Result<()> {
-    let object = context
+    let object = match context
         .lookup
         .resolve_expected(record.first_change_set, ObjectKind::ChangeSet)
-        .map_err(|_| Error::new(ErrorCode::FileIdLifetimeEvidenceInvalid))?;
+    {
+        Ok(object) => object,
+        Err(error) if error.code == ErrorCode::ObjectReferenceMissing => {
+            return Err(Error::new(ErrorCode::FileIdLifetimeEvidenceInvalid));
+        }
+        Err(error) => return Err(error),
+    };
     let change_set = metadata_value(&object)?;
     if object_ref(field(change_set, 16)?)? != context.descriptor {
         return Err(Error::new(ErrorCode::FileIdLifetimeEvidenceInvalid));
@@ -2203,27 +3614,109 @@ pub struct ConflictSummary {
     pub records: Vec<Cbor>,
 }
 
+struct ReservedConflictSummary<'a> {
+    summary: ConflictSummary,
+    _memory: DerivedMemory<'a>,
+}
+
 pub fn validate_conflict_set(
     reference: Option<ObjectRef>,
     lookup: &RepositoryObjectLookup,
     descriptor: ObjectRef,
     published: bool,
 ) -> Result<ConflictSummary> {
+    lookup.require_repository_semantics()?;
+    lookup.with_operation(|| {
+        validate_conflict_set_owned(reference, lookup, descriptor, published)
+            .map(|owned| owned.summary)
+    })
+}
+
+fn validate_conflict_set_owned<'a>(
+    reference: Option<ObjectRef>,
+    lookup: &'a RepositoryObjectLookup,
+    descriptor: ObjectRef,
+    published: bool,
+) -> Result<ReservedConflictSummary<'a>> {
+    lookup.require_repository_semantics()?;
     let Some(reference) = reference else {
-        return Ok(ConflictSummary {
-            records: Vec::new(),
+        return Ok(ReservedConflictSummary {
+            summary: ConflictSummary {
+                records: Vec::new(),
+            },
+            _memory: DerivedMemory::reserve(lookup, 0)?,
         });
     };
     let object = lookup.resolve_expected(reference, ObjectKind::ConflictSet)?;
     let set = metadata_value(&object)?;
+    // The direct conflict route closes over its authenticated descriptor and
+    // every directly carried EntryState target.  This pass is intentionally
+    // shallow: content-manifest chunks are not conflict-route dependencies.
+    // Complete it before descriptor, conflict, or publication semantics so a
+    // missing/wrong-kind edge retains its layer-two precedence.
+    let mut lookup_error = None;
+    let _ = collect_lookup_result(
+        &mut lookup_error,
+        lookup.edge(descriptor, ObjectKind::RepositoryDescriptor),
+    )?;
+    let _ = collect_lookup_result(
+        &mut lookup_error,
+        lookup.edge(
+            object_ref(field(set, 16)?)?,
+            ObjectKind::RepositoryDescriptor,
+        ),
+    )?;
+    let records = array(field(set, 17)?)?;
+    for record in records {
+        lookup.checkpoint()?;
+        for key in [3, 4, 5] {
+            if let Some(side) = optional_field(record, key) {
+                resolve_conflict_entry_target(side, lookup, &mut lookup_error)?;
+            }
+        }
+        let resolution = field(record, 6)?;
+        if let Some(side) = optional_field(resolution, 2) {
+            resolve_conflict_entry_target(side, lookup, &mut lookup_error)?;
+        }
+    }
+    finish_lookup_selection(lookup_error)?;
+    lookup.finish_registry_phase()?;
     if object_ref(field(set, 16)?)? != descriptor {
         return Err(Error::new(ErrorCode::RepositoryDescriptorMismatch));
     }
-    let records = array(field(set, 17)?)?;
     validate_conflict_records(records, published, lookup)?;
-    Ok(ConflictSummary {
-        records: records.to_vec(),
+    let retained = records.iter().try_fold(256usize, |total, record| {
+        total
+            .checked_add(cbor_retained_cost(record, 0)?)
+            .ok_or_else(|| Error::new(ErrorCode::LimitMemory))
+    })?;
+    let memory = DerivedMemory::reserve(lookup, retained)?;
+    Ok(ReservedConflictSummary {
+        summary: ConflictSummary {
+            records: records.to_vec(),
+        },
+        _memory: memory,
     })
+}
+
+fn resolve_conflict_entry_target(
+    side: &Cbor,
+    lookup: &RepositoryObjectLookup,
+    lookup_error: &mut Option<Error>,
+) -> Result<()> {
+    if uint(field(side, 0)?)? != 1 {
+        return Ok(());
+    }
+    let state = EntryState::from_cbor(field(side, 1)?)?;
+    let expected = if state.kind == 1 {
+        ObjectKind::Tree
+    } else {
+        ObjectKind::ContentManifest
+    };
+    if let Some(target) = state.target {
+        let _ = collect_lookup_result(lookup_error, lookup.edge(target, expected))?;
+    }
+    Ok(())
 }
 
 fn validate_conflict_records(
@@ -2235,7 +3728,7 @@ fn validate_conflict_records(
     // bounded set. Only then rank independent repository-stage semantics.
     for record in records {
         lookup.checkpoint()?;
-        validate_conflict_record_identity(record)?;
+        validate_conflict_record_identity(record, Some(lookup))?;
     }
     let mut best = None;
     for record in records {
@@ -2255,11 +3748,25 @@ fn validate_conflict_records(
 
 #[cfg(test)]
 fn validate_conflict_record(record: &Cbor, published: bool) -> Result<()> {
-    validate_conflict_record_identity(record)?;
+    validate_conflict_record_identity(record, None)?;
     validate_conflict_record_semantics(record, published)
 }
 
-fn validate_conflict_record_identity(record: &Cbor) -> Result<()> {
+fn validate_conflict_record_identity(
+    record: &Cbor,
+    lookup: Option<&RepositoryObjectLookup>,
+) -> Result<()> {
+    // The keyed preimage clones a bounded projection and canonical-encodes it.
+    // Reserve that transient working set before either allocation.
+    let _memory = lookup
+        .map(|lookup| {
+            cbor_retained_cost(record, 0)?
+                .checked_mul(3)
+                .and_then(|bytes| bytes.checked_add(512))
+                .ok_or_else(|| Error::new(ErrorCode::LimitMemory))
+                .and_then(|bytes| DerivedMemory::reserve(lookup, bytes))
+        })
+        .transpose()?;
     let declared_id = digest32(field(record, 0)?)?;
     if conflict_id(&keyed_conflict_preimage(record)?) != declared_id {
         return Err(Error::new(ErrorCode::ConflictIdMismatch));
@@ -2437,19 +3944,34 @@ pub fn validate_snapshot_graph(
     candidate: ObjectRef,
     context: &RepositoryContext<'_>,
 ) -> Result<SnapshotGraphSummary> {
-    context.lookup.validate_all()?;
+    context.lookup.require_repository_semantics()?;
+    context
+        .lookup
+        .with_operation(|| validate_snapshot_graph_operation(candidate, context))
+}
+
+fn validate_snapshot_graph_operation(
+    candidate: ObjectRef,
+    context: &RepositoryContext<'_>,
+) -> Result<SnapshotGraphSummary> {
     expect_ref_kind(candidate, ObjectKind::Snapshot)?;
     expect_ref_kind(context.descriptor, ObjectKind::RepositoryDescriptor)?;
     expect_ref_kind(context.designated_root, ObjectKind::Snapshot)?;
     let mut colors = BTreeMap::<ObjectRef, u8>::new();
     let mut visited = BTreeSet::new();
-    let mut snapshots = BTreeMap::<ObjectRef, Cbor>::new();
+    let mut snapshots = BTreeMap::<ObjectRef, Arc<Cbor>>::new();
+    let mut memory = OwnedDerivedMemory::empty(context.lookup);
     let mut saw_cycle = false;
+    let mut lookup_error = None;
+    memory.grow_by(derived_value_cost(35)?)?;
     let mut stack = vec![(candidate, false)];
     while let Some((reference, exiting)) = stack.pop() {
         context.lookup.checkpoint()?;
         if exiting {
             colors.insert(reference, 2);
+            if !visited.contains(&reference) {
+                memory.grow_by(derived_value_cost(34)?)?;
+            }
             visited.insert(reference);
             continue;
         }
@@ -2461,31 +3983,48 @@ pub fn validate_snapshot_graph(
             Some(2) => continue,
             _ => {}
         }
+        memory.grow_by(derived_value_cost(35)?)?;
         colors.insert(reference, 1);
-        let snapshot = snapshot_object(reference, context.lookup)?;
+        let Some(snapshot) = collect_lookup_result(
+            &mut lookup_error,
+            snapshot_object(reference, context.lookup),
+        )? else {
+            continue;
+        };
         let descriptor = object_ref(field(&snapshot, 16)?)?;
-        context
-            .lookup
-            .edge(descriptor, ObjectKind::RepositoryDescriptor)?;
-        let parents = array(field(&snapshot, 17)?)?
+        let _ = collect_lookup_result(
+            &mut lookup_error,
+            context.lookup.edge(descriptor, ObjectKind::RepositoryDescriptor),
+        )?;
+        let raw_parents = array(field(&snapshot, 17)?)?;
+        memory.grow_by(derived_value_cost(raw_parents.len().saturating_mul(34))?)?;
+        let parents = raw_parents
             .iter()
             .map(object_ref)
             .collect::<Result<Vec<_>>>()?;
         let change_reference = object_ref(field(&snapshot, 19)?)?;
-        context
-            .lookup
-            .edge(change_reference, ObjectKind::ChangeSet)?;
+        let _ = collect_lookup_result(
+            &mut lookup_error,
+            context.lookup.edge(change_reference, ObjectKind::ChangeSet),
+        )?;
+        memory.grow_by(derived_value_cost(64)?)?;
         snapshots.insert(reference, snapshot);
+        memory.grow_by(derived_value_cost(35)?)?;
         stack.push((reference, true));
         for parent in parents.into_iter().rev() {
+            memory.grow_by(derived_value_cost(35)?)?;
             stack.push((parent, false));
         }
     }
+
+    finish_lookup_selection(lookup_error)?;
+    context.lookup.finish_registry_phase()?;
 
     // All safely discoverable references above are resolved before any
     // repository-layer decision. Then select layer-three failures in the
     // frozen catalogue order, independent of traversal or map order.
     for (reference, snapshot) in &snapshots {
+        context.lookup.checkpoint()?;
         let parents = array(field(snapshot, 17)?)?;
         if *reference == context.designated_root {
             if !parents.is_empty() {
@@ -2499,6 +4038,7 @@ pub fn validate_snapshot_graph(
         return Err(Error::new(ErrorCode::SnapshotParentCycle));
     }
     for snapshot in snapshots.values() {
+        context.lookup.checkpoint()?;
         if object_ref(field(snapshot, 16)?)? != context.descriptor {
             return Err(Error::new(ErrorCode::SnapshotParentCrossRepository));
         }
@@ -2507,6 +4047,7 @@ pub fn validate_snapshot_graph(
         return Err(Error::new(ErrorCode::SnapshotRootInvalid));
     }
     for snapshot in snapshots.values() {
+        context.lookup.checkpoint()?;
         let parent_refs = array(field(snapshot, 17)?)?
             .iter()
             .map(object_ref)
@@ -2535,25 +4076,95 @@ pub fn validate_provenance_graph(
     lookup: &RepositoryObjectLookup,
     forbidden: &[ObjectRef],
 ) -> Result<ProvenanceGraphSummary> {
+    lookup.require_repository_semantics()?;
+    lookup.with_operation(|| validate_provenance_graph_operation(references, lookup, forbidden))
+}
+
+fn validate_provenance_graph_operation(
+    references: &[ObjectRef],
+    lookup: &RepositoryObjectLookup,
+    forbidden: &[ObjectRef],
+) -> Result<ProvenanceGraphSummary> {
     for reference in references {
+        lookup.checkpoint()?;
         expect_ref_kind(*reference, ObjectKind::Provenance)?;
     }
+    let mut memory = OwnedDerivedMemory::empty(lookup);
+    memory.grow_by(derived_value_cost(forbidden.len().saturating_mul(34))?)?;
+    let mut forbidden_set = BTreeSet::new();
+    for reference in forbidden {
+        lookup.checkpoint()?;
+        forbidden_set.insert(*reference);
+    }
+    // First discover the complete reachable L2 closure without allowing a
+    // cycle/forbidden repository error on one branch to hide a missing or
+    // wrong-kind edge on another branch.
+    let mut reached = BTreeSet::new();
+    let mut adjacency = BTreeMap::<ObjectRef, Vec<ObjectRef>>::new();
+    let mut lookup_error = None;
+    memory.grow_by(derived_value_cost(references.len().saturating_mul(35))?)?;
+    let mut closure_stack = Vec::new();
+    for reference in references.iter().rev() {
+        lookup.checkpoint()?;
+        closure_stack.push(*reference);
+    }
+    while let Some(reference) = closure_stack.pop() {
+        lookup.checkpoint()?;
+        if forbidden_set.contains(&reference) || reached.contains(&reference) {
+            continue;
+        }
+        memory.grow_by(derived_value_cost(69)?)?;
+        reached.insert(reference);
+        let Some(object) = collect_lookup_result(
+            &mut lookup_error,
+            lookup.edge_any(reference),
+        )? else {
+            continue;
+        };
+        let mut inputs = Vec::new();
+        if let Some(value) = object.value.as_ref() {
+            visit_schema_object_references(
+                reference.kind,
+                value,
+                &lookup.registry,
+                lookup.mode.operation(),
+                &mut |input| {
+                    lookup.checkpoint()?;
+                    memory.grow_by(derived_value_cost(35)?)?;
+                    inputs.push(input);
+                    if !forbidden_set.contains(&input) && !reached.contains(&input) {
+                        closure_stack.push(input);
+                    }
+                    Ok(())
+                },
+            )?;
+        }
+        adjacency.insert(reference, inputs);
+    }
+
+    finish_lookup_selection(lookup_error)?;
+    lookup.finish_registry_phase()?;
+
+    // Repository phase: run cycle/forbidden detection over the already closed
+    // adjacency graph. No lookup or caller hook occurs after this boundary.
     let mut colors = BTreeMap::<ObjectRef, u8>::new();
     let mut visited = BTreeSet::new();
-    let forbidden = forbidden.iter().copied().collect::<BTreeSet<_>>();
-    let mut stack = references
-        .iter()
-        .rev()
-        .map(|reference| (*reference, false))
-        .collect::<Vec<_>>();
+    let mut stack = Vec::new();
+    for reference in references.iter().rev() {
+        memory.grow_by(derived_value_cost(35)?)?;
+        stack.push((*reference, false));
+    }
     while let Some((reference, exiting)) = stack.pop() {
         lookup.checkpoint()?;
-        if forbidden.contains(&reference) {
+        if forbidden_set.contains(&reference) {
             return Err(Error::new(ErrorCode::ProvenanceCycle));
         }
         if exiting {
             colors.insert(reference, 2);
-            visited.insert(reference);
+            if !visited.contains(&reference) {
+                memory.grow_by(derived_value_cost(34)?)?;
+                visited.insert(reference);
+            }
             continue;
         }
         match colors.get(&reference).copied() {
@@ -2562,20 +4173,11 @@ pub fn validate_provenance_graph(
             _ => {}
         }
         colors.insert(reference, 1);
-        let object = lookup.edge_any(reference)?;
+        memory.grow_by(derived_value_cost(35)?)?;
         stack.push((reference, true));
-        if let Some(value) = object.value.as_ref() {
-            visit_validated_object_references(
-                reference.kind,
-                value,
-                &lookup.registry,
-                lookup.mode.operation(),
-                &mut |input| {
-                    lookup.checkpoint()?;
-                    stack.push((input, false));
-                    Ok(())
-                },
-            )?;
+        for input in adjacency.get(&reference).into_iter().flatten().rev() {
+            memory.grow_by(derived_value_cost(35)?)?;
+            stack.push((*input, false));
         }
     }
     Ok(ProvenanceGraphSummary { visited })
@@ -2652,35 +4254,48 @@ struct SnapshotReplay<'a> {
 struct SnapshotReplayPlan {
     parents: BTreeMap<ObjectRef, Vec<ObjectRef>>,
     remaining_uses: BTreeMap<ObjectRef, usize>,
+    _memory: OwnedDerivedMemory,
 }
 
 impl SnapshotReplayPlan {
     fn build(roots: &[ObjectRef], context: &RepositoryContext<'_>) -> Result<SnapshotReplayPlan> {
+        let mut memory = OwnedDerivedMemory::empty(context.lookup);
         let mut parents = BTreeMap::<ObjectRef, Vec<ObjectRef>>::new();
         let mut checked_roots = BTreeSet::new();
         for root in roots {
             context.lookup.checkpoint()?;
-            if checked_roots.insert(*root) {
+            if !checked_roots.contains(root) {
+                memory.grow_by(derived_value_cost(34)?)?;
+                checked_roots.insert(*root);
                 validate_snapshot_graph(*root, context)?;
             }
-            for reference in snapshot_postorder(*root, context)? {
+            let postorder = snapshot_postorder(*root, context)?;
+            for reference in postorder.ordered.iter().copied() {
+                context.lookup.checkpoint()?;
                 if parents.contains_key(&reference) {
                     continue;
                 }
                 let snapshot = snapshot_object(reference, context.lookup)?;
-                let parent_refs = array(field(&snapshot, 17)?)?
-                    .iter()
-                    .map(object_ref)
-                    .collect::<Result<Vec<_>>>()?;
+                let raw_parents = array(field(&snapshot, 17)?)?;
+                memory.grow_by(derived_value_cost(
+                    34usize.saturating_mul(raw_parents.len().saturating_add(1)),
+                )?)?;
+                let mut parent_refs = Vec::new();
+                for parent in raw_parents {
+                    context.lookup.checkpoint()?;
+                    parent_refs.push(object_ref(parent)?);
+                }
                 parents.insert(reference, parent_refs);
             }
         }
-        let mut remaining_uses = parents
-            .keys()
-            .copied()
-            .map(|reference| (reference, 0usize))
-            .collect::<BTreeMap<_, _>>();
+        memory.grow_by(derived_value_cost(parents.len().saturating_mul(42))?)?;
+        let mut remaining_uses = BTreeMap::new();
+        for reference in parents.keys().copied() {
+            context.lookup.checkpoint()?;
+            remaining_uses.insert(reference, 0usize);
+        }
         for parent_refs in parents.values() {
+            context.lookup.checkpoint()?;
             if let Some(parent) = parent_refs.first() {
                 *remaining_uses
                     .get_mut(parent)
@@ -2688,6 +4303,7 @@ impl SnapshotReplayPlan {
             }
         }
         for root in roots {
+            context.lookup.checkpoint()?;
             *remaining_uses
                 .get_mut(root)
                 .ok_or_else(|| Error::new(ErrorCode::SnapshotRootInvalid))? += 1;
@@ -2695,6 +4311,7 @@ impl SnapshotReplayPlan {
         Ok(Self {
             parents,
             remaining_uses,
+            _memory: memory,
         })
     }
 }
@@ -2704,16 +4321,25 @@ struct SnapshotReplayWorkspace<'a, 'context> {
     plan: SnapshotReplayPlan,
     cache: BTreeMap<ObjectRef, SnapshotReplay<'a>>,
     completed: BTreeSet<ObjectRef>,
+    index_memory: OwnedDerivedMemory,
 }
 
-fn snapshot_postorder(root: ObjectRef, context: &RepositoryContext<'_>) -> Result<Vec<ObjectRef>> {
+struct ReservedPostorder {
+    ordered: Vec<ObjectRef>,
+    _memory: OwnedDerivedMemory,
+}
+
+fn snapshot_postorder(root: ObjectRef, context: &RepositoryContext<'_>) -> Result<ReservedPostorder> {
+    let mut memory = OwnedDerivedMemory::empty(context.lookup);
     let mut colors = BTreeMap::<ObjectRef, u8>::new();
     let mut ordered = Vec::new();
+    memory.grow_by(derived_value_cost(35)?)?;
     let mut stack = vec![(root, false)];
     while let Some((reference, exiting)) = stack.pop() {
         context.lookup.checkpoint()?;
         if exiting {
             colors.insert(reference, 2);
+            memory.grow_by(derived_value_cost(34)?)?;
             ordered.push(reference);
             continue;
         }
@@ -2722,14 +4348,21 @@ fn snapshot_postorder(root: ObjectRef, context: &RepositoryContext<'_>) -> Resul
             Some(2) => continue,
             _ => {}
         }
+        memory.grow_by(derived_value_cost(35)?)?;
         colors.insert(reference, 1);
         let snapshot = snapshot_object(reference, context.lookup)?;
+        memory.grow_by(derived_value_cost(35)?)?;
         stack.push((reference, true));
         for parent in array(field(&snapshot, 17)?)?.iter().rev() {
+            context.lookup.checkpoint()?;
+            memory.grow_by(derived_value_cost(35)?)?;
             stack.push((object_ref(parent)?, false));
         }
     }
-    Ok(ordered)
+    Ok(ReservedPostorder {
+        ordered,
+        _memory: memory,
+    })
 }
 
 fn replay_working_reservation(
@@ -2747,7 +4380,7 @@ fn replay_working_reservation(
     }
     let change_cost = derived_value_cost(change.payload.len())?;
     let conflict_cost = conflict_set
-        .map(|value| encode_canonical(value).and_then(|bytes| derived_value_cost(bytes.len())))
+        .map(|value| cbor_encoded_len(value, context.lookup, 0).and_then(derived_value_cost))
         .transpose()?
         .unwrap_or(0);
     state
@@ -2798,6 +4431,7 @@ impl<'a, 'context> SnapshotReplayWorkspace<'a, 'context> {
             plan: SnapshotReplayPlan::build(roots, context)?,
             cache: BTreeMap::new(),
             completed: BTreeSet::new(),
+            index_memory: OwnedDerivedMemory::empty(context.lookup),
         })
     }
 
@@ -2825,25 +4459,29 @@ impl<'a, 'context> SnapshotReplayWorkspace<'a, 'context> {
     }
 
     fn ensure(&mut self, root: ObjectRef, current: Option<ObjectRef>) -> Result<()> {
-        for reference in snapshot_postorder(root, self.context)? {
+        let postorder = snapshot_postorder(root, self.context)?;
+        for reference in postorder.ordered.iter().copied() {
             self.context.lookup.checkpoint()?;
             if self.completed.contains(&reference) {
                 continue;
             }
             let snapshot = snapshot_object(reference, self.context.lookup)?;
-            let parent_refs = self
+            let parent_count = self
                 .plan
                 .parents
                 .get(&reference)
-                .cloned()
-                .ok_or_else(|| Error::new(ErrorCode::SnapshotRootInvalid))?;
+                .ok_or_else(|| Error::new(ErrorCode::SnapshotRootInvalid))?
+                .len();
+            self.index_memory
+                .grow_by(derived_value_cost(parent_count.saturating_mul(34))?)?;
+            let parent_refs = self.plan.parents[&reference].clone();
             let base = if let Some(parent) = parent_refs.first() {
                 self.consume_state(*parent)?
             } else {
                 ReservedRepositoryState::empty(self.context.lookup)?
             };
             let conflict_reference = optional_field(&snapshot, 28).map(object_ref).transpose()?;
-            let conflicts = validate_conflict_set(
+            let conflicts = validate_conflict_set_owned(
                 conflict_reference,
                 self.context.lookup,
                 self.context.descriptor,
@@ -2854,7 +4492,11 @@ impl<'a, 'context> SnapshotReplayWorkspace<'a, 'context> {
                     self.context
                         .lookup
                         .resolve_expected(conflict_reference, ObjectKind::ConflictSet)
-                        .and_then(|object| metadata_value(&object).cloned())
+                        .and_then(|object| {
+                            object
+                                .value
+                                .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))
+                        })
                 })
                 .transpose()?;
             let change_reference = object_ref(field(&snapshot, 19)?)?;
@@ -2862,7 +4504,7 @@ impl<'a, 'context> SnapshotReplayWorkspace<'a, 'context> {
                 base,
                 change_reference,
                 self.context,
-                conflict_object.as_ref(),
+                conflict_object.as_deref(),
                 current != Some(reference),
             )?;
             compare_state_to_roots(
@@ -2872,7 +4514,7 @@ impl<'a, 'context> SnapshotReplayWorkspace<'a, 'context> {
                 self.context,
             )?;
             validate_resolution_operation_counts(
-                &conflicts.records,
+                &conflicts.summary.records,
                 metadata_value(
                     &self
                         .context
@@ -2891,7 +4533,10 @@ impl<'a, 'context> SnapshotReplayWorkspace<'a, 'context> {
                 .transpose()?
                 .unwrap_or_default();
             validate_provenance_graph(&provenance, self.context.lookup, &[reference])?;
-            self.completed.insert(reference);
+            if !self.completed.contains(&reference) {
+                self.index_memory.grow_by(derived_value_cost(34)?)?;
+                self.completed.insert(reference);
+            }
             if self
                 .plan
                 .remaining_uses
@@ -2900,11 +4545,12 @@ impl<'a, 'context> SnapshotReplayWorkspace<'a, 'context> {
                 .unwrap_or(0)
                 > 0
             {
+                self.index_memory.grow_by(derived_value_cost(64)?)?;
                 self.cache.insert(
                     reference,
                     SnapshotReplay {
                         state: replayed,
-                        conflicts: conflicts.records.len(),
+                        conflicts: conflicts.summary.records.len(),
                     },
                 );
             }
@@ -2929,7 +4575,28 @@ pub fn validate_repository_candidate(
     candidate: ObjectRef,
     context: &RepositoryContext<'_>,
 ) -> Result<RepositoryValidationSummary> {
+    context.lookup.require_repository_semantics()?;
+    if !context.verify_content {
+        return Err(Error::new(ErrorCode::SchemaFieldInvalid)
+            .with_layer(1)
+            .with_stage(ValidationStage::ConfiguredResourcePreflight));
+    }
+    context
+        .lookup
+        .with_operation(|| validate_repository_candidate_operation(candidate, context))
+}
+
+fn validate_repository_candidate_operation(
+    candidate: ObjectRef,
+    context: &RepositoryContext<'_>,
+) -> Result<RepositoryValidationSummary> {
     let context = complete_lifetime_context(context);
+    // Candidate validation is the whole-supplied boundary. Rank every supplied
+    // L1/L2 defect, then the complete candidate/outbound closure, before any
+    // registry or repository semantics.
+    context.lookup.preflight_all_l1_l2()?;
+    preflight_candidate_closure(candidate, &context)?;
+    context.lookup.finish_all_registry()?;
     let mut workspace = SnapshotReplayWorkspace::new(&[candidate], &context)?;
     workspace.ensure(candidate, Some(candidate))?;
     let replayed = workspace.consume(candidate)?;
@@ -2941,15 +4608,80 @@ pub fn validate_repository_candidate(
     })
 }
 
+fn preflight_candidate_closure(
+    candidate: ObjectRef,
+    context: &RepositoryContext<'_>,
+) -> Result<()> {
+    let mut memory = OwnedDerivedMemory::empty(context.lookup);
+    let mut reached = BTreeSet::new();
+    let mut stack = vec![candidate];
+    let mut lookup_error = None;
+    memory.grow_by(derived_value_cost(35)?)?;
+    while let Some(reference) = stack.pop() {
+        context.lookup.checkpoint()?;
+        if reached.contains(&reference) {
+            continue;
+        }
+        memory.grow_by(derived_value_cost(34)?)?;
+        reached.insert(reference);
+        let Some(object) = collect_lookup_result(
+            &mut lookup_error,
+            context.lookup.edge_any(reference),
+        )? else {
+            continue;
+        };
+        if let Some(value) = object.value.as_ref() {
+            visit_schema_object_references(
+                reference.kind,
+                value,
+                &context.lookup.registry,
+                context.lookup.mode.operation(),
+                &mut |outbound| {
+                    context.lookup.checkpoint()?;
+                    if !reached.contains(&outbound) {
+                        memory.grow_by(derived_value_cost(35)?)?;
+                        stack.push(outbound);
+                    }
+                    Ok(())
+                },
+            )?;
+        }
+    }
+    finish_lookup_selection(lookup_error)
+}
+
 pub fn validate_shelf_revision(
     reference: ObjectRef,
     context: &RepositoryContext<'_>,
 ) -> Result<RepositoryValidationSummary> {
+    context.lookup.require_repository_semantics()?;
+    if !context.verify_content {
+        return Err(Error::new(ErrorCode::SchemaFieldInvalid)
+            .with_layer(1)
+            .with_stage(ValidationStage::ConfiguredResourcePreflight));
+    }
+    context
+        .lookup
+        .with_operation(|| validate_shelf_revision_operation(reference, context))
+}
+
+fn validate_shelf_revision_operation(
+    reference: ObjectRef,
+    context: &RepositoryContext<'_>,
+) -> Result<RepositoryValidationSummary> {
     let context = complete_lifetime_context(context);
-    context.lookup.validate_all()?;
+    // Shelf validation is an exact reached-set boundary: discover the complete
+    // previous-chain and every consumed replay/content dependency first, then
+    // finish registry semantics before chain/replay repository decisions.
+    preflight_candidate_closure(reference, &context)?;
+    context.lookup.finish_registry_phase()?;
     expect_ref_kind(reference, ObjectKind::ShelfRevision)?;
-    let chain = validate_shelf_chain(reference, &context)?;
+    let mut chain = validate_shelf_chain(reference, &context)?;
+    chain
+        .memory
+        .grow_by(derived_value_cost(chain.references.len().saturating_mul(34))?)?;
     let base_roots = chain
+        .references
         .iter()
         .map(|shelf_reference| {
             context.lookup.checkpoint()?;
@@ -2961,18 +4693,21 @@ pub fn validate_shelf_revision(
         .collect::<Result<Vec<_>>>()?;
     let mut snapshot_workspace = SnapshotReplayWorkspace::new(&base_roots, &context)?;
     let mut result = None;
-    for (shelf_reference, base_reference) in chain.into_iter().zip(base_roots) {
+    for (shelf_reference, base_reference) in chain
+        .references
+        .iter()
+        .copied()
+        .zip(base_roots.iter().copied())
+    {
         context.lookup.checkpoint()?;
-        let shelf = metadata_value(
-            &context
-                .lookup
-                .resolve_expected(shelf_reference, ObjectKind::ShelfRevision)?,
-        )?
-        .clone();
+        let shelf_object = context
+            .lookup
+            .resolve_expected(shelf_reference, ObjectKind::ShelfRevision)?;
+        let shelf = metadata_value(&shelf_object)?;
         snapshot_workspace.ensure(base_reference, None)?;
         let base = snapshot_workspace.consume(base_reference)?.state;
         let conflict_reference = optional_field(&shelf, 24).map(object_ref).transpose()?;
-        let conflicts = validate_conflict_set(
+        let conflicts = validate_conflict_set_owned(
             conflict_reference,
             context.lookup,
             context.descriptor,
@@ -2983,7 +4718,11 @@ pub fn validate_shelf_revision(
                 context
                     .lookup
                     .resolve_expected(conflict_reference, ObjectKind::ConflictSet)
-                    .and_then(|object| metadata_value(&object).cloned())
+                    .and_then(|object| {
+                        object
+                            .value
+                            .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))
+                    })
             })
             .transpose()?;
         let change_reference = object_ref(field(&shelf, 21)?)?;
@@ -3001,7 +4740,7 @@ pub fn validate_shelf_revision(
             base,
             change_reference,
             &context,
-            conflict_object.as_ref(),
+            conflict_object.as_deref(),
             shelf_reference != reference,
         )?;
         compare_state_to_roots(
@@ -3011,7 +4750,7 @@ pub fn validate_shelf_revision(
             &context,
         )?;
         validate_resolution_operation_counts(
-            &conflicts.records,
+            &conflicts.summary.records,
             metadata_value(&change_object)?,
             context.lookup,
         )?;
@@ -3029,31 +4768,37 @@ pub fn validate_shelf_revision(
             highest_layer: 3,
             entries: replayed.state.entries.len(),
             groups: replayed.state.groups.len(),
-            conflicts: conflicts.records.len(),
+            conflicts: conflicts.summary.records.len(),
         });
     }
     result.ok_or_else(|| Error::new(ErrorCode::ShelfChainInvalid))
 }
 
+struct ReservedShelfChain {
+    references: Vec<ObjectRef>,
+    memory: OwnedDerivedMemory,
+}
+
 fn validate_shelf_chain(
     reference: ObjectRef,
     context: &RepositoryContext<'_>,
-) -> Result<Vec<ObjectRef>> {
+) -> Result<ReservedShelfChain> {
     let mut current = reference;
     let mut seen = BTreeSet::new();
     let mut chain = Vec::new();
+    let mut memory = OwnedDerivedMemory::empty(context.lookup);
     loop {
         context.lookup.checkpoint()?;
-        if !seen.insert(current) {
+        if seen.contains(&current) {
             return Err(Error::new(ErrorCode::ShelfChainInvalid));
         }
+        memory.grow_by(derived_value_cost(68)?)?;
+        seen.insert(current);
         chain.push(current);
-        let shelf = metadata_value(
-            &context
-                .lookup
-                .resolve_expected(current, ObjectKind::ShelfRevision)?,
-        )?
-        .clone();
+        let shelf_object = context
+            .lookup
+            .resolve_expected(current, ObjectKind::ShelfRevision)?;
+        let shelf = metadata_value(&shelf_object)?;
         if object_ref(field(&shelf, 16)?)? != context.descriptor {
             return Err(Error::new(ErrorCode::RepositoryDescriptorMismatch));
         }
@@ -3064,14 +4809,15 @@ fn validate_shelf_chain(
         }
         let Some(previous_ref) = previous else {
             chain.reverse();
-            return Ok(chain);
+            return Ok(ReservedShelfChain {
+                references: chain,
+                memory,
+            });
         };
-        let previous_value = metadata_value(
-            &context
-                .lookup
-                .edge(previous_ref, ObjectKind::ShelfRevision)?,
-        )?
-        .clone();
+        let previous_object = context
+            .lookup
+            .edge(previous_ref, ObjectKind::ShelfRevision)?;
+        let previous_value = metadata_value(&previous_object)?;
         let previous_revision = uint(field(&previous_value, 18)?)?;
         if object_ref(field(&previous_value, 16)?)? != context.descriptor
             || field(&previous_value, 17)? != field(&shelf, 17)?
@@ -3089,11 +4835,13 @@ fn compare_state_to_roots(
     group_reference: Option<ObjectRef>,
     context: &RepositoryContext<'_>,
 ) -> Result<()> {
-    let expected_tree = expand_tree(
+    let expected_tree = expand_tree_owned(
         tree_reference,
         context.lookup,
         context.descriptor,
         context.verify_content,
+        context.path_case_mode,
+        context.path_profile_validator,
     )?;
     let expected_groups = groups_from_set(group_reference, context.lookup, context.descriptor)?;
     context.lookup.checkpoint()?;
@@ -3106,7 +4854,9 @@ fn compare_state_to_roots(
         &expected_tree.file_ids,
         context.group_profile_rules,
         context.unique_external_key_profiles,
-        Some(context.lookup),
+        &context.lookup.registry,
+        context.lookup.mode.operation(),
+        Some(&context.lookup.guard),
         context.lookup.hard_limits(),
     )?;
     Ok(())
@@ -3117,13 +4867,17 @@ pub fn validate_asset_groups(
     file_ids: &BTreeMap<FileId, Vec<String>>,
     configured_rules: &[GroupProfileRule],
     unique_external_key_profiles: &[ProfileRef],
+    registry: &Registry,
+    mode: ValidationMode,
 ) -> Result<GroupValidationSummary> {
-    validate_asset_groups_with_hard_limits(
+    validate_asset_groups_with_limits(
         groups,
         file_ids,
         configured_rules,
         unique_external_key_profiles,
-        HardLimitCeilings::HARD,
+        registry,
+        mode,
+        RepositoryLimits::default(),
     )
 }
 
@@ -3132,15 +4886,50 @@ pub fn validate_asset_groups_with_hard_limits(
     file_ids: &BTreeMap<FileId, Vec<String>>,
     configured_rules: &[GroupProfileRule],
     unique_external_key_profiles: &[ProfileRef],
+    registry: &Registry,
+    mode: ValidationMode,
     hard_limits: HardLimitCeilings,
 ) -> Result<GroupValidationSummary> {
+    validate_asset_groups_with_limits(
+        groups,
+        file_ids,
+        configured_rules,
+        unique_external_key_profiles,
+        registry,
+        mode,
+        RepositoryLimits {
+            hard_limits,
+            ..RepositoryLimits::default()
+        },
+    )
+}
+
+pub fn validate_asset_groups_with_limits(
+    groups: &BTreeMap<[u8; 16], AssetGroup>,
+    file_ids: &BTreeMap<FileId, Vec<String>>,
+    configured_rules: &[GroupProfileRule],
+    unique_external_key_profiles: &[ProfileRef],
+    registry: &Registry,
+    mode: ValidationMode,
+    limits: RepositoryLimits,
+) -> Result<GroupValidationSummary> {
+    registry.require_complete_authority()?;
+    if mode == ValidationMode::Read {
+        return Err(Error::new(ErrorCode::SchemaFieldInvalid)
+            .with_layer(1)
+            .with_stage(ValidationStage::ConfiguredResourcePreflight));
+    }
+    let guard = Rc::new(RefCell::new(ResourceGuard::new(limits)));
+    guard.borrow().check_time()?;
     validate_asset_groups_inner(
         groups,
         file_ids,
         configured_rules,
         unique_external_key_profiles,
-        None,
-        hard_limits,
+        registry,
+        mode.operation(),
+        Some(&guard),
+        limits.hard_limits,
     )
 }
 
@@ -3149,7 +4938,9 @@ fn validate_asset_groups_inner(
     file_ids: &BTreeMap<FileId, Vec<String>>,
     configured_rules: &[GroupProfileRule],
     unique_external_key_profiles: &[ProfileRef],
-    lookup: Option<&RepositoryObjectLookup>,
+    registry: &Registry,
+    operation: Operation,
+    resource_guard: Option<&Rc<RefCell<ResourceGuard>>>,
     hard_limits: HardLimitCeilings,
 ) -> Result<GroupValidationSummary> {
     enforce_hard_limit_context(
@@ -3159,12 +4950,64 @@ fn validate_asset_groups_inner(
         ErrorCode::LimitCount,
         2,
     )?;
+    let mut memory = resource_guard.map(OwnedDerivedMemory::from_guard);
+    if let Some(memory) = &mut memory {
+        memory.grow_by(512)?;
+    }
     let mut membership = BTreeMap::<FileId, [u8; 16]>::new();
     let mut external_owners = BTreeMap::<(ProfileRef, Vec<u8>), [u8; 16]>::new();
-    let configured_unique = unique_external_key_profiles
-        .iter()
-        .cloned()
-        .collect::<BTreeSet<_>>();
+    let mut configured_unique = BTreeSet::new();
+    for profile in unique_external_key_profiles {
+        resource_checkpoint(resource_guard)?;
+        if !configured_unique.contains(profile) {
+            if let Some(memory) = &mut memory {
+                memory.grow_by(profile_retained_cost(profile)?)?;
+            }
+            configured_unique.insert(profile.clone());
+        }
+    }
+    // Whole-input phase order: every known family assignment is L2 and must be
+    // established before any lifecycle decision from an earlier group. Then
+    // rank lifecycle errors across the complete bounded input before entering
+    // group membership/cardinality semantics.
+    for group in groups.values() {
+        resource_checkpoint(resource_guard)?;
+        validate_group_profile_family(registry, &group.profile, &["group", "fixture-group"])?;
+        for (_, role) in &group.members {
+            resource_checkpoint(resource_guard)?;
+            validate_group_profile_family(
+                registry,
+                role,
+                &["group-role", "fixture-group-role"],
+            )?;
+        }
+        for (scheme, _) in &group.external_keys {
+            resource_checkpoint(resource_guard)?;
+            validate_group_profile_family(
+                registry,
+                scheme,
+                &["external-key", "fixture-external-key"],
+            )?;
+        }
+    }
+    let mut lifecycle_error = None;
+    for group in groups.values() {
+        resource_checkpoint(resource_guard)?;
+        for profile in std::iter::once(&group.profile)
+            .chain(group.members.iter().map(|(_, role)| role))
+            .chain(group.external_keys.iter().map(|(scheme, _)| scheme))
+        {
+            if let Err(error) = registry.check_assignment(
+                RegistryAssignment::Profile(profile),
+                operation,
+            ) {
+                observe_lookup_error(&mut lifecycle_error, error);
+            }
+        }
+    }
+    if let Some(error) = lifecycle_error {
+        return Err(error);
+    }
     let mut best_error = None;
     for group in groups.values() {
         enforce_hard_limit_context(
@@ -3174,21 +5017,41 @@ fn validate_asset_groups_inner(
             ErrorCode::LimitCount,
             2,
         )?;
-        if let Some(lookup) = lookup {
-            lookup.checkpoint()?;
+        if let Some(guard) = resource_guard {
+            guard.borrow().check_time()?;
         }
-        if !group
-            .members
-            .iter()
-            .any(|(file_id, _)| *file_id == group.primary_file_id)
-        {
+        let mut primary_present = false;
+        for (file_id, _) in &group.members {
+            if let Some(guard) = resource_guard {
+                guard.borrow().check_time()?;
+            }
+            if *file_id == group.primary_file_id {
+                primary_present = true;
+            }
+        }
+        if !primary_present {
             observe_group_error(&mut best_error, Error::new(ErrorCode::GroupMemberInvalid))?;
         }
         let mut local = BTreeSet::new();
         let mut role_counts = BTreeMap::<ProfileRef, usize>::new();
         for (file_id, role) in &group.members {
-            if !local.insert(*file_id) || !file_ids.contains_key(file_id) {
+            if let Some(guard) = resource_guard {
+                guard.borrow().check_time()?;
+            }
+            let local_new = !local.contains(file_id);
+            if local_new {
+                if let Some(memory) = &mut memory {
+                    memory.grow_by(derived_value_cost(16)?)?;
+                }
+                local.insert(*file_id);
+            }
+            if !local_new || !file_ids.contains_key(file_id) {
                 observe_group_error(&mut best_error, Error::new(ErrorCode::GroupMemberInvalid))?;
+            }
+            if !membership.contains_key(file_id) {
+                if let Some(memory) = &mut memory {
+                    memory.grow_by(derived_value_cost(32)?)?;
+                }
             }
             if membership.insert(*file_id, group.id).is_some() {
                 observe_group_error(
@@ -3196,21 +5059,55 @@ fn validate_asset_groups_inner(
                     Error::new(ErrorCode::GroupMembershipOverlap),
                 )?;
             }
+            if !role_counts.contains_key(role) {
+                if let Some(memory) = &mut memory {
+                    memory.grow_by(profile_retained_cost(role)?)?;
+                }
+            }
             *role_counts.entry(role.clone()).or_default() += 1;
         }
-        let configured = configured_rules
-            .iter()
-            .find(|rule| rule.profile == group.profile);
+        let configured = find_configured_group_rule(
+            configured_rules,
+            &group.profile,
+            resource_guard,
+        )?;
         if let Some(rule) = configured {
-            if let Err(error) = validate_role_counts(&role_counts, &rule.roles) {
+            if let Err(error) = validate_role_counts_guarded(
+                &role_counts,
+                &rule.roles,
+                resource_guard,
+            ) {
                 observe_group_error(&mut best_error, error)?;
             }
-        } else if let Err(error) = validate_builtin_role_counts(&group.profile, &role_counts) {
+        } else if let Err(error) = validate_builtin_role_counts_guarded(
+            &group.profile,
+            &role_counts,
+            resource_guard,
+        ) {
             observe_group_error(&mut best_error, error)?;
         }
         for (scheme, value) in &group.external_keys {
-            let configured_rule_unique =
-                configured.is_some_and(|rule| rule.unique_external_key_profiles.contains(scheme));
+            if let Some(guard) = resource_guard {
+                guard.borrow().check_time()?;
+            }
+            if let Some(memory) = &mut memory {
+                let key_bytes = scheme
+                    .namespace()
+                    .len()
+                    .checked_add(scheme.id().len())
+                    .and_then(|bytes| bytes.checked_add(value.len()))
+                    .and_then(|bytes| bytes.checked_add(48))
+                    .ok_or_else(|| Error::new(ErrorCode::LimitMemory))?;
+                memory.grow_by(derived_value_cost(key_bytes)?)?;
+            }
+            let configured_rule_unique = match configured {
+                Some(rule) => configured_rule_has_unique_external_profile(
+                    rule,
+                    scheme,
+                    resource_guard,
+                )?,
+                None => false,
+            };
             if scheme.to_string() != "fixture-key.opengamevcs.test/synthetic-guid@2"
                 && !configured_unique.contains(scheme)
                 && !configured_rule_unique
@@ -3239,6 +5136,21 @@ fn validate_asset_groups_inner(
     })
 }
 
+fn validate_group_profile_family(
+    registry: &Registry,
+    profile: &ProfileRef,
+    families: &[&str],
+) -> Result<()> {
+    if let Some(entry) = registry.profile(profile) {
+        if !families.contains(&entry.family.as_str()) {
+            return Err(Error::new(ErrorCode::SchemaFieldInvalid)
+                .with_layer(2)
+                .with_stage(ValidationStage::KnownSchema));
+        }
+    }
+    Ok(())
+}
+
 fn observe_group_error(best: &mut Option<Error>, error: Error) -> Result<()> {
     let rank = |code| match code {
         ErrorCode::GroupMemberInvalid => Some(0),
@@ -3258,17 +5170,69 @@ fn observe_group_error(best: &mut Option<Error>, error: Error) -> Result<()> {
     Ok(())
 }
 
+fn resource_checkpoint(resource_guard: Option<&Rc<RefCell<ResourceGuard>>>) -> Result<()> {
+    if let Some(guard) = resource_guard {
+        guard.borrow().check_time()?;
+    }
+    Ok(())
+}
+
+fn find_configured_group_rule<'a>(
+    rules: &'a [GroupProfileRule],
+    profile: &ProfileRef,
+    resource_guard: Option<&Rc<RefCell<ResourceGuard>>>,
+) -> Result<Option<&'a GroupProfileRule>> {
+    for rule in rules {
+        resource_checkpoint(resource_guard)?;
+        if &rule.profile == profile {
+            return Ok(Some(rule));
+        }
+    }
+    Ok(None)
+}
+
+fn configured_rule_has_unique_external_profile(
+    rule: &GroupProfileRule,
+    profile: &ProfileRef,
+    resource_guard: Option<&Rc<RefCell<ResourceGuard>>>,
+) -> Result<bool> {
+    for configured in &rule.unique_external_key_profiles {
+        resource_checkpoint(resource_guard)?;
+        if configured == profile {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 fn validate_role_counts(
     counts: &BTreeMap<ProfileRef, usize>,
     rules: &[GroupRoleCardinality],
 ) -> Result<()> {
-    if counts
-        .keys()
-        .any(|role| !rules.iter().any(|rule| &rule.role == role))
-    {
-        return Err(Error::new(ErrorCode::GroupRequiredRoleMissing));
+    validate_role_counts_guarded(counts, rules, None)
+}
+
+fn validate_role_counts_guarded(
+    counts: &BTreeMap<ProfileRef, usize>,
+    rules: &[GroupRoleCardinality],
+    resource_guard: Option<&Rc<RefCell<ResourceGuard>>>,
+) -> Result<()> {
+    for role in counts.keys() {
+        resource_checkpoint(resource_guard)?;
+        let mut allowed = false;
+        for rule in rules {
+            resource_checkpoint(resource_guard)?;
+            if &rule.role == role {
+                allowed = true;
+                break;
+            }
+        }
+        if !allowed {
+            return Err(Error::new(ErrorCode::GroupRequiredRoleMissing));
+        }
     }
     for rule in rules {
+        resource_checkpoint(resource_guard)?;
         let count = counts.get(&rule.role).copied().unwrap_or_default();
         if count < rule.minimum || rule.maximum.is_some_and(|maximum| count > maximum) {
             return Err(Error::new(ErrorCode::GroupRequiredRoleMissing));
@@ -3280,6 +5244,14 @@ fn validate_role_counts(
 fn validate_builtin_role_counts(
     profile: &ProfileRef,
     counts: &BTreeMap<ProfileRef, usize>,
+) -> Result<()> {
+    validate_builtin_role_counts_guarded(profile, counts, None)
+}
+
+fn validate_builtin_role_counts_guarded(
+    profile: &ProfileRef,
+    counts: &BTreeMap<ProfileRef, usize>,
+    resource_guard: Option<&Rc<RefCell<ResourceGuard>>>,
 ) -> Result<()> {
     let rules: &[(&str, usize, Option<usize>)] = match profile.to_string().as_str() {
         "fixture-group.opengamevcs.test/package-sidecars@2" => &[
@@ -3302,20 +5274,33 @@ fn validate_builtin_role_counts(
         }
         _ => &[],
     };
-    if !rules.is_empty()
-        && counts.keys().any(|profile| {
-            !rules
-                .iter()
-                .any(|(role, _, _)| profile.to_string() == *role)
-        })
-    {
-        return Err(Error::new(ErrorCode::GroupRequiredRoleMissing));
+    if !rules.is_empty() {
+        for profile in counts.keys() {
+            resource_checkpoint(resource_guard)?;
+            let profile = profile.to_string();
+            let mut allowed = false;
+            for (role, _, _) in rules {
+                resource_checkpoint(resource_guard)?;
+                if profile == *role {
+                    allowed = true;
+                    break;
+                }
+            }
+            if !allowed {
+                return Err(Error::new(ErrorCode::GroupRequiredRoleMissing));
+            }
+        }
     }
     for (role, minimum, maximum) in rules {
-        let count = counts
-            .iter()
-            .find_map(|(profile, count)| (profile.to_string() == *role).then_some(*count))
-            .unwrap_or_default();
+        resource_checkpoint(resource_guard)?;
+        let mut count = 0;
+        for (profile, candidate) in counts {
+            resource_checkpoint(resource_guard)?;
+            if profile.to_string() == *role {
+                count = *candidate;
+                break;
+            }
+        }
         if count < *minimum || maximum.is_some_and(|maximum| count > maximum) {
             return Err(Error::new(ErrorCode::GroupRequiredRoleMissing));
         }
@@ -3329,10 +5314,14 @@ fn validate_resolution_operation_counts(
     lookup: &RepositoryObjectLookup,
 ) -> Result<()> {
     let mut counts = BTreeMap::<[u8; 32], usize>::new();
+    let mut memory = OwnedDerivedMemory::empty(lookup);
     for operation in array(field(change_set, 18)?)? {
         lookup.checkpoint()?;
         if uint(field(operation, 1)?)? == 11 {
             let id = digest32(field(operation, 9)?)?;
+            if !counts.contains_key(&id) {
+                memory.grow_by(derived_value_cost(40)?)?;
+            }
             *counts.entry(id).or_default() += 1;
         }
     }
@@ -3358,6 +5347,9 @@ pub fn validate_abstract_reference_graph(
     graph: &JsonValue,
     limits: RepositoryLimits,
 ) -> Result<AbstractGraphSummary> {
+    let mut guard = ResourceGuard::new(limits);
+    // Configured-resource authority precedes all caller graph traversal.
+    guard.check_time()?;
     let object = json_object_exact(
         graph,
         &[
@@ -3385,18 +5377,12 @@ pub fn validate_abstract_reference_graph(
         .and_then(JsonValue::as_array)
         .filter(|nodes| !nodes.is_empty())
         .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))?;
-    let mut guard = ResourceGuard::new(limits);
     let mut nodes = BTreeMap::<String, Vec<String>>::new();
     let mut previous_node: Option<&str> = None;
     for node in nodes_value {
+        guard.object(0, false)?;
         let node = json_object_exact(node, &["id", "type", "edges"])?;
         let id = json_string(node, "id")?;
-        if !valid_node_id(id)
-            || previous_node.is_some_and(|previous| previous >= id)
-            || json_string(node, "type")? != node_type
-        {
-            return Err(Error::new(ErrorCode::SchemaFieldInvalid));
-        }
         guard.reserve_derived(
             id.len()
                 .checked_mul(4)
@@ -3404,12 +5390,23 @@ pub fn validate_abstract_reference_graph(
                 .ok_or_else(|| Error::new(ErrorCode::LimitMemory))?,
         )?;
         guard.scratch(id.len())?;
+        if !valid_abstract_node_id(id, &mut guard)?
+            || previous_node
+                .map(|previous| compare_abstract_node_id(previous, id, &mut guard))
+                .transpose()?
+                .is_some_and(|ordering| ordering != std::cmp::Ordering::Less)
+            || json_string(node, "type")? != node_type
+        {
+            return Err(Error::new(ErrorCode::SchemaFieldInvalid));
+        }
         let edges = node
             .get("edges")
             .and_then(JsonValue::as_array)
             .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))?;
-        let mut targets = Vec::with_capacity(edges.len());
-        let mut previous_edge: Option<String> = None;
+        // Grow only after the corresponding edge reservation below. A hostile
+        // declared edge count must never trigger an eager capacity allocation.
+        let mut targets = Vec::new();
+        let mut previous_edge: Option<&str> = None;
         for edge in edges {
             // Every supplied edge is part of the untrusted input budget even
             // when its node is unreachable from the selected roots.
@@ -3417,16 +5414,6 @@ pub fn validate_abstract_reference_graph(
             let edge = json_object_exact(edge, &["kind", "target"])?;
             let kind = json_string(edge, "kind")?;
             let target = json_string(edge, "target")?;
-            let key = format!("{kind}\0{target}");
-            if kind != edge_kind
-                || !valid_node_id(target)
-                || previous_edge
-                    .as_ref()
-                    .is_some_and(|previous| previous >= &key)
-            {
-                return Err(Error::new(ErrorCode::SchemaFieldInvalid));
-            }
-            previous_edge = Some(key);
             guard.reserve_derived(
                 target
                     .len()
@@ -3435,12 +5422,21 @@ pub fn validate_abstract_reference_graph(
                     .ok_or_else(|| Error::new(ErrorCode::LimitMemory))?,
             )?;
             guard.scratch(target.len())?;
+            if kind != edge_kind
+                || !valid_abstract_node_id(target, &mut guard)?
+                || previous_edge
+                    .map(|previous| compare_abstract_node_id(previous, target, &mut guard))
+                    .transpose()?
+                    .is_some_and(|ordering| ordering != std::cmp::Ordering::Less)
+            {
+                return Err(Error::new(ErrorCode::SchemaFieldInvalid));
+            }
+            previous_edge = Some(target);
             targets.push(target.to_owned());
         }
         if nodes.insert(id.to_owned(), targets).is_some() {
             return Err(Error::new(ErrorCode::SchemaFieldInvalid));
         }
-        guard.object(0, false)?;
         previous_node = Some(id);
     }
     let roots = object
@@ -3448,42 +5444,57 @@ pub fn validate_abstract_reference_graph(
         .and_then(JsonValue::as_array)
         .filter(|roots| !roots.is_empty())
         .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))?;
-    let mut root_ids = Vec::with_capacity(roots.len());
+    // Root storage is likewise allocated only after each root is charged.
+    let mut root_ids = Vec::new();
     let mut previous_root: Option<&str> = None;
     for root in roots {
         let root = root
             .as_str()
-            .filter(|root| valid_node_id(root))
             .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))?;
-        if !nodes.contains_key(root) || previous_root.is_some_and(|previous| previous >= root) {
-            return Err(Error::new(ErrorCode::SchemaFieldInvalid));
-        }
-        previous_root = Some(root);
         guard.reserve_derived(
             root.len()
                 .checked_mul(2)
                 .and_then(|bytes| bytes.checked_add(64))
                 .ok_or_else(|| Error::new(ErrorCode::LimitMemory))?,
         )?;
+        if !valid_abstract_node_id(root, &mut guard)?
+            || !nodes.contains_key(root)
+            || previous_root
+                .map(|previous| compare_abstract_node_id(previous, root, &mut guard))
+                .transpose()?
+                .is_some_and(|ordering| ordering != std::cmp::Ordering::Less)
+        {
+            return Err(Error::new(ErrorCode::SchemaFieldInvalid));
+        }
+        previous_root = Some(root);
         root_ids.push(root.to_owned());
     }
-    if nodes
-        .values()
-        .flatten()
-        .any(|target| !nodes.contains_key(target))
-    {
-        return Err(Error::new(ErrorCode::SchemaFieldInvalid));
+    for targets in nodes.values() {
+        for target in targets {
+            guard.check_time()?;
+            if !nodes.contains_key(target) {
+                return Err(Error::new(ErrorCode::SchemaFieldInvalid));
+            }
+        }
     }
     let mut colors = BTreeMap::<String, u8>::new();
     let mut visited = BTreeSet::new();
+    for root in &root_ids {
+        guard.reserve_derived(derived_value_cost(root.len())?)?;
+    }
     let mut stack = root_ids
         .iter()
         .rev()
         .map(|root| (root.clone(), false))
         .collect::<Vec<_>>();
     while let Some((id, exiting)) = stack.pop() {
+        guard.release_derived(derived_value_cost(id.len())?);
+        guard.check_time()?;
         if exiting {
             colors.insert(id.clone(), 2);
+            if !visited.contains(&id) {
+                guard.reserve_derived(derived_value_cost(id.len())?)?;
+            }
             visited.insert(id);
             continue;
         }
@@ -3492,13 +5503,16 @@ pub fn validate_abstract_reference_graph(
             Some(2) => continue,
             _ => {}
         }
+        guard.reserve_derived(derived_value_cost(id.len())?)?;
         colors.insert(id.clone(), 1);
         let targets = nodes
             .get(&id)
             .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))?;
+        guard.reserve_derived(derived_value_cost(id.len())?)?;
         stack.push((id, true));
         for target in targets.iter().rev() {
             guard.check_time()?;
+            guard.reserve_derived(derived_value_cost(target.len())?)?;
             stack.push((target.clone(), false));
         }
     }
@@ -3529,19 +5543,39 @@ fn json_string<'a>(object: &'a JsonMap<String, JsonValue>, key: &str) -> Result<
         .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))
 }
 
-fn valid_node_id(value: &str) -> bool {
-    if value.is_empty() || !value.is_ascii() {
-        return false;
+fn valid_abstract_node_id(value: &str, guard: &mut ResourceGuard) -> Result<bool> {
+    if value.is_empty() {
+        return Ok(false);
     }
     let mut previous_hyphen = false;
     for (index, byte) in value.bytes().enumerate() {
+        if index % 1_024 == 0 {
+            guard.check_time()?;
+        }
         match byte {
             b'a'..=b'z' | b'0'..=b'9' => previous_hyphen = false,
             b'-' if index > 0 && !previous_hyphen => previous_hyphen = true,
-            _ => return false,
+            _ => return Ok(false),
         }
     }
-    !previous_hyphen
+    Ok(!previous_hyphen)
+}
+
+fn compare_abstract_node_id(
+    left: &str,
+    right: &str,
+    guard: &mut ResourceGuard,
+) -> Result<std::cmp::Ordering> {
+    for (index, (left, right)) in left.bytes().zip(right.bytes()).enumerate() {
+        if index % 1_024 == 0 {
+            guard.check_time()?;
+        }
+        match left.cmp(&right) {
+            std::cmp::Ordering::Equal => {}
+            ordering => return Ok(ordering),
+        }
+    }
+    Ok(left.len().cmp(&right.len()))
 }
 
 #[cfg(test)]
@@ -3613,7 +5647,12 @@ mod tests {
             },
         ];
         let mut context =
-            RepositoryContext::new(&lookup, descriptor, test_reference(ObjectKind::Snapshot, 3));
+            RepositoryContext::new(
+                &lookup,
+                descriptor,
+                test_reference(ObjectKind::Snapshot, 3),
+                PathCaseMode::CaseSensitive,
+            );
         context.working_lifetime_additions = &working;
         validate_lifetime_and_imports(&context, change_set, &allocations, None).unwrap();
 
@@ -3648,7 +5687,12 @@ mod tests {
             import_mapping_key: None,
         }];
         let mut context =
-            RepositoryContext::new(&lookup, descriptor, test_reference(ObjectKind::Snapshot, 3));
+            RepositoryContext::new(
+                &lookup,
+                descriptor,
+                test_reference(ObjectKind::Snapshot, 3),
+                PathCaseMode::CaseSensitive,
+            );
         context.lifetime_records = &prior;
         let error = validate_lifetime_and_imports(
             &context,
@@ -3714,7 +5758,12 @@ mod tests {
         )
         .unwrap();
         let context =
-            RepositoryContext::new(&lookup, descriptor, test_reference(ObjectKind::Snapshot, 4));
+            RepositoryContext::new(
+                &lookup,
+                descriptor,
+                test_reference(ObjectKind::Snapshot, 4),
+                PathCaseMode::CaseSensitive,
+            );
         assert_eq!(
             replay_change_set(
                 change_reference,
@@ -3858,10 +5907,75 @@ mod tests {
         ]);
         let file_ids = BTreeMap::from([(file_a, vec!["present.bin".to_owned()])]);
         assert_eq!(
-            validate_asset_groups(&groups, &file_ids, &[], &[])
+            validate_asset_groups(
+                &groups,
+                &file_ids,
+                &[],
+                &[],
+                &Registry::bundled(),
+                ValidationMode::Conformance,
+            )
                 .unwrap_err()
                 .code,
             ErrorCode::GroupMemberInvalid
+        );
+    }
+
+    #[test]
+    fn standalone_group_validation_requires_complete_authority_and_charges_indexes() {
+        let file_id = FileId::new([0x11; 16]).unwrap();
+        let group = AssetGroup {
+            id: [1; 16],
+            profile: ProfileRef::new("group.test", "opaque", 1).unwrap(),
+            primary_file_id: file_id,
+            members: vec![(
+                file_id,
+                ProfileRef::new("group-role.test", "member", 1).unwrap(),
+            )],
+            external_keys: vec![],
+            raw: Cbor::Map(vec![]),
+        };
+        let groups = BTreeMap::from([([1; 16], group)]);
+        let file_ids = BTreeMap::from([(file_id, vec!["present.bin".to_owned()])]);
+        let partial = Registry::load([], []).unwrap();
+        let error = validate_asset_groups(
+            &groups,
+            &file_ids,
+            &[],
+            &[],
+            &partial,
+            ValidationMode::Conformance,
+        )
+        .unwrap_err();
+        assert_eq!(
+            (error.code, error.layer, error.stage),
+            (
+                ErrorCode::SchemaFieldInvalid,
+                1,
+                ValidationStage::ConfiguredResourcePreflight,
+            )
+        );
+
+        let error = validate_asset_groups_with_limits(
+            &groups,
+            &file_ids,
+            &[],
+            &[],
+            &Registry::bundled(),
+            ValidationMode::Conformance,
+            RepositoryLimits {
+                max_memory_bytes: 511,
+                ..RepositoryLimits::default()
+            },
+        )
+        .unwrap_err();
+        assert_eq!(
+            (error.code, error.layer, error.stage),
+            (
+                ErrorCode::LimitMemory,
+                1,
+                ValidationStage::ConfiguredResourcePreflight,
+            )
         );
     }
 }

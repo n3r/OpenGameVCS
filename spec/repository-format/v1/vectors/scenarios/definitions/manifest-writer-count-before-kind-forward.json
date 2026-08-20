@@ -1,0 +1,96 @@
+{
+  "algorithm": {
+    "id": "ogvcs.repository-validation-scenario-constructor",
+    "version": 1
+  },
+  "arithmetic": "mathematical nonnegative integers with explicit uint64 decode bounds; no host-width overflow is a semantic test oracle",
+  "detail": "manifest writer selects the global actual-versus-declared part-count mismatch before a wrong-kind part in forward occurrence order",
+  "exactConstructorValues": {
+    "manifestWriter": {
+      "api": "write-content-manifest",
+      "chunkArtifact": "objects/01-chunk.bin",
+      "chunkProfile": "chunking.test/external-boundaries@1",
+      "declaredParts": "1",
+      "logicalLength": "24",
+      "maxItems": 2,
+      "operation": "conformance",
+      "outputDisposition": {
+        "orderedStagingSink": "aborted-discard",
+        "successCommit": false
+      },
+      "parts": [
+        {
+          "chunk": "ogvcs:v1:chunk:sha256:944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5",
+          "length": "12"
+        },
+        {
+          "chunk": "ogvcs:v1:content-manifest:sha256:82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12",
+          "length": "12"
+        }
+      ],
+      "registry": "bundled",
+      "schema": "ogvcs.repository-format.v1.manifest-writer-input.v1",
+      "wholeFileSha256": "cb4f2424fd3588eb17773169678f8a2bc61546e0605e6f58ef64e4c67fdc49f8"
+    }
+  },
+  "expectedRootState": {
+    "resultFamily": "repository",
+    "rootState": "unchanged-no-trusted-output",
+    "scenarioId": "manifest-writer-count-before-kind-forward",
+    "stableOutputIdentity": "ogvcs:v1:content-manifest:sha256:c90f74b546e1db00e1d4146909d87d8f43b6c9cc4828094b576e03e5e3656e04"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "normativeContext": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 13,
+          "mediaType": "application/octet-stream",
+          "path": "scenarios/objects/manifest-writer-count-before-kind-forward/chunk-0.bin",
+          "sha256": "37c757348e671599102d25f0c58362f5924a94fd313f4478cec8e3139f8886f5"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:8ae03cdb20ee0500d1cc4e9c5403469c318e1a3ec3a31826751650221c3550e1"
+      },
+      {
+        "artifact": {
+          "bytes": 136,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/manifest-writer-count-before-kind-forward/manifest.cbor",
+          "sha256": "f28750ac37b12d427f40291640ee2414ff52266134529c48a87be0661f2bb32e"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:c90f74b546e1db00e1d4146909d87d8f43b6c9cc4828094b576e03e5e3656e04"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
+      "registryVersion": 1
+    },
+    "requestedLayer": 2,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "operation": "write-content-manifest",
+  "parameters": {},
+  "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
+  "scenarioId": "manifest-writer-count-before-kind-forward",
+  "seedHex": "dcc653c27d713fcd6e4ef2d77c8371173663a2104429bff6cfbc843c324d4833",
+  "suppliedResourceCatalogue": {
+    "baseObjectArtifacts": [
+      "scenarios/objects/manifest-writer-count-before-kind-forward/chunk-0.bin",
+      "scenarios/objects/manifest-writer-count-before-kind-forward/manifest.cbor"
+    ],
+    "logicalRecordArtifacts": [],
+    "mutationRecipe": "none",
+    "virtualLimitRecipe": "none"
+  },
+  "validation": {
+    "mode": "conformance",
+    "requestedLayer": 2
+  }
+}

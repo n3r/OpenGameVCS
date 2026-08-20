@@ -1,6 +1,7 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [],
     "lifetimeRecords": [],
     "mode": "conformance",
@@ -132,7 +133,7 @@
         "path": "scenarios/outputs/registry-unknown-extension-preserve.json",
         "sha256": "655bb53e4c59af6f84a5a1b10e6bb9ee4e7aabf0344ebb1682a13401d2d34500"
       },
-      "summarySha256": "6c322567344b46f9e2846218c7a0952ce74d32ef9089dd4de3bddd8b8e8f8cff"
+      "summarySha256": "51f0d23d74d52a83cb81b1a5e7e49ccabee041bf0ff92d9657dbd9823277db77"
     },
     "result": "accept"
   },
@@ -145,10 +146,10 @@
       "sha256": "3d3854b7a1584d4e07092c1e1d0c227f57fecdb75d5caa944dc3b91d9cb34122"
     },
     {
-      "bytes": 6479,
+      "bytes": 6513,
       "mediaType": "application/json",
       "path": "scenarios/definitions/registry-unknown-extension-preserve.json",
-      "sha256": "dcb95d18143aa185660f87cc3ad0fbd46714b822d1ad6957360ccaf0e847b09e"
+      "sha256": "5f575c12f08109b4a3518471b0736ff5398e3e45e3fe2739e288be203cc8836c"
     }
   ],
   "operation": "validate-object",
@@ -161,18 +162,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/registry-unknown-extension-preserve.json",
-        "definitionSha256": "dcb95d18143aa185660f87cc3ad0fbd46714b822d1ad6957360ccaf0e847b09e",
+        "definitionSha256": "5f575c12f08109b4a3518471b0736ff5398e3e45e3fe2739e288be203cc8836c",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "d0e2753cd928ac3411559b9152b087fd965d627bf97e9395c527c3098c6c89b0"
     },
     "summary": {
-      "bytes": 11823,
+      "bytes": 11857,
       "indexEntries": 0,
       "items": 12,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "6c322567344b46f9e2846218c7a0952ce74d32ef9089dd4de3bddd8b8e8f8cff",
+      "summarySha256": "51f0d23d74d52a83cb81b1a5e7e49ccabee041bf0ff92d9657dbd9823277db77",
       "traversalEdges": 0
     }
   },

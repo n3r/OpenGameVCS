@@ -1,0 +1,29 @@
+{
+  "api": "validate-resource-reservation",
+  "assertNoPartialState": true,
+  "baseState": {
+    "groups": "empty",
+    "tree": "ogvcs:v1:tree:sha256:9458b24239ce71b75b1c6ab857883d66a6eab3f0f6f4e9afab15371af1d4bf19"
+  },
+  "changeSet": "ogvcs:v1:change-set:sha256:82cc41e5e86d1397579a8ebfc7ea6c7d9102552130f4da86ca592fc3c10a424c",
+  "cluster": "replay-base",
+  "evidenceRequired": {
+    "noPartialState": true,
+    "routeEvidence": [
+      {
+        "noPartialState": true,
+        "recoveryKind": "same-authority-instance",
+        "route": "replay-change-set",
+        "succeeded": true
+      }
+    ]
+  },
+  "fixture": "bounded-reduced-retention-v1",
+  "memoryCeiling": {
+    "derivation": "one-byte-below-conservative-retained-cost-v1"
+  },
+  "routes": [
+    "replay-change-set"
+  ],
+  "schema": "ogvcs.repository-format.v1.resource-reservation-input.v1"
+}

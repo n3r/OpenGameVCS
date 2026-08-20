@@ -1,6 +1,7 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [],
     "lifetimeRecords": [],
     "mode": "conformance",
@@ -138,10 +139,10 @@
       "sha256": "7c20861043045b9fd55c82eb02777b6f1d497bea44f0e24f23ab8d7f25f8c852"
     },
     {
-      "bytes": 6474,
+      "bytes": 6508,
       "mediaType": "application/json",
       "path": "scenarios/definitions/error-extension-key-invalid.json",
-      "sha256": "d9f4006c0f74ea6eba033cb136543d0a248bfbc2e6cc914b88be8805c6b8fabd"
+      "sha256": "5b5e21db02034f9f84dba6b4efa4cf7e56ee9291ae5e37e8c1338a633b710703"
     }
   ],
   "operation": "validate-object",
@@ -153,18 +154,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/error-extension-key-invalid.json",
-        "definitionSha256": "d9f4006c0f74ea6eba033cb136543d0a248bfbc2e6cc914b88be8805c6b8fabd",
+        "definitionSha256": "5b5e21db02034f9f84dba6b4efa4cf7e56ee9291ae5e37e8c1338a633b710703",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "e545601a385785761121afa841b2d73a9f11208531155788376a469633007619"
     },
     "summary": {
-      "bytes": 11901,
+      "bytes": 11935,
       "indexEntries": 0,
       "items": 12,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "7b8c55e4d89797d46e8ff80a79d70875cef7c0234ac98297b0d53b62cfee1fae",
+      "summarySha256": "4a9effd0254e3552075cccc35ce4000711e2c89dbd4b2e939586b213fa722540",
       "traversalEdges": 0
     }
   },

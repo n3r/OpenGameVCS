@@ -10,11 +10,12 @@
     "resultFamily": "repository",
     "rootState": "unchanged-no-trusted-output",
     "scenarioId": "error-repository-descriptor-mismatch",
-    "stableOutputIdentity": "ogvcs:v1:tree:sha256:d6b0dc8db96b752d8336fe9ed88de33bf99931cd3ad2e17d0f7c5f649487fb2c"
+    "stableOutputIdentity": "ogvcs:v1:tree:sha256:0ac7540fa4e7b3dabdc8f4c745cde22794c71eceb92e7adac2656e49d5c462bf"
   },
   "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
   "normativeContext": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [],
     "lifetimeRecords": [],
     "mode": "conformance",
@@ -39,6 +40,15 @@
       },
       {
         "artifact": {
+          "bytes": 148,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/error-repository-descriptor-mismatch/foreign-descriptor.cbor",
+          "sha256": "694d54f46678009b72ad76d20cadc2efa963e709b90b91167901b95a13e08704"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:373e25786bea92ef81dae6ccdd2690ec9bdbcd9ee275982b8f9f7590805638c2"
+      },
+      {
+        "artifact": {
           "bytes": 274,
           "mediaType": "application/cbor",
           "path": "objects/06-repository-descriptor.cbor",
@@ -51,9 +61,9 @@
           "bytes": 52,
           "mediaType": "application/cbor",
           "path": "scenarios/objects/error-repository-descriptor-mismatch/tree.cbor",
-          "sha256": "649ad4049b70a1a0750a2559e5abaefe84407712a9f0083e871422f0f7c128d7"
+          "sha256": "3887b6ba285aa190c75a090aecd0df4b9672fee2dc017f8ebf1155907b584e84"
         },
-        "ref": "ogvcs:v1:tree:sha256:d6b0dc8db96b752d8336fe9ed88de33bf99931cd3ad2e17d0f7c5f649487fb2c"
+        "ref": "ogvcs:v1:tree:sha256:0ac7540fa4e7b3dabdc8f4c745cde22794c71eceb92e7adac2656e49d5c462bf"
       }
     ],
     "registrySnapshot": {
@@ -75,6 +85,7 @@
     "baseObjectArtifacts": [
       "objects/01-chunk.bin",
       "objects/02-content-manifest.cbor",
+      "scenarios/objects/error-repository-descriptor-mismatch/foreign-descriptor.cbor",
       "objects/06-repository-descriptor.cbor",
       "scenarios/objects/error-repository-descriptor-mismatch/tree.cbor"
     ],

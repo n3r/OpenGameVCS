@@ -1,0 +1,110 @@
+{
+  "algorithm": {
+    "id": "ogvcs.repository-validation-scenario-constructor",
+    "version": 1
+  },
+  "arithmetic": "mathematical nonnegative integers with explicit uint64 decode bounds; no host-width overflow is a semantic test oracle",
+  "detail": "expandTree rejects an absent entry target before a conformance-only path-profile lifecycle fault under production",
+  "exactConstructorValues": {
+    "repositoryRoute": {
+      "api": "expand-tree",
+      "authorityContext": "scenario.context",
+      "caseMode": "case-sensitive",
+      "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:1fdb14163872f2b9e37a039389646af167b2e0bcd8e436de38ccb4f5db02735a",
+      "schema": "ogvcs.repository-format.v1.repository-route-input.v1",
+      "tree": "ogvcs:v1:tree:sha256:a1d4f5509c7da5be73269bad0201fc24b9c55fde78e6a52dbaabcac33e669460",
+      "verifyContent": true
+    }
+  },
+  "expectedRootState": {
+    "resultFamily": "repository",
+    "rootState": "unchanged-no-trusted-output",
+    "scenarioId": "tree-missing-target-before-path-profile-lifecycle",
+    "stableOutputIdentity": "ogvcs:v1:tree:sha256:a1d4f5509c7da5be73269bad0201fc24b9c55fde78e6a52dbaabcac33e669460"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "normativeContext": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "production",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 12,
+          "mediaType": "application/octet-stream",
+          "path": "objects/01-chunk.bin",
+          "sha256": "36fcc2e9442be1071c275604af6e41bd93875c743dc2fdaa6037662df74c5894"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5"
+      },
+      {
+        "artifact": {
+          "bytes": 183,
+          "mediaType": "application/cbor",
+          "path": "objects/02-content-manifest.cbor",
+          "sha256": "b635d76c8dd9f29c2862ae0e22077c70d157f68d4595861c09fb38bdf47c456b"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+      },
+      {
+        "artifact": {
+          "bytes": 148,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-missing-target-before-path-profile-lifecycle/repository-descriptor.cbor",
+          "sha256": "8bf7cdb0e5f3c04b1378d4618e306146263f0a0d0a92e6f34acb7097bd527a62"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:1fdb14163872f2b9e37a039389646af167b2e0bcd8e436de38ccb4f5db02735a"
+      },
+      {
+        "artifact": {
+          "bytes": 274,
+          "mediaType": "application/cbor",
+          "path": "objects/06-repository-descriptor.cbor",
+          "sha256": "677905a883b1f4ddd87fea27b5afc0293cccd2d2ea29cc4884e758e4a071b6e9"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+      },
+      {
+        "artifact": {
+          "bytes": 172,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-missing-target-before-path-profile-lifecycle/tree.cbor",
+          "sha256": "bc7fa99334857aeab04a71ef25ba799290d59b9f48f4d9eb84d3b85456aada0b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a1d4f5509c7da5be73269bad0201fc24b9c55fde78e6a52dbaabcac33e669460"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
+      "registryVersion": 1
+    },
+    "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:1fdb14163872f2b9e37a039389646af167b2e0bcd8e436de38ccb4f5db02735a",
+    "requestedLayer": 2,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "operation": "validate-repository-route",
+  "parameters": {},
+  "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
+  "scenarioId": "tree-missing-target-before-path-profile-lifecycle",
+  "seedHex": "81ad4e86f021f8aff2c6285f0b319b3629b59b1c9f11b5635675c3a776366e72",
+  "suppliedResourceCatalogue": {
+    "baseObjectArtifacts": [
+      "objects/01-chunk.bin",
+      "objects/02-content-manifest.cbor",
+      "scenarios/objects/tree-missing-target-before-path-profile-lifecycle/repository-descriptor.cbor",
+      "objects/06-repository-descriptor.cbor",
+      "scenarios/objects/tree-missing-target-before-path-profile-lifecycle/tree.cbor"
+    ],
+    "logicalRecordArtifacts": [],
+    "mutationRecipe": "none",
+    "virtualLimitRecipe": "none"
+  },
+  "validation": {
+    "mode": "production",
+    "requestedLayer": 2
+  }
+}

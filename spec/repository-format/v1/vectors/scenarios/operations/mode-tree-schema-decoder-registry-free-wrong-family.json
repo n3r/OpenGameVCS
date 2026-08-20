@@ -1,0 +1,11 @@
+{
+  "api": "validate-operation-mode",
+  "expectedProfileFamily": "content-policy",
+  "profile": "path.test/opaque@1",
+  "registry": "absent",
+  "requestedLayer": 2,
+  "schema": "ogvcs.repository-format.v1.operation-mode-input.v1",
+  "semanticProfiles": false,
+  "source": "lifecycle/tree-wrong-content-profile-family.cbor",
+  "surface": "tree-schema-decoder"
+}

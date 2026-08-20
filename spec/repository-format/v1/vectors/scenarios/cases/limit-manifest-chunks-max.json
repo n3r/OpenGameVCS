@@ -1,6 +1,7 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [],
     "lifetimeRecords": [],
     "mode": "conformance",
@@ -132,17 +133,17 @@
         "path": "scenarios/outputs/limit-manifest-chunks-max.json",
         "sha256": "087b521135fd65be315a1d0cb63ac82d086cb5c563b7f3e49604e1e8220bd7e9"
       },
-      "summarySha256": "bb1985665e440ef6e5d63453eb8d33787b3b9520d7d1129b87148f720c75cd55"
+      "summarySha256": "0772811b5bfd4fccbd8f15542c00279284582c15ce8ab1773fdb7a956a67dd19"
     },
     "result": "accept"
   },
   "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
   "inputs": [
     {
-      "bytes": 6609,
+      "bytes": 6643,
       "mediaType": "application/json",
       "path": "scenarios/definitions/limit-manifest-chunks-max.json",
-      "sha256": "b35a74363fffda69a1d9114d2affee051bfa81383df89a63e407e3a9365cd1dc"
+      "sha256": "2c6ff65823ab7da5390d95d465a8edf672221b7c6523f000833f3221883c402c"
     }
   ],
   "operation": "validate-object",
@@ -155,18 +156,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/limit-manifest-chunks-max.json",
-        "definitionSha256": "b35a74363fffda69a1d9114d2affee051bfa81383df89a63e407e3a9365cd1dc",
+        "definitionSha256": "2c6ff65823ab7da5390d95d465a8edf672221b7c6523f000833f3221883c402c",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "52d28a18ec529f1e998832327f3c9b6420be09339c719cd192a3ca688eded486"
     },
     "summary": {
-      "bytes": 11832,
+      "bytes": 11866,
       "indexEntries": 0,
       "items": 12,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "bb1985665e440ef6e5d63453eb8d33787b3b9520d7d1129b87148f720c75cd55",
+      "summarySha256": "0772811b5bfd4fccbd8f15542c00279284582c15ce8ab1773fdb7a956a67dd19",
       "traversalEdges": 0
     }
   },

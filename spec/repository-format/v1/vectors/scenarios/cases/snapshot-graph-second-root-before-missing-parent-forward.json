@@ -1,0 +1,136 @@
+{
+  "context": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "candidateSnapshot": "ogvcs:v1:snapshot:sha256:351b2e0beeb34b7cc9b4196fa54a12c6742e6a9b56eaefd42eb70b47fe6bb6d3",
+    "caseMode": "case-sensitive",
+    "designatedRoot": "ogvcs:v1:snapshot:sha256:0ac217a384f2ebb14dbe4400972d05ac5dd13e9b4272411d71e68448e27f18b5",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 52,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/snapshot-graph-second-root-before-missing-parent-forward/root-change.cbor",
+          "sha256": "ef6e897742ff4d1220c8cd636f2a889a8f8746b2e97b2b7dad6fec4dc3747a6d"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:82cc41e5e86d1397579a8ebfc7ea6c7d9102552130f4da86ca592fc3c10a424c"
+      },
+      {
+        "artifact": {
+          "bytes": 95,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/snapshot-graph-second-root-before-missing-parent-forward/candidate-change.cbor",
+          "sha256": "05ba64f5c3beedc512de3395a2d6f06e3b299ed39d89a837dda5dcdfdc320eca"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:911be3affaaff0b9a0278d95c2da98e3e06852bd0d8b61b2a094fe7000bb4394"
+      },
+      {
+        "artifact": {
+          "bytes": 274,
+          "mediaType": "application/cbor",
+          "path": "objects/06-repository-descriptor.cbor",
+          "sha256": "677905a883b1f4ddd87fea27b5afc0293cccd2d2ea29cc4884e758e4a071b6e9"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+      },
+      {
+        "artifact": {
+          "bytes": 312,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/snapshot-graph-second-root-before-missing-parent-forward/designated-root.cbor",
+          "sha256": "9322fc70782819da97e88cb08cfb9b1493327f0bedd34e79dddfbb668e9424d1"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:0ac217a384f2ebb14dbe4400972d05ac5dd13e9b4272411d71e68448e27f18b5"
+      },
+      {
+        "artifact": {
+          "bytes": 449,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/snapshot-graph-second-root-before-missing-parent-forward/candidate.cbor",
+          "sha256": "004304f130abc83418ee466a82a36cd04f93ecaaf6213d0eb753acadd3c48878"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:351b2e0beeb34b7cc9b4196fa54a12c6742e6a9b56eaefd42eb70b47fe6bb6d3"
+      },
+      {
+        "artifact": {
+          "bytes": 319,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/snapshot-graph-second-root-before-missing-parent-forward/second-root.cbor",
+          "sha256": "45e79727f1eb96b6fbdefdad51f0475aa05d2cb6dacf6b676ff1a2547f54de3d"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:ea3344452e16aa72e0fcf8e82efbf0c702476c9b14dfa61d70c4ee35f472ad04"
+      },
+      {
+        "artifact": {
+          "bytes": 52,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/snapshot-graph-second-root-before-missing-parent-forward/empty-tree.cbor",
+          "sha256": "f0515d605a2c20abf9f321474bc861964b20faeaebbc41a2d8316ae4ffe2bb2b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a458f2bc72d5816dc3f7ee2cc8580eaaaed9a0208588ee66d18ea78f0c255c81"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
+      "registryVersion": 1
+    },
+    "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+    "requestedLayer": 2,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "expected": {
+    "code": "OBJECT_REFERENCE_MISSING",
+    "layer": 2,
+    "result": "reject",
+    "stage": "closure-and-reference-resolution"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "inputs": [
+    {
+      "bytes": 510,
+      "mediaType": "application/json",
+      "path": "scenarios/operations/snapshot-graph-second-root-before-missing-parent-forward.json",
+      "sha256": "dd1db7bf31dfa3a175573f9c72ee7612d85ba820d2baea6e586da979028babd0"
+    },
+    {
+      "bytes": 6372,
+      "mediaType": "application/json",
+      "path": "scenarios/definitions/snapshot-graph-second-root-before-missing-parent-forward.json",
+      "sha256": "0d2f243e62c305b38bcdc3cfdfad3659abfae0acfeab0e74c28c647a61cb09c7"
+    }
+  ],
+  "operation": "validate-repository-route",
+  "requirementIds": [
+    "OGVCS-002-AC-06",
+    "OGVCS-002-AC-08",
+    "OGVCS-002-FR-09",
+    "OGVCS-002-FR-11",
+    "OGVCS-002-NFR-01"
+  ],
+  "resources": {
+    "recipe": {
+      "generator": "ogvcs.repository-validation-scenario-constructor/v1",
+      "parameters": {
+        "definition": "scenarios/definitions/snapshot-graph-second-root-before-missing-parent-forward.json",
+        "definitionSha256": "0d2f243e62c305b38bcdc3cfdfad3659abfae0acfeab0e74c28c647a61cb09c7",
+        "runtimeHighWaterMarks": "not-asserted"
+      },
+      "seed": "9caa45e5a544e4d01b1c235543b14201ef9cc7c215194af960cab24b0a30f8ff"
+    },
+    "summary": {
+      "bytes": 8435,
+      "indexEntries": 0,
+      "items": 7,
+      "peakMemoryBytes": 0,
+      "scratchBytes": 0,
+      "summarySha256": "f8c5166c4d6398e2f1f5e8605fc8286ee04c747b4d13050441bdf98ca99d504f",
+      "traversalEdges": 0
+    }
+  },
+  "scenarioId": "snapshot-graph-second-root-before-missing-parent-forward",
+  "schemaVersion": "ogvcs.repository-format/validation-scenario/v1"
+}

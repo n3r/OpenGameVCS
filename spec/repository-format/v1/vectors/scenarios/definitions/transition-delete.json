@@ -106,6 +106,7 @@
   "normativeContext": {
     "asOf": "immediately-before-candidate-snapshot",
     "candidateSnapshot": "ogvcs:v1:snapshot:sha256:d9ef8b0a1767cabdf8f1eff3d948e55ac7448e697fcb50e93e2d3993f5c55039",
+    "caseMode": "case-sensitive",
     "designatedRoot": "ogvcs:v1:snapshot:sha256:812b17a3fd9246a2eb231467de4bc0422034a16df2fceaec439aee48ba0368c9",
     "importMappings": [],
     "lifetimeRecords": [

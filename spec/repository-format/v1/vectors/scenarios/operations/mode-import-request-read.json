@@ -1,0 +1,23 @@
+{
+  "api": "validate-operation-mode",
+  "importContext": {
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "workingLifetimeAdditions": []
+  },
+  "importRequest": {
+    "importerProfile": "importer.test/fixture-adapter@1",
+    "requestedFileId": "77777777777777777777777777777777",
+    "sourceIdentityDigest": "7272727272727272727272727272727272727272727272727272727272727272",
+    "sourceNamespaceDigest": "7171717171717171717171717171717171717171717171717171717171717171"
+  },
+  "mode": "read",
+  "objectLookup": "scenario.context.objectLookup",
+  "registry": "bundled",
+  "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+  "requestedLayer": 3,
+  "schema": "ogvcs.repository-format.v1.operation-mode-input.v1",
+  "semanticProfiles": true,
+  "source": "objects/07-snapshot.cbor",
+  "surface": "import-request"
+}

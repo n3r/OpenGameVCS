@@ -2,6 +2,7 @@
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
     "candidateSnapshot": "ogvcs:v1:snapshot:sha256:85f518929e37440755b2de4b3abb01c351eb7e2f9ec58e68377ce4bb33128041",
+    "caseMode": "case-sensitive",
     "designatedRoot": "ogvcs:v1:snapshot:sha256:69bc6e1989e3ed3c4298b0fa488e22b2fe80c5fde310c2105ad6a97b1b2858e3",
     "importMappings": [],
     "lifetimeRecords": [
@@ -139,10 +140,10 @@
       "sha256": "33ba20f75ecb6db7de1a64aff8dae147a7b4427fdb1fe6560eedff4fa7308925"
     },
     {
-      "bytes": 7234,
+      "bytes": 7268,
       "mediaType": "application/json",
       "path": "scenarios/definitions/group-membership-overlap.json",
-      "sha256": "b20ad3c29836a4f948d84992df54777a89b912160cac1dc104d32940a979a092"
+      "sha256": "4ceb3c8d3adf1bc1b9d0ede3111497b405f814c7a7b8b410765ae47ca4f37407"
     }
   ],
   "operation": "validate-repository",
@@ -155,18 +156,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/group-membership-overlap.json",
-        "definitionSha256": "b20ad3c29836a4f948d84992df54777a89b912160cac1dc104d32940a979a092",
+        "definitionSha256": "4ceb3c8d3adf1bc1b9d0ede3111497b405f814c7a7b8b410765ae47ca4f37407",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "608dfad25865e4f7531e02c0803f8be35a86ae6352090b07cfe589f8151cb050"
     },
     "summary": {
-      "bytes": 9788,
+      "bytes": 9822,
       "indexEntries": 0,
       "items": 11,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "82f90c2325168c68f5766d1f178a57aa23269cfaf5cff0965054dbd4c3578860",
+      "summarySha256": "b07c7bf49e6129cf299ef7149739e015af2e25c8a98493380ae8f36a33736786",
       "traversalEdges": 0
     }
   },

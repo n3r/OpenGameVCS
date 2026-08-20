@@ -1,6 +1,7 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [],
     "lifetimeRecords": [],
     "mode": "conformance",
@@ -42,7 +43,7 @@
         "path": "scenarios/outputs/manifest-annotation-invariance.json",
         "sha256": "2098e60acf2644685e7fe92fe5ffa0387d7bef66a68dcbe21365416aa4460fc5"
       },
-      "summarySha256": "523b25106341ea44f6541966a3e41c414a11bb7201a83f282c8c87b0a969d424"
+      "summarySha256": "1b1258dfd711dfbf1d54e7e3b810863b4915c7630b9ae3642770e5e6aef3d1a9"
     },
     "result": "accept"
   },
@@ -67,10 +68,10 @@
       "sha256": "b890b230b65608ee0f5de85546c9155a89eccd3ae50ab59e7380e5b376b4d23d"
     },
     {
-      "bytes": 2626,
+      "bytes": 2660,
       "mediaType": "application/json",
       "path": "scenarios/definitions/manifest-annotation-invariance.json",
-      "sha256": "44cf7c61c312790af9438c63b6f4e78b132ae193d75d9bab628f1b6b40076f27"
+      "sha256": "2ee3a5f069a4a6be19ded016494775bc5864ba380c3421f155938f4710baf936"
     }
   ],
   "operation": "validate-object",
@@ -83,18 +84,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/manifest-annotation-invariance.json",
-        "definitionSha256": "44cf7c61c312790af9438c63b6f4e78b132ae193d75d9bab628f1b6b40076f27",
+        "definitionSha256": "2ee3a5f069a4a6be19ded016494775bc5864ba380c3421f155938f4710baf936",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "03c10e81e1ad92af929f8cfeb4ee30d776ae2470e07c9c8e0827de4cf507c483"
     },
     "summary": {
-      "bytes": 2992,
+      "bytes": 3026,
       "indexEntries": 0,
       "items": 2,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "523b25106341ea44f6541966a3e41c414a11bb7201a83f282c8c87b0a969d424",
+      "summarySha256": "1b1258dfd711dfbf1d54e7e3b810863b4915c7630b9ae3642770e5e6aef3d1a9",
       "traversalEdges": 0
     }
   },

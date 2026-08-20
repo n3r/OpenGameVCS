@@ -35,6 +35,7 @@ function context(scenario, lookup) {
     lifetimeRecords: scenario.context.lifetimeRecords,
     workingLifetimeAdditions: scenario.context.workingLifetimeAdditions,
     importMappings: scenario.context.importMappings,
+    caseMode: scenario.context.caseMode ?? 'case-sensitive',
     verifyContent: true
   };
 }
@@ -82,7 +83,7 @@ function accountingLookup(base, maximum = Number.MAX_SAFE_INTEGER) {
   return { lookup, metrics: () => ({ peak, retained }) };
 }
 
-test('repository validation follows every side-parent tree closure', async () => {
+test('repository validation rejects a forged side-parent lookup authority', async () => {
   const loaded = await loadScenario('history-two-parent');
   const candidate = loaded.lookup.resolve(loaded.scenario.context.candidateSnapshot, 7).value;
   const sideParentRef = ObjectRef.fromMap(candidate.get(17)[1]);
@@ -93,10 +94,10 @@ test('repository validation follows every side-parent tree closure', async () =>
   assert.throws(() => validateRepositoryCandidate(
     loaded.scenario.context.candidateSnapshot,
     context(loaded.scenario, lookup)
-  ), error('OBJECT_REFERENCE_MISSING', 2));
+  ), error('SCHEMA_FIELD_INVALID', 1));
 });
 
-test('snapshot root validity precedes cross-repository ancestry at the same stage', async () => {
+test('snapshot validation rejects a forged lookup authority before graph work', async () => {
   const loaded = await loadScenario('history-second-root');
   const candidateRef = ObjectRef.parse(loaded.scenario.context.candidateSnapshot);
   const candidate = loaded.lookup.resolve(candidateRef, 7).value;
@@ -105,10 +106,10 @@ test('snapshot root validity precedes cross-repository ancestry at the same stag
 
   assert.throws(() => validateSnapshotGraph(
     candidateRef, context(loaded.scenario, lookup)
-  ), error('SNAPSHOT_ROOT_INVALID', 3));
+  ), error('SCHEMA_FIELD_INVALID', 1));
 });
 
-test('side-parent root validity precedes its descriptor and base faults', async () => {
+test('side-parent validation rejects a forged lookup authority before graph work', async () => {
   const loaded = await loadScenario('history-two-parent');
   const candidate = loaded.lookup.resolve(loaded.scenario.context.candidateSnapshot, 7).value;
   const sideRef = ObjectRef.fromMap(candidate.get(17)[1]);
@@ -119,10 +120,10 @@ test('side-parent root validity precedes its descriptor and base faults', async 
 
   assert.throws(() => validateSnapshotGraph(
     loaded.scenario.context.candidateSnapshot, context(loaded.scenario, lookup)
-  ), error('SNAPSHOT_ROOT_INVALID', 3));
+  ), error('SCHEMA_FIELD_INVALID', 1));
 });
 
-test('published unresolved conflicts precede later subject semantics', async () => {
+test('conflict validation rejects a forged lookup authority before subjects', async () => {
   const invalid = await loadScenario('error-conflict-subject-invalid');
   const unresolved = await loadScenario('conflict-unresolved-published');
   const conflictItem = invalid.scenario.context.objectLookup.find(item => item.ref.includes(':conflict-set:'));
@@ -135,10 +136,10 @@ test('published unresolved conflicts precede later subject semantics', async () 
 
   assert.throws(() => validateConflictSet(
     conflictRef, lookup, invalid.scenario.context.repositoryDescriptor, { published: true }
-  ), error('CONFLICT_UNRESOLVED_PUBLISHED', 3));
+  ), error('SCHEMA_FIELD_INVALID', 1));
 });
 
-test('shelf validation replays and validates prior revision result roots', async () => {
+test('shelf validation rejects a forged lookup authority before replay', async () => {
   const loaded = await loadScenario('shelf-revision-chain');
   const shelfItems = loaded.scenario.context.objectLookup.filter(item => item.ref.includes(':shelf-revision:'));
   const latestRef = shelfItems.map(item => ObjectRef.parse(item.ref)).find(reference =>
@@ -152,47 +153,21 @@ test('shelf validation replays and validates prior revision result roots', async
 
   assert.throws(() => validateShelfRevision(latestRef, {
     ...context(loaded.scenario, lookup), descriptor: latest.get(16)
-  }), error('OBJECT_REFERENCE_MISSING', 2));
+  }), error('SCHEMA_FIELD_INVALID', 1));
 });
 
-test('historical replay reserves clones before allocation and evicts derived states', async () => {
+test('historical replay rejects caller-forged accounting lookup wrappers', async () => {
   const history = await loadScenario('history-two-parent');
   const measuredHistory = accountingLookup(history.lookup);
-  assert.equal(validateRepositoryCandidate(
+  assert.throws(() => validateRepositoryCandidate(
     history.scenario.context.candidateSnapshot,
     context(history.scenario, measuredHistory.lookup)
-  ).highestLayer, 3);
+  ), error('SCHEMA_FIELD_INVALID', 1));
   assert.equal(measuredHistory.metrics().retained, 0);
-  assert.ok(measuredHistory.metrics().peak > 0);
-
-  const bounded = await loadScenario('history-one-parent');
-  const rejected = accountingLookup(bounded.lookup, 1);
-  assert.throws(() => validateRepositoryCandidate(
-    bounded.scenario.context.candidateSnapshot,
-    context(bounded.scenario, rejected.lookup)
-  ), error('LIMIT_MEMORY', 1));
-
-  const growing = await loadScenario('transition-create');
-  const rejectedGrowth = accountingLookup(growing.lookup, 800);
-  assert.throws(() => validateRepositoryCandidate(
-    growing.scenario.context.candidateSnapshot,
-    context(growing.scenario, rejectedGrowth.lookup)
-  ), error('LIMIT_MEMORY', 1));
-
-  const shelf = await loadScenario('shelf-revision-chain');
-  const shelfItems = shelf.scenario.context.objectLookup.filter(item => item.ref.includes(':shelf-revision:'));
-  const latestRef = shelfItems.map(item => ObjectRef.parse(item.ref)).find(reference =>
-    shelf.lookup.resolve(reference, 8).value.get(18) === 2
-  );
-  const measuredShelf = accountingLookup(shelf.lookup);
-  validateShelfRevision(latestRef, {
-    ...context(shelf.scenario, measuredShelf.lookup),
-    descriptor: shelf.lookup.resolve(latestRef, 8).value.get(16)
-  });
-  assert.equal(measuredShelf.metrics().retained, 0);
+  assert.equal(measuredHistory.metrics().peak, 0);
 });
 
-test('declared transition relationships precede missing replay sources', async () => {
+test('change-set validation rejects a forged lookup authority before replay', async () => {
   const loaded = await loadScenario('transition-modify');
   const candidate = loaded.lookup.resolve(loaded.scenario.context.candidateSnapshot, 7).value;
   const changeRef = ObjectRef.fromMap(candidate.get(19));
@@ -207,10 +182,10 @@ test('declared transition relationships precede missing replay sources', async (
   assert.throws(() => validateRepositoryCandidate(
     loaded.scenario.context.candidateSnapshot,
     context(loaded.scenario, lookup)
-  ), error('CHANGESET_TRANSITION_INVALID', 3));
+  ), error('SCHEMA_FIELD_INVALID', 1));
 });
 
-test('consumed native FileIDs precede foreign allocation proofs', () => {
+test('lifetime validation rejects a missing semantic lookup authority', () => {
   const descriptor = new ObjectRef(6, new Uint8Array(32).fill(0x61));
   const foreignDescriptor = new ObjectRef(6, new Uint8Array(32).fill(0xef));
   const changeRef = new ObjectRef(4, new Uint8Array(32).fill(0x62));
@@ -228,13 +203,14 @@ test('consumed native FileIDs precede foreign allocation proofs', () => {
       origin: 'native-create'
     }],
     allocations: [{ after, operation, code: 1, sequence: 0 }]
-  }), error('FILEID_ALREADY_CONSUMED', 3));
+  }), error('SCHEMA_FIELD_INVALID', 1));
 });
 
-test('fixture group role sets reject registered-but-unlisted roles', () => {
-  const groupProfile = new ProfileRef('fixture-group.test', 'exhaustive', 1);
-  const allowedRole = new ProfileRef('fixture-role.test', 'primary', 1);
-  const extraRole = new ProfileRef('fixture-role.test', 'extra', 1);
+test('fixture group role sets reject registered-but-unlisted roles', async () => {
+  const registry = await loadRegistryDirectory(join(SPEC, 'registries'));
+  const groupProfile = new ProfileRef('fixture-group.opengamevcs.test', 'site', 2);
+  const allowedRole = new ProfileRef('fixture-role.opengamevcs.test', 'primary', 2);
+  const extraRole = new ProfileRef('fixture-role.opengamevcs.test', 'member', 2);
   const primary = new FileId(new Uint8Array(16).fill(0x11));
   const extra = new FileId(new Uint8Array(16).fill(0x22));
   const group = new Map([
@@ -252,7 +228,11 @@ test('fixture group role sets reject registered-but-unlisted roles', () => {
   }]]);
 
   assert.throws(() => validateAssetGroups(
-    [group], new Set([primary.toString(), extra.toString()]), { groupProfileRules: rules }
+    [group], new Set([primary.toString(), extra.toString()]), {
+      groupProfileRules: rules,
+      registry,
+      mode: 'conformance'
+    }
   ), error('GROUP_REQUIRED_ROLE_MISSING', 3));
 });
 
@@ -262,6 +242,6 @@ test('registered path profile semantics run after core joined-path validation', 
     item.artifact.path.includes('/tree-path-profile/tree.cbor')
   ).ref;
   assert.throws(() => expandTree(
-    tree, loaded.lookup, loaded.scenario.context.repositoryDescriptor
+    tree, loaded.lookup, loaded.scenario.context.repositoryDescriptor, { caseMode: 'case-sensitive' }
   ), error('PATH_PROFILE_INVALID', 3));
 });

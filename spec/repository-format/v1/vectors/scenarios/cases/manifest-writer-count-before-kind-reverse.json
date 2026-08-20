@@ -1,0 +1,95 @@
+{
+  "context": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 13,
+          "mediaType": "application/octet-stream",
+          "path": "scenarios/objects/manifest-writer-count-before-kind-reverse/chunk-0.bin",
+          "sha256": "37c757348e671599102d25f0c58362f5924a94fd313f4478cec8e3139f8886f5"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:8ae03cdb20ee0500d1cc4e9c5403469c318e1a3ec3a31826751650221c3550e1"
+      },
+      {
+        "artifact": {
+          "bytes": 136,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/manifest-writer-count-before-kind-reverse/manifest.cbor",
+          "sha256": "f28750ac37b12d427f40291640ee2414ff52266134529c48a87be0661f2bb32e"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:c90f74b546e1db00e1d4146909d87d8f43b6c9cc4828094b576e03e5e3656e04"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
+      "registryVersion": 1
+    },
+    "requestedLayer": 2,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "expected": {
+    "code": "SCHEMA_FIELD_INVALID",
+    "layer": 2,
+    "result": "reject",
+    "stage": "known-schema"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "inputs": [
+    {
+      "bytes": 823,
+      "mediaType": "application/json",
+      "path": "scenarios/operations/manifest-writer-count-before-kind-reverse.json",
+      "sha256": "7265c8ea94af0e2b61c079703dc3c68d696cee3922e88b4a1e716f4208033942"
+    },
+    {
+      "bytes": 12,
+      "mediaType": "application/octet-stream",
+      "path": "objects/01-chunk.bin",
+      "sha256": "36fcc2e9442be1071c275604af6e41bd93875c743dc2fdaa6037662df74c5894"
+    },
+    {
+      "bytes": 3745,
+      "mediaType": "application/json",
+      "path": "scenarios/definitions/manifest-writer-count-before-kind-reverse.json",
+      "sha256": "b44d04e3b9e408e94a6948913de3b129e8a30de82736928c84d6383dd6660552"
+    }
+  ],
+  "operation": "write-content-manifest",
+  "requirementIds": [
+    "OGVCS-002-AC-08",
+    "OGVCS-002-AC-09",
+    "OGVCS-002-FR-09",
+    "OGVCS-002-FR-11",
+    "OGVCS-002-NFR-01",
+    "OGVCS-002-NFR-04"
+  ],
+  "resources": {
+    "recipe": {
+      "generator": "ogvcs.repository-validation-scenario-constructor/v1",
+      "parameters": {
+        "definition": "scenarios/definitions/manifest-writer-count-before-kind-reverse.json",
+        "definitionSha256": "b44d04e3b9e408e94a6948913de3b129e8a30de82736928c84d6383dd6660552",
+        "runtimeHighWaterMarks": "not-asserted"
+      },
+      "seed": "cdd675aaf1083bc1d9edd925f117fd524c7935dcaea13f35d1a7745cc8af1b9f"
+    },
+    "summary": {
+      "bytes": 4729,
+      "indexEntries": 0,
+      "items": 2,
+      "peakMemoryBytes": 0,
+      "scratchBytes": 0,
+      "summarySha256": "a593bdc733090e6ecd21d6e97c4a998675e9bea08ffb6d4b776bea829ebed0d0",
+      "traversalEdges": 0
+    }
+  },
+  "scenarioId": "manifest-writer-count-before-kind-reverse",
+  "schemaVersion": "ogvcs.repository-format/validation-scenario/v1"
+}

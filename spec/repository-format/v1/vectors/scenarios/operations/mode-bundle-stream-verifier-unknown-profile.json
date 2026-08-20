@@ -1,0 +1,13 @@
+{
+  "api": "validate-operation-mode",
+  "expectedProfileFamily": "path",
+  "objectRef": "ogvcs:v1:repository-descriptor:sha256:cbfffaead88a872ae2c1ea08b26d8dde669f9e3aa63d90e755260a8c45f1935c",
+  "operation": "read",
+  "profile": "unknown.example/path@1",
+  "registry": "bundled",
+  "requestedLayer": 3,
+  "schema": "ogvcs.repository-format.v1.operation-mode-input.v1",
+  "semanticProfiles": true,
+  "source": "lifecycle/bundle-unknown-example-path-1.cborseq",
+  "surface": "bundle-stream-verifier"
+}

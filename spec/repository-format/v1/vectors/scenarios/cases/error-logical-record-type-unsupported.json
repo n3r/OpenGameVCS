@@ -1,6 +1,7 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [],
     "lifetimeRecords": [],
     "mode": "conformance",
@@ -149,10 +150,10 @@
       "sha256": "f0b3f217e2912f3f37f9968e56b297521fc32a86e15ef3e971b4cd3adbef24d1"
     },
     {
-      "bytes": 6909,
+      "bytes": 6943,
       "mediaType": "application/json",
       "path": "scenarios/definitions/error-logical-record-type-unsupported.json",
-      "sha256": "f7a0fcc1f36205dbc8d0b9201246ef0be55e900f29805d839b39c8a2cf5cb5d4"
+      "sha256": "387150f146724e18f340c238d73d9a0dc1a38fd3ed2377be1d05b42e62085786"
     }
   ],
   "operation": "validate-bundle",
@@ -164,18 +165,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/error-logical-record-type-unsupported.json",
-        "definitionSha256": "f7a0fcc1f36205dbc8d0b9201246ef0be55e900f29805d839b39c8a2cf5cb5d4",
+        "definitionSha256": "387150f146724e18f340c238d73d9a0dc1a38fd3ed2377be1d05b42e62085786",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "b235ed833a7b1a7fc88c78d75e1bc508d8b747eb56cc4ba709594c256305516c"
     },
     "summary": {
-      "bytes": 12339,
+      "bytes": 12373,
       "indexEntries": 0,
       "items": 12,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "d0626015bf290826c2230f087c2d915b152b606778c159457bae91ccf47d69e7",
+      "summarySha256": "b81c07bc58de2efca4561ecdb173b4763e1adee31b348f3e537631ec45db6c49",
       "traversalEdges": 0
     }
   },

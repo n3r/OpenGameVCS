@@ -1,10 +1,11 @@
 use std::{cell::Cell, collections::BTreeSet, str::FromStr};
 
 use crate::{
-    conflict_id, encode_canonical, hard_limits::enforce_hard_limit_context, sha256, Cbor, Error,
-    ErrorCode, HardLimitCeilings, Limits, ObjectKind, ObjectRef, ProfileRef, Result, TypedDigest,
-    ValidationStage,
+    conflict_id, encode_canonical, hard_limits::enforce_hard_limit_context, sha256,
+    unicode_age::is_unicode_15, Cbor, Error, ErrorCode, HardLimitCeilings, Limits, ObjectKind,
+    ObjectRef, ProfileRef, Registry, Result, TypedDigest, ValidationStage,
 };
+use unicode_normalization::is_nfc;
 
 #[derive(Clone, Debug)]
 pub struct FramingScan {
@@ -161,6 +162,23 @@ fn scan_metadata_inner(
 }
 
 pub fn validate_metadata_schema(object: &MetadataObject) -> Result<ObjectKind> {
+    validate_metadata_schema_with_limits(object, usize::MAX)
+}
+
+/// Validates one already-scanned metadata object with a finite diagnostic
+/// workspace. Error ranking retains one fixed candidate regardless of the
+/// number of invalid fields, but that fixed workspace is admitted before the
+/// caller-owned value is traversed.
+pub fn validate_metadata_schema_with_limits(
+    object: &MetadataObject,
+    max_working_bytes: usize,
+) -> Result<ObjectKind> {
+    const DIAGNOSTIC_WORKING_BYTES: usize = 512;
+    if max_working_bytes < DIAGNOSTIC_WORKING_BYTES {
+        return Err(Error::new(ErrorCode::LimitMemory)
+            .with_layer(1)
+            .with_stage(ValidationStage::ConfiguredResourcePreflight));
+    }
     with_deferred_unknown_fields(|| validate_metadata_schema_inner(object))
         .map_err(|error| error.with_layer(2))
 }
@@ -265,7 +283,7 @@ pub fn validate_logical_record_with_hard_limits(
             5 => {
                 f.shape(&[0, 1, 16, 17, 18, 19, 20, 21], &[])?;
                 object_ref(f.get(16)?, Some(6))?;
-                profile(f.get(17)?)?;
+                profile_in(f.get(17)?, &["importer"])?;
                 digest(f.get(18)?)?;
                 digest(f.get(19)?)?;
                 file_id(f.get(20)?)?;
@@ -296,14 +314,14 @@ pub fn validate_logical_record_with_hard_limits(
             8 => {
                 f.shape(&[0, 1, 16, 17, 18], &[])?;
                 object_ref(f.get(16)?, None)?;
-                profile(f.get(17)?)?;
+                profile_in(f.get(17)?, &["annotation-payload"])?;
                 bytes(f.get(18)?)?;
             }
             9 => {
                 f.shape(&[0, 1, 16, 17, 18, 19, 20], &[])?;
                 typed_digest(f.get(16)?)?;
                 u(f.get(17)?)?;
-                profile(f.get(18)?)?;
+                profile_in(f.get(18)?, &["fixture-event"])?;
                 typed_digest(f.get(19)?)?;
                 fixture_op(f.get(20)?)?;
             }
@@ -550,7 +568,7 @@ fn manifest(f: &Fields<'_>, limits: HardLimitCeilings) -> Result<()> {
     common(f, 2, &[16, 17, 18, 19], &[], limits)?;
     let logical = logical_length(f.get(16)?, limits)?;
     typed_digest(f.get(17)?)?;
-    profile(f.get(18)?)?;
+    profile_in(f.get(18)?, &["chunking"])?;
     let chunks = array(f.get(19)?)?;
     schema_limit(
         limits,
@@ -694,15 +712,15 @@ fn group_set(f: &Fields<'_>, limits: HardLimitCeilings) -> Result<()> {
 fn descriptor(f: &Fields<'_>, limits: HardLimitCeilings) -> Result<()> {
     common(f, 6, &[16, 17, 18, 19], &[20], limits)?;
     id128(f.get(16)?)?;
-    profile(f.get(17)?)?;
-    sorted_profiles(f.get(18)?, true)?;
-    sorted_profiles(f.get(19)?, false)?;
+    profile_in(f.get(17)?, &["path"])?;
+    sorted_profiles(f.get(18)?, true, &["content-policy", "fixture-content-policy"])?;
+    sorted_profiles(f.get(19)?, false, &["group", "fixture-group"])?;
     if let Some(v) = f.opt(20) {
         let a = array(v)?;
         if a.is_empty() {
             return invalid();
         }
-        sorted_profiles(v, false)?;
+        sorted_profiles(v, false, &["chunking"])?;
     }
     Ok(())
 }
@@ -795,7 +813,7 @@ fn shelf(f: &Fields<'_>, limits: HardLimitCeilings) -> Result<()> {
 }
 fn provenance(f: &Fields<'_>, limits: HardLimitCeilings) -> Result<()> {
     common(f, 9, &[16, 17, 18], &[19], limits)?;
-    profile(f.get(16)?)?;
+    profile_in(f.get(16)?, &["provenance"])?;
     sorted_refs(f.get(17)?, None)?;
     let claim = typed_digest(f.get(18)?)?;
     if let Some(v) = f.opt(19) {
@@ -808,13 +826,13 @@ fn provenance(f: &Fields<'_>, limits: HardLimitCeilings) -> Result<()> {
 fn attestation(f: &Fields<'_>, limits: HardLimitCeilings) -> Result<()> {
     common(f, 10, &[16, 17, 18, 19, 20], &[21, 22], limits)?;
     object_ref(f.get(16)?, None)?;
-    profile(f.get(17)?)?;
+    profile_in(f.get(17)?, &["attestation-predicate"])?;
     identity(f.get(18)?)?;
     integer(f.get(19)?)?;
     bytes(f.get(20)?)?;
     match (f.opt(21), f.opt(22)) {
         (Some(p), Some(s)) => {
-            profile(p)?;
+            profile_in(p, &["signature"])?;
             if bytes(s)?.is_empty() {
                 return Err(Error::new(ErrorCode::AttestationSignatureShapeInvalid));
             }
@@ -1277,7 +1295,7 @@ fn entry_state(v: &Cbor, limits: HardLimitCeilings) -> Result<()> {
     file_id(f.get(2)?)?;
     let mode = range(f.get(3)?, 1, 4)?;
     let size = logical_length(f.get(5)?, limits)?;
-    profile(f.get(6)?)?;
+    profile_in(f.get(6)?, &["content-policy", "fixture-content-policy"])?;
     if kind != mode {
         return Err(Error::new(ErrorCode::TreeEntryTargetInvalid));
     }
@@ -1317,7 +1335,7 @@ fn asset_group(v: &Cbor, limits: HardLimitCeilings) -> Result<[u8; 16]> {
     let f = Fields::new(v)?;
     f.shape(&[0, 1, 2, 3], &[4])?;
     let id = id128(f.get(0)?)?;
-    profile(f.get(1)?)?;
+    profile_in(f.get(1)?, &["group", "fixture-group"])?;
     file_id(f.get(2)?)?;
     let members = array(f.get(3)?)?;
     if members.is_empty() {
@@ -1334,7 +1352,7 @@ fn asset_group(v: &Cbor, limits: HardLimitCeilings) -> Result<[u8; 16]> {
         let mf = Fields::new(m)?;
         mf.shape(&[0, 1], &[])?;
         let fid = file_id(mf.get(0)?)?;
-        profile(mf.get(1)?)?;
+        profile_in(mf.get(1)?, &["group-role", "fixture-group-role"])?;
         let current = (encode_canonical(mf.get(1)?)?, fid);
         if previous_member
             .as_ref()
@@ -1349,7 +1367,7 @@ fn asset_group(v: &Cbor, limits: HardLimitCeilings) -> Result<[u8; 16]> {
         for e in array(x)? {
             let ef = Fields::new(e)?;
             ef.shape(&[0, 1], &[])?;
-            profile(ef.get(0)?)?;
+            profile_in(ef.get(0)?, &["external-key", "fixture-external-key"])?;
             let raw_value = bytes(ef.get(1)?)?;
             if raw_value.is_empty() {
                 return invalid();
@@ -1564,7 +1582,7 @@ fn resolution(v: &Cbor, limits: HardLimitCeilings) -> Result<()> {
                 5 => {
                     f.shape(&[0, 1, 2, 3], &[])?;
                     conflict_side(f.get(2)?, limits)?;
-                    profile(f.get(3)?)?;
+                    profile_in(f.get(3)?, &["conflict-driver"])?;
                 }
                 _ => unreachable!(),
             }
@@ -1608,10 +1626,20 @@ fn profile(v: &Cbor) -> Result<ProfileRef> {
             .map_err(|_| Error::new(ErrorCode::SchemaFieldInvalid))?,
     )
 }
+fn profile_in(v: &Cbor, families: &[&str]) -> Result<ProfileRef> {
+    let profile = profile(v)?;
+    if Registry::bundled()
+        .profile(&profile)
+        .is_some_and(|entry| !families.contains(&entry.family.as_str()))
+    {
+        return Err(Error::new(ErrorCode::SchemaFieldInvalid));
+    }
+    Ok(profile)
+}
 fn identity(v: &Cbor) -> Result<()> {
     let f = Fields::new(v)?;
     f.shape(&[0, 1], &[2])?;
-    profile(f.get(0)?)?;
+    profile_in(f.get(0)?, &["identity"])?;
     if bytes(f.get(1)?)?.is_empty() {
         return invalid();
     }
@@ -1623,7 +1651,7 @@ fn identity(v: &Cbor) -> Result<()> {
 fn policy(v: &Cbor) -> Result<()> {
     let f = Fields::new(v)?;
     f.shape(&[0, 1, 2, 3], &[])?;
-    profile(f.get(0)?)?;
+    profile_in(f.get(0)?, &["policy"])?;
     u(f.get(1)?)?;
     range(f.get(2)?, 1, 2)?;
     typed_digest(f.get(3)?)?;
@@ -1663,14 +1691,14 @@ fn basename(v: &Cbor, limits: HardLimitCeilings) -> Result<&str> {
     }
     Ok(s)
 }
-fn sorted_profiles(v: &Cbor, nonempty: bool) -> Result<()> {
+fn sorted_profiles(v: &Cbor, nonempty: bool, families: &[&str]) -> Result<()> {
     let a = array(v)?;
     if nonempty && a.is_empty() {
         return invalid();
     }
     let mut prev = None;
     for p in a {
-        profile(p)?;
+        profile_in(p, families)?;
         let enc = encode_canonical(p)?;
         if prev.as_ref().is_some_and(|x: &Vec<u8>| x >= &enc) {
             return invalid();
@@ -1814,6 +1842,9 @@ fn nonempty_bytes(v: &Cbor) -> Result<&[u8]> {
 }
 fn text(v: &Cbor) -> Result<&str> {
     if let Cbor::Text(x) = v {
+        if !is_unicode_15(x) || !is_nfc(x) {
+            return invalid();
+        }
         Ok(x)
     } else {
         invalid()
@@ -1839,7 +1870,8 @@ fn invalid<T>() -> Result<T> {
 
 fn validate_extension_value(v: &Cbor) -> Result<()> {
     match v {
-        Cbor::UInt(_) | Cbor::NInt(_) | Cbor::Bytes(_) | Cbor::Text(_) | Cbor::Bool(_) => Ok(()),
+        Cbor::UInt(_) | Cbor::NInt(_) | Cbor::Bytes(_) | Cbor::Bool(_) => Ok(()),
+        Cbor::Text(_) => text(v).map(|_| ()),
         Cbor::Array(a) => a.iter().try_for_each(validate_extension_value),
         Cbor::Map(m) => m.iter().try_for_each(|(k, v)| {
             u(k)?;

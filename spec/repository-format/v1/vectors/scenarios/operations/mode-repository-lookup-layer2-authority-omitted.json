@@ -1,0 +1,6 @@
+{
+  "api": "validate-operation-mode",
+  "schema": "ogvcs.repository-format.v1.operation-mode-input.v1",
+  "source": "malformed/nonminimal-unsigned.cbor",
+  "surface": "repository-lookup-layer2"
+}

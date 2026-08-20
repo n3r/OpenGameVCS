@@ -1,6 +1,7 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [],
     "lifetimeRecords": [],
     "mode": "conformance",
@@ -132,17 +133,17 @@
         "path": "scenarios/outputs/manifest-one-tib.json",
         "sha256": "3a0c0528dee69e3fc311b2e50f6a656dd900da8a7424da1dc8b894026b0cda95"
       },
-      "summarySha256": "cc361f11313f4258e60e19288905e2a1f2ab00e196d2718c453e695a3f5065d8"
+      "summarySha256": "1933daa2070a552827513b50b469f4b2069cccce71c37ee2eaf35fc91383a516"
     },
     "result": "accept"
   },
   "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
   "inputs": [
     {
-      "bytes": 9853,
+      "bytes": 9887,
       "mediaType": "application/json",
       "path": "scenarios/definitions/manifest-one-tib.json",
-      "sha256": "5a4f54b9f8ed7df12e0bc0b04f4d15ee612e08c83c53978ffbebd9c660ce69ce"
+      "sha256": "3a43898cbcef7fb388a1a31ac0cd3fe397e813f885ece3af57fdb971e8e2c0a6"
     }
   ],
   "operation": "validate-object",
@@ -156,18 +157,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/manifest-one-tib.json",
-        "definitionSha256": "5a4f54b9f8ed7df12e0bc0b04f4d15ee612e08c83c53978ffbebd9c660ce69ce",
+        "definitionSha256": "3a43898cbcef7fb388a1a31ac0cd3fe397e813f885ece3af57fdb971e8e2c0a6",
         "runtimeHighWaterMarks": "not-measured-inventory-only"
       },
       "seed": "860f753350ec981c19f401b44ed6a36a0ac76353a5389e31dc36048dd2d78f65"
     },
     "summary": {
-      "bytes": 15076,
+      "bytes": 15110,
       "indexEntries": 0,
       "items": 12,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "cc361f11313f4258e60e19288905e2a1f2ab00e196d2718c453e695a3f5065d8",
+      "summarySha256": "1933daa2070a552827513b50b469f4b2069cccce71c37ee2eaf35fc91383a516",
       "traversalEdges": 0
     }
   },

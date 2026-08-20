@@ -1,0 +1,15 @@
+{
+  "api": "validate-snapshot-graph",
+  "authorityContext": "scenario.context",
+  "candidateSnapshot": "ogvcs:v1:snapshot:sha256:b9edd34e71dcbb1a50603553aa0c8034247b160d46f506e87285465e25551793",
+  "designatedRoot": "ogvcs:v1:snapshot:sha256:b9edd34e71dcbb1a50603553aa0c8034247b160d46f506e87285465e25551793",
+  "lookupMutations": [
+    {
+      "action": "replace-payload-preserve-reference",
+      "reference": "ogvcs:v1:snapshot:sha256:fcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfc",
+      "sourceArtifact": "objects/07-snapshot.cbor"
+    }
+  ],
+  "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+  "schema": "ogvcs.repository-format.v1.repository-route-input.v1"
+}

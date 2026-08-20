@@ -121,6 +121,12 @@ test('incremental digest and transcript writers are chunk-boundary invariant', a
   const bundle = createBundleTranscriptHashWriter();
   for await (const part of chunks(Buffer.concat(items))) bundle.update(part);
   assert.equal(toHex(bundle.finish().bytes), toHex(hashBundleTranscript(items).bytes));
+
+  assert.throws(
+    () => createBundleTranscriptHashWriter({ maxBytes: 1 }).update(Uint8Array.of(1, 2)),
+    error => error instanceof OgvcsError && error.code === 'BUNDLE_BUDGET_EXCEEDED' &&
+      error.layer === 1 && error.stage === 'configured-resource-preflight'
+  );
 });
 
 test('registered identity writers enforce assignments and payload discriminator', async () => {
@@ -184,4 +190,29 @@ test('logical-bundle visitor is non-retaining and applies contextual payload cei
   const metadata = declaredObjectItem(2, 67_108_865);
   await expectCode(() => visitLogicalBundle(chunks(metadata)), 'CBOR_TRUNCATED');
   await expectCode(() => visitLogicalBundle(chunks(metadata), {}, { maxMetadataBytes: 1024 }), 'LIMIT_METADATA_BYTES');
+
+  const zeroSections = await readFile(resolve(VECTORS, 'logical-bundles/scenario-bundle-zero-sections.cborseq'));
+  for (const limits of [{ maxItemBytes: 1 }, { maxItems: 1 }]) {
+    await assert.rejects(
+      () => visitLogicalBundle(chunks(zeroSections), {}, limits),
+      error => error instanceof OgvcsError && error.code === 'BUNDLE_BUDGET_EXCEEDED' &&
+        error.layer === 1 && error.stage === 'configured-resource-preflight'
+    );
+  }
+});
+
+test('logical-bundle visitor bounds cumulative nested map-key captures', async () => {
+  const nested = await readFile(resolve(
+    VECTORS, 'logical-bundles/nested-map-key-capture-memory.cborseq'
+  ));
+  const limits = { maxValueBytes: 64, maxNesting: 10 };
+  await assert.rejects(
+    () => visitLogicalBundle(chunks(nested), {}, { ...limits, maxCaptureBytes: 511 }),
+    error => error instanceof OgvcsError && error.code === 'LIMIT_MEMORY' &&
+      error.layer === 1 && error.stage === 'configured-resource-preflight'
+  );
+  assert.deepEqual(
+    await visitLogicalBundle(chunks(nested), {}, { ...limits, maxCaptureBytes: 512 }),
+    { items: 4, bytes: nested.length }
+  );
 });

@@ -58,7 +58,7 @@ test('independent vector audit rejects byte and coverage drift even with a refre
     scenarios: summary.scenarios,
     stableErrors: summary.stableErrors,
     validationStages: summary.validationStages
-  }, { artifacts: 1236, obligations: 148, scenarios: 235, stableErrors: 81, validationStages: 10 });
+  }, { artifacts: 2815, obligations: 486, scenarios: 573, stableErrors: 81, validationStages: 10 });
 
   const errorsPath = join(directory, 'spec', 'repository-format', 'v1', 'errors.json');
   const originalErrors = await readFile(errorsPath);

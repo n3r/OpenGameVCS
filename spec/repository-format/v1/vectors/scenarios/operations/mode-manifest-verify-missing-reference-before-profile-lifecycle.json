@@ -1,0 +1,17 @@
+{
+  "api": "validate-operation-mode",
+  "manifest": "ogvcs:v1:content-manifest:sha256:d140d3719b89622383790bf5a8c30d4e0072ab8470696aa03729de6d978c9fce",
+  "mode": "production",
+  "objectLookup": "scenario.context.objectLookup",
+  "registry": "bundled",
+  "registryFixture": {
+    "path": "registries/index.json",
+    "scenarioId": "registry-conformance-production"
+  },
+  "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+  "requestedLayer": 3,
+  "schema": "ogvcs.repository-format.v1.operation-mode-input.v1",
+  "semanticProfiles": true,
+  "source": "lifecycle/manifest-missing-reference-before-profile-lifecycle.cbor",
+  "surface": "manifest-verify"
+}

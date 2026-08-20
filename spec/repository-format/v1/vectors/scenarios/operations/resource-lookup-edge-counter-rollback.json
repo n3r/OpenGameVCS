@@ -1,0 +1,32 @@
+{
+  "api": "validate-resource-reservation",
+  "assertCounterBaselineAfterFailure": true,
+  "assertCounterBaselineAfterRecovery": true,
+  "assertNoPartialState": true,
+  "cluster": "lookup-edge-counter-rollback",
+  "configuredLimit": {
+    "field": "maxEdges",
+    "value": 1
+  },
+  "evidenceRequired": {
+    "noPartialState": true,
+    "routeEvidence": [
+      {
+        "counterBaselineRestored": true,
+        "noPartialState": true,
+        "recoveryKind": "same-authority-instance",
+        "route": "expand-tree-edge-budget",
+        "succeeded": true
+      }
+    ]
+  },
+  "failureTree": "ogvcs:v1:tree:sha256:9458b24239ce71b75b1c6ab857883d66a6eab3f0f6f4e9afab15371af1d4bf19",
+  "recovery": {
+    "api": "verify-manifest",
+    "reference": "ogvcs:v1:content-manifest:sha256:771d07afb8bb70aeacfb964f98d8a01670e79989406f2a5519f21ff57dec2c89"
+  },
+  "routes": [
+    "expand-tree-edge-budget"
+  ],
+  "schema": "ogvcs.repository-format.v1.resource-reservation-input.v1"
+}

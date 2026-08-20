@@ -18,10 +18,6 @@ const MAX_COMMAND_OUTPUT = 16 * 1024 * 1024;
 const MAX_ARCHIVE_BYTES = 64 * 1024 * 1024;
 const JS_IMPLEMENTATION = '@opengamevcs/object-model/javascript';
 const RUST_IMPLEMENTATION = 'ogvcs-object-model/rust';
-const EXPECTED_SCENARIO_COUNTS = Object.freeze({
-  [JS_IMPLEMENTATION]: Object.freeze({ executed: 233, failed: 0, inventoryOnly: 2, notApplicable: 0 }),
-  [RUST_IMPLEMENTATION]: Object.freeze({ executed: 228, failed: 0, inventoryOnly: 2, notApplicable: 5 })
-});
 
 function fail(message) { throw new Error(`packed conformance failed: ${message}`); }
 function canonical(value) {
@@ -53,21 +49,58 @@ function validationSites(catalogue) {
   return sites;
 }
 
-function validOutcome(outcome, sites) {
+function validOutcome(outcome, sites, { expectedEvidence } = {}) {
   if (!outcome || typeof outcome !== 'object' || Array.isArray(outcome)) return false;
+  const keys = Object.keys(outcome).filter(key => key !== 'evidence').sort();
+  const requiresEvidence = expectedEvidence !== undefined;
+  if (Object.hasOwn(outcome, 'evidence') !== requiresEvidence ||
+      (requiresEvidence && canonical(outcome.evidence) !== canonical(expectedEvidence))) return false;
   if (outcome.result === 'accept') {
-    return canonical(Object.keys(outcome).sort()) === canonical(['highestLayer', 'result']) &&
+    return canonical(keys) === canonical(['highestLayer', 'result']) &&
       Number.isInteger(outcome.highestLayer) && outcome.highestLayer >= 1 && outcome.highestLayer <= 3;
   }
   if (outcome.result === 'reject') {
-    return canonical(Object.keys(outcome).sort()) === canonical(['code', 'layer', 'result', 'stage']) &&
+    return canonical(keys) === canonical(['code', 'layer', 'result', 'stage']) &&
       typeof outcome.code === 'string' && Number.isInteger(outcome.layer) &&
       sites.has(`${outcome.code}\0${outcome.layer}\0${outcome.stage}`);
   }
   return false;
 }
 
-function validateScenarioOutcomes(report, sites) {
+function scenarioAuthority(index) {
+  if (!Array.isArray(index?.cases)) fail('invalid packed scenario index');
+  const rows = index.cases;
+  const ids = rows.map(row => row?.scenarioId);
+  if (ids.some(id => typeof id !== 'string') || new Set(ids).size !== ids.length) {
+    fail('invalid packed scenario inventory');
+  }
+  const scope = row => row.implementationScope ?? ['javascript', 'rust'];
+  const executable = row => row.materialization !== 'virtual-constructor' &&
+    (row.materialization !== 'virtual-constructor-shared-bundle-baseline' ||
+      row.scenarioId === 'bundle-export-claim');
+  const counts = language => {
+    const result = { executed: 0, failed: 0, inventoryOnly: 0, notApplicable: 0 };
+    for (const row of rows) {
+      if (!scope(row).includes(language)) result.notApplicable += 1;
+      else if (executable(row)) result.executed += 1;
+      else result.inventoryOnly += 1;
+    }
+    return result;
+  };
+  return Object.freeze({
+    counts: Object.freeze({
+      [JS_IMPLEMENTATION]: Object.freeze(counts('javascript')),
+      [RUST_IMPLEMENTATION]: Object.freeze(counts('rust'))
+    }),
+    evidenceById: new Map(rows.filter(row => row.expected?.evidence !== undefined)
+      .map(row => [row.scenarioId, row.expected.evidence])),
+    ids: Object.freeze(ids),
+    sharedIds: new Set(rows.filter(row => scope(row).includes('javascript') && scope(row).includes('rust'))
+      .map(row => row.scenarioId))
+  });
+}
+
+function validateScenarioOutcomes(report, sites, authority) {
   const scenarios = report.conformance?.scenarios;
   const rows = scenarios?.rows;
   if (!Array.isArray(rows)) fail(`invalid scenario report for ${report.implementation}`);
@@ -77,14 +110,18 @@ function validateScenarioOutcomes(report, sites) {
     inventoryOnly: rows.filter(row => row.status === 'not-executed').length,
     notApplicable: rows.filter(row => row.status === 'not-applicable').length
   };
-  if (rows.length !== 235 || canonical(counts) !== canonical(EXPECTED_SCENARIO_COUNTS[report.implementation]) ||
+  if (canonical(rows.map(row => row.scenarioId)) !== canonical(authority.ids) ||
+      canonical(counts) !== canonical(authority.counts[report.implementation]) ||
       Object.entries(counts).some(([name, value]) => scenarios[name] !== value)) {
     fail(`invalid frozen scenario cardinality for ${report.implementation}`);
   }
   for (const row of rows) {
     if (row.status === 'passed' || row.status === 'failed') {
-      if (!validOutcome(row.actual, sites) || !validOutcome(row.expected, sites) ||
-          (row.status === 'passed') !== (canonical(row.actual) === canonical(row.expected))) {
+      const expectedEvidence = authority.evidenceById.get(row.scenarioId);
+      if (!validOutcome(row.actual, sites, { expectedEvidence }) ||
+          !validOutcome(row.expected, sites, { expectedEvidence }) ||
+          (row.status === 'passed') !==
+            (canonical(row.actual) === canonical(row.expected))) {
         fail(`invalid scenario outcome for ${report.implementation}: ${row.scenarioId}`);
       }
     } else if (row.actual !== undefined || row.expected !== undefined) {
@@ -186,12 +223,13 @@ async function npmPack(packageRoot, destination, cache) {
   return join(destination, basename(records[0].filename));
 }
 
-function sharedConformance(report) {
+function sharedConformance(report, authority) {
   const conformance = structuredClone(report.conformance);
   const rows = conformance.scenarios?.rows?.filter(row =>
     Array.isArray(row.implementationScope) &&
     row.implementationScope.includes('javascript') && row.implementationScope.includes('rust'));
-  if (!Array.isArray(rows) || rows.length !== 230 ||
+  if (!Array.isArray(rows) || rows.length !== authority.sharedIds.size ||
+      rows.some(row => !authority.sharedIds.has(row.scenarioId)) ||
       rows.some(row => row.status !== 'passed' && row.status !== 'not-executed')) {
     fail(`invalid shared scenario rows for ${report.implementation}`);
   }
@@ -208,7 +246,7 @@ function sharedConformance(report) {
   return conformance;
 }
 
-function validateReport(report, implementation, artifact, formatArtifact, revision, sites) {
+function validateReport(report, implementation, artifact, formatArtifact, revision, sites, authority) {
   if (report.schema !== 'ogvcs.object-model.conformance-report/v1' ||
       report.implementation !== implementation || report.sourceRevision !== revision ||
       report.conformanceSha256 !== digest(canonical(report.conformance)) ||
@@ -217,7 +255,7 @@ function validateReport(report, implementation, artifact, formatArtifact, revisi
       report.conformance?.scenarios?.failed !== 0) {
     fail(`invalid packed report for ${implementation}`);
   }
-  validateScenarioOutcomes(report, sites);
+  validateScenarioOutcomes(report, sites, authority);
 }
 
 async function main() {
@@ -271,6 +309,8 @@ async function main() {
       ...formatPackage, sha256: formatSha, type: 'npm-tarball'
     };
     const sites = validationSites(JSON.parse(await readFile(join(formatRoot, 'errors.json'), 'utf8')));
+    const authority = scenarioAuthority(JSON.parse(await readFile(
+      join(formatRoot, 'vectors', 'scenarios', 'index.json'), 'utf8')));
     const revisionResult = process.env.GITHUB_SHA === undefined
       ? await run('git', ['rev-parse', 'HEAD'], { label: 'git revision' })
       : { stdout: process.env.GITHUB_SHA };
@@ -334,10 +374,10 @@ async function main() {
 
     const javascriptReport = JSON.parse(await readFile(javascriptReportPath, 'utf8'));
     const rustReport = JSON.parse(await readFile(rustReportPath, 'utf8'));
-    validateReport(javascriptReport, JS_IMPLEMENTATION, javascriptArtifact, formatArtifact, revision, sites);
-    validateReport(rustReport, RUST_IMPLEMENTATION, rustArtifact, formatArtifact, revision, sites);
-    const javascriptShared = digest(canonical(sharedConformance(javascriptReport)));
-    const rustShared = digest(canonical(sharedConformance(rustReport)));
+    validateReport(javascriptReport, JS_IMPLEMENTATION, javascriptArtifact, formatArtifact, revision, sites, authority);
+    validateReport(rustReport, RUST_IMPLEMENTATION, rustArtifact, formatArtifact, revision, sites, authority);
+    const javascriptShared = digest(canonical(sharedConformance(javascriptReport, authority)));
+    const rustShared = digest(canonical(sharedConformance(rustReport, authority)));
     if (javascriptShared !== rustShared) fail('packed JavaScript and Rust shared conformance differs');
     const retainedArchives = [
       {

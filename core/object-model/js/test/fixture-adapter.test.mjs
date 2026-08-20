@@ -6,8 +6,12 @@ import test from 'node:test';
 
 import { createRequest, generateFixture, verifyFixture } from '@opengamevcs/fixture-generator';
 import { encodeLogicalBundle, verifyLogicalBundle } from '../src/bundle.js';
+import { encodeCanonical } from '../src/cbor.js';
 import { OgvcsError } from '../src/errors.js';
-import { adaptFixture, prepareFixtureAdapterLedger } from '../src/fixture-adapter.js';
+import { hashLogicalRecord } from '../src/hash.js';
+import {
+  adaptFixture, FIXTURE_ADAPTER_LIMITS, prepareFixtureAdapterLedger
+} from '../src/fixture-adapter.js';
 import { loadBundledRegistry } from '../src/registry.js';
 
 const PROFILES = ['code-heavy', 'unreal-like', 'unity-like', 'large-binary', 'global-studio'];
@@ -42,6 +46,32 @@ function objectFingerprint(result) {
   return result.objects.map(item => `${item.ref}:${Buffer.from(item.payload).toString('hex')}`);
 }
 
+function canonicalBundleSections(result) {
+  const objects = [...result.objects].sort((left, right) => Buffer.compare(
+    Buffer.from(encodeCanonical(left.ref.toMap())), Buffer.from(encodeCanonical(right.ref.toMap()))
+  ));
+  const logicalRecords = [...result.logicalRecords].sort((left, right) => {
+    const leftType = Number(left.get(1)); const rightType = Number(right.get(1));
+    if (leftType !== rightType) return leftType - rightType;
+    return Buffer.compare(
+      Buffer.from(hashLogicalRecord(leftType, left).bytes),
+      Buffer.from(hashLogicalRecord(rightType, right).bytes)
+    );
+  });
+  const roots = [...result.roots].sort((left, right) => {
+    if (left.kind !== right.kind) return left.kind - right.kind;
+    const identity = Buffer.compare(
+      Buffer.from(encodeCanonical(left.identity.toMap())),
+      Buffer.from(encodeCanonical(right.identity.toMap()))
+    );
+    return identity !== 0 ? identity : Buffer.compare(
+      Buffer.from(encodeCanonical(left.role.toMap())),
+      Buffer.from(encodeCanonical(right.role.toMap()))
+    );
+  });
+  return { objects, logicalRecords, roots };
+}
+
 test('public adapter maps all five profile-v2 fixtures and retries byte-identically', async (t) => {
   const cwd = await temporaryDirectory(t);
   const registry = await loadBundledRegistry();
@@ -67,9 +97,11 @@ test('public adapter maps all five profile-v2 fixtures and retries byte-identica
     assert.equal(first.logicalRecords.length, 8);
     assert.equal(first.roots.filter(root => root.kind === 2).length, 8);
 
-    const bundle = encodeLogicalBundle({ objects: first.objects, logicalRecords: first.logicalRecords, roots: first.roots }, { registry });
-    const verification = verifyLogicalBundle(bundle, { registry });
-    assert.equal(verification.highestLayer, 2);
+    const bundle = encodeLogicalBundle(canonicalBundleSections(first), {
+      registry, operation: 'conformance'
+    });
+    const verification = verifyLogicalBundle(bundle, { registry, operation: 'conformance' });
+    assert.equal(verification.highestLayer, 3);
     assert.equal(verification.objectCount, first.objects.length);
     assert.equal(verification.logicalRecordCount, 8);
 
@@ -145,6 +177,7 @@ test('adapter enforces every aggregate input, state, output, and time ceiling be
     ['inventoryRecords', 5, 'LIMIT_COUNT'],
     ['operationRecords', 7, 'LIMIT_COUNT'],
     ['groups', 0, 'LIMIT_COUNT'],
+    ['groupMemberships', 0, 'LIMIT_COUNT'],
     ['mappings', 1, 'LIMIT_COUNT'],
     ['objects', 1, 'LIMIT_COUNT'],
     ['manifestParts', 0, 'LIMIT_COUNT'],
@@ -175,6 +208,73 @@ test('adapter enforces every aggregate input, state, output, and time ceiling be
     persistLedger: async () => {}
   }), error => error instanceof OgvcsError && error.code === 'LIMIT_COUNT');
   assert.equal(verifierCalled, false, 'adapter request limits must preflight before the external deep verifier');
+});
+
+test('group relationship projection fails before publication and the fixture remains reusable', async (t) => {
+  const cwd = await temporaryDirectory(t);
+  await generateFixture(request('unity-like', 'group-working', { pathCount: 6 }), { cwd });
+  let ledger;
+  let writes = 0;
+  let commits = 0;
+  let aborts = 0;
+  const objectSink = {
+    async write() { writes += 1; },
+    async commit() { commits += 1; },
+    async abort() { aborts += 1; }
+  };
+  await assert.rejects(adaptFixture('group-working', {
+    cwd,
+    isTargetFileIdConsumed: TARGET_EMPTY,
+    limits: { groupMemberships: 0 },
+    objectSink,
+    persistLedger: async value => { ledger = value; }
+  }), error => error instanceof OgvcsError && error.code === 'LIMIT_COUNT' && error.layer === 1);
+  await Promise.resolve();
+  assert.ok(writes > 0, 'the reduced case did not reach staged object construction');
+  assert.equal(commits, 0, 'failed adaptation published staged objects');
+  assert.equal(aborts, 1, 'failed adaptation did not abort its staged sink');
+  assert.ok(ledger, 'the bounded ledger was not available for retry');
+
+  await adaptFixture('group-working', {
+    cwd,
+    ledger,
+    isTargetFileIdConsumed: TARGET_EMPTY,
+    objectSink,
+    persistLedger: async () => { throw new Error('complete ledger must not be rewritten'); }
+  });
+  assert.equal(commits, 1, 'same fixture did not succeed after the bounded failure');
+
+  const silentSink = Object.freeze({
+    async write() {}, async commit() {}, async abort() {}
+  });
+  const invoke = (maxWorkingBytes, sink = silentSink) => adaptFixture('group-working', {
+    cwd,
+    ledger,
+    isTargetFileIdConsumed: TARGET_EMPTY,
+    limits: { maxWorkingBytes },
+    objectSink: sink,
+    persistLedger: async () => { throw new Error('complete ledger must not be rewritten'); }
+  });
+  let low = 0;
+  let high = FIXTURE_ADAPTER_LIMITS.maxWorkingBytes;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    try { await invoke(middle); high = middle; }
+    catch (error) {
+      if (!(error instanceof OgvcsError) || error.code !== 'LIMIT_MEMORY') throw error;
+      low = middle + 1;
+    }
+  }
+  assert.ok(low > 0, 'fixture unexpectedly required no working-memory reservation');
+  writes = 0; commits = 0; aborts = 0;
+  await assert.rejects(invoke(low - 1, objectSink), error =>
+    error instanceof OgvcsError && error.code === 'LIMIT_MEMORY' && error.layer === 1);
+  await Promise.resolve();
+  assert.ok(writes > 0, 'reduced working-memory case did not reach staged output');
+  assert.equal(commits, 0, 'working-memory failure published staged objects');
+  assert.equal(aborts, 1, 'working-memory failure did not abort staged output');
+  await invoke(low, objectSink);
+  assert.equal(commits, 1, 'same fixture did not reuse the exact successful working ceiling');
 });
 
 test('adapter deadline aborts a non-settling external boundary with LIMIT_TIME', async t => {
@@ -262,6 +362,25 @@ test('ledger mapping values are shallow-validated before structured cloning', as
       fileIds: {}, groupIds: {}, revisionSnapshots: {}, importMappings: {}
     }
   }), error => error instanceof OgvcsError && error.code === 'FIXTURE_MAPPING_MISSING');
+});
+
+test('ledger cloning and requirement indexes obey the reduced working-memory ceiling', async () => {
+  const oversizedKey = 'g'.repeat(4_000);
+  const ledger = {
+    schemaVersion: 'ogvcs.fixture-adapter/ledger/v1',
+    requestDigest: '41'.repeat(32),
+    repositoryId: '51'.repeat(16),
+    directoryIds: {}, fileIds: {},
+    groupIds: { [oversizedKey]: '61'.repeat(16) },
+    revisionSnapshots: {}, importMappings: {}
+  };
+  await assert.rejects(prepareFixtureAdapterLedger({
+    manifest: { requestDigest: '41'.repeat(32) }, inventory: [], groups: []
+  }, {
+    ledger,
+    limits: { maxWorkingBytes: 1_024 }
+  }), error => error instanceof OgvcsError && error.code === 'LIMIT_MEMORY' && error.layer === 1);
+  assert.equal(ledger.groupIds[oversizedKey], '61'.repeat(16), 'caller ledger was mutated');
 });
 
 test('adapter binds the exact groups bytes it consumes to the verified manifest', async (t) => {

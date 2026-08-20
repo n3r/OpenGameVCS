@@ -2,6 +2,7 @@
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
     "candidateSnapshot": "ogvcs:v1:snapshot:sha256:7a07004fa0796ecaf80632f918a7a67a97ee4577804db24b0034f0b9ca655a0e",
+    "caseMode": "case-sensitive",
     "designatedRoot": "ogvcs:v1:snapshot:sha256:cb4c15924c9b6f099b9d842821b7f3d7d74beab34bd692bec237218a896d4dde",
     "importMappings": [],
     "lifetimeRecords": [
@@ -124,7 +125,7 @@
         "path": "scenarios/outputs/transition-group-delete.json",
         "sha256": "f3aa6da4e4606b9a238f929b2d2ffd2304084d56f55bff4991ab3c984fe5a952"
       },
-      "summarySha256": "1f73185a452eb6e42475f01e98e9965e9474680c0abe6b52924d65ded8623075"
+      "summarySha256": "803385251e0c7379e6e869bca81fca961dd2313b7b2184d2a8a0eac34ed4bfdc"
     },
     "result": "accept"
   },
@@ -137,10 +138,10 @@
       "sha256": "487a2dea49107a8afdda736e413b430dee1a7c281d02eb525602f3b2a0a7fb70"
     },
     {
-      "bytes": 10155,
+      "bytes": 10189,
       "mediaType": "application/json",
       "path": "scenarios/definitions/transition-group-delete.json",
-      "sha256": "d5a0bce183adfe75c32e2f0149c0a8daa1b7efdc8fefa30407aeb7936a13bab2"
+      "sha256": "bccdc30a8db2fc73e2a9cefd111059cfcb762b7d6c6b45dea64b056ca2a08a81"
     }
   ],
   "operation": "replay-change-set",
@@ -152,18 +153,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/transition-group-delete.json",
-        "definitionSha256": "d5a0bce183adfe75c32e2f0149c0a8daa1b7efdc8fefa30407aeb7936a13bab2",
+        "definitionSha256": "bccdc30a8db2fc73e2a9cefd111059cfcb762b7d6c6b45dea64b056ca2a08a81",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "88b29a592ce4264b97204091bc6e7add264142c234b8e6979cbe3731fc493117"
     },
     "summary": {
-      "bytes": 12534,
+      "bytes": 12568,
       "indexEntries": 0,
       "items": 10,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "1f73185a452eb6e42475f01e98e9965e9474680c0abe6b52924d65ded8623075",
+      "summarySha256": "803385251e0c7379e6e869bca81fca961dd2313b7b2184d2a8a0eac34ed4bfdc",
       "traversalEdges": 0
     }
   },

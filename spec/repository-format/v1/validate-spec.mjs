@@ -9,6 +9,8 @@ import { fileURLToPath } from "node:url";
 
 const FORMAT_VERSION = 1;
 const REGISTRY_VERSION = 1;
+const UNICODE_VERSION = "15.0.0";
+const UNICODE_SOURCE_SHA256 = "7570877e0fa197c45338f7c41a02636da4e14c8dba6a3611a01cd30bf329d5ca";
 const STATES = new Set(["reserved", "conformance-only", "ratified", "deprecated"]);
 const VALIDATION_STAGES = [
   "configured-resource-preflight",
@@ -149,6 +151,9 @@ const EXPECTED_FILES = [
   "spec/repository-format/v1/vector-manifest.schema.json",
   "spec/repository-format/v1/validate-spec.mjs",
   "spec/repository-format/v1/validate-spec.test.mjs",
+  "spec/repository-format/v1/unicode/DerivedAge-15.0.0.txt",
+  "spec/repository-format/v1/unicode/NOTICE.md",
+  "spec/repository-format/v1/unicode/UNICODE-LICENSE.txt",
   "spec/repository-format/v1/registries/common-fields.json",
   "spec/repository-format/v1/registries/entry-kinds.json",
   "spec/repository-format/v1/registries/entry-modes.json",
@@ -387,6 +392,35 @@ function validateNumericRegistry(v, scope, registry, maximum) {
 
 function sameArray(actual, expected) {
   return actual.length === expected.length && actual.every((value, index) => value === expected[index]);
+}
+
+function deriveFrozenUnicodeIntervals(v, scope, source) {
+  const ranges = [];
+  v.check(source.startsWith("# DerivedAge-15.0.0.txt\n"), scope, "Unicode age source version header changed");
+  for (const line of source.split("\n")) {
+    const match = /^([0-9A-F]{4,6})(?:\.\.([0-9A-F]{4,6}))?\s*;\s*([0-9]+)\.([0-9]+)\b/.exec(line);
+    if (!match) continue;
+    const major = Number(match[3]);
+    const minor = Number(match[4]);
+    v.check(major < 15 || (major === 15 && minor === 0), scope, `post-15.0 assignment in frozen source: ${line}`);
+    const from = Number.parseInt(match[1], 16);
+    const to = Number.parseInt(match[2] ?? match[1], 16);
+    v.check(from <= to && to <= 0x10ffff, scope, `invalid age range: ${line}`);
+    if (to < 0xd800 || from > 0xdfff) ranges.push([from, to]);
+    else {
+      if (from < 0xd800) ranges.push([from, 0xd7ff]);
+      if (to > 0xdfff) ranges.push([0xe000, to]);
+    }
+  }
+  ranges.sort((left, right) => left[0] - right[0] || left[1] - right[1]);
+  const merged = [];
+  for (const range of ranges) {
+    const previous = merged.at(-1);
+    v.check(!previous || range[0] > previous[1], scope, "Unicode age ranges overlap");
+    if (previous && range[0] === previous[1] + 1) previous[1] = range[1];
+    else merged.push([...range]);
+  }
+  return merged;
 }
 
 function exactRanges(v, scope, actual, expected, label) {
@@ -688,6 +722,7 @@ function validateSpec(root) {
     v.check(formatPackage.name === "@opengamevcs/repository-format-v1", "spec/repository-format/v1/package.json", "package name is invalid");
     v.check(formatPackage.license === "MIT", "spec/repository-format/v1/package.json", "package license must be MIT");
     v.check(formatPackage.files?.includes("LICENSE") === true, "spec/repository-format/v1/package.json", "packed files must include LICENSE");
+    v.check(formatPackage.files?.includes("unicode") === true, "spec/repository-format/v1/package.json", "packed files must include the normative Unicode authority");
   }
 
   const registryPaths = [
@@ -815,6 +850,17 @@ function validateSpec(root) {
     v.check(shape?.namespacePattern === PROFILE_NAMESPACE.source && shape?.idPattern === PROFILE_TOKEN.source, "profiles", "ProfileRef grammar metadata disagrees with the normative grammar");
     v.check(shape?.namespaceUtf8BytesMaximum === 253 && shape?.idUtf8BytesMaximum === 63 && shape?.textKey === "<namespace>/<id>@<major>", "profiles", "ProfileRef bounds or text rendering metadata is invalid");
     v.check(sameArray((shape?.fields ?? []).map((field) => field.code), [0, 1, 2]), "profiles", "ProfileRef wire keys must be 0,1,2");
+    const ratifiedPaths = profiles.entries.filter((entry) => entry.namespace === "path.opengamevcs");
+    const ratifiedPathAssignments = ratifiedPaths.map((entry) => [entry.id, entry.major, entry.family, entry.owner, entry.state, entry.productionWriteAllowed]);
+    const expectedRatifiedPathAssignments = [
+      ["linux", 1, "path", "OGVCS-004", "ratified", true],
+      ["macos", 1, "path", "OGVCS-004", "ratified", true],
+      ["portable", 1, "path", "OGVCS-004", "ratified", true],
+      ["windows", 1, "path", "OGVCS-004", "ratified", true]
+    ];
+    v.check(ratifiedPathAssignments.length === expectedRatifiedPathAssignments.length &&
+      ratifiedPathAssignments.every((assignment, index) => sameArray(assignment, expectedRatifiedPathAssignments[index])),
+    "profiles", "ratified OGVCS-004 path profile assignments changed");
   }
 
   const extensions = registries.extensions;
@@ -904,10 +950,83 @@ function validateSpec(root) {
 
   const cddlRelative = "spec/repository-format/v1/repository-format.cddl";
   const cddl = v.text(cddlRelative);
+  const encodingRelative = "spec/repository-format/v1/encoding.md";
+  const encoding = v.text(encodingRelative);
   const objectModelRelative = "spec/repository-format/v1/object-model.md";
   const objectModel = v.text(objectModelRelative);
   const logicalBundleRelative = "spec/repository-format/v1/logical-bundle.md";
   const logicalBundle = v.text(logicalBundleRelative);
+  const unicodeSourceRelative = "spec/repository-format/v1/unicode/DerivedAge-15.0.0.txt";
+  const unicodeSourceBytes = v.raw(unicodeSourceRelative);
+  const unicodeSource = v.text(unicodeSourceRelative);
+  const unicodeLicenseRelative = "spec/repository-format/v1/unicode/UNICODE-LICENSE.txt";
+  const unicodeLicenseBytes = v.raw(unicodeLicenseRelative);
+  v.text(unicodeLicenseRelative);
+  const unicodeNoticeRelative = "spec/repository-format/v1/unicode/NOTICE.md";
+  const unicodeNoticeBytes = v.raw(unicodeNoticeRelative);
+  const unicodeNotice = v.text(unicodeNoticeRelative);
+  const frozenUnicodeIntervals = unicodeSource ? deriveFrozenUnicodeIntervals(v, unicodeSourceRelative, unicodeSource) : [];
+  const frozenUnicodeScalarCount = frozenUnicodeIntervals.reduce((sum, [from, to]) => sum + to - from + 1, 0);
+  if (unicodeSourceBytes) {
+    v.check(createHash("sha256").update(unicodeSourceBytes).digest("hex") === UNICODE_SOURCE_SHA256,
+      unicodeSourceRelative, "official Unicode 15.0 DerivedAge digest changed");
+  }
+  v.check(frozenUnicodeIntervals.length === 715 && frozenUnicodeScalarCount === 286785,
+    unicodeSourceRelative, "derived Unicode 15.0 scalar repertoire count changed");
+  v.check(unicodeNotice?.includes(UNICODE_SOURCE_SHA256) && unicodeNotice.includes("Unicode License v3"),
+    unicodeNoticeRelative, "Unicode source provenance or license routing is incomplete");
+
+  const unicodeVectorSourceRelative = "spec/repository-format/v1/vectors/unicode/DerivedAge-15.0.0.txt";
+  const unicodeVectorSourceBytes = v.raw(unicodeVectorSourceRelative);
+  const unicodeVectorLicenseBytes = v.raw("spec/repository-format/v1/vectors/unicode/UNICODE-LICENSE.txt");
+  const unicodeVectorNoticeBytes = v.raw("spec/repository-format/v1/vectors/unicode/NOTICE.md");
+  v.check(Boolean(unicodeSourceBytes && unicodeVectorSourceBytes?.equals(unicodeSourceBytes)),
+    unicodeVectorSourceRelative, "manifested Unicode source is not an exact copy of the normative source");
+  v.check(Boolean(unicodeLicenseBytes && unicodeVectorLicenseBytes?.equals(unicodeLicenseBytes)),
+    "spec/repository-format/v1/vectors/unicode/UNICODE-LICENSE.txt", "manifested Unicode license is not exact");
+  v.check(Boolean(unicodeNoticeBytes && unicodeVectorNoticeBytes?.equals(unicodeNoticeBytes)),
+    "spec/repository-format/v1/vectors/unicode/NOTICE.md", "manifested Unicode notice is not exact");
+  const unicodeIntervalsRelative = "spec/repository-format/v1/vectors/unicode/age-15.0.0-intervals.json";
+  const unicodeIntervals = v.text(unicodeIntervalsRelative, { stableJson: true, lexicographicKeys: true });
+  v.check(unicodeIntervals?.schema === "ogvcs.repository-format.v1.unicode-age-intervals.v1" &&
+    unicodeIntervals?.unicodeVersion === UNICODE_VERSION && unicodeIntervals?.intervalCount === 715 &&
+    unicodeIntervals?.sourceSha256 === UNICODE_SOURCE_SHA256 &&
+    unicodeIntervals?.scalarCount === 286785 && JSON.stringify(unicodeIntervals?.intervals) === JSON.stringify(frozenUnicodeIntervals),
+  unicodeIntervalsRelative, "compact Unicode interval table is not an exact derivation of DerivedAge 15.0");
+  const unicodeIndexRelative = "spec/repository-format/v1/vectors/unicode/index.json";
+  const unicodeIndex = v.text(unicodeIndexRelative, { stableJson: true, lexicographicKeys: true });
+  const expectedUnicodeCases = [
+    ["unicode/cases/age-15-assigned.cbor", ["U+1FAE8"], "accept"],
+    ["malformed/unicode-age-newer-composition-pair.cbor", ["U+16D63", "U+16D68"], "reject"],
+    ["malformed/unicode-age-newer-decomposed.cbor", ["U+16D63", "U+16D67", "U+16D67"], "reject"],
+    ["malformed/unicode-age-newer-canonical.cbor", ["U+16D6A"], "reject"],
+    ["malformed/unicode-age-frozen-unassigned.cbor", ["U+0378"], "reject"]
+  ];
+  v.check(unicodeIndex?.schema === "ogvcs.repository-format.v1.unicode-authority.v1" &&
+    unicodeIndex?.unicodeVersion === UNICODE_VERSION && unicodeIndex?.source?.sha256 === UNICODE_SOURCE_SHA256 &&
+    unicodeIndex?.source?.bytes === 130720 && unicodeIndex?.source?.path === "unicode/DerivedAge-15.0.0.txt" &&
+    sameArray(unicodeIndex?.evaluationOrder ?? [], [
+      "shortest-form UTF-8 and Unicode scalar decoding", "Unicode 15.0 Age repertoire", "NFC under the host normalizer"
+    ]) && (unicodeIndex?.cases?.length ?? 0) === expectedUnicodeCases.length &&
+    expectedUnicodeCases.every(([artifact, codePoints, result], index) =>
+      unicodeIndex.cases[index]?.artifact === artifact && sameArray(unicodeIndex.cases[index]?.codePoints ?? [], codePoints) &&
+      unicodeIndex.cases[index]?.expected?.result === result), unicodeIndexRelative,
+  "Unicode authority index, evaluation order, or boundary case inventory changed");
+  const vectorManifestRelative = "spec/repository-format/v1/vectors/manifest.json";
+  const vectorManifest = v.text(vectorManifestRelative, { stableJson: true, lexicographicKeys: true });
+  const vectorInventory = new Map((vectorManifest?.artifacts ?? []).map((artifact) => [artifact.path, artifact]));
+  for (const authority of [unicodeIndex?.source, unicodeIndex?.compactIntervals, unicodeIndex?.license, unicodeIndex?.notice]) {
+    const record = vectorInventory.get(authority?.path);
+    v.check(Boolean(record && record.bytes === authority.bytes && record.sha256 === authority.sha256),
+      vectorManifestRelative, `Unicode authority artifact is not manifest-bound: ${authority?.path ?? "missing"}`);
+  }
+  for (const [relative, codePoints] of expectedUnicodeCases.map(([artifact, points]) => [artifact, points])) {
+    const text = String.fromCodePoint(...codePoints.map((point) => Number.parseInt(point.slice(2), 16)));
+    const body = Buffer.from(text, "utf8");
+    const expectedBytes = Buffer.concat([Buffer.from([0x60 + body.length]), body]);
+    const actual = v.raw(`spec/repository-format/v1/vectors/${relative}`);
+    v.check(Boolean(actual?.equals(expectedBytes)), relative, "Unicode boundary CBOR bytes changed");
+  }
   validateKindFields(v, registries["kind-fields"], common, objectKinds, logical, cddl, "kind-fields");
   if (cddl && objectModel) {
     v.check(/^format-v1 = 1$/m.test(cddl) && /^sha256-algorithm = 1$/m.test(cddl) && /^digest = bstr \.size 32$/m.test(cddl), cddlRelative, "format/hash/digest CDDL constants disagree with registries");
@@ -970,6 +1089,111 @@ function validateSpec(root) {
     }
     const kindRows = [...objectModel.matchAll(/^\|\s*(\d+)\s*\|\s*(?:raw chunk|content manifest|tree|change set|asset-group set|repository descriptor|snapshot|shelf revision|provenance|attestation|conflict set)\s*\|$/gm)].map((match) => Number(match[1]));
     v.check(sameArray(kindRows, OBJECT_KINDS.map(([code]) => code)), objectModelRelative, "object-kind prose table disagrees with the registry");
+    v.check(objectModel.includes("the authenticated repository context's `case-sensitive` or `case-folded`\ncase mode") &&
+      objectModel.includes("required even when the expanded tree\nis empty"), objectModelRelative,
+    "ratified path-profile callback and repository case-mode authority is missing");
+    v.check(objectModel.includes("standalone asset-group validator is a\nlayer-3 repository operation") &&
+      objectModel.includes("profiles are family-checked and passed through registry lifecycle before group\ncardinality") &&
+      objectModel.includes("Only inert built-in maps and arrays are\nadmitted; accessors, proxies, non-map records, and wrong-family profiles are") &&
+      objectModel.includes("Native\nhost exceptions and caller code are never part of the wire error surface"), objectModelRelative,
+    "standalone asset-group registry authority is missing");
+    v.check(objectModel.includes("Internal\nrepository consumers may hold tree, group, membership, and collision indexes simultaneously") &&
+      objectModel.includes("public standalone tree expansion transfers a bounded result to its\ncaller and releases the operation reservation before returning"), objectModelRelative,
+    "derived working-memory ownership boundary is missing");
+    v.check(objectModel.includes("Snapshot/provenance ancestry,\nshelf, abstract-graph, conflict, and group workspaces charge every retained") &&
+      objectModel.includes("Whole-lookup schema-error selection retains only a\nbounded ranked candidate"), objectModelRelative,
+    "repository retained-workspace resource boundary is missing");
+    v.check(objectModel.includes("Resource conformance rows MUST report an ordered `routeEvidence` observation\nfor every public route declared by the recipe") &&
+      objectModel.includes("Same-authority recovery reuses the exact\nlookup, context, and guard instance") &&
+      objectModel.includes("deadline\nrecovery uses a fresh operation because an expired guard remains terminal") &&
+      objectModel.includes("reports `counterBaselineRestored: true`; this value\nis produced only after the same guard returns to its exact pre-operation") &&
+      objectModel.includes("Recipe flags and route names alone are inventory metadata, not execution\nevidence") &&
+      objectModel.includes("`eachComponentAloneFit: true`; its recovery kind is\n`same-authority-instance`"), objectModelRelative,
+    "resource runtime-result evidence boundary is missing");
+    v.check(objectModel.includes("whole-lookup `validateAll` checks each supplied object's framing, declared\n  identity, known schema, and registry assignments, but does not follow") &&
+      objectModel.includes("standalone conflict validation follows the descriptor and direct entry-side\n  targets, not the targets' content graph") &&
+      objectModel.includes("repository-candidate validation covers the complete supplied and candidate\n  closure and is always content-complete") &&
+      objectModel.includes("Candidate closure includes the candidate ChangeSet's declared base edge\nindependently of the candidate snapshot's parent-zero edge") &&
+      objectModel.includes("valid but absent declared base is `OBJECT_REFERENCE_MISSING` at layer 2") &&
+      objectModel.includes("caller-supplied false selector is `SCHEMA_FIELD_INVALID` at\nlayer 1 in `configured-resource-preflight`") &&
+      objectModel.includes("missing reached chunk is `OBJECT_REFERENCE_MISSING`\nat layer 2"), objectModelRelative,
+    "public route closure scopes or content-completeness preflight are missing");
+    v.check(objectModel.includes("lifetime `firstChangeSet` lookup is an evidence check, not a general graph\nclosure claim") &&
+      objectModel.includes("absent from the supplied\nevidence lookup is `FILEID_LIFETIME_EVIDENCE_INVALID` at layer 3") &&
+      objectModel.includes("serialized `import-mapping-record` remains\nthe CDDL map with fields 0, 1, and 16 through 21") &&
+      objectModel.includes("At the serialized logical-record boundary, `fileid-lifetime-record` and\n`import-mapping-record` are exact canonical maps") &&
+      objectModel.includes("Any additional field,\nincluding 22 or 999, is `SCHEMA_FIELD_UNKNOWN`") &&
+      objectModel.includes("field 22 is\nnot an import-mapping key") &&
+      objectModel.includes("self-consistent\nmapping key, mapping record, and lifetime proof bound to a different repository\nis `FILEID_CROSS_REPOSITORY_PROOF`") &&
+      objectModel.includes("`FILEID_IMPORT_MAPPING_CONFLICT` is reserved\nfor a same-repository tuple/key/FileID disagreement"), objectModelRelative,
+    "lifetime evidence and repository-bound import-mapping authority are missing");
+    v.check(objectModel.includes("freezes and validates the complete plain-object shape of every\n`lifetimeRecords`, `importMappings`, and `workingLifetimeAdditions` row") &&
+      objectModel.includes("malformed row is `SCHEMA_FIELD_INVALID` at layer 2 even when an earlier row\nwould later cause a duplicate-lifetime or import-mapping conflict at layer 3") &&
+      objectModel.includes("property or row order cannot change that result"), objectModelRelative,
+    "whole-input lifetime/import shape precedence is missing");
+    v.check(objectModel.includes("File-backed tree validation reserves the reader buffer, current decoded entry,\nand `TreeFileIdIndex` as one composite working set") &&
+      objectModel.includes("same index instance\ncan validate a fitting retry") &&
+      objectModel.includes("report the unchanged target, same-index retry, and\nscratch-index reuse"), objectModelRelative,
+    "file-backed tree transaction and composite-memory authority are missing");
+  }
+  if (encoding) {
+    v.check(encoding.includes("freezes its text repertoire to Unicode scalar values with an assigned\n`Age` of 15.0 or earlier in Unicode 15.0.0") &&
+      encoding.includes(UNICODE_SOURCE_SHA256) &&
+      encoding.includes("first reject invalid or non-shortest UTF-8 and non-scalar\nvalues, then reject any scalar outside the frozen repertoire, and only then test"),
+    encodingRelative, "frozen Unicode 15.0 repertoire or validation order is missing");
+    v.check(encoding.includes("establishes every safely\ndiscoverable layer-1 ordering, declared-identity, and actual iterator-count\nfact and layer-2 known-schema fact before selecting a later registry-lifecycle\nfailure") &&
+      encoding.includes("caller-designated untrusted staging\nsink; it poisons or aborts that attempt, produces no successful commit or\nsummary") &&
+      encoding.includes("descending\nlogical-bundle object pair wins over a later bad object digest") &&
+      encoding.includes("including a content-policy\nprofile carried by an entry observed before the iterator-count mismatch") &&
+      encoding.includes("duplicate FileID observed during iteration is likewise a later\nrepository-semantic fact") &&
+      encoding.includes("ordered tree writer and a file-backed tree reader complete every\nsafely decodable entry's known-schema checks") &&
+      encoding.includes("`OBJECT_REFERENCE_KIND_MISMATCH` win over `TREE_ENTRY_ORDER_INVALID` even when\nthe winning fact occurs later in the input") &&
+      encoding.includes("layer-2 wrong-kind chunk reference wins over another part's layer-3 actual\nchunk-length mismatch in either occurrence order") &&
+      encoding.includes("file-backed tree reader likewise completes canonical entry-order and other\nknown-schema checks before selecting a wrong-descriptor, duplicate-FileID, or\nrequired-feature lifecycle/repository failure") &&
+      encoding.includes("registry semantics precede repository semantics, so a conformance-only\nrequired feature wins over a duplicate FileID") &&
+      encoding.includes("supplied chunk identity\nmismatch likewise wins over a conformance-only chunking-profile failure") &&
+      encoding.includes("Closure and reference resolution are completed before registry or repository\nsemantics") &&
+      encoding.includes("absent manifest chunk, tree entry target, replay target,\nconflict-side object, or provenance input is `OBJECT_REFERENCE_MISSING`" ) &&
+      encoding.includes("declared object digest\nmismatch on a known tree likewise wins over that tree's conformance-only\nrequired-feature failure under `production-write`"),
+    encodingRelative, "emitter failure-precedence and no-output boundary is missing");
+    v.check(encoding.includes("configured item ceiling is evaluated against\nthe actual iterator count") &&
+      encoding.includes("`LIMIT_COUNT` at layer 1 in `configured-resource-preflight` wins over both an\nactual-versus-declared count mismatch") &&
+      encoding.includes("`SCHEMA_FIELD_INVALID` at layer 2 in `known-schema` wins over the later\nlifecycle fault"),
+    encodingRelative, "writer item-ceiling and declared-count precedence is missing");
+    const registryProse = /^The registry files are:\n\n((?:- `registries\/[^`]+\.json`\n)+)/m.exec(encoding)?.[1];
+    const proseFiles = [...(registryProse ?? "").matchAll(/`registries\/([^`]+\.json)`/g)].map((match) => match[1]);
+    const expectedRegistryFiles = [
+      "object-kinds.json", "hash-algorithms.json", "common-fields.json", "kind-fields.json",
+      "entry-kinds.json", "entry-modes.json", "required-features.json", "extensions.json",
+      "profiles.json", "logical-record-types.json", "semantic-enums.json", "limits.json"
+    ];
+    v.check(sameArray(proseFiles, expectedRegistryFiles), encodingRelative, "registry prose inventory must list the exact twelve runtime authorities in digest order");
+    v.check(encoding.includes("repository validators accept exactly the modes `conformance` and\n  `production`"), encodingRelative, "repository validator mode prose must remain closed to conformance and production");
+    v.check(encoding.includes("supplied-closure logical-bundle verifier accepts exactly the registry\n  operations `read`, `conformance`, and `production-write`"), encodingRelative, "registry-aware semantic codec operations are incomplete");
+    v.check(encoding.includes("authoritative metadata encoder and every ordered, sorted, or file-backed\n  tree, manifest, or logical-bundle emitter accept exactly the registry\n  operations `conformance` or `production-write`"), encodingRelative, "metadata/tree/manifest/bundle emitter authority prose is missing");
+    v.check(encoding.includes("public verifier rejects such a callback option with\n`SCHEMA_FIELD_INVALID` at configured-resource preflight"), encodingRelative, "bundle semantic callback boundary is missing");
+    v.check(encoding.includes("registry-free tree boundary\nis the decoded-tree known-schema reader") &&
+      encoding.includes("public file verifier performs\ndescriptor and FileID semantics"), encodingRelative,
+    "tree schema-reader and semantic file-verifier boundary is missing");
+    v.check(encoding.includes("`semantic:false` layer-2 route forbids both a registry and a\nlifecycle operation") &&
+      encoding.includes("registry presence always selects the semantic route"), encodingRelative,
+    "registry-free layer-2 selector boundary is missing");
+    v.check(encoding.includes("Omitting both registry authority and the explicit `semantic:false` selector is\nnot a request for layer 2") &&
+      encoding.includes("MUST discover the lifecycle-bearing profile or required feature from\nthe bytes or typed input actually consumed by that named surface") &&
+      encoding.includes("A detached\nregistry decision, descriptive profile label, or post-operation registry lookup\nis not evidence"),
+    encodingRelative, "real-surface lifecycle evidence and all-authority-omitted rules are missing");
+    v.check(encoding.includes("command-line semantic `object`, `tree`, and `bundle` verification routes\nlikewise require an explicit `read`, `conformance`, or `production-write`"), encodingRelative, "CLI semantic operation authority is missing");
+    v.check(encoding.includes("complete runtime authority is exactly the validated twelve-document registry\nset bound by its computed registry-set digest") &&
+      encoding.includes("high-level semantic, repository, and emitter APIs reject it\nat configured-resource preflight"), encodingRelative,
+    "complete registry authority boundary is missing");
+    v.check(encoding.includes("code-to-token assignment is immutable authority, not a caller customization\npoint") &&
+      encoding.includes("Additive kind tokens are usable only through a complete, validated\n`RegistrySnapshot`") &&
+      encoding.includes("same text token to two codes is\n`REGISTRY_INVALID`"), encodingRelative,
+    "typed-reference token authority boundary is missing");
+    v.check(encoding.includes("colon-dense value that cannot have the exact five-component\nv1 shape is `SCHEMA_FIELD_INVALID` at layer 2 in `known-schema`") &&
+      encoding.includes("unsupported format version or hash-algorithm token is\n`OBJECT_REFERENCE_FORMAT_UNSUPPORTED`"),
+    encodingRelative, "durable ObjectRef bound and unsupported-format classification are missing");
+    v.check(encoding.includes("`encodeCanonical` is not a\nmetadata emitter; `encodeMetadata` is"), encodingRelative, "generic and semantic encoder boundary is missing");
   }
   if (cddl) {
     const testDriver = process.env.OGVCS_CDDL_TEST_DRIVER;
@@ -992,20 +1216,94 @@ function validateSpec(root) {
     v.check(scenarioSchema.$schema === "https://json-schema.org/draft/2020-12/schema" && scenarioSchema.$id?.endsWith("/validation-scenario.schema.json"), scenarioSchemaRelative, "scenario schema identity is invalid");
     v.check(scenarioSchema.additionalProperties === false && scenarioSchema.type === "object", scenarioSchemaRelative, "scenario root must be a closed object");
     v.check(sameArray(scenarioSchema.required ?? [], ["schemaVersion", "scenarioId", "operation", "requirementIds", "inputs", "context", "resources", "expected", "failurePrecedence"]), scenarioSchemaRelative, "scenario required fields are missing or reordered");
-    v.check(sameArray(scenarioSchema.properties?.operation?.enum ?? [], ["adapt-fixture", "allocate-file-id", "canonical-scan", "import-file-id", "replay-change-set", "validate-abstract-reference-graph", "validate-bundle", "validate-bundle-claim", "validate-object", "validate-repository"]), scenarioSchemaRelative, "scenario operation enum is invalid");
+    v.check(sameArray(scenarioSchema.properties?.operation?.enum ?? [], ["adapt-fixture", "allocate-file-id", "canonical-scan", "import-file-id", "replay-change-set", "validate-abstract-reference-graph", "validate-bundle", "validate-bundle-claim", "validate-object", "validate-operation-mode", "validate-path-profile-decision", "validate-repository", "validate-repository-route", "validate-resource-reservation", "validate-tree-groups-memory", "validate-typed-reference-authority", "write-content-manifest", "write-logical-bundle", "write-tree"]), scenarioSchemaRelative, "scenario operation enum is invalid");
     v.check(sameArray(scenarioSchema.properties?.implementationScope?.items?.enum ?? [], ["javascript", "rust"]), scenarioSchemaRelative, "scenario implementation scope is invalid");
     v.check(scenarioSchema.properties?.failurePrecedence?.const === "errors-v1-layer-stage-code-offset-subject", scenarioSchemaRelative, "scenario failure precedence selector is invalid");
     const rejectingExpected = scenarioSchema.$defs?.expected?.oneOf?.[1];
     v.check(sameArray(rejectingExpected?.required ?? [], ["result", "layer", "stage", "code"]) &&
       sameArray(rejectingExpected?.properties?.stage?.enum ?? [], VALIDATION_STAGES),
     scenarioSchemaRelative, "scenario rejecting result must expose the exact validation stage");
-    const contextRequired = ["mode", "requestedLayer", "asOf", "registrySnapshot", "objectLookup", "roots", "lifetimeRecords", "workingLifetimeAdditions", "importMappings"];
+    const resourceEvidence = scenarioSchema.$defs?.resourceEvidence;
+    const resourceRouteEvidence = scenarioSchema.$defs?.resourceRouteEvidence;
+    const treeGroupsMemoryEvidence = scenarioSchema.$defs?.treeGroupsMemoryEvidence;
+    const resourceEvidenceRule = scenarioSchema.allOf?.find(rule =>
+      rule?.if?.properties?.operation?.const === "validate-resource-reservation");
+    const treeGroupsMemoryEvidenceRule = scenarioSchema.allOf?.find(rule =>
+      rule?.if?.properties?.operation?.const === "validate-tree-groups-memory");
+    v.check(resourceEvidence?.additionalProperties === false &&
+      sameArray(resourceEvidence?.required ?? [], ["noPartialState", "routeEvidence"]) &&
+      resourceEvidence?.properties?.noPartialState?.const === true &&
+      resourceEvidence?.properties?.routeEvidence?.items?.$ref === "#/$defs/resourceRouteEvidence" &&
+      resourceEvidence?.properties?.routeEvidence?.minItems === 1 &&
+      resourceEvidence?.properties?.routeEvidence?.uniqueItems === true &&
+      resourceRouteEvidence?.additionalProperties === false &&
+      sameArray(resourceRouteEvidence?.required ?? [],
+        ["route", "noPartialState", "recoveryKind", "succeeded"]) &&
+      resourceRouteEvidence?.properties?.counterBaselineRestored?.const === true &&
+      resourceRouteEvidence?.properties?.compositeMemoryBounded?.const === true &&
+      resourceRouteEvidence?.properties?.indexInstanceReused?.const === true &&
+      resourceRouteEvidence?.properties?.noPartialState?.const === true &&
+      resourceRouteEvidence?.properties?.scratchIndexReusableAfterAbort?.const === true &&
+      resourceRouteEvidence?.properties?.succeeded?.const === true &&
+      resourceRouteEvidence?.properties?.targetUnchanged?.const === true &&
+      sameArray(resourceRouteEvidence?.properties?.recoveryKind?.enum ?? [],
+        ["fresh-operation-after-deadline", "same-authority-instance", "stateless-reinvoke"]) &&
+      sameArray(rejectingExpected?.properties?.evidence?.oneOf?.map(rule => rule.$ref) ?? [],
+        ["#/$defs/resourceEvidence", "#/$defs/treeGroupsMemoryEvidence"]) &&
+      sameArray(resourceEvidenceRule?.then?.properties?.expected?.required ?? [], ["evidence"]) &&
+      resourceEvidenceRule?.then?.properties?.expected?.properties?.evidence?.$ref === "#/$defs/resourceEvidence",
+    scenarioSchemaRelative, "resource reservation outcomes must require exact executed-state evidence");
+    v.check(treeGroupsMemoryEvidence?.additionalProperties === false &&
+      sameArray(treeGroupsMemoryEvidence?.required ?? [],
+        ["eachComponentAloneFit", "noPartialState", "routeEvidence"]) &&
+      treeGroupsMemoryEvidence?.properties?.eachComponentAloneFit?.const === true &&
+      treeGroupsMemoryEvidence?.properties?.noPartialState?.const === true &&
+      treeGroupsMemoryEvidence?.properties?.routeEvidence?.items?.$ref === "#/$defs/resourceRouteEvidence" &&
+      treeGroupsMemoryEvidence?.properties?.routeEvidence?.minItems === 1 &&
+      treeGroupsMemoryEvidence?.properties?.routeEvidence?.maxItems === 1 &&
+      sameArray(treeGroupsMemoryEvidenceRule?.then?.properties?.expected?.required ?? [], ["evidence"]) &&
+      treeGroupsMemoryEvidenceRule?.then?.properties?.expected?.properties?.evidence?.$ref ===
+        "#/$defs/treeGroupsMemoryEvidence",
+    scenarioSchemaRelative, "combined tree/group memory outcomes must require exact component-fit evidence");
+    const contextRequired = ["mode", "caseMode", "requestedLayer", "asOf", "registrySnapshot", "objectLookup", "roots", "lifetimeRecords", "workingLifetimeAdditions", "importMappings"];
     v.check(sameArray(scenarioSchema.$defs?.context?.required ?? [], contextRequired), scenarioSchemaRelative, "scenario context required fields are missing or reordered");
+    v.check(sameArray(scenarioSchema.$defs?.context?.properties?.mode?.enum ?? [], ["conformance", "production"]), scenarioSchemaRelative, "scenario validation mode must be exactly conformance or production");
+    v.check(sameArray(scenarioSchema.$defs?.context?.properties?.caseMode?.enum ?? [], ["case-sensitive", "case-folded"]), scenarioSchemaRelative, "scenario repository case mode authority is invalid");
     v.check(scenarioSchema.$defs?.context?.properties?.asOf?.const === "immediately-before-candidate-snapshot", scenarioSchemaRelative, "scenario temporal convention is invalid");
     const lookup = scenarioSchema.$defs?.context?.properties?.objectLookup?.items;
     v.check(lookup?.additionalProperties === false && sameArray(lookup?.required ?? [], ["ref", "artifact"]), scenarioSchemaRelative, "scenario object lookup must bind each ObjectRef to one artifact");
     v.check(scenarioSchema.$defs?.lifetime?.oneOf?.length === 2 && sameArray(scenarioSchema.$defs?.lifetime?.oneOf?.[1]?.required ?? [], ["importMappingKey"]), scenarioSchemaRelative, "scenario lifetime origin/import-key coupling is missing");
-    v.check((scenarioSchema.$defs?.importMapping?.required ?? []).includes("mappingKey"), scenarioSchemaRelative, "scenario import mapping must carry its derived mapping key");
+    v.check(sameArray(scenarioSchema.$defs?.importMapping?.required ?? [], ["descriptor", "importerProfile", "sourceNamespaceDigest", "sourceIdentityDigest", "mappingKey", "fileId", "state"]), scenarioSchemaRelative, "scenario import mapping must carry its repository descriptor, derived mapping key, tuple, FileID, and state");
+    const pathValidator = scenarioSchema.$defs?.pathProfileValidator;
+    const invocation = pathValidator?.properties?.invocations?.items;
+    const acceptedDecision = invocation?.properties?.decision?.oneOf?.[0];
+    const rejectedDecision = invocation?.properties?.decision?.oneOf?.[1];
+    v.check(pathValidator?.additionalProperties === false &&
+      sameArray(pathValidator?.required ?? [], ["profile", "caseMode", "invocations"]) &&
+      sameArray(pathValidator?.properties?.caseMode?.enum ?? [], ["case-sensitive", "case-folded"]) &&
+      pathValidator?.properties?.invocations?.minItems === 0 &&
+      pathValidator?.properties?.invocations?.maxItems === 256 &&
+      invocation?.additionalProperties === false &&
+      sameArray(invocation?.required ?? [], ["segments", "decision"]) &&
+      acceptedDecision?.additionalProperties === false &&
+      acceptedDecision?.properties?.accepted?.const === true &&
+      sameArray(acceptedDecision?.required ?? [], ["accepted", "repositoryKey", "platformKey"]) &&
+      acceptedDecision?.properties?.repositoryKey?.maxLength === 32768 &&
+      acceptedDecision?.properties?.platformKey?.maxLength === 32768 &&
+      rejectedDecision?.additionalProperties === false &&
+      rejectedDecision?.properties?.accepted?.const === false &&
+      sameArray(rejectedDecision?.required ?? [], ["accepted"]),
+    scenarioSchemaRelative, "ratified path-profile validator recipe must remain closed, bounded, and support an empty invocation sequence");
+    const pathResultRelative = "spec/path-filesystem/v1/schemas/path-result.schema.json";
+    if (fs.existsSync(v.absolute(pathResultRelative))) {
+      const pathResultText = v.text(pathResultRelative);
+      const pathResult = pathResultText === null ? null : parseJsonStrict(pathResultText, pathResultRelative, v.errors);
+      const success = pathResult?.oneOf?.[0];
+      v.check(success?.properties?.repositoryKey?.maxLength === acceptedDecision?.properties?.repositoryKey?.maxLength &&
+        success?.properties?.platformKey?.maxLength === acceptedDecision?.properties?.platformKey?.maxLength &&
+        (success?.required ?? []).includes("repositoryKey") && (success?.required ?? []).includes("platformKey"),
+      scenarioSchemaRelative, "path-profile validator decision must preserve the pinned OGVCS-004 collision-key authority");
+    }
     v.check(sameArray(scenarioSchema.$defs?.resources?.required ?? [], ["recipe", "summary"]), scenarioSchemaRelative, "scenario resource contract is incomplete");
   }
 
@@ -1043,7 +1341,7 @@ function validateSpec(root) {
     v.check(!stale, relative, `stale specification token ${stale?.[0] ?? ""}`.trim());
   }
   const readme = fs.existsSync(v.absolute("spec/repository-format/v1/README.md")) ? fs.readFileSync(v.absolute("spec/repository-format/v1/README.md"), "utf8") : "";
-  for (const artifact of ["encoding.md", "object-model.md", "conformance-profiles.md", "logical-bundle.md", "fixture-adapter.md", "repository-format.cddl", "abstract-reference-graph.schema.json", "validation-scenario.schema.json", "vector-manifest.schema.json", "errors.json", ...registryPaths.map((name) => `registries/${name}.json`)]) {
+  for (const artifact of ["encoding.md", "object-model.md", "conformance-profiles.md", "logical-bundle.md", "fixture-adapter.md", "unicode/", "repository-format.cddl", "abstract-reference-graph.schema.json", "validation-scenario.schema.json", "vector-manifest.schema.json", "errors.json", ...registryPaths.map((name) => `registries/${name}.json`)]) {
     v.check(readme.includes(`](${artifact})`), "spec/repository-format/v1/README.md", `normative artifact is not routed: ${artifact}`);
   }
   validateAdrStatus(v);

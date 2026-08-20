@@ -1,0 +1,9 @@
+{
+  "api": "validate-provenance-graph",
+  "authorityContext": "scenario.context",
+  "forbidden": [],
+  "roots": [
+    "ogvcs:v1:provenance:sha256:c123d9f3ee9c464318609900a845ebf72ede8909bb7852e6b274da9ef6e5b93a"
+  ],
+  "schema": "ogvcs.repository-format.v1.repository-route-input.v1"
+}

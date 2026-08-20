@@ -1,0 +1,24 @@
+{
+  "api": "validate-resource-reservation",
+  "assertNoPartialState": true,
+  "cluster": "graph-workspace-indexes",
+  "evidenceRequired": {
+    "noPartialState": true,
+    "routeEvidence": [
+      {
+        "noPartialState": true,
+        "recoveryKind": "same-authority-instance",
+        "route": "validate-snapshot-graph",
+        "succeeded": true
+      }
+    ]
+  },
+  "fixture": "bounded-reduced-retention-v1",
+  "memoryCeiling": {
+    "derivation": "one-byte-below-conservative-retained-cost-v1"
+  },
+  "routes": [
+    "validate-snapshot-graph"
+  ],
+  "schema": "ogvcs.repository-format.v1.resource-reservation-input.v1"
+}

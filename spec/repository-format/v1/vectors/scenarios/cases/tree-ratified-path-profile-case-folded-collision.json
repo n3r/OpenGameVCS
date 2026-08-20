@@ -1,0 +1,143 @@
+{
+  "context": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-folded",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 12,
+          "mediaType": "application/octet-stream",
+          "path": "objects/01-chunk.bin",
+          "sha256": "36fcc2e9442be1071c275604af6e41bd93875c743dc2fdaa6037662df74c5894"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5"
+      },
+      {
+        "artifact": {
+          "bytes": 183,
+          "mediaType": "application/cbor",
+          "path": "objects/02-content-manifest.cbor",
+          "sha256": "b635d76c8dd9f29c2862ae0e22077c70d157f68d4595861c09fb38bdf47c456b"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+      },
+      {
+        "artifact": {
+          "bytes": 283,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-ratified-path-profile-case-folded-collision/repository-descriptor.cbor",
+          "sha256": "fda06d8cc328f9134be92ba925b01dab084cb8e4ae69149f819507d2e7be676c"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:b00938615a6eee7279d853aa84ff2118afee7776032e5e6afcce050ba54365dc"
+      },
+      {
+        "artifact": {
+          "bytes": 274,
+          "mediaType": "application/cbor",
+          "path": "objects/06-repository-descriptor.cbor",
+          "sha256": "677905a883b1f4ddd87fea27b5afc0293cccd2d2ea29cc4884e758e4a071b6e9"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+      },
+      {
+        "artifact": {
+          "bytes": 262,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-ratified-path-profile-case-folded-collision/tree.cbor",
+          "sha256": "a2b1adf98409f55e618edf3369a18b78e1fcbcffae3cced45f6304ceac5333aa"
+        },
+        "ref": "ogvcs:v1:tree:sha256:27806b38c37f794fd7b324b1d01a190e6ec1aac1cd8bda2db48fd550bcbf6cd0"
+      }
+    ],
+    "pathProfileValidator": {
+      "caseMode": "case-folded",
+      "invocations": [
+        {
+          "decision": {
+            "accepted": true,
+            "platformKey": "A",
+            "repositoryKey": "a"
+          },
+          "segments": [
+            "A"
+          ]
+        },
+        {
+          "decision": {
+            "accepted": true,
+            "platformKey": "a",
+            "repositoryKey": "a"
+          },
+          "segments": [
+            "a"
+          ]
+        }
+      ],
+      "profile": "path.opengamevcs/portable@1"
+    },
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
+      "registryVersion": 1
+    },
+    "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:b00938615a6eee7279d853aa84ff2118afee7776032e5e6afcce050ba54365dc",
+    "requestedLayer": 3,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "expected": {
+    "code": "PATH_PROFILE_INVALID",
+    "layer": 3,
+    "result": "reject",
+    "stage": "repository-semantics"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "inputs": [
+    {
+      "bytes": 262,
+      "mediaType": "application/cbor",
+      "path": "scenarios/objects/tree-ratified-path-profile-case-folded-collision/tree.cbor",
+      "sha256": "a2b1adf98409f55e618edf3369a18b78e1fcbcffae3cced45f6304ceac5333aa"
+    },
+    {
+      "bytes": 4736,
+      "mediaType": "application/json",
+      "path": "scenarios/definitions/tree-ratified-path-profile-case-folded-collision.json",
+      "sha256": "e5349a59da6fe88d55c0da1a803253f9fcdd193e9ae25bdb3d05e2e09df68221"
+    }
+  ],
+  "operation": "validate-object",
+  "requirementIds": [
+    "OGVCS-002-AC-11",
+    "OGVCS-002-FR-04",
+    "OGVCS-002-FR-06",
+    "OGVCS-002-FR-09",
+    "OGVCS-002-FR-13",
+    "OGVCS-002-NFR-01"
+  ],
+  "resources": {
+    "recipe": {
+      "generator": "ogvcs.repository-validation-scenario-constructor/v1",
+      "parameters": {
+        "definition": "scenarios/definitions/tree-ratified-path-profile-case-folded-collision.json",
+        "definitionSha256": "e5349a59da6fe88d55c0da1a803253f9fcdd193e9ae25bdb3d05e2e09df68221",
+        "runtimeHighWaterMarks": "not-asserted"
+      },
+      "seed": "8059a83f9c0a1098c1c475b9de0652bb3bdbc65adab6b78833125cbad3370d8b"
+    },
+    "summary": {
+      "bytes": 5750,
+      "indexEntries": 0,
+      "items": 5,
+      "peakMemoryBytes": 0,
+      "scratchBytes": 0,
+      "summarySha256": "a8b6fdf8dddb6f49049ce48d82b76fcc8bb5ec2d823fb0f2da6a0890e61e58e3",
+      "traversalEdges": 0
+    }
+  },
+  "scenarioId": "tree-ratified-path-profile-case-folded-collision",
+  "schemaVersion": "ogvcs.repository-format/validation-scenario/v1"
+}

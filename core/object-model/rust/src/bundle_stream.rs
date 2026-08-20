@@ -9,7 +9,7 @@ use crate::{
         MAX_BUNDLE_TOTAL_ITEMS, MAX_CBOR_NESTING, MAX_CHUNK_BYTES, MAX_GENERIC_VALUE_BYTES,
         MAX_MANIFEST_CHUNKS, MAX_METADATA_BYTES,
     },
-    Error, ErrorCode, Result, ValidationStage,
+    unicode_age::is_unicode_15, Error, ErrorCode, Result, ValidationStage,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -19,6 +19,10 @@ pub struct BundleLimits {
     pub max_chunk_bytes: usize,
     pub max_metadata_bytes: usize,
     pub max_value_bytes: usize,
+    /// Aggregate capacity of canonical-map-key capture buffers. The scanner
+    /// admits deterministic buffer growth before allocation and includes both
+    /// active nested captures and the retained preceding key for each map.
+    pub max_capture_bytes: usize,
     pub max_container_items: usize,
     pub max_nesting: usize,
     pub max_items: usize,
@@ -31,6 +35,7 @@ impl BundleLimits {
         max_chunk_bytes: MAX_CHUNK_BYTES as usize,
         max_metadata_bytes: MAX_METADATA_BYTES as usize,
         max_value_bytes: MAX_GENERIC_VALUE_BYTES as usize,
+        max_capture_bytes: 64 * 1024 * 1024,
         max_container_items: MAX_MANIFEST_CHUNKS as usize,
         max_nesting: MAX_CBOR_NESTING as usize,
         max_items: MAX_BUNDLE_TOTAL_ITEMS as usize,
@@ -43,6 +48,7 @@ impl BundleLimits {
             max_chunk_bytes: min(self.max_chunk_bytes, configured.max_chunk_bytes),
             max_metadata_bytes: min(self.max_metadata_bytes, configured.max_metadata_bytes),
             max_value_bytes: min(self.max_value_bytes, configured.max_value_bytes),
+            max_capture_bytes: min(self.max_capture_bytes, configured.max_capture_bytes),
             max_container_items: min(self.max_container_items, configured.max_container_items),
             max_nesting: min(self.max_nesting, configured.max_nesting),
             max_items: min(self.max_items, configured.max_items),
@@ -124,7 +130,7 @@ fn visit_logical_bundle_inner<R: Read, V: BundleVisitor>(
     defer_object_ref_format: bool,
 ) -> Result<BundleSummary> {
     let limits = BundleLimits::HARD.constrained_by(limits);
-    let mut reader = StreamReader::new(input, visitor, limits, defer_object_ref_format);
+    let mut reader = StreamReader::new(input, visitor, limits, defer_object_ref_format)?;
     let mut items = 0usize;
     while reader.has_more()? {
         enforce_at(
@@ -150,7 +156,8 @@ struct StreamReader<'a, R, V> {
     offset: usize,
     item_start: usize,
     lookahead: Option<u8>,
-    captures: Vec<Vec<u8>>,
+    captures: Vec<Capture>,
+    capture_capacity_bytes: usize,
     defer_object_ref_format: bool,
 }
 
@@ -160,17 +167,25 @@ impl<'a, R: Read, V: BundleVisitor> StreamReader<'a, R, V> {
         visitor: &'a mut V,
         limits: BundleLimits,
         defer_object_ref_format: bool,
-    ) -> Self {
-        Self {
+    ) -> Result<Self> {
+        // The capture stack itself is a fixed, hard-bounded part of the
+        // scanner resident base. Reserve it once so pushing a nested capture
+        // never performs an unadmitted allocation.
+        let mut captures = Vec::new();
+        captures
+            .try_reserve_exact(limits.max_nesting.saturating_add(2))
+            .map_err(|_| Error::new(ErrorCode::LimitMemory))?;
+        Ok(Self {
             input,
             visitor,
             limits,
             offset: 0,
             item_start: 0,
             lookahead: None,
-            captures: Vec::new(),
+            captures,
+            capture_capacity_bytes: 0,
             defer_object_ref_format,
-        }
+        })
     }
 
     fn has_more(&mut self) -> Result<bool> {
@@ -205,17 +220,17 @@ impl<'a, R: Read, V: BundleVisitor> StreamReader<'a, R, V> {
             ErrorCode::BundleBudgetExceeded,
             self.offset,
         )?;
-        for capture in &mut self.captures {
-            if bytes.len()
-                > self
-                    .limits
-                    .max_value_bytes
-                    .saturating_add(16)
-                    .saturating_sub(capture.len())
-            {
+        for index in 0..self.captures.len() {
+            let old_length = self.captures[index].length;
+            let new_length = old_length
+                .checked_add(bytes.len())
+                .ok_or_else(|| Error::at(ErrorCode::LimitValueBytes, self.offset).with_layer(1))?;
+            if new_length > self.limits.max_value_bytes.saturating_add(16) {
                 return Err(Error::at(ErrorCode::LimitValueBytes, self.offset).with_layer(1));
             }
-            capture.extend_from_slice(bytes);
+            self.grow_capture(index, new_length)?;
+            self.captures[index].bytes[old_length..new_length].copy_from_slice(bytes);
+            self.captures[index].length = new_length;
         }
         self.visitor.bytes(bytes)?;
         self.offset += bytes.len();
@@ -312,14 +327,90 @@ impl<'a, R: Read, V: BundleVisitor> StreamReader<'a, R, V> {
         self.take(length, |_, _| Ok(()))
     }
 
-    fn capture_start(&mut self) {
-        self.captures.push(Vec::new());
+    fn grow_capture(&mut self, index: usize, required: usize) -> Result<()> {
+        let old_capacity = self.captures[index].bytes.len();
+        if required <= old_capacity {
+            return Ok(());
+        }
+        let mut new_capacity = old_capacity.max(64);
+        while new_capacity < required {
+            new_capacity = new_capacity.checked_mul(2).ok_or_else(|| {
+                Error::at(ErrorCode::LimitMemory, self.offset)
+                    .with_stage(ValidationStage::ConfiguredResourcePreflight)
+            })?;
+        }
+
+        // The old allocation remains live until its bytes have been copied,
+        // so admit the complete replacement capacity before allocating it.
+        if new_capacity
+            > self
+                .limits
+                .max_capture_bytes
+                .saturating_sub(self.capture_capacity_bytes)
+        {
+            return Err(Error::at(ErrorCode::LimitMemory, self.offset)
+                .with_stage(ValidationStage::ConfiguredResourcePreflight));
+        }
+        let mut replacement = Vec::new();
+        replacement
+            .try_reserve_exact(new_capacity)
+            .map_err(|_| Error::at(ErrorCode::LimitMemory, self.offset))?;
+        replacement.resize(new_capacity, 0);
+        replacement[..self.captures[index].length]
+            .copy_from_slice(&self.captures[index].bytes[..self.captures[index].length]);
+        let replacement = replacement.into_boxed_slice();
+        let old = core::mem::replace(&mut self.captures[index].bytes, replacement);
+        self.capture_capacity_bytes = self
+            .capture_capacity_bytes
+            .saturating_add(new_capacity)
+            .saturating_sub(old_capacity);
+        drop(old);
+        Ok(())
     }
 
-    fn capture_end(&mut self) -> Result<Vec<u8>> {
+    fn capture_start(&mut self) -> Result<()> {
+        if self.captures.len() == self.captures.capacity() {
+            return Err(Error::at(ErrorCode::LimitMemory, self.offset)
+                .with_stage(ValidationStage::ConfiguredResourcePreflight));
+        }
+        self.captures.push(Capture {
+            bytes: Vec::new().into_boxed_slice(),
+            length: 0,
+        });
+        Ok(())
+    }
+
+    fn capture_end(&mut self) -> Result<CapturedKey> {
         self.captures
             .pop()
+            .map(|capture| CapturedKey {
+                bytes: capture.bytes,
+                length: capture.length,
+            })
             .ok_or_else(|| Error::new(ErrorCode::SchemaFieldInvalid))
+    }
+
+    fn release_capture(&mut self, capture: CapturedKey) {
+        self.capture_capacity_bytes = self
+            .capture_capacity_bytes
+            .saturating_sub(capture.bytes.len());
+        drop(capture);
+    }
+}
+
+struct Capture {
+    bytes: Box<[u8]>,
+    length: usize,
+}
+
+struct CapturedKey {
+    bytes: Box<[u8]>,
+    length: usize,
+}
+
+impl CapturedKey {
+    fn as_slice(&self) -> &[u8] {
+        &self.bytes[..self.length]
     }
 }
 
@@ -469,7 +560,7 @@ fn scan_value<R: Read, V: BundleVisitor>(
             })?;
             let text = core::str::from_utf8(&bytes)
                 .map_err(|_| Error::at(ErrorCode::CborNonCanonical, value.start))?;
-            if !is_nfc(text) {
+            if !is_unicode_15(text) || !is_nfc(text) {
                 return Err(Error::at(ErrorCode::CborNonCanonical, value.start));
             }
             Ok(())
@@ -505,19 +596,31 @@ fn scan_value<R: Read, V: BundleVisitor>(
                 ErrorCode::LimitCount,
                 value.start,
             )?;
-            let mut previous: Option<Vec<u8>> = None;
+            let mut previous: Option<CapturedKey> = None;
             for _ in 0..length {
-                reader.capture_start();
+                reader.capture_start()?;
                 scan_value(reader, depth + 1)?;
                 let key = reader.capture_end()?;
                 if previous
                     .as_ref()
-                    .is_some_and(|previous| canonical_cmp(previous, &key) != Ordering::Less)
+                    .is_some_and(|previous| {
+                        canonical_cmp(previous.as_slice(), key.as_slice()) != Ordering::Less
+                    })
                 {
+                    reader.release_capture(key);
+                    if let Some(previous) = previous.take() {
+                        reader.release_capture(previous);
+                    }
                     return Err(Error::at(ErrorCode::CborNonCanonical, value.start));
+                }
+                if let Some(previous) = previous.take() {
+                    reader.release_capture(previous);
                 }
                 previous = Some(key);
                 scan_value(reader, depth + 1)?;
+            }
+            if let Some(previous) = previous {
+                reader.release_capture(previous);
             }
             Ok(())
         }

@@ -1,0 +1,47 @@
+{
+  "api": "validate-resource-reservation",
+  "assertNoPartialState": true,
+  "cluster": "tree-stream-transaction-composite-memory",
+  "evidenceRequired": {
+    "noPartialState": true,
+    "routeEvidence": [
+      {
+        "compositeMemoryBounded": true,
+        "indexInstanceReused": true,
+        "noPartialState": true,
+        "recoveryKind": "same-authority-instance",
+        "route": "verify-tree-file-stream",
+        "scratchIndexReusableAfterAbort": true,
+        "succeeded": true,
+        "targetUnchanged": true
+      }
+    ]
+  },
+  "failure": {
+    "api": "verify-tree-file",
+    "failurePoint": "after-at-least-one-fileid-index-insertion",
+    "source": "objects/03-tree.cbor"
+  },
+  "memoryCeiling": {
+    "derivation": "one-byte-below-reader-current-entry-and-fileid-index-composite-v1",
+    "indexCapacity": "remaining-composite-budget-not-full-operation-ceiling"
+  },
+  "operation": "conformance",
+  "recovery": {
+    "api": "verify-tree-file",
+    "reuseTreeFileIdIndex": true,
+    "source": "scenarios/objects/resource-lookup-scratch-counter-rollback/recovery-tree.cbor"
+  },
+  "registryFixture": {
+    "path": "registries/index.json",
+    "scenarioId": "registry-conformance-production"
+  },
+  "routes": [
+    "verify-tree-file-stream"
+  ],
+  "schema": "ogvcs.repository-format.v1.resource-reservation-input.v1",
+  "transaction": {
+    "scratchIndexReusableAfterAbortDrop": true,
+    "targetBytesUnchanged": true
+  }
+}

@@ -1,8 +1,10 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [
       {
+        "descriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
         "fileId": "54545454545454545454545454545454",
         "importerProfile": "importer.test/fixture-adapter@1",
         "mappingKey": "88dac6527bab0c6ed295e9b484b59acc198901531cadf344dbbc736e77ab8ee6",
@@ -180,10 +182,10 @@
       "sha256": "1cd354a2d13af2863ac6d37ebc593863a77c51ff9751a84803e2326fb3b3b248"
     },
     {
-      "bytes": 8667,
+      "bytes": 8829,
       "mediaType": "application/json",
       "path": "scenarios/definitions/fileid-import-native-collision.json",
-      "sha256": "25ee396c8789beb2d880a693fd1fb8659fa84a0d32a054d7ba7a063403876aaf"
+      "sha256": "812870e8a5028a7d92e41a14463973cdb3d31b5fb45783dbe0ef84817b14cb98"
     }
   ],
   "operation": "import-file-id",
@@ -196,18 +198,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/fileid-import-native-collision.json",
-        "definitionSha256": "25ee396c8789beb2d880a693fd1fb8659fa84a0d32a054d7ba7a063403876aaf",
+        "definitionSha256": "812870e8a5028a7d92e41a14463973cdb3d31b5fb45783dbe0ef84817b14cb98",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "cd44cd4d2c5988cd5e69bf8c226f12c7603aae0e0d521e03837b6e5266e1f634"
     },
     "summary": {
-      "bytes": 14775,
+      "bytes": 14937,
       "indexEntries": 0,
       "items": 14,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "050477ebe505dba175a7a881505782f8c9c06b5ebdd53f541500d5a7addae2bd",
+      "summarySha256": "23adc173364080bb2887459a4c386fc67fef79bb7868777620ec9398b20b051d",
       "traversalEdges": 0
     }
   },

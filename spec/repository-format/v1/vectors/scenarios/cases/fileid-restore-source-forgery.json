@@ -2,6 +2,7 @@
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
     "candidateSnapshot": "ogvcs:v1:snapshot:sha256:3d0bc50e061222f2e4726d22df009c9a66c7cfd5468918eeffa8e0e67f1c3fab",
+    "caseMode": "case-sensitive",
     "designatedRoot": "ogvcs:v1:snapshot:sha256:fd79feadd41098e276151723a4c018dae4292e24b3999d77437713ddc5d697d5",
     "importMappings": [],
     "lifetimeRecords": [
@@ -157,10 +158,10 @@
       "sha256": "3b7b67d6821994a0fad48985b8f609d7b05778a15f5a9827000c2f63af2d0453"
     },
     {
-      "bytes": 8322,
+      "bytes": 8356,
       "mediaType": "application/json",
       "path": "scenarios/definitions/fileid-restore-source-forgery.json",
-      "sha256": "ef64e072433e5643da32f219f132913f501aeabf3596dd6ac2a6ae222d1fe7df"
+      "sha256": "92ca5210c044a484d8842b701f963a350bd1ec7c635ff5333c8743fd4af2315a"
     }
   ],
   "operation": "replay-change-set",
@@ -173,18 +174,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/fileid-restore-source-forgery.json",
-        "definitionSha256": "ef64e072433e5643da32f219f132913f501aeabf3596dd6ac2a6ae222d1fe7df",
+        "definitionSha256": "92ca5210c044a484d8842b701f963a350bd1ec7c635ff5333c8743fd4af2315a",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "bc841003cd10d9a45e46d34dc143b02a2a08e5716b7e82cb2b359639e2686cf1"
     },
     "summary": {
-      "bytes": 11143,
+      "bytes": 11177,
       "indexEntries": 0,
       "items": 13,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "6a14182e8d10c0d738fd1d986447741fbdac7220d35ed69b8ef67afe05a75818",
+      "summarySha256": "edbfebcc9a10052f1ce9cf806a2aaf4610c5a6dcac55d6aeed056e579bf14d71",
       "traversalEdges": 0
     }
   },

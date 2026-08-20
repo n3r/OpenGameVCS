@@ -1,0 +1,24 @@
+{
+  "api": "validate-tree-groups-memory",
+  "assertNoPartialState": true,
+  "evidenceRequired": {
+    "eachComponentAloneFit": true,
+    "noPartialState": true,
+    "routeEvidence": [
+      {
+        "noPartialState": true,
+        "recoveryKind": "same-authority-instance",
+        "route": "validate-tree-groups-memory",
+        "succeeded": true
+      }
+    ]
+  },
+  "memoryCeiling": {
+    "derivation": "one-byte-below-simultaneous-retained-tree-group-membership-and-collision-index",
+    "requireEachComponentAloneToFit": true
+  },
+  "routes": [
+    "validate-tree-groups-memory"
+  ],
+  "schema": "ogvcs.repository-format.v1.tree-groups-memory-input.v1"
+}

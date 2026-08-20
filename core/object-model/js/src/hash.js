@@ -3,12 +3,14 @@ import { encodeCanonical } from './cbor.js';
 import { fail } from './errors.js';
 import { configuredHardLimit, hardLimitMaximum } from './hard-limits.js';
 import { ObjectRef, Digest, KIND_NAMES, equalBytes } from './types.js';
+import {
+  FROZEN_LOGICAL_TYPES, isKindNameAuthority, isLogicalTypeAuthority
+} from './assignment-authority.js';
 
 const OBJECT_DOMAIN = Buffer.from('OpenGameVCS object\0', 'ascii');
 const LOGICAL_DOMAIN = Buffer.from('OpenGameVCS logical record\0', 'ascii');
 const CONFLICT_DOMAIN = Buffer.from('OpenGameVCS conflict\0', 'ascii');
 const BUNDLE_DOMAIN = Buffer.from('OpenGameVCS logical bundle\0', 'ascii');
-const LOGICAL_RECORD_TYPES = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9]);
 const MAX_CHUNK_BYTES = hardLimitMaximum('chunk-payload-bytes');
 const MAX_METADATA_BYTES = hardLimitMaximum('metadata-payload-bytes');
 const MAX_BUNDLE_BYTES = hardLimitMaximum('bundle-sequence-bytes');
@@ -82,23 +84,31 @@ class DomainHashWriter {
   #bytes = 0;
   #maximum;
   #limitCode;
+  #limitStage;
   #expectedFieldOne;
   #prefix = new Uint8Array();
 
-  constructor(domain, discriminator, { maximum = Number.MAX_SAFE_INTEGER, limitCode = 'LIMIT_METADATA_BYTES', expectedFieldOne } = {}) {
+  constructor(domain, discriminator, {
+    maximum = Number.MAX_SAFE_INTEGER, limitCode = 'LIMIT_METADATA_BYTES', limitStage, expectedFieldOne
+  } = {}) {
     this.#hash = createHash('sha256');
     this.#hash.update(domain);
     this.#hash.update(u16(1));
     if (discriminator !== undefined) this.#hash.update(u16(discriminator));
     this.#maximum = maximum;
     this.#limitCode = limitCode;
+    this.#limitStage = limitStage;
     this.#expectedFieldOne = expectedFieldOne;
   }
 
   update(part) {
     if (this.#finished) fail('SCHEMA_FIELD_INVALID', { layer: 2 });
     const chunk = bytes(part);
-    if (chunk.length > this.#maximum - this.#bytes) fail(this.#limitCode, { layer: 1 });
+    if (chunk.length > this.#maximum - this.#bytes) {
+      const details = { layer: 1 };
+      if (this.#limitStage !== undefined) details.stage = this.#limitStage;
+      fail(this.#limitCode, details);
+    }
     this.#bytes += chunk.length;
     if (this.#expectedFieldOne !== undefined && discriminatorAtFieldOne(this.#prefix) === null) {
       const take = Math.min(chunk.length, 128 - this.#prefix.length);
@@ -140,6 +150,9 @@ export class Sha256Writer {
 export function createObjectHashWriter(kind, {
   maxChunkBytes = MAX_CHUNK_BYTES, maxMetadataBytes = MAX_METADATA_BYTES, registry = KIND_NAMES
 } = {}) {
+  if (!isKindNameAuthority(registry)) {
+    fail('SCHEMA_FIELD_INVALID', { layer: 1, stage: 'configured-resource-preflight' });
+  }
   if (!Number.isInteger(kind) || kind < 1 || kind > 65535 || !assigned(registry, kind)) {
     fail('OBJECT_KIND_UNSUPPORTED', { layer: 2 });
   }
@@ -169,7 +182,12 @@ export function createOpaqueObjectHashWriter(kind, { maxBytes = MAX_METADATA_BYT
   });
 }
 
-export function createLogicalRecordHashWriter(type, { registry = LOGICAL_RECORD_TYPES, maxBytes = MAX_METADATA_BYTES } = {}) {
+export function createLogicalRecordHashWriter(type, {
+  registry = FROZEN_LOGICAL_TYPES, maxBytes = MAX_METADATA_BYTES
+} = {}) {
+  if (!isLogicalTypeAuthority(registry)) {
+    fail('SCHEMA_FIELD_INVALID', { layer: 1, stage: 'configured-resource-preflight' });
+  }
   if (!Number.isInteger(type) || type < 1 || type > 65535 || !assigned(registry, type)) {
     fail('LOGICAL_RECORD_TYPE_UNSUPPORTED', { layer: 2 });
   }
@@ -191,7 +209,9 @@ export function createConflictHashWriter({ maxBytes = MAX_METADATA_BYTES } = {})
 
 export function createBundleTranscriptHashWriter({ maxBytes = MAX_BUNDLE_BYTES } = {}) {
   const state = new DomainHashWriter(BUNDLE_DOMAIN, undefined, {
-    maximum: configuredHardLimit('bundle-sequence-bytes', maxBytes)
+    maximum: configuredHardLimit('bundle-sequence-bytes', maxBytes),
+    limitCode: 'BUNDLE_BUDGET_EXCEEDED',
+    limitStage: 'configured-resource-preflight'
   });
   return Object.freeze({ update(part) { state.update(part); return this; }, finish() { return new Digest(1, state.finishBytes()); } });
 }

@@ -1,6 +1,7 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [],
     "lifetimeRecords": [],
     "mode": "conformance",
@@ -132,16 +133,16 @@
   "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
   "inputs": [
     {
-      "bytes": 5085,
+      "bytes": 5090,
       "mediaType": "application/json",
       "path": "registries/index.json",
-      "sha256": "752004fcd3e74233fc6d08173a726f3c0bd76d4a3f45ea3fe2c40287a594df06"
+      "sha256": "e775a50d12ad2a53a32ef9f073e3686d25ff9892b8d9a1e89f1fc62508e1add8"
     },
     {
-      "bytes": 6555,
+      "bytes": 6589,
       "mediaType": "application/json",
       "path": "scenarios/definitions/registry-reassigned.json",
-      "sha256": "2ee19dea02a5428dc21a2e9ed62d3cdeb7d5557bd4af277fa78b348f619cd691"
+      "sha256": "f916ff9dc72eeec4ca2ebe633332a31bbfc97aaee4bb978be6e06527b7adac98"
     }
   ],
   "operation": "validate-object",
@@ -154,18 +155,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/registry-reassigned.json",
-        "definitionSha256": "2ee19dea02a5428dc21a2e9ed62d3cdeb7d5557bd4af277fa78b348f619cd691",
+        "definitionSha256": "f916ff9dc72eeec4ca2ebe633332a31bbfc97aaee4bb978be6e06527b7adac98",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "c8de0725a8bed5808da1beeeae8c35be4b5881153c128cb53f1f0443fa188191"
     },
     "summary": {
-      "bytes": 16863,
+      "bytes": 16902,
       "indexEntries": 0,
       "items": 12,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "ea198c64d32be7ce941f92093148da3bbaf8dcc09ca871ee444c2fd671f712aa",
+      "summarySha256": "ee1f54789f46afd6050b56504948fb844c84d4a21d88c31d76c353b66304479b",
       "traversalEdges": 0
     }
   },

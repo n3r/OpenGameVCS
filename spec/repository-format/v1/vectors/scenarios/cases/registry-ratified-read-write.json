@@ -1,6 +1,7 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [],
     "lifetimeRecords": [],
     "mode": "conformance",
@@ -132,23 +133,23 @@
         "path": "scenarios/outputs/registry-ratified-read-write.json",
         "sha256": "174f5278c0cfa6842cb8e7d76253ac8e42dc2733ccfd6903542a7e3d11e60087"
       },
-      "summarySha256": "d5ece6cdfa1884f765eb08959f41927561e0a0c5b91d2fb32065608c5cfe6d6c"
+      "summarySha256": "a34d3a5ddd759fc0adb3bb8973495d5d2322c68b021708df373a7539bf693ec4"
     },
     "result": "accept"
   },
   "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
   "inputs": [
     {
-      "bytes": 5085,
+      "bytes": 5090,
       "mediaType": "application/json",
       "path": "registries/index.json",
-      "sha256": "752004fcd3e74233fc6d08173a726f3c0bd76d4a3f45ea3fe2c40287a594df06"
+      "sha256": "e775a50d12ad2a53a32ef9f073e3686d25ff9892b8d9a1e89f1fc62508e1add8"
     },
     {
-      "bytes": 6561,
+      "bytes": 6595,
       "mediaType": "application/json",
       "path": "scenarios/definitions/registry-ratified-read-write.json",
-      "sha256": "b16b9ab4b311579085a2e0c587525ae7418764fd6040dbfd2d75b6ddd1c4b79c"
+      "sha256": "e49a6c58e809673425a2f8d5a6a27fd8a8e589d8cf4d01317f8e113a157d5980"
     }
   ],
   "operation": "validate-object",
@@ -161,18 +162,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/registry-ratified-read-write.json",
-        "definitionSha256": "b16b9ab4b311579085a2e0c587525ae7418764fd6040dbfd2d75b6ddd1c4b79c",
+        "definitionSha256": "e49a6c58e809673425a2f8d5a6a27fd8a8e589d8cf4d01317f8e113a157d5980",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "7bea8bcfffebf36dba0d7e356ae16f0e2b2565901e9ea35067d1c14c899b689d"
     },
     "summary": {
-      "bytes": 16869,
+      "bytes": 16908,
       "indexEntries": 0,
       "items": 12,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "d5ece6cdfa1884f765eb08959f41927561e0a0c5b91d2fb32065608c5cfe6d6c",
+      "summarySha256": "a34d3a5ddd759fc0adb3bb8973495d5d2322c68b021708df373a7539bf693ec4",
       "traversalEdges": 0
     }
   },

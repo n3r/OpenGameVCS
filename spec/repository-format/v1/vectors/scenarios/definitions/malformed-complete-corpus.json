@@ -8,7 +8,7 @@
   "exactConstructorValues": {
     "enumeratedRecipe": {
       "path": "malformed/index.json",
-      "totalCases": 22
+      "totalCases": 26
     }
   },
   "expectedRootState": {
@@ -20,6 +20,7 @@
   "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
   "normativeContext": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [],
     "lifetimeRecords": [],
     "mode": "conformance",

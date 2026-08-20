@@ -66,13 +66,17 @@ object freezes the hard maxima:
 | inventory records | 100,000 |
 | operation records | 100,000 |
 | groups | 100,000 |
+| aggregate group memberships | 1,000,000 |
 | ledger mappings | 300,000 |
 | emitted object references | 500,000 |
 | parts in one emitted content manifest | 65,536 |
 | retained tree nodes | 200,000 |
+| aggregate adapter working memory | 256 MiB |
 | elapsed adapter time | 10 minutes |
 
 Callers may lower any of these with `options.limits`; they cannot raise them.
+`maxWorkingBytes` covers bounded input decoding, ledger clones and sort views,
+mapping/index strings, parsed NDJSON records, and constructed adapter outputs.
 `maxRetainedBytes` separately limits retained emitted payloads plus fixed
 per-reference accounting and cannot exceed 256 MiB. Aggregate input overflow
 returns `LIMIT_MEMORY`, count overflow returns `LIMIT_COUNT`, and elapsed-time
@@ -117,7 +121,9 @@ and streams the exact transcript into the trailer. Its default retained-item
 ceiling is 64 MiB and may be raised up to the format item ceiling for a caller
 that can safely hold a larger single item.
 
-Successful writing proves wire integrity, not supplied closure. Publish or
+Both bundle writers require objects, logical records, and roots in their
+canonical section order; the convenience encoder no longer sorts caller input
+implicitly. Successful writing proves wire integrity, not supplied closure. Publish or
 classify the staged bytes only after `verifyLogicalBundleStream` or
 `verifyLogicalBundleFile` succeeds. `encodeLogicalBundle` remains the
 explicitly small in-memory convenience encoder.
@@ -154,7 +160,7 @@ ceilings. A deployment may deliberately choose lower limits.
 ```js
 const result = await verifyLogicalBundleFile('/staging/bundle.cborseq', {
   registry,
-  mode: 'conformance',
+  operation: 'conformance',
   scratchDirectory: '/staging/ogvcs-scratch',
   maxMemoryBytes: 64 * 1024 * 1024,
   maxScratchBytes: 8 * 1024 * 1024 * 1024
@@ -165,16 +171,19 @@ The result contains only counts, total bytes, traversal/index accounting, the
 bundle transcript digest, and aggregate timing/scratch/run metrics; it never
 returns payloads, paths, embedded names/messages, or supplied object, logical,
 or root identities. Its
-`highestLayer` remains 2 because the streaming API does not accept the
-in-memory `semanticValidator` callback or claim repository-context replay.
-Use the existing `verifyLogicalBundle` only for explicitly small in-memory
-callers that need that callback.
+`highestLayer` is 3 only when a complete registry and explicit lifecycle
+`operation` (`read`, `conformance`, or `production-write`) authorize the
+supplied-closure codec checks. Registry-free verification stops honestly at
+layer 2. No bundle verifier accepts a caller callback as repository-semantic
+authority. Use `verifyLogicalBundle` only for explicitly small in-memory
+callers.
 
 The packaged regular-file CLI always uses this path and requires scratch:
 
 ```sh
 ogvcs-object bundle verify bundle.cborseq \
   --scratch /explicit/staging/scratch \
+  --operation conformance \
   --max-memory-bytes 67108864 \
   --max-scratch-bytes 8589934592
 ```
@@ -207,8 +216,12 @@ Exact FileID uniqueness is part of both paths. `writeSortedTree` maintains a
 FileID-sorted side index in its bounded scratch space. `writeOrderedTree` uses
 a bounded in-memory index only through 100,000 entries; larger trees require a
 caller-owned index created by `createDiskFileIdIndex` (or an equivalent object
-implementing `add`, `finish`, and `abort`). This prevents a million-entry claim
-from depending on an unbounded JavaScript `Set`.
+implementing transactional `begin`, `add`, `finish`, and `abort`). `begin`
+receives the expected count plus the operation's `signal` and remaining
+`maxMemoryBytes`; `add`, `finish`, and `abort` receive the same operation
+signal. An aborted attempt must discard its pending state and leave the same
+index instance reusable. This prevents a million-entry claim from depending on
+an unbounded JavaScript `Set` or an independently budgeted index.
 
 ```js
 const result = await writeOrderedTree({
@@ -228,7 +241,8 @@ uses the same FileID-index contract. The packaged CLI exposes it as:
 ```sh
 ogvcs-object tree verify tree.cbor \
   --descriptor ogvcs:v1:repository-descriptor:sha256:<64-lowercase-hex> \
-  --scratch /explicit/staging/scratch
+  --scratch /explicit/staging/scratch \
+  --operation conformance
 ```
 
 `writeContentManifest` streams exact `ChunkPart` maps and requires
@@ -293,11 +307,17 @@ checks, complete lifetime validation, and provenance checks without mutating
 that context.
 
 Ratified `path.opengamevcs/*@1` descriptors require the OGVCS-004 adapter.
-Pass its `objectModelPathProfileValidator` as `validatePathProfile` to
-`expandTree`, then run OGVCS-004 whole-set materialization preflight for case
-and platform collisions. The object-model core fails closed with
-`PATH_PROFILE_INVALID` when a ratified external path profile is selected but
-no adapter is supplied; registry-family validation alone is not a path proof.
+Pass an exact-version adapter object as
+`validatePathProfile: { profile, caseMode, validate }` and pass the same
+authenticated `caseMode` (`case-sensitive` or `case-folded`) to `expandTree`.
+to `expandTree`. The core invokes it for each complete joined path and consumes
+its `repositoryKey` and `platformKey` results to reject collisions across the
+expanded tree. OGVCS-004 materialization preflight remains required for host
+capabilities and workspace-specific constraints, but is not a substitute for
+the repository collision check. The object-model core fails closed with
+`PATH_PROFILE_INVALID` when a ratified external profile is selected but the
+adapter is missing or pinned to another namespace/id/major, including for an
+empty tree; registry-family validation alone is not a path proof.
 
 Decoded maps are JavaScript `Map` instances, binary strings are independent
 `Uint8Array` values, and integers outside the safe JavaScript number range are

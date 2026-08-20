@@ -1,0 +1,109 @@
+{
+  "context": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "candidateSnapshot": "ogvcs:v1:snapshot:sha256:48f6280b55862ddc8fa48b246d2cb744808d02f00fc575e175c5b87c3e04e845",
+    "caseMode": "case-sensitive",
+    "designatedRoot": "ogvcs:v1:snapshot:sha256:48f6280b55862ddc8fa48b246d2cb744808d02f00fc575e175c5b87c3e04e845",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 52,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/snapshot-graph-missing-descriptor-before-descriptor-mismatch/root-change.cbor",
+          "sha256": "ef6e897742ff4d1220c8cd636f2a889a8f8746b2e97b2b7dad6fec4dc3747a6d"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:82cc41e5e86d1397579a8ebfc7ea6c7d9102552130f4da86ca592fc3c10a424c"
+      },
+      {
+        "artifact": {
+          "bytes": 274,
+          "mediaType": "application/cbor",
+          "path": "objects/06-repository-descriptor.cbor",
+          "sha256": "677905a883b1f4ddd87fea27b5afc0293cccd2d2ea29cc4884e758e4a071b6e9"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+      },
+      {
+        "artifact": {
+          "bytes": 369,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/snapshot-graph-missing-descriptor-before-descriptor-mismatch/candidate.cbor",
+          "sha256": "b9ad429789dd7c1a0d0c9e4c22392d8a91cc7089b30b938710347a4243f97f6c"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:48f6280b55862ddc8fa48b246d2cb744808d02f00fc575e175c5b87c3e04e845"
+      },
+      {
+        "artifact": {
+          "bytes": 52,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/snapshot-graph-missing-descriptor-before-descriptor-mismatch/empty-tree.cbor",
+          "sha256": "f0515d605a2c20abf9f321474bc861964b20faeaebbc41a2d8316ae4ffe2bb2b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a458f2bc72d5816dc3f7ee2cc8580eaaaed9a0208588ee66d18ea78f0c255c81"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
+      "registryVersion": 1
+    },
+    "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+    "requestedLayer": 2,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "expected": {
+    "code": "OBJECT_REFERENCE_MISSING",
+    "layer": 2,
+    "result": "reject",
+    "stage": "closure-and-reference-resolution"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "inputs": [
+    {
+      "bytes": 510,
+      "mediaType": "application/json",
+      "path": "scenarios/operations/snapshot-graph-missing-descriptor-before-descriptor-mismatch.json",
+      "sha256": "ae902d616ee3d10e43da61cd59c9405bb2843d5e2852a69c1fe78cf71b4fb87c"
+    },
+    {
+      "bytes": 4801,
+      "mediaType": "application/json",
+      "path": "scenarios/definitions/snapshot-graph-missing-descriptor-before-descriptor-mismatch.json",
+      "sha256": "3465d5ec39118e0bcc913f75f3035264874e5897ba44f180cf20359a86d6884d"
+    }
+  ],
+  "operation": "validate-repository-route",
+  "requirementIds": [
+    "OGVCS-002-AC-06",
+    "OGVCS-002-AC-08",
+    "OGVCS-002-FR-09",
+    "OGVCS-002-FR-11",
+    "OGVCS-002-NFR-01"
+  ],
+  "resources": {
+    "recipe": {
+      "generator": "ogvcs.repository-validation-scenario-constructor/v1",
+      "parameters": {
+        "definition": "scenarios/definitions/snapshot-graph-missing-descriptor-before-descriptor-mismatch.json",
+        "definitionSha256": "3465d5ec39118e0bcc913f75f3035264874e5897ba44f180cf20359a86d6884d",
+        "runtimeHighWaterMarks": "not-asserted"
+      },
+      "seed": "616c692e20c3fea85d772b6bf9549962d097572fdad1e95608bd1abcb2c3cd4d"
+    },
+    "summary": {
+      "bytes": 6058,
+      "indexEntries": 0,
+      "items": 4,
+      "peakMemoryBytes": 0,
+      "scratchBytes": 0,
+      "summarySha256": "2524892cf363d2e3bdd3535f480fbdaad774bb9604bf71a6cd7c0b451bd7ee55",
+      "traversalEdges": 0
+    }
+  },
+  "scenarioId": "snapshot-graph-missing-descriptor-before-descriptor-mismatch",
+  "schemaVersion": "ogvcs.repository-format/validation-scenario/v1"
+}

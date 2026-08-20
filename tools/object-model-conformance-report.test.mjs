@@ -47,17 +47,35 @@ test('two-language three-platform report comparison requires identical, intact c
   const generated = await run(['tools/object-model-conformance-report.mjs', '--output', basePath]);
   assert.equal(generated.code, 0, generated.stderr || generated.stdout);
   const base = JSON.parse(await readFile(basePath, 'utf8'));
+  const scenarioIndex = JSON.parse(await readFile(
+    join(ROOT, 'spec/repository-format/v1/vectors/scenarios/index.json'),
+    'utf8'
+  ));
+  const executable = row => row.materialization !== 'virtual-constructor' &&
+    (row.materialization !== 'virtual-constructor-shared-bundle-baseline' ||
+      row.scenarioId === 'bundle-export-claim');
+  const javascriptRows = scenarioIndex.cases.filter(row =>
+    (row.implementationScope ?? ['javascript', 'rust']).includes('javascript'));
   assert.deepEqual(base.artifact,
     { name: '@opengamevcs/object-model', type: 'workspace', version: '0.1.0' });
   assert.deepEqual(base.formatArtifact,
     { name: '@opengamevcs/repository-format-v1', type: 'workspace', version: '0.1.0' });
-  assert.equal(base.conformance.scenarios.scenarios, 235);
-  assert.equal(base.conformance.scenarios.executed, 233);
+  assert.equal(base.conformance.scenarios.scenarios, scenarioIndex.cases.length);
+  assert.equal(base.conformance.scenarios.executed, javascriptRows.filter(executable).length);
   assert.equal(base.conformance.scenarios.failed, 0);
   assert.equal(base.conformance.scenarios.inventoryOnly, 2);
   assert.equal(base.conformance.scenarios.notApplicable, 0);
-  assert.equal(base.conformance.scenarios.rows.length, 235);
+  assert.equal(base.conformance.scenarios.rows.length, scenarioIndex.cases.length);
   assert.ok(base.conformance.scenarios.rows.every(row => row.status === 'passed' || row.status === 'not-executed'));
+  const evidenceById = new Map(scenarioIndex.cases
+    .filter(row => row.expected?.evidence !== undefined)
+    .map(row => [row.scenarioId, row.expected.evidence]));
+  assert.ok(evidenceById.size > 0);
+  for (const row of base.conformance.scenarios.rows.filter(item => evidenceById.has(item.scenarioId))) {
+    assert.equal(row.status, 'passed');
+    assert.equal(canonicalJson(row.actual?.evidence), canonicalJson(evidenceById.get(row.scenarioId)));
+    assert.equal(canonicalJson(row.expected?.evidence), canonicalJson(evidenceById.get(row.scenarioId)));
+  }
 
   const reports = join(directory, 'reports');
   await mkdir(reports);
@@ -115,6 +133,27 @@ test('two-language three-platform report comparison requires identical, intact c
   ]);
   assert.ok(result.implementations.every(item =>
     item.platforms.map(platform => platform.os).join(',') === 'darwin,linux,win32'));
+
+  const evidencePath = join(reports, 'javascript-darwin.json');
+  const evidenceOriginal = JSON.parse(await readFile(evidencePath, 'utf8'));
+  const evidenceChanged = structuredClone(evidenceOriginal);
+  const evidenceRow = evidenceChanged.conformance.scenarios.rows.find(
+    row => row.operation === 'validate-tree-groups-memory'
+  );
+  assert.ok(evidenceRow, 'the scenario report must exercise resource recovery evidence');
+  evidenceRow.actual.evidence.eachComponentAloneFit = false;
+  evidenceChanged.conformance.scenarios.resultsSha256 =
+    digest(evidenceChanged.conformance.scenarios.rows);
+  evidenceChanged.conformanceSha256 = digest(evidenceChanged.conformance);
+  await writeFile(evidencePath, `${JSON.stringify(evidenceChanged)}\n`, 'utf8');
+  await rm(output, { force: true });
+  const rejectedEvidence = await run([
+    'tools/compare-object-model-conformance.mjs', '--input', reports, '--output', output
+  ]);
+  assert.notEqual(rejectedEvidence.code, 0);
+  assert.match(rejectedEvidence.stderr, /invalid scenario outcome/);
+  await assert.rejects(readFile(output));
+  await writeFile(evidencePath, `${JSON.stringify(evidenceOriginal)}\n`, 'utf8');
 
   const stagePath = join(reports, 'javascript-linux.json');
   const stageOriginal = JSON.parse(await readFile(stagePath, 'utf8'));

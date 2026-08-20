@@ -7,12 +7,44 @@
   "profiles": {
     "entries": [
       {
+        "family": "bundle-root-role",
+        "id": "bundle-root-ratified",
+        "major": 1,
+        "namespace": "profile-state.test",
+        "productionWriteAllowed": true,
+        "state": "ratified"
+      },
+      {
+        "family": "chunking",
+        "id": "chunking-conformance",
+        "major": 1,
+        "namespace": "profile-state.test",
+        "productionWriteAllowed": false,
+        "state": "conformance-only"
+      },
+      {
         "family": "path",
         "id": "conformance",
         "major": 1,
         "namespace": "profile-state.test",
         "productionWriteAllowed": false,
         "state": "conformance-only"
+      },
+      {
+        "family": "content-policy",
+        "id": "content-conformance",
+        "major": 1,
+        "namespace": "profile-state.test",
+        "productionWriteAllowed": false,
+        "state": "conformance-only"
+      },
+      {
+        "family": "content-policy",
+        "id": "content-ratified",
+        "major": 1,
+        "namespace": "profile-state.test",
+        "productionWriteAllowed": true,
+        "state": "ratified"
       },
       {
         "family": "path",
@@ -42,7 +74,20 @@
     "registryVersion": 1
   },
   "requiredFeatures": {
-    "entries": [],
+    "entries": [
+      {
+        "behavior": "no-op: exercise lifecycle through the containing surface",
+        "code": 1,
+        "name": "lifecycle-conformance",
+        "state": "conformance-only"
+      },
+      {
+        "behavior": "no-op: exercise lifecycle through the containing surface",
+        "code": 2,
+        "name": "lifecycle-deprecated",
+        "state": "deprecated"
+      }
+    ],
     "registryVersion": 1
   },
   "schema": "ogvcs.repository-format.v1.registry-snapshot.v1"

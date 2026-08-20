@@ -1,8 +1,10 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [
       {
+        "descriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
         "fileId": "53535353535353535353535353535353",
         "importerProfile": "importer.test/fixture-adapter@1",
         "mappingKey": "eb07c76be60687c1360a59b05e8457fd7c1e26e755be5d71725ed92b42eb45d4",
@@ -159,7 +161,7 @@
         "path": "scenarios/outputs/fileid-import-lost-ack-retry.json",
         "sha256": "5e5cf04cd7eaef8921c355a353b1ca9b15265d15102ce132b177ad6178730f07"
       },
-      "summarySha256": "af8dcf19363d8969cbf002db10d66ab43425a1772f97199bdf8743dbe795bd66"
+      "summarySha256": "3407d5752e4d2cf8438efd698d2c33cd6c3b43a16952f149ccffbb0a2bb2ecd2"
     },
     "result": "accept"
   },
@@ -172,10 +174,10 @@
       "sha256": "1cd354a2d13af2863ac6d37ebc593863a77c51ff9751a84803e2326fb3b3b248"
     },
     {
-      "bytes": 7869,
+      "bytes": 8031,
       "mediaType": "application/json",
       "path": "scenarios/definitions/fileid-import-lost-ack-retry.json",
-      "sha256": "e9f58e6e40b7678db7c431688ce879571e778cf59ed3c35107228f2b0086f988"
+      "sha256": "fe39321c0a2a7ff67e9e867b44547ee1d91bdc16e5101df5cd615825ff0a7911"
     }
   ],
   "operation": "import-file-id",
@@ -189,18 +191,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/fileid-import-lost-ack-retry.json",
-        "definitionSha256": "e9f58e6e40b7678db7c431688ce879571e778cf59ed3c35107228f2b0086f988",
+        "definitionSha256": "fe39321c0a2a7ff67e9e867b44547ee1d91bdc16e5101df5cd615825ff0a7911",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "8d92c015c71d0d1821f451678b6e1d092eef6f7189f2db8ca15c4d46817c19bb"
     },
     "summary": {
-      "bytes": 13755,
+      "bytes": 13917,
       "indexEntries": 0,
       "items": 13,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "af8dcf19363d8969cbf002db10d66ab43425a1772f97199bdf8743dbe795bd66",
+      "summarySha256": "3407d5752e4d2cf8438efd698d2c33cd6c3b43a16952f149ccffbb0a2bb2ecd2",
       "traversalEdges": 0
     }
   },

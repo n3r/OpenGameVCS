@@ -7,8 +7,8 @@
   },
   "conflictPresenceCombinations": 8,
   "coverageMatrix": "coverage-matrix.json",
-  "deterministicCborMalformedCases": 22,
-  "generatedScenarioCases": 235,
+  "deterministicCborMalformedCases": 26,
+  "generatedScenarioCases": 573,
   "independentlyReproduciblePreimages": {
     "conflicts": 8,
     "logicalRecords": 9,
@@ -70,11 +70,11 @@
     "unknown-optional-extension-byte-preservation",
     "reserved-rejection",
     "ratified-read-and-write",
-    "deprecated-read-and-new-write-rejection",
+    "deprecated-read-and-production-write-rejection",
     "conformance-only-test-acceptance-and-production-rejection",
     "unknown-profile-rejection"
   ],
-  "representedNormativeObligations": 148,
+  "representedNormativeObligations": 486,
   "representedStableErrors": 81,
   "schema": "ogvcs.repository-format.v1.coverage.v2",
   "wrongFamilyCases": 15

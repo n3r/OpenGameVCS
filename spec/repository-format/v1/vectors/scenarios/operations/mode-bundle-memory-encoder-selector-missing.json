@@ -1,0 +1,7 @@
+{
+  "api": "validate-operation-mode",
+  "registry": "bundled",
+  "schema": "ogvcs.repository-format.v1.operation-mode-input.v1",
+  "source": "logical-bundles/valid-supplied-closure.cborseq",
+  "surface": "bundle-memory-encoder"
+}

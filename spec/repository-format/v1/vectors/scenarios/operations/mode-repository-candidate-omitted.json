@@ -1,0 +1,43 @@
+{
+  "api": "validate-operation-mode",
+  "candidateSnapshot": "ogvcs:v1:snapshot:sha256:cc4d4a4a7be098bc74f5bb97cfe1eb37d870832dd44c56f0ceac12d65f871290",
+  "designatedRoot": "ogvcs:v1:snapshot:sha256:cc4d4a4a7be098bc74f5bb97cfe1eb37d870832dd44c56f0ceac12d65f871290",
+  "lifetimeContext": {
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "workingLifetimeAdditions": [
+      {
+        "fileId": "11111111111111111111111111111111",
+        "firstChangeSet": "ogvcs:v1:change-set:sha256:9cda477b4303c876fc79feb4cbd0a5deda70011261bd81fc758b588872040720",
+        "firstOperation": 0,
+        "origin": "native-create"
+      },
+      {
+        "fileId": "12121212121212121212121212121212",
+        "firstChangeSet": "ogvcs:v1:change-set:sha256:9cda477b4303c876fc79feb4cbd0a5deda70011261bd81fc758b588872040720",
+        "firstOperation": 1,
+        "origin": "native-create"
+      },
+      {
+        "fileId": "13131313131313131313131313131313",
+        "firstChangeSet": "ogvcs:v1:change-set:sha256:9cda477b4303c876fc79feb4cbd0a5deda70011261bd81fc758b588872040720",
+        "firstOperation": 2,
+        "origin": "native-create"
+      },
+      {
+        "fileId": "14141414141414141414141414141414",
+        "firstChangeSet": "ogvcs:v1:change-set:sha256:9cda477b4303c876fc79feb4cbd0a5deda70011261bd81fc758b588872040720",
+        "firstOperation": 3,
+        "origin": "native-create"
+      }
+    ]
+  },
+  "objectLookup": "scenario.context.objectLookup",
+  "registry": "bundled",
+  "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+  "requestedLayer": 3,
+  "schema": "ogvcs.repository-format.v1.operation-mode-input.v1",
+  "semanticProfiles": true,
+  "source": "objects/07-snapshot.cbor",
+  "surface": "repository-candidate"
+}

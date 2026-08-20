@@ -128,6 +128,40 @@ test('offline distribution is reproducible, self-verifying, and fail-closed', {
     await readFile(join(first, 'LICENSE'), 'utf8'),
     await readFile(join(CRATE_ROOT, 'LICENSE'), 'utf8')
   );
+  const packagedCrate = join(first, manifest.package.verifiedSourceDirectory);
+  const formatRoot = resolve(CRATE_ROOT, '../../../spec/repository-format/v1');
+  for (const name of ['DerivedAge-15.0.0.txt', 'UNICODE-LICENSE.txt', 'NOTICE.md']) {
+    assert.deepEqual(
+      await readFile(join(packagedCrate, 'unicode', name)),
+      await readFile(join(formatRoot, 'unicode', name)),
+      `packaged Unicode authority differs for ${name}`
+    );
+  }
+  assert.deepEqual(
+    await readFile(join(packagedCrate, 'unicode', 'age-15.0.0-intervals.json')),
+    await readFile(join(formatRoot, 'vectors/unicode/age-15.0.0-intervals.json')),
+    'packaged compact Unicode authority differs'
+  );
+  for (const name of [
+    'object-kinds.json',
+    'hash-algorithms.json',
+    'common-fields.json',
+    'kind-fields.json',
+    'entry-kinds.json',
+    'entry-modes.json',
+    'required-features.json',
+    'extensions.json',
+    'profiles.json',
+    'logical-record-types.json',
+    'semantic-enums.json',
+    'limits.json'
+  ]) {
+    assert.deepEqual(
+      await readFile(join(packagedCrate, 'registries', name)),
+      await readFile(join(formatRoot, 'registries', name)),
+      `packaged Rust registry authority differs for ${name}`
+    );
+  }
   if (process.env.HOME) assert.equal(firstManifest.includes(process.env.HOME), false);
 
   const verified = await run(['--verify', first]);

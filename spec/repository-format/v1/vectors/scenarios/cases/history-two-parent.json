@@ -2,6 +2,7 @@
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
     "candidateSnapshot": "ogvcs:v1:snapshot:sha256:dd2edeabaeeda77d7d608f9f3b00b4452c5ba9bae08118a0fc1c99c7c8c1d75e",
+    "caseMode": "case-sensitive",
     "designatedRoot": "ogvcs:v1:snapshot:sha256:0ac217a384f2ebb14dbe4400972d05ac5dd13e9b4272411d71e68448e27f18b5",
     "importMappings": [],
     "lifetimeRecords": [],
@@ -99,7 +100,7 @@
         "path": "scenarios/outputs/history-two-parent.json",
         "sha256": "0b1607fc44d7b901e6449974492dea3bd6045c3fcef6356b2e72f81ea81f3efc"
       },
-      "summarySha256": "ca1830ad72f10c8481c7133440e1459d6f0e7bdc7cf72c88801fe200efbac5ea"
+      "summarySha256": "cf249535f10b221ee478f949dd6eb7a168cc72de2d971f75e632a05e5240c314"
     },
     "result": "accept"
   },
@@ -112,10 +113,10 @@
       "sha256": "3f278acd977ebfba663db87632d2fc237bdbd39f44a3b6ae8c106896fe38a869"
     },
     {
-      "bytes": 6575,
+      "bytes": 6609,
       "mediaType": "application/json",
       "path": "scenarios/definitions/history-two-parent.json",
-      "sha256": "9d0d3df39a7664ff2b1ae15081f66e3fff65bb2d36781cab92c86dae753b15e6"
+      "sha256": "d9fa49cb8328f522b45027dae18692690e4baa513cab5bbffed041394b79ffa6"
     }
   ],
   "operation": "validate-repository",
@@ -128,18 +129,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/history-two-parent.json",
-        "definitionSha256": "9d0d3df39a7664ff2b1ae15081f66e3fff65bb2d36781cab92c86dae753b15e6",
+        "definitionSha256": "d9fa49cb8328f522b45027dae18692690e4baa513cab5bbffed041394b79ffa6",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "4f90fcdec314171838b371b8d24e33f7e48298254065968834aee8518c2d93f6"
     },
     "summary": {
-      "bytes": 8221,
+      "bytes": 8255,
       "indexEntries": 0,
       "items": 8,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "ca1830ad72f10c8481c7133440e1459d6f0e7bdc7cf72c88801fe200efbac5ea",
+      "summarySha256": "cf249535f10b221ee478f949dd6eb7a168cc72de2d971f75e632a05e5240c314",
       "traversalEdges": 0
     }
   },

@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fail } from './errors.js';
 import { ProfileRef } from './types.js';
+import { createKindNameAuthority, createLogicalTypeAuthority } from './assignment-authority.js';
 
 export const REGISTRY_FILES = Object.freeze([
   'object-kinds.json', 'hash-algorithms.json', 'common-fields.json', 'kind-fields.json',
@@ -32,6 +33,8 @@ const STATES = new Set(['reserved', 'conformance-only', 'ratified', 'deprecated'
 const UNITS = new Set(['bytes', 'edges', 'encoded-bytes', 'entries', 'entries-per-group',
   'items', 'levels', 'members-per-group', 'objects', 'operations', 'parents', 'records',
   'roots', 'segments', 'utf8-bytes', 'groups', 'chunks']);
+const COMPLETE_REGISTRY_SNAPSHOTS = new WeakSet();
+const COMPLETE_REGISTRY_TOKEN = Symbol('complete-registry-authority');
 
 function invalid() { fail('REGISTRY_INVALID', { layer: 3 }); }
 function validateProfileTuple(entry) { try { new ProfileRef(entry.namespace, entry.id, entry.major); } catch { invalid(); } }
@@ -45,6 +48,15 @@ function frozenRegistryDocuments() {
     ])));
   }
   return bundledDocuments;
+}
+
+/** Returns the immutable format-v1 family for a known frozen profile. */
+export function frozenProfileFamily(profile) {
+  const key = profile instanceof ProfileRef ? profile.toString() : profile;
+  if (typeof key !== 'string') return undefined;
+  return frozenRegistryDocuments()['profiles.json'].entries.find(entry =>
+    `${entry.namespace}/${entry.id}@${entry.major}` === key
+  )?.family;
 }
 
 function normalizedJson(value) {
@@ -111,6 +123,17 @@ function immutableJson(value) {
     return Object.freeze(Object.fromEntries(Object.entries(value).map(([key, item]) => [key, immutableJson(item)])));
   }
   return value;
+}
+
+function readOnlySet(values) {
+  const set = new Set(values);
+  const view = {
+    get size() { return set.size; },
+    has(value) { return set.has(value); },
+    values() { return set.values(); },
+    [Symbol.iterator]() { return set[Symbol.iterator](); }
+  };
+  return Object.freeze(view);
 }
 
 function validateJsonDepth(value) {
@@ -321,9 +344,12 @@ export class RegistrySnapshot {
     objectKinds = [], hashAlgorithms = [], commonFields = [], kindFields = [], entryKinds = [], entryModes = [],
     profiles = [], requiredFeatures = [], extensions = [], limits = [], logicalRecordTypes = [], semanticEnums = [],
     documents = []
-  }) {
+  }, authorityToken) {
     this.objectKinds = indexed(objectKinds, entry => entry.code);
-    this.kindNames = readOnlyMap([...this.objectKinds].map(([code, entry]) => [code, entry.textToken ?? entry.name]));
+    const kindNames = [...this.objectKinds].map(([code, entry]) => [code, entry.textToken ?? entry.name]);
+    this.kindNames = authorityToken === COMPLETE_REGISTRY_TOKEN
+      ? createKindNameAuthority(kindNames)
+      : readOnlyMap(kindNames);
     this.hashAlgorithms = indexed(hashAlgorithms, entry => entry.code);
     this.commonFields = indexed(commonFields, entry => entry.code);
     this.kindFields = indexed(kindFields, entry => `${entry.cddlRule}\0${entry.code}`);
@@ -334,12 +360,25 @@ export class RegistrySnapshot {
     this.extensions = indexed(extensions, entry => `${entry.namespace}/${entry.id}@${entry.major}`);
     this.limits = indexed(limits, entry => entry.name);
     this.logicalRecordTypes = indexed(logicalRecordTypes, entry => entry.code);
+    const logicalTypeCodes = logicalRecordTypes.map(entry => entry.code);
+    this.logicalRecordTypeCodes = authorityToken === COMPLETE_REGISTRY_TOKEN
+      ? createLogicalTypeAuthority(logicalTypeCodes)
+      : readOnlySet(logicalTypeCodes);
     this.semanticEnums = readOnlyMap(semanticEnums.map(domain => {
       const frozenDomain = immutableJson(domain);
       return [frozenDomain.name, readOnlyMap(frozenDomain.entries.map(entry => [entry.code, entry]))];
     }));
     this.documents = readOnlyMap(documents.map(([name, document]) => [name, immutableJson(document)]));
     Object.freeze(this);
+  }
+}
+
+export function isCompleteRegistrySnapshot(value) {
+  try {
+    return value instanceof RegistrySnapshot && COMPLETE_REGISTRY_SNAPSHOTS.has(value) &&
+      Object.getPrototypeOf(value) === RegistrySnapshot.prototype && Object.isFrozen(value);
+  } catch {
+    return false;
   }
 }
 
@@ -384,7 +423,7 @@ export function validateRegistrySet(documents) {
     limitNames.add(entry.name);
   }
   validateFrozenAssignments(docs);
-  return new RegistrySnapshot({
+  const snapshot = new RegistrySnapshot({
     objectKinds: objectKinds.entries,
     hashAlgorithms: docs['hash-algorithms.json'].entries,
     commonFields: docs['common-fields.json'].entries,
@@ -397,7 +436,9 @@ export function validateRegistrySet(documents) {
     logicalRecordTypes: docs['logical-record-types.json'].entries,
     semanticEnums: docs['semantic-enums.json'].domains,
     documents: REGISTRY_FILES.map(file => [file, docs[file]])
-  });
+  }, COMPLETE_REGISTRY_TOKEN);
+  COMPLETE_REGISTRY_SNAPSHOTS.add(snapshot);
+  return snapshot;
 }
 
 async function readRegistryFile(path, maximumBytes) {
@@ -500,7 +541,7 @@ function assignmentUnknown(collection) {
 
 /** Apply the exhaustive registry-state truth table to one selected assignment. */
 export function registryAssignmentDecision(registry, collection, key, operation = 'read') {
-  if (!['read', 'conformance', 'new-write', 'production-write'].includes(operation)) {
+  if (!['read', 'conformance', 'production-write'].includes(operation)) {
     fail('SCHEMA_FIELD_INVALID', { layer: 2 });
   }
   let assignments;
@@ -511,7 +552,7 @@ export function registryAssignmentDecision(registry, collection, key, operation 
   const entry = assignments.get(key);
   if (!entry) assignmentUnknown(collection);
   if (entry.state === 'reserved') fail('PROFILE_STATE_FORBIDDEN', { layer: 3 });
-  const newWrite = operation === 'new-write' || operation === 'production-write';
+  const newWrite = operation === 'production-write';
   if (entry.state === 'deprecated' && newWrite) fail('PROFILE_STATE_FORBIDDEN', { layer: 3 });
   if (entry.state === 'conformance-only' && operation !== 'conformance') fail('PROFILE_CONFORMANCE_ONLY', { layer: 3 });
   if (!STATES.has(entry.state)) fail('REGISTRY_INVALID', { layer: 3 });
@@ -521,7 +562,7 @@ export function registryAssignmentDecision(registry, collection, key, operation 
 export function profileDecision(registry, profile, operation = 'read') {
   const ref = profile instanceof ProfileRef ? profile : ProfileRef.parse(profile);
   const entry = registryAssignmentDecision(registry, 'profiles', ref.toString(), operation);
-  const newWrite = operation === 'new-write' || operation === 'production-write';
+  const newWrite = operation === 'production-write';
   if (newWrite && entry.productionWriteAllowed !== true) {
     fail(entry.state === 'conformance-only' ? 'PROFILE_CONFORMANCE_ONLY' : 'PROFILE_STATE_FORBIDDEN', { layer: 3 });
   }

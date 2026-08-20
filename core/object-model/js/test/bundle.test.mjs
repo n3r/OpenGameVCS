@@ -13,10 +13,10 @@ test('logical bundle verifies identity, transcript, supplied closure, and exact 
   const registry = await loadBundledRegistry();
   const result = verifyLogicalBundle(await bytes('logical-bundles/valid-supplied-closure.cborseq'), {
     registry,
-    mode: 'conformance'
+    operation: 'conformance'
   });
   assert.deepEqual(result, {
-    highestLayer: 2,
+    highestLayer: 3,
     bytes: 666,
     items: 7,
     objectCount: 2,
@@ -29,7 +29,7 @@ test('logical bundle verifies identity, transcript, supplied closure, and exact 
 
   const empty = verifyLogicalBundle(await bytes('logical-bundles/scenario-bundle-zero-sections.cborseq'), {
     registry,
-    mode: 'conformance'
+    operation: 'conformance'
   });
   assert.equal(empty.objectCount, 0);
   assert.equal(empty.logicalRecordCount, 0);
@@ -38,7 +38,7 @@ test('logical bundle verifies identity, transcript, supplied closure, and exact 
 
   const allFamilies = verifyLogicalBundle(await bytes('logical-bundles/valid-all-families.cborseq'), {
     registry,
-    mode: 'conformance'
+    operation: 'conformance'
   });
   assert.deepEqual({
     items: allFamilies.items,
@@ -71,7 +71,7 @@ test('logical bundle rejects every checked-in case with its normative code', asy
   for (const [artifact, expected] of cases) {
     const payload = await bytes(artifact);
     assert.throws(
-      () => verifyLogicalBundle(payload, { registry, mode: 'conformance' }),
+      () => verifyLogicalBundle(payload, { registry, operation: 'conformance' }),
       error => error instanceof OgvcsError && error.code === expected,
       artifact
     );
@@ -93,7 +93,7 @@ test('logical bundle writer reproduces the independent canonical sequence byte-f
   }));
   const declared = values[0].get(6);
   assert.deepEqual(Buffer.from(encodeLogicalBundle({ objects, logicalRecords, roots }, {
-    registry, mode: 'conformance',
+    registry, operation: 'conformance',
     declaredTraversalEdges: Number(declared.get(2)),
     declaredIndexEntries: Number(declared.get(3))
   })), Buffer.from(expected));
@@ -127,13 +127,13 @@ test('ordered sink writer reproduces every valid bundle with bounded current-ite
           traversalEdges: Number(declared.get(2)), indexEntries: Number(declared.get(3))
         }
       },
-      objects, logicalRecords, roots, sink, registry, mode: 'conformance', maxMemoryBytes: 536_871_424
+      objects, logicalRecords, roots, sink, registry, operation: 'conformance', maxMemoryBytes: 536_871_424
     });
     const actual = Buffer.concat(chunks);
     assert.deepEqual(actual, Buffer.from(expected), name);
     assert.equal(summary.bytes, expected.length, name);
     assert.equal(summary.items, values.length, name);
-    assert.deepEqual(verifyLogicalBundle(actual, { registry, mode: 'conformance' }).transcriptDigest,
+    assert.deepEqual(verifyLogicalBundle(actual, { registry, operation: 'conformance' }).transcriptDigest,
       summary.transcriptDigest, name);
   }
 });
@@ -156,7 +156,7 @@ test('ordered sink writer rejects order, count, memory, budget, and invalid root
     roots: values.filter(item => item.get(1) === 4).map(item => ({ kind: item.get(3), identity: item.get(4), role: item.get(5) })),
     sink: async () => undefined,
     registry,
-    mode: 'conformance'
+    operation: 'conformance'
   };
   const rejects = async (override, expectedCode) => assert.rejects(
     writeOrderedLogicalBundle({ ...base, ...override }),
@@ -197,7 +197,7 @@ test('ordered sink writer detects logical-record mutation between replay passes'
       roots: [{ kind: 2, identity: logicalRoot.get(4), role: logicalRoot.get(5) }],
       sink,
       registry,
-      mode: 'conformance'
+      operation: 'conformance'
     }),
     error => error instanceof OgvcsError && error.code === 'BUNDLE_RECORD_ID_MISMATCH' && error.layer === 1
   );
@@ -219,7 +219,7 @@ test('ordered sink writer binds canonical-record working memory to its configure
     roots: [{ kind: 2, identity: root.get(4), role: root.get(5) }],
     sink: async () => { writes++; },
     registry,
-    mode: 'conformance',
+    operation: 'conformance',
     maxMemoryBytes: 64
   }), error => error instanceof OgvcsError && error.code === 'LIMIT_MEMORY' && error.layer === 1);
   assert.equal(writes, 1, 'only the staged header may be emitted before record preflight fails');
@@ -260,7 +260,7 @@ test('ordered sink writer detects object-payload mutation during emission', asyn
       })),
       sink,
       registry,
-      mode: 'conformance'
+      operation: 'conformance'
     }),
     error => error instanceof OgvcsError && error.code === 'OBJECT_ID_MISMATCH' && error.layer === 1
   );

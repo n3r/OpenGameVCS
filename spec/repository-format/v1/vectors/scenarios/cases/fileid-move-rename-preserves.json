@@ -2,6 +2,7 @@
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
     "candidateSnapshot": "ogvcs:v1:snapshot:sha256:63976960990d8e0455e285dd66642bc85cf42172998ad40a76f7cedf2cc4fede",
+    "caseMode": "case-sensitive",
     "designatedRoot": "ogvcs:v1:snapshot:sha256:ea6512682b6e586b010046f855d39a5867c15939c608f828d5317d894ce6a1f8",
     "importMappings": [],
     "lifetimeRecords": [
@@ -163,7 +164,7 @@
         "path": "scenarios/outputs/fileid-move-rename-preserves.json",
         "sha256": "0c7d29ca785df1bcd5816f08dc2a85dd6e2b96da5861d5299a64d8c257c29ffe"
       },
-      "summarySha256": "decab3ed00ddf42dd42cf777e9e0886176e29e5adb18e36c7cd8d8b053bd0f2e"
+      "summarySha256": "cf88c6cbb19595bdeb921d5ab1343ddbe13711a9f533df2cd374add052f48b07"
     },
     "result": "accept"
   },
@@ -176,10 +177,10 @@
       "sha256": "78d4e74c9a82ec01e883e0897d724933566ceddf98db9a6ce0093acb39105aac"
     },
     {
-      "bytes": 8499,
+      "bytes": 8533,
       "mediaType": "application/json",
       "path": "scenarios/definitions/fileid-move-rename-preserves.json",
-      "sha256": "7570bc4167d5ca753d8d04990a1b263fd2330f906ee3eb39e31661a94b9a78c4"
+      "sha256": "e41339f6ae587328c8c238cfdcf1f190eb497e3853d4217a9df87f8434f59a0c"
     }
   ],
   "operation": "replay-change-set",
@@ -192,18 +193,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/fileid-move-rename-preserves.json",
-        "definitionSha256": "7570bc4167d5ca753d8d04990a1b263fd2330f906ee3eb39e31661a94b9a78c4",
+        "definitionSha256": "e41339f6ae587328c8c238cfdcf1f190eb497e3853d4217a9df87f8434f59a0c",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "7bbffe71505747c89116f01425227f1bee2f984ed6d4f1df5f0a32da8a47ab18"
     },
     "summary": {
-      "bytes": 11404,
+      "bytes": 11438,
       "indexEntries": 0,
       "items": 13,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "decab3ed00ddf42dd42cf777e9e0886176e29e5adb18e36c7cd8d8b053bd0f2e",
+      "summarySha256": "cf88c6cbb19595bdeb921d5ab1343ddbe13711a9f533df2cd374add052f48b07",
       "traversalEdges": 0
     }
   },

@@ -2,7 +2,7 @@ use ogvcs_object_model::{
     decode_canonical, encode_canonical, hash_chunk, scan_metadata, scan_metadata_with_hard_limits,
     validate_metadata_schema, Error, ErrorCode, HardLimitCeilings, Limits, LogicalBundleBudget,
     LogicalBundleWriteLimits, LogicalBundleWriteOptions, LogicalBundleWritePlan,
-    LogicalBundleWriter, Registry,
+    LogicalBundleWriter, Operation, Registry,
 };
 
 const VECTOR_ROOT: &str = "../../../spec/repository-format/v1/vectors";
@@ -158,7 +158,7 @@ fn writer_preflight_error(
         LogicalBundleWriteOptions {
             registry: &registry,
             limits,
-            ..LogicalBundleWriteOptions::new(&registry)
+            ..LogicalBundleWriteOptions::new(&registry, Operation::ConformanceWrite)
         },
     ) {
         Ok(_) => panic!("reduced bundle ceiling accepted"),

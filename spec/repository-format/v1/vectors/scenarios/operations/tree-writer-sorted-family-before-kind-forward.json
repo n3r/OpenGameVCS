@@ -1,0 +1,34 @@
+{
+  "api": "write-tree",
+  "descriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+  "entries": [
+    {
+      "contentPolicy": "path.test/opaque@1",
+      "fileId": "21212121212121212121212121212121",
+      "kind": 2,
+      "logicalSize": "24",
+      "mode": 2,
+      "name": "a",
+      "target": "ogvcs:v1:content-manifest:sha256:82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+    },
+    {
+      "contentPolicy": "content-policy.test/opaque@1",
+      "fileId": "22222222222222222222222222222222",
+      "kind": 2,
+      "logicalSize": "24",
+      "mode": 2,
+      "name": "b",
+      "target": "ogvcs:v1:tree:sha256:9458b24239ce71b75b1c6ab857883d66a6eab3f0f6f4e9afab15371af1d4bf19"
+    }
+  ],
+  "entryCount": "2",
+  "maxItems": 2,
+  "operation": "conformance",
+  "ordering": "sorted",
+  "outputDisposition": {
+    "orderedStagingSink": "aborted-discard",
+    "successCommit": false
+  },
+  "registry": "bundled",
+  "schema": "ogvcs.repository-format.v1.tree-writer-input.v1"
+}

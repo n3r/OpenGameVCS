@@ -5,42 +5,27 @@ import test from 'node:test';
 
 import {
   OgvcsError, RegistrySnapshot, decodeCanonical, encodeMetadata, loadBundledRegistry,
-  registryAssignmentDecision
+  registryAssignmentDecision, validateRegistrySet
 } from '../src/index.js';
 
 const VECTORS = resolve(import.meta.dirname, '../../../../spec/repository-format/v1/vectors');
 const error = code => value => value instanceof OgvcsError && value.code === code && value.layer === 3;
 
 function registryWithExtension(live, state) {
-  return new RegistrySnapshot({
-    objectKinds: [...live.objectKinds.values()],
-    hashAlgorithms: [...live.hashAlgorithms.values()],
-    commonFields: [...live.commonFields.values()],
-    kindFields: [...live.kindFields.values()],
-    entryKinds: [...live.entryKinds.values()],
-    entryModes: [...live.entryModes.values()],
-    requiredFeatures: [...live.requiredFeatures.values()],
-    extensions: [{ namespace: 'extension-state.test', id: 'known', major: 1, state }],
-    profiles: [...live.profiles.values()].map(entry => ({
-      ...entry, state: 'ratified', productionWriteAllowed: true
-    })),
-    logicalRecordTypes: [...live.logicalRecordTypes.values()],
-    semanticEnums: [...live.semanticEnums].map(([name, entries]) => ({
-      name, entries: [...entries.values()]
-    })),
-    limits: [...live.limits.values()]
+  const documents = structuredClone(Object.fromEntries(live.documents));
+  documents['extensions.json'].entries.push({
+    namespace: 'extension-state.test', id: 'known', major: 1, state
   });
+  return validateRegistrySet(documents);
 }
 
 test('registry assignment lifecycle implements every state-operation combination', () => {
-  const operations = ['read', 'conformance', 'new-write', 'production-write'];
+  const operations = ['read', 'conformance', 'production-write'];
   const expected = new Map([
-    ['ratified', [undefined, undefined, undefined, undefined]],
-    ['deprecated', [undefined, undefined, 'PROFILE_STATE_FORBIDDEN', 'PROFILE_STATE_FORBIDDEN']],
-    ['conformance-only', ['PROFILE_CONFORMANCE_ONLY', undefined,
-      'PROFILE_CONFORMANCE_ONLY', 'PROFILE_CONFORMANCE_ONLY']],
-    ['reserved', ['PROFILE_STATE_FORBIDDEN', 'PROFILE_STATE_FORBIDDEN',
-      'PROFILE_STATE_FORBIDDEN', 'PROFILE_STATE_FORBIDDEN']]
+    ['ratified', [undefined, undefined, undefined]],
+    ['deprecated', [undefined, undefined, 'PROFILE_STATE_FORBIDDEN']],
+    ['conformance-only', ['PROFILE_CONFORMANCE_ONLY', undefined, 'PROFILE_CONFORMANCE_ONLY']],
+    ['reserved', ['PROFILE_STATE_FORBIDDEN', 'PROFILE_STATE_FORBIDDEN', 'PROFILE_STATE_FORBIDDEN']]
   ]);
   let executed = 0;
   for (const [state, outcomes] of expected) {
@@ -56,7 +41,7 @@ test('registry assignment lifecycle implements every state-operation combination
       executed += 1;
     }
   }
-  assert.equal(executed, 16);
+  assert.equal(executed, 12);
 });
 
 test('the shared lifecycle primitive dispatches every assignment collection', () => {
@@ -90,7 +75,7 @@ test('the shared lifecycle primitive dispatches every assignment collection', ()
 test('metadata production writes enforce known extension lifecycle but preserve unknown optional extensions', async () => {
   const live = await loadBundledRegistry();
   const value = decodeCanonical(new Uint8Array(await readFile(resolve(
-    VECTORS, 'objects/02-content-manifest.cbor'
+    VECTORS, 'objects/03-tree-child.cbor'
   ))));
   value.set(3, new Map([['extension-state.test/known@1', true]]));
   const deprecated = registryWithExtension(live, 'deprecated');

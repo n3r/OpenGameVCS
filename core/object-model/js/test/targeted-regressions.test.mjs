@@ -16,12 +16,15 @@ const VECTORS = resolve(import.meta.dirname, '../../../../spec/repository-format
 const error = (code, layer) => value => value instanceof OgvcsError && value.code === code && value.layer === layer;
 
 test('convenience bundle encoder memory-preflights caller values before normalization', async () => {
+  const registry = await loadBundledRegistry();
   let refRead = false;
   const item = {
     payload: Uint8Array.of(0x41),
     get ref() { refRead = true; throw new Error('ref must remain unread'); }
   };
-  assert.throws(() => encodeLogicalBundle({ objects: [item] }, { maxMemoryBytes: 1_000 }),
+  assert.throws(() => encodeLogicalBundle({ objects: [item] }, {
+    registry, operation: 'conformance', maxMemoryBytes: 1_000
+  }),
     error('LIMIT_MEMORY', 1));
   assert.equal(refRead, false);
 
@@ -30,8 +33,26 @@ test('convenience bundle encoder memory-preflights caller values before normaliz
   ))));
   annotation.set(18, new Uint8Array(400_000));
   assert.throws(() => encodeLogicalBundle({ logicalRecords: [annotation] }, {
-    maxMemoryBytes: 1_000_000
+    registry, operation: 'conformance', maxMemoryBytes: 1_000_000
   }), error('LIMIT_MEMORY', 1));
+
+  const descriptor = decodeCanonical(new Uint8Array(await readFile(resolve(
+    VECTORS, 'objects/06-repository-descriptor.cbor'
+  ))));
+  descriptor.set(3, new Map([[
+    'extension-state.test/opaque@1', new Array(1_000).fill(false)
+  ]]));
+  const compactPayload = encodeCanonical(descriptor);
+  const compactReference = hashObject(6, compactPayload);
+  let compactRefRead = false;
+  const compact = {
+    payload: compactPayload,
+    get ref() { compactRefRead = true; return compactReference; }
+  };
+  assert.throws(() => encodeLogicalBundle({ objects: [compact] }, {
+    registry, operation: 'conformance', maxMemoryBytes: 50_000
+  }), error('LIMIT_MEMORY', 1));
+  assert.equal(compactRefRead, false);
 });
 
 test('supplied-closure root membership rejects at layer two in both verifiers', async t => {
@@ -39,13 +60,13 @@ test('supplied-closure root membership rejects at layer two in both verifiers', 
     VECTORS, 'logical-bundles/scenario-bundle-root-invalid.cborseq'
   )));
   const registry = await loadBundledRegistry();
-  assert.throws(() => verifyLogicalBundle(payload, { registry, mode: 'conformance' }),
+  assert.throws(() => verifyLogicalBundle(payload, { registry, operation: 'conformance' }),
     error('BUNDLE_ROOT_INVALID', 2));
 
   const scratchDirectory = await mkdtemp(join(tmpdir(), 'ogvcs-root-layer-'));
   t.after(() => rm(scratchDirectory, { recursive: true, force: true }));
   await assert.rejects(verifyLogicalBundleStream([payload], {
-    registry, mode: 'conformance', scratchDirectory
+    registry, operation: 'conformance', scratchDirectory
   }), error('BUNDLE_ROOT_INVALID', 2));
   assert.deepEqual(await readdir(scratchDirectory), []);
 });
@@ -54,11 +75,11 @@ test('in-memory bundle verification accounts retained sequence state in one aggr
   const payload = new Uint8Array(await readFile(resolve(
     VECTORS, 'logical-bundles/valid-supplied-closure.cborseq'
   )));
-  assert.throws(() => verifyLogicalBundle(payload, { maxMemoryBytes: payload.length }),
+  assert.throws(() => verifyLogicalBundle(payload, { semantic: false, maxMemoryBytes: payload.length }),
     error('LIMIT_MEMORY', 1));
   // Decoding the sequence alone fits this ceiling; the second decoded object
   // representation plus lookup/root/closure indexes does not.
-  assert.throws(() => verifyLogicalBundle(payload, { maxMemoryBytes: 19_000 }),
+  assert.throws(() => verifyLogicalBundle(payload, { semantic: false, maxMemoryBytes: 19_000 }),
     error('LIMIT_MEMORY', 1));
 });
 
@@ -68,7 +89,7 @@ test('actual traversal beyond the header declaration is a layer-one bundle budge
   )));
   const registry = await loadBundledRegistry();
   const actualTraversalEdges = verifyLogicalBundle(original, {
-    registry, mode: 'conformance'
+    registry, operation: 'conformance'
   }).traversalEdges;
   const { values } = decodeSequence(original, { maxValueBytes: 536_870_912 });
   const header = new Map(values[0]);
@@ -86,13 +107,13 @@ test('actual traversal beyond the header declaration is a layer-one bundle budge
   const changed = Buffer.concat([...prefix, encodeCanonical(trailer)]);
   assert.equal(changed.length, original.length);
 
-  assert.throws(() => verifyLogicalBundle(changed, { registry, mode: 'conformance' }),
+  assert.throws(() => verifyLogicalBundle(changed, { registry, operation: 'conformance' }),
     error('BUNDLE_BUDGET_EXCEEDED', 1));
 
   const scratchDirectory = await mkdtemp(join(tmpdir(), 'ogvcs-budget-layer-'));
   t.after(() => rm(scratchDirectory, { recursive: true, force: true }));
   await assert.rejects(verifyLogicalBundleStream([changed], {
-    registry, mode: 'conformance', scratchDirectory
+    registry, operation: 'conformance', scratchDirectory
   }), error('BUNDLE_BUDGET_EXCEEDED', 1));
   assert.deepEqual(await readdir(scratchDirectory), []);
 });
@@ -142,12 +163,12 @@ test('actual traversal accounting precedes later closure failure', async t => {
   }
 
   const registry = await loadBundledRegistry();
-  assert.throws(() => verifyLogicalBundle(changed, { registry, mode: 'conformance' }),
+  assert.throws(() => verifyLogicalBundle(changed, { registry, operation: 'conformance' }),
     error('BUNDLE_BUDGET_EXCEEDED', 1));
   const scratchDirectory = await mkdtemp(join(tmpdir(), 'ogvcs-unreachable-budget-'));
   t.after(() => rm(scratchDirectory, { recursive: true, force: true }));
   await assert.rejects(verifyLogicalBundleStream([changed], {
-    registry, mode: 'conformance', scratchDirectory
+    registry, operation: 'conformance', scratchDirectory
   }), error('BUNDLE_BUDGET_EXCEEDED', 1));
   assert.deepEqual(await readdir(scratchDirectory), []);
 });
@@ -162,7 +183,7 @@ test('same-stage invalid required fields outrank unknown metadata fields across 
     const value = decodeCanonical(new Uint8Array(await readFile(resolve(VECTORS, path))));
     value.set(16, 'invalid-required-field');
     value.set(4095, true);
-    assert.throws(() => validateKnownSchema(value, kind), error('SCHEMA_FIELD_INVALID', 2), path);
+    assert.throws(() => validateKnownSchema(value, kind, { semantic: false }), error('SCHEMA_FIELD_INVALID', 2), path);
   }
 });
 
@@ -221,11 +242,11 @@ test('bundle-wide known-schema selection ranks later invalid before earlier unkn
 
   const selected = value => value instanceof OgvcsError && value.code === 'SCHEMA_FIELD_INVALID' &&
     value.layer === 2 && value.stage === 'known-schema';
-  assert.throws(() => verifyLogicalBundle(changed, { registry, mode: 'conformance' }), selected);
+  assert.throws(() => verifyLogicalBundle(changed, { registry, operation: 'conformance' }), selected);
   const scratchDirectory = await mkdtemp(join(tmpdir(), 'ogvcs-known-schema-rank-'));
   t.after(() => rm(scratchDirectory, { recursive: true, force: true }));
   await assert.rejects(verifyLogicalBundleStream([changed], {
-    registry, mode: 'conformance', scratchDirectory
+    registry, operation: 'conformance', scratchDirectory
   }), selected);
   assert.deepEqual(await readdir(scratchDirectory), []);
 });
@@ -236,6 +257,7 @@ test('configured resource preflight still outranks a deferred unknown field', as
   ))));
   manifest.set(4095, true);
   assert.throws(() => validateKnownSchema(manifest, 2, {
+    semantic: false,
     hardLimits: { 'manifest-chunks': 0 }
   }), error('LIMIT_COUNT', 2));
 });
@@ -246,6 +268,7 @@ test('configured count preflight never reads an over-limit tree element', async 
   const hostile = new Proxy({}, { get() { reads += 1; throw new Error('must not read'); } });
   tree.set(17, [hostile]);
   assert.throws(() => validateKnownSchema(tree, 3, {
+    semantic: false,
     hardLimits: { 'tree-entries': 0 }
   }), error('LIMIT_COUNT', 2));
   assert.equal(reads, 0);
@@ -255,7 +278,7 @@ test('entry schema failure outranks global tree order failure in the known-schem
   const tree = decodeCanonical(new Uint8Array(await readFile(resolve(VECTORS, 'objects/03-tree.cbor'))));
   tree.set(17, [...tree.get(17)].reverse());
   tree.get(17)[0].set(1, 99);
-  assert.throws(() => validateKnownSchema(tree, 3), error('SCHEMA_FIELD_INVALID', 2));
+  assert.throws(() => validateKnownSchema(tree, 3, { semantic: false }), error('SCHEMA_FIELD_INVALID', 2));
 });
 
 test('operation schema failure outranks change-set sequence failure', async () => {
@@ -264,7 +287,7 @@ test('operation schema failure outranks change-set sequence failure', async () =
   ))));
   changeSet.get(18)[0].set(0, 99);
   changeSet.get(18)[0].set(1, 99);
-  assert.throws(() => validateKnownSchema(changeSet, 4), error('SCHEMA_FIELD_INVALID', 2));
+  assert.throws(() => validateKnownSchema(changeSet, 4, { semantic: false }), error('SCHEMA_FIELD_INVALID', 2));
 });
 
 test('later tree-target failure outranks an earlier change-set sequence failure', async () => {
@@ -277,7 +300,7 @@ test('later tree-target failure outranks an earlier change-set sequence failure'
   const laterState = operations.slice(1).find(operation => operation.get(3) instanceof Map).get(3);
   assert.ok(laterState instanceof Map);
   laterState.set(3, Number(laterState.get(1)) === 1 ? 2 : 1);
-  assert.throws(() => validateKnownSchema(changeSet, 4), error('TREE_ENTRY_TARGET_INVALID', 2));
+  assert.throws(() => validateKnownSchema(changeSet, 4, { semantic: false }), error('TREE_ENTRY_TARGET_INVALID', 2));
 });
 
 test('later manifest-part schema failure outranks an earlier chunk-length failure', async () => {
@@ -286,7 +309,7 @@ test('later manifest-part schema failure outranks an earlier chunk-length failur
   ))));
   manifest.get(19)[0].set(1, 0);
   manifest.get(19)[1].set(0, false);
-  assert.throws(() => validateKnownSchema(manifest, 2), error('SCHEMA_FIELD_INVALID', 2));
+  assert.throws(() => validateKnownSchema(manifest, 2, { semantic: false }), error('SCHEMA_FIELD_INVALID', 2));
 });
 
 test('snapshot field schema failure outranks the duplicate-parent constraint', async () => {
@@ -296,7 +319,7 @@ test('snapshot field schema failure outranks the duplicate-parent constraint', a
   const parent = snapshot.get(17)[0] ?? snapshot.get(16);
   snapshot.set(17, [structuredClone(parent), structuredClone(parent)]);
   snapshot.set(25, 123);
-  assert.throws(() => validateKnownSchema(snapshot, 7), error('SCHEMA_FIELD_INVALID', 2));
+  assert.throws(() => validateKnownSchema(snapshot, 7, { semantic: false }), error('SCHEMA_FIELD_INVALID', 2));
 });
 
 test('mutable-ref names are nonempty', async () => {
@@ -304,7 +327,7 @@ test('mutable-ref names are nonempty', async () => {
     VECTORS, 'logical-records/02-mutable-ref.cbor'
   ))));
   record.set(18, '');
-  assert.throws(() => validateLogicalRecord(record), error('SCHEMA_FIELD_INVALID', 2));
+  assert.throws(() => validateLogicalRecord(record, { semantic: false }), error('SCHEMA_FIELD_INVALID', 2));
 });
 
 test('catalogue ranking covers every object, logical-record, and bundle-item shape', async () => {
@@ -318,7 +341,7 @@ test('catalogue ranking covers every object, logical-record, and bundle-item sha
     const kind = value.get(1);
     value.set(0, 2);
     value.set(4095, true);
-    assert.throws(() => validateKnownSchema(value, kind), error('SCHEMA_FIELD_INVALID', 2), file);
+    assert.throws(() => validateKnownSchema(value, kind, { semantic: false }), error('SCHEMA_FIELD_INVALID', 2), file);
   }
 
   for (let type = 1; type <= 9; type += 1) {
@@ -329,7 +352,7 @@ test('catalogue ranking covers every object, logical-record, and bundle-item sha
     const value = decodeCanonical(new Uint8Array(await readFile(resolve(VECTORS, 'logical-records', file))));
     value.set(0, 2);
     value.set(4095, true);
-    assert.throws(() => validateLogicalRecord(value), error('SCHEMA_FIELD_INVALID', 2), file);
+    assert.throws(() => validateLogicalRecord(value, { semantic: false }), error('SCHEMA_FIELD_INVALID', 2), file);
   }
 
   const { values } = decodeSequence(new Uint8Array(await readFile(resolve(
@@ -340,13 +363,13 @@ test('catalogue ranking covers every object, logical-record, and bundle-item sha
     value.set(4095, true);
     if (type === 1) value.get(6).set(0, 'invalid');
     else value.set(2, 'invalid');
-    assert.throws(() => validateBundleItem(value), error('SCHEMA_FIELD_INVALID', 2), `bundle type ${type}`);
+    assert.throws(() => validateBundleItem(value, { semantic: false }), error('SCHEMA_FIELD_INVALID', 2), `bundle type ${type}`);
   }
 
   const nested = structuredClone(values.find(item => item.get(1) === 3));
   nested.get(4).set(0, 2);
   nested.get(4).set(4095, true);
-  assert.throws(() => validateBundleItem(nested), error('SCHEMA_FIELD_INVALID', 2));
+  assert.throws(() => validateBundleItem(nested, { semantic: false }), error('SCHEMA_FIELD_INVALID', 2));
 });
 
 test('sequence ordering precedes too-small declared bytes in both bundle verifiers', async t => {
@@ -369,12 +392,12 @@ test('sequence ordering precedes too-small declared bytes in both bundle verifie
   trailer.set(6, hashBundleTranscript(prefix).toMap());
   const changed = Buffer.concat([...prefix, encodeCanonical(trailer)]);
 
-  assert.throws(() => verifyLogicalBundle(changed, { registry, mode: 'conformance' }),
+  assert.throws(() => verifyLogicalBundle(changed, { registry, operation: 'conformance' }),
     error('BUNDLE_SEQUENCE_INVALID', 1));
   const scratchDirectory = await mkdtemp(join(tmpdir(), 'ogvcs-accounting-order-'));
   t.after(() => rm(scratchDirectory, { recursive: true, force: true }));
   await assert.rejects(verifyLogicalBundleStream([changed], {
-    registry, mode: 'conformance', scratchDirectory
+    registry, operation: 'conformance', scratchDirectory
   }), error('BUNDLE_SEQUENCE_INVALID', 1));
   assert.deepEqual(await readdir(scratchDirectory), []);
 });
@@ -396,12 +419,12 @@ test('bundle object ordering precedes unsupported reference format', async t => 
   trailer.set(6, hashBundleTranscript(prefix).toMap());
   const changed = Buffer.concat([...prefix, encodeCanonical(trailer)]);
 
-  assert.throws(() => verifyLogicalBundle(changed, { registry, mode: 'conformance' }),
+  assert.throws(() => verifyLogicalBundle(changed, { registry, operation: 'conformance' }),
     error('BUNDLE_SEQUENCE_INVALID', 1));
   const scratchDirectory = await mkdtemp(join(tmpdir(), 'ogvcs-ref-order-'));
   t.after(() => rm(scratchDirectory, { recursive: true, force: true }));
   await assert.rejects(verifyLogicalBundleStream([changed], {
-    registry, mode: 'conformance', scratchDirectory
+    registry, operation: 'conformance', scratchDirectory
   }), error('BUNDLE_SEQUENCE_INVALID', 1));
   assert.deepEqual(await readdir(scratchDirectory), []);
 });
@@ -423,12 +446,12 @@ test('authenticated invalid bundle-root kind is a layer-two root failure in both
   trailer.set(6, hashBundleTranscript(prefix).toMap());
   const changed = Buffer.concat([...prefix, encodeCanonical(trailer)]);
 
-  assert.throws(() => verifyLogicalBundle(changed, { registry, mode: 'conformance' }),
+  assert.throws(() => verifyLogicalBundle(changed, { registry, operation: 'conformance' }),
     error('BUNDLE_ROOT_INVALID', 2));
   const scratchDirectory = await mkdtemp(join(tmpdir(), 'ogvcs-root-kind-'));
   t.after(() => rm(scratchDirectory, { recursive: true, force: true }));
   await assert.rejects(verifyLogicalBundleStream([changed], {
-    registry, mode: 'conformance', scratchDirectory
+    registry, operation: 'conformance', scratchDirectory
   }), error('BUNDLE_ROOT_INVALID', 2));
   assert.deepEqual(await readdir(scratchDirectory), []);
 });
@@ -467,16 +490,16 @@ test('authenticated out-of-domain logical types defer to layer-two support check
       declarations.set(0, changed.length);
       declarations.set(1, largest);
     }
-    assert.throws(() => verifyLogicalBundle(changed, { registry, mode: 'conformance' }),
+    assert.throws(() => verifyLogicalBundle(changed, { registry, operation: 'conformance' }),
       error('LOGICAL_RECORD_TYPE_UNSUPPORTED', 2), String(type));
     await assert.rejects(verifyLogicalBundleStream([changed], {
-      registry, mode: 'conformance', scratchDirectory
+      registry, operation: 'conformance', scratchDirectory
     }), error('LOGICAL_RECORD_TYPE_UNSUPPORTED', 2), String(type));
     assert.deepEqual(await readdir(scratchDirectory), []);
   }
 });
 
-test('asset-group repository-stage selection uses catalogue order across all groups', () => {
+test('asset-group repository-stage selection uses catalogue order across all groups', async () => {
   const profile = (namespace, id) => new Map([[0, namespace], [1, id], [2, 1]]);
   const fileA = new Uint8Array(16).fill(0x11);
   const fileB = new Uint8Array(16).fill(0x22);
@@ -488,7 +511,143 @@ test('asset-group repository-stage selection uses catalogue order across all gro
   ]);
   const groups = [group(1, fileA), group(2, fileA), group(3, fileB)];
   const fileIds = new Map([[`fid:${Buffer.from(fileA).toString('hex')}`, true]]);
-  assert.throws(() => validateAssetGroups(groups, fileIds), error('GROUP_MEMBER_INVALID', 3));
+  const registry = await loadBundledRegistry();
+  assert.throws(() => validateAssetGroups(groups, fileIds, {
+    registry,
+    mode: 'conformance'
+  }), error('GROUP_MEMBER_INVALID', 3));
+});
+
+test('asset-group shape preflight rejects outer, nested, and FileID proxies without caller code', async () => {
+  const profile = (namespace, id) => new Map([[0, namespace], [1, id], [2, 1]]);
+  const memberId = new Uint8Array(16).fill(0x44);
+  const validMember = new Map([[0, memberId], [1, profile('group-role.test', 'member')]]);
+  const validGroup = () => new Map([
+    [0, new Uint8Array(16).fill(0x55)],
+    [1, profile('group.test', 'opaque')],
+    [2, memberId],
+    [3, [validMember]]
+  ]);
+  const registry = await loadBundledRegistry();
+  let traps = 0;
+  const throwingProxy = value => new Proxy(value, {
+    getPrototypeOf() {
+      traps += 1;
+      throw new Error('caller trap must not run');
+    }
+  });
+  const rejectsShape = callback => assert.throws(callback,
+    error('SCHEMA_FIELD_INVALID', 2));
+
+  rejectsShape(() => validateAssetGroups(throwingProxy(new Map([['group', validGroup()]])),
+    new Set([`fid:${Buffer.from(memberId).toString('hex')}`]), { registry, mode: 'conformance' }));
+
+  const nested = validGroup();
+  nested.set(3, throwingProxy([validMember]));
+  rejectsShape(() => validateAssetGroups(new Map([['group', nested]]),
+    new Set([`fid:${Buffer.from(memberId).toString('hex')}`]), { registry, mode: 'conformance' }));
+
+  rejectsShape(() => validateAssetGroups(new Map([['group', validGroup()]]),
+    throwingProxy(new Set([`fid:${Buffer.from(memberId).toString('hex')}`])),
+    { registry, mode: 'conformance' }));
+  assert.equal(traps, 0);
+});
+
+test('asset-group configured rules are inertly snapshotted before validation', async () => {
+  const profile = (namespace, id) => new Map([[0, namespace], [1, id], [2, 1]]);
+  const memberId = new Uint8Array(16).fill(0x46);
+  const group = new Map([
+    [0, new Uint8Array(16).fill(0x57)],
+    [1, profile('group.test', 'opaque')],
+    [2, memberId],
+    [3, [new Map([[0, memberId], [1, profile('group-role.test', 'member')]])]]
+  ]);
+  const groups = new Map([['group', group]]);
+  const fileIds = new Set([`fid:${Buffer.from(memberId).toString('hex')}`]);
+  const registry = await loadBundledRegistry();
+  let traps = 0;
+  const throwingProxy = value => new Proxy(value, {
+    getPrototypeOf() {
+      traps += 1;
+      throw new Error('configured caller trap must not run');
+    },
+    get() {
+      traps += 1;
+      throw new Error('configured caller getter must not run');
+    }
+  });
+  const configuredError = value => error('SCHEMA_FIELD_INVALID', 1)(value) &&
+    value.stage === 'configured-resource-preflight';
+  const rejectsConfiguration = options => assert.throws(
+    () => validateAssetGroups(groups, fileIds, { registry, mode: 'conformance', ...options }),
+    configuredError
+  );
+
+  rejectsConfiguration({ groupProfileRules: throwingProxy(new Map()) });
+  rejectsConfiguration({ uniqueExternalKeyProfiles: throwingProxy([]) });
+  rejectsConfiguration({
+    groupProfileRules: new Map([['group.test/opaque@1', {
+      get roles() {
+        traps += 1;
+        throw new Error('configured rule getter must not run');
+      }
+    }]])
+  });
+  rejectsConfiguration({
+    groupProfileRules: new Map([['group.test/opaque@1', {
+      roles: throwingProxy([['group-role.test/member@1', 1, 1]])
+    }]])
+  });
+  const accessorOptions = { registry, mode: 'conformance' };
+  Object.defineProperty(accessorOptions, 'groupProfileRules', {
+    enumerable: true,
+    get() {
+      traps += 1;
+      throw new Error('top-level option getter must not run');
+    }
+  });
+  assert.throws(() => validateAssetGroups(groups, fileIds, accessorOptions), configuredError);
+
+  const unknownOptions = { registry, mode: 'conformance' };
+  Object.defineProperty(unknownOptions, 'unexpected', {
+    enumerable: true,
+    get() {
+      traps += 1;
+      throw new Error('unknown option getter must not run');
+    }
+  });
+  assert.throws(() => validateAssetGroups(groups, fileIds, unknownOptions), configuredError);
+
+  const hostileHardLimits = {};
+  Object.defineProperty(hostileHardLimits, 'unexpected', {
+    enumerable: true,
+    get() {
+      traps += 1;
+      throw new Error('unknown hard-limit getter must not run');
+    }
+  });
+  rejectsConfiguration({ hardLimits: hostileHardLimits });
+
+  const ruleWithUnknownField = { roles: [] };
+  Object.defineProperty(ruleWithUnknownField, 'unexpected', {
+    enumerable: true,
+    get() {
+      traps += 1;
+      throw new Error('unknown rule getter must not run');
+    }
+  });
+  rejectsConfiguration({
+    groupProfileRules: new Map([['group.test/opaque@1', ruleWithUnknownField]])
+  });
+
+  const profileWithUnknownField = Object.create(ProfileRef.prototype, {
+    namespace: { value: 'group.test', enumerable: true },
+    id: { value: 'opaque', enumerable: true },
+    major: { value: 1, enumerable: true },
+    unexpected: { value: true, enumerable: true }
+  });
+  rejectsConfiguration({ groupProfileRules: new Map([[profileWithUnknownField, { roles: [] }]]) });
+  assert.equal(traps, 0);
 });
 
 test('manifest reference resolution precedes chunk-length content semantics', async () => {
@@ -508,9 +667,10 @@ test('manifest reference resolution precedes chunk-length content semantics', as
   ]);
   const payload = encodeCanonical(manifest);
   const manifestReference = hashObject(2, payload);
+  const registry = await loadBundledRegistry();
   const lookup = new RepositoryObjectLookup([
     [manifestReference, payload], [presentReference, presentChunk]
-  ]);
+  ], { registry, mode: 'conformance' });
   assert.throws(() => verifyManifest(manifestReference, lookup), error('OBJECT_REFERENCE_MISSING', 2));
 });
 
@@ -527,7 +687,7 @@ test('repository lookup selects known-schema failures across the complete object
   const treeReference = hashObject(3, treePayload);
   const lookup = new RepositoryObjectLookup([
     [manifestReference, manifestPayload], [treeReference, treePayload]
-  ]);
+  ], { semanticProfiles: false });
   assert.throws(() => lookup.validateAll(), error('SCHEMA_FIELD_INVALID', 2));
 });
 
@@ -542,7 +702,7 @@ test('repository lookup completes whole-set framing and identity before schema',
   const wrongTreeReference = new ObjectRef(3, new Uint8Array(32));
   const lookup = new RepositoryObjectLookup([
     [manifestReference, manifestPayload], [wrongTreeReference, treePayload]
-  ]);
+  ], { semanticProfiles: false });
   assert.throws(() => lookup.validateAll(), error('OBJECT_ID_MISMATCH', 1));
 });
 
@@ -578,9 +738,9 @@ test('repository lookup budgets compact decoded containers and returned clones',
   // whole-set validation and resolve must bind that graph (and resolve's deep
   // clone) to the exact remaining budget instead of payload-length heuristics.
   assert.throws(() => new RepositoryObjectLookup([[reference, payload]], {
-    maxMemoryBytes: 50_000
+    semanticProfiles: false, maxMemoryBytes: 50_000
   }).validateAll(), error('LIMIT_MEMORY', 1));
   assert.throws(() => new RepositoryObjectLookup([[reference, payload]], {
-    maxMemoryBytes: 50_000
+    semanticProfiles: false, maxMemoryBytes: 50_000
   }).resolve(reference), error('LIMIT_MEMORY', 1));
 });

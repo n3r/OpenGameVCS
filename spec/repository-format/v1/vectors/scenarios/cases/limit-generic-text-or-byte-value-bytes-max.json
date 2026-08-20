@@ -1,6 +1,7 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [],
     "lifetimeRecords": [],
     "mode": "conformance",
@@ -132,17 +133,17 @@
         "path": "scenarios/outputs/limit-generic-text-or-byte-value-bytes-max.json",
         "sha256": "05b7c88726b4afda74c0eb4570d229a3677b41c23d0fa0d6b7e7435947acb494"
       },
-      "summarySha256": "a48569ad6abc38dfd755ddb181dd10e9474ae08174c59edb0887f31781824b5f"
+      "summarySha256": "c174dbd6d0fc9150277a2c68c69130221d88cd41e9cb0d3755463f25bd945043"
     },
     "result": "accept"
   },
   "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
   "inputs": [
     {
-      "bytes": 6677,
+      "bytes": 6711,
       "mediaType": "application/json",
       "path": "scenarios/definitions/limit-generic-text-or-byte-value-bytes-max.json",
-      "sha256": "f5cb9472c9b76dfd5883a4614b8b4f02f2fabb92701b21609e241d13ebd86fea"
+      "sha256": "5f710a1d129751e582f20b14c7ccf25afc2b28aa20c7dcfcf1b29bd2ea55f40f"
     }
   ],
   "operation": "validate-object",
@@ -155,18 +156,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/limit-generic-text-or-byte-value-bytes-max.json",
-        "definitionSha256": "f5cb9472c9b76dfd5883a4614b8b4f02f2fabb92701b21609e241d13ebd86fea",
+        "definitionSha256": "5f710a1d129751e582f20b14c7ccf25afc2b28aa20c7dcfcf1b29bd2ea55f40f",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "0ce1c114e377f1f81d084b2f1b91549e312f8412329016d43632b226abd4a41a"
     },
     "summary": {
-      "bytes": 11900,
+      "bytes": 11934,
       "indexEntries": 0,
       "items": 12,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "a48569ad6abc38dfd755ddb181dd10e9474ae08174c59edb0887f31781824b5f",
+      "summarySha256": "c174dbd6d0fc9150277a2c68c69130221d88cd41e9cb0d3755463f25bd945043",
       "traversalEdges": 0
     }
   },

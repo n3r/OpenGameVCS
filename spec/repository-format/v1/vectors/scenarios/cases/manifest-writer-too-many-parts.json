@@ -1,0 +1,94 @@
+{
+  "context": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 13,
+          "mediaType": "application/octet-stream",
+          "path": "scenarios/objects/manifest-writer-too-many-parts/chunk-0.bin",
+          "sha256": "37c757348e671599102d25f0c58362f5924a94fd313f4478cec8e3139f8886f5"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:8ae03cdb20ee0500d1cc4e9c5403469c318e1a3ec3a31826751650221c3550e1"
+      },
+      {
+        "artifact": {
+          "bytes": 136,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/manifest-writer-too-many-parts/manifest.cbor",
+          "sha256": "f28750ac37b12d427f40291640ee2414ff52266134529c48a87be0661f2bb32e"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:c90f74b546e1db00e1d4146909d87d8f43b6c9cc4828094b576e03e5e3656e04"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
+      "registryVersion": 1
+    },
+    "requestedLayer": 2,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "expected": {
+    "code": "SCHEMA_FIELD_INVALID",
+    "layer": 2,
+    "result": "reject",
+    "stage": "known-schema"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "inputs": [
+    {
+      "bytes": 710,
+      "mediaType": "application/json",
+      "path": "scenarios/operations/manifest-writer-too-many-parts.json",
+      "sha256": "e6f740dcacd40b83db9ee7166ab801267c8a0965188e0c537392e345d22d5d10"
+    },
+    {
+      "bytes": 12,
+      "mediaType": "application/octet-stream",
+      "path": "objects/01-chunk.bin",
+      "sha256": "36fcc2e9442be1071c275604af6e41bd93875c743dc2fdaa6037662df74c5894"
+    },
+    {
+      "bytes": 3483,
+      "mediaType": "application/json",
+      "path": "scenarios/definitions/manifest-writer-too-many-parts.json",
+      "sha256": "4993f3e7538ae8c238a11a54b54e1d5efac2b717e06b65c81fa80f92e1c392d5"
+    }
+  ],
+  "operation": "write-content-manifest",
+  "requirementIds": [
+    "OGVCS-002-AC-08",
+    "OGVCS-002-AC-09",
+    "OGVCS-002-FR-09",
+    "OGVCS-002-NFR-01",
+    "OGVCS-002-NFR-04"
+  ],
+  "resources": {
+    "recipe": {
+      "generator": "ogvcs.repository-validation-scenario-constructor/v1",
+      "parameters": {
+        "definition": "scenarios/definitions/manifest-writer-too-many-parts.json",
+        "definitionSha256": "4993f3e7538ae8c238a11a54b54e1d5efac2b717e06b65c81fa80f92e1c392d5",
+        "runtimeHighWaterMarks": "not-asserted"
+      },
+      "seed": "9c343b2ea33b55d4a36a312725cd4378b97c414ac0c103f7a7da20ce240e45b5"
+    },
+    "summary": {
+      "bytes": 4354,
+      "indexEntries": 0,
+      "items": 2,
+      "peakMemoryBytes": 0,
+      "scratchBytes": 0,
+      "summarySha256": "3000547ad2a0a1b467539ccc7da27c4e70a75d32f14d54a60c06c6eccccaac33",
+      "traversalEdges": 0
+    }
+  },
+  "scenarioId": "manifest-writer-too-many-parts",
+  "schemaVersion": "ogvcs.repository-format/validation-scenario/v1"
+}

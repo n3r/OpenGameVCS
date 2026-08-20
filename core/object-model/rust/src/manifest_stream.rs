@@ -11,6 +11,7 @@ use crate::{
     Error, ErrorCode, ObjectHashWriter, ObjectKind, ObjectRef, Operation, ProfileRef, Registry,
     RegistryAssignment, Result, Sha256Writer, ValidationStage,
 };
+use crate::registry::require_write_operation;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ManifestStreamPart {
@@ -124,7 +125,7 @@ impl Budget {
             count,
             self.limits.max_parts,
             ErrorCode::LimitCount,
-            2,
+            1,
         )
     }
 }
@@ -191,8 +192,10 @@ struct PartPass {
 
 /// Preflights the lightweight part iterator, streams every referenced byte
 /// once, derives the whole-file digest, then replays the iterator to emit a
-/// canonical `ContentManifestV1`. The factory must return the same ordered
-/// parts on all three calls.
+/// canonical `ContentManifestV1`. The factory must return exactly
+/// `declared_parts` identical ordered parts on all three calls. A caller shape
+/// mismatch is `SCHEMA_FIELD_INVALID`; configured/hard count ceilings remain
+/// `LIMIT_COUNT`.
 #[allow(clippy::too_many_arguments)]
 pub fn encode_content_manifest_stream<W, F, I, S>(
     writer: W,
@@ -210,6 +213,8 @@ where
     I: IntoIterator<Item = ManifestStreamPart>,
     S: ManifestChunkSource + ?Sized,
 {
+    registry.require_complete_authority()?;
+    require_write_operation(operation)?;
     encode_manifest_internal(
         writer,
         declared_parts,
@@ -244,6 +249,8 @@ where
     I: IntoIterator<Item = ManifestStreamPart>,
     S: ManifestChunkSource + ?Sized,
 {
+    registry.require_complete_authority()?;
+    require_write_operation(operation)?;
     encode_manifest_internal(
         writer,
         declared_parts,
@@ -277,8 +284,6 @@ where
 {
     let budget = Budget::new(limits)?;
     budget.check_count(declared_parts)?;
-    validate_manifest_assignments(registry, operation)?;
-    validate_chunk_profile(chunk_profile, registry, operation)?;
     if let Some((logical, _)) = expected {
         manifest_limit(
             "logical-file-bytes",
@@ -308,6 +313,11 @@ where
         }
     }
 
+    // Complete all bounded count, shape, chunk identity, and whole-file
+    // agreement passes before item-derived registry/profile lifecycle.
+    validate_manifest_assignments(registry, operation)?;
+    validate_chunk_profile(chunk_profile, registry, operation)?;
+
     budget.check_time()?;
     let mut sink = CanonicalSink::new(writer, budget.limits.max_output_bytes);
     sink.head(5, 7)?;
@@ -334,8 +344,9 @@ where
         second_count = second_count
             .checked_add(1)
             .ok_or_else(|| Error::new(ErrorCode::LimitCount))?;
+        budget.check_count(second_count)?;
         if second_count > declared_parts {
-            return Err(Error::new(ErrorCode::LimitCount));
+            return Err(declared_part_count_error());
         }
         validate_part(&part, &budget)?;
         second_logical = add_logical(second_logical, part.length, &budget)?;
@@ -344,7 +355,7 @@ where
         sink.bytes(&encoded)?;
     }
     if second_count != declared_parts {
-        return Err(Error::new(ErrorCode::LimitCount));
+        return Err(declared_part_count_error());
     }
     if second_logical != pass.logical_bytes || second_transcript.finish() != pass.part_transcript {
         return Err(Error::new(ErrorCode::ManifestLengthMismatch));
@@ -367,25 +378,61 @@ where
     let mut count = 0u64;
     let mut logical_bytes = 0u64;
     let mut transcript = Sha256Writer::new();
+    let mut best_error = None;
     for part in parts {
         budget.check_time()?;
         count = count
             .checked_add(1)
             .ok_or_else(|| Error::new(ErrorCode::LimitCount))?;
+        budget.check_count(count)?;
         if count > declared_parts {
-            return Err(Error::new(ErrorCode::LimitCount));
+            observe_manifest_preflight_error(&mut best_error, declared_part_count_error());
         }
-        validate_part(&part, budget)?;
+        if let Err(error) = validate_part(&part, budget) {
+            if manifest_error_is_resource(&error) {
+                return Err(error);
+            }
+            observe_manifest_preflight_error(&mut best_error, error);
+            continue;
+        }
         logical_bytes = add_logical(logical_bytes, part.length, budget)?;
         transcript.update(&encode_part(&part));
     }
     if count != declared_parts {
-        return Err(Error::new(ErrorCode::LimitCount));
+        observe_manifest_preflight_error(&mut best_error, declared_part_count_error());
+    }
+    if let Some(error) = best_error {
+        return Err(error);
     }
     Ok(PartPass {
         logical_bytes,
         part_transcript: transcript.finish(),
     })
+}
+
+fn observe_manifest_preflight_error(best: &mut Option<Error>, error: Error) {
+    if best
+        .as_ref()
+        .is_none_or(|current| error.precedence_key() < current.precedence_key())
+    {
+        *best = Some(error);
+    }
+}
+
+fn manifest_error_is_resource(error: &Error) -> bool {
+    matches!(
+        error.code,
+        ErrorCode::LimitMetadataBytes
+            | ErrorCode::LimitChunkBytes
+            | ErrorCode::LimitNesting
+            | ErrorCode::LimitCount
+            | ErrorCode::LimitMemory
+            | ErrorCode::LimitScratch
+            | ErrorCode::LimitTime
+            | ErrorCode::LimitValueBytes
+            | ErrorCode::LimitExtensionBytes
+            | ErrorCode::LimitLogicalBytes
+    )
 }
 
 fn verify_content<I, S>(
@@ -402,16 +449,24 @@ where
     let mut logical_bytes = 0u64;
     let mut whole_file = Sha256Writer::new();
     let mut transcript = Sha256Writer::new();
+    let mut best_error = None;
     for part in parts {
         budget.check_time()?;
         let part_index = count;
         count = count
             .checked_add(1)
             .ok_or_else(|| Error::new(ErrorCode::LimitCount))?;
+        budget.check_count(count)?;
         if count > declared_parts {
-            return Err(Error::new(ErrorCode::LimitCount));
+            observe_manifest_preflight_error(&mut best_error, declared_part_count_error());
         }
-        validate_part(&part, budget)?;
+        if let Err(error) = validate_part(&part, budget) {
+            if manifest_error_is_resource(&error) {
+                return Err(error);
+            }
+            observe_manifest_preflight_error(&mut best_error, error);
+            continue;
+        }
         logical_bytes = add_logical(logical_bytes, part.length, budget)?;
         transcript.update(&encode_part(&part));
 
@@ -438,22 +493,47 @@ where
             whole_file.update(bytes);
             Ok(())
         };
-        source.stream_chunk(part_index, &part, &mut consume)?;
-        if emitted != part.length {
-            return Err(Error::new(ErrorCode::ManifestChunkLengthInvalid));
+        if let Err(error) = source.stream_chunk(part_index, &part, &mut consume) {
+            if manifest_error_is_resource(&error) {
+                return Err(error);
+            }
+            observe_manifest_preflight_error(&mut best_error, error);
+            continue;
         }
-        if chunk_hash.finish()? != part.chunk {
-            return Err(Error::new(ErrorCode::ObjectIdMismatch));
+        if emitted != part.length {
+            observe_manifest_preflight_error(
+                &mut best_error,
+                Error::new(ErrorCode::ManifestChunkLengthInvalid),
+            );
+            continue;
+        }
+        match chunk_hash.finish() {
+            Ok(actual) if actual == part.chunk => {}
+            Ok(_) => observe_manifest_preflight_error(
+                &mut best_error,
+                Error::new(ErrorCode::ObjectIdMismatch),
+            ),
+            Err(error) if manifest_error_is_resource(&error) => return Err(error),
+            Err(error) => observe_manifest_preflight_error(&mut best_error, error),
         }
     }
     if count != declared_parts {
-        return Err(Error::new(ErrorCode::LimitCount));
+        observe_manifest_preflight_error(&mut best_error, declared_part_count_error());
+    }
+    if let Some(error) = best_error {
+        return Err(error);
     }
     Ok(ContentPass {
         logical_bytes,
         whole_file_digest: whole_file.finish(),
         part_transcript: transcript.finish(),
     })
+}
+
+fn declared_part_count_error() -> Error {
+    Error::new(ErrorCode::SchemaFieldInvalid)
+        .with_layer(2)
+        .with_stage(ValidationStage::KnownSchema)
 }
 
 fn validate_part(part: &ManifestStreamPart, budget: &Budget) -> Result<()> {

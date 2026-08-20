@@ -67,25 +67,48 @@ objects enter the lookup. Larger graph validation must use an explicitly
 bounded caller-owned lookup/service rather than relying on unbounded defaults.
 
 Ratified `path.opengamevcs/*@1` assignments are owned by OGVCS-004. This crate
-recognizes their registry lifecycle but deliberately returns
-`PATH_PROFILE_INVALID` during tree expansion until a version-pinned external
-path adapter is integrated; it never treats registry recognition as proof that
-platform/collision semantics ran. The built-in `path.test/*` profiles remain
-conformance-only fixtures.
+recognizes their registry lifecycle but never treats registry recognition as
+proof that platform/collision semantics ran. Supply an implementation of
+`PathProfileValidator`, pinned by `profile()` to the descriptor's exact
+namespace/id/major and by `case_mode()` to the authenticated repository
+`PathCaseMode`, through `expand_tree_with_path_profile_validator` or
+`RepositoryContext::{path_profile_validator,path_case_mode}`. The validator receives each
+complete core-valid joined path. Every accepted decision must return both
+nonempty, at-most-32,768-scalar repository/platform collision keys; duplicate
+keys reject the expansion. A missing or mismatched adapter fails closed with
+`PATH_PROFILE_INVALID`, including for an empty tree.
+The built-in `path.test/*` profiles remain conformance-only fixtures and do not
+delegate their test semantics to an external adapter.
 
-`visit_logical_bundle` is the small streaming framing/visitor boundary. For a
-complete supplied-closure decision, use `verify_logical_bundle_stream` with any
-`Read`, or `verify_logical_bundle_file` for same-handle file verification:
+`visit_logical_bundle` is the small streaming framing/visitor boundary.
+`BundleLimits::max_capture_bytes` bounds the aggregate capacity of active and
+retained canonical-map-key capture buffers; growth is admitted before
+allocation. The complete verifier derives this ceiling from its single
+`max_memory_bytes` budget after reserving its resident spool/index workspace.
+For a complete supplied-closure decision, use `verify_logical_bundle_stream`
+with any `Read`, or `verify_logical_bundle_file` for same-handle file
+verification:
 
 ```rust
 use ogvcs_object_model::{
-    verify_logical_bundle_file, LogicalBundleVerifyOptions, Registry,
+    verify_logical_bundle_file, LogicalBundleVerifyOptions, Operation, Registry,
 };
 
 let registry = Registry::bundled();
-let options = LogicalBundleVerifyOptions::new(scratch_directory, &registry);
-let summary = verify_logical_bundle_file(bundle_path, options)?;
-assert_eq!(summary.highest_layer, 2);
+let layer_two = verify_logical_bundle_file(
+    bundle_path,
+    LogicalBundleVerifyOptions::layer2(scratch_directory),
+)?;
+assert_eq!(layer_two.highest_layer, 2);
+let semantic = verify_logical_bundle_file(
+    bundle_path,
+    LogicalBundleVerifyOptions::semantic(
+        scratch_directory,
+        &registry,
+        Operation::Read,
+    ),
+)?;
+assert_eq!(semantic.highest_layer, 3);
 # Ok::<(), ogvcs_object_model::Error>(())
 ```
 
@@ -125,21 +148,26 @@ let mut bytes = Vec::new();
 let mut writer = LogicalBundleWriter::new(
     &mut bytes,
     plan,
-    LogicalBundleWriteOptions::new(&registry),
+    LogicalBundleWriteOptions::new(&registry, Operation::ConformanceWrite),
 )?;
 let summary = writer.finish()?;
 assert_eq!(summary.items, 2);
 # Ok::<(), ogvcs_object_model::Error>(())
 ```
 
-Before each item is emitted, the writer validates canonical shape, object and
-logical-record identity, known base schema, registry/profile context, ordering,
-counts, and actual traversal/index accounting. Object payload slices are
-forwarded byte-for-byte and are never re-encoded. Header and trailer bytes are
-included in sequence/largest-item enforcement, and the trailer contains the
-exact transcript digest. A validation failure before emission is retryable; an
-I/O failure or an elapsed-time stop during emission may leave a partial item and
-poisons that writer. `LogicalBundleWriteLimits` applies finite memory and
+Before each item is emitted, the writer checks its bounded canonical framing,
+identity, known schema, registry/profile context, ordering, counts, and actual
+traversal/index accounting. Safely continuable declared-identity, known-schema,
+and lifecycle findings are retained across the complete section so a later
+lower-stage failure is selected deterministically at `finish`; structurally
+terminal framing, ordering, resource, I/O, and elapsed-time failures stop the
+attempt immediately. Object payload slices are forwarded byte-for-byte and are
+never re-encoded. Header and trailer bytes are included in
+sequence/largest-item enforcement, and the trailer contains the exact
+transcript digest. Any error returned by a write call or by `finish` poisons
+that writer; replacing a rejected item cannot turn the same attempt into a
+successful bundle. A failure may leave bytes only in the caller-designated
+untrusted staging sink. `LogicalBundleWriteLimits` applies finite memory and
 elapsed-time ceilings (64 MiB and ten minutes by default). Memory accounting
 covers writer-owned decoded/encoded values and canonical-key working state;
 borrowed caller-owned inputs are not charged twice. The ordered writer uses no

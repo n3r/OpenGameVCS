@@ -2,6 +2,7 @@
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
     "candidateSnapshot": "ogvcs:v1:snapshot:sha256:7315250f7e7a26069066343932c021d63e2434836040abad64b15b05a3fdfbda",
+    "caseMode": "case-sensitive",
     "designatedRoot": "ogvcs:v1:snapshot:sha256:0ac217a384f2ebb14dbe4400972d05ac5dd13e9b4272411d71e68448e27f18b5",
     "importMappings": [],
     "lifetimeRecords": [],
@@ -87,10 +88,10 @@
       "sha256": "5049f0e4ed1e951d5554f6783876d0b669ca5b184787c317160847cb33761db3"
     },
     {
-      "bytes": 4733,
+      "bytes": 4767,
       "mediaType": "application/json",
       "path": "scenarios/definitions/history-missing-parent.json",
-      "sha256": "9dfbd7dd5374fb8c49b3e319effa8e5895827ba444a4b87c50d436cc913307f1"
+      "sha256": "e7ba0a0ee020951023e0cb281500f62052b65f20e5607812a8ea361c6d39bc0f"
     }
   ],
   "operation": "validate-repository",
@@ -103,18 +104,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/history-missing-parent.json",
-        "definitionSha256": "9dfbd7dd5374fb8c49b3e319effa8e5895827ba444a4b87c50d436cc913307f1",
+        "definitionSha256": "e7ba0a0ee020951023e0cb281500f62052b65f20e5607812a8ea361c6d39bc0f",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "3b1bea3c42ccd71230983135da6f8573d18e3953591678cbd1f5c19db5bb3c3a"
     },
     "summary": {
-      "bytes": 5890,
+      "bytes": 5924,
       "indexEntries": 0,
       "items": 6,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "104781023d11161fd431421c37538feda1ce5c8f11218069047228ba53adb2bf",
+      "summarySha256": "6278f50b08104765e13d47b94604f2924b042d1e377ee952a98744ecfa2a5971",
       "traversalEdges": 0
     }
   },

@@ -15,8 +15,10 @@
   "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
   "normativeContext": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [
       {
+        "descriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
         "fileId": "53535353535353535353535353535353",
         "importerProfile": "importer.test/fixture-adapter@1",
         "mappingKey": "eb07c76be60687c1360a59b05e8457fd7c1e26e755be5d71725ed92b42eb45d4",

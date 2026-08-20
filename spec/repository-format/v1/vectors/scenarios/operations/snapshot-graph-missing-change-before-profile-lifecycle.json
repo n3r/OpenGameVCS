@@ -1,0 +1,8 @@
+{
+  "api": "validate-snapshot-graph",
+  "authorityContext": "scenario.context",
+  "candidateSnapshot": "ogvcs:v1:snapshot:sha256:89ca4f666e08515d4a42a808539e4186d72e794d0af72ca52c25f5174ee9c852",
+  "designatedRoot": "ogvcs:v1:snapshot:sha256:89ca4f666e08515d4a42a808539e4186d72e794d0af72ca52c25f5174ee9c852",
+  "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+  "schema": "ogvcs.repository-format.v1.repository-route-input.v1"
+}

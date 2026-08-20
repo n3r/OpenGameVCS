@@ -1,6 +1,8 @@
 import { fail } from './errors.js';
 import { configuredHardLimit, hardLimitMaximum } from './hard-limits.js';
 import { ResourceGuard } from './scale-util.js';
+import { validationMode } from './validation-mode.js';
+import { isUnicode15String } from './unicode-age.js';
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
@@ -10,6 +12,7 @@ const DEFAULTS = Object.freeze({
   maxChunkBytes: hardLimitMaximum('chunk-payload-bytes'),
   maxMetadataBytes: hardLimitMaximum('metadata-payload-bytes'),
   maxValueBytes: hardLimitMaximum('generic-text-or-byte-value-bytes'),
+  maxCaptureBytes: 67_108_864,
   maxContainerItems: hardLimitMaximum('manifest-chunks'),
   maxNesting: hardLimitMaximum('cbor-nesting-depth'),
   payloadChunkBytes: 65_536,
@@ -46,6 +49,7 @@ function compare(a, b) {
 }
 
 function optionsOf(options) {
+  validationMode(options.mode);
   const out = { ...DEFAULTS, ...options };
   for (const name of Object.keys(DEFAULTS)) {
     if (!Number.isSafeInteger(out[name]) || out[name] < (name === 'maxNesting' || name === 'payloadChunkBytes' ? 1 : 0)) {
@@ -79,6 +83,7 @@ class AsyncReader {
   #cursor = 0;
   #done = false;
   #captures = [];
+  #captureBytes = 0;
   constructor(input, options, visitor) {
     this.#iterator = sourceOf(input)[Symbol.asyncIterator]?.() ?? (async function* (source) { yield* source; })(sourceOf(input))[Symbol.asyncIterator]();
     this.options = options;
@@ -116,7 +121,9 @@ class AsyncReader {
     if (count > this.options.maxSequenceBytes - this.offset) fail('BUNDLE_BUDGET_EXCEEDED', {
       layer: 1, stage: 'configured-resource-preflight', offset: this.offset
     });
-    if (count > this.options.maxItemBytes - (this.offset - this.itemStart)) fail('LIMIT_METADATA_BYTES', { layer: 1, offset: this.offset });
+    if (count > this.options.maxItemBytes - (this.offset - this.itemStart)) fail('BUNDLE_BUDGET_EXCEEDED', {
+      layer: 1, stage: 'configured-resource-preflight', offset: this.offset
+    });
     let remaining = count;
     while (remaining > 0) {
       if (!await this.#fill()) fail('CBOR_TRUNCATED', { layer: 1, offset: this.offset });
@@ -130,9 +137,20 @@ class AsyncReader {
         const required = capture.length + part.length;
         if (required > capture.buffer.length) {
           const capacity = Math.min(capture.limit, Math.max(required, Math.max(1, capture.buffer.length * 2)));
-          const grown = new Uint8Array(capacity);
-          grown.set(capture.buffer.subarray(0, capture.length));
-          capture.buffer = grown;
+          // The old and replacement buffers coexist while the replacement is
+          // allocated and copied. Admit the replacement's complete capacity
+          // before allocation, then release the old capacity after transfer.
+          this.#reserveCapture(capacity);
+          try {
+            const old = capture.buffer;
+            const grown = new Uint8Array(capacity);
+            grown.set(old.subarray(0, capture.length));
+            capture.buffer = grown;
+            this.#releaseCapture(old.length);
+          } catch (error) {
+            this.#releaseCapture(capacity);
+            throw error;
+          }
         }
         capture.buffer.set(part, capture.length);
         capture.length += part.length;
@@ -143,21 +161,65 @@ class AsyncReader {
       if (callback) await this.wait(signal => callback(part, { signal }));
     }
   }
+  #reserveCapture(bytes) {
+    if (!Number.isSafeInteger(bytes) || bytes < 0 ||
+        bytes > this.options.maxCaptureBytes - this.#captureBytes) {
+      fail('LIMIT_MEMORY', { layer: 1, offset: this.offset });
+    }
+    this.#captureBytes += bytes;
+  }
+  #releaseCapture(bytes) {
+    if (!Number.isSafeInteger(bytes) || bytes < 0 || bytes > this.#captureBytes) {
+      fail('SCHEMA_FIELD_INVALID', { layer: 1, stage: 'canonical-framing', offset: this.offset });
+    }
+    this.#captureBytes -= bytes;
+  }
   async byte() {
     let value;
     await this.take(1, part => { value = part[0]; });
     return value;
   }
   capture(limit = this.options.maxValueBytes + 16) {
-    const state = { buffer: new Uint8Array(Math.min(64, limit)), length: 0, limit };
+    const capacity = Math.min(64, limit);
+    this.#reserveCapture(capacity);
+    let buffer;
+    try { buffer = new Uint8Array(capacity); }
+    catch (error) { this.#releaseCapture(capacity); throw error; }
+    const state = { buffer, length: 0, limit };
+    let active = true;
     this.#captures.push(state);
-    return () => {
+    const detach = () => {
+      if (!active) return false;
       if (this.#captures.at(-1) !== state) fail('SCHEMA_FIELD_INVALID', {
         layer: 1, stage: 'canonical-framing'
       });
       this.#captures.pop();
-      return state.buffer.slice(0, state.length);
+      active = false;
+      return true;
     };
+    return Object.freeze({
+      abort: () => {
+        if (!detach()) return;
+        this.#releaseCapture(state.buffer.length);
+      },
+      finish: () => {
+        if (!detach()) fail('SCHEMA_FIELD_INVALID', {
+          layer: 1, stage: 'canonical-framing'
+        });
+        // Transfer the already-admitted buffer into the retained key instead
+        // of copying it. Its full capacity remains charged until release.
+        const bytes = state.buffer.subarray(0, state.length);
+        let retained = true;
+        return Object.freeze({
+          bytes,
+          release: () => {
+            if (!retained) return;
+            retained = false;
+            this.#releaseCapture(state.buffer.length);
+          }
+        });
+      }
+    });
   }
   async eof() { return !(await this.#fill()); }
   async close() {
@@ -232,7 +294,8 @@ async function scanValue(reader, depth = 1) {
     await reader.take(length, part => { body.set(part, offset); offset += part.length; });
     let text;
     try { text = decoder.decode(body); } catch (cause) { fail('CBOR_NON_CANONICAL', { layer: 1, offset: item.start, cause }); }
-    if (encoder.encode(text).length !== body.length || text.normalize('NFC') !== text) fail('CBOR_NON_CANONICAL', { layer: 1, offset: item.start });
+    if (encoder.encode(text).length !== body.length || !isUnicode15String(text) ||
+        text.normalize('NFC') !== text) fail('CBOR_NON_CANONICAL', { layer: 1, offset: item.start });
     return;
   }
   if (depth > reader.options.maxNesting) fail('LIMIT_NESTING', { layer: 1, offset: item.start });
@@ -243,13 +306,27 @@ async function scanValue(reader, depth = 1) {
   }
   if (item.major === 5) {
     let previous;
-    for (let index = 0; index < length; index++) {
-      const finish = reader.capture();
-      await scanValue(reader, depth + 1);
-      const key = finish();
-      if (previous && compare(previous, key) >= 0) fail('CBOR_NON_CANONICAL', { layer: 1, offset: item.start });
-      previous = key;
-      await scanValue(reader, depth + 1);
+    try {
+      for (let index = 0; index < length; index++) {
+        const capture = reader.capture();
+        let current;
+        try {
+          await scanValue(reader, depth + 1);
+          current = capture.finish();
+        } catch (error) {
+          capture.abort();
+          throw error;
+        }
+        if (previous && compare(previous.bytes, current.bytes) >= 0) {
+          current.release();
+          fail('CBOR_NON_CANONICAL', { layer: 1, offset: item.start });
+        }
+        previous?.release();
+        previous = current;
+        await scanValue(reader, depth + 1);
+      }
+    } finally {
+      previous?.release();
     }
     return;
   }
@@ -343,7 +420,7 @@ export async function visitLogicalBundle(input, visitor = {}, options = {}) {
   let failure;
   try {
     while (!await reader.eof()) {
-      if (items >= effective.maxItems) fail('LIMIT_COUNT', {
+      if (items >= effective.maxItems) fail('BUNDLE_BUDGET_EXCEEDED', {
         layer: 1, stage: 'configured-resource-preflight', offset: reader.offset
       });
       await bundleItem(reader, visitor, items++);

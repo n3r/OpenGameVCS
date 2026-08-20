@@ -1,6 +1,7 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [],
     "lifetimeRecords": [],
     "mode": "conformance",
@@ -138,10 +139,10 @@
       "sha256": "8f497e0c2784222c9b35a3dfcef8c98a1d11f50594f6823a82de13d6ce3e78b2"
     },
     {
-      "bytes": 6522,
+      "bytes": 6556,
       "mediaType": "application/json",
       "path": "scenarios/definitions/hash-tampered-object.json",
-      "sha256": "4844f4723aed6928c8472d03c1860855375c99c6e4d3c830375316a814430ae3"
+      "sha256": "4e6528f9d5c19ac8cea15f820a24c8048f170a9643c01d31f68aebe9addce1e0"
     }
   ],
   "operation": "canonical-scan",
@@ -154,18 +155,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/hash-tampered-object.json",
-        "definitionSha256": "4844f4723aed6928c8472d03c1860855375c99c6e4d3c830375316a814430ae3",
+        "definitionSha256": "4e6528f9d5c19ac8cea15f820a24c8048f170a9643c01d31f68aebe9addce1e0",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "ba4ee28600640feccd7b7276829716011ac88ac8cab73cd0d850c140cce412a8"
     },
     "summary": {
-      "bytes": 11745,
+      "bytes": 11779,
       "indexEntries": 0,
       "items": 12,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "13a59598ae3fad7372c04b8ff8b14d617a717bf3f8b5f68d0f9c4fd0d9ec8273",
+      "summarySha256": "866c0ec366cfedaf8a7fa16d3c1692d03d9a8e169a22ff7ca9368e591f0a82d7",
       "traversalEdges": 0
     }
   },

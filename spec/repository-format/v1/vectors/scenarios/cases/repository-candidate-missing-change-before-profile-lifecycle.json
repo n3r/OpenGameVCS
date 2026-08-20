@@ -1,0 +1,118 @@
+{
+  "context": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "candidateSnapshot": "ogvcs:v1:snapshot:sha256:153986340de529797a29ce9b244bbb82da0247c74acaf997d7d89c4432d1150a",
+    "caseMode": "case-sensitive",
+    "designatedRoot": "ogvcs:v1:snapshot:sha256:0ac217a384f2ebb14dbe4400972d05ac5dd13e9b4272411d71e68448e27f18b5",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "production",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 52,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/repository-candidate-missing-change-before-profile-lifecycle/root-change.cbor",
+          "sha256": "ef6e897742ff4d1220c8cd636f2a889a8f8746b2e97b2b7dad6fec4dc3747a6d"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:82cc41e5e86d1397579a8ebfc7ea6c7d9102552130f4da86ca592fc3c10a424c"
+      },
+      {
+        "artifact": {
+          "bytes": 274,
+          "mediaType": "application/cbor",
+          "path": "objects/06-repository-descriptor.cbor",
+          "sha256": "677905a883b1f4ddd87fea27b5afc0293cccd2d2ea29cc4884e758e4a071b6e9"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+      },
+      {
+        "artifact": {
+          "bytes": 312,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/repository-candidate-missing-change-before-profile-lifecycle/designated-root.cbor",
+          "sha256": "9322fc70782819da97e88cb08cfb9b1493327f0bedd34e79dddfbb668e9424d1"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:0ac217a384f2ebb14dbe4400972d05ac5dd13e9b4272411d71e68448e27f18b5"
+      },
+      {
+        "artifact": {
+          "bytes": 412,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/repository-candidate-missing-change-before-profile-lifecycle/candidate.cbor",
+          "sha256": "c859d48bbd8bdce25db0d38dc02940d6d3df8c1fd9e6a81d7214e3b6392d2500"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:153986340de529797a29ce9b244bbb82da0247c74acaf997d7d89c4432d1150a"
+      },
+      {
+        "artifact": {
+          "bytes": 52,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/repository-candidate-missing-change-before-profile-lifecycle/empty-tree.cbor",
+          "sha256": "f0515d605a2c20abf9f321474bc861964b20faeaebbc41a2d8316ae4ffe2bb2b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a458f2bc72d5816dc3f7ee2cc8580eaaaed9a0208588ee66d18ea78f0c255c81"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
+      "registryVersion": 1
+    },
+    "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+    "requestedLayer": 2,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "expected": {
+    "code": "OBJECT_REFERENCE_MISSING",
+    "layer": 2,
+    "result": "reject",
+    "stage": "closure-and-reference-resolution"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "inputs": [
+    {
+      "bytes": 334,
+      "mediaType": "application/json",
+      "path": "scenarios/operations/repository-candidate-missing-change-before-profile-lifecycle.json",
+      "sha256": "c910385d1f4e484107e7655afa8e6b44ee8a627b5e26630d28d1df455f819003"
+    },
+    {
+      "bytes": 5190,
+      "mediaType": "application/json",
+      "path": "scenarios/definitions/repository-candidate-missing-change-before-profile-lifecycle.json",
+      "sha256": "c11dc721ee1bf59cf86edcaf954ee2c50fc83216860ac71f72ecb769e939a08a"
+    }
+  ],
+  "operation": "validate-repository-route",
+  "requirementIds": [
+    "OGVCS-002-AC-08",
+    "OGVCS-002-FR-09",
+    "OGVCS-002-FR-11",
+    "OGVCS-002-NFR-01",
+    "OGVCS-002-NFR-04"
+  ],
+  "resources": {
+    "recipe": {
+      "generator": "ogvcs.repository-validation-scenario-constructor/v1",
+      "parameters": {
+        "definition": "scenarios/definitions/repository-candidate-missing-change-before-profile-lifecycle.json",
+        "definitionSha256": "c11dc721ee1bf59cf86edcaf954ee2c50fc83216860ac71f72ecb769e939a08a",
+        "runtimeHighWaterMarks": "not-asserted"
+      },
+      "seed": "2d023e8ff2a5b58ab0b1c7a6be7501b7b14410abee60f463b81203942033a298"
+    },
+    "summary": {
+      "bytes": 6626,
+      "indexEntries": 0,
+      "items": 5,
+      "peakMemoryBytes": 0,
+      "scratchBytes": 0,
+      "summarySha256": "8d77bc2ead8361820a51b8e2cc6e3f8d4e69038f3da8c84b985a59654ed3f608",
+      "traversalEdges": 0
+    }
+  },
+  "scenarioId": "repository-candidate-missing-change-before-profile-lifecycle",
+  "schemaVersion": "ogvcs.repository-format/validation-scenario/v1"
+}

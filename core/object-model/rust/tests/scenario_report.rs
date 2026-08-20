@@ -82,11 +82,39 @@ fn conformance_report_executes_every_applicable_non_scale_scenario() {
     assert_eq!(report["conformance"]["logicalRecords"]["count"], 9);
     assert_eq!(report["conformance"]["bundles"]["count"], 3);
     let scenarios = &report["conformance"]["scenarios"];
-    assert_eq!(scenarios["scenarios"], 235);
-    assert_eq!(scenarios["executed"], 228);
+    let index: serde_json::Value = serde_json::from_slice(
+        &fs::read(PathBuf::from(VECTOR_ROOT).join("scenarios/index.json")).unwrap(),
+    )
+    .unwrap();
+    let cases = index["cases"].as_array().unwrap();
+    let not_applicable = cases
+        .iter()
+        .filter(|case| {
+            case.get("implementationScope")
+                .and_then(serde_json::Value::as_array)
+                .is_some_and(|scope| !scope.iter().any(|value| value == "rust"))
+        })
+        .count();
+    let inventory_only = cases
+        .iter()
+        .filter(|case| {
+            let scoped_for_rust = case
+                .get("implementationScope")
+                .and_then(serde_json::Value::as_array)
+                .is_none_or(|scope| scope.iter().any(|value| value == "rust"));
+            let materialization = case["materialization"].as_str().unwrap();
+            scoped_for_rust
+                && (materialization == "virtual-constructor"
+                    || materialization == "virtual-constructor-shared-bundle-baseline"
+                        && case["scenarioId"] != "bundle-export-claim")
+        })
+        .count();
+    let executed = cases.len() - not_applicable - inventory_only;
+    assert_eq!(scenarios["scenarios"], cases.len());
+    assert_eq!(scenarios["executed"], executed);
     assert_eq!(scenarios["failed"], 0);
-    assert_eq!(scenarios["inventoryOnly"], 2);
-    assert_eq!(scenarios["notApplicable"], 5);
+    assert_eq!(scenarios["inventoryOnly"], inventory_only);
+    assert_eq!(scenarios["notApplicable"], not_applicable);
     assert_eq!(
         scenarios["rows"]
             .as_array()
@@ -94,7 +122,7 @@ fn conformance_report_executes_every_applicable_non_scale_scenario() {
             .iter()
             .filter(|row| row["status"] == "not-applicable")
             .count(),
-        5
+        not_applicable
     );
     for row in scenarios["rows"].as_array().unwrap() {
         if row["expected"]["result"] == "reject" {

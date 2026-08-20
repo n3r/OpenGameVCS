@@ -3,7 +3,13 @@ import { OgvcsError, errorPrecedence, fail as throwFailure } from './errors.js';
 import { configuredHardLimit, enforceHardLimit, hardLimitMaximum } from './hard-limits.js';
 import { Digest, FileId, KIND_NAMES, ObjectRef, ProfileRef, equalBytes } from './types.js';
 import { hashConflictPreimage, hashLogicalRecord, hashObject, hashOpaqueObject, sha256Digest } from './hash.js';
-import { profileDecision, registryAssignmentDecision, requiredFeatureDecision } from './registry.js';
+import {
+  frozenProfileFamily, profileDecision, registryAssignmentDecision, requiredFeatureDecision
+} from './registry.js';
+import {
+  codecValidationContext, registrySnapshot, writerValidationContext
+} from './validation-mode.js';
+import { isUnicode15String } from './unicode-age.js';
 
 const MAX = Object.freeze({
   value: hardLimitMaximum('generic-text-or-byte-value-bytes'),
@@ -47,8 +53,16 @@ const LOGICAL_RULES = Object.freeze({
 const BUNDLE_RULES = Object.freeze({
   1: 'bundle-header', 2: 'bundle-object', 3: 'bundle-logical-record', 4: 'bundle-root', 5: 'bundle-trailer'
 });
+// One ranked error candidate plus the non-recursive validator frame. The
+// collector remains constant-space regardless of how many caller fields fail,
+// but its fixed workspace is still admitted before caller-owned input is read.
+const KNOWN_SCHEMA_WORKING_BYTES = 512;
 
-let knownSchemaCollector;
+const knownSchemaCollectors = [];
+
+function currentKnownSchemaCollector() {
+  return knownSchemaCollectors.at(-1);
+}
 
 class KnownSchemaTerminal extends Error {
   constructor(error) { super(error.code); this.error = error; }
@@ -56,11 +70,17 @@ class KnownSchemaTerminal extends Error {
 
 function recordKnownSchema(error, stage = 5) {
   if (stage === 0) throw new KnownSchemaTerminal(error);
-  knownSchemaCollector.push({ error, stage });
+  const collector = currentKnownSchemaCollector();
+  const candidate = { error, stage };
+  if (!collector.best || stage < collector.best.stage ||
+      (stage === collector.best.stage &&
+       errorPrecedence(error.code) < errorPrecedence(collector.best.error.code))) {
+    collector.best = candidate;
+  }
 }
 
 function fail(code, details) {
-  if (knownSchemaCollector && details?.layer === 2) {
+  if (currentKnownSchemaCollector() && details?.layer === 2) {
     const { collectorStage = 5, ...errorDetails } = details;
     errorDetails.stage ??= code === 'CONFLICT_ID_MISMATCH' ? 'declared-identity' : 'known-schema';
     recordKnownSchema(new OgvcsError(code, errorDetails), collectorStage);
@@ -74,29 +94,24 @@ function fail(code, details) {
 }
 
 function collectKnownSchema(callback) {
-  if (knownSchemaCollector) return callback();
-  const failures = [];
-  knownSchemaCollector = failures;
+  const collector = { best: undefined };
+  knownSchemaCollectors.push(collector);
   try {
     callback();
   } catch (error) {
-    if (error instanceof KnownSchemaTerminal) failures.push({ error: error.error, stage: 0 });
-    else if (error instanceof OgvcsError && error.layer === 2) failures.push({ error, stage: 5 });
+    if (error instanceof KnownSchemaTerminal) collector.best = { error: error.error, stage: 0 };
+    else if (error instanceof OgvcsError && error.layer === 2) recordKnownSchema(error, 5);
     else throw error;
   } finally {
-    knownSchemaCollector = undefined;
+    knownSchemaCollectors.pop();
   }
-  if (failures.length > 0) {
-    failures.sort((left, right) => left.stage - right.stage ||
-      errorPrecedence(left.error.code) - errorPrecedence(right.error.code));
-    throw failures[0].error;
-  }
+  if (collector.best) throw collector.best.error;
 }
 
 function captureKnownSchema(callback, fallback) {
   try { return callback(); }
   catch (error) {
-    if (knownSchemaCollector && error instanceof OgvcsError && error.layer === 2) {
+    if (currentKnownSchemaCollector() && error instanceof OgvcsError && error.layer === 2) {
       recordKnownSchema(error, 5);
       return fallback;
     }
@@ -111,7 +126,7 @@ function captureKnownSchema(callback, fallback) {
 function captureSchemaComputation(callback, fallback) {
   try { return callback(); }
   catch (error) {
-    if (knownSchemaCollector && error instanceof OgvcsError) {
+    if (currentKnownSchemaCollector() && error instanceof OgvcsError) {
       invalid();
       return fallback;
     }
@@ -147,7 +162,7 @@ function fileId(value) {
 function digest(value) { return bytes(value, 32, 32); }
 function text(value, min = 0, max = MAX.value, code = 'SCHEMA_FIELD_INVALID') {
   if (typeof value !== 'string') { fail(code, { layer: 2 }); return ''; }
-  if (value.normalize('NFC') !== value) fail(code, { layer: 2 });
+  if (!isUnicode15String(value) || value.normalize('NFC') !== value) fail(code, { layer: 2 });
   const length = Buffer.byteLength(value);
   if (length < min) fail(code, { layer: 2 });
   if (length > max) fail(max === MAX.message ? 'LIMIT_VALUE_BYTES' : code,
@@ -219,7 +234,7 @@ function contextLimit(context, name, value, code, layer = 2) {
       maximum: context?.hardLimits?.[name], code, layer, stage: diagnosticStage
     });
   } catch (error) {
-    if (knownSchemaCollector && error instanceof OgvcsError && error.layer === 2) {
+    if (currentKnownSchemaCollector() && error instanceof OgvcsError && error.layer === 2) {
       const unsigned = (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) ||
         (typeof value === 'bigint' && value >= 0n);
       recordKnownSchema(error, unsigned ? 0 : 5);
@@ -243,7 +258,7 @@ function byteSort(values, selector, code = 'SCHEMA_FIELD_INVALID') {
     let current;
     try { current = selector(value); }
     catch (error) {
-      if (error instanceof TypeError && knownSchemaCollector) { invalid(); continue; }
+      if (error instanceof TypeError && currentKnownSchemaCollector()) { invalid(); continue; }
       throw error;
     }
     if (!(current instanceof Uint8Array)) { invalid(); continue; }
@@ -270,7 +285,7 @@ function tupleSort(values, selector, code = 'SCHEMA_FIELD_INVALID') {
     let current;
     try { current = selector(value); }
     catch (error) {
-      if (error instanceof TypeError && knownSchemaCollector) { invalid(); continue; }
+      if (error instanceof TypeError && currentKnownSchemaCollector()) { invalid(); continue; }
       throw error;
     }
     if (!Array.isArray(current) || current.some(part => !(part instanceof Uint8Array))) {
@@ -297,6 +312,9 @@ function profile(value, families, context) {
   if (context.registry) {
     const entry = context.registry.profiles.get(ref.toString());
     if (entry && families && !families.includes(entry.family)) invalid();
+  } else if (families) {
+    const family = frozenProfileFamily(ref);
+    if (family !== undefined && !families.includes(family)) invalid();
   }
   context.profiles.push(ref);
   return ref;
@@ -663,11 +681,20 @@ function context(options) {
   return {
     registry: options.registry,
     hardLimits: options.hardLimits ?? {},
-    operation: options.operation ?? 'conformance',
+    operation: options.operation,
     semantic: options.semantic,
     assignments: [],
     profiles: [], features: [], policyResults: []
   };
+}
+
+function semanticContext(options) {
+  return context(semanticOptions(options));
+}
+
+function semanticOptions(options) {
+  const semantic = codecValidationContext(options);
+  return { ...options, ...semantic };
 }
 
 const REGISTRY_ERRORS = new Set([
@@ -699,10 +726,18 @@ function applyRegistrySemantics(ctx) {
   }
 }
 export function validateKnownSchema(value, expectedKind, options = {}) {
+  options = semanticOptions(options);
+  const maxWorkingBytes = options.maxWorkingBytes ?? 67_108_864;
+  if (!Number.isSafeInteger(maxWorkingBytes) || maxWorkingBytes < 0) {
+    throwFailure('SCHEMA_FIELD_INVALID', { layer: 1, stage: 'configured-resource-preflight' });
+  }
+  if (maxWorkingBytes < KNOWN_SCHEMA_WORKING_BYTES) {
+    throwFailure('LIMIT_MEMORY', { layer: 1, stage: 'configured-resource-preflight' });
+  }
   const kind = expectedKind ?? value?.get?.(1);
   if (!OBJECT_VALIDATORS[kind]) fail('OBJECT_KIND_UNSUPPORTED', { layer: 2 });
   collectKnownSchema(() => OBJECT_VALIDATORS[kind](value, context({ ...options, semantic: false })));
-  const ctx = context(options);
+  const ctx = semanticContext(options);
   OBJECT_VALIDATORS[kind](value, ctx);
   selection(ctx, 'object-kinds', kind);
   selection(ctx, 'hash-algorithms', 1);
@@ -710,7 +745,7 @@ export function validateKnownSchema(value, expectedKind, options = {}) {
   return { kind, profiles: ctx.profiles, requiredFeatures: ctx.features, policyResults: ctx.policyResults };
 }
 
-export function scanMetadata(payload, options = {}) {
+function scanMetadataCore(payload, options = {}) {
   if (!(payload instanceof Uint8Array)) invalid();
   const maxBytes=optionMaximum(options,'metadata-payload-bytes',options.maxBytes);
   enforceHardLimit(undefined,'metadata-payload-bytes',payload.length,{maximum:maxBytes,code:'LIMIT_METADATA_BYTES',layer:1});
@@ -719,9 +754,9 @@ export function scanMetadata(payload, options = {}) {
     maxValueBytes:optionMaximum(options,'generic-text-or-byte-value-bytes',options.maxValueBytes),
     maxContainerItems:optionMaximum(options,'manifest-chunks',options.maxContainerItems),
     maxWorkingBytes:Math.min(options.maxWorkingBytes??67_108_864,67_108_864)});
-  const ctx=context(options);
+  const ctx=context({ ...options, registry: undefined, operation: undefined, semantic: false });
   framingCommon(value,ctx);
-  const kind=value.get(1); const names=options.registry?.kindNames??KIND_NAMES;
+  const kind=value.get(1); const names=KIND_NAMES;
   let objectId; let identityDigest;
   if(options.computeId!==false){
     if(names.has(kind)){objectId=hashObject(kind,payload,{registry:names,maxMetadataBytes:maxBytes});identityDigest=new Digest(1,objectId.digest);}
@@ -730,14 +765,24 @@ export function scanMetadata(payload, options = {}) {
   return {highestLayer:1,kind,requiredFeatures:ctx.features,value,payload:payload.slice(),objectId,identityDigest};
 }
 
+export function scanMetadata(payload, options = {}) {
+  if (options.registry !== undefined || options.operation !== undefined) {
+    throwFailure('SCHEMA_FIELD_INVALID', { layer: 1, stage: 'configured-resource-preflight' });
+  }
+  return scanMetadataCore(payload, options);
+}
+
 export function decodeMetadata(payload, options = {}) {
-  const scan=scanMetadata(payload,options); const result=validateKnownSchema(scan.value,scan.kind,options);
+  options = semanticOptions(options);
+  const scan=scanMetadataCore(payload,options); const result=validateKnownSchema(scan.value,scan.kind,options);
   if(options.semantic===false)return {...scan,...result,highestLayer:2};
   if(!options.registry) return {...scan,...result,highestLayer:2};
   return {...scan,...result,highestLayer:3};
 }
 
 export function encodeMetadata(value, options={}) {
+  const semantic = writerValidationContext(options.operation, options.registry);
+  options = { ...options, ...semantic, semantic: true };
   // Establish depth, value, container, working-memory, and canonical-key
   // failures before schema helpers traverse caller-owned extension values.
   const encoded = encodeCanonical(value, {
@@ -753,8 +798,9 @@ export function encodeMetadata(value, options={}) {
 }
 
 export function validateConflictPreimage(value, options = {}) {
+  options = semanticOptions(options);
   collectKnownSchema(() => conflictPreimage(value, context({ ...options, semantic: false })));
-  const ctx = context(options);
+  const ctx = semanticContext(options);
   conflictPreimage(value, ctx);
   applyRegistrySemantics(ctx);
   return { profiles: ctx.profiles };
@@ -824,8 +870,9 @@ function logicalRecordShape(input, ctx) {
 }
 
 export function validateLogicalRecord(value, options = {}) {
+  options = semanticOptions(options);
   collectKnownSchema(() => logicalRecordShape(value, context({ ...options, semantic: false })));
-  const ctx = context(options);
+  const ctx = semanticContext(options);
   const type = logicalRecordShape(value, ctx);
   applyRegistrySemantics(ctx);
   return { type, profiles: ctx.profiles };
@@ -897,12 +944,13 @@ function bundleItemShape(input, ctx) {
 }
 
 export function validateBundleItem(value, options = {}) {
+  options = semanticOptions(options);
   collectKnownSchema(() => bundleItemShape(value, context({ ...options, semantic: false })));
-  const ctx = context(options);
+  const ctx = semanticContext(options);
   const type = bundleItemShape(value, ctx);
   applyRegistrySemantics(ctx);
   return { type, profiles: ctx.profiles };
 }
 
-export function reproduceLogicalRecordIdentity(value){const {type}=validateLogicalRecord(value);return hashLogicalRecord(type,value);}
-export function reproduceConflictId(value){validateConflictPreimage(value);return hashConflictPreimage(value);}
+export function reproduceLogicalRecordIdentity(value){const {type}=validateLogicalRecord(value,{semantic:false});return hashLogicalRecord(type,value);}
+export function reproduceConflictId(value){validateConflictPreimage(value,{semantic:false});return hashConflictPreimage(value);}

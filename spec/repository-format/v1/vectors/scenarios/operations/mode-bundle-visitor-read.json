@@ -1,0 +1,10 @@
+{
+  "api": "validate-operation-mode",
+  "mode": "read",
+  "registry": "absent",
+  "requestedLayer": 2,
+  "schema": "ogvcs.repository-format.v1.operation-mode-input.v1",
+  "semanticProfiles": false,
+  "source": "logical-bundles/valid-supplied-closure.cborseq",
+  "surface": "bundle-visitor"
+}

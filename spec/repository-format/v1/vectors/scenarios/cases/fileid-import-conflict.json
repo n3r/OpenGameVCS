@@ -1,8 +1,10 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [
       {
+        "descriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
         "fileId": "53535353535353535353535353535353",
         "importerProfile": "importer.test/fixture-adapter@1",
         "mappingKey": "eb07c76be60687c1360a59b05e8457fd7c1e26e755be5d71725ed92b42eb45d4",
@@ -165,10 +167,10 @@
       "sha256": "98256969dafeb2e1338e1a32bed8dfda6cef205625d2e1a8f4bf75af4369f2ef"
     },
     {
-      "bytes": 7866,
+      "bytes": 8028,
       "mediaType": "application/json",
       "path": "scenarios/definitions/fileid-import-conflict.json",
-      "sha256": "f0a3cf5e4491096fb45178eefe0ae3bd337bda4008d72cdcb1402dd0603b46fb"
+      "sha256": "33a6def2cffee2245b9e52587baa067980409aa60c3faf8e87596d60d4ab51eb"
     }
   ],
   "operation": "import-file-id",
@@ -181,18 +183,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/fileid-import-conflict.json",
-        "definitionSha256": "f0a3cf5e4491096fb45178eefe0ae3bd337bda4008d72cdcb1402dd0603b46fb",
+        "definitionSha256": "33a6def2cffee2245b9e52587baa067980409aa60c3faf8e87596d60d4ab51eb",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "e4f6fa29a980f01c7297e4ec76c4d11c4c1ac63d025c78936801db787b4130e2"
     },
     "summary": {
-      "bytes": 13752,
+      "bytes": 13914,
       "indexEntries": 0,
       "items": 13,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "5a807f44494744a3b8107429f5cee77d8635adae43b74b5fa2e3377adc302117",
+      "summarySha256": "f13274d84ca6d8f7dbc6a9e7a23a0b8faa9ad9b4a5ba63a14f92251e8c4e06b8",
       "traversalEdges": 0
     }
   },

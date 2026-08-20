@@ -1,0 +1,12 @@
+{
+  "api": "validate-operation-mode",
+  "operation": "conformance",
+  "registry": "forged",
+  "registryMutation": {
+    "action": "replace-registry-set-sha256",
+    "value": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "schema": "ogvcs.repository-format.v1.operation-mode-input.v1",
+  "source": "malformed/nonminimal-unsigned.cbor",
+  "surface": "tree-ordered"
+}

@@ -1,21 +1,13 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
-    "candidateSnapshot": "ogvcs:v1:snapshot:sha256:2b1cfa8bcb8e5eda5d5a9de601a01f9582c1774a657e9b7ed04651c0cfd09daf",
+    "candidateSnapshot": "ogvcs:v1:snapshot:sha256:4075f9fe6ff14f447f0c3fbb5b86132037648574bc63814d37793158e57ef54c",
+    "caseMode": "case-sensitive",
     "designatedRoot": "ogvcs:v1:snapshot:sha256:0ac217a384f2ebb14dbe4400972d05ac5dd13e9b4272411d71e68448e27f18b5",
     "importMappings": [],
     "lifetimeRecords": [],
     "mode": "conformance",
     "objectLookup": [
-      {
-        "artifact": {
-          "bytes": 95,
-          "mediaType": "application/cbor",
-          "path": "scenarios/objects/history-base-mismatch/candidate-change.cbor",
-          "sha256": "597fd95eef026bbf4d2ac1c0dce4fc10762419d9e7840a14382d946f79fd8875"
-        },
-        "ref": "ogvcs:v1:change-set:sha256:650c6e135388c1c375ee966c5ef4cf0fa451b350a8a2e7764ffc3cbc2fc83b6d"
-      },
       {
         "artifact": {
           "bytes": 52,
@@ -24,6 +16,24 @@
           "sha256": "ef6e897742ff4d1220c8cd636f2a889a8f8746b2e97b2b7dad6fec4dc3747a6d"
         },
         "ref": "ogvcs:v1:change-set:sha256:82cc41e5e86d1397579a8ebfc7ea6c7d9102552130f4da86ca592fc3c10a424c"
+      },
+      {
+        "artifact": {
+          "bytes": 95,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/history-base-mismatch/candidate-change.cbor",
+          "sha256": "ad494a6d3c84c89ae2b870ea7e0b7a859e12ba2493436efb26e10840df321d4c"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:edab305abe01fc03a2c5a4fc920e3575baba3efbc07f3d99d7ec25f22693e16a"
+      },
+      {
+        "artifact": {
+          "bytes": 95,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/history-base-mismatch/alternate-base-change.cbor",
+          "sha256": "a88be4839e48c479a0eee8e1a22080091d4c1fd3ef6d13d3ec38381a70e269cf"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:f29b5ba1e25fe434272c878aef755239bc1a7aa301d26d75cf3a9ef1258bae1b"
       },
       {
         "artifact": {
@@ -48,9 +58,18 @@
           "bytes": 371,
           "mediaType": "application/cbor",
           "path": "scenarios/objects/history-base-mismatch/candidate.cbor",
-          "sha256": "69b1ee985b63b620c51562e9dcd2421d8cd40bd3a388711196f242787a164682"
+          "sha256": "4730136356f1bcd51fb53304dd9e3454efbee7915d723b91dc68163f427e6439"
         },
-        "ref": "ogvcs:v1:snapshot:sha256:2b1cfa8bcb8e5eda5d5a9de601a01f9582c1774a657e9b7ed04651c0cfd09daf"
+        "ref": "ogvcs:v1:snapshot:sha256:4075f9fe6ff14f447f0c3fbb5b86132037648574bc63814d37793158e57ef54c"
+      },
+      {
+        "artifact": {
+          "bytes": 372,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/history-base-mismatch/alternate-base.cbor",
+          "sha256": "68ea3d3bcb5b42113a5b78e099b2ec6b8a30b8f7356a3023997a906e942c268b"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:b1193e388d644fab668eb4bccbefdd893b9632b2cfb1ab96dc842c7da420e26c"
       },
       {
         "artifact": {
@@ -84,13 +103,13 @@
       "bytes": 371,
       "mediaType": "application/cbor",
       "path": "scenarios/objects/history-base-mismatch/candidate.cbor",
-      "sha256": "69b1ee985b63b620c51562e9dcd2421d8cd40bd3a388711196f242787a164682"
+      "sha256": "4730136356f1bcd51fb53304dd9e3454efbee7915d723b91dc68163f427e6439"
     },
     {
-      "bytes": 4717,
+      "bytes": 5688,
       "mediaType": "application/json",
       "path": "scenarios/definitions/history-base-mismatch.json",
-      "sha256": "cf411010f810ca6611194c81d1fafcbd30247f33deb3dc04da967e1a4fb34313"
+      "sha256": "76b1288221c90a65b654eb17c836adf17001f229bc2e43286a2e62c806e64c20"
     }
   ],
   "operation": "validate-repository",
@@ -102,18 +121,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/history-base-mismatch.json",
-        "definitionSha256": "cf411010f810ca6611194c81d1fafcbd30247f33deb3dc04da967e1a4fb34313",
+        "definitionSha256": "76b1288221c90a65b654eb17c836adf17001f229bc2e43286a2e62c806e64c20",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "6a27464071353e5164b65a64d4f4df98062066605faebe3ecc79833e648655de"
     },
     "summary": {
-      "bytes": 5873,
+      "bytes": 7311,
       "indexEntries": 0,
-      "items": 6,
+      "items": 8,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "25a6eb9971309bc9f66e1874ffbdc976c7495dcf02592b55de9b4830b8554451",
+      "summarySha256": "2a235d0431d81035fb9f425448271ce8bff71ef523c956fb0bf2e2f3fe4c76b5",
       "traversalEdges": 0
     }
   },

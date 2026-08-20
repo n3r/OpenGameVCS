@@ -50,12 +50,14 @@ await atomicWriteFile(workspace, keys.canonical, bytes, { createParents: true })
 The deterministic APIs are `caseFold`, `validateRepositoryPath`,
 `pathCollisionKeys`, `findPathCollisions`, `preflightMaterialization`, and
 `planRenames`. Their `evaluate*` counterparts return the frozen decision shape
-instead of throwing. `objectModelPathProfileValidator` is the synchronous
-adapter passed to OGVCS-002 repository expansion when the descriptor selects
-one of the four `path.opengamevcs/*@1` profiles. OGVCS-002 registry/family
+instead of throwing. `createObjectModelPathProfileAdapter({profile,caseMode})`
+returns the exact-version/case-mode OGVCS-002 adapter object when the descriptor
+selects one of the four `path.opengamevcs/*@1` profiles. It projects the richer
+OGVCS-004 result to the closed object-model decision `{accepted,
+repositoryKey, platformKey}` (or `{accepted:false}`). OGVCS-002 registry/family
 validation alone is not a materialization proof: callers validate each
-composed path with this adapter and run `preflightMaterialization` over the
-complete expanded set so repository/platform collisions are also detected.
+composed path with this adapter; the object-model core consumes both collision
+keys across the complete expanded set.
 
 The host APIs are `probeFilesystemCapabilities`, `openWorkspaceRoot`,
 `atomicWriteFile`, `replaceWorkspaceEntry`, `materializeSymlink`,

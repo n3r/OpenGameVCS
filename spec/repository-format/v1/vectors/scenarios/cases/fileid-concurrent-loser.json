@@ -1,6 +1,7 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [],
     "lifetimeRecords": [],
     "mode": "conformance",
@@ -146,10 +147,10 @@
       "sha256": "4ebccb77ed9c2417d61c2f994602ed193ad8185e9b611fed3749124e2a478033"
     },
     {
-      "bytes": 6882,
+      "bytes": 6916,
       "mediaType": "application/json",
       "path": "scenarios/definitions/fileid-concurrent-loser.json",
-      "sha256": "b3d5942b5a7d95c5ce40571bba394bbdad36fccdf160ceb758ce1c6fcd8a7533"
+      "sha256": "021b19d2c6982a8170a844515f0c21599edc969c642121c49f46d830884a7a9c"
     }
   ],
   "operation": "allocate-file-id",
@@ -162,18 +163,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/fileid-concurrent-loser.json",
-        "definitionSha256": "b3d5942b5a7d95c5ce40571bba394bbdad36fccdf160ceb758ce1c6fcd8a7533",
+        "definitionSha256": "021b19d2c6982a8170a844515f0c21599edc969c642121c49f46d830884a7a9c",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "f064cf19c38254900c55dad667bc49e2f832bafa02b6b3b3c0eed6fae6e698c5"
     },
     "summary": {
-      "bytes": 12310,
+      "bytes": 12344,
       "indexEntries": 0,
       "items": 12,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "e3653bc9d3186ab3c3837cc736f63d03dba1ec17372e6183d3e49cbe161f4766",
+      "summarySha256": "a3793a92eaa5a0fbe36329a53fd9c861e2de6bac7d9e0470a9bfe725420b9fce",
       "traversalEdges": 0
     }
   },

@@ -9,17 +9,18 @@ const EXPECTED_IMPLEMENTATIONS = new Set([
   '@opengamevcs/object-model/javascript',
   'ogvcs-object-model/rust'
 ]);
+const JS_IMPLEMENTATION = '@opengamevcs/object-model/javascript';
+const RUST_IMPLEMENTATION = 'ogvcs-object-model/rust';
 const IMPLEMENTATION_ARTIFACT_NAMES = Object.freeze({
   '@opengamevcs/object-model/javascript': '@opengamevcs/object-model',
   'ogvcs-object-model/rust': 'ogvcs-object-model'
 });
 const MAX_REPORT_BYTES = 1_048_576;
-const EXPECTED_SHARED_SCENARIOS = 230;
-const EXPECTED_SCENARIO_COUNTS = Object.freeze({
-  javascript: Object.freeze({ executed: 233, failed: 0, inventoryOnly: 2, notApplicable: 0 }),
-  rust: Object.freeze({ executed: 228, failed: 0, inventoryOnly: 2, notApplicable: 5 })
-});
 const ERROR_CATALOGUE = resolve(import.meta.dirname, '../spec/repository-format/v1/errors.json');
+const SCENARIO_INDEX = resolve(
+  import.meta.dirname,
+  '../spec/repository-format/v1/vectors/scenarios/index.json'
+);
 
 function parseArguments(argv) {
   if (argv.length !== 4 || argv[0] !== '--input' || argv[2] !== '--output') {
@@ -60,24 +61,63 @@ function validationSites(catalogue) {
   return sites;
 }
 
-function validOutcome(outcome, sites) {
+function validOutcome(outcome, sites, { evidence } = {}) {
   if (!outcome || typeof outcome !== 'object' || Array.isArray(outcome)) return false;
+  const keys = Object.keys(outcome).filter(key => key !== 'evidence').sort();
+  if ((Object.hasOwn(outcome, 'evidence') !== (evidence !== undefined)) ||
+      (evidence !== undefined && canonicalJson(outcome.evidence) !== canonicalJson(evidence))) return false;
   if (outcome.result === 'accept') {
-    return canonicalJson(Object.keys(outcome).sort()) === canonicalJson(['highestLayer', 'result']) &&
+    return canonicalJson(keys) === canonicalJson(['highestLayer', 'result']) &&
       Number.isInteger(outcome.highestLayer) && outcome.highestLayer >= 1 && outcome.highestLayer <= 3;
   }
   if (outcome.result === 'reject') {
-    return canonicalJson(Object.keys(outcome).sort()) === canonicalJson(['code', 'layer', 'result', 'stage']) &&
+    return canonicalJson(keys) === canonicalJson(['code', 'layer', 'result', 'stage']) &&
       typeof outcome.code === 'string' && Number.isInteger(outcome.layer) &&
       sites.has(`${outcome.code}\0${outcome.layer}\0${outcome.stage}`);
   }
   return false;
 }
 
-function validateScenarioOutcomes(rows, sites, language) {
+function scenarioAuthority(index) {
+  if (!Array.isArray(index?.cases)) throw new Error('invalid normative scenario index');
+  const rows = index.cases;
+  const ids = rows.map(row => row?.scenarioId);
+  if (ids.some(id => typeof id !== 'string') || new Set(ids).size !== ids.length) {
+    throw new Error('invalid normative scenario inventory');
+  }
+  const scope = row => row.implementationScope ?? ['javascript', 'rust'];
+  const executable = row => row.materialization !== 'virtual-constructor' &&
+    (row.materialization !== 'virtual-constructor-shared-bundle-baseline' ||
+      row.scenarioId === 'bundle-export-claim');
+  const counts = language => {
+    const result = { executed: 0, failed: 0, inventoryOnly: 0, notApplicable: 0 };
+    for (const row of rows) {
+      if (!scope(row).includes(language)) result.notApplicable += 1;
+      else if (executable(row)) result.executed += 1;
+      else result.inventoryOnly += 1;
+    }
+    return result;
+  };
+  return Object.freeze({
+    counts: Object.freeze({
+      [JS_IMPLEMENTATION]: Object.freeze(counts('javascript')),
+      [RUST_IMPLEMENTATION]: Object.freeze(counts('rust'))
+    }),
+    evidenceById: new Map(rows.filter(row => row.expected?.evidence !== undefined)
+      .map(row => [row.scenarioId, row.expected.evidence])),
+    ids: Object.freeze(ids),
+    sharedIds: new Set(rows.filter(row =>
+      scope(row).includes('javascript') && scope(row).includes('rust'))
+      .map(row => row.scenarioId))
+  });
+}
+
+function validateScenarioOutcomes(rows, sites, language, authority) {
   for (const row of rows) {
     if (row.status === 'passed' || row.status === 'failed') {
-      if (!validOutcome(row.actual, sites) || !validOutcome(row.expected, sites)) {
+      const evidence = authority.evidenceById.get(row.scenarioId);
+      if (!validOutcome(row.actual, sites, { evidence }) ||
+          !validOutcome(row.expected, sites, { evidence })) {
         throw new Error(`invalid scenario outcome for ${language}: ${row.scenarioId}`);
       }
       const equal = canonicalJson(row.actual) === canonicalJson(row.expected);
@@ -90,15 +130,12 @@ function validateScenarioOutcomes(rows, sites, language) {
   }
 }
 
-function normalizedSharedConformance(report) {
+function normalizedSharedConformance(report, authority) {
   const conformance = structuredClone(report.conformance);
   const source = conformance.scenarios;
   if (!source || !Array.isArray(source.rows)) throw new Error('conformance report has no scenario rows');
-  const rows = source.rows.filter(row =>
-    Array.isArray(row.implementationScope) &&
-    EXPECTED_IMPLEMENTATIONS.size === row.implementationScope.length &&
-    row.implementationScope.includes('javascript') && row.implementationScope.includes('rust'));
-  if (rows.length !== EXPECTED_SHARED_SCENARIOS ||
+  const rows = source.rows.filter(row => authority.sharedIds.has(row.scenarioId));
+  if (rows.length !== authority.sharedIds.size ||
       rows.some(row => row.status !== 'passed' && row.status !== 'not-executed')) {
     throw new Error(`shared scenario did not pass for ${report.implementation}/${report.platform?.os}`);
   }
@@ -115,7 +152,7 @@ function normalizedSharedConformance(report) {
   return conformance;
 }
 
-function validateApplicability(report, sites) {
+function validateApplicability(report, sites, authority) {
   const language = report.implementation === '@opengamevcs/object-model/javascript' ? 'javascript' : 'rust';
   const expectedArtifact = {
     name: IMPLEMENTATION_ARTIFACT_NAMES[report.implementation], type: 'workspace', version: '0.1.0'
@@ -131,7 +168,7 @@ function validateApplicability(report, sites) {
   const rows = scenarios?.rows;
   if (!Array.isArray(rows) || rows.length !== scenarios.scenarios ||
       scenarios.resultsSha256 !== sha256(canonicalJson(rows)) ||
-      new Set(rows.map(row => row.scenarioId)).size !== rows.length) {
+      canonicalJson(rows.map(row => row.scenarioId)) !== canonicalJson(authority.ids)) {
     throw new Error(`invalid scenario result envelope for ${language}`);
   }
   const counts = {
@@ -140,13 +177,13 @@ function validateApplicability(report, sites) {
     inventoryOnly: rows.filter(row => row.status === 'not-executed').length,
     notApplicable: rows.filter(row => row.status === 'not-applicable').length
   };
-  if (rows.length !== 235 || canonicalJson(counts) !== canonicalJson(EXPECTED_SCENARIO_COUNTS[language])) {
+  if (canonicalJson(counts) !== canonicalJson(authority.counts[report.implementation])) {
     throw new Error(`unexpected frozen scenario cardinality for ${language}`);
   }
   for (const [name, value] of Object.entries(counts)) {
     if (scenarios[name] !== value) throw new Error(`invalid scenario ${name} count for ${language}`);
   }
-  validateScenarioOutcomes(rows, sites, language);
+  validateScenarioOutcomes(rows, sites, language, authority);
   for (const row of rows) {
     if (!Array.isArray(row.implementationScope) || row.implementationScope.length === 0 ||
         new Set(row.implementationScope).size !== row.implementationScope.length ||
@@ -179,6 +216,7 @@ async function jsonFiles(directory) {
 async function main() {
   const { input, output } = parseArguments(process.argv.slice(2));
   const sites = validationSites(JSON.parse(await readFile(ERROR_CATALOGUE, 'utf8')));
+  const authority = scenarioAuthority(JSON.parse(await readFile(SCENARIO_INDEX, 'utf8')));
   const reports = [];
   for (const path of await jsonFiles(input)) {
     const metadata = await stat(path);
@@ -205,7 +243,7 @@ async function main() {
     if (calculated !== report.conformanceSha256) {
       throw new Error(`invalid conformance digest for ${implementation}/${os}`);
     }
-    validateApplicability(report, sites);
+    validateApplicability(report, sites, authority);
     matrix.set(key, report);
   }
   for (const implementation of EXPECTED_IMPLEMENTATIONS) {
@@ -227,7 +265,7 @@ async function main() {
     if (digests.size !== 1) throw new Error(`cross-platform conformance output differs for ${implementation}`);
   }
   const sharedDigests = new Set(reports.map(report =>
-    sha256(canonicalJson(normalizedSharedConformance(report)))));
+    sha256(canonicalJson(normalizedSharedConformance(report, authority)))));
   if (sharedDigests.size !== 1) throw new Error('cross-language shared conformance output differs');
   const [sharedConformanceSha256] = sharedDigests;
 

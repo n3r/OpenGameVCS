@@ -6,7 +6,7 @@ use crate::{
         enforce_hard_limit_context, MAX_BUNDLE_ITEM_BYTES, MAX_CBOR_NESTING,
         MAX_GENERIC_VALUE_BYTES, MAX_MANIFEST_CHUNKS, MAX_METADATA_BYTES,
     },
-    Error, ErrorCode, Result, ValidationStage,
+    unicode_age::is_unicode_15, Error, ErrorCode, Result, ValidationStage,
 };
 use unicode_normalization::is_nfc;
 
@@ -222,7 +222,7 @@ fn validate_for_encoding(
                 ErrorCode::LimitValueBytes,
                 0,
             )?;
-            if !is_nfc(value) {
+            if !is_unicode_15(value) || !is_nfc(value) {
                 return Err(Error::new(ErrorCode::CborNonCanonical));
             }
             checked_encoded_sum(head_len(value.len() as u64), value.len())?
@@ -319,7 +319,7 @@ fn encode(value: &Cbor, out: &mut Vec<u8>) -> Result<()> {
             out.extend_from_slice(v);
         }
         Cbor::Text(v) => {
-            if !is_nfc(v) {
+            if !is_unicode_15(v) || !is_nfc(v) {
                 return Err(Error::new(ErrorCode::CborNonCanonical));
             }
             head(3, v.len() as u64, out);
@@ -400,7 +400,7 @@ fn measured_size(value: &Cbor, limits: Limits, depth: usize) -> Result<usize> {
                 ErrorCode::LimitValueBytes,
                 0,
             )?;
-            if !is_nfc(value) {
+            if !is_unicode_15(value) || !is_nfc(value) {
                 return Err(Error::new(ErrorCode::CborNonCanonical));
             }
             checked_encoded_sum(head_len(value.len() as u64), value.len())
@@ -442,7 +442,7 @@ fn encode_to<W: Write>(
             out.bytes(value)
         }
         Cbor::Text(value) => {
-            if !is_nfc(value) {
+            if !is_unicode_15(value) || !is_nfc(value) {
                 return Err(Error::new(ErrorCode::CborNonCanonical));
             }
             out.bytes(&head_bytes(3, value.len() as u64))?;
@@ -581,7 +581,7 @@ impl Decoder<'_> {
                     let bytes = self.take(len)?;
                     let text = core::str::from_utf8(bytes)
                         .map_err(|_| Error::at(ErrorCode::CborNonCanonical, start))?;
-                    if !is_nfc(text) {
+                    if !is_unicode_15(text) || !is_nfc(text) {
                         return Err(Error::at(ErrorCode::CborNonCanonical, start));
                     }
                     Ok(Cbor::Text(text.to_owned()))

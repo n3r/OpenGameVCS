@@ -1,0 +1,98 @@
+{
+  "cases": [
+    {
+      "artifact": "unicode/cases/age-15-assigned.cbor",
+      "codePoints": [
+        "U+1FAE8"
+      ],
+      "expected": {
+        "highestLayer": 1,
+        "result": "accept"
+      },
+      "purpose": "Unicode 15.0 Age boundary assignment is in the frozen repertoire and is NFC"
+    },
+    {
+      "artifact": "malformed/unicode-age-newer-composition-pair.cbor",
+      "codePoints": [
+        "U+16D63",
+        "U+16D68"
+      ],
+      "expected": {
+        "code": "CBOR_NON_CANONICAL",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "purpose": "reject outside the frozen repertoire before applying host NFC"
+    },
+    {
+      "artifact": "malformed/unicode-age-newer-decomposed.cbor",
+      "codePoints": [
+        "U+16D63",
+        "U+16D67",
+        "U+16D67"
+      ],
+      "expected": {
+        "code": "CBOR_NON_CANONICAL",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "purpose": "reject outside the frozen repertoire before applying host NFC"
+    },
+    {
+      "artifact": "malformed/unicode-age-newer-canonical.cbor",
+      "codePoints": [
+        "U+16D6A"
+      ],
+      "expected": {
+        "code": "CBOR_NON_CANONICAL",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "purpose": "reject outside the frozen repertoire before applying host NFC"
+    },
+    {
+      "artifact": "malformed/unicode-age-frozen-unassigned.cbor",
+      "codePoints": [
+        "U+0378"
+      ],
+      "expected": {
+        "code": "CBOR_NON_CANONICAL",
+        "layer": 1,
+        "result": "reject",
+        "stage": "canonical-framing"
+      },
+      "purpose": "reject outside the frozen repertoire before applying host NFC"
+    }
+  ],
+  "compactIntervals": {
+    "bytes": 27364,
+    "path": "unicode/age-15.0.0-intervals.json",
+    "sha256": "f720e60157290e8714986679b54f8f49ce2c863146873dc5bda491d2d44a38b2"
+  },
+  "evaluationOrder": [
+    "shortest-form UTF-8 and Unicode scalar decoding",
+    "Unicode 15.0 Age repertoire",
+    "NFC under the host normalizer"
+  ],
+  "license": {
+    "bytes": 1995,
+    "path": "unicode/UNICODE-LICENSE.txt",
+    "sha256": "e7a93b009565cfce55919a381437ac4db883e9da2126fa28b91d12732bc53d96"
+  },
+  "notice": {
+    "bytes": 761,
+    "path": "unicode/NOTICE.md",
+    "sha256": "e93902743ef67c6fe07c902c05d025bd04cbd696a0efa2c77657b13d338f25fe"
+  },
+  "schema": "ogvcs.repository-format.v1.unicode-authority.v1",
+  "source": {
+    "bytes": 130720,
+    "path": "unicode/DerivedAge-15.0.0.txt",
+    "sha256": "7570877e0fa197c45338f7c41a02636da4e14c8dba6a3611a01cd30bf329d5ca",
+    "url": "https://www.unicode.org/Public/15.0.0/ucd/DerivedAge.txt"
+  },
+  "unicodeVersion": "15.0.0"
+}

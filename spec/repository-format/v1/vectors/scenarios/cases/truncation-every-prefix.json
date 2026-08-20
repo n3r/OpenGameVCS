@@ -1,6 +1,7 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [],
     "lifetimeRecords": [],
     "mode": "conformance",
@@ -132,7 +133,7 @@
         "path": "scenarios/outputs/truncation-every-prefix.json",
         "sha256": "cf66ed06f1a66273e2d1c653034ddcd97c340fb0b1e977c9e2e9c9cee4d9df9b"
       },
-      "summarySha256": "61e3ebdb504f9f1cd5afb904245f344f1d6074d92b965b16a80ed70ce83eb6c4"
+      "summarySha256": "44b482381bf7f2ea5bd211544ee5edaf4303d7ccaf38d3332c3d837b1dc28705"
     },
     "result": "accept"
   },
@@ -145,10 +146,10 @@
       "sha256": "a25305b2751862a78d7e8ed56407580b8da29665b1deaaa2c8fcb71abf8f21e7"
     },
     {
-      "bytes": 6573,
+      "bytes": 6607,
       "mediaType": "application/json",
       "path": "scenarios/definitions/truncation-every-prefix.json",
-      "sha256": "6e27cbe8e74234d3346ea233c98cea8d765de7ede8937a86b70b122de79facb6"
+      "sha256": "796d5298e4c8ec35fc53f32e79d43685cf8613763a24c2c01ae3aba7606ad30f"
     }
   ],
   "operation": "canonical-scan",
@@ -161,18 +162,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/truncation-every-prefix.json",
-        "definitionSha256": "6e27cbe8e74234d3346ea233c98cea8d765de7ede8937a86b70b122de79facb6",
+        "definitionSha256": "796d5298e4c8ec35fc53f32e79d43685cf8613763a24c2c01ae3aba7606ad30f",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "9cb07873afebc1851e7d40730d89fde73158035d7ed66c871ad3a655573ba126"
     },
     "summary": {
-      "bytes": 25826,
+      "bytes": 25860,
       "indexEntries": 0,
       "items": 12,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "61e3ebdb504f9f1cd5afb904245f344f1d6074d92b965b16a80ed70ce83eb6c4",
+      "summarySha256": "44b482381bf7f2ea5bd211544ee5edaf4303d7ccaf38d3332c3d837b1dc28705",
       "traversalEdges": 0
     }
   },

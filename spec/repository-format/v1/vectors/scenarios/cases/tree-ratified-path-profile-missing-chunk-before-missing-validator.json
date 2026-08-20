@@ -1,0 +1,129 @@
+{
+  "context": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 12,
+          "mediaType": "application/octet-stream",
+          "path": "objects/01-chunk.bin",
+          "sha256": "36fcc2e9442be1071c275604af6e41bd93875c743dc2fdaa6037662df74c5894"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5"
+      },
+      {
+        "artifact": {
+          "bytes": 183,
+          "mediaType": "application/cbor",
+          "path": "objects/02-content-manifest.cbor",
+          "sha256": "b635d76c8dd9f29c2862ae0e22077c70d157f68d4595861c09fb38bdf47c456b"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+      },
+      {
+        "artifact": {
+          "bytes": 136,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-ratified-path-profile-missing-chunk-before-missing-validator/missing-chunk-manifest.cbor",
+          "sha256": "f28ad01e553abcbf491a06a127f1884de57b8a9b0ac700cdd542d5f0e3bfbee1"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:ac7765a733315c76ca4e6b752d83deef155d3e1d8d6e29000c4d1893f1a5f4e3"
+      },
+      {
+        "artifact": {
+          "bytes": 283,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-ratified-path-profile-missing-chunk-before-missing-validator/repository-descriptor.cbor",
+          "sha256": "fda06d8cc328f9134be92ba925b01dab084cb8e4ae69149f819507d2e7be676c"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:b00938615a6eee7279d853aa84ff2118afee7776032e5e6afcce050ba54365dc"
+      },
+      {
+        "artifact": {
+          "bytes": 274,
+          "mediaType": "application/cbor",
+          "path": "objects/06-repository-descriptor.cbor",
+          "sha256": "677905a883b1f4ddd87fea27b5afc0293cccd2d2ea29cc4884e758e4a071b6e9"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+      },
+      {
+        "artifact": {
+          "bytes": 168,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-ratified-path-profile-missing-chunk-before-missing-validator/tree.cbor",
+          "sha256": "95416b2826350cd0f056940656af53a263e90f5177edb890fefe9245f3b02cf1"
+        },
+        "ref": "ogvcs:v1:tree:sha256:718de7bd47c12110b511007ae129c72708b4fb2554905e1f288a6138052ad9d8"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
+      "registryVersion": 1
+    },
+    "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:b00938615a6eee7279d853aa84ff2118afee7776032e5e6afcce050ba54365dc",
+    "requestedLayer": 2,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "expected": {
+    "code": "OBJECT_REFERENCE_MISSING",
+    "layer": 2,
+    "result": "reject",
+    "stage": "closure-and-reference-resolution"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "inputs": [
+    {
+      "bytes": 425,
+      "mediaType": "application/json",
+      "path": "scenarios/operations/tree-ratified-path-profile-missing-chunk-before-missing-validator.json",
+      "sha256": "fdd20e5a97aea77127e9995579aa0d03d3ebb08383222e741e9597eb850307f8"
+    },
+    {
+      "bytes": 5350,
+      "mediaType": "application/json",
+      "path": "scenarios/definitions/tree-ratified-path-profile-missing-chunk-before-missing-validator.json",
+      "sha256": "e2e13ab285ce5a6216a454499a85ed1bd2984d4180def0cf25119cdb4c0d80e9"
+    }
+  ],
+  "operation": "validate-repository-route",
+  "requirementIds": [
+    "OGVCS-002-AC-08",
+    "OGVCS-002-AC-11",
+    "OGVCS-002-FR-04",
+    "OGVCS-002-FR-06",
+    "OGVCS-002-FR-09",
+    "OGVCS-002-FR-11",
+    "OGVCS-002-FR-13",
+    "OGVCS-002-NFR-01",
+    "OGVCS-002-NFR-04"
+  ],
+  "resources": {
+    "recipe": {
+      "generator": "ogvcs.repository-validation-scenario-constructor/v1",
+      "parameters": {
+        "definition": "scenarios/definitions/tree-ratified-path-profile-missing-chunk-before-missing-validator.json",
+        "definitionSha256": "e2e13ab285ce5a6216a454499a85ed1bd2984d4180def0cf25119cdb4c0d80e9",
+        "runtimeHighWaterMarks": "not-asserted"
+      },
+      "seed": "e5cfdb81f269d8e6eaf825487a5b33d8a507367c014d30ae21ad75c32b7a06ff"
+    },
+    "summary": {
+      "bytes": 6831,
+      "indexEntries": 0,
+      "items": 6,
+      "peakMemoryBytes": 0,
+      "scratchBytes": 0,
+      "summarySha256": "0e4e24957bcb6b4edbde77f06d070f2c1e6f930f9038edd2b5243dd850079413",
+      "traversalEdges": 0
+    }
+  },
+  "scenarioId": "tree-ratified-path-profile-missing-chunk-before-missing-validator",
+  "schemaVersion": "ogvcs.repository-format/validation-scenario/v1"
+}

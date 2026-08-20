@@ -2,6 +2,7 @@
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
     "candidateSnapshot": "ogvcs:v1:snapshot:sha256:45cbaf683e65bb26970a0457a7d178f1f5673ffa235e3eebfefd43bc1e5dbe28",
+    "caseMode": "case-sensitive",
     "designatedRoot": "ogvcs:v1:snapshot:sha256:812b17a3fd9246a2eb231467de4bc0422034a16df2fceaec439aee48ba0368c9",
     "importMappings": [],
     "lifetimeRecords": [
@@ -124,7 +125,7 @@
         "path": "scenarios/outputs/group-create.json",
         "sha256": "dc8d1e20b392fe4ce1a874eff1882ace27faf074831e13c4669d44c8046644de"
       },
-      "summarySha256": "a2e89d165509c6a8149785cf011c90319d0d63e8fa75ec3a367633143c4882d0"
+      "summarySha256": "7311dfedcc0a0d29ab1448b9a87003f6bbe0e9c72b4c3630ed62c00507f23455"
     },
     "result": "accept"
   },
@@ -137,10 +138,10 @@
       "sha256": "65b9fec20c70601b0366987b6441d506a8362da16b0f95219a36609cc1c0e9f9"
     },
     {
-      "bytes": 6724,
+      "bytes": 6758,
       "mediaType": "application/json",
       "path": "scenarios/definitions/group-create.json",
-      "sha256": "2363f15ca92770381652e8d56d492af985c16dcd1115e8829acf41b046a79370"
+      "sha256": "435d11621d33f5b56917601aae2720e7e22d52f8e58abb17c583eb0ed831b008"
     }
   ],
   "operation": "replay-change-set",
@@ -152,18 +153,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/group-create.json",
-        "definitionSha256": "2363f15ca92770381652e8d56d492af985c16dcd1115e8829acf41b046a79370",
+        "definitionSha256": "435d11621d33f5b56917601aae2720e7e22d52f8e58abb17c583eb0ed831b008",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "f79f739f6c18d4bd99575b8f299c224fa29d59c3c737b05bea0738b4174cab61"
     },
     "summary": {
-      "bytes": 8938,
+      "bytes": 8972,
       "indexEntries": 0,
       "items": 10,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "a2e89d165509c6a8149785cf011c90319d0d63e8fa75ec3a367633143c4882d0",
+      "summarySha256": "7311dfedcc0a0d29ab1448b9a87003f6bbe0e9c72b4c3630ed62c00507f23455",
       "traversalEdges": 0
     }
   },

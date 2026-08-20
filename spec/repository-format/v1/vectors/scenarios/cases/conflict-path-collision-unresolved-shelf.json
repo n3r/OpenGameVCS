@@ -1,6 +1,7 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [],
     "lifetimeRecords": [
       {
@@ -212,7 +213,7 @@
         "path": "scenarios/outputs/conflict-path-collision-unresolved-shelf.json",
         "sha256": "b771882101ffbded44628d5b40e7c9299cf66af00494badd1f0c256ffafb0214"
       },
-      "summarySha256": "7092bd9fb860d1ebd240811b4d68d6b16c3cf453118a61afb3fdf9da3757aa75"
+      "summarySha256": "43f417fe6e0ff77a6e9c64985a51370f9c1e8a70eb697c250708f4e211e3d35c"
     },
     "result": "accept"
   },
@@ -225,10 +226,10 @@
       "sha256": "ef3d2dc519c3e2aaa8686380e6e2f5342e12638807665fb4f38933813044e144"
     },
     {
-      "bytes": 10785,
+      "bytes": 10819,
       "mediaType": "application/json",
       "path": "scenarios/definitions/conflict-path-collision-unresolved-shelf.json",
-      "sha256": "8740b925983311c734fd206cf401075983a71e1705efd5b9bd567e07da4a1768"
+      "sha256": "35241d4c49628e02fafd593e8a9f34f60d52a8347af04a66452b5f7b070cbce8"
     }
   ],
   "operation": "validate-object",
@@ -240,18 +241,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/conflict-path-collision-unresolved-shelf.json",
-        "definitionSha256": "8740b925983311c734fd206cf401075983a71e1705efd5b9bd567e07da4a1768",
+        "definitionSha256": "35241d4c49628e02fafd593e8a9f34f60d52a8347af04a66452b5f7b070cbce8",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "857b5fb77028c96b513ebc0d9192995106572565b8beb6fca48f42d20116ce4f"
     },
     "summary": {
-      "bytes": 15264,
+      "bytes": 15298,
       "indexEntries": 0,
       "items": 18,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "7092bd9fb860d1ebd240811b4d68d6b16c3cf453118a61afb3fdf9da3757aa75",
+      "summarySha256": "43f417fe6e0ff77a6e9c64985a51370f9c1e8a70eb697c250708f4e211e3d35c",
       "traversalEdges": 0
     }
   },

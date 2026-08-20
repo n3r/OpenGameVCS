@@ -51,7 +51,7 @@ These invariants have priority over performance and convenience:
 3. **Immutable published history.** Published snapshots, trees, manifests, and chunks are immutable. Correction creates new objects and new history; it never edits bytes under an existing ID.
 4. **Canonical identity.** Format version 1 uses the deterministic-CBOR profile and domain-separated SHA-256 object IDs fixed by ADR-0008. Canonical framing scan, known-kind schema validation, and semantic feature/profile validation are distinct reported layers: readers may hash and byte-preserve canonical objects with unsupported required features but never interpret them semantically. No layer normalizes noncanonical input. Physical database rows, pack files, compression, and backend keys do not define logical identity.
 5. **Stable file identity.** Move and rename preserve an opaque repository-scoped `FileID`; copy creates a new `FileID`. Locks, history, reviews, and integrations follow `FileID`, not only a path string.
-6. **Canonical paths.** Paths are slash-separated relative UTF-8 NFC segments under an immutable repository case/platform profile. The server rejects collisions and unsafe materialization states before publication.
+6. **Canonical paths.** Paths are slash-separated relative UTF-8 NFC segments under an immutable repository case/platform profile. Format v1 freezes the Unicode 15.0.0 `Age <= 15.0` scalar repertoire from its vendored authority, rejects every scalar outside that repertoire before NFC evaluation, and therefore never delegates identity validity to a host's evolving Unicode database. The server rejects collisions and unsafe materialization states before publication.
 7. **Authorization before disclosure.** Every list, tree, history, lock, event, search, review, preview, export, and object operation applies the same versioned policy contract. A denied actor must not learn protected existence or metadata through another surface.
 8. **Server-enforced hard locks.** Read-only filesystem flags are hints. The final submit transaction is the security/correctness boundary and rejects an invalid, stale, wrong-domain, or missing lock proof.
 9. **Atomic visible mutation.** Submit either advances one branch to one complete snapshot with its audit/outbox/lock disposition, or leaves the previous visible state. Drafts and uploaded objects are never branch history.
@@ -234,7 +234,7 @@ Attestations and signatures point to the completed snapshot ID and are discovere
 
 ### 6.3 Tree and tree entry
 
-A canonical tree represents exactly one directory as a definite entry array strictly ordered by NFC UTF-8 basename bytes. Encoding and verification operate over an ordered iterator and do not require materializing the array. A physical representation may be sharded or indexed only as a source for that iterator; page boundaries are never canonical bytes and cannot affect identity. Each named entry, including a directory, contains:
+A canonical tree represents exactly one directory as a definite entry array strictly ordered by NFC UTF-8 basename bytes. Before NFC evaluation, format v1 rejects any scalar outside the vendored Unicode 15.0.0 `Age <= 15.0` repertoire; later host Unicode assignments cannot change which format-v1 text is valid. Encoding and verification operate over an ordered iterator and do not require materializing the array. A physical representation may be sharded or indexed only as a source for that iterator; page boundaries are never canonical bytes and cannot affect identity. Each named entry, including a directory, contains:
 
 - canonical name and entry kind;
 - stable `FileID`;
@@ -749,7 +749,7 @@ These choices are defaults, not substitutes for the logical contracts:
 | Content manifest and chunk identity | OGVCS-002 `ContentManifestV1`, raw logical chunks, whole-file SHA-256 | Format-v1 invariant; OGVCS-002 |
 | Chunking profiles | Versioned content-defined boundaries and parameters | Algorithm/profile entries deferred to OGVCS-007 benchmarks |
 | Pack and transfer representation | Identity-neutral versioned pack/compression framing | Deferred to OGVCS-008 |
-| Tree segment representation | NFC UTF-8 basename bytes, canonical order, entry/mode codepoints | Format-v1 invariant; OGVCS-002 |
+| Tree segment representation | Unicode 15.0.0 `Age <= 15.0` scalar repertoire checked before NFC; UTF-8 basename bytes, canonical order, entry/mode codepoints | Format-v1 invariant; OGVCS-002 |
 | Repository path semantics | Relative slash-joined paths under immutable case/platform profiles | Invariant/profile entries; OGVCS-004 |
 | Authentication | OIDC PKCE/device plus scoped service identities and recovery bootstrap | Baseline; OGVCS-009 |
 | Public API transport | TLS 1.3 HTTP/1.1, bounded JSON-schema, capability-negotiated baseline with generated bindings | R0 baseline; ADR-0013/OGVCS-041, extended by OGVCS-036 |

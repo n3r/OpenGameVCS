@@ -1,0 +1,107 @@
+{
+  "context": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 12,
+          "mediaType": "application/octet-stream",
+          "path": "objects/01-chunk.bin",
+          "sha256": "36fcc2e9442be1071c275604af6e41bd93875c743dc2fdaa6037662df74c5894"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5"
+      },
+      {
+        "artifact": {
+          "bytes": 183,
+          "mediaType": "application/cbor",
+          "path": "objects/02-content-manifest.cbor",
+          "sha256": "b635d76c8dd9f29c2862ae0e22077c70d157f68d4595861c09fb38bdf47c456b"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+      },
+      {
+        "artifact": {
+          "bytes": 274,
+          "mediaType": "application/cbor",
+          "path": "objects/06-repository-descriptor.cbor",
+          "sha256": "677905a883b1f4ddd87fea27b5afc0293cccd2d2ea29cc4884e758e4a071b6e9"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+      },
+      {
+        "artifact": {
+          "bytes": 52,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-writer-sorted-family-before-kind-forward/tree.cbor",
+          "sha256": "f0515d605a2c20abf9f321474bc861964b20faeaebbc41a2d8316ae4ffe2bb2b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a458f2bc72d5816dc3f7ee2cc8580eaaaed9a0208588ee66d18ea78f0c255c81"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
+      "registryVersion": 1
+    },
+    "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+    "requestedLayer": 2,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "expected": {
+    "code": "SCHEMA_FIELD_INVALID",
+    "layer": 2,
+    "result": "reject",
+    "stage": "known-schema"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "inputs": [
+    {
+      "bytes": 1059,
+      "mediaType": "application/json",
+      "path": "scenarios/operations/tree-writer-sorted-family-before-kind-forward.json",
+      "sha256": "370f5d7df5cbc5e5fb713320d4cb408f5aa7f87e6d72f14b9eb3e6a2bb44aaab"
+    },
+    {
+      "bytes": 4846,
+      "mediaType": "application/json",
+      "path": "scenarios/definitions/tree-writer-sorted-family-before-kind-forward.json",
+      "sha256": "125696a533d9347a8a96c2a88db4ade39a34e1941e081ec5a27136f34a411a81"
+    }
+  ],
+  "operation": "write-tree",
+  "requirementIds": [
+    "OGVCS-002-AC-08",
+    "OGVCS-002-FR-09",
+    "OGVCS-002-FR-11",
+    "OGVCS-002-NFR-01",
+    "OGVCS-002-NFR-04"
+  ],
+  "resources": {
+    "recipe": {
+      "generator": "ogvcs.repository-validation-scenario-constructor/v1",
+      "parameters": {
+        "definition": "scenarios/definitions/tree-writer-sorted-family-before-kind-forward.json",
+        "definitionSha256": "125696a533d9347a8a96c2a88db4ade39a34e1941e081ec5a27136f34a411a81",
+        "runtimeHighWaterMarks": "not-asserted"
+      },
+      "seed": "1be53161b02e3f429d2fbdc1fba3fcaa6d63c8a96370107eeb8c3e53407f942a"
+    },
+    "summary": {
+      "bytes": 6426,
+      "indexEntries": 0,
+      "items": 4,
+      "peakMemoryBytes": 0,
+      "scratchBytes": 0,
+      "summarySha256": "4eeaa89a711d09f67ed82efa2a3262e6406dd045d9965ffe06b7ef7bf6635fc7",
+      "traversalEdges": 0
+    }
+  },
+  "scenarioId": "tree-writer-sorted-family-before-kind-forward",
+  "schemaVersion": "ogvcs.repository-format/validation-scenario/v1"
+}

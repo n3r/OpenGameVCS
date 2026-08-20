@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { fail } from './errors.js';
 import { configuredHardLimit, hardLimitMaximum } from './hard-limits.js';
 import { ResourceGuard, writeFully } from './scale-util.js';
+import { isUnicode15String } from './unicode-age.js';
 
 const U64_MAX = 0xffff_ffff_ffff_ffffn;
 const I64_MIN = -0x8000_0000_0000_0000n;
@@ -153,7 +154,8 @@ class Reader {
       this.retain(length * 2 + 32, start);
       let text;
       try { text = decoder.decode(raw); } catch (cause) { fail('CBOR_NON_CANONICAL', { layer: 1, offset: start, cause }); }
-      if (encoder.encode(text).length !== raw.length || text.normalize('NFC') !== text) {
+      if (encoder.encode(text).length !== raw.length || !isUnicode15String(text) ||
+          text.normalize('NFC') !== text) {
         fail('CBOR_NON_CANONICAL', { layer: 1, offset: start });
       }
       return text;
@@ -313,7 +315,9 @@ function encodedLength(value, depth, options) {
     });
     size = headerLength(n >= 0n ? n : -1n - n);
   } else if (typeof value === 'string') {
-    if (value.normalize('NFC') !== value) fail('CBOR_NON_CANONICAL', { layer: 1 });
+    if (!isUnicode15String(value) || value.normalize('NFC') !== value) {
+      fail('CBOR_NON_CANONICAL', { layer: 1 });
+    }
     const body = encoder.encode(value);
     if (decoder.decode(body) !== value) fail('CBOR_NON_CANONICAL', { layer: 1 });
     if (body.length > options.maxValueBytes) fail('LIMIT_VALUE_BYTES', { layer: 1 });
@@ -342,6 +346,15 @@ function encodedLength(value, depth, options) {
   } else fail('SCHEMA_FIELD_INVALID', { layer: 1, stage: 'canonical-framing' });
   if (size > options.maxBytes) fail('LIMIT_METADATA_BYTES', { layer: 1 });
   return size;
+}
+
+/**
+ * Measures the canonical encoding without materializing the encoded item.
+ * This is intentionally narrower than `encodeCanonical`: callers use it to
+ * admit scratch/output work before allocating the corresponding bytes.
+ */
+export function canonicalEncodedLength(value, options = {}) {
+  return encodedLength(value, 1, effectiveLimits(options));
 }
 
 function reserveWorking(working, bytes) {
@@ -437,7 +450,9 @@ function* emitCanonicalChunks(value, effective, chunkBytes) {
       return;
     }
     if (typeof current === 'string') {
-      if (current.normalize('NFC') !== current) fail('CBOR_NON_CANONICAL', { layer: 1 });
+      if (!isUnicode15String(current) || current.normalize('NFC') !== current) {
+        fail('CBOR_NON_CANONICAL', { layer: 1 });
+      }
       const body = encoder.encode(current);
       if (decoder.decode(body) !== current) fail('CBOR_NON_CANONICAL', { layer: 1 });
       if (body.length > effective.maxValueBytes) fail('LIMIT_VALUE_BYTES', { layer: 1 });
@@ -571,7 +586,9 @@ function encodeItem(value, depth, options, working) {
     return header(1, -1n - n);
   }
   if (typeof value === 'string') {
-    if (value.normalize('NFC') !== value) fail('CBOR_NON_CANONICAL', { layer: 1 });
+    if (!isUnicode15String(value) || value.normalize('NFC') !== value) {
+      fail('CBOR_NON_CANONICAL', { layer: 1 });
+    }
     const body = encoder.encode(value);
     if (decoder.decode(body) !== value) fail('CBOR_NON_CANONICAL', { layer: 1 });
     if (body.length > options.maxValueBytes) fail('LIMIT_VALUE_BYTES', { layer: 1 });

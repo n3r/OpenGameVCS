@@ -2,6 +2,7 @@
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
     "candidateSnapshot": "ogvcs:v1:snapshot:sha256:abc51077e8c8aa8d9d1578af54e17c9f716e443602a59fd43d5af1f297f3fe57",
+    "caseMode": "case-sensitive",
     "designatedRoot": "ogvcs:v1:snapshot:sha256:812b17a3fd9246a2eb231467de4bc0422034a16df2fceaec439aee48ba0368c9",
     "importMappings": [],
     "lifetimeRecords": [
@@ -130,10 +131,10 @@
       "sha256": "4ea3d2bd55f59f2755abed0fb1489672a2420d944484a767eead6de40b5867d7"
     },
     {
-      "bytes": 6831,
+      "bytes": 6865,
       "mediaType": "application/json",
       "path": "scenarios/definitions/group-required-role-missing.json",
-      "sha256": "3c61279989fe66c76b1407da63ab35f2c4b06db474d85c54d2d7f325158525e6"
+      "sha256": "d7e89e4b7bafc22ced41f1477614a02ffc719aa7e4cabf74f23d870ab9c9bdca"
     }
   ],
   "operation": "validate-repository",
@@ -146,18 +147,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/group-required-role-missing.json",
-        "definitionSha256": "3c61279989fe66c76b1407da63ab35f2c4b06db474d85c54d2d7f325158525e6",
+        "definitionSha256": "d7e89e4b7bafc22ced41f1477614a02ffc719aa7e4cabf74f23d870ab9c9bdca",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "eca46667c57139fd06e96070c83b73933a7b37b4b052d637729d6920c1f1db00"
     },
     "summary": {
-      "bytes": 9036,
+      "bytes": 9070,
       "indexEntries": 0,
       "items": 10,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "dfe6b90937a8e150f29a8ae7477856a69971aac7a5f067e6709b17d3a526ac60",
+      "summarySha256": "4c0806ca520c22a9607dc69a972464f2018a44f81d1e5511c8d1a72b1b14b981",
       "traversalEdges": 0
     }
   },

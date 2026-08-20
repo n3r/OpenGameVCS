@@ -1,0 +1,11 @@
+{
+  "case": "arbitrary-kind-map-relabel",
+  "kindCode": 3,
+  "kindMap": [
+    [
+      3,
+      "evil"
+    ]
+  ],
+  "text": "ogvcs:v1:evil:sha256:9458b24239ce71b75b1c6ab857883d66a6eab3f0f6f4e9afab15371af1d4bf19"
+}

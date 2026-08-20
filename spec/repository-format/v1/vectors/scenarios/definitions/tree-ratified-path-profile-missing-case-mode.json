@@ -1,0 +1,118 @@
+{
+  "algorithm": {
+    "id": "ogvcs.repository-validation-scenario-constructor",
+    "version": 1
+  },
+  "arithmetic": "mathematical nonnegative integers with explicit uint64 decode bounds; no host-width overflow is a semantic test oracle",
+  "detail": "external path-profile adapter omits its required case-mode pin",
+  "exactConstructorValues": {
+    "pathProfileDecision": {
+      "adapter": {
+        "decision": {
+          "accepted": true,
+          "platformKey": "safe",
+          "repositoryKey": "safe"
+        },
+        "profile": "path.opengamevcs/portable@1"
+      },
+      "api": "validate-path-profile-decision",
+      "caseMode": "case-sensitive",
+      "profile": "path.opengamevcs/portable@1",
+      "schema": "ogvcs.repository-format.v1.path-profile-decision-input.v1",
+      "segments": [
+        "safe"
+      ]
+    }
+  },
+  "expectedRootState": {
+    "resultFamily": "repository",
+    "rootState": "unchanged-no-trusted-output",
+    "scenarioId": "tree-ratified-path-profile-missing-case-mode",
+    "stableOutputIdentity": "ogvcs:v1:tree:sha256:d886063179c4e74bb803fc02cd5e731ceb4d46b04ce7e70eff042658b859c7e5"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "normativeContext": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 12,
+          "mediaType": "application/octet-stream",
+          "path": "objects/01-chunk.bin",
+          "sha256": "36fcc2e9442be1071c275604af6e41bd93875c743dc2fdaa6037662df74c5894"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5"
+      },
+      {
+        "artifact": {
+          "bytes": 183,
+          "mediaType": "application/cbor",
+          "path": "objects/02-content-manifest.cbor",
+          "sha256": "b635d76c8dd9f29c2862ae0e22077c70d157f68d4595861c09fb38bdf47c456b"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+      },
+      {
+        "artifact": {
+          "bytes": 283,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-ratified-path-profile-missing-case-mode/repository-descriptor.cbor",
+          "sha256": "fda06d8cc328f9134be92ba925b01dab084cb8e4ae69149f819507d2e7be676c"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:b00938615a6eee7279d853aa84ff2118afee7776032e5e6afcce050ba54365dc"
+      },
+      {
+        "artifact": {
+          "bytes": 274,
+          "mediaType": "application/cbor",
+          "path": "objects/06-repository-descriptor.cbor",
+          "sha256": "677905a883b1f4ddd87fea27b5afc0293cccd2d2ea29cc4884e758e4a071b6e9"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+      },
+      {
+        "artifact": {
+          "bytes": 160,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-ratified-path-profile-missing-case-mode/tree.cbor",
+          "sha256": "d4f0763813139b0953e2f83e7eb564623e1c26baf3bd6e8dd345cad1fe121b8f"
+        },
+        "ref": "ogvcs:v1:tree:sha256:d886063179c4e74bb803fc02cd5e731ceb4d46b04ce7e70eff042658b859c7e5"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
+      "registryVersion": 1
+    },
+    "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:b00938615a6eee7279d853aa84ff2118afee7776032e5e6afcce050ba54365dc",
+    "requestedLayer": 3,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "operation": "validate-path-profile-decision",
+  "parameters": {},
+  "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
+  "scenarioId": "tree-ratified-path-profile-missing-case-mode",
+  "seedHex": "80c83be4e83afbe4e93b9c5abecaf01de27eac3ac20d10eda575e70b0505d218",
+  "suppliedResourceCatalogue": {
+    "baseObjectArtifacts": [
+      "objects/01-chunk.bin",
+      "objects/02-content-manifest.cbor",
+      "scenarios/objects/tree-ratified-path-profile-missing-case-mode/repository-descriptor.cbor",
+      "objects/06-repository-descriptor.cbor",
+      "scenarios/objects/tree-ratified-path-profile-missing-case-mode/tree.cbor"
+    ],
+    "logicalRecordArtifacts": [],
+    "mutationRecipe": "none",
+    "virtualLimitRecipe": "none"
+  },
+  "validation": {
+    "mode": "conformance",
+    "requestedLayer": 3
+  }
+}

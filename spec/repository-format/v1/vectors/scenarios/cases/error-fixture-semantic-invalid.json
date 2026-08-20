@@ -1,6 +1,7 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [],
     "lifetimeRecords": [],
     "mode": "conformance",
@@ -135,10 +136,10 @@
   ],
   "inputs": [
     {
-      "bytes": 7454,
+      "bytes": 7488,
       "mediaType": "application/json",
       "path": "scenarios/definitions/error-fixture-semantic-invalid.json",
-      "sha256": "9dbb0c9a8831a094b7fd4a1116f5e406bb4ae8397c570c11088b67080234efb8"
+      "sha256": "602b22ffdce6bee3ff9cb24ae659e9ed57a1924d1caa60ecf15768321317bd3e"
     }
   ],
   "operation": "adapt-fixture",
@@ -151,18 +152,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/error-fixture-semantic-invalid.json",
-        "definitionSha256": "9dbb0c9a8831a094b7fd4a1116f5e406bb4ae8397c570c11088b67080234efb8",
+        "definitionSha256": "602b22ffdce6bee3ff9cb24ae659e9ed57a1924d1caa60ecf15768321317bd3e",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "f3401827523e4aa0a89167d8ba230207d3ef81c5e1d87630b34a52d6cc16c572"
     },
     "summary": {
-      "bytes": 12677,
+      "bytes": 12711,
       "indexEntries": 0,
       "items": 12,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "b10983c413a12618936837f33d9b02fa3fda9f65b46d0f4104ef23d8f9008111",
+      "summarySha256": "920ff4eddc7e0f2a029f1df0910ca8d742db03e131c5ffcee8220e938dde9227",
       "traversalEdges": 0
     }
   },

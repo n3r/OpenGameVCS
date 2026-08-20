@@ -2,6 +2,7 @@
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
     "candidateSnapshot": "ogvcs:v1:snapshot:sha256:47443c3c337113cadb4d363ec65c7b4a91cb90d979b12a2b64af2e466603a34f",
+    "caseMode": "case-sensitive",
     "designatedRoot": "ogvcs:v1:snapshot:sha256:812b17a3fd9246a2eb231467de4bc0422034a16df2fceaec439aee48ba0368c9",
     "importMappings": [],
     "lifetimeRecords": [
@@ -122,7 +123,7 @@
         "path": "scenarios/outputs/fileid-copy-fresh.json",
         "sha256": "4b9f4a21f6b317c77e99a4b15275295efa45bd5c7518d15df913ec29f57fad84"
       },
-      "summarySha256": "ab9771d88a10b03938a325b29d2d6f70c33f56d2a5a97809ed8def1df46dc9d1"
+      "summarySha256": "92034f7b52dc4e8efd1edc2e3ac6d354fc7cff74b92b9b4015c9b79d01e4c8a3"
     },
     "result": "accept"
   },
@@ -135,10 +136,10 @@
       "sha256": "1622ddd790cb7be9c57b3caf93d7d138e2f9662946585bb2c99146c5c781d8dd"
     },
     {
-      "bytes": 6433,
+      "bytes": 6467,
       "mediaType": "application/json",
       "path": "scenarios/definitions/fileid-copy-fresh.json",
-      "sha256": "8ed701dab90da2394ed0f7f9a8b032c7e09be998279ca145f69251a123fd24c2"
+      "sha256": "497a8c97a94ed8f1171b73d589515a731759d1e50abfebe91358e768e6ee1a87"
     }
   ],
   "operation": "replay-change-set",
@@ -151,18 +152,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/fileid-copy-fresh.json",
-        "definitionSha256": "8ed701dab90da2394ed0f7f9a8b032c7e09be998279ca145f69251a123fd24c2",
+        "definitionSha256": "497a8c97a94ed8f1171b73d589515a731759d1e50abfebe91358e768e6ee1a87",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "3069eed3a0ac96694c55b5d7210b5f8169da3e2bd19a3ff52e1d1197a5e540b3"
     },
     "summary": {
-      "bytes": 8613,
+      "bytes": 8647,
       "indexEntries": 0,
       "items": 9,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "ab9771d88a10b03938a325b29d2d6f70c33f56d2a5a97809ed8def1df46dc9d1",
+      "summarySha256": "92034f7b52dc4e8efd1edc2e3ac6d354fc7cff74b92b9b4015c9b79d01e4c8a3",
       "traversalEdges": 0
     }
   },

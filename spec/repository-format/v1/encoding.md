@@ -12,9 +12,10 @@ resource limits for OpenGameVCS repository format v1. It does not define the
 kind-specific object model, a production path or chunking algorithm, physical
 transfer framing, or a repository-complete export.
 
-ADR-0008, ADR-0009, and ADR-0010 are the design authority for this draft. Their
-proposal or acceptance status also determines whether this format may be called
-ratified; publication of this draft does not ratify them. Within this directory:
+ADR-0008, ADR-0009, and ADR-0010 are accepted design authorities for this
+release candidate. Format v1 remains unratified while OGVCS-002 is in
+Validation; ADR acceptance and publication of this draft do not authorize
+production writes. Within this directory:
 
 1. this document is normative for encoding mechanics, hash preimages, textual
    forms, canonicality, and decoder behavior;
@@ -48,18 +49,31 @@ encoding requirements.
 - unsigned integers in the range `0..18446744073709551615`;
 - negative integers in the range `-9223372036854775808..-1`;
 - definite-length byte strings;
-- definite-length text strings containing Unicode scalar values encoded as
-  shortest-form UTF-8 and already normalized to NFC; and
+- definite-length text strings containing only the frozen Unicode 15.0.0
+  repertoire described below, encoded as shortest-form UTF-8 and already
+  normalized to NFC; and
 - the simple values `false` and `true`.
 
 All integers and string lengths MUST use the shortest CBOR additional-information
 form. A schema MAY impose a smaller numeric or length range.
 
+Format v1 freezes its text repertoire to Unicode scalar values with an assigned
+`Age` of 15.0 or earlier in Unicode 15.0.0. The authoritative versioned data is
+[`unicode/DerivedAge-15.0.0.txt`](unicode/DerivedAge-15.0.0.txt), SHA-256
+`7570877e0fa197c45338f7c41a02636da4e14c8dba6a3611a01cd30bf329d5ca`;
+the generated vector manifest binds an exact copy, its Unicode license, notice,
+and the mechanically derived compact interval table. Surrogate code points are
+excluded even though the Unicode `Age` data assigns them. A scalar absent from
+that frozen repertoire remains forbidden in format v1 even if a newer host
+Unicode database assigns or normalizes it.
+
 Text is compared and measured after UTF-8 encoding but is never modified during
-decoding. A decoder MUST reject invalid UTF-8, non-shortest UTF-8, surrogate code
-points, and text that is not already NFC. It MUST NOT normalize then accept the
-input. Unless a kind schema says otherwise, line endings and other valid Unicode
-scalar values retain their exact value.
+decoding. A decoder MUST first reject invalid or non-shortest UTF-8 and non-scalar
+values, then reject any scalar outside the frozen repertoire, and only then test
+whether the unchanged text is NFC. It MUST NOT normalize then accept the input,
+and host-current character assignment is not authority. Unless a kind schema
+says otherwise, line endings and other admitted scalar values retain their exact
+value.
 
 ### 2.2 Allowed containers
 
@@ -183,11 +197,14 @@ component may be inferred, defaulted, or embedded in `id`. The canonical text
 rendering is `<namespace>/<id>@<major>`, where `major` is base-10 without a
 leading zero, for example `path.test/opaque@1`.
 
-The initial profiles are conformance-only. They are valid in declared normative
-vectors and fixture-adapter corpora and MUST be rejected when a caller requests
-a production-repository write. Their exact family-specific payload and
-validation semantics—including the deliberately non-cryptographic opaque
-signature profile—are normative in
+The registry contains four ratified OGVCS-004 path profiles
+(`path.opengamevcs/{linux,macos,portable,windows}@1`) and conformance-only
+OGVCS-002 test profiles. Ratified path behavior remains owned by OGVCS-004 and
+requires its exact caller-supplied validator; registry recognition alone is not
+a path proof. Conformance-only assignments are valid only in declared normative
+vectors and fixture-adapter corpora and MUST be rejected for production writes.
+Their exact family-specific payload and validation semantics—including the
+deliberately non-cryptographic opaque signature profile—are normative in
 [`conformance-profiles.md`](conformance-profiles.md).
 
 ### 4.4 FileID
@@ -238,8 +255,20 @@ ogvcs:v1:<kind-name>:sha256:<64-lowercase-hex-digits>
 and occupies at most 63 lowercase ASCII bytes. The complete durable ObjectID
 text is therefore at most 144 bytes and parsers MUST enforce that bound before
 splitting or otherwise allocating proportional component storage.
+An overlength or colon-dense value that cannot have the exact five-component
+v1 shape is `SCHEMA_FIELD_INVALID` at layer 2 in `known-schema`. A value with
+that bounded shape but an unsupported format version or hash-algorithm token is
+`OBJECT_REFERENCE_FORMAT_UNSUPPORTED` at the same layer and stage.
 Each current token equals its lower-case registry name, including its hyphens;
 aliases are not valid.
+The code-to-token assignment is immutable authority, not a caller customization
+point. A parser or renderer MUST NOT accept an arbitrary map that relabels a
+frozen v1 kind code; for example, kind code `3` is always `tree` and never
+`evil`. Additive kind tokens are usable only through a complete, validated
+`RegistrySnapshot` whose twelve-document registry-set digest is authenticated.
+A look-alike map or unbranded registry view cannot add or replace tokens, and a
+candidate registry that assigns the same text token to two codes is
+`REGISTRY_INVALID`.
 The parser MUST reject upper-case hex, a missing or extra component, an alias,
 an unregistered kind, an unknown algorithm, the wrong digest length, whitespace,
 and trailing characters. Example shape:
@@ -298,7 +327,7 @@ trusted partial object:
    budgets while enforcing the non-overridable hard ceilings;
 2. parse exactly one allowed, definite CBOR item without allocating from an
    unchecked length;
-3. perform the canonical framing scan and reject nonminimal encodings, forbidden values, invalid/non-NFC text,
+3. perform the canonical framing scan and reject nonminimal encodings, forbidden values, invalid text, scalars outside the frozen Unicode 15.0 repertoire, non-NFC text,
    duplicate or incorrectly ordered map keys, excessive nesting, and trailing
    bytes;
 4. compute the ObjectID over the original canonical payload bytes and, when an
@@ -329,6 +358,73 @@ configured resource stop that prevents safe continuation is layer 1 and precedes
 facts that could only be learned by exceeding the budget. A normative result
 contains this one selected failure. Implementations MAY additionally return
 other failures only in a clearly non-normative diagnostic list.
+
+An emitter first validates its explicit selector and complete registry
+authority at configured-resource preflight. It then establishes every safely
+discoverable layer-1 ordering, declared-identity, and actual iterator-count
+fact and layer-2 known-schema fact before selecting a later registry-lifecycle
+failure. The in-memory encoder returns no buffer on rejection. A one-pass
+ordered writer may have written only to a caller-designated untrusted staging
+sink; it poisons or aborts that attempt, produces no successful commit or
+summary, and requires the caller to discard all staged bytes. Thus a descending
+logical-bundle object pair wins over a later bad object digest, and an
+actual-versus-declared tree or manifest iterator count mismatch wins over a
+later conformance-only feature or profile failure, including a content-policy
+profile carried by an entry observed before the iterator-count mismatch. A
+duplicate FileID observed during iteration is likewise a later
+repository-semantic fact and does not outrank the completed iterator-count
+mismatch. An ordered tree writer and a file-backed tree reader complete every
+safely decodable entry's known-schema checks before selecting their same-stage
+layer-2 failure. Frozen catalogue order therefore makes
+`SCHEMA_FIELD_INVALID`, `SCHEMA_FIELD_UNKNOWN`, or
+`OBJECT_REFERENCE_KIND_MISMATCH` win over `TREE_ENTRY_ORDER_INVALID` even when
+the winning fact occurs later in the input; reversing the occurrences does not
+change the result. A file-backed tree reader likewise completes canonical entry-order and other
+known-schema checks before selecting a wrong-descriptor, duplicate-FileID, or
+required-feature lifecycle/repository failure. When both remaining faults are
+layer 3, registry semantics precede repository semantics, so a conformance-only
+required feature wins over a duplicate FileID. A supplied chunk identity
+mismatch likewise wins over a conformance-only chunking-profile failure. A declared object digest
+mismatch on a known tree likewise wins over that tree's conformance-only
+required-feature failure under `production-write`. Across manifest parts, a
+layer-2 wrong-kind chunk reference wins over another part's layer-3 actual
+chunk-length mismatch in either occurrence order. No rejected prefix is
+trusted output.
+
+The logical-bundle writer applies the same rule across each complete bounded
+section, not merely within one item. In the object section, any item's declared
+identity mismatch at layer 1 wins over a different item's conformance-only
+required feature under `production-write`, whether the lifecycle fault occurs
+first or last. In the root section, descending canonical root order at layer 1
+wins over a different root's conformance-only role profile in either
+occurrence order. In the logical-record section, a safely hashable record's
+layer-2 known-schema defect does not stop the bounded section scan; a descending
+or duplicate identity discovered elsewhere in that section remains the
+layer-1 winner regardless of whether the malformed record occurs first or
+last.
+
+When content verification is requested, the manifest writer likewise
+completes the bounded provider pass across all declared parts before selecting
+its failure. A provider result with the declared length but bytes that do not
+match the part's ObjectRef is `OBJECT_ID_MISMATCH` at layer 1 and wins over a
+sibling provider's `MANIFEST_CHUNK_LENGTH_INVALID` at layer 3 in either part
+order. Provider results remain subject to the configured byte, item, memory,
+scratch, and deadline stops; this complete pass does not authorize work beyond
+those limits.
+
+Closure and reference resolution are completed before registry or repository
+semantics. Thus an absent manifest chunk, tree entry target, replay target,
+conflict-side object, or provenance input is `OBJECT_REFERENCE_MISSING` at
+layer 2 even when the containing value also selects a conformance-only profile
+or required feature in production mode.
+
+For tree and manifest writers, the configured item ceiling is evaluated against
+the actual iterator count. If the iterator exceeds that ceiling,
+`LIMIT_COUNT` at layer 1 in `configured-resource-preflight` wins over both an
+actual-versus-declared count mismatch and any registry-lifecycle fault. If the
+actual count fits the configured ceiling but differs from its declaration,
+`SCHEMA_FIELD_INVALID` at layer 2 in `known-schema` wins over the later
+lifecycle fault.
 
 Every catalogue entry binds its code to one or more exact `sites`; each site
 pairs one stage with its permitted validation layer or layers. A normative
@@ -485,6 +581,70 @@ The following selections are exhaustive for format v1:
 - Private or experimental production code MUST NOT claim unregistered numeric
   values. Experiments use namespaced optional extensions or a non-v1 envelope.
 
+The public selector domains are distinct and closed:
+
+- repository validators accept exactly the modes `conformance` and
+  `production`; registry operation `read` is not a repository-validator mode;
+- a registry-aware semantic metadata decoder, file-backed tree reader, or
+  supplied-closure logical-bundle verifier accepts exactly the registry
+  operations `read`, `conformance`, and `production-write`; explicit `read` is
+  how readable deprecated bytes remain inspectable without authorizing a new
+  write;
+- the authoritative metadata encoder and every ordered, sorted, or file-backed
+  tree, manifest, or logical-bundle emitter accept exactly the registry
+  operations `conformance` or `production-write`.
+
+Raw canonical-CBOR encoding, framing-only decoding, and identity hashing remain
+registry-free. A registry-free metadata or tree decoder with semantic
+validation explicitly disabled, and a registry-free supplied-closure bundle
+verifier, may deliberately stop after layer 2. The registry-free tree boundary
+is the decoded-tree known-schema reader; the public file verifier performs
+descriptor and FileID semantics and therefore
+always requires a complete registry and explicit lifecycle operation before it
+opens the file or scratch state. Supplying a registry to a
+semantic codec requires an explicit registry operation, and selecting semantic
+validation without a registry is invalid before input is consumed. An explicit
+`semantic:false` layer-2 route forbids both a registry and a
+lifecycle operation and uses only the frozen v1 kind and profile-family tables;
+registry presence always selects the semantic route. A generic
+or no-op bundle callback cannot promote supplied-closure verification beyond
+layer 2: the public verifier rejects such a callback option with
+`SCHEMA_FIELD_INVALID` at configured-resource preflight. Repository-semantic
+validation is a separate composition with a full `RepositoryContext`. Every
+repository API claiming layer 3 requires an explicit repository mode, immutable repository
+case mode, enabled registry semantics, and a complete validated registry
+snapshot. The standalone asset-group validator has the same requirement and
+applies profile family and lifecycle checks before group rules.
+
+Omitting both registry authority and the explicit `semantic:false` selector is
+not a request for layer 2; it is `SCHEMA_FIELD_INVALID` at configured-resource
+preflight. Conformance evidence for a named decoder, verifier, validator, or
+emitter MUST discover the lifecycle-bearing profile or required feature from
+the bytes or typed input actually consumed by that named surface. A detached
+registry decision, descriptive profile label, or post-operation registry lookup
+is not evidence that the surface propagated its operation and authority.
+
+A complete runtime authority is exactly the validated twelve-document registry
+set bound by its computed registry-set digest. A partial document collection,
+a forged or stale digest, or an arbitrary look-alike object is not a
+`RegistrySnapshot`; high-level semantic, repository, and emitter APIs reject it
+at configured-resource preflight before opening a source or sink. Partial
+registries are permitted only inside registry-evolution tooling or an explicit
+registry-free layer-2 boundary that makes no lifecycle claim.
+
+An absent, wrong-typed, `read`, or otherwise unknown repository-validator mode,
+an absent or invalid emitter selector, a missing registry on a semantic or
+emitter route, or disabled semantic profiles on a layer-3 route is
+`SCHEMA_FIELD_INVALID` at layer 1 in `configured-resource-preflight`, before
+payload, source, sink, scratch, or output work. `encodeCanonical` is not a
+metadata emitter; `encodeMetadata` is, and therefore has the registry and
+operation requirements above.
+
+The command-line semantic `object`, `tree`, and `bundle` verification routes
+likewise require an explicit `read`, `conformance`, or `production-write`
+operation. CLI inspection and identity-only routes remain explicit layer-2
+operations and make no registry-semantic claim.
+
 Registry JSON is stable source data, not an object-identity encoding. Every file
 MUST be UTF-8 without BOM, use LF, end in one LF, use two-space indentation, and
 have object keys in lexicographic order. Registry entry arrays are ordered by
@@ -544,12 +704,14 @@ specialized typed lookup.
 The registry files are:
 
 - `registries/object-kinds.json`
+- `registries/hash-algorithms.json`
 - `registries/common-fields.json`
+- `registries/kind-fields.json`
 - `registries/entry-kinds.json`
 - `registries/entry-modes.json`
 - `registries/required-features.json`
-- `registries/profiles.json`
 - `registries/extensions.json`
+- `registries/profiles.json`
 - `registries/logical-record-types.json`
 - `registries/semantic-enums.json`
 - `registries/limits.json`

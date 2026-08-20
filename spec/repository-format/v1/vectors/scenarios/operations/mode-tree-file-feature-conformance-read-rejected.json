@@ -1,0 +1,19 @@
+{
+  "api": "validate-operation-mode",
+  "objectLookup": "scenario.context.objectLookup",
+  "operation": "read",
+  "registry": "bundled",
+  "registryFixture": {
+    "path": "registries/index.json",
+    "scenarioId": "registry-conformance-mode"
+  },
+  "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+  "requestedLayer": 3,
+  "requiredFeatures": [
+    1
+  ],
+  "schema": "ogvcs.repository-format.v1.operation-mode-input.v1",
+  "semanticProfiles": true,
+  "source": "lifecycle/tree-feature-conformance.cbor",
+  "surface": "tree-file"
+}

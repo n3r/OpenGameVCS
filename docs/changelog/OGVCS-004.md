@@ -94,9 +94,11 @@ Four additive `path.opengamevcs/*@1` assignments were added to all OGVCS-002
 registry snapshots, regenerated vectors, package bindings, Rust indexes, and
 evidence. JavaScript repository expansion calls the OGVCS-004 adapter for every
 composed path and rejects full-set repository/platform collisions. Recognizing
-the profile family alone is not considered a proof. The Rust object library
-fails these production profiles closed until an equivalent external path
-adapter is supplied; it does not silently apply incomplete rules.
+the profile family alone is not considered a proof. Both OGVCS-002 core
+implementations expose the same pinned path-profile/case-mode validation hook
+and fail closed when it is absent or mismatched. OGVCS-004 currently ships the
+owner adapter as a JavaScript package; it does not claim a separate Rust
+filesystem implementation.
 
 Case/Unicode integration tests decode normative OGVCS-002 objects, build
 renamed canonical trees, preserve the entry `FileID`, verify changed tree bytes

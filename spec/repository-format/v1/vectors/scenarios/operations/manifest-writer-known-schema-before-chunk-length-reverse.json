@@ -1,0 +1,26 @@
+{
+  "api": "write-content-manifest",
+  "chunkArtifact": "objects/01-chunk.bin",
+  "chunkProfile": "chunking.test/external-boundaries@1",
+  "declaredParts": "2",
+  "logicalLength": "23",
+  "maxItems": 2,
+  "operation": "conformance",
+  "outputDisposition": {
+    "orderedStagingSink": "aborted-discard",
+    "successCommit": false
+  },
+  "parts": [
+    {
+      "chunk": "ogvcs:v1:content-manifest:sha256:82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12",
+      "length": "12"
+    },
+    {
+      "chunk": "ogvcs:v1:chunk:sha256:944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5",
+      "length": "11"
+    }
+  ],
+  "registry": "bundled",
+  "schema": "ogvcs.repository-format.v1.manifest-writer-input.v1",
+  "wholeFileSha256": "cb4f2424fd3588eb17773169678f8a2bc61546e0605e6f58ef64e4c67fdc49f8"
+}

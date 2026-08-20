@@ -2,6 +2,7 @@
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
     "candidateSnapshot": "ogvcs:v1:snapshot:sha256:2a92a51dd113ecd87d46011d386800c92772c6eecb0ace9b2873e59d54c4ced7",
+    "caseMode": "case-sensitive",
     "designatedRoot": "ogvcs:v1:snapshot:sha256:1f12d26a139da2787ec41777f591ad2a7b52708a237691099ced6c23d9bb40ab",
     "importMappings": [],
     "lifetimeRecords": [
@@ -121,10 +122,10 @@
       "sha256": "a34d41d198814140fb430a2a055b80a43cbf8145706444165880f7ffead37bec"
     },
     {
-      "bytes": 6223,
+      "bytes": 6257,
       "mediaType": "application/json",
       "path": "scenarios/definitions/fileid-delete-recreate-reuse.json",
-      "sha256": "2d4271855a41478ce1b78cf45946c004ac81d528bae1d126c6be19d5a9e4b30d"
+      "sha256": "4490c591df84b96165ebe821bbbcd87687ed33a294e14dd4db2f862b760162cd"
     }
   ],
   "operation": "replay-change-set",
@@ -137,18 +138,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/fileid-delete-recreate-reuse.json",
-        "definitionSha256": "2d4271855a41478ce1b78cf45946c004ac81d528bae1d126c6be19d5a9e4b30d",
+        "definitionSha256": "4490c591df84b96165ebe821bbbcd87687ed33a294e14dd4db2f862b760162cd",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "e54d4c1c53e21fdb0e27f466a442b87f82458668cfa82226b72cb4a750ded92b"
     },
     "summary": {
-      "bytes": 7903,
+      "bytes": 7937,
       "indexEntries": 0,
       "items": 9,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "349a2070e2fbe889a349aab387f94ab93fe19ad43b34254ff1b605f6862989ce",
+      "summarySha256": "1c882490c5d926ccd6df0dfeaec070d569fe8ecf781c88f5f894d1a901cb70ee",
       "traversalEdges": 0
     }
   },

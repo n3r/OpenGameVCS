@@ -7,11 +7,21 @@ import test from 'node:test';
 
 import {
   ObjectRef, OgvcsError, ProfileRef, decodeCanonical, decodeSequence, hashObject, sha256Digest,
-  verifyLogicalBundleStream, visitLogicalBundle, writeCanonical, writeContentManifest,
-  writeOrderedLogicalBundle, writeOrderedTree
+  loadBundledRegistry, verifyLogicalBundleStream, visitLogicalBundle, writeCanonical,
+  writeContentManifest as writeContentManifestRaw,
+  writeOrderedLogicalBundle as writeOrderedLogicalBundleRaw,
+  writeOrderedTree as writeOrderedTreeRaw
 } from '../src/index.js';
 
 const VECTORS = resolve(import.meta.dirname, '../../../../spec/repository-format/v1/vectors');
+const registry = await loadBundledRegistry();
+const writeContentManifest = input => writeContentManifestRaw({
+  registry, operation: 'conformance', ...input
+});
+const writeOrderedLogicalBundle = input => writeOrderedLogicalBundleRaw({
+  registry, operation: 'conformance', ...input
+});
+const writeOrderedTree = input => writeOrderedTreeRaw({ registry, operation: 'conformance', ...input });
 const deadline = value => value instanceof OgvcsError && value.code === 'LIMIT_TIME' && value.layer === 1;
 const never = () => new Promise(() => {});
 
@@ -28,7 +38,7 @@ test('tree and manifest callback sinks receive one signal and cannot outwait the
       sink, maxTimeMs: 25
     })],
     ['manifest', sink => writeContentManifest({
-      chunkProfile: new ProfileRef('chunking.test', 'fixed', 1),
+      chunkProfile: new ProfileRef('chunking.test', 'external-boundaries', 1),
       logicalLength: 0, partCount: 0, parts: [],
       wholeFileDigest: sha256Digest(new Uint8Array()), sink, maxTimeMs: 25
     })]
@@ -188,7 +198,7 @@ test('spooled bundle verification bounds input next and return', async t => {
       };
     }
   };
-  await bounded(verifyLogicalBundleStream(source, { scratchDirectory, maxTimeMs: 25 }));
+  await bounded(verifyLogicalBundleStream(source, { semantic: false, scratchDirectory, maxTimeMs: 25 }));
   await Promise.resolve();
   assert.ok(nextSignal instanceof AbortSignal);
   assert.equal(nextSignal.aborted, true);
@@ -208,7 +218,7 @@ test('public bundle visitor deadline-races nonsettling visitor hooks', async () 
   assert.equal(observed.reason?.code, 'LIMIT_TIME');
 });
 
-test('iterator return cannot outwait the shared tree deadline', async () => {
+test('tree declared-count ranking completes a finite iterator without cancellation', async () => {
   const tree = decodeCanonical(new Uint8Array(await readFile(resolve(VECTORS, 'objects/03-tree.cbor'))));
   let returnSignal;
   const source = {
@@ -228,9 +238,8 @@ test('iterator return cannot outwait the shared tree deadline', async () => {
     descriptor: ObjectRef.fromMap(tree.get(16)), entryCount: 0, entries: source,
     sink() {}, maxTimeMs: 25
   }), value => value instanceof OgvcsError && value.code === 'SCHEMA_FIELD_INVALID' && value.layer === 2);
-  assert.ok(Date.now() - started < 2_000, 'iterator return outwaited the shared deadline');
-  assert.ok(returnSignal instanceof AbortSignal);
-  assert.equal(returnSignal.aborted, true);
+  assert.ok(Date.now() - started < 2_000, 'finite iterator traversal exceeded the shared deadline');
+  assert.equal(returnSignal, undefined);
 });
 
 test('manifest part and chunk-provider awaits share the writer deadline', async () => {
@@ -244,7 +253,7 @@ test('manifest part and chunk-provider awaits share the writer deadline', async 
     }
   };
   await bounded(writeContentManifest({
-    chunkProfile: new ProfileRef('chunking.test', 'fixed', 1),
+    chunkProfile: new ProfileRef('chunking.test', 'external-boundaries', 1),
     logicalLength: 0, partCount: 0, parts,
     wholeFileDigest: sha256Digest(new Uint8Array()), sink() {}, maxTimeMs: 25
   }));
@@ -255,7 +264,7 @@ test('manifest part and chunk-provider awaits share the writer deadline', async 
   const reference = hashObject(1, chunk);
   let providerSignal;
   await bounded(writeContentManifest({
-    chunkProfile: new ProfileRef('chunking.test', 'fixed', 1),
+    chunkProfile: new ProfileRef('chunking.test', 'external-boundaries', 1),
     logicalLength: chunk.length, partCount: 1,
     parts: [new Map([[0, reference.toMap()], [1, chunk.length]])],
     wholeFileDigest: sha256Digest(chunk), verifyContent: true,
@@ -273,6 +282,7 @@ test('caller-owned FileID index add and finish hooks are deadline-bound', async 
   await bounded(writeOrderedTree({
     descriptor, entryCount: 1, entries: [tree.get(17)[0]], sink() {}, maxTimeMs: 25,
     fileIdIndex: {
+      begin() {},
       add(_fileId, { signal }) { addSignal = signal; return never(); },
       finish() { return { count: 1 }; },
       abort() {}
@@ -285,6 +295,7 @@ test('caller-owned FileID index add and finish hooks are deadline-bound', async 
   await bounded(writeOrderedTree({
     descriptor, entryCount: 0, entries: [], sink() {}, maxTimeMs: 25,
     fileIdIndex: {
+      begin() {},
       add() {},
       finish(_count, { signal }) { finishSignal = signal; return never(); },
       abort() {}

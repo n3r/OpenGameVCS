@@ -2,6 +2,7 @@
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
     "candidateSnapshot": "ogvcs:v1:snapshot:sha256:838cdb3296455745ff5184cc82b4ee3968fb6141e817879e8488a87e998ac332",
+    "caseMode": "case-sensitive",
     "designatedRoot": "ogvcs:v1:snapshot:sha256:1f12d26a139da2787ec41777f591ad2a7b52708a237691099ced6c23d9bb40ab",
     "importMappings": [],
     "lifetimeRecords": [],
@@ -121,10 +122,10 @@
       "sha256": "56d68fbd989378fb0688af1e0f8a916c2d4415a5d6fd453edc2b04225e299c99"
     },
     {
-      "bytes": 6287,
+      "bytes": 6321,
       "mediaType": "application/json",
       "path": "scenarios/definitions/transition-sequence-gap.json",
-      "sha256": "d77c22a9e40e3f901f8da4db7397ec229ea0d8a42e08d0bc9bbdcb95fcdbfa69"
+      "sha256": "bdbde3cd11b759200e5cda93922341a67511ff629940a8f9bb700e21e9f43283"
     }
   ],
   "operation": "replay-change-set",
@@ -136,18 +137,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/transition-sequence-gap.json",
-        "definitionSha256": "d77c22a9e40e3f901f8da4db7397ec229ea0d8a42e08d0bc9bbdcb95fcdbfa69",
+        "definitionSha256": "bdbde3cd11b759200e5cda93922341a67511ff629940a8f9bb700e21e9f43283",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "6b282eea7f291530cf45845d3732ad40fad92a5017d4276a4908d25dbc59f138"
     },
     "summary": {
-      "bytes": 7973,
+      "bytes": 8007,
       "indexEntries": 0,
       "items": 9,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "6d8fa81d96a2b9103a993228a505904ff8ead1120180f2f81603649e2c47b89a",
+      "summarySha256": "47a03f04e230eb9605adc30051fc90ce105698af1a424a1bdf91822b116147c0",
       "traversalEdges": 0
     }
   },

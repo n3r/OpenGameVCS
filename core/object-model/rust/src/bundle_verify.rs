@@ -119,23 +119,54 @@ impl LogicalBundleVerifyLimits {
     }
 }
 
-/// Caller-selected semantic context and private scratch directory.
+/// Caller-selected verification authority and private scratch directory.
+#[derive(Clone, Copy)]
+pub enum LogicalBundleVerifyAuthority<'a> {
+    /// Explicit registry-free supplied-closure verification through layer two.
+    Layer2,
+    /// Complete registry authority and explicit lifecycle operation.
+    Semantic {
+        registry: &'a Registry,
+        operation: Operation,
+    },
+}
+
 #[derive(Clone, Copy)]
 pub struct LogicalBundleVerifyOptions<'a> {
     pub scratch_directory: &'a Path,
-    pub registry: &'a Registry,
-    pub operation: Operation,
+    pub authority: LogicalBundleVerifyAuthority<'a>,
     pub limits: LogicalBundleVerifyLimits,
 }
 
 impl<'a> LogicalBundleVerifyOptions<'a> {
-    pub fn new(scratch_directory: &'a Path, registry: &'a Registry) -> Self {
+    pub fn layer2(scratch_directory: &'a Path) -> Self {
         Self {
             scratch_directory,
-            registry,
-            operation: Operation::ConformanceWrite,
+            authority: LogicalBundleVerifyAuthority::Layer2,
             limits: LogicalBundleVerifyLimits::default(),
         }
+    }
+
+    pub fn semantic(
+        scratch_directory: &'a Path,
+        registry: &'a Registry,
+        operation: Operation,
+    ) -> Self {
+        Self {
+            scratch_directory,
+            authority: LogicalBundleVerifyAuthority::Semantic {
+                registry,
+                operation,
+            },
+            limits: LogicalBundleVerifyLimits::default(),
+        }
+    }
+
+    fn preflight_authority(self) -> Result<()> {
+        if let LogicalBundleVerifyAuthority::Semantic { registry, .. } = self.authority {
+            registry.require_complete_authority()?;
+        }
+        Ok(())
     }
 }
 
@@ -169,13 +200,23 @@ pub fn verify_logical_bundle_stream<R: Read>(
     reader: R,
     options: LogicalBundleVerifyOptions<'_>,
 ) -> Result<LogicalBundleVerifySummary> {
+    options.preflight_authority()?;
+    let layer2_registry = Registry::bundled();
+    let (registry, operation, highest_layer) = match options.authority {
+        LogicalBundleVerifyAuthority::Layer2 => (&layer2_registry, Operation::Read, 2),
+        LogicalBundleVerifyAuthority::Semantic {
+            registry,
+            operation,
+        } => (registry, operation, 3),
+    };
     let limits = options.limits.constrained()?;
     let budget = Budget::new(limits)?;
     let workspace = ScratchWorkspace::new(options.scratch_directory, limits.max_scratch_bytes)?;
     verify_spooled(
         reader,
-        options.registry,
-        options.operation,
+        registry,
+        operation,
+        highest_layer,
         &budget,
         &workspace,
     )
@@ -186,6 +227,7 @@ pub fn verify_logical_bundle_file(
     path: impl AsRef<Path>,
     options: LogicalBundleVerifyOptions<'_>,
 ) -> Result<LogicalBundleVerifySummary> {
+    options.preflight_authority()?;
     let limits = options.limits.constrained()?;
     let mut open = OpenOptions::new();
     open.read(true);
@@ -984,7 +1026,14 @@ fn scanner_value_bytes(limits: &LogicalBundleVerifyLimits) -> usize {
         .max_memory_bytes
         .saturating_sub(resident_base(limits))
         / 4)
-    .clamp(1, MAX_GENERIC_VALUE_BYTES as usize)
+    .min(MAX_GENERIC_VALUE_BYTES as usize)
+}
+
+fn scanner_capture_bytes(limits: &LogicalBundleVerifyLimits) -> usize {
+    let remaining = limits.max_memory_bytes.saturating_sub(resident_base(limits));
+    remaining
+        .saturating_sub(scanner_value_bytes(limits))
+        .min(BundleLimits::HARD.max_capture_bytes)
 }
 
 fn read_payload(
@@ -1394,14 +1443,23 @@ fn transcript(sequence: &mut ScratchFile, end: u64, budget: &Budget) -> Result<[
 }
 
 #[derive(Clone, Copy)]
-struct DeferredSemanticError(Option<ErrorCode>);
+struct DeferredSemanticError {
+    enabled: bool,
+    code: Option<ErrorCode>,
+}
 
 impl DeferredSemanticError {
-    fn new() -> Self {
-        Self(None)
+    fn new(enabled: bool) -> Self {
+        Self {
+            enabled,
+            code: None,
+        }
     }
 
     fn observe(&mut self, error: Error) -> Result<()> {
+        if !self.enabled {
+            return Ok(());
+        }
         if matches!(
             error.code,
             ErrorCode::RequiredFeatureUnsupported
@@ -1410,10 +1468,10 @@ impl DeferredSemanticError {
                 | ErrorCode::ProfileStateForbidden
         ) {
             if self
-                .0
+                .code
                 .is_none_or(|current| semantic_rank(error.code) < semantic_rank(current))
             {
-                self.0 = Some(error.code);
+                self.code = Some(error.code);
             }
             Ok(())
         } else {
@@ -1422,7 +1480,7 @@ impl DeferredSemanticError {
     }
 
     fn finish(self) -> Result<()> {
-        if let Some(code) = self.0 {
+        if let Some(code) = self.code {
             Err(Error::new(code))
         } else {
             Ok(())
@@ -1446,6 +1504,9 @@ fn check_assignment(
     operation: Operation,
     deferred: &mut DeferredSemanticError,
 ) -> Result<()> {
+    if !deferred.enabled {
+        return Ok(());
+    }
     if let Err(error) = registry.check_assignment_if_present(assignment, operation) {
         deferred.observe(error)?;
     }
@@ -1617,13 +1678,19 @@ fn check_profile(
     check_rule_fields(value, "profile-ref", registry, operation, deferred)?;
     let profile = ProfileRef::from_cbor(value)?;
     let Some(entry) = registry.profile(&profile) else {
-        return deferred.observe(Error::new(ErrorCode::ProfileUnknown));
+        return if deferred.enabled {
+            deferred.observe(Error::new(ErrorCode::ProfileUnknown))
+        } else {
+            Ok(())
+        };
     };
     if !families.contains(&entry.family.as_str()) {
         return Err(Error::new(ErrorCode::SchemaFieldInvalid));
     }
-    if let Err(error) = registry.check_profile(&profile, &entry.family, operation) {
-        deferred.observe(error)?;
+    if deferred.enabled {
+        if let Err(error) = registry.check_profile(&profile, &entry.family, operation) {
+            deferred.observe(error)?;
+        }
     }
     Ok(())
 }
@@ -1637,10 +1704,12 @@ fn check_features(
     for value in array(field(value, 2)?)? {
         let code = u32::try_from(uint(value, ErrorCode::SchemaFieldInvalid)?)
             .map_err(|_| Error::new(ErrorCode::SchemaFieldInvalid))?;
-        if let Err(error) =
-            registry.check_assignment(RegistryAssignment::RequiredFeature(code), operation)
-        {
-            deferred.observe(error)?;
+        if deferred.enabled {
+            if let Err(error) =
+                registry.check_assignment(RegistryAssignment::RequiredFeature(code), operation)
+            {
+                deferred.observe(error)?;
+            }
         }
     }
     Ok(())
@@ -2195,9 +2264,24 @@ pub(crate) fn visit_validated_object_references(
     operation: Operation,
     emit: &mut dyn FnMut(ObjectRef) -> Result<()>,
 ) -> Result<()> {
-    let mut deferred = DeferredSemanticError::new();
+    let mut deferred = DeferredSemanticError::new(true);
     analyze_object(kind, value, registry, operation, &mut deferred, emit)?;
     deferred.finish()
+}
+
+/// Extracts a known-schema object's outbound references while deliberately
+/// suppressing additive/lifecycle registry decisions. Known profile-family
+/// mismatches remain schema errors. Repository routes use this to finish their
+/// exact L2 closure before entering the registry phase.
+pub(crate) fn visit_schema_object_references(
+    kind: ObjectKind,
+    value: &Cbor,
+    registry: &Registry,
+    operation: Operation,
+    emit: &mut dyn FnMut(ObjectRef) -> Result<()>,
+) -> Result<()> {
+    let mut deferred = DeferredSemanticError::new(false);
+    analyze_object(kind, value, registry, operation, &mut deferred, emit)
 }
 
 fn analyze_logical_record(
@@ -2325,7 +2409,7 @@ pub(crate) fn validate_bundle_logical_record_for_write(
     registry: &Registry,
     operation: Operation,
 ) -> Result<u64> {
-    let mut deferred = DeferredSemanticError::new();
+    let mut deferred = DeferredSemanticError::new(true);
     let mut edges = 0u64;
     let mut emit = |_reference: ObjectRef| {
         edges = edges
@@ -2345,11 +2429,49 @@ pub(crate) fn validate_bundle_logical_record_for_write(
     Ok(edges)
 }
 
+pub(crate) fn visit_schema_logical_record_references(
+    record_type: u16,
+    value: &Cbor,
+    registry: &Registry,
+    operation: Operation,
+    emit: &mut dyn FnMut(ObjectRef) -> Result<()>,
+) -> Result<()> {
+    let mut deferred = DeferredSemanticError::new(false);
+    analyze_logical_record(
+        record_type,
+        value,
+        registry,
+        operation,
+        &mut deferred,
+        emit,
+    )
+}
+
+pub(crate) fn visit_validated_logical_record_references(
+    record_type: u16,
+    value: &Cbor,
+    registry: &Registry,
+    operation: Operation,
+    emit: &mut dyn FnMut(ObjectRef) -> Result<()>,
+) -> Result<()> {
+    let mut deferred = DeferredSemanticError::new(true);
+    analyze_logical_record(
+        record_type,
+        value,
+        registry,
+        operation,
+        &mut deferred,
+        emit,
+    )?;
+    deferred.finish()
+}
+
 #[allow(clippy::too_many_lines)]
 fn verify_spooled<R: Read>(
     reader: R,
     registry: &Registry,
     operation: Operation,
+    highest_layer: u8,
     budget: &Budget,
     workspace: &ScratchWorkspace,
 ) -> Result<LogicalBundleVerifySummary> {
@@ -2369,6 +2491,7 @@ fn verify_spooled<R: Read>(
             &mut visitor,
             BundleLimits {
                 max_value_bytes: scanner_value_bytes(&budget.limits),
+                max_capture_bytes: scanner_capture_bytes(&budget.limits),
                 ..BundleLimits::HARD
             },
         );
@@ -2706,7 +2829,7 @@ fn verify_spooled<R: Read>(
 
     // Known schema, root/profile semantics, and closure begin only after the
     // complete layer-one sequence has authenticated.
-    let mut deferred = DeferredSemanticError::new();
+    let mut deferred = DeferredSemanticError::new(highest_layer == 3);
     let semantic_header = decode_item(&mut sequence, header_item, budget)?;
     check_bundle_item_assignments(
         &semantic_header,
@@ -2992,7 +3115,7 @@ fn verify_spooled<R: Read>(
     deferred.finish()?;
 
     Ok(LogicalBundleVerifySummary {
-        highest_layer: 2,
+        highest_layer,
         bytes: sequence_bytes,
         items: item_count,
         object_count: header.object_count,

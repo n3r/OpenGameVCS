@@ -1,6 +1,7 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [],
     "lifetimeRecords": [],
     "mode": "conformance",
@@ -132,17 +133,17 @@
         "path": "scenarios/outputs/limit-cbor-nesting-depth-max.json",
         "sha256": "348fd5b2534f02ee9ed28ef4bb28e80a8dd0cb5685055ea29f277950696f9f4e"
       },
-      "summarySha256": "0348818ca2f781ac229a05fcfadb2ddaf0cff4f1da12010e42bd64db6f7ad91f"
+      "summarySha256": "0d08871a547613123099e56d89baa416d89196da615f5580186c76be38934410"
     },
     "result": "accept"
   },
   "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
   "inputs": [
     {
-      "bytes": 6621,
+      "bytes": 6655,
       "mediaType": "application/json",
       "path": "scenarios/definitions/limit-cbor-nesting-depth-max.json",
-      "sha256": "02efbd4be61541e643afdc66b0f4251300e0599aca4f27adc2f06cab00c8628c"
+      "sha256": "01d38bf02e576f6d76dbe1e6c34a9096f36b1c91e07b7e545daa5ffd6377d6dd"
     }
   ],
   "operation": "validate-object",
@@ -155,18 +156,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/limit-cbor-nesting-depth-max.json",
-        "definitionSha256": "02efbd4be61541e643afdc66b0f4251300e0599aca4f27adc2f06cab00c8628c",
+        "definitionSha256": "01d38bf02e576f6d76dbe1e6c34a9096f36b1c91e07b7e545daa5ffd6377d6dd",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "2ab5813a6192819232dbaf2c89b8945b1a15830a8a6cc988f917181cad521ad3"
     },
     "summary": {
-      "bytes": 11844,
+      "bytes": 11878,
       "indexEntries": 0,
       "items": 12,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "0348818ca2f781ac229a05fcfadb2ddaf0cff4f1da12010e42bd64db6f7ad91f",
+      "summarySha256": "0d08871a547613123099e56d89baa416d89196da615f5580186c76be38934410",
       "traversalEdges": 0
     }
   },

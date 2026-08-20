@@ -8,7 +8,7 @@ use std::{
 
 use serde_json::{Map, Value};
 
-use crate::{hash::Sha256Writer, Error, ErrorCode, ProfileRef, Result};
+use crate::{hash::Sha256Writer, Error, ErrorCode, ProfileRef, Result, ValidationStage};
 
 pub const REGISTRY_FILES: [&str; 12] = [
     "object-kinds.json",
@@ -96,6 +96,16 @@ pub enum Operation {
     ProductionWrite,
 }
 
+pub(crate) fn require_write_operation(operation: Operation) -> Result<()> {
+    if matches!(operation, Operation::ConformanceWrite | Operation::ProductionWrite) {
+        Ok(())
+    } else {
+        Err(Error::new(ErrorCode::SchemaFieldInvalid)
+            .with_layer(1)
+            .with_stage(ValidationStage::ConfiguredResourcePreflight))
+    }
+}
+
 /// One registry assignment selected by a read or write operation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RegistryAssignment<'a> {
@@ -177,6 +187,20 @@ pub struct Registry {
 }
 
 impl Registry {
+    pub(crate) fn require_complete_authority(&self) -> Result<()> {
+        if self.registry_set_digest.is_some()
+            && REGISTRY_FILES
+                .iter()
+                .all(|name| self.documents.contains_key(*name))
+            && self.documents.len() == REGISTRY_FILES.len()
+        {
+            Ok(())
+        } else {
+            Err(Error::new(ErrorCode::SchemaFieldInvalid)
+                .with_layer(1)
+                .with_stage(ValidationStage::ConfiguredResourcePreflight))
+        }
+    }
     /// Atomically validates and loads normalized profile and feature entries.
     /// This compatibility constructor does not represent a complete registry
     /// set and therefore has no registry-set digest.

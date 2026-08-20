@@ -1,0 +1,6 @@
+{
+  "api": "canonical-scan",
+  "schema": "ogvcs.repository-format.v1.canonical-scan-input.v1",
+  "source": "malformed/unicode-age-newer-composition-pair.cbor",
+  "surface": "generic-cbor-item"
+}

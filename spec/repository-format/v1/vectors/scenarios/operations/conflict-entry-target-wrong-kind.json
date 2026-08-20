@@ -1,0 +1,7 @@
+{
+  "api": "validate-conflict-set",
+  "authorityContext": "scenario.context",
+  "conflictSet": "ogvcs:v1:conflict-set:sha256:d176cca13678b2e532464380a3121afe380a4bc733bf29f2a256da4272a74244",
+  "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+  "schema": "ogvcs.repository-format.v1.repository-route-input.v1"
+}

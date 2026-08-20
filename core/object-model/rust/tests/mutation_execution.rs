@@ -8,7 +8,7 @@ use ogvcs_object_model::{
     logical_record_id, object_id, scan_metadata, validate_logical_record, validate_metadata_schema,
     verify_logical_bundle_stream, visit_logical_bundle, BundleItemInfo, BundleLimits,
     BundleTranscriptHashWriter, BundleVisitor, ErrorCode, Limits, LogicalBundleVerifyOptions,
-    ObjectKind, Registry,
+    ObjectKind, Operation, Registry,
 };
 use serde_json::{json, Value};
 
@@ -104,7 +104,7 @@ impl FrozenBundle {
         let scratch = Scratch::new();
         let verified = verify_logical_bundle_stream(
             Cursor::new(bytes),
-            LogicalBundleVerifyOptions::new(scratch.path(), &registry),
+            LogicalBundleVerifyOptions::semantic(scratch.path(), &registry, Operation::ConformanceWrite),
         )
         .unwrap();
         assert_eq!(verified.bytes as usize, bytes.len());

@@ -1,0 +1,15 @@
+{
+  "api": "validate-shelf-revision",
+  "authorityContext": "scenario.context",
+  "callerVerifyContent": true,
+  "forceContentComplete": true,
+  "lookupMutations": [
+    {
+      "action": "replace-payload-preserve-reference",
+      "reference": "ogvcs:v1:provenance:sha256:fcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfc",
+      "sourceArtifact": "objects/09-provenance.cbor"
+    }
+  ],
+  "schema": "ogvcs.repository-format.v1.repository-route-input.v1",
+  "shelfRevision": "ogvcs:v1:shelf-revision:sha256:6cdad5a8862058032548198f1286e6aa09472c4b0f662c998150e5270f667b11"
+}

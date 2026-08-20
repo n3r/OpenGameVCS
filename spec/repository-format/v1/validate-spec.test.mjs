@@ -81,6 +81,15 @@ const mutations = [
     }
   },
   {
+    name: "duplicate object-kind text token",
+    expected: /duplicate textToken "content-manifest"/,
+    apply(root) {
+      rewriteJson(root, "spec/repository-format/v1/registries/object-kinds.json", (value) => {
+        value.entries.find((entry) => entry.code === 3).textToken = "content-manifest";
+      });
+    }
+  },
+  {
     name: "kind-field name drift",
     expected: /frozen field-name assignments changed/,
     apply(root) {
@@ -211,6 +220,231 @@ const mutations = [
     }
   },
   {
+    name: "scenario validator mode admits registry read",
+    expected: /scenario validation mode must be exactly conformance or production/,
+    apply(root) {
+      rewriteJson(root, "spec/repository-format/v1/validation-scenario.schema.json", (value) => {
+        value.$defs.context.properties.mode.enum.push("read");
+      });
+    }
+  },
+  {
+    name: "scenario repository case mode becomes optional",
+    expected: /scenario context required fields are missing or reordered/,
+    apply(root) {
+      rewriteJson(root, "spec/repository-format/v1/validation-scenario.schema.json", (value) => {
+        value.$defs.context.required = value.$defs.context.required.filter((field) => field !== "caseMode");
+      });
+    }
+  },
+  {
+    name: "ratified path callback accepts one collision key",
+    expected: /ratified path-profile validator recipe must remain closed, bounded/,
+    apply(root) {
+      rewriteJson(root, "spec/repository-format/v1/validation-scenario.schema.json", (value) => {
+        value.$defs.pathProfileValidator.properties.invocations.items.properties.decision.oneOf[0].required = ["accepted", "repositoryKey"];
+      });
+    }
+  },
+  {
+    name: "ratified path callback narrows OGVCS-004 key maximum",
+    expected: /ratified path-profile validator recipe must remain closed, bounded|preserve the pinned OGVCS-004 collision-key authority/,
+    apply(root) {
+      rewriteJson(root, "spec/repository-format/v1/validation-scenario.schema.json", (value) => {
+        value.$defs.pathProfileValidator.properties.invocations.items.properties.decision.oneOf[0].properties.repositoryKey.maxLength = 4096;
+      });
+    }
+  },
+  {
+    name: "resource execution evidence becomes optional",
+    expected: /resource reservation outcomes must require exact executed-state evidence/,
+    apply(root) {
+      rewriteJson(root, "spec/repository-format/v1/validation-scenario.schema.json", (value) => {
+        const rule = value.allOf.find((entry) =>
+          entry?.if?.properties?.operation?.const === "validate-resource-reservation");
+        rule.then.properties.expected.required = [];
+      });
+    }
+  },
+  {
+    name: "resource counter rollback evidence becomes unauthenticated",
+    expected: /resource reservation outcomes must require exact executed-state evidence/,
+    apply(root) {
+      rewriteJson(root, "spec/repository-format/v1/validation-scenario.schema.json", (value) => {
+        delete value.$defs.resourceRouteEvidence.properties.counterBaselineRestored;
+      });
+    }
+  },
+  {
+    name: "combined tree/group component-fit evidence becomes optional",
+    expected: /combined tree\/group memory outcomes must require exact component-fit evidence/,
+    apply(root) {
+      rewriteJson(root, "spec/repository-format/v1/validation-scenario.schema.json", (value) => {
+        const rule = value.allOf.find((entry) =>
+          entry?.if?.properties?.operation?.const === "validate-tree-groups-memory");
+        rule.then.properties.expected.required = [];
+      });
+    }
+  },
+  {
+    name: "registry prose omits extensions authority",
+    expected: /registry prose inventory must list the exact twelve runtime authorities/,
+    apply(root) {
+      const file = path.join(root, "spec/repository-format/v1/encoding.md");
+      fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace("- `registries/extensions.json`\n", ""));
+    }
+  },
+  {
+    name: "Unicode DerivedAge source drift",
+    expected: /official Unicode 15\.0 DerivedAge digest changed|derived Unicode 15\.0 scalar repertoire count changed/,
+    apply(root) {
+      const file = path.join(root, "spec/repository-format/v1/unicode/DerivedAge-15.0.0.txt");
+      fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace("0000..001F", "0000..001E"));
+    }
+  },
+  {
+    name: "Unicode package authority omitted",
+    expected: /packed files must include the normative Unicode authority/,
+    apply(root) {
+      rewriteJson(root, "spec/repository-format/v1/package.json", (value) => {
+        value.files = value.files.filter((entry) => entry !== "unicode");
+      });
+    }
+  },
+  {
+    name: "Unicode compact interval table drift",
+    expected: /compact Unicode interval table is not an exact derivation/,
+    apply(root) {
+      rewriteJson(root, "spec/repository-format/v1/vectors/unicode/age-15.0.0-intervals.json", (value) => {
+        value.intervals[0][1] -= 1;
+      });
+    }
+  },
+  {
+    name: "Unicode compact source binding drift",
+    expected: /compact Unicode interval table is not an exact derivation/,
+    apply(root) {
+      rewriteJson(root, "spec/repository-format/v1/vectors/unicode/age-15.0.0-intervals.json", (value) => {
+        value.sourceSha256 = "0".repeat(64);
+      });
+    }
+  },
+  {
+    name: "Unicode evaluation order drift",
+    expected: /Unicode authority index, evaluation order, or boundary case inventory changed/,
+    apply(root) {
+      rewriteJson(root, "spec/repository-format/v1/vectors/unicode/index.json", (value) => {
+        value.evaluationOrder.reverse();
+      });
+    }
+  },
+  {
+    name: "Unicode boundary vector drift",
+    expected: /Unicode boundary CBOR bytes changed/,
+    apply(root) {
+      const file = path.join(root, "spec/repository-format/v1/vectors/malformed/unicode-age-newer-canonical.cbor");
+      const bytes = fs.readFileSync(file);
+      bytes[bytes.length - 1] ^= 1;
+      fs.writeFileSync(file, bytes);
+    }
+  },
+  {
+    name: "Unicode repertoire prose removed",
+    expected: /frozen Unicode 15\.0 repertoire or validation order is missing/,
+    apply(root) {
+      const file = path.join(root, "spec/repository-format/v1/encoding.md");
+      fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace("freezes its text repertoire", "uses a host repertoire"));
+    }
+  },
+  {
+    name: "metadata emitter authority prose removed",
+    expected: /metadata\/tree\/manifest\/bundle emitter authority prose is missing/,
+    apply(root) {
+      const file = path.join(root, "spec/repository-format/v1/encoding.md");
+      fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace("authoritative metadata encoder and every ordered, sorted, or file-backed", "metadata encoder and selected writers"));
+    }
+  },
+  {
+    name: "real surface lifecycle evidence prose removed",
+    expected: /real-surface lifecycle evidence and all-authority-omitted rules are missing/,
+    apply(root) {
+      const file = path.join(root, "spec/repository-format/v1/encoding.md");
+      fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace("MUST discover the lifecycle-bearing profile or required feature from", "may consult a detached lifecycle label for"));
+    }
+  },
+  {
+    name: "complete registry authority prose removed",
+    expected: /complete registry authority boundary is missing/,
+    apply(root) {
+      const file = path.join(root, "spec/repository-format/v1/encoding.md");
+      fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace("complete runtime authority is exactly the validated twelve-document registry", "runtime authority may be partial"));
+    }
+  },
+  {
+    name: "emitter precedence prose removed",
+    expected: /emitter failure-precedence and no-output boundary is missing/,
+    apply(root) {
+      const file = path.join(root, "spec/repository-format/v1/encoding.md");
+      fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace("produces no successful commit or\nsummary", "may publish a successful commit before rejection"));
+    }
+  },
+  {
+    name: "writer item ceiling precedence removed",
+    expected: /writer item-ceiling and declared-count precedence is missing/,
+    apply(root) {
+      const file = path.join(root, "spec/repository-format/v1/encoding.md");
+      fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace("configured item ceiling is evaluated against\nthe actual iterator count", "configured item ceiling may be evaluated after lifecycle"));
+    }
+  },
+  {
+    name: "writer identity before lifecycle prose removed",
+    expected: /emitter failure-precedence and no-output boundary is missing/,
+    apply(root) {
+      const file = path.join(root, "spec/repository-format/v1/encoding.md");
+      fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace("declared object digest\nmismatch on a known tree likewise wins", "profile lifecycle may precede a bad object digest"));
+    }
+  },
+  {
+    name: "typed-reference token authority prose removed",
+    expected: /typed-reference token authority boundary is missing/,
+    apply(root) {
+      const file = path.join(root, "spec/repository-format/v1/encoding.md");
+      fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace("code-to-token assignment is immutable authority, not a caller customization", "code-to-token assignment may be customized by callers"));
+    }
+  },
+  {
+    name: "durable ObjectRef bound classification removed",
+    expected: /durable ObjectRef bound and unsupported-format classification are missing/,
+    apply(root) {
+      const file = path.join(root, "spec/repository-format/v1/encoding.md");
+      fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace("colon-dense value that cannot have the exact five-component", "colon-dense values may be split before bounding"));
+    }
+  },
+  {
+    name: "retained workspace resource prose removed",
+    expected: /repository retained-workspace resource boundary is missing/,
+    apply(root) {
+      const file = path.join(root, "spec/repository-format/v1/object-model.md");
+      fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace("Snapshot/provenance ancestry,\nshelf, abstract-graph, conflict, and group workspaces charge every retained", "Repository workspaces retain data"));
+    }
+  },
+  {
+    name: "derived working-memory ownership prose removed",
+    expected: /derived working-memory ownership boundary is missing/,
+    apply(root) {
+      const file = path.join(root, "spec/repository-format/v1/object-model.md");
+      fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace("Internal\nrepository consumers may hold tree, group, membership, and collision indexes simultaneously", "Internal consumers may hold indexes"));
+    }
+  },
+  {
+    name: "resource runtime evidence prose removed",
+    expected: /resource runtime-result evidence boundary is missing/,
+    apply(root) {
+      const file = path.join(root, "spec/repository-format/v1/object-model.md");
+      fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace("MUST report an ordered `routeEvidence` observation", "may trust recipe route labels"));
+    }
+  },
+  {
     name: "abstract graph prevalidation marker drift",
     expected: /abstract graph prevalidation marker is invalid/,
     apply(root) {
@@ -239,10 +473,10 @@ const mutations = [
   },
   {
     name: "ADR status disagreement",
-    expected: /table status Proposed disagrees with file status Accepted/,
+    expected: /table status Accepted disagrees with file status Proposed/,
     apply(root) {
       const file = path.join(root, "adr/0008-format-v1-deterministic-cbor-and-object-identity.md");
-      fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace("**Status:** Proposed", "**Status:** Accepted"));
+      fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace("**Status:** Accepted", "**Status:** Proposed"));
     }
   },
   {

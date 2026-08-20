@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, str::FromStr};
+use std::{collections::BTreeSet, io::{Cursor, Read}, str::FromStr};
 
 use ogvcs_object_model::*;
 
@@ -48,6 +48,80 @@ fn profile(namespace: &str, id: &str) -> Cbor {
         (Cbor::UInt(1), Cbor::Text(id.to_owned())),
         (Cbor::UInt(2), Cbor::UInt(1)),
     ])
+}
+
+struct Unreadable;
+
+impl Read for Unreadable {
+    fn read(&mut self, _buffer: &mut [u8]) -> std::io::Result<usize> {
+        panic!("metadata authority must be checked before reading")
+    }
+}
+
+#[test]
+fn authoritative_metadata_codec_preflights_authority_and_write_operation() {
+    let partial = Registry::load(Vec::<RegistryEntry>::new(), Vec::<u32>::new()).unwrap();
+    let decode_error = decode_metadata(
+        Unreadable,
+        MetadataDecodeOptions::new(&partial, Operation::ConformanceWrite),
+    )
+    .unwrap_err();
+    assert_eq!(
+        (decode_error.code, decode_error.layer, decode_error.stage),
+        (
+            ErrorCode::SchemaFieldInvalid,
+            1,
+            ValidationStage::ConfiguredResourcePreflight
+        )
+    );
+
+    let mut output = Vec::new();
+    let encode_error = encode_metadata(
+        &Cbor::UInt(0),
+        &mut output,
+        MetadataEncodeOptions::new(&partial, Operation::ConformanceWrite),
+    )
+    .unwrap_err();
+    assert_eq!(encode_error.code, ErrorCode::SchemaFieldInvalid);
+    assert!(output.is_empty());
+
+    let registry = Registry::bundled();
+    let read_error = encode_metadata(
+        &Cbor::UInt(0),
+        &mut output,
+        MetadataEncodeOptions::new(&registry, Operation::Read),
+    )
+    .unwrap_err();
+    assert_eq!(
+        (read_error.code, read_error.layer, read_error.stage),
+        (
+            ErrorCode::SchemaFieldInvalid,
+            1,
+            ValidationStage::ConfiguredResourcePreflight
+        )
+    );
+    assert!(output.is_empty());
+}
+
+#[test]
+fn authoritative_metadata_codec_roundtrips_after_semantic_validation() {
+    let bytes = read("objects/06-repository-descriptor.cbor");
+    let registry = Registry::bundled();
+    let decoded = decode_metadata(
+        Cursor::new(bytes.clone()),
+        MetadataDecodeOptions::new(&registry, Operation::ConformanceWrite),
+    )
+    .unwrap();
+    assert_eq!(decoded.highest_layer, 3);
+    let mut output = Vec::new();
+    let encoded = encode_metadata(
+        decoded.object.value(),
+        &mut output,
+        MetadataEncodeOptions::new(&registry, Operation::ConformanceWrite),
+    )
+    .unwrap();
+    assert_eq!(encoded.highest_layer, 3);
+    assert_eq!(output, bytes);
 }
 
 fn member(file_id: u8, role: &str) -> Cbor {
@@ -175,6 +249,52 @@ fn golden_logical_records_and_conflict_preimages() {
 }
 
 #[test]
+fn raw_lifetime_and_import_mapping_records_use_the_public_byte_schema_boundary() {
+    let cases = [
+        (
+            "schema/logical-record-file-id-lifetime-extra-field-22.cbor",
+            ErrorCode::SchemaFieldUnknown,
+        ),
+        (
+            "schema/logical-record-file-id-lifetime-extra-field-999.cbor",
+            ErrorCode::SchemaFieldUnknown,
+        ),
+        (
+            "schema/logical-record-file-id-lifetime-type-selector-invalid.cbor",
+            ErrorCode::SchemaFieldInvalid,
+        ),
+        (
+            "schema/logical-record-file-id-lifetime-version-selector-invalid.cbor",
+            ErrorCode::SchemaFieldInvalid,
+        ),
+        (
+            "schema/logical-record-import-mapping-extra-field-22.cbor",
+            ErrorCode::SchemaFieldUnknown,
+        ),
+        (
+            "schema/logical-record-import-mapping-extra-field-999.cbor",
+            ErrorCode::SchemaFieldUnknown,
+        ),
+        (
+            "schema/logical-record-import-mapping-type-selector-invalid.cbor",
+            ErrorCode::SchemaFieldInvalid,
+        ),
+        (
+            "schema/logical-record-import-mapping-version-selector-invalid.cbor",
+            ErrorCode::SchemaFieldInvalid,
+        ),
+    ];
+    for (path, code) in cases {
+        let error = validate_logical_record(&read(path), Limits::METADATA).unwrap_err();
+        assert_eq!(
+            (error.code, error.layer, error.stage),
+            (code, 2, ValidationStage::KnownSchema),
+            "{path}"
+        );
+    }
+}
+
+#[test]
 fn malformed_corpus_has_stable_class() {
     let cases = [
         ("truncated", ErrorCode::CborTruncated),
@@ -208,6 +328,32 @@ fn malformed_corpus_has_stable_class() {
 }
 
 #[test]
+fn canonical_text_uses_the_frozen_unicode_15_repertoire_before_nfc() {
+    let accepted = read("unicode/cases/age-15-assigned.cbor");
+    let value = decode_canonical(&accepted, Limits::METADATA).unwrap();
+    assert_eq!(encode_canonical(&value).unwrap(), accepted);
+    for name in [
+        "unicode-age-newer-composition-pair",
+        "unicode-age-newer-decomposed",
+        "unicode-age-newer-canonical",
+        "unicode-age-frozen-unassigned",
+    ] {
+        let error = decode_canonical(
+            &read(&format!("malformed/{name}.cbor")),
+            Limits::METADATA,
+        )
+        .unwrap_err();
+        assert_eq!(error.code, ErrorCode::CborNonCanonical, "{name}");
+    }
+    assert_eq!(
+        encode_canonical(&Cbor::Array(vec![Cbor::Text("\u{16d6a}".to_owned())]))
+            .unwrap_err()
+            .code,
+        ErrorCode::CborNonCanonical
+    );
+}
+
+#[test]
 fn refs_profiles_extensions_and_features() {
     let text =
         "ogvcs:v1:tree:sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -221,12 +367,15 @@ fn refs_profiles_extensions_and_features() {
         text.to_uppercase(),
         text.replace(":v1:", ":v2:"),
         text.replace(":sha256:", ":sha512:"),
-        format!("ogvcs:v1:{}:sha256:{}", "a".repeat(64), "0".repeat(64)),
     ] {
         let error = ObjectRef::from_str(&invalid).unwrap_err();
         assert_eq!(error.code, ErrorCode::ObjectReferenceFormatUnsupported);
         assert_eq!(error.layer, 2);
     }
+    let overlength = format!("ogvcs:v1:{}:sha256:{}", "tree:".repeat(30), "0".repeat(64));
+    let error = ObjectRef::from_str(&overlength).unwrap_err();
+    assert_eq!(error.code, ErrorCode::SchemaFieldInvalid);
+    assert_eq!(error.layer, 2);
     let fid = "fid:0102030405060708090a0b0c0d0e0f10";
     assert_eq!(FileId::from_str(fid).unwrap().to_string(), fid);
     assert!(FileId::from_str("fid:00000000000000000000000000000000").is_err());

@@ -1,0 +1,2410 @@
+{
+  "context": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 12,
+          "mediaType": "application/octet-stream",
+          "path": "objects/01-chunk.bin",
+          "sha256": "36fcc2e9442be1071c275604af6e41bd93875c743dc2fdaa6037662df74c5894"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5"
+      },
+      {
+        "artifact": {
+          "bytes": 183,
+          "mediaType": "application/cbor",
+          "path": "objects/02-content-manifest.cbor",
+          "sha256": "b635d76c8dd9f29c2862ae0e22077c70d157f68d4595861c09fb38bdf47c456b"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+      },
+      {
+        "artifact": {
+          "bytes": 274,
+          "mediaType": "application/cbor",
+          "path": "objects/06-repository-descriptor.cbor",
+          "sha256": "677905a883b1f4ddd87fea27b5afc0293cccd2d2ea29cc4884e758e4a071b6e9"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-043.cbor",
+          "sha256": "6126e135a3634fe2d1721461ea7fa98eb08083f1b3a090c6df587af17d1d837b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:00839fe93f60a50925b0087ddff5b33871229687f1e19f5a6a79fcff49c9d317"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-134.cbor",
+          "sha256": "0167d630a7a11f494fd1fe83c90d610ec6aed47004ee6f843e93bef2a5197086"
+        },
+        "ref": "ogvcs:v1:tree:sha256:008e32d02a4a31f8d045ab2c61b26c64d06b87a2c770742405bae38d380d52a6"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-131.cbor",
+          "sha256": "721ab7400febccd6259dfb4748319efc4ef906456df9ea06f158b5ac6462634b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:009b61305b167923f758cc927b14f8fdb438fe10d781d390bb417ee296e494c5"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-014.cbor",
+          "sha256": "1219f5d4c33594b61e0820447ad67a132fe00f56fc83a2994ac4e08c023b3b2e"
+        },
+        "ref": "ogvcs:v1:tree:sha256:026200d0720cef462907b0b868e8cdde6825b92196dd78ff297ea0404beb71bb"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-155.cbor",
+          "sha256": "af27f195ebb0f5ede9f7418143c2ccb930228be10d2074cb0423a601d12f1b88"
+        },
+        "ref": "ogvcs:v1:tree:sha256:03bfb4287e4d5f73333ea3c716c8ca65b34c88910bf12af9c66bf29ab438177c"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-207.cbor",
+          "sha256": "1a2087d3b14911e7c516387eac25e2bcb6457e785cc19fe6254a7612c0a0ae52"
+        },
+        "ref": "ogvcs:v1:tree:sha256:03c301633ec6f060c46e7541d4f3f3b517469300f166bdb1b4b9182b7bdbfbc4"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-197.cbor",
+          "sha256": "3718577a5b650b504170333c0069a63d0c300cb50fa0e8be0f051b0ac56e6387"
+        },
+        "ref": "ogvcs:v1:tree:sha256:03d5a65fb1d036c043255649bd4554d1f1bc3d5507c03b5a64a233469642feb9"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-084.cbor",
+          "sha256": "dc376db92ecf5d8fc0e415d2bf5c7ba7be84ea574f1230cd44282638e62f1a97"
+        },
+        "ref": "ogvcs:v1:tree:sha256:052ee0ffe7d8d1a8ebe7749f12202eb15bff3d91d0d58f58c92e0f9d595b4ccf"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-144.cbor",
+          "sha256": "8779e1d1c18fd1ca2ff3020189d1c30e9c7695ead15d0761d8dcf03cbca7b4d4"
+        },
+        "ref": "ogvcs:v1:tree:sha256:064e11b5afdf73eaf26a594f33c1554ed89a19adbd7fa7b81700f8fb00f36d08"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-116.cbor",
+          "sha256": "5e79dce49034854dc778ba000f4ea981dd679e8752fd649423bd6f4d96b92f58"
+        },
+        "ref": "ogvcs:v1:tree:sha256:07e15c2f3568b634db57d660f9c57aad0b972f1db2c30804f27fc814c5bf2ad4"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-143.cbor",
+          "sha256": "4221865b527d7144a101046b0ae08515dc44d35bc40c9552c0a78a2e075df03a"
+        },
+        "ref": "ogvcs:v1:tree:sha256:0a1328ea0cd4c34a4220770d603dc12eb87a3701e5e9b1bcd487688e326aae94"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-149.cbor",
+          "sha256": "b757b52385590427261160699fc52a3202ef74ad1950a310221c4ab6bff31c3d"
+        },
+        "ref": "ogvcs:v1:tree:sha256:0be1ec04c06d7541d170f678eaa2755eaa9ed77f799fe130b30798c3bddea69c"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-057.cbor",
+          "sha256": "3fb2117f306a77d71fcd67e7fcd723e6f69f4eaa07ed2512ca219cfdce8313ab"
+        },
+        "ref": "ogvcs:v1:tree:sha256:0c60c1c64b5bfa4e27426e6a7bec777f90c5fedbd1d5aa3c83388ebf003b8a4c"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-032.cbor",
+          "sha256": "23028f7fec5337723e6fb41252736f16da728b365c4d79853658fc3efb49a290"
+        },
+        "ref": "ogvcs:v1:tree:sha256:0d2b85afd4dbcfbdabec4af77bfab6cf6e33d97c643df91bf6deed67367b2550"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-195.cbor",
+          "sha256": "585468287f4296f2be89b1568731e4baab38ba331e69118ae8dfa31962478e51"
+        },
+        "ref": "ogvcs:v1:tree:sha256:0e20fcbdadbdb88dda5068a1bb97a33ac5fbadf00a642689efeddd067e72bfad"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-072.cbor",
+          "sha256": "30147ceaf7c7633176096d0ec4a0c121de76b495c1c7df9f4697270d3e7ffe7a"
+        },
+        "ref": "ogvcs:v1:tree:sha256:0f1c5425ac4420548a90896113fb663d8775b43560f8c6b2b5c16f574ba441c8"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-247.cbor",
+          "sha256": "02beb724b68cda1583b7d232b5d5c78656d7844c34b3154ea8c82712e12c8941"
+        },
+        "ref": "ogvcs:v1:tree:sha256:0fa19f4e73af0e417db843419e3473272a80701a7ce6afe84935d9aaedd1ffe8"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-215.cbor",
+          "sha256": "7e3e58be3b1357350ae50aead49b70c00d4c044bea9db012629180a875637378"
+        },
+        "ref": "ogvcs:v1:tree:sha256:0ff243deb540aa7fa5825350747f8de26742e809db5477e1818e85be59ec8459"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-070.cbor",
+          "sha256": "b52bdea6c10d0eac7af966eec1d198e356400cdb7ddee2e10708ede18067e60a"
+        },
+        "ref": "ogvcs:v1:tree:sha256:12f2a6339cc10a9b62bd6f765971b075357b708ab05ac653b0d768f32664ec12"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-068.cbor",
+          "sha256": "a08ff99462cb407432916dc9e8137a748e139987d5d338f530add6305727690d"
+        },
+        "ref": "ogvcs:v1:tree:sha256:175b073d5f1043727be2b6873199fe1260f0d33787087984554b79e296e15a7c"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-214.cbor",
+          "sha256": "1fa7412d354e2828df6c605406a1c3bf25c486027545a33aac4a342f28ef6383"
+        },
+        "ref": "ogvcs:v1:tree:sha256:189b4785cabe7a24a3a480aaec3fb8da0e4d686b63343ab9a1c21475f304a67f"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-015.cbor",
+          "sha256": "e6c890fc9d5508e3c82578fda39a30707c6ca651c9cd20b01851245fd3b818fd"
+        },
+        "ref": "ogvcs:v1:tree:sha256:18eda1e498b85e4f6d6c5d9bd0187814e6dd1ce7e87dbe3e57c747222ad2f899"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-176.cbor",
+          "sha256": "b9ecbba5313196ab2654d68034de4d7ebd66c81474825f6aba5bebfa293fa508"
+        },
+        "ref": "ogvcs:v1:tree:sha256:195ef947617a5e349fc591a9fc481505d11e1f1fdfe22c9a45aa5a29a3290810"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-249.cbor",
+          "sha256": "bb5ee38e70889b9ca663ffe2c838fd551486fdb0273f859fb5d1963b36c5278c"
+        },
+        "ref": "ogvcs:v1:tree:sha256:1ac51f870a1f235f32466d9b3ab79b0dc4f9502385f7d6055eae6154a2d451b8"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-146.cbor",
+          "sha256": "33e5877b12418fe164b6a48faead61f4d54ee26bf18f93a0378be9d3edcdd0d5"
+        },
+        "ref": "ogvcs:v1:tree:sha256:1d7ac7519e3902436b2e4fda19a3fce377798a4d54d617976bb868031a6957fc"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-011.cbor",
+          "sha256": "2309a0b988c2c39e08495151cf36a5d1704f738572b07eb0fb313d933930a26e"
+        },
+        "ref": "ogvcs:v1:tree:sha256:1f750fce3c508c4f4e04c1d06eb311d5435e142e679648171efc2ff74942375d"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-180.cbor",
+          "sha256": "b09b64fb285bf4f2ff0cfbfecb770bb793f6f933cece9810be96554336c9e37b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:20e7c0fc377e940f2f290651d8d21976da5052c2bdd29001d6b284b614ee947d"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-130.cbor",
+          "sha256": "1723815d9a485c3e62a27655915acdb04e33a796ec040f8fc6e09d08f1ca868b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:2160f129cc0751003ba8092b3b483e14b032b7d9ba6e8715e3c05f51bee0d53a"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-106.cbor",
+          "sha256": "fd6f16465fa8ef6e85d438b33a8b8371cd9dfbd6baf6443bf50d56401844952b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:21b8db806cef28aec7ba86357e56da2a4c195149b582adaa0ab50eb082cc8a81"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-244.cbor",
+          "sha256": "6b0a626515b784aab3b1ad94ed93869b563f5c92f97d7f6eefe07be43f7cbc10"
+        },
+        "ref": "ogvcs:v1:tree:sha256:23d3a80b32aa9e4f747c17780dc49ee0302df8a018434615db87ea35423c14fc"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-001.cbor",
+          "sha256": "ace30adc1b92d485a5edd65226a38d96c885c52c08e40412233abd236c09cc57"
+        },
+        "ref": "ogvcs:v1:tree:sha256:26025e193b6825ff0bdb6213d5bc24ab0873b15ae42c2c868ec12b48afbacc03"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-194.cbor",
+          "sha256": "1b1c19d9b067211a2b4b3f99c2ba0ee561ce05fdc3ae78a8204a7795c82e233a"
+        },
+        "ref": "ogvcs:v1:tree:sha256:2717e3f62f047da37e3a3647feb9e8587cbe69bde02963957c36fcd0d0e1653a"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-167.cbor",
+          "sha256": "38b26e083731c07b7d6ee895ba0e12c9ae55a9758fc4f5bfa0f02c3743d8cda9"
+        },
+        "ref": "ogvcs:v1:tree:sha256:27cc8aef18f591dd2609f9a61f888d4ca3dfa43305a9565f866aa038b2112943"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-142.cbor",
+          "sha256": "381ec11bf260cab52e0c67de843a30ba00d2e7b6178fea27cece880fd2c0639c"
+        },
+        "ref": "ogvcs:v1:tree:sha256:27f0cf1709cc8b9fe2a572aa26df046521364198cb267e0c469aea74e4a1892c"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-236.cbor",
+          "sha256": "cc9e66b1ebaa57f7affe659ad6497671181d3ba104f91a8a46b04d97dec44fd5"
+        },
+        "ref": "ogvcs:v1:tree:sha256:2a2d6b43c21db5cc1d314ea0ea4eb9e68d052bb8e4df07fdac8950726e19923f"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-135.cbor",
+          "sha256": "6e9a48b10febb2dff3b643c8598b43e34ce8c3651677a7cf4ee0e58ee9a76373"
+        },
+        "ref": "ogvcs:v1:tree:sha256:2b051cb2d3b5a0d13c40c2504acd5689635f8c4516f4d7b31ca9e1cee27e72d4"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-140.cbor",
+          "sha256": "2c7a5d0fc78dce1be4fdd1e6555748851382cbf0cbd019b70338cf329a366bf6"
+        },
+        "ref": "ogvcs:v1:tree:sha256:2ba4d6f95a8f6ab64feae73eb25585a92839be34af908b6d9ce7e9a756ad5565"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-021.cbor",
+          "sha256": "af8f248aa17451b0e7c2ffdd4251a7e4dfca36a63bc8502fcf747f3965781bd8"
+        },
+        "ref": "ogvcs:v1:tree:sha256:2bea160c832d54dafad678c467cdbbb6a92dd94177d8f6f0917bc6bce7087a06"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-091.cbor",
+          "sha256": "a8d99532fceea955746564da40cebcebf94c5ab4e5ad1ff4242ca416678b9e76"
+        },
+        "ref": "ogvcs:v1:tree:sha256:2becb303edb9ba1ebe23ca678b94bdc184c3ebcfbb72b170462131df5eea711b"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-199.cbor",
+          "sha256": "cfa91b541f5aa844179c7cf05466cead7b3216f65cbf086846abf870833259ec"
+        },
+        "ref": "ogvcs:v1:tree:sha256:2c4ac413971839d2ad06a0ba126b8c2c91fe2b768f5df272b88acd54ae26402b"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-136.cbor",
+          "sha256": "43c01dd061ca8b0408136efa846c4d88466de24c47f702706198e9254080b93a"
+        },
+        "ref": "ogvcs:v1:tree:sha256:2c767b82026826d51f30f9e21c0d4f9e9b390d489fdf594091e7ea5ef06223c4"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-003.cbor",
+          "sha256": "4dc5638481f3b24007978ab83cc18c7b080e486ef110e28a299f3a48a3c1d731"
+        },
+        "ref": "ogvcs:v1:tree:sha256:2e27296b35ad04d3cddb78f6d583c4c9c5fd42e1934a20e47dd477ee65837d4d"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-063.cbor",
+          "sha256": "3d2811755d598eaf59b7c2eab55acfcfa819eba5968b81544f79006f84cb503f"
+        },
+        "ref": "ogvcs:v1:tree:sha256:2ed7a5e2b5111ed8f9def5953fb119d362f3a998a0d44099d798364450005007"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-138.cbor",
+          "sha256": "0f362a6045d332e8ba1ee26314d146dcd13760fa4a08321df40d20d8c82d970e"
+        },
+        "ref": "ogvcs:v1:tree:sha256:2fa0978ca81d20f1827527572eb2cb528d4b9f971d9f5f936cb69a421c6ac0a7"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-209.cbor",
+          "sha256": "e0c138d080f5ebbea59c3b195c3fb131f0a123c5e0f23a7454c8b646095bbfd0"
+        },
+        "ref": "ogvcs:v1:tree:sha256:3065deb62943c625d16f05272ff9b5aeb09ecf967007a322ef54331cea87a238"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-004.cbor",
+          "sha256": "029ffe37acb05ad8405dbe4d2a7cdc8f52338c4cbe4148d8e79aba72cd87beaa"
+        },
+        "ref": "ogvcs:v1:tree:sha256:32523120c2b4f059efc50dedcc4024b202019f1282807582acb1871b23048643"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-234.cbor",
+          "sha256": "b30ee29333d9438ba592a64ab2b140b2f6205ba370b6f5405537c6cbf34d9755"
+        },
+        "ref": "ogvcs:v1:tree:sha256:33e8dddfb4d99fbebf9ef2b00aa3dff956621f32d179706d1dabc0490e993dc4"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-151.cbor",
+          "sha256": "e99d4b0e5dc3f0fbf2c36199c93185bdb77749b6a889a9a4f37dcfe13334f053"
+        },
+        "ref": "ogvcs:v1:tree:sha256:35083747432639229e1994e4658945fa5de9edafc20cf72e174b48b9a3ff4d09"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-132.cbor",
+          "sha256": "0c610f73652ae095b334031bdf08d3582fef0c593359003142429fc8cc7aa416"
+        },
+        "ref": "ogvcs:v1:tree:sha256:35493f32650522f69a79cac233e6b6bbb10d7086b4f901be2813a479bcfb049c"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-204.cbor",
+          "sha256": "35618000e622c774e293c1e8d7940e4609b2753ff2ad60b82fbdc83cab0a3ff5"
+        },
+        "ref": "ogvcs:v1:tree:sha256:362ccc573615fb480b279e960f88c182ee646d76d577e95e78dce202e200f591"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-051.cbor",
+          "sha256": "edd99200a84af306239b0d586df3133c36947b0d8431a2a5e6b5cb18b7067a33"
+        },
+        "ref": "ogvcs:v1:tree:sha256:3785b313ec0fee863f937dfb4f9f4af2f86fdc205d0ae3ec402f96e966ea3280"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-058.cbor",
+          "sha256": "b9eac696bd5f5ca37a730b117b3e52b5b7781a8e4af11867d080bc1871d312fd"
+        },
+        "ref": "ogvcs:v1:tree:sha256:378945da8a17038c3a24d154a00eab756a2ec030f2da3315354616c9566a4f6c"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-150.cbor",
+          "sha256": "499b57f461951024675dc391a86cd2241bf5708d6eebc8dfb08dd2d8eed2b023"
+        },
+        "ref": "ogvcs:v1:tree:sha256:38694cc12f818479a6a3242d469e966074c03bf77f632a62a945965f18155499"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-111.cbor",
+          "sha256": "7599e460be063e353e743c6a1a0cf3ae8260d4576f68755794b82d182dfbc070"
+        },
+        "ref": "ogvcs:v1:tree:sha256:38c9d58d17b361a0be9aaf3a7afba1274ff4f0d23a41c4f0210a36db88dac75f"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-073.cbor",
+          "sha256": "a8faa0563a73aae387178270a39f49d871bb51081e40cf51b456c61fbcb6da11"
+        },
+        "ref": "ogvcs:v1:tree:sha256:38d3880c6570b83858e73aea9e59b32ce998fce5f2c4a283dd6e92a9a8882060"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-047.cbor",
+          "sha256": "2123d6e293c401aad1be6755cfea5535e73d685122e414ad37656b473d1d8dd6"
+        },
+        "ref": "ogvcs:v1:tree:sha256:3b95a62f1f37a9e0689681fba6ee936f4caf7d4e351490832239f18ff51f75fb"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-226.cbor",
+          "sha256": "add8a6cc49cc5df4bca80b7562d063122e8dff6e9695535f7891177b76114e87"
+        },
+        "ref": "ogvcs:v1:tree:sha256:3cdd060081f7d20b98deba5bc0f02f3024ef5a0138cf02e71402e6cbf74bad48"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-159.cbor",
+          "sha256": "cc469e2f76ccc033f87c4f5ac3483c5b9efd7866dbe7a5b231a598ecd8557764"
+        },
+        "ref": "ogvcs:v1:tree:sha256:3fc8c38b2e71203c91a893c8b7b2146e327d73adb40f8e094693c524c3326d93"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-222.cbor",
+          "sha256": "46c0fb2c52b70c4bd41cc3549dc8030ad4ca2ccf4ad20b2c3d81879a7a970f44"
+        },
+        "ref": "ogvcs:v1:tree:sha256:40b7a94cc4532cc03a08cdc7b1fe28a2cd8efcee63848d7d935e1bc9e9d14e98"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-165.cbor",
+          "sha256": "f6d23d4d96186d636a519f4b62d6202fef3c13e7666ea814d81724825f870d73"
+        },
+        "ref": "ogvcs:v1:tree:sha256:411b560bf059bdfe3722dea74bc4cf4bbad53196ddec383810ec6614205fa601"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-038.cbor",
+          "sha256": "bbb05e705439917ff33c5bf9c4712d5d2ce63c05d36e66709c20287216c2aebc"
+        },
+        "ref": "ogvcs:v1:tree:sha256:42982a0f27e27adb16f92ae446211fb4820d1e4b199c9e78e4db05174128f3c5"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-125.cbor",
+          "sha256": "e6b3061fec846d29bfd842fbbc1b5f1be268fff77135a4b41a1bf147f63cb753"
+        },
+        "ref": "ogvcs:v1:tree:sha256:4403ae94c5ece753f67b84e8bc7115c804b03cff9a3b99ee5c2f30e1347d19f0"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-187.cbor",
+          "sha256": "0c1fe542f1f5757b57327e899555892dd5891f8201bbd95558cd82210dc44d00"
+        },
+        "ref": "ogvcs:v1:tree:sha256:458b4ec786608a4499389cbb7986ac07b20f81c396a76f322988fbb69539a02a"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-242.cbor",
+          "sha256": "06ec817f062ba8dc1a39638876131ce15ca55b2372f2cf40560d39d9464c3395"
+        },
+        "ref": "ogvcs:v1:tree:sha256:4673bf02fab6ce58b83153d2be916ca37753dc05b963827ed174b1851dd722b5"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-066.cbor",
+          "sha256": "2ea6fe613d8d67aea8a9dcf69ae6a7cf3502a5f27ccbfe7e357f1ce55721332f"
+        },
+        "ref": "ogvcs:v1:tree:sha256:47188633ca2887b3bd54a3d789b4dedc7c23217ca251c918292b68edb6f3de03"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-238.cbor",
+          "sha256": "7497badea264302e2400a50c8a7e38a8440ae7f60630853069da546f91134fe0"
+        },
+        "ref": "ogvcs:v1:tree:sha256:487f2a5bc6c2d0b6feab231cb6594818bb6250f2985c7969b7bc4ce97c48f151"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-036.cbor",
+          "sha256": "7939ce9e28446a987e501f5826c6701bf105cda5e54be94184fde3ffaa3591cf"
+        },
+        "ref": "ogvcs:v1:tree:sha256:48e07e50299f636806d33d61359f21596451a0b566808bed76ae727ecbe1d703"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-164.cbor",
+          "sha256": "84c29547118f279d08ec7d7068abf27562ee6b61e5586c8de38daf0e9ddafb11"
+        },
+        "ref": "ogvcs:v1:tree:sha256:4b70a7bc0aea8f7579713003a78e3f21e7b1101d78193a994c6640d5ac4ad8cc"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-118.cbor",
+          "sha256": "d27c7e67b53b0ecd4c82b723423ac8742bdd5f7aa0199219c50fe131f9a452fd"
+        },
+        "ref": "ogvcs:v1:tree:sha256:4c043dc743300319c0b946dea8f52ee9081a11f1c04ff420902fa5162bbceb04"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-246.cbor",
+          "sha256": "5c3fcad648dae43ae325e0670713d319d78520fdef6b8d949df4aa9746e9673c"
+        },
+        "ref": "ogvcs:v1:tree:sha256:4c7efb44c3367c1c72703545dcbdeb9f91de653e37cead8f3233524cac3858e6"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-201.cbor",
+          "sha256": "b54e486d26ea14ec31b454e1d3b204a5be07ea22d0a6cd49b5670e748671f775"
+        },
+        "ref": "ogvcs:v1:tree:sha256:4d5491147269122aa2f4cc7c7bb6d8aad511bdbefe268b9514ca9a1cdecdb8b6"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-206.cbor",
+          "sha256": "3834ee367fa7c2ee865d6835408a0bae2bf7e98e685752713caaa02c8aab560d"
+        },
+        "ref": "ogvcs:v1:tree:sha256:4d59bba8f90ad3e0c0ac2f8242a32908e9c8a78cade27625852a4c885728d7ec"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-175.cbor",
+          "sha256": "1c4ab133a109790da5f12ddee9eee866b6309a795e902623a7726a9ac11d08d2"
+        },
+        "ref": "ogvcs:v1:tree:sha256:505aa4c3465c44f3149abcb0d97e244f52c4da4294618642106a5e27edc6175f"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-129.cbor",
+          "sha256": "be66ed4d518582923b4d286362f98d61e7826f620b175a570da4aaeab055b0db"
+        },
+        "ref": "ogvcs:v1:tree:sha256:51aa21165d2aadd827c8bf85ee7e33e13051b33a098f97905b08d761d48ae663"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-077.cbor",
+          "sha256": "d3613126021c7908f6b72198487793c9432397a121afe7ee6134b8d66c1542fd"
+        },
+        "ref": "ogvcs:v1:tree:sha256:51b8aec098d27b0c4c2bd21886ba3d1148b25aa2bf1aa7464522eb97e287e790"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-053.cbor",
+          "sha256": "5b6e4cf58094dd88a998eb7f2665c56fda34cef2e9db3dcf2bbe8d954110d6de"
+        },
+        "ref": "ogvcs:v1:tree:sha256:5235e0fa6f511e3d7a3ecf983005f79d6ab51b6cf6041020be17f355af8e8ee5"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-065.cbor",
+          "sha256": "b845280e378b15980a9a97895aca846d3fd4c6b098847244a9df5342b1395d72"
+        },
+        "ref": "ogvcs:v1:tree:sha256:529ffefb2e40ec055d79ce0f21f76dff2ce02e268af2f53048b9dc7c06f12f2e"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-087.cbor",
+          "sha256": "bee640893fd1f3b1013b0bee4709426a7bdacbbff6cfdfabdbda5cf9cc249dea"
+        },
+        "ref": "ogvcs:v1:tree:sha256:54acaa2257744ff0061ab965e0ab1f70980a0f462bd3f028499529336fab3cf2"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-037.cbor",
+          "sha256": "8d24e3ffec9826edaec95c235450b9b0c034ea4e3e6c1db98ab519a1daec070a"
+        },
+        "ref": "ogvcs:v1:tree:sha256:574d5de7bf984954f337db618a2ebc8bcd9cc29df045d6383ac66ad8305e66d0"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-196.cbor",
+          "sha256": "209c234c55477daecbc914b20e9b8690178bfe44478f1c517536f1350a9c388c"
+        },
+        "ref": "ogvcs:v1:tree:sha256:579d3552ed15bf8c75fe5f36939175620dd589d18504e5cb714b5661de9529ef"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-168.cbor",
+          "sha256": "02ea15433df9c52b81890e0bf485647a514957c5eb2b22c25426f3b819c627b6"
+        },
+        "ref": "ogvcs:v1:tree:sha256:594e5c9516904d258dc3c541ba1583a45c523baec31b233fd08a1ff54c1104bb"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-054.cbor",
+          "sha256": "bfcca99c208f7869272b44de6e7139707e3756d1a50e422a48b093a13c742a9e"
+        },
+        "ref": "ogvcs:v1:tree:sha256:59c75bcb1e21d5be56ad6b785bdadb2a9608b1df85ef1592941bdb4b2d310d9a"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-082.cbor",
+          "sha256": "a214b85b50c43286ed57d523e2b37d53a9425d30b7104b7fb988580f74047892"
+        },
+        "ref": "ogvcs:v1:tree:sha256:5a657c7f190a4063b4f7d91b165f08a460f2f5ac4214239dd31ffe7b09ed0528"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-107.cbor",
+          "sha256": "c649389505f6d052f9b206ee42433013580267fb537f9649c8eeef124e7e4de9"
+        },
+        "ref": "ogvcs:v1:tree:sha256:5abf39fc37b7ec755aa4bbffcb5860d4275765a13cef96283d53ffaf32df067a"
+      },
+      {
+        "artifact": {
+          "bytes": 160,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-256.cbor",
+          "sha256": "8a19dc71b7b8d5c7e483226f83ada96bad22f66d9e74872fa4b82f3622f725fb"
+        },
+        "ref": "ogvcs:v1:tree:sha256:5b7971aab5ed1c1213eea11dc82c24809f2f6435e5b3429bd00489a10d795c4a"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-225.cbor",
+          "sha256": "cde1bd9744873f4f6d10ecb647f1a26559f0e78885973ffa6090db39aef472fa"
+        },
+        "ref": "ogvcs:v1:tree:sha256:5ba7c43fa8fa5d21a511185a6230bf398e2d076aa61344c267bef0178ebce7fd"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-016.cbor",
+          "sha256": "ceaed19e3f9951aff4604e564a30a0d86d878cb5d54743240ccadbd68f8248cd"
+        },
+        "ref": "ogvcs:v1:tree:sha256:5bbbc4f18e0271596ab419bb376df441d616fb64a0382fc99569c604f4c4370d"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-218.cbor",
+          "sha256": "8c3fce1937372e327e16c5d79fad5fb60197635cd0eb430ddf90cda595c7f03e"
+        },
+        "ref": "ogvcs:v1:tree:sha256:5c4cd8cb9b914e087b3cd79102a02a5b201a3905a575f086979664f9d2b76f19"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-109.cbor",
+          "sha256": "7dbb147e2bf75c824ead52f7e7085efbfe76b6374d26e606126af71ba5483ccf"
+        },
+        "ref": "ogvcs:v1:tree:sha256:5e5a0d6f88d361dd0e0b33ce1c10ac70b317de97b3c8eb3b42981b43c2d7b1bb"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-025.cbor",
+          "sha256": "b244f8d442bc462cb18641468338cfe6f3ec72be211d89f2f2bc1c5c8c2d4351"
+        },
+        "ref": "ogvcs:v1:tree:sha256:61bdf2db1899ac317052af9ca562b98de10953b88391bdc6a5905536039e34f7"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-172.cbor",
+          "sha256": "2ee8c51d4bc12df32966b7b04f34077d4f290513300579aed5e12624e90366c3"
+        },
+        "ref": "ogvcs:v1:tree:sha256:61d2ce9889f3544ee486b5cfb0172b71c54d8f328abd4233e2e5507cda880d9b"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-060.cbor",
+          "sha256": "02f028d14ce64f53ccf43e1906adb03676f4147f2da8c0316f1f3b5b7c23353f"
+        },
+        "ref": "ogvcs:v1:tree:sha256:624227c31cf1509e679fc1c3456d56dfd0f8c0cef3a08c5e78a7685947a6f605"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-252.cbor",
+          "sha256": "b9c4a46cdcd4503f025b8964f354d925c07ad2608f353e7d6e9762921376cee9"
+        },
+        "ref": "ogvcs:v1:tree:sha256:62bc2235866afa255f62395915e98fe9337c9a80ccc46e8b0e62cdeef7962801"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-157.cbor",
+          "sha256": "037620cd067531b43c3b859444173c24841608249f7a4975349d4afccc468c71"
+        },
+        "ref": "ogvcs:v1:tree:sha256:63273b0919ee4d351701693326a2e8196130c4b1864c0254fea4428ff600e360"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-128.cbor",
+          "sha256": "9350ba692434259ca1c3b78b894ea619fdc300827264ddaa995bbb6d837ef852"
+        },
+        "ref": "ogvcs:v1:tree:sha256:6365c6dcfba5a5fd54b51b3d6a0c9a935241df6b0df578804f1c0ac8407eb57e"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-117.cbor",
+          "sha256": "e74e1fb8ca0e4209390b43e88b313ed84ba6052e7b5f9167f442a1d7e8aba9d9"
+        },
+        "ref": "ogvcs:v1:tree:sha256:65ddbadff9fbbc5f3d8a700961801852e1a5761c1b6adebd63e9fb0a68c64252"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-208.cbor",
+          "sha256": "0e2a5bc46b057d936d105781bbc1b1babb6cc306f8d8e8876129cfc35df205e4"
+        },
+        "ref": "ogvcs:v1:tree:sha256:6881d43d8ee74be0d41f1b82e124b25dc2d0566dda7c3c1ea7807d53347cc371"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-190.cbor",
+          "sha256": "900284f05e13294cea87812dbb49e705b309b049d1a1b090f28acf8e3f4884fe"
+        },
+        "ref": "ogvcs:v1:tree:sha256:68eae4ff795b1a60d5e5ed0224ee177c60563d9dae32e0785a6d99cf442f8dc6"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-092.cbor",
+          "sha256": "2819d141bc3435ec90775ae62441de3710fb20d2293df49ad93ecaa58a5d6f01"
+        },
+        "ref": "ogvcs:v1:tree:sha256:6b774b226a238a29eea5fbe6d31dfc90a0acd4d988e3ff3f723a9303a767796b"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-216.cbor",
+          "sha256": "93782e5785d8eaca6206916de459faac47d1127564f46b7a39de30b8b277a5b3"
+        },
+        "ref": "ogvcs:v1:tree:sha256:6c397768a56d07c5a6c9fd7e385c565cad2f224d8e1fcb0160cf76287baa62c0"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-040.cbor",
+          "sha256": "02fd9219581f0a9aa816b1dec0562cf02f8bf6ea2e80c9d70f55e2148e7d9dd1"
+        },
+        "ref": "ogvcs:v1:tree:sha256:6c8bd50dc5c0efbbffeaa717c32ed39f56f44d34d71906dd02043785107b4ef1"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-121.cbor",
+          "sha256": "4b974aa44bf766574a5910524965371f4caaad59128567dd938b9c7dd1dccb98"
+        },
+        "ref": "ogvcs:v1:tree:sha256:6db6bc69b6a80649aea7a9099b23c8e668d280f63500bed6758cd984d1173f7c"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-026.cbor",
+          "sha256": "8010863a70e94b1f5515cb97e0bf63251c6b9317a060e312cbc03d99f31a2e6c"
+        },
+        "ref": "ogvcs:v1:tree:sha256:6fdbf5e8eca8c0710771b74a884c520a1267e390eff03b7133e74600c6a0e25e"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-086.cbor",
+          "sha256": "ae41bd95353c9d73e6b095ba5c7ecd90bc7fa9ffcc020a3f5060af89e14c7509"
+        },
+        "ref": "ogvcs:v1:tree:sha256:709bdd759d92945c414aaa66acf478dcb84bd5be0503f5032156ff5c2d2ced55"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-227.cbor",
+          "sha256": "ae67638cddf7e1023172836da9853bd98367108342b13c63f76105cb6e56f96c"
+        },
+        "ref": "ogvcs:v1:tree:sha256:70ad751d7799996b82edbd0e1bde0a2353545bae2476e0cf3a9c97f90e23a60e"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-105.cbor",
+          "sha256": "75a627706306ccbc4b783b82d2fdf539d8fcb415df272297e8a603972af801b6"
+        },
+        "ref": "ogvcs:v1:tree:sha256:72742060d62c7ae97e5a6c4ab15aeec179a3a4c41dd016e0d4f0f88974dbfc55"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-039.cbor",
+          "sha256": "bddf7df69c61d19ebe2303a51121ea95638cfcbf3d903135e266f1adbb5782ec"
+        },
+        "ref": "ogvcs:v1:tree:sha256:72c41942263c1897fb112b00b63c1bd38e58aad54135f69de5347e9ac4126f7c"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-095.cbor",
+          "sha256": "497d2abd01b4e5729e9323823a513e534482c5bbc954018f5c372dcc9dd18496"
+        },
+        "ref": "ogvcs:v1:tree:sha256:744c569c4a47e664f52d6ce6f437298e91727fbb9a1e0cb06a92b9db5f13cb07"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-013.cbor",
+          "sha256": "4ea597c48aa0150357d4396eba17aa740eaa1ad242b6fd5dfce997442d2d0daf"
+        },
+        "ref": "ogvcs:v1:tree:sha256:7466e6acc3600ae5a9166556c2d36085681c5489b483e351e2185bba99205f40"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-179.cbor",
+          "sha256": "dc6db7775df1193b6dbb3258a474c7afb81842580993ab814f0d450fa83cd2db"
+        },
+        "ref": "ogvcs:v1:tree:sha256:758e1c725b604cdc425e63eaa60ec8d42b17f5e964e63239db7cb7a3f52cba3d"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-230.cbor",
+          "sha256": "3f69adc7a3c293ca7afc30f4f2c559953a7d157e4b9d4d6ccd8dbfa8d66b0aeb"
+        },
+        "ref": "ogvcs:v1:tree:sha256:759bb498a622f98f45ea42f3ab5c9cd5d676370bf5c8d0a6ce3a48c71fc50ba8"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-181.cbor",
+          "sha256": "ed113cbe06909722b0a7cd24d183d1957f9741758f9b291ee9c9cb10d185d460"
+        },
+        "ref": "ogvcs:v1:tree:sha256:75b315d7590ee12072bf2ce0d1dea9710008dd07f7596dfd8dfe61710130eef0"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-169.cbor",
+          "sha256": "9c5a8da1d4a512ee1a411a9fcf648dde1cafadfc0f3d7436366e0fcaa230c6ba"
+        },
+        "ref": "ogvcs:v1:tree:sha256:75b4fd8d82924398f4a65e82f30fe2646ac505e3aaabe5f4cde7c5d533de856b"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-050.cbor",
+          "sha256": "d397149c60973518869d7a75c241a1126c738799b365d8cd1884cb95d038ce39"
+        },
+        "ref": "ogvcs:v1:tree:sha256:77322220f55c132fc03474328e4f8561e03b54b19b5f24f3ae9fe7dd5d7296ca"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-018.cbor",
+          "sha256": "1df71afd77ca9376fa3f132b1eaa5f7cd6905bd2ff7fac4f933c776892a086af"
+        },
+        "ref": "ogvcs:v1:tree:sha256:780a732bd2f90e56c03f068cefaa388481bbb15feab4e65a4095924f88e8359b"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-239.cbor",
+          "sha256": "42c4bf0d7321707fcbb9c0a6a3a5622a787438fdd9dd28ab1d763ff70e64fb4d"
+        },
+        "ref": "ogvcs:v1:tree:sha256:780b6335c66082facb0407cf366f5e6f6516b3b47d6ae07b43913b895e441fab"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-035.cbor",
+          "sha256": "e824216ad37f9137a9f0c418ddda6442775610dec736864e77ee84c9a5a9ca7d"
+        },
+        "ref": "ogvcs:v1:tree:sha256:7816c387a761fc6a1eb15cb3f9abec0eafcdf81840ceb47995f30bfae4fe57d8"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-237.cbor",
+          "sha256": "419672498713899a37f8863b432a7561d0cd7642c3410f2d3989fef3e8e243bb"
+        },
+        "ref": "ogvcs:v1:tree:sha256:78bb9b92bd1035190e3afaafcc7a7aebcb224bd9e22ee73f08583fd364ef9187"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-162.cbor",
+          "sha256": "bb82721cfe8e9df9d5425f2f47c12442a946abaf5861d455ef02218db169ed6f"
+        },
+        "ref": "ogvcs:v1:tree:sha256:7915acc26f2f6ee4112edc6c3818fd3918f37870b260ad8d2132fe4196b1a0c6"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-253.cbor",
+          "sha256": "b87e25a550bb93a6a0c37b5ae0da02e877ccad7712abff3686cc75101747be7e"
+        },
+        "ref": "ogvcs:v1:tree:sha256:79e4a76db1b6d3db28f2b089602290ec1cac754f12dbad04e17d37a53865f4dd"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-228.cbor",
+          "sha256": "881a5af8c938cb778c922e188258c2bf2f6a69739d46d27475750c6007dd6111"
+        },
+        "ref": "ogvcs:v1:tree:sha256:7a4b1488e314d9022336715ceb1f7f036e0d40f83571ee971ad2ba50a87c54f2"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-182.cbor",
+          "sha256": "9b2a721accbb7d294a7859a76ceb96c2c48c9e1ee539f3493ba46ab808d40e35"
+        },
+        "ref": "ogvcs:v1:tree:sha256:7cbeacf369e905587ec99c0a22bb2ecb47a1c67be9f20bed2835f163584a8a03"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-235.cbor",
+          "sha256": "2347fd59ffda3541fca4b0c96d04421952084a41f3c13b47b6695289f1427823"
+        },
+        "ref": "ogvcs:v1:tree:sha256:7e05fd5428d00c52eedf78834f217a90ca4cb1bd5e85531fe7d6dee713873751"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-094.cbor",
+          "sha256": "5cac27ba37cee82696c03c3ad190e00353ca3fcfa6676f864f29b22d97e273eb"
+        },
+        "ref": "ogvcs:v1:tree:sha256:7ee85931ba101afa5db665cb173851eddb2088f5bba30332694e1886de613ec7"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-184.cbor",
+          "sha256": "9683dac4fe3793ee107a27bc68b2e08c22cd0b9126e762b928ed8c0d0b04f22a"
+        },
+        "ref": "ogvcs:v1:tree:sha256:7f51934dfdbd29e43f55758967e3db3ff50c2069adb300e100f6ba723b00c5f0"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-074.cbor",
+          "sha256": "6ff27fe920d4d22e72c4cb5d3d3f68641a4cbdcd3e5b4e022c3d796e738332c8"
+        },
+        "ref": "ogvcs:v1:tree:sha256:8027ad23a55d8d9b3123c53ca0aac8c5c5419336f623c29d01c8913e60f1d6b1"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-096.cbor",
+          "sha256": "37d1572f6b775fe09fcc8395cf5714b736225028e528074dfa0a5892dc81dd42"
+        },
+        "ref": "ogvcs:v1:tree:sha256:814e181e19b1d7107df301016f388b655c272d353277a9cafb68b396a6ace611"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-113.cbor",
+          "sha256": "78051b119e87f9e2d1deafca793562b788d2dd8cf0041a4a753d75645a352a20"
+        },
+        "ref": "ogvcs:v1:tree:sha256:816338e0f9266d5d0eff81628851b1d2eeaa5bdcad2a5498400019d26ef3f7d8"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-188.cbor",
+          "sha256": "9a7807e4301653773ca307b5d01e090b8c25178746a077edead614116f706269"
+        },
+        "ref": "ogvcs:v1:tree:sha256:81cbd67c1ab31dbd3e254fb804262930c3b9dadfc8d0996b1423dba6afc3c39c"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-017.cbor",
+          "sha256": "406db316516e769ff2fbdaeeb0d756a91cdf5bf93e2575e5cdc002403092199e"
+        },
+        "ref": "ogvcs:v1:tree:sha256:8259c2c5fe353fc1484917941ec61cd6b072feb87a3523ccd99a710ec270371a"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-232.cbor",
+          "sha256": "b0ffd56e92dae0262d38c6d6d5fa16d17228afc32ea9eedbb1f2a4be61f983be"
+        },
+        "ref": "ogvcs:v1:tree:sha256:8522ff1565f1492400275337bee26fc1fb68ae045e4d3436ed66ce72620af447"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-161.cbor",
+          "sha256": "ff5c3d1da08cea0c11bbb09d9cf83d498bf24cd6a3a29ad5290d3fed99eea0e3"
+        },
+        "ref": "ogvcs:v1:tree:sha256:8524e520af4220688d5a7d0eb3fd03ed58ddeb75fb8755e8daf14e656de80c7d"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-024.cbor",
+          "sha256": "f179dbfd1831737d5c543a652e8b1ace2eb464c0110ad482c15785ee01019258"
+        },
+        "ref": "ogvcs:v1:tree:sha256:8576e72c1607c549c3fe68df60ae58af05ec2d25a0f161587e6de39d030c0c15"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-044.cbor",
+          "sha256": "5320232943ad7a368b639f0d6eac28ccbcda6d6f7c6cb1382dd3e169697e9d04"
+        },
+        "ref": "ogvcs:v1:tree:sha256:86d822b628f56a13424438c49b99150baccf8caf0dcfe4b67831a4e3721d5e7f"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-223.cbor",
+          "sha256": "3690fb9d3e69aaeca62709c751a7680ce7b03b460eb5e545802337515331c41d"
+        },
+        "ref": "ogvcs:v1:tree:sha256:87df75634a01c49e3d27abc490e9b59a9a1bf9cd78d642d8c8f0ab21f66a4f07"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-139.cbor",
+          "sha256": "0eff850b4d15d438c1a604d54ed4225090b12f83c8760b60fe29556d8bd6fbe8"
+        },
+        "ref": "ogvcs:v1:tree:sha256:881f296e522a375855310b3b90145046451afea9d7ef77c9717f0fd8c0561c50"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-250.cbor",
+          "sha256": "577cbf60eaacd6822bd03fdba720fb88308d2b477af9c3dc595aa5404ad2d403"
+        },
+        "ref": "ogvcs:v1:tree:sha256:88c23cad8d0022fb2ac8fb94002623b9e2d43e5e6d16f8b528cdf8ff22d56115"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-153.cbor",
+          "sha256": "fa1e602e1b6b59965573fc2723799cba24ea9e11b85718d03831060fda0c1bd0"
+        },
+        "ref": "ogvcs:v1:tree:sha256:897e71fdf69b7efaac83c908701392e7a0a155b4ea7cdc52c8889883d215bb93"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-245.cbor",
+          "sha256": "97e6b5fc7508ae79fb6e9c88de7d297c9ad1ffbf11bc0b5212091997088d9076"
+        },
+        "ref": "ogvcs:v1:tree:sha256:8ad2d8d39d002ea75024511d2901e87ac26b80001cbdd03098faf041131b87a9"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-055.cbor",
+          "sha256": "995b8157aca313e6ad66405d9e5fa99316ca77674b2370a7711e9e08c9f9c225"
+        },
+        "ref": "ogvcs:v1:tree:sha256:8aeeb162d58f9cdf2603c52b03bf502572636ff1479ffb7f1ca48df67645dbe3"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-255.cbor",
+          "sha256": "5526f7b46f620130fab018cedb3d32147e5e0ea633f6dd9f8de5b0ec59341d9b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:8b303db8d3da9062e2bd7ea4644b7318740f8d547e3821d6c226998a8655f088"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-088.cbor",
+          "sha256": "73fab40baf64eff271fbbf937f916569121e63a6617bf74b3a2b545272e33a43"
+        },
+        "ref": "ogvcs:v1:tree:sha256:8bac95f1d46bca560327ecdc045d1963fca96d958dee0c1232502e43117ec759"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-028.cbor",
+          "sha256": "5d0f70b03ea5d96e6581e66335ff1c962cc2976cce7ff1e6a5a2c98120f291c5"
+        },
+        "ref": "ogvcs:v1:tree:sha256:8bebc39101499733ca8e9477c8c8f62c20d3ce4f366b70fc35b954daea2d373e"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-163.cbor",
+          "sha256": "19891f82acc86e2e78269c989bf7d2354e861a4930aa30540369a6a898675765"
+        },
+        "ref": "ogvcs:v1:tree:sha256:8becaa5769bbe5c1cf12c19fb0de538807bd359b34208e5ea8d3b6d846469e1c"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-115.cbor",
+          "sha256": "4862ac2735011628bae18491dabe34c047a58032fe91a1c4192d8a664e131d50"
+        },
+        "ref": "ogvcs:v1:tree:sha256:8cc5a95ad92ed2d23e1be418101bb66df4b3e11bd80ad0ec348f4f68c2c25cf8"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-133.cbor",
+          "sha256": "0f3cfe3fcaeae82d2ca48d0a219e847fd14b6dc07d50a08676235fe4cb959981"
+        },
+        "ref": "ogvcs:v1:tree:sha256:8d418f018ebd2046619c156b995163349d593b3de209ac0061c255ac1c514c54"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-156.cbor",
+          "sha256": "27c0c658a1e037bdbb55e842416aa422c0d568eb1ba8677c5fafbce4edfa8e33"
+        },
+        "ref": "ogvcs:v1:tree:sha256:8dbe12edd1429f2df4478d5483bb28add197d1ba062808904ffcbdf9769797ed"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-120.cbor",
+          "sha256": "842881c118af043d8a72284ad06544c0f1a69e346b6acf81d66c13b51bddea89"
+        },
+        "ref": "ogvcs:v1:tree:sha256:8e5313fcecf1ea7a0c5bb75f850479477532220fa03c7055eeca65965ab8910a"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-089.cbor",
+          "sha256": "2aa01564691072090e592c15bb3ff8a1e70a9684231bccb96faed3e15f247e48"
+        },
+        "ref": "ogvcs:v1:tree:sha256:90f883303baa3217cfa280c030c183af6f9b55450cfef1a4f44052dd2f55f0c2"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-101.cbor",
+          "sha256": "6130238a7e113e7f6448cc551fd19cba254b7704dc766832f4a6fb0d67ed2685"
+        },
+        "ref": "ogvcs:v1:tree:sha256:98690da24f5b1b87876e1404ebd7a9aad7511194227f9942cc23c9ddfba59031"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-110.cbor",
+          "sha256": "84aaa49455303202078c9d2734a36d25b906866845096f5984267753bb565b83"
+        },
+        "ref": "ogvcs:v1:tree:sha256:9b8013d5693f91c2385a8a71b7111e29c20c2c65b596eee2e5fc09c28e60de0b"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-123.cbor",
+          "sha256": "e00de79f28e48ba279f46771783537451a71d5626e0cee8c72d2dea661cb5dcb"
+        },
+        "ref": "ogvcs:v1:tree:sha256:9bcab1070642dac8c8ed76f4b6a0f6a4e208b7c4a217555b0b87c897a7049e06"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-203.cbor",
+          "sha256": "699b826a79a6b84fadc861bcb8af34568963b94d27b7f4334dacf760c8a1c671"
+        },
+        "ref": "ogvcs:v1:tree:sha256:9c4ad522932220f09bf2d1359eede38fec4b72b39dcbae97f9f57b6e1cab5305"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-081.cbor",
+          "sha256": "1490c70dcaf456adbee1626d188b3d716b8768d8485d3a829d5490abf89bf390"
+        },
+        "ref": "ogvcs:v1:tree:sha256:9cdc5c8a5161ee186e18642af38477ce04090dfba4ff1cf06a958e200cde3f5e"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-006.cbor",
+          "sha256": "605b17b13515224dfaa7f24c75cadc52ad0fe7374181160ca22d81540a575a84"
+        },
+        "ref": "ogvcs:v1:tree:sha256:9ec664d3d24fd853e6816d68bd92119844e3540e26e782bf89a787d8d065ac85"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-198.cbor",
+          "sha256": "49d2a50d1ebd0ef02680521d4e8e2929fbdb07a80fc5aaaf0fd895af87c350af"
+        },
+        "ref": "ogvcs:v1:tree:sha256:9ece304cba3eb051da9b420620b455cab85f8e2ae1dbdf149a073ef53db0e275"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-080.cbor",
+          "sha256": "186e7f2b02651071d8dc5586a88b2be8c96b0bbab5aef054de1c8616c3d493a3"
+        },
+        "ref": "ogvcs:v1:tree:sha256:9ed08dd2c1f2b7987cf56a3a61b9098bc8974acfb52ad3f30ce44c5118c8e191"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-221.cbor",
+          "sha256": "baf4d88e8d80e31de14c3fe44367cb5f7f222e5da2d460eacdd4fbeb204b952e"
+        },
+        "ref": "ogvcs:v1:tree:sha256:9f65d1061378e6b70bd96aa26777f96d79e82d37d2d4002e6e77b35b5b806fe3"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-233.cbor",
+          "sha256": "9942bfd513e1fdd6367b0ca60a9a5086258cc966b999ac583c4379ca7fed5b78"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a18422f3bb905d4a1987564dba8cddcc93a2991923844a019feb3340a737274c"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-217.cbor",
+          "sha256": "14f22a8aa17f1fa053c7aa13d34e17267216da5af06911fc4b035df95676f0a2"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a1eb215753c17345ac4e429ef9dcd5639dec8038e9fd54e802c594c1480cf366"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-241.cbor",
+          "sha256": "66b28eb163b9a43bfd358f51fa7c986f6de04d54cde38275b987dc2b5e1aba24"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a31393de04cbceafb5c85c4bb2c4621f93b35c145c1cd07741dba1aace7cea51"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-158.cbor",
+          "sha256": "8f83d3638349ecda8e0b4f4fb9f41318f37de364bb3542b4d53439aa5a65831c"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a4260de5f2c9099eaf3a58776f077a562b59bcfcbf05e4a07e08159efb683345"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-124.cbor",
+          "sha256": "867eaa2319da9db92eab44c75ce5d49db54720d850825e680b8cb58d4c42d7fe"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a4e1a91733e16c3d273aafcd9c02414bb3be8459a297fe009c0c52406a05d6b6"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-046.cbor",
+          "sha256": "c2bae67b3aea472dc2948d57cd496c608e7d64ababd97995ada0b3522edd5344"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a561e8fce22ce3b49d3ad2f01957053f566ac8f505ab058bcb08ebb9b0ec9cf7"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-056.cbor",
+          "sha256": "789ad000cd21e39ccd55b9b2c6d44d7eea4050ce21c48e2575d1967f65778fbd"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a6837f4aed94352eb682f8add3431132be408874f85ff83780d9a337ed09fd84"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-231.cbor",
+          "sha256": "6ce450606a430b66494036f4784526fbb0291d0f20f4cec144d8bd45bdd74956"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a6e02098b853dfd19994a2677a556876595f92e2c36881cbd7abae5b793d0010"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-100.cbor",
+          "sha256": "dca6e6f2f9c7e5106cd447dfbe7620abb483d26aad88c7b2fbdbd2ebb3560aab"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a8600125cd9f1bff7ef7a939f94bdfe59ce4aed6ab2831b045062ae8ebb06143"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-103.cbor",
+          "sha256": "0e2f156fda14ec78191e1c31648815569706e149ec40df80ab36dfe1501cc574"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a8a30b92ffa50ed362b7c486a1c67067b6c6bbe0961ae5b8491937481572eee1"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-033.cbor",
+          "sha256": "0d6ef8888ddb5aa3a68751b70bd4944550ef85757abbc8bcbfa5e801046f8f09"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a91c37edbc1d333bf203b84aafac79cd5453eb4399910ce6f50bce55c3afc702"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-083.cbor",
+          "sha256": "b705d6d62bfdd9dd2f0e73435b5e62d53eb99b7fd036b54e08d0c33eef8498e4"
+        },
+        "ref": "ogvcs:v1:tree:sha256:aa895aaf16d03b62b04341d0adf65975aea7479b43e6086877ba9a5c5a158335"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-099.cbor",
+          "sha256": "c457c4ee3541c2f058ebd905712c617160cb2d452545b0950abae000cbd4afa8"
+        },
+        "ref": "ogvcs:v1:tree:sha256:aa92a034fbbde9e6c80188d3fa8824c7b8e3be771b2b977b32dc21bcb5222a2e"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-012.cbor",
+          "sha256": "21fb1971c1d7bc7b3360dc3336a1fdefb3b9cdd18b93a274b482397bc0db0d88"
+        },
+        "ref": "ogvcs:v1:tree:sha256:ab2a69e3d6fac359cf6ab077c150707145fe60e426591bfc0fc7716c526a5d97"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-098.cbor",
+          "sha256": "67fa3770b19e776dbb5c494ddbaba4f614ed9266b274e4c88841ae89bc72b56f"
+        },
+        "ref": "ogvcs:v1:tree:sha256:ab866ad09743bd5708152871fbc3e607c40e2e6b7da288abac8ace6108aa7e50"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-192.cbor",
+          "sha256": "b20f4e5eee43be5e654a1bcf575144fa662758ced19fb4e045bb8c2f40d96c2f"
+        },
+        "ref": "ogvcs:v1:tree:sha256:acf222b608c605129755efdd7b061a4be5a99830493f4a5210ce17b56be56015"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-224.cbor",
+          "sha256": "c73a1b260d15b22132f7cd5a37e42e2e0179d21ac777129145e56bc447488e9d"
+        },
+        "ref": "ogvcs:v1:tree:sha256:ae983aabf7ae35675349aa4201e6901c935ff54ba584603a455471f9ac9bc523"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-093.cbor",
+          "sha256": "e4064e5b1624b44bb57d0ae8d0068ab91ca69140cdd5741561ddd041a848bd2f"
+        },
+        "ref": "ogvcs:v1:tree:sha256:aec5f293e3fc19020d79649c3a06b38446f510fed42a747959ce767702d4c88e"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-052.cbor",
+          "sha256": "57d039333eabc38583ef5188a8b214893006112b15a66cddff9fd2a3e29504c2"
+        },
+        "ref": "ogvcs:v1:tree:sha256:afdfe8e48e65249887c5bcaa0f420f2017f8c26b3cb577f68abdc981bead79b8"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-061.cbor",
+          "sha256": "ec1cda0f81429193876461d5a17ef5147e9225bb17d083047ea8a537a60ecad3"
+        },
+        "ref": "ogvcs:v1:tree:sha256:b059a921f48ef3127299f283fbf657854ded9d422a2a6e627abf61343b851662"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-049.cbor",
+          "sha256": "b73052b90d171b46457836845de54b213902de8722a2761586567303afe1be04"
+        },
+        "ref": "ogvcs:v1:tree:sha256:b12801032a7108af94f1d076741e633bb5690b428a5a10dbbecd122d04812720"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-166.cbor",
+          "sha256": "5635b65e44419fd094843fd3a96f9deeef72987b0e3e5177abec2a3d7cd64176"
+        },
+        "ref": "ogvcs:v1:tree:sha256:b1da407172bbcda0eb051a08d8be00379fe5ea266c9379208001e7a6f47469f4"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-185.cbor",
+          "sha256": "8a4d88c668bbb78b12268c5c4fabead299139a866162d195316be0440c6a9fed"
+        },
+        "ref": "ogvcs:v1:tree:sha256:b2750e09fbbf4e262ac5955bd31c6d82a2d51011eb39920f2f1bee6bb589506e"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-243.cbor",
+          "sha256": "8664880b9aafe016c462530035799a06730c9b620ff674410224904c3d376be0"
+        },
+        "ref": "ogvcs:v1:tree:sha256:b3486de4b6550f099d2d97ad7af9b599ace46f468fba9cb5d397dab07c25af60"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-062.cbor",
+          "sha256": "9888c0ff6801bc5a6ceb61104b01fec2c7994b2fcb49c46c8ee8c092022b9c74"
+        },
+        "ref": "ogvcs:v1:tree:sha256:b35fa0afe8f2f3d304825120f2cad2fc069b523d98c5e8afff669f0a8c5a6b91"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-075.cbor",
+          "sha256": "7da26b1aa4722ce6cac2233b31097efe3b5f8492be09c059e46faa37fdd53a53"
+        },
+        "ref": "ogvcs:v1:tree:sha256:b3701b5f653615a6f46542895e748656b40965933d9aff85e1edd56ccdad86a4"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-020.cbor",
+          "sha256": "38e2604119d91783330f6414c2627593a80878d7dfa4eea91817dafe1e2f22a5"
+        },
+        "ref": "ogvcs:v1:tree:sha256:b3e0085088ef24f5d36bba3e272dcfe385cd7b907a204f4993594bc11bac0165"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-186.cbor",
+          "sha256": "1c48b474659e880eb3be4a5cf2d5d4bff1a2b76d9381c0e9e3edd97a5e68238f"
+        },
+        "ref": "ogvcs:v1:tree:sha256:b512ec8f9fbc247977d8cd82e655fe1deba674a6c6521ef22fbc529411524290"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-211.cbor",
+          "sha256": "5090978531421e3f5b557ce323b526b72bb496541ad309d5725140cf7940c9f3"
+        },
+        "ref": "ogvcs:v1:tree:sha256:b9cdf08999e4886a6a9b897ffdd610c34a63937fadbc675ce7e6c9aabe97777a"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-112.cbor",
+          "sha256": "2937c83e7c55d972a92539d7b424d16a21e624f500cbe257625b3a1f57dc61d4"
+        },
+        "ref": "ogvcs:v1:tree:sha256:ba459988b82a850f0519d58b972869a55afc7c02905e132df1ff922b479883f8"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-023.cbor",
+          "sha256": "a7b4dda44f8aecf7bc9eca65ead2126d73ef3eb79684a23cda2dea75a9f8d654"
+        },
+        "ref": "ogvcs:v1:tree:sha256:bb65c2ad23c15b6004227a22e74cced57d76427249d160782bb8aa2541932789"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-007.cbor",
+          "sha256": "fc9955599bf76d722cc363a023aad294fd705fbee28bbd9198deeec50b2978b3"
+        },
+        "ref": "ogvcs:v1:tree:sha256:bb8ef731003ac5168b023b128d172457565aed97a9239fa7de8262b4fc73b239"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-122.cbor",
+          "sha256": "f92c0290e0dfe20797606dbf01847e20af4990b31b94de29cad3fce5b8e18bb3"
+        },
+        "ref": "ogvcs:v1:tree:sha256:bbc6843b2736e81c0c12d72a68beb533ed4dc307b8c17967c9b1ba4170d25923"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-114.cbor",
+          "sha256": "cb678b2dbdf56d97646402d55baa8bd29a0cea9c546cf08247d66e921f2a36c6"
+        },
+        "ref": "ogvcs:v1:tree:sha256:bbe7d4c977f3dcb75d96775a159880ace179b80f9ef2f90e76e2f872a55915b9"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-202.cbor",
+          "sha256": "bdf6e36baf7b6aeb1db281e169f6dc76bc73fd62674f086d0f3ecd6fabbd72ce"
+        },
+        "ref": "ogvcs:v1:tree:sha256:bc3ddd63107dafb75aec4515436df7045ca5cf84e1d57b0932a3d5fc4b843d3f"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-210.cbor",
+          "sha256": "651990a82d51095d8e652094f864edf54579457e5f1d7463b863d8f02a67538a"
+        },
+        "ref": "ogvcs:v1:tree:sha256:bd8a3c9b34aacd96192617f7c6889b12e7ddcc14086b59bde24292845c5e0183"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-071.cbor",
+          "sha256": "8e20e51a427ee5b4a2834a63fdbc3a8e1217655cf8167a24b5baff1da95b9632"
+        },
+        "ref": "ogvcs:v1:tree:sha256:c0317198c4cde6ca4a2a2eeddb4ca300f5951bf455457bfb67bb6efbb6f1cdac"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-048.cbor",
+          "sha256": "5a131a9494662ff2ff5e81cd3067211aec4ddf5f3f0a2d63c8a519eedf631234"
+        },
+        "ref": "ogvcs:v1:tree:sha256:c0f98a821add9ba322b9bf7ae8fa1f895070bf7ea42a23e1e3a0166c9c1a49fe"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-069.cbor",
+          "sha256": "59c268b6ad9ec9c6b02297f092c8459dd093c5f1ae7d65ecbf50968515868293"
+        },
+        "ref": "ogvcs:v1:tree:sha256:c109de180ed6511fb6f4a0159378944b38866afb2af5e9f119c7aa3191cc4b38"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-212.cbor",
+          "sha256": "4b3b8420d6640cf2d703bcb983db9798400a37be8bac7502292e34b0c1b246dc"
+        },
+        "ref": "ogvcs:v1:tree:sha256:c18fcbf559b45a22594d9c9ba388bc0e654922ecf846676a92e2975a1a7d193b"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-170.cbor",
+          "sha256": "5df1bfca3ca09fb80a468d8a2a88f90789938fb9386121065e06ce3ea753c001"
+        },
+        "ref": "ogvcs:v1:tree:sha256:c1cfa87dda847c128d5b564f3f2063060b6644090d888d3214fe68e5b19a332c"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-022.cbor",
+          "sha256": "588dae40aaf1e3182849f8bfd9f7966a233ab65e8cca771415a1112df9e810d2"
+        },
+        "ref": "ogvcs:v1:tree:sha256:c1e42f29ac3555a1e092bcfadd3616492d2ac37d29a9b5f14cea7c16b15e4437"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-000.cbor",
+          "sha256": "a406c92260cdd820bc075089f7e8796d428c77ab75b7b58d596c322057cad79a"
+        },
+        "ref": "ogvcs:v1:tree:sha256:c2e072cacd2fc422d42bcb372c573f9decaadd092a2ab4c901d5e1bc23be7d17"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-059.cbor",
+          "sha256": "456333a07b345ce8d7636c1d305a95829447b26f142a0332d03699710badbfbb"
+        },
+        "ref": "ogvcs:v1:tree:sha256:c446c22a1a0c263bf4c03c2345be771bf44e56b9ffa7757de5305c5403999732"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-147.cbor",
+          "sha256": "9053cf5baaf595042b6200856e67292a7ec58f70f80d6959fccaf606d746ac22"
+        },
+        "ref": "ogvcs:v1:tree:sha256:c464e49f12c5c67dc07f4a5e83171637abe3688144bc0861949e4c0a2c316e4a"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-251.cbor",
+          "sha256": "b07a033b11a723b81ac283488e2f843da4fd73a55c6fec32ae20d4570e85ff7b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:c4ab1204f598363442cffc6e9a87e5d3a4059686325a1447929e8483b6fe22f7"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-191.cbor",
+          "sha256": "5a9085b7a52161da18ac0c06c1ccf3cbef1b2843d46304fc38c8d80c1c6e782b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:c5629812fff2e101d7c1382ac26a123a06b695845cee7c51013168161978e434"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-005.cbor",
+          "sha256": "1e6015abcae741345e7816e6f08e681c859da1aacf7601fddb1579de084bac56"
+        },
+        "ref": "ogvcs:v1:tree:sha256:c5cf478c9b8ea2af0128c10dbb971eb8ff8fb222ab1162ad7f30ec5eaa8f3de0"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-019.cbor",
+          "sha256": "a75a0ed6ac4c2c9c526699da0ef515b4c6592487457bc112eee4b4e2df37c73a"
+        },
+        "ref": "ogvcs:v1:tree:sha256:c63b1ccbdbbb818b2b04e7c9f00192c308ffc78c250f04b52fb895318f150b72"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-171.cbor",
+          "sha256": "2901b482cc1f97c15aada6c19eeccf91d8fa8bfc623bb9efbceb8ae00baa6345"
+        },
+        "ref": "ogvcs:v1:tree:sha256:ca083e00fa726b1ddd787c0325df1f1e1a9d9515f0b9745fd277dcfbc66162e9"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-220.cbor",
+          "sha256": "744137585f03dd1dbc4c93b931e2d19e19b562f13f1492edec3fe5dadb7ab125"
+        },
+        "ref": "ogvcs:v1:tree:sha256:ca8de7eba980b18eaf4c2b7b8c59a17eb4903b5fcd9d70c5bf5915465c91ad9f"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-102.cbor",
+          "sha256": "2ac1896a4824e2c8077ff2b2c20299097f7f3842df43dd291344edbc56a66037"
+        },
+        "ref": "ogvcs:v1:tree:sha256:cb73d2db6f066fdcc2b1176014c49fceb415f09e8fdd4d0ea8769afd0879f8f3"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-193.cbor",
+          "sha256": "355125172f2e3e7dc836f561f9cb1bde7a5db1f36ab4d6b131d9d9d512fffcc3"
+        },
+        "ref": "ogvcs:v1:tree:sha256:cc44e2568246493d97f33b319c60cc9d34170b113d6d16c85e95d67fbe778650"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-108.cbor",
+          "sha256": "00d042845d975cfbf36439bc642fcb37083b2f8c51059cc616ae8599c72759e2"
+        },
+        "ref": "ogvcs:v1:tree:sha256:cec1af08cb5c8235738f05eb48e3bd930a700337d29373a49512d01256b815fd"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-127.cbor",
+          "sha256": "dfd3588cf96c662aef4ec0cc95abcc91af346ff164d8caafd59a3763173c9376"
+        },
+        "ref": "ogvcs:v1:tree:sha256:cef374731a7caa79a9d3487367fbe3d95133dafd3d47fdc723ba538871a2477e"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-079.cbor",
+          "sha256": "1745f907fb47a432ffe5199f1e8a1a1ab1aaf71d4ecf243f883eb892b2427a2f"
+        },
+        "ref": "ogvcs:v1:tree:sha256:cf0f0c8ba2953bcb4308a906aa1fa72015a38b38acd066c64bebcd688a0bb8fa"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-141.cbor",
+          "sha256": "821beef6607a5425da79cb32fabe0583564911a2f4d7095d327049e9496504be"
+        },
+        "ref": "ogvcs:v1:tree:sha256:cfef1c16bdde0aa7f3a3e463c101a95969699d9dd137cbe4214bb6d882d81440"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-229.cbor",
+          "sha256": "a1455f303490dfe190f81d2eb9067311c965cf406d960ec40ea890e1bdbc2753"
+        },
+        "ref": "ogvcs:v1:tree:sha256:d0670d5d38473f1e77e271e77235846a08bb07a5fc9a265c5b2febf2fc3f7f47"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-031.cbor",
+          "sha256": "5b0aa3fe9a0305d92b4de0cf42d22f307aa441db752442110f51ff73e9efd866"
+        },
+        "ref": "ogvcs:v1:tree:sha256:d1212f784068482a53225b52a68a076354d550ca43d5cd9fa02ee3b52bfb2412"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-126.cbor",
+          "sha256": "e0a6cd7c5780ef814ecf094bae1d25b367d7072dc64402140f8c525bfa0aeaff"
+        },
+        "ref": "ogvcs:v1:tree:sha256:d248acc842be83c006048a16f9029659089d8a52dbf8e013c7d7bf83ddcef8e7"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-076.cbor",
+          "sha256": "231899b327f161730e58eb5f832d7b7b449be1fd1f30f01d69f7d23dffdb6076"
+        },
+        "ref": "ogvcs:v1:tree:sha256:d464517e0d8a1ebf5e9ac5682a2d9c956c4db0943936b72ca57c3cf8e7a0bd0e"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-078.cbor",
+          "sha256": "8e0800b4d8d9ec44454e0e06668ed5edd8d631371ef5e8202bcca88593df2edb"
+        },
+        "ref": "ogvcs:v1:tree:sha256:d4dcfff7221b6ea5bf72e78b76b0f43f28dbe784a32b5794d54bd652c8facf70"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-137.cbor",
+          "sha256": "7ad6ba5fef34ea283c9af1145113e2797302a686069a70a4d24963680d53836d"
+        },
+        "ref": "ogvcs:v1:tree:sha256:d753cbfb65ff0d5474d220ab7d0ecd3a02387f5b65592314de3701bc11261280"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-041.cbor",
+          "sha256": "c904d1f6af12e631f52b0d2fc7b559bbfbc6a01607970747c92c846df4e85ebd"
+        },
+        "ref": "ogvcs:v1:tree:sha256:d84baf90089fa0e6d35e892413d1c412f0baa034324a5201583fdd7ebd2b7d2c"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-254.cbor",
+          "sha256": "bddb6eb2496642709a8f057ac8e43d6ca46fd0dec9779a1b712ea9c55a3f93e3"
+        },
+        "ref": "ogvcs:v1:tree:sha256:dbe7d74a919a819d47ba48335057d0972b91ce2bd6f26519486a0d2454a19654"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-205.cbor",
+          "sha256": "19c039958755e02394c2ec61c3f27dc617270cbe741729319074e9399b1d15af"
+        },
+        "ref": "ogvcs:v1:tree:sha256:dc5fc5f8e7734a8bed5a493dda52b2a579bb641338b2bb03eb73f922f64e127d"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-200.cbor",
+          "sha256": "ade353a48995fff3b57c749abacb51311f334c7c0679ef9c5a4383fb71568fc9"
+        },
+        "ref": "ogvcs:v1:tree:sha256:dd055421e334c28fc3c06f139483eb5961ba3277ec662a52fb73484e16e6e922"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-030.cbor",
+          "sha256": "437002c715fc893c0ad402956c12d47bb4bafd26fd77251146f7356c547f57d2"
+        },
+        "ref": "ogvcs:v1:tree:sha256:dd3b374c2629931923c57b0153895488e20b58fe9f5d6fe98d7b128dc475855f"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-219.cbor",
+          "sha256": "9fd382c0ca4bed75c1a9430b2768d45ada2ec0ecfb663ce62ed727efa8a66e31"
+        },
+        "ref": "ogvcs:v1:tree:sha256:de116f5ef4827312e7bfb51423d15917f275f3cbd940aab03ac0af87d401e487"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-174.cbor",
+          "sha256": "ed7fad0097053d51937b617d5d260e145f4cf141d4e89bc05308e5343bb6f430"
+        },
+        "ref": "ogvcs:v1:tree:sha256:de93443f291d3e9583a85691dcb64b020a9e1ebd58bf6535098a7000830e0ee2"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-097.cbor",
+          "sha256": "1cb6da4d140597ae665db2c5738179276d9785c5c632182becf8c4580fa6b6f5"
+        },
+        "ref": "ogvcs:v1:tree:sha256:e08fd3304fcf1d4d2ed3f1a1e0ed69de4685bfdfb73891962f7ff3ac681c00a0"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-027.cbor",
+          "sha256": "2275f313c632494c049c4b84070e4f6043d6fbb682418c88c342b59a35bb3350"
+        },
+        "ref": "ogvcs:v1:tree:sha256:e24cce47d0fe88007b5e84d3f3447dc77ebd8165eba868d58f9814f62ed66ecb"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-148.cbor",
+          "sha256": "0397bab46d2782a8673f3563f1899c22aa6aada55fe8e2fdf2085feb22f33edc"
+        },
+        "ref": "ogvcs:v1:tree:sha256:e364070db6694c99db0e2abbaa2f0f330cb52abb0cbae3a2b960351238aa3525"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-034.cbor",
+          "sha256": "7b04592cd7d8a2b41c26941992ed4ded0c8d3c447ffda565f4cf547fbda85976"
+        },
+        "ref": "ogvcs:v1:tree:sha256:e53e4b7c781ad70473a9b9899338fa4a3db3498b540960dc085436cdbc52ec2e"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-145.cbor",
+          "sha256": "723965496f72dfebe3b7111606f0aeee7b1905b675a30f449073204e51f33239"
+        },
+        "ref": "ogvcs:v1:tree:sha256:e98eb504915ea0898257a4b21eb1ed087f4695f6b89708b13b9f3711ddd4fa3d"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-090.cbor",
+          "sha256": "896fb25980ce6493f6a282d7f36480279a6f772f3f0827004140d41fbe70a6db"
+        },
+        "ref": "ogvcs:v1:tree:sha256:ec3a4176dd4059a56fe248912c0b5ba7497c50ac0932db13576a86b7b96e0ebb"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-177.cbor",
+          "sha256": "cb1faa8807e5f61b60a4e697d6237c02363f74f70d948eea8baa33c517e70de3"
+        },
+        "ref": "ogvcs:v1:tree:sha256:ec7c4019bb926317259da08c5c232897b09bc07a46a4fc23d8b9fb92c5a5f2b1"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-173.cbor",
+          "sha256": "01797385e569bcd73ff8d5621cdb44a634631acf3fe53cef66d42c87ca799ea9"
+        },
+        "ref": "ogvcs:v1:tree:sha256:edd4b698120f39673c19f75742a668de80a63df5744147b1f421977e716eb05a"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-008.cbor",
+          "sha256": "e872bf0d7e8e9de1e6b9f06b9a019a75fcc36de5d13ef3e95d2e1ee3ce38b484"
+        },
+        "ref": "ogvcs:v1:tree:sha256:ee7b16c3a30ae882603ca0e6fc87fe886525a1a2b30259c128d7a8946d891735"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-240.cbor",
+          "sha256": "309c8aff5ef4dacbd8d9b5af7460ab26ff7bd4e7637f62086bf59038d7e33f16"
+        },
+        "ref": "ogvcs:v1:tree:sha256:f0505321b548ad9f5d29c3ff8259aa54b619a2d99e01bcad403d47bb5e5a0ffb"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-042.cbor",
+          "sha256": "e416bc2077f1aa27dea0ccbbe264871b19c5904613e2d076ab823521c12b123a"
+        },
+        "ref": "ogvcs:v1:tree:sha256:f0a5710b8a7105488f89a729d2447e2e351cb965aa9de06ce17af7669d1dafe3"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-104.cbor",
+          "sha256": "56e51a3f92614271d9647f7aa469d8e0105684509a4ce8abd0e72c2142b9de17"
+        },
+        "ref": "ogvcs:v1:tree:sha256:f0c881233d09a7d869a450f75c9f4a609281f26ff57c3da916687b4b1eb349f8"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-085.cbor",
+          "sha256": "34cd779745cc50e9960d8acaa6ca8d81d3990de2edbe9f2aecb3951ecd2aaaa4"
+        },
+        "ref": "ogvcs:v1:tree:sha256:f1811650fd5adc399f5fa9c4b93c81c5a403136d00c27e7f33c9ba3f43fc5d6c"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-178.cbor",
+          "sha256": "b52cb011771b8da5bee26073355cacb53980d12a5cb5c2cfa9e59399e2944c17"
+        },
+        "ref": "ogvcs:v1:tree:sha256:f1b9f8daf013540771675556917c63e4bff50abc0170184ca24441f21755851f"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-002.cbor",
+          "sha256": "1ae04f3694408c2672fd70739156cdaa801d862636508b0cbea77b4b74d39d20"
+        },
+        "ref": "ogvcs:v1:tree:sha256:f205344028d039dbdc3b48aad4f532144f78c78ff7d7c7bdbb54feac71382896"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-045.cbor",
+          "sha256": "78a8db089bb2d62cfb5e6a5d407790fc32144668e4687710d56b32affae4ddc1"
+        },
+        "ref": "ogvcs:v1:tree:sha256:f24e53215d34338dddcfe997a3a606822f6c770c65098fb29c5c7e13b06e2b1e"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-183.cbor",
+          "sha256": "74195cd918124f334b21b0833e7fcb4e656929ead90c8a648066b9d091af66d8"
+        },
+        "ref": "ogvcs:v1:tree:sha256:f371cd2abeda663f91a908cf2bb9a7ba2c067d015af894b057e6abe84057c942"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-213.cbor",
+          "sha256": "e0c438f1cdd642a97f6646204c888c4ec12977d05914e2229903fdc88338ed41"
+        },
+        "ref": "ogvcs:v1:tree:sha256:f59f53c1dde3c0434d7d9d76c49f7b28899bc186020246d20ece79d4914118f4"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-029.cbor",
+          "sha256": "c68326c5941d91c6afbc63de14d536fcead315f75c6b88fb1cb936f765e73a76"
+        },
+        "ref": "ogvcs:v1:tree:sha256:f660a4e1c29c70129a4fa6f246830ae7c6d1b74798a4232bf28a30697408f70a"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-119.cbor",
+          "sha256": "ef580d12bffb24d6a7b9cfe8bf3dca73399f0bf173814f01c2688734087ccfc2"
+        },
+        "ref": "ogvcs:v1:tree:sha256:f705014f5c3130ae3ff3b3628323b55bcd9163d50973311f5aa792ee9e75f20d"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-064.cbor",
+          "sha256": "8803f66361431100c1f2e670bac33fd4ae95b54560c470255761316978a550bb"
+        },
+        "ref": "ogvcs:v1:tree:sha256:f7515e25d8238cbf909e63aa0912d2e6c062cf0c9f45acae33e817ed9e842878"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-009.cbor",
+          "sha256": "f7d85d3c0a4713c54181e98c742eeee766c3151b70059ce91b1140b0183dc520"
+        },
+        "ref": "ogvcs:v1:tree:sha256:f7721c8475f144f83d6f72ff13c92e54f06167804f173a5500149ba9f017b1f2"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-152.cbor",
+          "sha256": "4b8009e81a3108a5b7354309952603159681bd4969fc73a9d94b37d3fa46cba7"
+        },
+        "ref": "ogvcs:v1:tree:sha256:f77ce86e9ac8b1c6bd008f374a390c29502ac945ced0c5866025c40bb7de6d38"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-189.cbor",
+          "sha256": "ee57b5eafae50580691cfccb5493002c416c5598f5a0aae1d62d8db013a70550"
+        },
+        "ref": "ogvcs:v1:tree:sha256:f8138000c4d2159249d7bd7ed7db3b31ec8d4ba314c4c85ccf27bf464af83c48"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-010.cbor",
+          "sha256": "fdb1e1de4540da458e5cc768dfe3a69a7c54f4b7054bcbfc3044b2fa2c5ea835"
+        },
+        "ref": "ogvcs:v1:tree:sha256:f95c9a19d0b1980254191e475bbfcabdc82fb448880428d8e6f454624fcda1b7"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-248.cbor",
+          "sha256": "cca62e3345547d24cf45a7d884f810d2566dec0b65ed9744839e16f836333e88"
+        },
+        "ref": "ogvcs:v1:tree:sha256:fa484be71f870806b52e4a729f34c4e614b047cc30f2e1d5760202a8596739f8"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-160.cbor",
+          "sha256": "a1e4ca4b94393e13f0166ceeaf0affd4cf4a83a0d18cfc2406e77a0ebdf3dfde"
+        },
+        "ref": "ogvcs:v1:tree:sha256:fad2859870f98dd0da203bfb545a04c746c9bff783c685c407bdeaa42706847d"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-067.cbor",
+          "sha256": "b9936c8eafefd0966edcf322838d7991d2850512054e526bce6bb0952b68e581"
+        },
+        "ref": "ogvcs:v1:tree:sha256:fc53166fd22287970f354c26184479def7983d895a73a59e3a8691c5c53b5b93"
+      },
+      {
+        "artifact": {
+          "bytes": 156,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-154.cbor",
+          "sha256": "ec6b1a0a5e474bea69754e19cd90edefedcbd9eb80ae0a8d718c9c85dc45ec29"
+        },
+        "ref": "ogvcs:v1:tree:sha256:ffae502a365eaef0abfda03f70fcb8de371b5aa91c00f74e3b79d8c492a23ce3"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
+      "registryVersion": 1
+    },
+    "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+    "requestedLayer": 3,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "expected": {
+    "code": "PATH_CORE_INVALID",
+    "layer": 3,
+    "result": "reject",
+    "stage": "repository-semantics"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "inputs": [
+    {
+      "bytes": 156,
+      "mediaType": "application/cbor",
+      "path": "scenarios/objects/tree-path-core-deep-chain/deep-path-000.cbor",
+      "sha256": "a406c92260cdd820bc075089f7e8796d428c77ab75b7b58d596c322057cad79a"
+    },
+    {
+      "bytes": 122113,
+      "mediaType": "application/json",
+      "path": "scenarios/definitions/tree-path-core-deep-chain.json",
+      "sha256": "49496719173e76c73857d171c5a48097b15c7e06f03d3a67dc1953c9ba3229f1"
+    }
+  ],
+  "operation": "validate-object",
+  "requirementIds": [
+    "OGVCS-002-AC-08",
+    "OGVCS-002-FR-09",
+    "OGVCS-002-NFR-01",
+    "OGVCS-002-NFR-04"
+  ],
+  "resources": {
+    "recipe": {
+      "generator": "ogvcs.repository-validation-scenario-constructor/v1",
+      "parameters": {
+        "definition": "scenarios/definitions/tree-path-core-deep-chain.json",
+        "definitionSha256": "49496719173e76c73857d171c5a48097b15c7e06f03d3a67dc1953c9ba3229f1",
+        "runtimeHighWaterMarks": "not-asserted"
+      },
+      "seed": "aedef1f2f07a9d35d6967048b44a3134d7d2fb0cac7d36a9f20fb7705573a153"
+    },
+    "summary": {
+      "bytes": 162678,
+      "indexEntries": 0,
+      "items": 260,
+      "peakMemoryBytes": 0,
+      "scratchBytes": 0,
+      "summarySha256": "d9e66391b759d90e4d011b93f16b55ed3a7da32ec9e790c82736ba2412c48a81",
+      "traversalEdges": 0
+    }
+  },
+  "scenarioId": "tree-path-core-deep-chain",
+  "schemaVersion": "ogvcs.repository-format/validation-scenario/v1"
+}

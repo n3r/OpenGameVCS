@@ -1,0 +1,9 @@
+{
+  "api": "expand-tree",
+  "authorityContext": "scenario.context",
+  "caseMode": "case-sensitive",
+  "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:1fdb14163872f2b9e37a039389646af167b2e0bcd8e436de38ccb4f5db02735a",
+  "schema": "ogvcs.repository-format.v1.repository-route-input.v1",
+  "tree": "ogvcs:v1:tree:sha256:a1d4f5509c7da5be73269bad0201fc24b9c55fde78e6a52dbaabcac33e669460",
+  "verifyContent": true
+}

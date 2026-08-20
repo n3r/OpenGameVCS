@@ -2,6 +2,7 @@
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
     "candidateSnapshot": "ogvcs:v1:snapshot:sha256:47443c3c337113cadb4d363ec65c7b4a91cb90d979b12a2b64af2e466603a34f",
+    "caseMode": "case-sensitive",
     "designatedRoot": "ogvcs:v1:snapshot:sha256:812b17a3fd9246a2eb231467de4bc0422034a16df2fceaec439aee48ba0368c9",
     "importMappings": [],
     "lifetimeRecords": [
@@ -127,10 +128,10 @@
       "sha256": "1622ddd790cb7be9c57b3caf93d7d138e2f9662946585bb2c99146c5c781d8dd"
     },
     {
-      "bytes": 6441,
+      "bytes": 6475,
       "mediaType": "application/json",
       "path": "scenarios/definitions/fileid-copy-reuse.json",
-      "sha256": "681509d99f0caf1c0a1bf27ed290f42e3cc86ae6a227fa5cec0a5369b948b268"
+      "sha256": "f8fd8e92fd0e6e0fd8295d58038716168fec70fd970efe1acf6a15b80ca93af9"
     }
   ],
   "operation": "replay-change-set",
@@ -143,18 +144,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/fileid-copy-reuse.json",
-        "definitionSha256": "681509d99f0caf1c0a1bf27ed290f42e3cc86ae6a227fa5cec0a5369b948b268",
+        "definitionSha256": "f8fd8e92fd0e6e0fd8295d58038716168fec70fd970efe1acf6a15b80ca93af9",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "a7231db3bb24d2e7fb30960b8043c5ebcda2ba53fbf32d779e4d1a68798fe13f"
     },
     "summary": {
-      "bytes": 8621,
+      "bytes": 8655,
       "indexEntries": 0,
       "items": 9,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "4a04f70c0dba087df876b3d44c383f65c4473a42ed0d66c3783721907153fa61",
+      "summarySha256": "2079137c4a3003eed6de73a11cd5325b6cbb5cc9460a6cd6a1a4a8f2d4ca3324",
       "traversalEdges": 0
     }
   },

@@ -1,14 +1,16 @@
 import { decodeSequence, encodeCanonical, encodeCanonicalChunks } from './cbor.js';
 import { compareErrorPrecedence, fail, OgvcsError } from './errors.js';
 import {
-  createBundleTranscriptHashWriter, createLogicalRecordHashWriter, createObjectHashWriter, hashBundleTranscript,
-  hashLogicalRecord, hashOpaqueObject, verifyObjectId
+  createBundleTranscriptHashWriter, createLogicalRecordHashWriter, createObjectHashWriter,
+  createOpaqueObjectHashWriter, hashBundleTranscript, hashLogicalRecord, hashOpaqueObject,
+  verifyObjectId
 } from './hash.js';
 import { configuredHardLimit, enforceHardLimit, hardLimitMaximum } from './hard-limits.js';
 import { profileDecision, registryAssignmentDecision, requiredFeatureDecision } from './registry.js';
 import { decodeMetadata, validateBundleItem, validateKnownSchema, validateLogicalRecord } from './schema.js';
 import { ResourceGuard, cborHeader, guardedAsyncIterable, toAsyncIterable, writeFully } from './scale-util.js';
 import { Digest, KIND_NAMES, ObjectRef, ProfileRef, equalBytes, toHex } from './types.js';
+import { codecValidationContext, registryValidationContext, writerValidationContext } from './validation-mode.js';
 
 const BUNDLE_LIMIT_NAMES = Object.freeze({
   sequenceBytes: 'bundle-sequence-bytes',
@@ -119,7 +121,9 @@ function rawLogicalType(record) {
 }
 
 function* stateReferences(state) {
-  if (state instanceof Map && state.has(4)) yield state.get(4);
+  // AssetGroup values also have field 4 (external keys). Only an EntryState
+  // has a path array at field 0; never reinterpret group data as ObjectRefs.
+  if (state instanceof Map && Array.isArray(state.get(0)) && state.has(4)) yield state.get(4);
 }
 
 function* groupSideReferences(side) {
@@ -218,8 +222,11 @@ const SEMANTIC_ERROR_RANK = new Map([
 ]);
 
 /** Selects registry-semantic failures in frozen error-catalogue order. */
-export function validateCollectedSemantics(registry, requiredFeatures, profiles, mode, policyResults = []) {
+export function validateCollectedSemantics(registry, requiredFeatures, profiles, operation, policyResults = []) {
+  const semantic = registryValidationContext(operation, registry);
+  registry = semantic.registry;
   if (!registry) return;
+  const normalizedOperation = semantic.operation;
   let selected;
   const observe = callback => {
     try { callback(); } catch (error) {
@@ -227,9 +234,10 @@ export function validateCollectedSemantics(registry, requiredFeatures, profiles,
       if (!selected || SEMANTIC_ERROR_RANK.get(error.code) < SEMANTIC_ERROR_RANK.get(selected.code)) selected = error;
     }
   };
-  for (const feature of requiredFeatures) observe(() => requiredFeatureDecision(registry, feature));
-  const operation = mode === 'production' ? 'production-write' : 'conformance';
-  for (const profile of profiles) observe(() => profileDecision(registry, profile, operation));
+  for (const feature of requiredFeatures) {
+    observe(() => requiredFeatureDecision(registry, feature, normalizedOperation));
+  }
+  for (const profile of profiles) observe(() => profileDecision(registry, profile, normalizedOperation));
   for (const policyResult of policyResults) {
     if (registry.profiles.has(policyResult.profile.toString()) &&
         policyResult.profile.toString() === 'policy.test/allow@1' && policyResult.decision !== 1) {
@@ -239,35 +247,106 @@ export function validateCollectedSemantics(registry, requiredFeatures, profiles,
   if (selected) throw selected;
 }
 
-function checkProfileList(profiles, registry, mode) {
-  validateCollectedSemantics(registry, [], profiles, mode);
+function checkProfileList(profiles, registry, operation) {
+  validateCollectedSemantics(registry, [], profiles, operation);
 }
 
-function normalizedObject(item, names, options) {
+function declaredObject(item, names) {
   if (!item || !(item.payload instanceof Uint8Array)) {
     fail('SCHEMA_FIELD_INVALID', { layer: 1, stage: 'configured-resource-preflight' });
   }
-  const ref = item.ref instanceof ObjectRef ? item.ref : asRef(item.ref, names);
-  const operation = options.mode === 'production' ? 'production-write' : 'conformance';
-  if (options.registry) {
-    registryAssignmentDecision(options.registry, 'object-kinds', ref.kind, operation);
-    registryAssignmentDecision(options.registry, 'hash-algorithms', 1, operation);
-  }
+  return item.ref instanceof ObjectRef ? item.ref : asRef(item.ref, names);
+}
+
+function verifyDeclaredObjectIdentity(ref, payload, names, options) {
   const limitName = ref.kind === 1 ? 'chunk-payload-bytes' : 'metadata-payload-bytes';
   const maximum = configuredHardLimit(limitName, options.hardLimits?.[limitName]);
-  enforceHardLimit(undefined, limitName, item.payload.length, { maximum, layer: 1 });
-  verifyObjectId(ref, item.payload, ref.kind === 1 ? { maxChunkBytes: maximum } : { maxMetadataBytes: maximum });
+  enforceHardLimit(undefined, limitName, payload.length, { maximum, layer: 1 });
+  if (names.has(ref.kind)) {
+    verifyObjectId(ref, payload, ref.kind === 1
+      ? { maxChunkBytes: maximum, registry: names }
+      : { maxMetadataBytes: maximum, registry: names });
+    return maximum;
+  }
+  const actual = hashOpaqueObject(ref.kind, payload, { maxBytes: maximum });
+  if (!equalBytes(ref.digest, actual.bytes)) fail('OBJECT_ID_MISMATCH', { layer: 1 });
+  return maximum;
+}
+
+function preflightObjectOrder(objects, names) {
+  const refs = [];
+  let previous;
+  for (const item of objects) {
+    const reference = declaredObject(item, names);
+    const sortKey = encodeCanonical(reference.toMap());
+    if (previous) {
+      const order = compareBytes(previous, sortKey);
+      if (order >= 0) {
+        fail(order === 0 ? 'BUNDLE_DUPLICATE_IDENTITY' : 'BUNDLE_SEQUENCE_INVALID', { layer: 1 });
+      }
+    }
+    refs.push(reference);
+    previous = sortKey;
+  }
+  return refs;
+}
+
+function preflightLogicalOrder(records) {
+  let previous;
+  for (const record of records) {
+    const raw = rawLogicalType(record);
+    if (!raw.hashable) continue;
+    const identity = hashLogicalRecord(raw.type, encodeCanonical(record));
+    const sortKey = [Uint8Array.of(raw.type >>> 8, raw.type & 255), identity.bytes];
+    if (previous) {
+      const order = compareTuple(previous, sortKey);
+      if (order >= 0) {
+        fail(order === 0 ? 'BUNDLE_DUPLICATE_IDENTITY' : 'BUNDLE_SEQUENCE_INVALID', { layer: 1 });
+      }
+    }
+    previous = sortKey;
+  }
+}
+
+function normalizedObject(item, names, options, deferred = undefined) {
+  const ref = declaredObject(item, names);
+  const operation = options.operation;
+  const declaredIdentity = deferred?.declaredIdentity;
+  const knownSchema = deferred?.knownSchema;
+  const registrySemantics = deferred?.registrySemantics;
+  const verifyIdentity = () => verifyDeclaredObjectIdentity(ref, item.payload, names, options);
+  const maximum = declaredIdentity ? declaredIdentity.observe(verifyIdentity) : verifyIdentity();
+  if (options.registry) {
+    const observeRegistry = callback => knownSchema
+      ? knownSchema.observe(() => registrySemantics
+        ? registrySemantics.observe(callback) : callback())
+      : registrySemantics ? registrySemantics.observe(callback) : callback();
+    observeRegistry(() => registryAssignmentDecision(options.registry, 'object-kinds', ref.kind, operation));
+    observeRegistry(() => registryAssignmentDecision(options.registry, 'hash-algorithms', 1, operation));
+  }
   let value;
   if (ref.kind !== 1) {
-    const decoded = decodeMetadata(item.payload, {
-      registry: options.registry,
-      hardLimits: options.hardLimits,
-      operation
+    const decode = () => decodeMetadata(item.payload, {
+      semantic: false, hardLimits: options.hardLimits
     });
-    if (decoded.kind !== ref.kind) {
-      fail('OBJECT_REFERENCE_KIND_MISMATCH', { layer: 2, stage: 'known-schema' });
+    const decoded = knownSchema ? knownSchema.observe(decode) : decode();
+    if (decoded) {
+      const checkKind = () => {
+        if (decoded.kind !== ref.kind) {
+          fail('OBJECT_REFERENCE_KIND_MISMATCH', { layer: 2, stage: 'known-schema' });
+        }
+      };
+      if (knownSchema) knownSchema.observe(checkKind);
+      else checkKind();
+      if (options.registry) {
+        const validateSemantics = () => validateKnownSchema(decoded.value, decoded.kind, {
+          registry: options.registry, hardLimits: options.hardLimits, operation
+        });
+        if (registrySemantics) registrySemantics.observe(validateSemantics);
+        else validateSemantics();
+      }
+      value = decoded.value;
     }
-    value = decoded.value;
   }
   return { ref, payload: item.payload.slice(), value };
 }
@@ -350,6 +429,60 @@ function boundedCanonicalBytes(value, maximum) {
     bytes += part.length;
   }
   return bytes;
+}
+
+// Measures the retained representation a canonical decoder would construct,
+// without decoding strings or allocating arrays/maps. Malformed/non-item raw
+// bytes (including ordinary chunk payloads) have no decoded representation;
+// their payload copy is still charged separately by the caller.
+function measuredDecodedBytes(input, maximum) {
+  let offset = 0;
+  let retained = 0;
+  let exceeded = false;
+  const charge = count => {
+    if (!Number.isSafeInteger(count) || count < 0 || count > maximum - retained) {
+      exceeded = true;
+      return false;
+    }
+    retained += count;
+    return true;
+  };
+  const takeArgument = ai => {
+    if (ai < 24) return ai;
+    const size = ai === 24 ? 1 : ai === 25 ? 2 : ai === 26 ? 4 : ai === 27 ? 8 : 0;
+    if (size === 0 || size > input.length - offset) return undefined;
+    let value = 0n;
+    for (let index = 0; index < size; index++) value = (value << 8n) | BigInt(input[offset++]);
+    return value > BigInt(Number.MAX_SAFE_INTEGER) ? undefined : Number(value);
+  };
+  const item = depth => {
+    if (exceeded || offset >= input.length || depth > MAX_NESTING_DEPTH) return false;
+    const first = input[offset++];
+    const major = first >>> 5;
+    const ai = first & 31;
+    if (major === 7) return ai === 20 || ai === 21;
+    if (major === 6 || ai === 31) return false;
+    const argument = takeArgument(ai);
+    if (argument === undefined) return false;
+    if (major <= 1) return true;
+    if (major === 2 || major === 3) {
+      if (argument > input.length - offset) return false;
+      offset += argument;
+      return charge((major === 2 ? argument : argument * 2) + 32);
+    }
+    if (major === 4 || major === 5) {
+      const values = major === 4 ? argument : argument * 2;
+      // Every child consumes at least one byte, so reject impossible declared
+      // counts without entering an attacker-sized loop.
+      if (!Number.isSafeInteger(values) || values > input.length - offset ||
+          !charge(argument * (major === 4 ? 64 : 128))) return false;
+      for (let index = 0; index < values; index++) if (!item(depth + 1)) return false;
+      return true;
+    }
+    return false;
+  };
+  const valid = item(1) && offset === input.length;
+  return exceeded ? maximum + 1 : valid ? retained : 0;
 }
 
 function planCount(value) {
@@ -441,6 +574,11 @@ function rootBytes(ordinal, root) {
 export async function writeOrderedLogicalBundle({
   plan, objects = [], logicalRecords = [], roots = [], sink, ...options
 }) {
+  const semantic = writerValidationContext(options.operation, options.registry);
+  if (options.semanticValidator !== undefined) {
+    fail('SCHEMA_FIELD_INVALID', { layer: 1, stage: 'configured-resource-preflight' });
+  }
+  options = { ...options, ...semantic };
   const limits = configured(options);
   const frozenPlan = bundleWritePlan(plan, limits);
   const maxMemoryBytes = options.maxMemoryBytes ?? 67_108_864;
@@ -449,7 +587,10 @@ export async function writeOrderedLogicalBundle({
     maxMemoryBytes
   });
   const names = options.registry?.kindNames ?? KIND_NAMES;
-  const operation = options.mode === 'production' ? 'production-write' : 'conformance';
+  const operation = semantic.operation;
+  const declaredIdentity = deferredStageCollector(1, 'declared-identity');
+  const knownSchema = deferredStageCollector(2, 'known-schema');
+  const registrySemantics = deferredStageCollector(3, 'registry-semantics');
   const header = bundleEncode(headerFor(frozenPlan));
   const dummyTrailer = bundleEncode(trailerFor(frozenPlan, new Digest(1, new Uint8Array(32))));
   if (header.length > limits.itemBytes || dummyTrailer.length > limits.itemBytes) {
@@ -496,9 +637,10 @@ export async function writeOrderedLogicalBundle({
       fail('BUNDLE_SEQUENCE_INVALID', { layer: 1 });
     }
     const reference = item.ref instanceof ObjectRef ? item.ref : asRef(item.ref, names);
-    if (options.registry) {
-      registryAssignmentDecision(options.registry, 'object-kinds', reference.kind, operation);
-      registryAssignmentDecision(options.registry, 'hash-algorithms', 1, operation);
+    const sortKey = encodeCanonical(reference.toMap());
+    if (previousObject) {
+      const order = compareBytes(previousObject, sortKey);
+      if (order >= 0) fail(order === 0 ? 'BUNDLE_DUPLICATE_IDENTITY' : 'BUNDLE_SEQUENCE_INVALID', { layer: 1 });
     }
     const limitName = reference.kind === 1 ? 'chunk-payload-bytes' : 'metadata-payload-bytes';
     const maximum = configuredHardLimit(limitName, options.hardLimits?.[limitName]);
@@ -508,20 +650,31 @@ export async function writeOrderedLogicalBundle({
       : item.payload.length * 16 + 512;
     if (!Number.isSafeInteger(retainedEstimate)) fail('LIMIT_MEMORY', { layer: 1 });
     guard.memory(retainedEstimate);
-    verifyObjectId(reference, item.payload,
-      reference.kind === 1 ? { maxChunkBytes: maximum } : { maxMetadataBytes: maximum });
+    declaredIdentity.observe(() => verifyDeclaredObjectIdentity(
+      reference, item.payload, names, options));
     let edges = 0;
     if (reference.kind !== 1) {
-      const decoded = decodeMetadata(item.payload, { registry: options.registry, hardLimits: options.hardLimits, operation });
-      if (decoded.kind !== reference.kind) {
-        fail('OBJECT_REFERENCE_KIND_MISMATCH', { layer: 2, stage: 'known-schema' });
+      const decoded = knownSchema.observe(() => decodeMetadata(item.payload, {
+        semantic: false, hardLimits: options.hardLimits
+      }));
+      if (decoded) {
+        if (decoded.kind !== reference.kind) {
+          knownSchema.observe(() => fail('OBJECT_REFERENCE_KIND_MISMATCH', {
+            layer: 2, stage: 'known-schema'
+          }));
+        }
+        if (options.registry) registrySemantics.observe(() => validateKnownSchema(
+          decoded.value, decoded.kind, {
+            registry: options.registry, hardLimits: options.hardLimits, operation
+          }));
+        for (const _reference of iterateObjectReferences(decoded.kind, decoded.value)) edges++;
       }
-      for (const _reference of iterateObjectReferences(reference.kind, decoded.value)) edges++;
     }
-    const sortKey = encodeCanonical(reference.toMap());
-    if (previousObject) {
-      const order = compareBytes(previousObject, sortKey);
-      if (order >= 0) fail(order === 0 ? 'BUNDLE_DUPLICATE_IDENTITY' : 'BUNDLE_SEQUENCE_INVALID', { layer: 1 });
+    if (options.registry) {
+      knownSchema.observe(() => registrySemantics.observe(() =>
+        registryAssignmentDecision(options.registry, 'object-kinds', reference.kind, operation)));
+      knownSchema.observe(() => registrySemantics.observe(() =>
+        registryAssignmentDecision(options.registry, 'hash-algorithms', 1, operation)));
     }
     if (traversalEdges + edges > limits.traversalEdges) {
       fail('BUNDLE_BUDGET_EXCEEDED', { layer: 1, stage: 'configured-resource-preflight' });
@@ -530,11 +683,13 @@ export async function writeOrderedLogicalBundle({
       fail('BUNDLE_BUDGET_EXCEEDED', { layer: 1, stage: 'declared-accounting' });
     }
     const prefix = objectPrefix(objectCount, reference, item.payload.length);
-    const replayWriter = createObjectHashWriter(reference.kind, {
-      registry: names,
-      maxChunkBytes: configuredHardLimit('chunk-payload-bytes', options.hardLimits?.['chunk-payload-bytes']),
-      maxMetadataBytes: configuredHardLimit('metadata-payload-bytes', options.hardLimits?.['metadata-payload-bytes'])
-    });
+    const replayWriter = names.has(reference.kind)
+      ? createObjectHashWriter(reference.kind, {
+        registry: names,
+        maxChunkBytes: configuredHardLimit('chunk-payload-bytes', options.hardLimits?.['chunk-payload-bytes']),
+        maxMetadataBytes: configuredHardLimit('metadata-payload-bytes', options.hardLimits?.['metadata-payload-bytes'])
+      })
+      : createOpaqueObjectHashWriter(reference.kind, { maxBytes: maximum });
     const payloadChunkBytes = Math.max(1, Math.min(65_536, Math.floor(maxMemoryBytes / 4) || 1));
     function* objectParts() {
       yield prefix;
@@ -545,9 +700,11 @@ export async function writeOrderedLogicalBundle({
       }
     }
     await emitKnownLength(prefix.length + item.payload.length, objectParts());
-    if (!equalBytes(replayWriter.finish().digest, reference.digest)) {
-      fail('OBJECT_ID_MISMATCH', { layer: 1 });
-    }
+    const replayIdentity = replayWriter.finish();
+    declaredIdentity.observe(() => {
+      const digest = replayIdentity instanceof ObjectRef ? replayIdentity.digest : replayIdentity.bytes;
+      if (!equalBytes(digest, reference.digest)) fail('OBJECT_ID_MISMATCH', { layer: 1 });
+    });
     previousObject = sortKey; traversalEdges += edges; objectCount++;
   }
   if (objectCount !== frozenPlan.objectCount) fail('BUNDLE_SEQUENCE_INVALID', { layer: 1 });
@@ -557,10 +714,13 @@ export async function writeOrderedLogicalBundle({
   for await (const record of guardedAsyncIterable(toAsyncIterable(logicalRecords), guard)) {
     if (logicalRecordCount >= frozenPlan.logicalRecordCount) fail('BUNDLE_SEQUENCE_INVALID', { layer: 1 });
     guard.time();
-    const validation = validateLogicalRecord(record, {
-      registry: options.registry, hardLimits: options.hardLimits, operation
-    });
-    checkProfileList(validation.profiles, options.registry, options.mode);
+    const raw = rawLogicalType(record);
+    if (!raw.hashable) {
+      // Without a bounded numeric record type no identity/sort key can be
+      // derived, so this is not a safely continuable item.
+      validateLogicalRecord(record, { semantic: false, hardLimits: options.hardLimits });
+      fail('SCHEMA_FIELD_INVALID', { layer: 2, stage: 'known-schema' });
+    }
     const encodingOptions = {
       maxBytes: Math.min(
         configuredHardLimit('metadata-payload-bytes', options.hardLimits?.['metadata-payload-bytes']),
@@ -577,8 +737,8 @@ export async function writeOrderedLogicalBundle({
       maxWorkingBytes: maxMemoryBytes,
       chunkBytes: Math.max(1, Math.min(65_536, Math.floor(maxMemoryBytes / 4) || 1))
     };
-    const identityWriter = createLogicalRecordHashWriter(validation.type, {
-      registry: options.registry?.logicalRecordTypes,
+    const identityWriter = createLogicalRecordHashWriter(raw.type, {
+      registry: options.registry?.logicalRecordTypeCodes,
       maxBytes: encodingOptions.maxBytes
     });
     let recordBytes = 0;
@@ -589,13 +749,24 @@ export async function writeOrderedLogicalBundle({
       recordBytes += part.length;
     }
     const identity = identityWriter.finish();
+    const validation = knownSchema.observe(() => validateLogicalRecord(record, {
+      semantic: false, hardLimits: options.hardLimits
+    }));
     let edges = 0;
-    for (const _reference of iterateLogicalRecordReferences(validation.type, record)) edges++;
-    const sortKey = [Uint8Array.of(validation.type >>> 8, validation.type & 255), identity.bytes];
+    if (validation) {
+      for (const _reference of iterateLogicalRecordReferences(validation.type, record)) edges++;
+    }
+    const sortKey = [Uint8Array.of(raw.type >>> 8, raw.type & 255), identity.bytes];
     if (previousLogical) {
       const order = compareTuple(previousLogical, sortKey);
       if (order >= 0) fail(order === 0 ? 'BUNDLE_DUPLICATE_IDENTITY' : 'BUNDLE_SEQUENCE_INVALID', { layer: 1 });
     }
+    if (options.registry && validation) registrySemantics.observe(() => {
+      const semanticValidation = validateLogicalRecord(record, {
+        registry: options.registry, hardLimits: options.hardLimits, operation
+      });
+      checkProfileList(semanticValidation.profiles, options.registry, operation);
+    });
     if (traversalEdges + edges > limits.traversalEdges) {
       fail('BUNDLE_BUDGET_EXCEEDED', { layer: 1, stage: 'configured-resource-preflight' });
     }
@@ -603,8 +774,8 @@ export async function writeOrderedLogicalBundle({
       fail('BUNDLE_BUDGET_EXCEEDED', { layer: 1, stage: 'declared-accounting' });
     }
     const prefix = logicalPrefix(logicalRecordCount, identity);
-    const replayWriter = createLogicalRecordHashWriter(validation.type, {
-      registry: options.registry?.logicalRecordTypes,
+    const replayWriter = createLogicalRecordHashWriter(raw.type, {
+      registry: options.registry?.logicalRecordTypeCodes,
       maxBytes: encodingOptions.maxBytes
     });
     function* encodedRecordParts() {
@@ -616,9 +787,11 @@ export async function writeOrderedLogicalBundle({
     }
     await emitKnownLength(prefix.length + recordBytes, encodedRecordParts());
     const replayIdentity = replayWriter.finish();
-    if (!equalBytes(replayIdentity.bytes, identity.bytes)) {
-      fail('BUNDLE_RECORD_ID_MISMATCH', { layer: 1 });
-    }
+    declaredIdentity.observe(() => {
+      if (!equalBytes(replayIdentity.bytes, identity.bytes)) {
+        fail('BUNDLE_RECORD_ID_MISMATCH', { layer: 1 });
+      }
+    });
     previousLogical = sortKey; traversalEdges += edges; logicalRecordCount++;
   }
   if (logicalRecordCount !== frozenPlan.logicalRecordCount) fail('BUNDLE_SEQUENCE_INVALID', { layer: 1 });
@@ -629,7 +802,6 @@ export async function writeOrderedLogicalBundle({
   for await (const raw of guardedAsyncIterable(toAsyncIterable(roots), guard)) {
     if (rootCount >= frozenPlan.rootCount) fail('BUNDLE_SEQUENCE_INVALID', { layer: 1 });
     const root = normalizedRoot(raw, names);
-    checkProfileList([root.role], options.registry, options.mode);
     const identityBytes = encodeCanonical(root.identity.toMap());
     const roleBytes = encodeCanonical(root.role.toMap());
     const sortKey = [Uint8Array.of(root.kind), identityBytes, roleBytes];
@@ -638,14 +810,19 @@ export async function writeOrderedLogicalBundle({
     if (previousRootIdentity && compareTuple(previousRootIdentity, identityKey) === 0) {
       fail('BUNDLE_DUPLICATE_IDENTITY', { layer: 1 });
     }
+    if (options.registry) registrySemantics.observe(() =>
+      checkProfileList([root.role], options.registry, operation));
     await emit([rootBytes(rootCount, root)]);
     if (root.kind === 1) objectRoots++; else logicalRoots++;
     previousRoot = sortKey; previousRootIdentity = identityKey; rootCount++;
   }
   if (rootCount !== frozenPlan.rootCount) fail('BUNDLE_SEQUENCE_INVALID', { layer: 1 });
+  declaredIdentity.throwSelected();
+  knownSchema.throwSelected();
   if ((objectCount > 0 && objectRoots === 0) || logicalRoots !== logicalRecordCount) {
     fail('BUNDLE_ROOT_INVALID', { layer: 2, stage: 'closure-and-reference-resolution' });
   }
+  registrySemantics.throwSelected();
 
   const transcriptDigest = transcript.finish();
   const trailer = bundleEncode(trailerFor(frozenPlan, transcriptDigest));
@@ -673,6 +850,11 @@ export function validateBundleClaim(claim) {
 
 /** Builds the deterministic in-memory supplied-closure representation. */
 export function encodeLogicalBundle({ objects = [], logicalRecords = [], roots = [] }, options = {}) {
+  const semantic = writerValidationContext(options.operation, options.registry);
+  if (options.semanticValidator !== undefined) {
+    fail('SCHEMA_FIELD_INVALID', { layer: 1, stage: 'configured-resource-preflight' });
+  }
+  options = { ...options, ...semantic };
   if (!Array.isArray(objects) || !Array.isArray(logicalRecords) || !Array.isArray(roots)) {
     fail('SCHEMA_FIELD_INVALID', { layer: 1, stage: 'configured-resource-preflight' });
   }
@@ -686,11 +868,15 @@ export function encodeLogicalBundle({ objects = [], logicalRecords = [], roots =
     fail('BUNDLE_BUDGET_EXCEEDED', { layer: 1, stage: 'configured-resource-preflight' });
   }
   let inputPayloadBytes = 0;
+  let decodedPayloadBytes = 0;
   for (const item of objects) {
     if (!(item?.payload instanceof Uint8Array) || item.payload.length > limits.sequenceBytes - inputPayloadBytes) {
       fail('BUNDLE_BUDGET_EXCEEDED', { layer: 1, stage: 'configured-resource-preflight' });
     }
     inputPayloadBytes += item.payload.length;
+    const decoded = measuredDecodedBytes(item.payload, maxMemoryBytes - decodedPayloadBytes);
+    if (decoded > maxMemoryBytes - decodedPayloadBytes) fail('LIMIT_MEMORY', { layer: 1 });
+    decodedPayloadBytes += decoded;
   }
   // The convenience encoder necessarily retains normalized payload copies,
   // encoded item bytes, the concatenated sequence, and verification state.
@@ -711,55 +897,61 @@ export function encodeLogicalBundle({ objects = [], logicalRecords = [], roots =
     rootInputBytes += bytes;
   }
   const recordCount = BigInt(objects.length + logicalRecords.length + roots.length + 2);
-  const minimumWorkingBytes = BigInt(inputPayloadBytes + logicalInputBytes + rootInputBytes) * 4n +
-    recordCount * 512n;
+  const minimumWorkingBytes = BigInt(inputPayloadBytes) * 3n +
+    BigInt(decodedPayloadBytes) * 2n +
+    BigInt(logicalInputBytes + rootInputBytes) * 3n +
+    recordCount * 2_048n;
   if (minimumWorkingBytes > BigInt(maxMemoryBytes)) fail('LIMIT_MEMORY', { layer: 1 });
   const names = options.registry?.kindNames ?? KIND_NAMES;
-  const operation = options.mode === 'production' ? 'production-write' : 'conformance';
-  const normalizedObjects = objects.map(item => normalizedObject(item, names, options));
-  normalizedObjects.sort((left, right) => compareBytes(encodeCanonical(left.ref.toMap()), encodeCanonical(right.ref.toMap())));
-  for (let index = 1; index < normalizedObjects.length; index++) {
-    if (refKey(normalizedObjects[index - 1].ref) === refKey(normalizedObjects[index].ref)) {
-      fail('BUNDLE_DUPLICATE_IDENTITY', { layer: 1 });
-    }
-  }
+  const operation = semantic.operation;
+  preflightObjectOrder(objects, names);
+  const declaredIdentity = deferredStageCollector(1, 'declared-identity');
+  const knownSchema = deferredStageCollector(2, 'known-schema');
+  const registrySemantics = deferredStageCollector(3, 'registry-semantics');
+  const normalizedObjects = objects.map(item => normalizedObject(item, names, options, {
+    declaredIdentity, knownSchema, registrySemantics
+  }));
   const objectItems = normalizedObjects.map((item, ordinal) => new Map([
     [0, 1], [1, 2], [2, ordinal], [3, item.ref.toMap()], [4, item.payload]
   ]));
 
+  preflightLogicalOrder(logicalRecords);
   const normalizedLogical = logicalRecords.map(record => {
     const validation = validateLogicalRecord(record, {
       registry: options.registry, hardLimits: options.hardLimits, operation
     });
-    checkProfileList(validation.profiles, options.registry, options.mode);
+    checkProfileList(validation.profiles, options.registry, operation);
     return { type: validation.type, record, identity: hashLogicalRecord(validation.type, encodeCanonical(record)) };
   });
-  normalizedLogical.sort((left, right) => compareTuple(
-    [Uint8Array.of(left.type >>> 8, left.type & 255), left.identity.bytes],
-    [Uint8Array.of(right.type >>> 8, right.type & 255), right.identity.bytes]
-  ));
   for (let index = 1; index < normalizedLogical.length; index++) {
-    if (digestKey(normalizedLogical[index - 1].identity) === digestKey(normalizedLogical[index].identity)) {
-      fail('BUNDLE_DUPLICATE_IDENTITY', { layer: 1 });
-    }
+    const left = normalizedLogical[index - 1]; const right = normalizedLogical[index];
+    const order = compareTuple(
+      [Uint8Array.of(left.type >>> 8, left.type & 255), left.identity.bytes],
+      [Uint8Array.of(right.type >>> 8, right.type & 255), right.identity.bytes]
+    );
+    if (order >= 0) fail(order === 0 ? 'BUNDLE_DUPLICATE_IDENTITY' : 'BUNDLE_SEQUENCE_INVALID', { layer: 1 });
   }
   const logicalItems = normalizedLogical.map((item, ordinal) => new Map([
     [0, 1], [1, 3], [2, ordinal], [3, item.identity.toMap()], [4, item.record]
   ]));
 
   const normalizedRoots = roots.map(item => normalizedRoot(item, names));
-  normalizedRoots.sort((left, right) => compareTuple(
-    [Uint8Array.of(left.kind), encodeCanonical(left.identity.toMap()), encodeCanonical(left.role.toMap())],
-    [Uint8Array.of(right.kind), encodeCanonical(right.identity.toMap()), encodeCanonical(right.role.toMap())]
-  ));
   for (let index = 1; index < normalizedRoots.length; index++) {
     const left = normalizedRoots[index - 1]; const right = normalizedRoots[index];
+    const order = compareTuple(
+      [Uint8Array.of(left.kind), encodeCanonical(left.identity.toMap()), encodeCanonical(left.role.toMap())],
+      [Uint8Array.of(right.kind), encodeCanonical(right.identity.toMap()), encodeCanonical(right.role.toMap())]
+    );
+    if (order > 0) fail('BUNDLE_SEQUENCE_INVALID', { layer: 1 });
     const sameIdentity = left.kind === right.kind && equalBytes(
       left.kind === 1 ? left.identity.digest : left.identity.bytes,
       right.kind === 1 ? right.identity.digest : right.identity.bytes
     );
     if (sameIdentity) fail('BUNDLE_DUPLICATE_IDENTITY', { layer: 1 });
   }
+  declaredIdentity.throwSelected();
+  knownSchema.throwSelected();
+  registrySemantics.throwSelected();
   const rootItems = normalizedRoots.map((item, ordinal) => new Map([
     [0, 1], [1, 4], [2, ordinal], [3, item.kind], [4, item.identity.toMap()], [5, item.role.toMap()]
   ]));
@@ -810,7 +1002,18 @@ export function encodeLogicalBundle({ objects = [], logicalRecords = [], roots =
     declaredBytes = nextBytes; declaredLargest = nextLargest;
     if (iteration === 11) fail('BUNDLE_SEQUENCE_INVALID', { layer: 1 });
   }
-  verifyLogicalBundle(finalBytes, { ...options, semanticValidator: options.semanticValidator });
+  // Normalized payload copies/decoded metadata and item/index wrappers remain
+  // live while the independent verifier decodes the finished sequence. Give
+  // that verifier only the genuinely remaining aggregate budget.
+  const retainedBeforeVerify = inputPayloadBytes + decodedPayloadBytes +
+    Number(recordCount) * 1_536;
+  if (!Number.isSafeInteger(retainedBeforeVerify) || retainedBeforeVerify > maxMemoryBytes) {
+    fail('LIMIT_MEMORY', { layer: 1 });
+  }
+  verifyLogicalBundle(finalBytes, {
+    ...options,
+    maxMemoryBytes: maxMemoryBytes - retainedBeforeVerify
+  });
   return new Uint8Array(finalBytes);
 }
 
@@ -820,11 +1023,16 @@ export function encodeLogicalBundle({ objects = [], logicalRecords = [], roots =
  * this entry point deliberately obeys the caller's finite `sequenceBytes` cap.
  */
 export function verifyLogicalBundle(input, options = {}) {
+  const semantic = codecValidationContext(options);
+  if (options.semanticValidator !== undefined) {
+    fail('SCHEMA_FIELD_INVALID', { layer: 1, stage: 'configured-resource-preflight' });
+  }
+  options = { ...options, ...semantic };
   if (!(input instanceof Uint8Array)) {
     fail('SCHEMA_FIELD_INVALID', { layer: 1, stage: 'configured-resource-preflight' });
   }
   const limits = configuredInMemory(options);
-  const operation = options.mode === 'production' ? 'production-write' : 'conformance';
+  const operation = semantic.operation;
   if (input.length > limits.sequenceBytes) {
     fail('BUNDLE_BUDGET_EXCEEDED', { layer: 1, stage: 'configured-resource-preflight' });
   }
@@ -979,9 +1187,7 @@ export function verifyLogicalBundle(input, options = {}) {
     const record = item.get(4);
     const recordType = rawLogicalType(record);
     if (!recordType.hashable) continue;
-    const actual = hashLogicalRecord(recordType.type, encodeCanonical(record), {
-      registry: new Set([recordType.type])
-    });
+    const actual = hashLogicalRecord(recordType.type, encodeCanonical(record));
     if (!equalBytes(identity, actual.bytes)) fail('BUNDLE_RECORD_ID_MISMATCH', { layer: 1 });
   }
 
@@ -1006,25 +1212,23 @@ export function verifyLogicalBundle(input, options = {}) {
   // is constant-space even for the in-memory entry point.
   const knownSchema = deferredStageCollector(2, 'known-schema');
   knownSchema.observe(() => validateBundleItem(header, {
-    registry: options.registry, hardLimits: options.hardLimits, operation, semantic: false
+    hardLimits: options.hardLimits, semantic: false
   }));
   knownSchema.observe(() => validateBundleItem(trailer, {
-    registry: options.registry, hardLimits: options.hardLimits, operation, semantic: false
+    hardLimits: options.hardLimits, semantic: false
   }));
   for (let ordinal = 0; ordinal < objectCount; ordinal++) {
     guard.time();
     const item = values[1 + ordinal];
     knownSchema.observe(() => validateBundleItem(item, {
-      registry: options.registry, hardLimits: options.hardLimits, operation, semantic: false
+      hardLimits: options.hardLimits, semantic: false
     }));
     const raw = rawObjectRef(item.get(3));
     if (raw.kind === 1) continue;
     const payload = item.get(4);
     checkTransient(payload.length);
     const decoded = knownSchema.observe(() => decodeMetadata(payload, {
-      registry: options.registry,
       hardLimits: options.hardLimits,
-      operation,
       semantic: false,
       maxWorkingBytes: maxMemoryBytes - retainedMemory - payload.length
     }));
@@ -1036,16 +1240,16 @@ export function verifyLogicalBundle(input, options = {}) {
     guard.time();
     const item = values[1 + objectCount + ordinal];
     knownSchema.observe(() => validateBundleItem(item, {
-      registry: options.registry, hardLimits: options.hardLimits, operation, semantic: false
+      hardLimits: options.hardLimits, semantic: false
     }));
     knownSchema.observe(() => validateLogicalRecord(item.get(4), {
-      registry: options.registry, hardLimits: options.hardLimits, operation, semantic: false
+      hardLimits: options.hardLimits, semantic: false
     }));
   }
   for (let ordinal = 0; ordinal < rootCount; ordinal++) {
     guard.time();
     knownSchema.observe(() => validateBundleItem(values[1 + objectCount + logicalCount + ordinal], {
-      registry: options.registry, hardLimits: options.hardLimits, operation, semantic: false
+      hardLimits: options.hardLimits, semantic: false
     }));
   }
   knownSchema.throwSelected();
@@ -1058,7 +1262,7 @@ export function verifyLogicalBundle(input, options = {}) {
     guard.time();
     const item = values[1 + ordinal];
     validateBundleItem(item, {
-      registry: options.registry, hardLimits: options.hardLimits, operation, semantic: false
+      hardLimits: options.hardLimits, semantic: false
     });
     if (uint(item.get(2)) !== BigInt(ordinal)) fail('BUNDLE_SEQUENCE_INVALID', { layer: 1 });
     const ref = asRef(item.get(3), names);
@@ -1079,9 +1283,7 @@ export function verifyLogicalBundle(input, options = {}) {
       checkTransient(payload.length);
       const remaining = maxMemoryBytes - retainedMemory - payload.length;
       decoded = decodeMetadata(payload, {
-        registry: options.registry,
         hardLimits: options.hardLimits,
-        operation,
         semantic: false,
         maxWorkingBytes: remaining
       });
@@ -1110,7 +1312,7 @@ export function verifyLogicalBundle(input, options = {}) {
     const identity = Digest.fromMap(item.get(3));
     const record = item.get(4);
     const result = validateLogicalRecord(record, {
-      registry: options.registry, hardLimits: options.hardLimits, operation, semantic: false
+      hardLimits: options.hardLimits, semantic: false
     });
     const sortKey = [Uint8Array.of(result.type >>> 8, result.type & 255), identity.bytes];
     if (previousLogical && compareTuple(previousLogical, sortKey) >= 0) {
@@ -1133,7 +1335,7 @@ export function verifyLogicalBundle(input, options = {}) {
     guard.time();
     const item = values[1 + objectCount + logicalCount + ordinal];
     validateBundleItem(item, {
-      registry: options.registry, hardLimits: options.hardLimits, operation, semantic: false
+      hardLimits: options.hardLimits, semantic: false
     });
     if (uint(item.get(2)) !== BigInt(ordinal)) fail('BUNDLE_SEQUENCE_INVALID', { layer: 1 });
     const rootKind = Number(item.get(3));
@@ -1153,7 +1355,7 @@ export function verifyLogicalBundle(input, options = {}) {
   }
 
   validateBundleItem(trailer, {
-    registry: options.registry, hardLimits: options.hardLimits, operation, semantic: false
+    hardLimits: options.hardLimits, semantic: false
   });
 
   let traversalEdges = 0;
@@ -1226,30 +1428,31 @@ export function verifyLogicalBundle(input, options = {}) {
 
   // Registry lifecycle/policy is the final stage. Re-run already proven
   // schemas one at a time and retain only the catalogue-best failure.
-  const registrySemantics = deferredStageCollector(3, 'registry-semantics');
-  for (const item of values) registrySemantics.observe(() => validateBundleItem(item, {
-    registry: options.registry, hardLimits: options.hardLimits, operation
-  }));
-  for (const object of objects.values()) {
-    if (object.ref.kind === 1) {
-      if (options.registry) registrySemantics.observe(() => {
-        registryAssignmentDecision(options.registry, 'object-kinds', 1, operation);
-        registryAssignmentDecision(options.registry, 'hash-algorithms', 1, operation);
-      });
-    } else {
-      registrySemantics.observe(() => validateKnownSchema(object.value, object.ref.kind, {
-        registry: options.registry, hardLimits: options.hardLimits, operation
-      }));
-    }
-  }
-  for (const record of logicalRecords.values()) registrySemantics.observe(() =>
-    validateLogicalRecord(record.value, {
+  if (options.registry) {
+    const registrySemantics = deferredStageCollector(3, 'registry-semantics');
+    for (const item of values) registrySemantics.observe(() => validateBundleItem(item, {
       registry: options.registry, hardLimits: options.hardLimits, operation
     }));
-  registrySemantics.throwSelected();
-  options.semanticValidator?.({ objects, logicalRecords, roots });
+    for (const object of objects.values()) {
+      if (object.ref.kind === 1) {
+        registrySemantics.observe(() => {
+        registryAssignmentDecision(options.registry, 'object-kinds', 1, operation);
+        registryAssignmentDecision(options.registry, 'hash-algorithms', 1, operation);
+        });
+      } else {
+        registrySemantics.observe(() => validateKnownSchema(object.value, object.ref.kind, {
+          registry: options.registry, hardLimits: options.hardLimits, operation
+        }));
+      }
+    }
+    for (const record of logicalRecords.values()) registrySemantics.observe(() =>
+      validateLogicalRecord(record.value, {
+        registry: options.registry, hardLimits: options.hardLimits, operation
+      }));
+    registrySemantics.throwSelected();
+  }
   return Object.freeze({
-    highestLayer: options.semanticValidator ? 3 : 2,
+    highestLayer: options.registry ? 3 : 2,
     bytes: input.length,
     items: values.length,
     objectCount,

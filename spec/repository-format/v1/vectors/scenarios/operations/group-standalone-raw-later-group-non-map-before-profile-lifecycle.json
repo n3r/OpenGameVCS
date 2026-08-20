@@ -1,0 +1,33 @@
+{
+  "api": "validate-operation-mode",
+  "firstGroupInput": {
+    "externalKeyProfile": "external-key.test/opaque@1",
+    "externalKeyValueHex": "01",
+    "fileIds": [
+      "21212121212121212121212121212121"
+    ],
+    "groupId": "51515151515151515151515151515151",
+    "groupProfile": "group.test/opaque@1",
+    "roleProfile": "group-role.test/member@1"
+  },
+  "laterGroupInput": {
+    "externalKeyProfile": "external-key.test/opaque@1",
+    "externalKeyValueHex": "01",
+    "fileIds": [
+      "22222222222222222222222222222222"
+    ],
+    "groupId": "52525252525252525252525252525252",
+    "groupProfile": "group.test/opaque@1",
+    "roleProfile": "group-role.test/member@1"
+  },
+  "malformedCarrier": {
+    "kind": "non-map-group",
+    "value": null
+  },
+  "mode": "production",
+  "registry": "bundled",
+  "requestedLayer": 3,
+  "schema": "ogvcs.repository-format.v1.operation-mode-input.v1",
+  "semanticProfiles": true,
+  "surface": "asset-groups-raw"
+}

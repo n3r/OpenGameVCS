@@ -811,6 +811,31 @@ fn manifest_rejects_shape_identity_replay_and_resource_failures() {
     assert_eq!(error.code, ErrorCode::LimitCount);
     assert_eq!(error.layer, 2);
 
+    for (parts, declared_parts) in [
+        (Vec::new(), 1),
+        (vec![valid_part, valid_part], 1),
+    ] {
+        let error = encode_content_manifest_stream(
+            io::sink(),
+            declared_parts,
+            || parts.clone(),
+            &chunk_profile(),
+            &mut valid_source,
+            &registry,
+            Operation::ConformanceWrite,
+            ManifestStreamLimits::default(),
+        )
+        .unwrap_err();
+        assert_eq!(
+            (error.code, error.layer, error.stage),
+            (
+                ErrorCode::SchemaFieldInvalid,
+                2,
+                ValidationStage::KnownSchema
+            )
+        );
+    }
+
     let maximum_part = ManifestStreamPart {
         chunk: valid_part.chunk,
         length: 67_108_864,
@@ -887,6 +912,53 @@ fn manifest_rejects_shape_identity_replay_and_resource_failures() {
     )
     .unwrap_err();
     assert_eq!(error.code, ErrorCode::ObjectIdMismatch);
+
+    let expected_one = b"provider-one".to_vec();
+    let expected_two = b"provider-two".to_vec();
+    let first = ManifestStreamPart {
+        chunk: ObjectRef {
+            kind: ObjectKind::Chunk,
+            digest: hash_chunk(&expected_one, 67_108_864).unwrap(),
+        },
+        length: 12,
+    };
+    let second = ManifestStreamPart {
+        chunk: ObjectRef {
+            kind: ObjectKind::Chunk,
+            digest: hash_chunk(&expected_two, 67_108_864).unwrap(),
+        },
+        length: 12,
+    };
+    let mut short = expected_one.clone();
+    short.pop();
+    let mut wrong = expected_two.clone();
+    wrong[0] ^= 1;
+    for ordered in [
+        vec![(first, short.clone()), (second, wrong.clone())],
+        vec![(second, wrong.clone()), (first, short.clone())],
+    ] {
+        let parts = ordered.iter().map(|(part, _)| *part).collect::<Vec<_>>();
+        let mut source = |index: u64,
+                          _part: &ManifestStreamPart,
+                          consume: &mut dyn FnMut(&[u8]) -> Result<()>| {
+            consume(&ordered[index as usize].1)
+        };
+        let error = encode_and_verify_content_manifest_stream(
+            io::sink(),
+            2,
+            || parts.clone(),
+            &chunk_profile(),
+            24,
+            sha256(b"provider-oneprovider-two"),
+            &mut source,
+            &registry,
+            Operation::ConformanceWrite,
+            ManifestStreamLimits::default(),
+        )
+        .unwrap_err();
+        assert_eq!(error.code, ErrorCode::ObjectIdMismatch);
+        assert_eq!(error.layer, 1);
+    }
 
     let error = encode_and_verify_content_manifest_stream(
         io::sink(),
@@ -1010,7 +1082,14 @@ fn manifest_rejects_shape_identity_replay_and_resource_failures() {
         ManifestStreamLimits::default(),
     )
     .unwrap_err();
-    assert_eq!(error.code, ErrorCode::LimitCount);
+    assert_eq!(
+        (error.code, error.layer, error.stage),
+        (
+            ErrorCode::SchemaFieldInvalid,
+            2,
+            ValidationStage::KnownSchema
+        )
+    );
 }
 
 fn scale_file_id(index: u64) -> [u8; 16] {

@@ -2,6 +2,7 @@
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
     "candidateSnapshot": "ogvcs:v1:snapshot:sha256:fc59b1081d4039b0a2cfdbd9c9e1459b582bb6cc3052502f95245e3c90833f54",
+    "caseMode": "case-sensitive",
     "designatedRoot": "ogvcs:v1:snapshot:sha256:cc4d4a4a7be098bc74f5bb97cfe1eb37d870832dd44c56f0ceac12d65f871290",
     "importMappings": [],
     "lifetimeRecords": [
@@ -214,7 +215,7 @@
         "path": "scenarios/outputs/conflict-group-resolved.json",
         "sha256": "1dc09b058ab71b78f6d485e20a0c7f3599400bf718b73f790056b9996e8d7ec7"
       },
-      "summarySha256": "6471f34eb722f156cd55f6b07935d251d4801f9d023679cbaaa95cebd6b73f0f"
+      "summarySha256": "23901bc06fa0017d08ec9df118fd641bf5e0035dd0e185fd1d8ef2e01d89336d"
     },
     "result": "accept"
   },
@@ -227,10 +228,10 @@
       "sha256": "4f4a8d760b938bfb4619a2f7f3dc4022510d66a7e38d787a1f993a51b544db90"
     },
     {
-      "bytes": 10724,
+      "bytes": 10758,
       "mediaType": "application/json",
       "path": "scenarios/definitions/conflict-group-resolved.json",
-      "sha256": "103879c853cba3ed38b42f251b59bf0a6a14072b19da03821cb685c41d75a6c1"
+      "sha256": "9a57d8fcb3f368fb2806591c4d506ed78540ae512199e41349df7a074b8523d1"
     }
   ],
   "operation": "validate-repository",
@@ -242,18 +243,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/conflict-group-resolved.json",
-        "definitionSha256": "103879c853cba3ed38b42f251b59bf0a6a14072b19da03821cb685c41d75a6c1",
+        "definitionSha256": "9a57d8fcb3f368fb2806591c4d506ed78540ae512199e41349df7a074b8523d1",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "9e216f07af4d2a969a53f0dd428e74ea888763196ee4634cecb97a9a2445acef"
     },
     "summary": {
-      "bytes": 15762,
+      "bytes": 15796,
       "indexEntries": 0,
       "items": 18,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "6471f34eb722f156cd55f6b07935d251d4801f9d023679cbaaa95cebd6b73f0f",
+      "summarySha256": "23901bc06fa0017d08ec9df118fd641bf5e0035dd0e185fd1d8ef2e01d89336d",
       "traversalEdges": 0
     }
   },

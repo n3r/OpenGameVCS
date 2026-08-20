@@ -14,10 +14,11 @@
     "README.md",
     "registries",
     "scripts/run-scale.mjs",
-    "src"
+    "src",
+    "unicode"
   ],
   "scripts": {
-    "check": "node --check src/index.js && node --check src/cli.js && node --check src/fixture-adapter.js && node --check src/hard-limits.js && node --check src/scale-util.js && node --check src/tree-stream.js && node --check src/manifest-stream.js && node --check src/bundle-scratch.js && node --check src/bundle-spool.js && node --check bin/ogvcs-object.mjs && node --check scripts/run-scale.mjs && node --check test/codec.test.mjs && node --check test/scale-stream.test.mjs && node scripts/sync-registries.mjs --check",
+    "check": "node --check src/index.js && node --check src/cli.js && node --check src/fixture-adapter.js && node --check src/hard-limits.js && node --check src/scale-util.js && node --check src/tree-stream.js && node --check src/manifest-stream.js && node --check src/bundle-scratch.js && node --check src/bundle-spool.js && node --check bin/ogvcs-object.mjs && node --check scripts/run-scale.mjs && node --check test/codec.test.mjs && node --check test/scale-stream.test.mjs && node scripts/sync-registries.mjs --check && node scripts/sync-unicode.mjs --check",
     "sync:registries": "node scripts/sync-registries.mjs",
     "test": "node --test --test-concurrency=1 test/*.test.mjs",
     "test:scale": "node scripts/run-scale.mjs",

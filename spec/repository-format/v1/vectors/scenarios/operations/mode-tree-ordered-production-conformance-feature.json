@@ -1,0 +1,15 @@
+{
+  "api": "validate-operation-mode",
+  "operation": "production-write",
+  "registry": "bundled",
+  "registryFixture": {
+    "path": "registries/index.json",
+    "scenarioId": "registry-conformance-production"
+  },
+  "requiredFeatures": [
+    1
+  ],
+  "schema": "ogvcs.repository-format.v1.operation-mode-input.v1",
+  "source": "lifecycle/tree-feature-conformance.cbor",
+  "surface": "tree-ordered"
+}

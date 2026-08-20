@@ -309,6 +309,15 @@ index to bounded scratch. Global closure, FileID, and path validation may use a
 disk-backed ordered index. No step requires loading all objects or a
 million-entry tree in memory.
 
+A streaming canonical scan charges the allocated capacity of every active and
+retained map-key capture buffer against one aggregate working-memory ceiling
+before allocating or growing that buffer. Nested map keys therefore compose
+their simultaneous capture capacities; a per-key maximum is not an aggregate
+memory bound. Format-v1 conformance derives capture growth as an initial
+64-byte capacity doubled only as required, and includes a bounded eight-level
+case where every complete key fits independently but the eighth simultaneous
+capture exceeds a 511-byte configured ceiling.
+
 The 512 MiB metadata, 64 MiB chunk, nesting-32, and object-specific limits are
 format maxima. Receivers may impose lower total bytes, items, edges, memory,
 time, and scratch budgets. Repository path profiles may impose lower path and

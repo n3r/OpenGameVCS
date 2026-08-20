@@ -1,0 +1,70 @@
+{
+  "api": "validate-operation-mode",
+  "lifetimeContext": {
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "workingLifetimeAdditions": []
+  },
+  "mode": "production",
+  "objectLookup": "scenario.context.objectLookup",
+  "rawImportRequestOrders": [
+    [
+      [
+        "schema",
+        "ogvcs.repository-format.v1.fileid-operation-input.v1"
+      ],
+      [
+        "operation",
+        "import-file-id"
+      ],
+      [
+        "importerProfile",
+        "importer.test/fixture-adapter@1"
+      ],
+      [
+        "sourceNamespaceDigest",
+        "7171717171717171717171717171717171717171717171717171717171717171"
+      ],
+      [
+        "sourceIdentityDigest",
+        "7272727272727272727272727272727272727272727272727272727272727272"
+      ],
+      [
+        "requestedFileId",
+        "00"
+      ]
+    ],
+    [
+      [
+        "schema",
+        "ogvcs.repository-format.v1.fileid-operation-input.v1"
+      ],
+      [
+        "operation",
+        "import-file-id"
+      ],
+      [
+        "requestedFileId",
+        "00"
+      ],
+      [
+        "sourceNamespaceDigest",
+        "7171717171717171717171717171717171717171717171717171717171717171"
+      ],
+      [
+        "sourceIdentityDigest",
+        "7272727272727272727272727272727272727272727272727272727272727272"
+      ],
+      [
+        "importerProfile",
+        "importer.test/fixture-adapter@1"
+      ]
+    ]
+  ],
+  "registry": "bundled",
+  "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+  "requestedLayer": 3,
+  "schema": "ogvcs.repository-format.v1.operation-mode-input.v1",
+  "semanticProfiles": true,
+  "surface": "import-request-raw"
+}

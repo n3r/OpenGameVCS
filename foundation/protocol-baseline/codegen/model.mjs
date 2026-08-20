@@ -59,7 +59,7 @@ export const PREDECESSORS = Object.freeze({
     format: CONTRACT.repositoryFormat,
     formatVersion: 1,
     manifestPath: "spec/repository-format/v1/vectors/manifest.json",
-    manifestSha256: "07d9c6f26d885e09d38a202d0277e28d536da3c293bf3d58c57f43fddf386be8",
+    manifestSha256: "2d0acb01a01b64c23d883d855d2802d939a8dc99622f2774de07af1c8af8d2b9",
     registrySetSha256: "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
   },
 });

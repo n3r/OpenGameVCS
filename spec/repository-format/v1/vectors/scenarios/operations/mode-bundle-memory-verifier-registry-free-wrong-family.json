@@ -1,0 +1,12 @@
+{
+  "api": "validate-operation-mode",
+  "expectedProfileFamily": "path",
+  "objectRef": "ogvcs:v1:repository-descriptor:sha256:c3d080e1d63ab4ba8e2f81615a647292d799931e363aa2437f61239665ce1093",
+  "profile": "content-policy.test/opaque@1",
+  "registry": "absent",
+  "requestedLayer": 2,
+  "schema": "ogvcs.repository-format.v1.operation-mode-input.v1",
+  "semanticProfiles": false,
+  "source": "lifecycle/bundle-content-policy-test-opaque-1.cborseq",
+  "surface": "bundle-memory-verifier"
+}

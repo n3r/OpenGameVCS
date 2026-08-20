@@ -1,0 +1,99 @@
+{
+  "algorithm": {
+    "id": "ogvcs.repository-validation-scenario-constructor",
+    "version": 1
+  },
+  "arithmetic": "mathematical nonnegative integers with explicit uint64 decode bounds; no host-width overflow is a semantic test oracle",
+  "detail": "manifest writer completes the bounded content-provider pass and selects a same-length corrupt chunk identity at layer 1 over a short sibling chunk at layer 3 in reverse part order",
+  "exactConstructorValues": {
+    "manifestWriter": {
+      "api": "write-content-manifest",
+      "chunkArtifacts": [
+        "writer-inputs/manifest-provider-wrong.bin",
+        "writer-inputs/manifest-provider-short.bin"
+      ],
+      "chunkProfile": "chunking.test/external-boundaries@1",
+      "declaredParts": "2",
+      "logicalLength": "24",
+      "maxItems": 2,
+      "operation": "conformance",
+      "outputDisposition": {
+        "orderedStagingSink": "aborted-discard",
+        "successCommit": false
+      },
+      "parts": [
+        {
+          "chunk": "ogvcs:v1:chunk:sha256:332477a223ae2defb717a8b1c7f4b9ed0b904d3a139c29277da9e89fc2e5da5d",
+          "length": "12"
+        },
+        {
+          "chunk": "ogvcs:v1:chunk:sha256:8cc81fc73a142566ef13224cd6669c89f252c4123db1d70d9912176ed26909e5",
+          "length": "12"
+        }
+      ],
+      "registry": "bundled",
+      "schema": "ogvcs.repository-format.v1.manifest-writer-input.v1",
+      "wholeFileSha256": "8c39ce2ea3781d9febf8bd986d679aa19fc7b107a9ca9af3e3d76cd883573de6"
+    }
+  },
+  "expectedRootState": {
+    "resultFamily": "repository",
+    "rootState": "unchanged-no-trusted-output",
+    "scenarioId": "manifest-writer-content-object-id-before-chunk-length-reverse",
+    "stableOutputIdentity": "ogvcs:v1:content-manifest:sha256:c90f74b546e1db00e1d4146909d87d8f43b6c9cc4828094b576e03e5e3656e04"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "normativeContext": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 13,
+          "mediaType": "application/octet-stream",
+          "path": "scenarios/objects/manifest-writer-content-object-id-before-chunk-length-reverse/chunk-0.bin",
+          "sha256": "37c757348e671599102d25f0c58362f5924a94fd313f4478cec8e3139f8886f5"
+        },
+        "ref": "ogvcs:v1:chunk:sha256:8ae03cdb20ee0500d1cc4e9c5403469c318e1a3ec3a31826751650221c3550e1"
+      },
+      {
+        "artifact": {
+          "bytes": 136,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/manifest-writer-content-object-id-before-chunk-length-reverse/manifest.cbor",
+          "sha256": "f28750ac37b12d427f40291640ee2414ff52266134529c48a87be0661f2bb32e"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:c90f74b546e1db00e1d4146909d87d8f43b6c9cc4828094b576e03e5e3656e04"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
+      "registryVersion": 1
+    },
+    "requestedLayer": 1,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "operation": "write-content-manifest",
+  "parameters": {},
+  "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
+  "scenarioId": "manifest-writer-content-object-id-before-chunk-length-reverse",
+  "seedHex": "8f1725383a10efc2c3be9b97f99d3e0e8a477d6929a3ed44b6ce9b2bc4f218d6",
+  "suppliedResourceCatalogue": {
+    "baseObjectArtifacts": [
+      "scenarios/objects/manifest-writer-content-object-id-before-chunk-length-reverse/chunk-0.bin",
+      "scenarios/objects/manifest-writer-content-object-id-before-chunk-length-reverse/manifest.cbor"
+    ],
+    "logicalRecordArtifacts": [],
+    "mutationRecipe": "none",
+    "virtualLimitRecipe": "none"
+  },
+  "validation": {
+    "mode": "conformance",
+    "requestedLayer": 1
+  }
+}

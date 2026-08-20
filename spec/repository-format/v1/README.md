@@ -4,10 +4,11 @@
 **Format version:** 1
 
 This directory is the language-neutral format-v1 contract. ADR-0008,
-ADR-0009, and ADR-0010 remain proposed, so these artifacts are normative for
-conformance work but are not a ratified production format. Acceptance requires
-the ADR table and each ADR file to agree; copying or publishing this directory
-does not change that status.
+ADR-0009, and ADR-0010 are accepted design authorities. Format v1 nevertheless
+remains an unratified release candidate while OGVCS-002 is in Validation;
+accepting the architecture decisions does not itself authorize production
+writes. The ADR table and each ADR file must agree, and copying or publishing
+this directory does not change the format-release status.
 
 ## Normative artifacts and precedence
 
@@ -31,6 +32,8 @@ The complete routed artifact set is:
   OGVCS-002 conformance-only profile registry entries;
 - [`logical-bundle.md`](logical-bundle.md) — canonical logical-record sequence,
   roots, transcript integrity, closure, and explicit no-export boundary;
+- [`unicode/`](unicode/) — the versioned Unicode 15.0 `Age` source, license,
+  provenance notice, and generated manifest-bound compact repertoire table;
 - [`fixture-adapter.md`](fixture-adapter.md) — public OGVCS-001 profile-v2
   adaptation contract;
 - [`repository-format.cddl`](repository-format.cddl) — data-model wire shapes;
@@ -123,7 +126,8 @@ and the [`ADR index`](../../../adr/README.md).
 This directory is also the data-only npm package
 `@opengamevcs/repository-format-v1@0.1.0`. Its package root contains the
 normative prose, CDDL, JSON schemas, exact registries, generated vectors, and
-their manifest. A clean consumer imports `formatVersion`, `formatRootUrl`,
+their manifest, plus the versioned Unicode 15.0 repertoire source and notices.
+A clean consumer imports `formatVersion`, `formatRootUrl`,
 `registriesUrl`, and `vectorsUrl` from the package root; it does not reach back
 into a source checkout.
 
@@ -140,8 +144,8 @@ snapshot.
 
 The full packed-artifact conformance gate additionally packages both codec
 implementations, runs their applicable scenario and golden corpus against the
-installed format package, binds each archive by SHA-256, and compares the 230
-shared-scope outcomes. Its output directory retains the exact fixture-generator,
+installed format package, binds each archive by SHA-256, and compares every
+applicable shared-scope outcome. Its output directory retains the exact fixture-generator,
 JavaScript implementation, format, and Rust crate archives used by the run,
 alongside their hashes and both reports:
 

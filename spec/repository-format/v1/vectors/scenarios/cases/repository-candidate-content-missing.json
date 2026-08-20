@@ -1,0 +1,152 @@
+{
+  "context": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "candidateSnapshot": "ogvcs:v1:snapshot:sha256:2a92a51dd113ecd87d46011d386800c92772c6eecb0ace9b2873e59d54c4ced7",
+    "caseMode": "case-sensitive",
+    "designatedRoot": "ogvcs:v1:snapshot:sha256:1f12d26a139da2787ec41777f591ad2a7b52708a237691099ced6c23d9bb40ab",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "conformance",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 258,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/repository-candidate-content-missing/candidate-change.cbor",
+          "sha256": "299efa66c9fb061b7792c8c93124eaf910b8adcf48461f9168cd121a55ca7aa0"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:66723c7889568e6fe9b430160b1b987b5d068f7407e376fa1ac5783d01a27855"
+      },
+      {
+        "artifact": {
+          "bytes": 52,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/repository-candidate-content-missing/root-change.cbor",
+          "sha256": "ef6e897742ff4d1220c8cd636f2a889a8f8746b2e97b2b7dad6fec4dc3747a6d"
+        },
+        "ref": "ogvcs:v1:change-set:sha256:82cc41e5e86d1397579a8ebfc7ea6c7d9102552130f4da86ca592fc3c10a424c"
+      },
+      {
+        "artifact": {
+          "bytes": 183,
+          "mediaType": "application/cbor",
+          "path": "objects/02-content-manifest.cbor",
+          "sha256": "b635d76c8dd9f29c2862ae0e22077c70d157f68d4595861c09fb38bdf47c456b"
+        },
+        "ref": "ogvcs:v1:content-manifest:sha256:82fb14ee539371d23ddeb6da89c7a23423ef733874882a8f75e57460f6cb8a12"
+      },
+      {
+        "artifact": {
+          "bytes": 274,
+          "mediaType": "application/cbor",
+          "path": "objects/06-repository-descriptor.cbor",
+          "sha256": "677905a883b1f4ddd87fea27b5afc0293cccd2d2ea29cc4884e758e4a071b6e9"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+      },
+      {
+        "artifact": {
+          "bytes": 321,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/repository-candidate-content-missing/root-snapshot.cbor",
+          "sha256": "3d092ae0f364450bcfa3a2dd8bbd19ec59266ff602f02494163038c9b93ce680"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:1f12d26a139da2787ec41777f591ad2a7b52708a237691099ced6c23d9bb40ab"
+      },
+      {
+        "artifact": {
+          "bytes": 367,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/repository-candidate-content-missing/candidate-snapshot.cbor",
+          "sha256": "a34d41d198814140fb430a2a055b80a43cbf8145706444165880f7ffead37bec"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:2a92a51dd113ecd87d46011d386800c92772c6eecb0ace9b2873e59d54c4ced7"
+      },
+      {
+        "artifact": {
+          "bytes": 52,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/repository-candidate-content-missing/base-tree-root.cbor",
+          "sha256": "f0515d605a2c20abf9f321474bc861964b20faeaebbc41a2d8316ae4ffe2bb2b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a458f2bc72d5816dc3f7ee2cc8580eaaaed9a0208588ee66d18ea78f0c255c81"
+      },
+      {
+        "artifact": {
+          "bytes": 161,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/repository-candidate-content-missing/result-tree-root.cbor",
+          "sha256": "218397b999252ca34fc3195a05c4229cb7654008559ec77be7941a4793a05428"
+        },
+        "ref": "ogvcs:v1:tree:sha256:cbd1dd98c1dc7b03787f870e0e38d78a44ff7253b67dfe5c692276e2d57a5225"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
+      "registryVersion": 1
+    },
+    "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+    "requestedLayer": 2,
+    "roots": [],
+    "verifyContent": true,
+    "workingLifetimeAdditions": [
+      {
+        "fileId": "21212121212121212121212121212121",
+        "firstChangeSet": "ogvcs:v1:change-set:sha256:66723c7889568e6fe9b430160b1b987b5d068f7407e376fa1ac5783d01a27855",
+        "firstOperation": 0,
+        "origin": "native-create"
+      }
+    ]
+  },
+  "expected": {
+    "code": "OBJECT_REFERENCE_MISSING",
+    "layer": 2,
+    "result": "reject",
+    "stage": "closure-and-reference-resolution"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "inputs": [
+    {
+      "bytes": 334,
+      "mediaType": "application/json",
+      "path": "scenarios/operations/repository-candidate-content-missing.json",
+      "sha256": "a82e097f754da565f64aa58f83a6cba61d9e1773faf2276f67dcf3fafa90dc73"
+    },
+    {
+      "bytes": 6599,
+      "mediaType": "application/json",
+      "path": "scenarios/definitions/repository-candidate-content-missing.json",
+      "sha256": "5eb1997c12c1a7e666fbdc4a8be4ca26a56084544135b225adbcb7cb538d3858"
+    }
+  ],
+  "operation": "validate-repository-route",
+  "requirementIds": [
+    "OGVCS-002-AC-08",
+    "OGVCS-002-FR-09",
+    "OGVCS-002-FR-11",
+    "OGVCS-002-NFR-01"
+  ],
+  "resources": {
+    "recipe": {
+      "generator": "ogvcs.repository-validation-scenario-constructor/v1",
+      "parameters": {
+        "definition": "scenarios/definitions/repository-candidate-content-missing.json",
+        "definitionSha256": "5eb1997c12c1a7e666fbdc4a8be4ca26a56084544135b225adbcb7cb538d3858",
+        "runtimeHighWaterMarks": "not-asserted"
+      },
+      "seed": "d52b79bc04b77b4b9ed6567233979e59f15bcf275197db9da77d84e444651664"
+    },
+    "summary": {
+      "bytes": 8601,
+      "indexEntries": 0,
+      "items": 8,
+      "peakMemoryBytes": 0,
+      "scratchBytes": 0,
+      "summarySha256": "a177574215cec79269c957ad0d2559f104b1826cadd1f329ccfedad01a629088",
+      "traversalEdges": 0
+    }
+  },
+  "scenarioId": "repository-candidate-content-missing",
+  "schemaVersion": "ogvcs.repository-format/validation-scenario/v1"
+}

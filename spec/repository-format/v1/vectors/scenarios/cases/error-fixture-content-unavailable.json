@@ -1,6 +1,7 @@
 {
   "context": {
     "asOf": "immediately-before-candidate-snapshot",
+    "caseMode": "case-sensitive",
     "importMappings": [],
     "lifetimeRecords": [],
     "mode": "conformance",
@@ -135,10 +136,10 @@
   ],
   "inputs": [
     {
-      "bytes": 7432,
+      "bytes": 7466,
       "mediaType": "application/json",
       "path": "scenarios/definitions/error-fixture-content-unavailable.json",
-      "sha256": "a0dd2db98e701fc73fa04754ac2904321651945453673a3c7fdf0517191f230d"
+      "sha256": "50e7d7d9ee973fda0aed3d213f37165e503e8eec9a4e30438e4b0dddd8c8684f"
     }
   ],
   "operation": "adapt-fixture",
@@ -151,18 +152,18 @@
       "generator": "ogvcs.repository-validation-scenario-constructor/v1",
       "parameters": {
         "definition": "scenarios/definitions/error-fixture-content-unavailable.json",
-        "definitionSha256": "a0dd2db98e701fc73fa04754ac2904321651945453673a3c7fdf0517191f230d",
+        "definitionSha256": "50e7d7d9ee973fda0aed3d213f37165e503e8eec9a4e30438e4b0dddd8c8684f",
         "runtimeHighWaterMarks": "not-asserted"
       },
       "seed": "35da63e77e97c293857feb63f68e167b09fe724f1c50d1e509dda46c8c5d6c1b"
     },
     "summary": {
-      "bytes": 12655,
+      "bytes": 12689,
       "indexEntries": 0,
       "items": 12,
       "peakMemoryBytes": 0,
       "scratchBytes": 0,
-      "summarySha256": "fee9cc8c5190926ba7e82ad615ef51ce2a818847f9511a1afd588bb3b6b31596",
+      "summarySha256": "3503bfeaebf0d46466c126b67ff88bdd8da3ee02d6752021f4bfea4d4c3bd9f6",
       "traversalEdges": 0
     }
   },

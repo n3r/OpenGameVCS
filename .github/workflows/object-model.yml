@@ -146,6 +146,10 @@ jobs:
         run: npm run test --workspace @opengamevcs/object-model
       - name: Smoke-test bounded JavaScript scale runner and packaged CLI path
         run: npm run test:scale:smoke --workspace @opengamevcs/object-model
+      - name: Check packaged Rust registry authority
+        run: node core/object-model/rust/scripts/sync-registries.mjs --check
+      - name: Check packaged Rust Unicode 15 authority
+        run: node core/object-model/rust/scripts/sync-unicode.mjs --check
       - name: Check Rust formatting
         run: cargo fmt --manifest-path core/object-model/rust/Cargo.toml --check
       - name: Test Rust implementation

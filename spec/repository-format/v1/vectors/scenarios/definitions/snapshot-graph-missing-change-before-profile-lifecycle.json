@@ -1,0 +1,91 @@
+{
+  "algorithm": {
+    "id": "ogvcs.repository-validation-scenario-constructor",
+    "version": 1
+  },
+  "arithmetic": "mathematical nonnegative integers with explicit uint64 decode bounds; no host-width overflow is a semantic test oracle",
+  "detail": "standalone snapshot-graph validation rejects an absent referenced ChangeSet before the snapshot's conformance-only required-feature lifecycle fault",
+  "exactConstructorValues": {
+    "repositoryRoute": {
+      "api": "validate-snapshot-graph",
+      "authorityContext": "scenario.context",
+      "candidateSnapshot": "ogvcs:v1:snapshot:sha256:89ca4f666e08515d4a42a808539e4186d72e794d0af72ca52c25f5174ee9c852",
+      "designatedRoot": "ogvcs:v1:snapshot:sha256:89ca4f666e08515d4a42a808539e4186d72e794d0af72ca52c25f5174ee9c852",
+      "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+      "schema": "ogvcs.repository-format.v1.repository-route-input.v1"
+    }
+  },
+  "expectedRootState": {
+    "resultFamily": "repository",
+    "rootState": "unchanged-no-trusted-output",
+    "scenarioId": "snapshot-graph-missing-change-before-profile-lifecycle",
+    "stableOutputIdentity": "ogvcs:v1:snapshot:sha256:89ca4f666e08515d4a42a808539e4186d72e794d0af72ca52c25f5174ee9c852"
+  },
+  "failurePrecedence": "errors-v1-layer-stage-code-offset-subject",
+  "normativeContext": {
+    "asOf": "immediately-before-candidate-snapshot",
+    "candidateSnapshot": "ogvcs:v1:snapshot:sha256:89ca4f666e08515d4a42a808539e4186d72e794d0af72ca52c25f5174ee9c852",
+    "caseMode": "case-sensitive",
+    "designatedRoot": "ogvcs:v1:snapshot:sha256:89ca4f666e08515d4a42a808539e4186d72e794d0af72ca52c25f5174ee9c852",
+    "importMappings": [],
+    "lifetimeRecords": [],
+    "mode": "production",
+    "objectLookup": [
+      {
+        "artifact": {
+          "bytes": 274,
+          "mediaType": "application/cbor",
+          "path": "objects/06-repository-descriptor.cbor",
+          "sha256": "677905a883b1f4ddd87fea27b5afc0293cccd2d2ea29cc4884e758e4a071b6e9"
+        },
+        "ref": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545"
+      },
+      {
+        "artifact": {
+          "bytes": 364,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/snapshot-graph-missing-change-before-profile-lifecycle/candidate.cbor",
+          "sha256": "c0fa449a9070c24c4f39a4808ec5523076b0b14286a08deaf3c96f61befec637"
+        },
+        "ref": "ogvcs:v1:snapshot:sha256:89ca4f666e08515d4a42a808539e4186d72e794d0af72ca52c25f5174ee9c852"
+      },
+      {
+        "artifact": {
+          "bytes": 52,
+          "mediaType": "application/cbor",
+          "path": "scenarios/objects/snapshot-graph-missing-change-before-profile-lifecycle/empty-tree.cbor",
+          "sha256": "f0515d605a2c20abf9f321474bc861964b20faeaebbc41a2d8316ae4ffe2bb2b"
+        },
+        "ref": "ogvcs:v1:tree:sha256:a458f2bc72d5816dc3f7ee2cc8580eaaaed9a0208588ee66d18ea78f0c255c81"
+      }
+    ],
+    "registrySnapshot": {
+      "formatVersion": 1,
+      "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
+      "registryVersion": 1
+    },
+    "repositoryDescriptor": "ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545",
+    "requestedLayer": 2,
+    "roots": [],
+    "workingLifetimeAdditions": []
+  },
+  "operation": "validate-repository-route",
+  "parameters": {},
+  "registrySetSha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
+  "scenarioId": "snapshot-graph-missing-change-before-profile-lifecycle",
+  "seedHex": "55a176ed85357214d592cfd2f950421fce70e639a728af25fb05ee6975a7e15a",
+  "suppliedResourceCatalogue": {
+    "baseObjectArtifacts": [
+      "objects/06-repository-descriptor.cbor",
+      "scenarios/objects/snapshot-graph-missing-change-before-profile-lifecycle/candidate.cbor",
+      "scenarios/objects/snapshot-graph-missing-change-before-profile-lifecycle/empty-tree.cbor"
+    ],
+    "logicalRecordArtifacts": [],
+    "mutationRecipe": "none",
+    "virtualLimitRecipe": "none"
+  },
+  "validation": {
+    "mode": "production",
+    "requestedLayer": 2
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "case": "duplicate-kind-token",
+  "registryMutation": {
+    "action": "replace-entry-field",
+    "field": "textToken",
+    "file": "object-kinds.json",
+    "selector": {
+      "code": 3
+    },
+    "value": "content-manifest"
+  }
+}
