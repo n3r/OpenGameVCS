@@ -6,7 +6,14 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
-import { createDiskFileIdIndex, hashObject, writeContentManifest, writeOrderedTree, writeSortedTree } from '../src/index.js';
+import {
+  createDiskFileIdIndex,
+  hashObject,
+  loadBundledRegistry,
+  writeContentManifest,
+  writeOrderedTree,
+  writeSortedTree
+} from '../src/index.js';
 
 const EXACT_TREE_COUNT = 1_000_000;
 const EXACT_MANIFEST_COUNT = 1_048_576;
@@ -242,6 +249,7 @@ async function runWorker(options) {
   const manifestPath = join(directory, 'manifest.cbor');
   await mkdir(scratch, { mode: 0o700 });
   try {
+    const registry = await loadBundledRegistry();
     const orderedFile = await open(orderedPath, 'wx', 0o600);
     let ordered;
     try {
@@ -258,7 +266,9 @@ async function runWorker(options) {
         entries: orderedTree(options.treeCount),
         sink: orderedFile,
         maxMemoryBytes: 67_108_864,
-        fileIdIndex
+        fileIdIndex,
+        registry,
+        operation: 'conformance'
       }));
     } finally { await orderedFile.close(); }
 
@@ -274,7 +284,9 @@ async function runWorker(options) {
         maxMemoryBytes: 67_108_864,
         maxRunBytes: 33_554_432,
         maxOpenRuns: 32,
-        maxScratchBytes: 805_306_368
+        maxScratchBytes: 805_306_368,
+        registry,
+        operation: 'conformance'
       }));
     } finally { await sortedFile.close(); }
     assert.equal(ordered.value.objectRef.toString(), sorted.value.objectRef.toString());
@@ -287,7 +299,8 @@ async function runWorker(options) {
     assert.equal(treePayloadSha256Hex, sortedTreePayloadSha256Hex);
     const cli = await invokePublicCli(['tree', 'verify', orderedPath, '--descriptor',
       'ogvcs:v1:repository-descriptor:sha256:dce2c6b4bedb2f231d7aef5ee499e1c7d2afd0b0150c66df36522d1a53042545',
-      '--scratch', scratch, '--max-memory-bytes', '67108864', '--max-scratch-bytes', '268435456']);
+      '--scratch', scratch, '--operation', 'conformance', '--max-memory-bytes', '67108864',
+      '--max-scratch-bytes', '268435456']);
     assert.equal(cli.ok, true);
     assert.equal(cli.result.objectRef, ordered.value.objectRef.toString());
     assert.equal(cli.result.entryCount, options.treeCount);
@@ -311,7 +324,9 @@ async function runWorker(options) {
           partCount: options.manifestCount,
           parts: partFactory(),
           sink: manifestFile,
-          maxMemoryBytes: 67_108_864
+          maxMemoryBytes: 67_108_864,
+          registry,
+          operation: 'conformance'
         }));
       } else {
         manifest = await timed(() => writeContentManifest({
@@ -321,7 +336,9 @@ async function runWorker(options) {
           parts: partFactory,
           chunkProvider: () => chunk,
           sink: manifestFile,
-          maxMemoryBytes: 67_108_864
+          maxMemoryBytes: 67_108_864,
+          registry,
+          operation: 'conformance'
         }));
       }
     } finally { await manifestFile.close(); }
