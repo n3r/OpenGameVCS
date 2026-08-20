@@ -2026,12 +2026,8 @@ fn historical_replay_evicts_long_chain_states_under_a_reduced_memory_ceiling() {
     }
 
     let lifetime = records(&document, "lifetimeRecords");
-    let graph_floor = minimum_snapshot_graph_memory(
-        &entries,
-        candidate,
-        descriptor,
-        designated_root,
-    );
+    let graph_floor =
+        minimum_snapshot_graph_memory(&entries, candidate, descriptor, designated_root);
     // Snapshot traversal legitimately retains O(history) color/parent indexes.
     // Calibrate that exact floor separately, then prove replay succeeds with a
     // fixed 1 MiB workspace and releases every operation-scoped reservation.
