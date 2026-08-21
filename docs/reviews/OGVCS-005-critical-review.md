@@ -3,7 +3,7 @@
 - **Review date:** 2026-08-21
 - **Reviewer:** Independent Codex critical-review pass
 - **Initial verdict:** Not definition-of-ready
-- **Current verdict:** Local bounded acceptance-ready; hosted and dependency gates pending
+- **Current verdict:** Local and hosted acceptance-ready; final R0 dependency gates pending
 
 ## Scope and method
 
@@ -79,7 +79,7 @@ reserved for the final R0 campaign.
 | AC-02 | Pass | Four independently observable cache states produce their required byte/hit state and reset between repetitions. |
 | AC-03 | Pass | The 36-row fault matrix preserves invariants and all seven deliberately broken modes are detected. |
 | AC-04 | Pass | Exact OGVCS-003 authorization and OGVCS-004 path negatives detect enumeration and workspace escape with zero misses. |
-| AC-05 | Pending | Local source and installed package semantics match, but a distinct hosted operator has not yet retained its comparison. |
+| AC-05 | Pass | Hosted Linux/macOS/Windows runners reproduced the exact package/semantic authorities, and a local redownload independently reproduced their comparison. |
 | AC-06 | Pass | Presubmit executes 1,320 samples; nightly executes the full unprivileged matrix; release CI validates a 33,000-sample plan without privileged execution. |
 | AC-07 | Pass | Negotiation, malformed, retry, lifecycle, bounds, trace, and incompatibility-before-mutation driver tests pass. |
 
@@ -100,25 +100,27 @@ The full ordinary repository suite passed. Its fixture scale test remained
 explicitly skipped behind `OGVCS_RUN_SCALE`, and the Windows-only junction test
 was skipped on macOS.
 
+Hosted run
+[32441625231](https://github.com/n3r/OpenGameVCS/actions/runs/32441625231)
+passed the packed proof on Linux, macOS, and Windows at source
+`327d843f6fcc2fc45616ca9e17feb1e79c7ae7ed`. The redownloaded three-report
+comparison is `matched`, with SHA-256
+`dcf7a133dfbc539cce2f92ab0671016d05d6fdd89f15aa9c2f5f0b9b3a8dbeb3`.
+
 ## Residual boundary
 
 No live local P0 or P1 implementation, specification, runner, package, or
 workflow defect remains in the reviewed candidate. The remaining gates are
 evidence/lifecycle dependencies, not hidden passes:
 
-- the commit-pinned workflow must install and run the ten-package proof on
-  Linux, macOS, and Windows and retain an equal comparison;
-- a second operator must reproduce a published result within tolerance for
-  AC-05;
 - OGVCS-002, OGVCS-004, and OGVCS-041 must complete their predecessor gates;
   and
 - the final R0 campaign must run the two maintainer-deferred OGVCS-002 exact
-  scale cases.
+  scale cases and settle durable publication.
 
 ## Recommendation
 
-Keep the contract and runtime at `1.0.0-rc.1`, commit and push the candidate,
-and keep OGVCS-005 in Validation. Retain the hosted run/job/archive/comparison
-record when CI completes. Do not ratify, move the PRD to `prd/done`, or claim
-R0 completion until AC-05, the hosted portability proof, predecessor closure,
-and the final-R0 exact-scale campaign are complete.
+Keep the contract and runtime at `1.0.0-rc.1` and keep OGVCS-005 in Validation.
+The hosted run/job/archive/comparison record is retained. Do not ratify, move
+the PRD to `prd/done`, or claim R0 completion until predecessor closure, the
+final-R0 exact-scale campaign, and durable publication are complete.

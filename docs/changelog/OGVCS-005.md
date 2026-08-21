@@ -125,6 +125,9 @@ On macOS 26.6.1 arm64 with Node.js 24.9.0 and npm 11.6.0:
   `8e14fb0797faae7e9202b2d708029dadcac411365974e8ccb657940cbac80a12`;
 - ten exact packages installed and executed offline with package-set SHA-256
   `4c609f2ecb8eb8c9ad51e6b37e40611f93957b74309439456c34c1718dc01fe9`;
+- hosted run 32441625231 reproduced those exact packages and semantic results
+  on Linux, macOS, and Windows; the redownloaded comparison SHA-256 is
+  `dcf7a133dfbc539cce2f92ab0671016d05d6fdd89f15aa9c2f5f0b9b3a8dbeb3`;
   and
 - the full bounded repository suite passed.
 
@@ -134,9 +137,9 @@ authorities and archive hashes.
 ## Rollout and deferred work
 
 The candidate remains `1.0.0-rc.1` and OGVCS-005 remains in Validation. The
-commit-pinned Linux/macOS/Windows workflow and a distinct operator reproduction
-must still be retained for AC-05 and hosted portability. OGVCS-002, OGVCS-004,
-and OGVCS-041 also remain predecessor validation candidates.
+commit-pinned Linux/macOS/Windows workflow and hosted independent reproduction
+now pass and are retained. OGVCS-002, OGVCS-004, and OGVCS-041 remain
+predecessor validation candidates pending the final scale/publication campaign.
 
 Per maintainer direction, neither the OGVCS-002 one-million-entry tree nor the
 logical-1-TiB manifest campaign ran here. Ordinary OGVCS-005 commands and CI do

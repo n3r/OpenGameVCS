@@ -1,0 +1,96 @@
+{
+  "schemaVersion": "ogvcs.benchmark/hosted-evidence/v1",
+  "workflow": "Benchmark and fault harness",
+  "runId": 32441625231,
+  "url": "https://github.com/n3r/OpenGameVCS/actions/runs/32441625231",
+  "event": "push",
+  "headSha": "327d843f6fcc2fc45616ca9e17feb1e79c7ae7ed",
+  "createdAt": "2026-08-21T02:57:03Z",
+  "completedAt": "2026-08-21T02:58:24Z",
+  "conclusion": "success",
+  "contractManifestSha256": "11c3038d6456e690664e705dcab55f2d8f8c8690b66e542a496a8e8a067ea7c3",
+  "profile": "local-smoke",
+  "exactScaleExecuted": false,
+  "jobs": {
+    "linux": 96653320238,
+    "macos": 96653320032,
+    "windows": 96653320114,
+    "comparison": 96653502472,
+    "releasePlan": 96653320101
+  },
+  "reports": [
+    {
+      "artifactId": 9432643327,
+      "artifactName": "benchmark-fault-Linux",
+      "artifactArchiveSha256": "bf231fff7b227d0f9661c41a97218a938e75e05ff50dfdea9b229ed74862c6de",
+      "artifactExpiresAt": "2026-09-20T02:58:04Z",
+      "evidenceFileSha256": "9d48d355c5317ba5e7ffd308b787925ac71edc260b85f36dda477b4ba480eda3",
+      "evidenceSha256": "00ab3c1ce81e39a512d68d753a8b4a9bab129572755a6c2d7bc23db1d33b07e7",
+      "platform": {
+        "os": "linux",
+        "architecture": "x64",
+        "node": "22.23.2"
+      },
+      "reportSha256": "e8627e32eddd6dae027f135052162e106f30def94805fecd47825f70870b88ac",
+      "reportFileSha256": "3233fccf066c3dc2245194e192a8572c5ad6819140efe3fe7e41175492e6ad5f"
+    },
+    {
+      "artifactId": 9432630156,
+      "artifactName": "benchmark-fault-macOS",
+      "artifactArchiveSha256": "8904410d1aabee077be499d908800f9c1bd756d2e70d30ebd7aafb8fd6060edf",
+      "artifactExpiresAt": "2026-09-20T02:57:25Z",
+      "evidenceFileSha256": "833805e423ed6a9ce5bfda29603e6b7c629214e17b91db7b4127868e0feb6ac8",
+      "evidenceSha256": "7e66728460bc52bab8a653fd92c067569c5f73a322d8c080312671397add16a0",
+      "platform": {
+        "os": "darwin",
+        "architecture": "arm64",
+        "node": "22.23.1"
+      },
+      "reportSha256": "b53dfb69b43baa25f1a44cec28163fa8834f1da2e4efaaa012a84c25acbd0e04",
+      "reportFileSha256": "8cc12db3d99a1bdcb3a32d75344706bd97be1fee291a67907eacb3bd7ba1258a"
+    },
+    {
+      "artifactId": 9432640560,
+      "artifactName": "benchmark-fault-Windows",
+      "artifactArchiveSha256": "263bf66fc2e2970365831a3138cfb5e1d9e9de3e9b3e13df6f3ed3667245d606",
+      "artifactExpiresAt": "2026-09-20T02:57:57Z",
+      "evidenceFileSha256": "de2c1bd5ea57161afcb35729b33c52780d97581ff70ca063077ce28a4d33d74a",
+      "evidenceSha256": "381951f22cf1e734f51ac1f3ced4e0794ac90d663f0e305521506f9dfd6b2cbe",
+      "platform": {
+        "os": "win32",
+        "architecture": "x64",
+        "node": "22.23.2"
+      },
+      "reportSha256": "8a7cb7c26294b1f8c51dea560cd36bb83c4911314df5c9689201a1b043f2e40c",
+      "reportFileSha256": "bdb7a482143dc40d39516565a29638ea95a3006b091d312e2b06d613435effc7"
+    }
+  ],
+  "comparison": {
+    "schemaVersion": "ogvcs.benchmark/cross-platform-comparison/v1",
+    "reports": 3,
+    "platforms": [
+      "darwin/arm64",
+      "linux/x64",
+      "win32/x64"
+    ],
+    "packageSetSha256": "4c609f2ecb8eb8c9ad51e6b37e40611f93957b74309439456c34c1718dc01fe9",
+    "semanticResultsSha256": "8e14fb0797faae7e9202b2d708029dadcac411365974e8ccb657940cbac80a12",
+    "comparisonSha256": "dcf7a133dfbc539cce2f92ab0671016d05d6fdd89f15aa9c2f5f0b9b3a8dbeb3",
+    "matched": true
+  },
+  "releasePlan": {
+    "artifactId": 9432625644,
+    "artifactArchiveSha256": "f070e19f93f6cf78fc5100b229585c895f3ba26325dc8a9bf2952b362c447810",
+    "artifactExpiresAt": "2026-09-20T02:57:12Z",
+    "planFileSha256": "96380d4e2e069b683e5a2b953b3bb753384efb5cdc8435140d072717594c4a5f",
+    "timedSamples": 33000,
+    "faultPoints": 12,
+    "privileged": true,
+    "executed": false
+  },
+  "independentReproduction": {
+    "operator": "GitHub Actions hosted runners",
+    "localRedownloadAndComparison": "passed",
+    "criterion": "OGVCS-005-AC-05"
+  }
+}

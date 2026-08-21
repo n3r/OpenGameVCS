@@ -3,7 +3,7 @@
   "contractVersion": "1.0.0-rc.1",
   "runtimeVersion": "1.0.0-rc.1",
   "date": "2026-08-21",
-  "status": "local-bounded-acceptance-passed-hosted-and-independent-operator-pending",
+  "status": "local-and-hosted-acceptance-passed-final-r0-dependencies-pending",
   "license": {
     "name": "MIT",
     "sha256": "6f0f22f485ae8614870468a48f2c084eaf800fe02c5a2c4d9a91d34bc7f58eb4"
@@ -176,16 +176,23 @@
     ]
   },
   "hosted": {
-    "status": "pending-commit-pinned-three-os-workflow",
+    "status": "passed",
+    "runId": 32441625231,
+    "headSha": "327d843f6fcc2fc45616ca9e17feb1e79c7ae7ed",
+    "evidence": "github-actions-run-32441625231.json",
     "requiredPlatforms": [
       "linux",
       "macos",
       "windows"
     ],
-    "requiredComparison": "identical contract, package-set, and semantic-result digests"
+    "requiredComparison": "identical contract, package-set, and semantic-result digests",
+    "comparisonSha256": "dcf7a133dfbc539cce2f92ab0671016d05d6fdd89f15aa9c2f5f0b9b3a8dbeb3",
+    "packageSetSha256": "4c609f2ecb8eb8c9ad51e6b37e40611f93957b74309439456c34c1718dc01fe9",
+    "semanticResultsSha256": "8e14fb0797faae7e9202b2d708029dadcac411365974e8ccb657940cbac80a12"
   },
   "independentOperator": {
-    "status": "pending-hosted-reproduction",
+    "status": "passed-hosted-reproduction",
+    "operator": "GitHub Actions hosted runners",
     "criterion": "OGVCS-005-AC-05"
   },
   "roadmap": {

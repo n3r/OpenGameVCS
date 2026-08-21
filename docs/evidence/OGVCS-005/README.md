@@ -2,8 +2,8 @@
 
 **Evidence date:** 2026-08-21
 
-**Status:** Local bounded candidate passed; hosted three-OS and independent
-operator evidence pending
+**Status:** Local and hosted three-OS candidate passed; final R0 scale and
+predecessor publication gates remain
 
 ## Evidence boundary
 
@@ -17,9 +17,10 @@ assessment is
 [`docs/reviews/OGVCS-005-critical-review.md`](../../reviews/OGVCS-005-critical-review.md).
 
 The candidate packages remain `1.0.0-rc.1`. OGVCS-005 remains in Validation:
-the commit-pinned Linux/macOS/Windows jobs and second-operator reproduction have
-not yet run for this change, and OGVCS-002/004/041 remain predecessor validation
-candidates.
+the commit-pinned Linux/macOS/Windows jobs and hosted independent reproduction
+passed in [run 32441625231](https://github.com/n3r/OpenGameVCS/actions/runs/32441625231),
+but OGVCS-002/004/041 remain predecessor validation candidates and the final R0
+scale/publication campaign is still active.
 
 The maintainer explicitly deferred OGVCS-002's exact one-million-entry tree and
 logical-1-TiB manifest cases to the final R0 campaign. They were not dispatched
@@ -108,6 +109,34 @@ The package-set SHA-256 is
 The packed evidence SHA-256 is
 `fa5911016272003fed6ba69a111230468e183a76afc221b8629126ff6579ad61`.
 
+## Hosted three-OS reproduction
+
+GitHub Actions run
+[32441625231](https://github.com/n3r/OpenGameVCS/actions/runs/32441625231)
+checked out commit `327d843f6fcc2fc45616ca9e17feb1e79c7ae7ed`, installed
+the exact lockfile, ran Linux contract/runtime/presubmit/report gates, and
+installed and executed the ten-package closure offline on Linux, macOS, and
+Windows. All jobs and the release-plan validation passed.
+
+The retained machine record is
+[`github-actions-run-32441625231.json`](github-actions-run-32441625231.json).
+After downloading all artifacts, the repository comparator independently
+reproduced:
+
+| Field | Value |
+|---|---:|
+| Platforms | `darwin/arm64`, `linux/x64`, `win32/x64` |
+| Contract manifest SHA-256 | `11c3038d6456e690664e705dcab55f2d8f8c8690b66e542a496a8e8a067ea7c3` |
+| Package-set SHA-256 | `4c609f2ecb8eb8c9ad51e6b37e40611f93957b74309439456c34c1718dc01fe9` |
+| Semantic-results SHA-256 | `8e14fb0797faae7e9202b2d708029dadcac411365974e8ccb657940cbac80a12` |
+| Comparison SHA-256 | `dcf7a133dfbc539cce2f92ab0671016d05d6fdd89f15aa9c2f5f0b9b3a8dbeb3` |
+| Result | `matched` |
+
+The hosted runners are independent of the local publisher and the locally
+redownloaded comparison therefore closes AC-05. The release job only validated
+the authenticated 33,000-sample privileged plan; it did not apply host network
+shaping or claim release-performance evidence.
+
 ## Acceptance map
 
 | Criterion | Candidate evidence | Status |
@@ -116,23 +145,21 @@ The packed evidence SHA-256 is
 | OGVCS-005-AC-02 | All four cache states are reset, independently inspected, and assert the declared local/regional byte differences; aggregate cache/matrix memory is bounded. | Pass |
 | OGVCS-005-AC-03 | All 36 injected boundary/action rows preserve invariants and seven intentionally broken modes are detected. | Pass |
 | OGVCS-005-AC-04 | The exact OGVCS-003/004 negative suites detect seeded enumeration and workspace-escape defects with no misses. | Pass |
-| OGVCS-005-AC-05 | Source and offline installed runs reproduce exact semantics locally; a second operator on a commit-pinned host has not yet supplied the required independent comparison. | Pending |
+| OGVCS-005-AC-05 | Independent hosted Linux/macOS/Windows runners reproduced the exact package and semantic authorities; a local redownload reproduced comparison `dcf7a133…`. | Pass |
 | OGVCS-005-AC-06 | Presubmit executes 1,320 bounded unprivileged samples; nightly is scheduled; release CI validates a 33,000-sample privileged plan without running it. | Pass |
 | OGVCS-005-AC-07 | The process driver passes negotiation, malformed, retry, bounds, lifecycle, trace, and fail-before-mutation tests. | Pass |
 
 The complete FR/NFR assessment and remediation history are in the
 [critical review](../../reviews/OGVCS-005-critical-review.md).
 
-## Hosted and roadmap boundary
+## Roadmap boundary
 
-The commit-pinned workflow must still run the packed proof on Ubuntu, macOS,
-and Windows and compare equal contract, package-set, and semantic-result
-digests. That hosted execution supplies portability evidence and the natural
-second-operator boundary for AC-05. Until its run/job/archive/comparison IDs are
-retained here, the local packet does not claim those gates.
+The commit-pinned workflow has now supplied the portability and independent
+reproduction evidence. Its 30-day Actions archives remain validation artifacts,
+not the durable final publication required by OGVCS-002's Done boundary.
 
 OGVCS-002, OGVCS-004, and OGVCS-041 remain in Validation. The candidate is
 therefore correctly kept at `1.0.0-rc.1` and OGVCS-005 remains in
-`prd/todo` with status Validation. After hosted evidence passes, the final R0
-campaign must still execute the two explicitly deferred OGVCS-002 scale cases
+`prd/todo` with status Validation. The final R0 campaign must still execute the
+two explicitly deferred OGVCS-002 scale cases and settle durable publication
 before dependency closure can move the R0 candidates to Done.

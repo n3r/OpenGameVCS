@@ -125,12 +125,12 @@ Start with local smoke profiles, add nightly scale runs, then release-gate matri
   [critical review](../../docs/reviews/OGVCS-005-critical-review.md) found no
   remaining local P0/P1 after aggregate-memory, derived/evidence-claim,
   comparison-authority, reproduction, predecessor-provenance, and workflow-
-  trigger remediation. AC-05 and hosted
-  three-OS evidence remain pending.
+  trigger remediation. Hosted run 32441625231 passes three-OS package/semantic
+  comparison and closes AC-05.
 - Documentation/runbooks: [ADR-0014](../../adr/0014-benchmark-fault-harness-contract-v1.md),
   the [operator runbook](../../docs/benchmark-fault/runbook.md), and the
   [delivery changelog](../../docs/changelog/OGVCS-005.md).
-- Rollout result: local bounded and packed candidates pass. Keep the PRD in
-  Validation and packages at `1.0.0-rc.1` until a second operator and the
-  commit-pinned Linux/macOS/Windows comparison pass, OGVCS-002/004/041 close,
-  and the final-R0 exact-scale campaign completes.
+- Rollout result: local bounded, packed, and commit-pinned Linux/macOS/Windows
+  candidates pass. Keep the PRD in Validation and packages at `1.0.0-rc.1`
+  until OGVCS-002/004/041 close and the final-R0 exact-scale/publication
+  campaign completes.
