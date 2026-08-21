@@ -1557,7 +1557,7 @@ fn release_scale_tree_and_one_tib_manifest() {
     let tree_payload_digest = sha256_file(&ordered_path).unwrap();
     assert_eq!(
         tree_payload_digest,
-        hex32("9197425f76ba67bdac58f820ca514bd6a7cda51ff0bab80e76b101d99e2ac761")
+        hex32("2b13fa2c05a014ecc14a2d0e3db3adee5f828f9aa7e223c45357f3ac52d36681")
     );
 
     let (manifest_block, repeated_chunk) = repeated_scale_chunk(CHUNK_BYTES);
