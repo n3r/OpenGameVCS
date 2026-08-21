@@ -1,0 +1,199 @@
+{
+  "schemaVersion": "ogvcs.benchmark/candidate-evidence/v1",
+  "contractVersion": "1.0.0-rc.1",
+  "runtimeVersion": "1.0.0-rc.1",
+  "date": "2026-08-21",
+  "status": "local-bounded-acceptance-passed-hosted-and-independent-operator-pending",
+  "license": {
+    "name": "MIT",
+    "sha256": "6f0f22f485ae8614870468a48f2c084eaf800fe02c5a2c4d9a91d34bc7f58eb4"
+  },
+  "authority": {
+    "manifestSha256": "11c3038d6456e690664e705dcab55f2d8f8c8690b66e542a496a8e8a067ea7c3",
+    "artifactSetSha256": "ba59c8dc9db4c0678fc630357396d9981934ac065b0dd2c8bbbb5c82dccad6d7",
+    "schemaSetSha256": "f186e1cfe4d8905b0fe36acfa641b3a97eed3f8bcb9d245c7a96055d9cd6f706",
+    "registrySetSha256": "bbe8230b1a115b5c0862537d7dde6e97db61c283b552dad61d2020165b75d532",
+    "vectorSetSha256": "7ab9d07b3f88e94be05f3d48bcd0b8e7bfac79ade49dad3e87f3f1d859a501b7",
+    "thresholdSetSha256": "13a1cf5e4d20dadced0b04bdc3cc8b3d01a5c3b2a42ca04e163b08e147dac7ff",
+    "modelSha256": "bdbd0f9c5d5573d8e9ee318cefc31bd8bc3a3d6fa239f8b0dbf49f9c0c8c2099",
+    "generatorSha256": "05d252d450785f628be40771db38ba25b8d22fe251c0b0014cf5a66dc1f93334",
+    "validatorSha256": "95c6a4353bf57cad1659aa4f2e6d305b3b0231fb6ccd9ca8196cb6030839188e",
+    "counts": {
+      "artifacts": 28,
+      "schemas": 17,
+      "registries": 8,
+      "scenarios": 35,
+      "tasks": 11,
+      "faultPoints": 12,
+      "thresholds": 8
+    }
+  },
+  "predecessors": {
+    "fixtureProfileSetSha256": "6b53f4274d8b2374224728d0cebd499e58ab990c4e6409fa5403bf8f38934b36",
+    "repositoryManifestSha256": "2d0acb01a01b64c23d883d855d2802d939a8dc99622f2774de07af1c8af8d2b9",
+    "authorizationManifestSha256": "3fb4dd4a89eb914f93a589b013bda8afcf4744c0d27171ee5849ca3b7bf62447",
+    "pathManifestSha256": "15251e63487e442f46ea689850f8d4d8db9ef65f1f1eeb961d9594686531b000",
+    "protocolManifestSha256": "1d02d4a858a5b3292511bcaccdb6d9619eaa3e2a8f95f8b89dbee73743de19d4"
+  },
+  "exactScale": {
+    "treeMillionEntries": "not-run",
+    "manifestOneTiB": "not-run",
+    "dispatched": false,
+    "reason": "Maintainer-deferred OGVCS-002 acceptance work reserved for the final R0 campaign"
+  },
+  "local": {
+    "environment": {
+      "operatingSystem": "macOS 26.6.1",
+      "build": "25G76",
+      "architecture": "arm64",
+      "node": "24.9.0",
+      "npm": "11.6.0"
+    },
+    "contractTests": {
+      "passed": 3,
+      "failed": 0
+    },
+    "runtimeTests": {
+      "passed": 19,
+      "failed": 0,
+      "typescript": "pass"
+    },
+    "reportToolTests": {
+      "passed": 3,
+      "failed": 0,
+      "offlinePackageInstall": "pass"
+    },
+    "presubmit": {
+      "profile": "presubmit",
+      "samples": 1320,
+      "passed": true,
+      "semanticResultsSha256": "64df6eec5143ce21ba21d5375399417f859e0d195b902ffe3b21a18133bfa84c"
+    },
+    "sourceReport": {
+      "profile": "local-smoke",
+      "overallStatus": "passed",
+      "corpora": 5,
+      "samples": 110,
+      "summaries": 110,
+      "environments": 10,
+      "faultRows": 36,
+      "brokenCases": 7,
+      "conformancePassed": 35,
+      "conformanceFailed": 0,
+      "faultFailures": 0,
+      "brokenMisses": 0,
+      "securityMisses": 0,
+      "bundleDigest": "0d463047b6aba49854e30c67cd18712a65d9e822d93003345dfadd00001522ac",
+      "conformanceResultsDigest": "4f44ed1ca99e0a5830348766109f112f306a7f1234b6eb26e04c7c025ff53336",
+      "evidenceReportDigest": "c32b9b7b198a42cf337c091b04feeb878b2f9be72eb5a82e8469f29bb7d90547",
+      "sampleSemanticsDigest": "b872c6ca01b1b01d2de24b76c59ccc48bd61e7137bd0f7ae7d33eed117d1d254",
+      "summarySemanticsDigest": "8b83e6d74aad79180c748abb6a57d7387c560a44f061e36593f9f34d68395784",
+      "semanticResultsSha256": "8e14fb0797faae7e9202b2d708029dadcac411365974e8ccb657940cbac80a12",
+      "reportSha256": "74aaa461747e1cf63d576f0ec6f7b535149e6e24a8c56a7b9b9586310b0a4e72",
+      "exactScaleExecuted": false
+    },
+    "fullRepository": {
+      "command": "npm test",
+      "status": "pass",
+      "fixtureGenerator": {
+        "passed": 128,
+        "skipped": 2,
+        "failed": 0,
+        "skippedReasons": [
+          "maintainer-gated reference-scale case",
+          "Windows-only junction case on macOS"
+        ]
+      },
+      "objectModel": {
+        "passed": 180,
+        "mutationCases": 58520,
+        "failed": 0
+      },
+      "exactScaleDispatched": false
+    }
+  },
+  "packed": {
+    "status": "pass",
+    "profile": "local-smoke",
+    "packages": 10,
+    "packageSetSha256": "4c609f2ecb8eb8c9ad51e6b37e40611f93957b74309439456c34c1718dc01fe9",
+    "evidenceSha256": "fa5911016272003fed6ba69a111230468e183a76afc221b8629126ff6579ad61",
+    "semanticResultsSha256": "8e14fb0797faae7e9202b2d708029dadcac411365974e8ccb657940cbac80a12",
+    "reportSha256": "74aaa461747e1cf63d576f0ec6f7b535149e6e24a8c56a7b9b9586310b0a4e72",
+    "reportFileSha256": "512d76f6499cfe419caa7e8836d6adbb1797c7b74be299ddbd7ec349deb5b494",
+    "exactScaleExecuted": false,
+    "packageArchives": [
+      {
+        "name": "@opengamevcs/authorization-contract",
+        "version": "1.0.0",
+        "sha256": "e28a0da4310b2bcdb12acdf6d39c55dea5221bdef451b15a601aaf63939b43c7"
+      },
+      {
+        "name": "@opengamevcs/authorization-contract-v1",
+        "version": "1.0.0",
+        "sha256": "766078f881bba7bd7f4e3657f506ce8270992667c425ec8054cf506e13170770"
+      },
+      {
+        "name": "@opengamevcs/benchmark-fault-contract-v1",
+        "version": "1.0.0-rc.1",
+        "sha256": "f632073283c311690a8e855056227606cdbb13e45c137e6613682fd86e88a622"
+      },
+      {
+        "name": "@opengamevcs/benchmark-fault-harness",
+        "version": "1.0.0-rc.1",
+        "sha256": "c8355a0997941507b94a48afbb7ae353ad65349ed685e59f8062193c05031699"
+      },
+      {
+        "name": "@opengamevcs/fixture-generator",
+        "version": "1.0.0",
+        "sha256": "1a4846a936aa466c73aaf7b722eb295eb66eadb7e98c885f17e75e2762a4e2f7"
+      },
+      {
+        "name": "@opengamevcs/path-contract-v1",
+        "version": "1.0.0",
+        "sha256": "c376cd1d29d42295f4842491b2fdf76322bd0537198d202f288f788d4271662e"
+      },
+      {
+        "name": "@opengamevcs/path-filesystem",
+        "version": "1.0.0",
+        "sha256": "4e726bcfdc5455ff348126ef93b1f3b2341eae92ed2bc40d0945d322a2544b6d"
+      },
+      {
+        "name": "@opengamevcs/protocol-baseline",
+        "version": "1.0.0-rc.1",
+        "sha256": "8b3836391046521a5672a08cdfbfb486fb7a55ac9b07e7f6c1eeb9418ac0a097"
+      },
+      {
+        "name": "@opengamevcs/protocol-contract-v1",
+        "version": "1.0.0-rc.1",
+        "sha256": "e86e12b892f5247ec8dd9c5510a48036418cc598a02797a1c2d10064f0b32f53"
+      },
+      {
+        "name": "@opengamevcs/protocol-types-v1",
+        "version": "1.0.0-rc.1",
+        "sha256": "89e69abe4b062250ce4b16e851742de906ab92597d0f7f74f32dd36d06278e01"
+      }
+    ]
+  },
+  "hosted": {
+    "status": "pending-commit-pinned-three-os-workflow",
+    "requiredPlatforms": [
+      "linux",
+      "macos",
+      "windows"
+    ],
+    "requiredComparison": "identical contract, package-set, and semantic-result digests"
+  },
+  "independentOperator": {
+    "status": "pending-hosted-reproduction",
+    "criterion": "OGVCS-005-AC-05"
+  },
+  "roadmap": {
+    "status": "Validation",
+    "predecessorsPending": [
+      "OGVCS-002",
+      "OGVCS-004",
+      "OGVCS-041"
+    ]
+  }
+}

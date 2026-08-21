@@ -1,0 +1,44 @@
+{
+  "name": "@opengamevcs/benchmark-fault-harness",
+  "version": "1.0.0-rc.1",
+  "description": "Reproducible OpenGameVCS benchmark, conformance, cache, network, and fault harness",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "ogvcs-benchmark": "bin/ogvcs-benchmark.mjs",
+    "ogvcs-benchmark-fake-driver": "bin/ogvcs-benchmark-fake-driver.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "default": "./src/index.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "bin",
+    "src",
+    "types",
+    "examples",
+    "scripts",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "check": "node bin/ogvcs-benchmark.mjs --help && npm run test:types",
+    "test": "npm run test:types && node --test --test-concurrency=1 test/*.test.mjs",
+    "test:ci": "node scripts/run-ci-tests.mjs",
+    "test:types": "tsc -p tsconfig.json --noEmit",
+    "test:package": "npm pack --dry-run --json"
+  },
+  "dependencies": {
+    "@opengamevcs/authorization-contract": "1.0.0",
+    "@opengamevcs/benchmark-fault-contract-v1": "1.0.0-rc.1",
+    "@opengamevcs/fixture-generator": "1.0.0",
+    "@opengamevcs/path-filesystem": "1.0.0",
+    "@opengamevcs/protocol-baseline": "1.0.0-rc.1"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

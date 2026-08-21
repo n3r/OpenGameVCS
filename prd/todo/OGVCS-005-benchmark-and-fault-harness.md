@@ -1,13 +1,13 @@
 # OGVCS-005 — Benchmark, conformance corpus, and fault harness
 
-**Status:** Todo  
+**Status:** Validation
 **Release:** R0 — Engineering Foundation  
 **Priority:** P0  
-**Owner:** Unassigned  
+**Owner:** Codex and OpenGameVCS maintainers
 **Depends on:** OGVCS-001, OGVCS-002, OGVCS-003, OGVCS-004, OGVCS-041  
 **Blocks:** OGVCS-006, OGVCS-007, OGVCS-012, OGVCS-028  
 **Source:** [OpenGameVCS proposal](../../GAME_DEV_VCS_ANALYSIS.md)  
-**Last updated:** 2026-08-14
+**Last updated:** 2026-08-21
 
 ## Outcome
 
@@ -108,8 +108,29 @@ Start with local smoke profiles, add nightly scale runs, then release-gate matri
 
 ## Completion evidence
 
-- Implementation changes:
-- Test and benchmark results:
-- Security/reliability review:
-- Documentation/runbooks:
-- Rollout result:
+- Implementation changes: the MIT-licensed
+  `@opengamevcs/benchmark-fault-contract-v1` contract under
+  `spec/benchmark-fault/v1` and
+  [`@opengamevcs/benchmark-fault-harness`](../../foundation/benchmark-fault-harness)
+  `1.0.0-rc.1` candidates, retained report/package/comparison tools, and the
+  commit-pinned three-OS workflow at
+  `.github/workflows/benchmark-fault-harness.yml`.
+- Test and benchmark results: the bounded
+  [candidate evidence](../../docs/evidence/OGVCS-005/README.md) records 3/3
+  contract tests, 19/19 runtime tests, 35/35 conformance rows, 36 fault rows,
+  seven broken-service detections, 110 smoke samples, 1,320 presubmit samples,
+  a ten-package offline install, and a passing full ordinary repository suite.
+  The two OGVCS-002 exact-scale cases were not run and remain final-R0 work.
+- Security/reliability review: the
+  [critical review](../../docs/reviews/OGVCS-005-critical-review.md) found no
+  remaining local P0/P1 after aggregate-memory, derived/evidence-claim,
+  comparison-authority, reproduction, predecessor-provenance, and workflow-
+  trigger remediation. AC-05 and hosted
+  three-OS evidence remain pending.
+- Documentation/runbooks: [ADR-0014](../../adr/0014-benchmark-fault-harness-contract-v1.md),
+  the [operator runbook](../../docs/benchmark-fault/runbook.md), and the
+  [delivery changelog](../../docs/changelog/OGVCS-005.md).
+- Rollout result: local bounded and packed candidates pass. Keep the PRD in
+  Validation and packages at `1.0.0-rc.1` until a second operator and the
+  commit-pinned Linux/macOS/Windows comparison pass, OGVCS-002/004/041 close,
+  and the final-R0 exact-scale campaign completes.

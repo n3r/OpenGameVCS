@@ -2,7 +2,7 @@
 
 **Roadmap state:** Proposed baseline  
 **Planning horizon:** 42+ months  
-**Last updated:** 2026-08-15
+**Last updated:** 2026-08-21
 **Authoritative status:** file location in [`todo/`](todo/) or [`done/`](done/)  
 **Architecture baseline:** [`architecture.md`](../architecture.md)
 

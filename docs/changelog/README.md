@@ -6,6 +6,7 @@ Each completed or validation-candidate PRD has one durable, human-readable deliv
 
 - [OGVCS-004 — Cross-platform path and workspace filesystem library](OGVCS-004.md)
 - [OGVCS-041 — Public protocol baseline and generated bindings](OGVCS-041.md)
+- [OGVCS-005 — Benchmark, conformance corpus, and fault harness](OGVCS-005.md)
 
 ## Completed deliveries
 

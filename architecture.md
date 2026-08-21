@@ -709,6 +709,27 @@ Capacity accounting distinguishes logical history bytes, unique durable bytes, s
 
 The initial targets and exact benchmark environment live in the roadmap/PRDs; no target may be met by weakening verification, authorization, durable acknowledgement, or state honesty.
 
+### Benchmark and fault evidence
+
+ADR-0014 fixes the R0 benchmark/fault authority. Every report binds the exact
+fixture, object, authorization, path, protocol, task, cache, network, seed,
+threshold, implementation, and environment authorities used to produce it.
+Successful latency samples are distinct from failed or incomplete operations;
+raw bounded inputs remain authenticated so a verifier can reproduce summaries,
+threshold decisions, and final status rather than trusting producer claims.
+
+Fault injection is available only through the test-only OGVCS-041-profiled
+driver after authenticated negotiation and lifecycle start. Ordinary local,
+presubmit, and nightly profiles are unprivileged. Privileged host network
+shaping requires a separately authorized isolated adapter. Test fault hooks are
+forbidden in production mode.
+
+The fixed R0 matrix covers all five synthetic workload profiles, eleven task
+families, four independently inspected cache states, deterministic simulated
+network conditions from loopback through 200 ms RTT, and every registered
+durability boundary. Exact-scale campaigns remain explicit operator actions;
+planning or ordinary conformance never dispatches them.
+
 ## 19. Interoperability and exit architecture
 
 ### Imports
@@ -835,7 +856,7 @@ Dependency direction is inward toward public foundation/core packages. Clients a
 | Canonical object/chunk/manifest encoding, hash preimages, registries, extension rules, logical bundle and FileID vectors | R0 format freeze | OGVCS-002 |
 | Permission/resource vocabulary, redaction model, grant claims, threat assumptions | R0 security-contract freeze | OGVCS-003 |
 | Case-fold algorithm, platform profile, path/entry limits, symlink semantics | R0 path-library freeze | OGVCS-004 |
-| Benchmark/fault driver protocol and invariant result format | R0 exit | OGVCS-005 |
+| Benchmark/fault driver protocol and invariant result format | Closed for R0 by ADR-0014; before R1 release-gate integration | OGVCS-005 |
 | Metadata physical schema, isolation level/CAS strategy, consistency token | Before metadata writes | OGVCS-006 |
 | CDC profiles, fingerprint algorithm/parameters and selection policy | Before content compatibility freeze | OGVCS-007 |
 | Pack, compression and transfer framing | Before storage compatibility freeze | OGVCS-008 |

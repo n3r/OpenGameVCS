@@ -13,12 +13,14 @@
     "foundation/protocol-baseline/js",
     "foundation/protocol-baseline/adapters/js-independent",
     "foundation/protocol-baseline/bindings/typescript",
+    "foundation/benchmark-fault-harness",
     "spec/authorization/v1",
     "spec/path-filesystem/v1",
-    "spec/protocols/v1"
+    "spec/protocols/v1",
+    "spec/benchmark-fault/v1"
   ],
   "scripts": {
-    "test": "npm run test --workspace @opengamevcs/fixture-generator && npm run test --workspace @opengamevcs/object-model && npm run test --workspace @opengamevcs/authorization-contract && npm run test:authz:spec && npm run test:authz:ci-report && npm run test --workspace @opengamevcs/path-filesystem && npm run test:path:spec && npm run test:path:ci-report && npm run test:protocol:spec && npm run test:protocol && npm run test:protocol:adapter && npm run test:protocol:ci-report && npm run test:spec && npm run test:vectors && node --test prd/validate-roadmap.test.mjs && npm run test:object-model:ci-report",
+    "test": "npm run test --workspace @opengamevcs/fixture-generator && npm run test --workspace @opengamevcs/object-model && npm run test --workspace @opengamevcs/authorization-contract && npm run test:authz:spec && npm run test:authz:ci-report && npm run test --workspace @opengamevcs/path-filesystem && npm run test:path:spec && npm run test:path:ci-report && npm run test:protocol:spec && npm run test:protocol && npm run test:protocol:adapter && npm run test:protocol:ci-report && npm run test:spec && npm run test:vectors && node --test prd/validate-roadmap.test.mjs && npm run test:object-model:ci-report && npm run test:benchmark:spec && npm run test:benchmark && npm run test:benchmark:ci-report",
     "test:authz": "npm run test --workspace @opengamevcs/authorization-contract",
     "test:authz:spec": "npm run test --workspace @opengamevcs/authorization-contract-v1",
     "test:authz:ci-report": "node --test tools/authorization-contract-report.test.mjs",
@@ -40,7 +42,12 @@
     "test:vectors": "node tools/verify-reference-vectors.mjs && node --test tools/verify-reference-vectors.test.mjs",
     "test:spec": "node spec/repository-format/v1/validate-spec.mjs && node --test spec/repository-format/v1/validate-spec.test.mjs",
     "test:roadmap": "node prd/validate-roadmap.mjs && node --test prd/validate-roadmap.test.mjs",
-    "test:fixture:scale": "npm run test:scale --workspace @opengamevcs/fixture-generator"
+    "test:fixture:scale": "npm run test:scale --workspace @opengamevcs/fixture-generator",
+    "test:benchmark": "npm run test --workspace @opengamevcs/benchmark-fault-harness",
+    "test:benchmark:spec": "npm run test --workspace @opengamevcs/benchmark-fault-contract-v1",
+    "test:benchmark:report": "node tools/benchmark-fault-conformance-report.mjs --output artifacts/benchmark-fault-source --profile presubmit",
+    "test:benchmark:packed-report": "node tools/run-packed-benchmark-fault-conformance.mjs --output artifacts/benchmark-fault-packed --profile presubmit",
+    "test:benchmark:ci-report": "node --test tools/benchmark-fault-conformance-report.test.mjs"
   },
   "engines": {
     "node": ">=22"

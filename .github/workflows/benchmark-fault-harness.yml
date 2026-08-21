@@ -1,0 +1,194 @@
+name: Benchmark and fault harness
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/benchmark-fault-harness.yml"
+      - "adr/0014-*.md"
+      - "adr/README.md"
+      - "architecture.md"
+      - "docs/benchmark-fault/**"
+      - "docs/changelog/OGVCS-005.md"
+      - "docs/evidence/OGVCS-005/**"
+      - "docs/reviews/OGVCS-005-critical-review.md"
+      - "core/authz-contract/js/**"
+      - "core/paths-filesystem/js/**"
+      - "foundation/benchmark-fault-harness/**"
+      - "foundation/fixture-generator/**"
+      - "foundation/protocol-baseline/**"
+      - "package.json"
+      - "package-lock.json"
+      - "prd/**/OGVCS-005-*.md"
+      - "prd/README.md"
+      - "prd/ROADMAP.md"
+      - "spec/benchmark-fault/v1/**"
+      - "spec/authorization/v1/**"
+      - "spec/path-filesystem/v1/**"
+      - "spec/protocols/v1/**"
+      - "spec/repository-format/v1/vectors/manifest.json"
+      - "tools/benchmark-fault-*.mjs"
+      - "tools/compare-benchmark-fault-reports.mjs"
+      - "tools/normalize-npm-tarball.mjs"
+      - "tools/run-packed-benchmark-fault-conformance.mjs"
+  push:
+    branches:
+      - main
+      - "ogvcs-005/**"
+    paths:
+      - ".github/workflows/benchmark-fault-harness.yml"
+      - "adr/0014-*.md"
+      - "adr/README.md"
+      - "architecture.md"
+      - "docs/benchmark-fault/**"
+      - "docs/changelog/OGVCS-005.md"
+      - "docs/evidence/OGVCS-005/**"
+      - "docs/reviews/OGVCS-005-critical-review.md"
+      - "core/authz-contract/js/**"
+      - "core/paths-filesystem/js/**"
+      - "foundation/benchmark-fault-harness/**"
+      - "foundation/fixture-generator/**"
+      - "foundation/protocol-baseline/**"
+      - "package.json"
+      - "package-lock.json"
+      - "prd/**/OGVCS-005-*.md"
+      - "prd/README.md"
+      - "prd/ROADMAP.md"
+      - "spec/benchmark-fault/v1/**"
+      - "spec/authorization/v1/**"
+      - "spec/path-filesystem/v1/**"
+      - "spec/protocols/v1/**"
+      - "spec/repository-format/v1/vectors/manifest.json"
+      - "tools/benchmark-fault-*.mjs"
+      - "tools/compare-benchmark-fault-reports.mjs"
+      - "tools/normalize-npm-tarball.mjs"
+      - "tools/run-packed-benchmark-fault-conformance.mjs"
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+    inputs:
+      run_nightly:
+        description: Run the complete unprivileged nightly matrix
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: benchmark-fault-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  conformance:
+    name: Packed bounded conformance (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install exact workspace dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Validate generated contract and runtime
+        if: runner.os == 'Linux'
+        run: npm run test:benchmark:spec && npm run test:benchmark
+      - name: Run bounded presubmit matrix
+        if: runner.os == 'Linux'
+        run: npm run test:ci --workspace @opengamevcs/benchmark-fault-harness
+      - name: Pack the complete dependency closure and execute offline
+        run: node tools/run-packed-benchmark-fault-conformance.mjs --output artifacts/benchmark-fault-${{ runner.os }} --profile local-smoke
+      - name: Validate roadmap lifecycle
+        if: runner.os == 'Linux'
+        run: npm run test:roadmap
+      - name: Test retained report tooling
+        if: runner.os == 'Linux'
+        run: node --test tools/benchmark-fault-conformance-report.test.mjs
+      - name: Upload packages, raw bundle, and evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: benchmark-fault-${{ runner.os }}
+          path: artifacts/benchmark-fault-${{ runner.os }}
+          if-no-files-found: error
+          retention-days: 30
+
+  compare:
+    name: Compare Linux, macOS, and Windows semantic results
+    if: ${{ !cancelled() }}
+    needs: conformance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: benchmark-fault-*
+          path: artifacts/downloaded
+      - name: Require identical package and semantic-result authorities
+        run: >-
+          node tools/compare-benchmark-fault-reports.mjs
+          artifacts/downloaded/benchmark-fault-Linux/packed-evidence.json
+          artifacts/downloaded/benchmark-fault-macOS/packed-evidence.json
+          artifacts/downloaded/benchmark-fault-Windows/packed-evidence.json
+
+  nightly:
+    name: Complete unprivileged nightly matrix
+    if: ${{ github.event_name == 'schedule' || inputs.run_nightly == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run all simulated cache/network/task combinations
+        run: node tools/benchmark-fault-conformance-report.mjs --output artifacts/benchmark-fault-nightly --profile nightly
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: benchmark-fault-nightly
+          path: artifacts/benchmark-fault-nightly
+          if-no-files-found: error
+          retention-days: 30
+
+  release-plan:
+    name: Validate complete release-matrix scheduling
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Produce the complete release plan without privileged execution
+        shell: bash
+        run: |
+          mkdir -p artifacts/benchmark-fault-release-plan
+          node foundation/benchmark-fault-harness/bin/ogvcs-benchmark.mjs plan \
+            --output artifacts/benchmark-fault-release-plan/plan.json
+          node --input-type=module -e '
+            import { readFile } from "node:fs/promises";
+            const plan = JSON.parse(await readFile("artifacts/benchmark-fault-release-plan/plan.json"));
+            const release = plan.profiles.find(({ profile }) => profile === "release");
+            if (!release || release.timedSamples !== 33000 || release.privileged !== true || release.faultPoints !== 12) throw new Error("release matrix plan differs");
+          '
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: benchmark-fault-release-plan
+          path: artifacts/benchmark-fault-release-plan
+          if-no-files-found: error
+          retention-days: 30
