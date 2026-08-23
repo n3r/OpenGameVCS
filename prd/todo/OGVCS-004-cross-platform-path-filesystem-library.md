@@ -113,9 +113,10 @@ GitHub Actions run 31939458256 passed 72/72 rows on Linux, macOS, and Windows,
 accepted exact cross-host package bytes and pure decisions, and retained a
 Linux syscall trace with zero outside-workspace references. Per maintainer
 direction, the OGVCS-002 one-million-tree and logical-1-TiB jobs are deferred
-to the final R0 campaign and were not run. Those are predecessor format gates
-rather than OGVCS-004 materializer tests. This PRD remains in Validation only
-until OGVCS-002 becomes Done.
+to the final R0 campaign and do not yet have a complete accepted two-language
+comparison. Those are predecessor format gates rather than OGVCS-004
+materializer tests. This PRD remains in Validation only until OGVCS-002 becomes
+Done.
 
 - Implementation changes: [Detailed candidate changelog](../../docs/changelog/OGVCS-004.md)
 - Test and benchmark results: [Candidate evidence packet](../../docs/evidence/OGVCS-004/README.md)

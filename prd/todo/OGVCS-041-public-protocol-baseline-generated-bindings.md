@@ -121,9 +121,10 @@ offline. Hosted workflow run
 [31967884476](https://github.com/n3r/OpenGameVCS/actions/runs/31967884476)
 compiled all four generated consumers and proved identical packages, generated
 source, and decisions on Linux, macOS, and Windows. Per maintainer direction,
-the OGVCS-002 one-million-entry tree and logical-1-TiB cases were not run and
-remain deferred to the final R0 campaign. This PRD remains in Validation until
-its OGVCS-002 and OGVCS-004 predecessors are Done.
+the OGVCS-002 one-million-entry tree and logical-1-TiB cases do not yet have a
+complete accepted two-language comparison and remain deferred to the final R0
+campaign. This PRD remains in Validation until its OGVCS-002 and OGVCS-004
+predecessors are Done.
 
 - Implementation changes: [Detailed candidate changelog](../../docs/changelog/OGVCS-041.md)
 - Test and benchmark results: [Candidate evidence packet](../../docs/evidence/OGVCS-041/README.md)

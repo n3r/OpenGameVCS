@@ -178,10 +178,9 @@ failure. The final candidate retains a finite fifteen-minute platform allowance
 under the workflow's 45-minute outer deadline. Exact run, job, report, and
 archive identities are recorded in the validation evidence packet.
 
-## Deliberately deferred exact-scale evidence
+## Deliberately deferred exact-scale acceptance
 
-Per maintainer direction, this delivery did **not** run either exact-scale
-workload:
+The bounded candidate did **not** claim either exact-scale workload:
 
 - `tree-million-entries`; or
 - `manifest-one-tib`.
@@ -192,6 +191,21 @@ high-water mark, processed counts/bytes, identities, and cross-language result
 comparison. Until then OGVCS-002 cannot be `Done`: AC-02 remains incomplete and
 the exact 1-TiB portion of AC-09 remains incomplete. The bounded candidate does
 not substitute a smaller run for either claim.
+
+A later final-campaign preflight on GitHub Actions run `32441880044` completed
+the JavaScript million-entry and logical-1-TiB work and reached the Rust
+million-entry tree. Rust independently emitted, reverified, and reproduced the
+same ordered/scratch tree bytes as JavaScript, with payload SHA-256
+`2b13fa2c05a014ecc14a2d0e3db3adee5f828f9aa7e223c45357f3ac52d36681`,
+but a stale Rust-only test constant stopped the run before the Rust 1-TiB pass
+and cross-language scale comparison. Commit `7b4baa0` corrects only that test
+oracle; it changes no codec, vector, registry, or canonical byte.
+
+The corrected run `32447152568` passed all ordinary Linux, macOS, Windows, and
+six-report comparison jobs, then was cancelled at maintainer request while the
+opt-in JavaScript scale step was active. Neither diagnostic run is accepted as
+the final scale proof. The two rows remain deferred until one final, complete,
+retained two-language comparison at the R0 release boundary.
 
 ## Rollout and rollback
 

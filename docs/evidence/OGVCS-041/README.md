@@ -19,9 +19,11 @@ remains in Validation because its OGVCS-002/OGVCS-004 predecessors are not
 Done.
 
 The maintainer directed that OGVCS-002's exact one-million-entry tree and
-logical-1-TiB manifest tests not run now. They remain deferred to the final R0
-campaign. ADR-0013 expressly excludes that separate scale campaign from this
-protocol proof; no reduced case is represented as exact-scale evidence.
+logical-1-TiB manifest acceptance remain deferred to the final R0 campaign.
+Partial diagnostic attempts do not provide the required complete retained
+two-language comparison. ADR-0013 expressly excludes that separate scale
+campaign from this protocol proof; no reduced case is represented as
+exact-scale evidence.
 
 ## Frozen candidate authorities
 

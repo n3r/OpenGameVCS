@@ -2,6 +2,8 @@
 
 **Evidence date:** 2026-08-21
 
+**Boundary update:** 2026-08-23
+
 **Candidate:** repository-format-v1 0.1.0, `@opengamevcs/object-model` 0.1.0, and `ogvcs-object-model` 0.1.0
 
 **Status:** Ordinary validation candidate passed; final `Done` gates remain open
@@ -18,9 +20,9 @@ platform reports have one identical shared projection.
 
 This evidence advances OGVCS-002 to `Validation`; it does not mark the PRD
 `Done` or ratify production writing. By maintainer decision, the exact
-one-million-entry tree and logical-1-TiB manifest remain unexecuted,
-authenticated inventory rows for the final R0 campaign. No reduced-scale result
-is presented as a substitute.
+one-million-entry tree and logical-1-TiB manifest remain unaccepted,
+authenticated inventory rows for the final R0 campaign. No reduced, partial,
+or interrupted scale result is presented as a substitute.
 
 The machine-readable candidate record is
 [`candidate-2026-08-21.json`](candidate-2026-08-21.json). The independent review
@@ -129,6 +131,16 @@ machine-readable candidate record.
 | OGVCS-002-AC-12 | Entropy, zero rejection, injected collision, and exhaustion cases pass in both languages on all three hosted operating systems. | Pass |
 
 ## Deferred Done gates
+
+Two later diagnostic attempts do not change this evidence boundary. Run
+`32441880044` completed the JavaScript exact work and proved that Rust emitted
+the same million-entry tree payload SHA-256
+`2b13fa2c05a014ecc14a2d0e3db3adee5f828f9aa7e223c45357f3ac52d36681`,
+but stopped on a stale Rust test oracle before its 1-TiB work and the required
+comparison. Commit `7b4baa0` corrected that test-only constant. Corrected run
+`32447152568` passed all ordinary three-platform jobs and their six-report
+comparison, then was cancelled at maintainer request during the opt-in scale
+job. Neither run supplies a complete retained two-language scale comparison.
 
 Before OGVCS-002 can move to `prd/done`:
 

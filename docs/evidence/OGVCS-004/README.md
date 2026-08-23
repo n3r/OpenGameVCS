@@ -27,8 +27,9 @@ roadmap does not permit OGVCS-004 to move to `prd/done` while its OGVCS-002
 predecessor remains in development.
 
 The maintainer directed that OGVCS-002's exact one-million-entry tree and
-logical-1-TiB manifest tests not run now. They remain deferred to the final R0
-campaign. OGVCS-004 does not duplicate those format-scale tests: its
+logical-1-TiB manifest acceptance remain deferred to the final R0 campaign.
+Partial diagnostic attempts do not provide the required complete retained
+two-language comparison. OGVCS-004 does not duplicate those format-scale tests: its
 materializer has a documented 100,000-record convenience bound, and FR-04
 explicitly leaves the one-million-entry tree ceiling with OGVCS-002.
 

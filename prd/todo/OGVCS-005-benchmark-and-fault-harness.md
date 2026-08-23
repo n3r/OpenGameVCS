@@ -120,7 +120,8 @@ Start with local smoke profiles, add nightly scale runs, then release-gate matri
   contract tests, 19/19 runtime tests, 35/35 conformance rows, 36 fault rows,
   seven broken-service detections, 110 smoke samples, 1,320 presubmit samples,
   a ten-package offline install, and a passing full ordinary repository suite.
-  The two OGVCS-002 exact-scale cases were not run and remain final-R0 work.
+  The two OGVCS-002 exact-scale cases do not yet have a complete accepted
+  two-language comparison and remain final-R0 work.
 - Security/reliability review: the
   [critical review](../../docs/reviews/OGVCS-005-critical-review.md) found no
   remaining local P0/P1 after aggregate-memory, derived/evidence-claim,

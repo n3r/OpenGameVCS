@@ -1,6 +1,7 @@
 # OGVCS-002 critical review
 
 - **Review date:** 2026-08-21
+- **Boundary update:** 2026-08-23
 - **Reviewer:** Independent Codex review agent (`ogvcs002_final_critical_review`)
 - **Initial verdict:** Not acceptance-ready
 - **Settled ordinary-candidate verdict:** No live P0 or P1 defect found
@@ -69,25 +70,31 @@ identically. The exact-scale job is skipped by design.
 | JavaScript hostile inputs | Proxies, accessors, sparse arrays, hostile iterables, and configuration callbacks could run before inert validation. | Exact data snapshots and branded adapter boundaries reject caller code with typed preflight errors. |
 | Package/offline boundary | Source-only results, mutable action tags, incomplete archive retention, and inconsistent licenses weakened reproducibility. | Actions use pinned SHAs; clean offline consumers exercise exact archives; distribution manifests bind dependencies/licenses; the maintainer-selected MIT text is identical throughout. |
 | Hosted portability | The first fresh Windows run overflowed its native stack on the bounded deep-tree route; later runs exposed five- and ten-minute test timeouts for two offline Cargo builds. | Rust semantic expansion now uses a resource-charged explicit DFS stack. Windows receives a finite fifteen-minute offline-test allowance beneath the 45-minute job ceiling; the replacement three-OS run passes. |
+| Exact-scale oracle | A later diagnostic run reached the Rust million-entry tree and exposed a stale Rust-only expected payload digest even though Rust ordered/scratch output, Rust verification, and the completed JavaScript run all agreed on the emitted bytes. | Commit `7b4baa0` updates only the expected SHA-256 to the independently reproduced `2b13fa2c05a014ecc14a2d0e3db3adee5f828f9aa7e223c45357f3ac52d36681`. The incomplete diagnostic and maintainer-cancelled retry are not credited as scale acceptance. |
 
 ## Acceptance verdict
 
 | AC | Verdict | Basis |
 |---|---|---|
 | AC-01 | Pass | Clean-room JavaScript and Rust golden/object/bundle/reference results and shared scenario outcomes agree in source and packed runs across three OSes. |
-| AC-02 | **Deferred/incomplete** | Ordered and bounded-sort paths pass ordinary tests, but the exact million-entry, below-1-GiB RSS proof was explicitly deferred. |
+| AC-02 | **Deferred/incomplete** | Ordered and bounded-sort paths pass ordinary tests. A partial diagnostic proved matching million-entry tree bytes but did not complete the required retained two-language scale comparison. |
 | AC-03 | Pass | The independent corpus executes all 58,520 systematic mutations and rejects or changes authenticated identity. |
 | AC-04 | Pass | The installed adapter runs all five fixture profiles; native restore/import/proof/root/shelf/conflict cases execute through their public routes. |
 | AC-05 | Pass | Inspection and verification require no private service, database schema, credential, or proprietary module; all first-party artifacts use MIT. |
 | AC-06 | Pass | Root/parent/merge/closure cases and the typed abstract-cycle harness agree with frozen precedence. |
 | AC-07 | Pass | Allocation, transition, restore, import, collision, concurrency, rollback, and same-authority recovery cases execute. |
 | AC-08 | Pass | Malformed, truncation, hard-limit, configured-resource, callback, scratch-replacement, and combined-invalid cases fail deterministically without trusted partial state. |
-| AC-09 | **Partially pass; exact scale deferred** | Empty/repeated/multi/corrupt/ceiling/profile/annotation cases agree; the exact logical-1-TiB stream remains unexecuted by decision. |
+| AC-09 | **Partially pass; exact scale deferred** | Empty/repeated/multi/corrupt/ceiling/profile/annotation cases agree. JavaScript completed one diagnostic 1-TiB stream, but Rust and the required retained cross-language comparison did not complete. |
 | AC-10 | Pass | Bundle order, identity, transcript, accounting, closure, resource, and forbidden-claim boundaries agree. |
 | AC-11 | Pass | Registry schema, immutability, lifecycle, family, unknown-feature, and lossless optional-extension behavior agree. |
 | AC-12 | Pass | OS entropy, zero rejection, injected collisions, and exhaustion pass in both languages on Linux, macOS, and Windows. |
 
 ## Deferred Done gates
+
+Runs `32441880044` and `32447152568` are diagnostic provenance only. The first
+stopped before Rust 1-TiB execution and comparison; the second was cancelled at
+maintainer request during the opt-in scale job after all ordinary jobs passed.
+Neither changes the verdict below.
 
 - Run and retain the exact `tree-million-entries` and `manifest-one-tib`
   reports during the final R0 campaign, including wall time, peak RSS, scratch
