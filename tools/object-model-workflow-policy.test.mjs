@@ -38,5 +38,9 @@ test('exact object-model scale is isolated from ordinary pull-request and branch
   );
   assert.match(scale, /node core\/object-model\/js\/scripts\/run-scale\.mjs/);
   assert.match(scale, /release_scale_tree_and_one_tib_manifest/);
+  assert.match(
+    scale,
+    /OGVCS_SCALE_REPORT_PATH: \$\{\{ github\.workspace \}\}\/artifacts\/rust-scale\.json/
+  );
   assert.match(scale, /tools\/compare-object-model-scale\.mjs/);
 });

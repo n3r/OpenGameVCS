@@ -39,7 +39,7 @@ jobs:
         run: node core/object-model/js/scripts/run-scale.mjs > artifacts/javascript-scale.json
       - name: Run Rust million-entry and logical-1-TiB checks
         env:
-          OGVCS_SCALE_REPORT_PATH: artifacts/rust-scale.json
+          OGVCS_SCALE_REPORT_PATH: ${{ github.workspace }}/artifacts/rust-scale.json
         run: cargo test --manifest-path core/object-model/rust/Cargo.toml --locked --release --test scale release_scale_tree_and_one_tib_manifest -- --ignored --exact --nocapture
       - name: Require byte-identical exact-scale results
         run: node tools/compare-object-model-scale.mjs --javascript artifacts/javascript-scale.json --rust artifacts/rust-scale.json --output artifacts/scale-comparison.json
