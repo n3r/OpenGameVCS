@@ -21,7 +21,10 @@ test('exact object-model scale is isolated from ordinary pull-request and branch
   const triggerEnd = scale.indexOf('\npermissions:');
   assert.notEqual(triggerEnd, -1);
   const triggers = scale.slice(0, triggerEnd);
-  assert.match(triggers, /\n  workflow_dispatch:\n/);
+  assert.match(
+    triggers,
+    /\n  workflow_dispatch:\n    inputs:\n      confirm_exact_scale:\n(?:        .+\n)+?        required: true\n        type: boolean\n        default: false\n/
+  );
   assert.match(triggers, /\n  push:\n    tags:\n      - "ogvcs-002-scale-\*"\n/);
   assert.doesNotMatch(triggers, /pull_request:/);
   assert.doesNotMatch(triggers, /schedule:/);
@@ -29,6 +32,10 @@ test('exact object-model scale is isolated from ordinary pull-request and branch
 
   assert.match(scale, /cancel-in-progress: false/);
   assert.doesNotMatch(scale, /\n    needs:/);
+  assert.match(
+    scale,
+    /\n  exact-scale:\n    if: \$\{\{ github\.event_name == 'push' \|\| inputs\.confirm_exact_scale == true \}\}/
+  );
   assert.match(scale, /node core\/object-model\/js\/scripts\/run-scale\.mjs/);
   assert.match(scale, /release_scale_tree_and_one_tib_manifest/);
   assert.match(scale, /tools\/compare-object-model-scale\.mjs/);

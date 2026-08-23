@@ -2,6 +2,12 @@ name: Object model exact scale (release only)
 
 on:
   workflow_dispatch:
+    inputs:
+      confirm_exact_scale:
+        description: "Run the billed million-entry and logical-1-TiB campaign"
+        required: true
+        type: boolean
+        default: false
   push:
     tags:
       - "ogvcs-002-scale-*"
@@ -15,6 +21,7 @@ concurrency:
 
 jobs:
   exact-scale:
+    if: ${{ github.event_name == 'push' || inputs.confirm_exact_scale == true }}
     name: Exact million-entry and logical-1-TiB evidence (Linux)
     runs-on: ubuntu-latest
     timeout-minutes: 240

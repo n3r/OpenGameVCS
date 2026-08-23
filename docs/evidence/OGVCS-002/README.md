@@ -32,6 +32,8 @@ and the three-platform workflow is
 The deferred workloads are isolated in the manually dispatched or release-tagged
 [`object-model-scale.yml`](../../../.github/workflows/object-model-scale.yml)
 workflow; it has no pull-request, branch-push, or scheduled trigger.
+Manual dispatch requires an explicit `confirm_exact_scale` selection; the
+default does not start the billed runner job.
 The historical 2026-08-16 candidate remains beside this packet for provenance;
 it is not the current authority.
 

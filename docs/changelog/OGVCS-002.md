@@ -213,7 +213,9 @@ Exact scale now lives in the dedicated release-only
 `.github/workflows/object-model-scale.yml` workflow. It has no pull-request,
 branch-push, or scheduled trigger and does not repeat the ordinary three-OS
 matrix. Only an explicit manual dispatch or an `ogvcs-002-scale-*` release tag
-can spend the million-entry/1-TiB build minutes.
+can spend the million-entry/1-TiB build minutes. Manual dispatch additionally
+requires the operator to enable the `confirm_exact_scale` boolean; leaving it
+false creates no runner job.
 
 ## Rollout and rollback
 
