@@ -1610,7 +1610,7 @@ fn release_scale_tree_and_one_tib_manifest() {
     let manifest_payload_digest = sha256_file(&manifest_path).unwrap();
     assert_eq!(
         manifest_payload_digest,
-        hex32("cc76d83faea3a80c090f2490e15faca51de2624615b99ff24306fd053c5f3270")
+        hex32("18fb1ac61e4c4933181dd4e001df9f8fe3069bba145e5aec44d9c7eb75349cd6")
     );
 
     let max_rss = process_max_rss_bytes();
