@@ -29,6 +29,9 @@ The machine-readable candidate record is
 is [`docs/reviews/OGVCS-002-critical-review.md`](../../reviews/OGVCS-002-critical-review.md),
 and the three-platform workflow is
 [`.github/workflows/object-model.yml`](../../../.github/workflows/object-model.yml).
+The deferred workloads are isolated in the manually dispatched or release-tagged
+[`object-model-scale.yml`](../../../.github/workflows/object-model-scale.yml)
+workflow; it has no pull-request, branch-push, or scheduled trigger.
 The historical 2026-08-16 candidate remains beside this packet for provenance;
 it is not the current authority.
 

@@ -38,7 +38,7 @@
     "test:object-model:js": "npm run test --workspace @opengamevcs/object-model",
     "test:object-model:report": "node tools/object-model-conformance-report.mjs --output artifacts/object-model-conformance.json",
     "test:object-model:packed-report": "node tools/run-packed-object-model-conformance.mjs --output artifacts/packed-object-model-conformance",
-    "test:object-model:ci-report": "node --test tools/object-model-conformance-report.test.mjs tools/compare-object-model-scale.test.mjs",
+    "test:object-model:ci-report": "node --test tools/object-model-conformance-report.test.mjs tools/compare-object-model-scale.test.mjs tools/object-model-workflow-policy.test.mjs",
     "test:vectors": "node tools/verify-reference-vectors.mjs && node --test tools/verify-reference-vectors.test.mjs",
     "test:spec": "node spec/repository-format/v1/validate-spec.mjs && node --test spec/repository-format/v1/validate-spec.test.mjs",
     "test:roadmap": "node prd/validate-roadmap.mjs && node --test prd/validate-roadmap.test.mjs",

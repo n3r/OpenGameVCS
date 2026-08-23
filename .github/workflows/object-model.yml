@@ -44,8 +44,6 @@ on:
     branches:
       - main
       - "ogvcs-002/**"
-    tags:
-      - "ogvcs-002-scale-*"
     paths:
       - ".github/workflows/object-model.yml"
       - ".gitattributes"
@@ -85,12 +83,6 @@ on:
       - "tools/compare-object-model-scale.mjs"
       - "tools/compare-object-model-scale.test.mjs"
   workflow_dispatch:
-    inputs:
-      run_scale:
-        description: "Run the real million-entry tree and logical 1-TiB streaming checks on Linux"
-        required: false
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -236,39 +228,4 @@ jobs:
           name: object-model-conformance-comparison
           path: artifacts/object-model-conformance-comparison.json
           if-no-files-found: warn
-          retention-days: 30
-
-  scale:
-    name: Bounded scale evidence (Linux)
-    needs: [conformance, compare-conformance]
-    if: >-
-      (github.event_name == 'workflow_dispatch' && inputs.run_scale) ||
-      startsWith(github.ref, 'refs/tags/ogvcs-002-scale-')
-    runs-on: ubuntu-latest
-    timeout-minutes: 240
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: 22
-          cache: npm
-      - uses: dtolnay/rust-toolchain@7d11e79e1714f6b6da93cac39ad8435666f5c337 # 1.82.0
-      - run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Prepare evidence directory
-        run: mkdir -p artifacts
-      - name: Run JavaScript million-entry and logical-1-TiB checks
-        run: node core/object-model/js/scripts/run-scale.mjs > artifacts/javascript-scale.json
-      - name: Run Rust million-entry and logical-1-TiB checks
-        env:
-          OGVCS_SCALE_REPORT_PATH: artifacts/rust-scale.json
-        run: cargo test --manifest-path core/object-model/rust/Cargo.toml --locked --release --test scale release_scale_tree_and_one_tib_manifest -- --ignored --exact --nocapture
-      - name: Require byte-identical bounded scale results
-        run: node tools/compare-object-model-scale.mjs --javascript artifacts/javascript-scale.json --rust artifacts/rust-scale.json --output artifacts/scale-comparison.json
-      - name: Upload scale evidence
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: object-model-scale-Linux
-          path: artifacts/*.json
-          if-no-files-found: error
           retention-days: 30
