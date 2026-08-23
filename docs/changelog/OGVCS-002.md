@@ -121,6 +121,8 @@ precomputed expected-value shortcut.
   are limited to the PRD-assigned fixture adapter plus JavaScript host-shape or
   raw carriers that Rust's closed public types cannot represent, such as
   Proxies, accessors, arbitrary kind maps, and unchecked unknown-kind writers.
+  The Rust package documentation explicitly identifies its scenario reporter
+  as conformance tooling rather than a second end-user CLI.
 - Format, JavaScript, fixture, Rust crate, and offline-distribution packages all
   carry byte-identical MIT license text and matching package metadata.
 - Packed checks install from retained local archives without network access,

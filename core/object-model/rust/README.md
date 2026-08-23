@@ -7,6 +7,12 @@ object and logical-record schemas, repository transition/graph validation,
 bounded manifest and tree streaming, and logical-bundle supplied-closure
 emission and verification.
 
+This crate intentionally does not ship the end-user `ogvcs-object` CLI or the
+OGVCS-001 fixture adapter. Those integration surfaces belong to the JavaScript
+package; Rust exists here as an independently authored codec and validation
+library. The `object_model_scenario_report` binary described below is bounded
+conformance tooling for comparing the two implementations, not a product CLI.
+
 Dependencies are exactly pinned in `Cargo.lock`. Runtime verification does not
 need the repository checkout or network: `Registry::bundled()` loads the exact
 registry snapshot embedded in the crate.
