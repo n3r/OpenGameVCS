@@ -243,6 +243,17 @@ can spend the million-entry/1-TiB build minutes. Manual dispatch additionally
 requires the operator to enable `confirm_exact_scale`; leaving it false creates
 no runner job.
 
+JavaScript and Rust now execute as independent Linux jobs with no dependency
+between them, so both exact workloads start together. Each job installs only
+its own toolchain and uploads its language report immediately. The JavaScript
+job does not install the root workspaces: its runner uses Node built-ins and
+packs/installs the dependency-free public tarball itself. A small third job waits
+for both artifacts, runs the byte/resource comparison, and publishes the
+combined evidence. Each language job has a two-hour ceiling and the comparison
+has a fifteen-minute ceiling. This changes campaign wall time from approximately
+the sum of both implementations to approximately the slower implementation;
+GitHub still bills the sum of both runners' active minutes.
+
 ## Rollout and rollback
 
 Repository format v1 remains a validation candidate. Readers, schemas,

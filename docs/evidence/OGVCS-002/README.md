@@ -43,6 +43,11 @@ The exact workloads are isolated in the manually dispatched or release-tagged
 workflow; it has no pull-request, branch-push, or scheduled trigger.
 Manual dispatch requires an explicit `confirm_exact_scale` selection; the
 default does not start the billed runner job.
+When authorized, the JavaScript and Rust exact jobs run concurrently and upload
+separate reports. A dependent comparison job downloads both, verifies the
+source/identity/resource contract, and publishes the combined artifact. The
+parallel layout shortens elapsed campaign time but does not reduce the sum of
+billed runner minutes.
 The historical 2026-08-16 candidate remains beside this packet for provenance;
 it is not the current authority.
 

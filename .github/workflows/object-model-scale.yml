@@ -20,30 +20,77 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  exact-scale:
+  javascript-exact-scale:
     if: ${{ github.event_name == 'push' || inputs.confirm_exact_scale == true }}
-    name: Exact million-entry and logical-1-TiB evidence (Linux)
+    name: JavaScript exact million-entry and logical-1-TiB evidence (Linux)
     runs-on: ubuntu-latest
-    timeout-minutes: 240
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
-          cache: npm
-      - uses: dtolnay/rust-toolchain@7d11e79e1714f6b6da93cac39ad8435666f5c337 # 1.82.0
-      - run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Prepare evidence directory
         run: mkdir -p artifacts
       - name: Run JavaScript million-entry and logical-1-TiB checks
         run: node core/object-model/js/scripts/run-scale.mjs > artifacts/javascript-scale.json
+      - name: Upload JavaScript exact-scale evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: object-model-scale-javascript-Linux
+          path: artifacts/javascript-scale.json
+          if-no-files-found: error
+          retention-days: 30
+
+  rust-exact-scale:
+    if: ${{ github.event_name == 'push' || inputs.confirm_exact_scale == true }}
+    name: Rust exact million-entry and logical-1-TiB evidence (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: dtolnay/rust-toolchain@7d11e79e1714f6b6da93cac39ad8435666f5c337 # 1.82.0
+      - name: Prepare evidence directory
+        run: mkdir -p artifacts
       - name: Run Rust million-entry and logical-1-TiB checks
         env:
           OGVCS_SCALE_REPORT_PATH: ${{ github.workspace }}/artifacts/rust-scale.json
         run: cargo test --manifest-path core/object-model/rust/Cargo.toml --locked --release --test scale release_scale_tree_and_one_tib_manifest -- --ignored --exact --nocapture
+      - name: Upload Rust exact-scale evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: object-model-scale-rust-Linux
+          path: artifacts/rust-scale.json
+          if-no-files-found: error
+          retention-days: 30
+
+  compare-exact-scale:
+    name: Compare JavaScript and Rust exact-scale evidence (Linux)
+    needs:
+      - javascript-exact-scale
+      - rust-exact-scale
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Download JavaScript exact-scale evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: object-model-scale-javascript-Linux
+          path: artifacts
+      - name: Download Rust exact-scale evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: object-model-scale-rust-Linux
+          path: artifacts
       - name: Require byte-identical exact-scale results
         run: node tools/compare-object-model-scale.mjs --javascript artifacts/javascript-scale.json --rust artifacts/rust-scale.json --output artifacts/scale-comparison.json
-      - name: Upload exact-scale evidence
+      - name: Upload combined exact-scale evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
