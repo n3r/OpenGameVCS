@@ -83,10 +83,12 @@ must treat `ManifestChunkSource` as content-addressed retrieval and must not
 depend on one invocation per manifest occurrence.
 
 All SHA-256 entry points share the exactly locked RustCrypto `sha2` backend.
-The crate enables its assembly backend so supported x86-64 and AArch64 targets
-use processor SHA instructions, with the dependency's portable implementation
-as the fallback. Domain separation, canonical preimages, digests, ObjectRefs,
-and public `Sha256Writer` behavior are unchanged.
+Supported x86-64 and AArch64 targets use processor SHA instructions, with the
+dependency's portable implementation as the fallback. Non-Windows targets
+enable the assembly backend; Windows uses the crate's runtime SHA-NI intrinsics
+because the pinned assembly package does not support MSVC. Domain separation,
+canonical preimages, digests, ObjectRefs, and public `Sha256Writer` behavior are
+unchanged.
 
 Ratified `path.opengamevcs/*@1` assignments are owned by OGVCS-004. This crate
 recognizes their registry lifecycle but never treats registry recognition as

@@ -216,8 +216,9 @@ byte into the whole-file digest.
 The 2026-08-24 follow-up aligns the Rust hot path without changing canonical
 bytes or validation semantics:
 
-- `Sha256Writer` now uses exactly pinned RustCrypto `sha2` 0.10.9 with its
-  x86-64/AArch64 assembly backend and portable fallback;
+- `Sha256Writer` now uses exactly pinned RustCrypto `sha2` 0.10.9 with
+  hardware SHA instructions and a portable fallback; non-Windows targets use
+  its assembly backend while Windows uses the crate's runtime SHA-NI path;
 - manifest verification admits a successfully authenticated chunk into a
   deterministic cache consuming at most half of the one configured memory
   ceiling;
