@@ -1,9 +1,40 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const ordinaryPath = new URL('../.github/workflows/object-model.yml', import.meta.url);
 const scalePath = new URL('../.github/workflows/object-model-scale.yml', import.meta.url);
+const workflowDirectory = new URL('../.github/workflows/', import.meta.url);
+const NODE_24_ACTION_PINS = new Map([
+  ['checkout', '3d3c42e5aac5ba805825da76410c181273ba90b1'], // v7.0.1
+  ['setup-node', '820762786026740c76f36085b0efc47a31fe5020'], // v7.0.0
+  ['upload-artifact', '043fb46d1a93c77aae656e7c1c64a875d1fc6a0a'], // v7.0.1
+  ['download-artifact', '3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c'] // v8.0.1
+]);
+
+test('official JavaScript actions use immutable Node 24-compatible releases', async () => {
+  const workflowFiles = (await readdir(workflowDirectory))
+    .filter((name) => name.endsWith('.yml') || name.endsWith('.yaml'))
+    .sort();
+  let checkedUses = 0;
+
+  for (const workflowFile of workflowFiles) {
+    const source = await readFile(new URL(workflowFile, workflowDirectory), 'utf8');
+    for (const match of source.matchAll(
+      /uses:\s+actions\/(checkout|setup-node|upload-artifact|download-artifact)@([^\s#]+)/g
+    )) {
+      const [, action, reference] = match;
+      checkedUses += 1;
+      assert.equal(
+        reference,
+        NODE_24_ACTION_PINS.get(action),
+        `${workflowFile}: actions/${action} must use the reviewed Node 24-compatible commit`
+      );
+    }
+  }
+
+  assert.ok(checkedUses > 0, 'expected at least one reviewed official JavaScript action');
+});
 
 test('exact object-model scale is isolated from ordinary pull-request and branch CI', async () => {
   const [ordinary, scale] = await Promise.all([
