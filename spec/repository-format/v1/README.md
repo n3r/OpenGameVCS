@@ -1,14 +1,15 @@
 # OpenGameVCS repository format v1
 
-**Status:** Normative draft for OGVCS-002
+**Status:** Ratified format-v1 contract
 **Format version:** 1
 
-This directory is the language-neutral format-v1 contract. ADR-0008,
-ADR-0009, and ADR-0010 are accepted design authorities. Format v1 nevertheless
-remains an unratified release candidate while OGVCS-002 is in Validation;
-accepting the architecture decisions does not itself authorize production
-writes. The ADR table and each ADR file must agree, and copying or publishing
-this directory does not change the format-release status.
+This directory is the ratified language-neutral format-v1 contract. ADR-0008,
+ADR-0009, and ADR-0010 are accepted design authorities, and OGVCS-002 completed
+its independent ordinary, packed, and exact-scale acceptance gates on
+2026-08-24. The ADR table and each ADR file must agree. Format ratification does
+not promote conformance-only profiles or invent production policy: a production
+write still requires every selected profile to be independently ratified and
+write-eligible.
 
 ## Normative artifacts and precedence
 

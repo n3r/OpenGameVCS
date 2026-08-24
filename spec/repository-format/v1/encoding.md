@@ -1,6 +1,6 @@
 # OpenGameVCS repository format v1: canonical encoding and registries
 
-**Status:** Normative draft for OGVCS-002
+**Status:** Ratified format-v1 contract
 **Format version:** 1
 **Encoding profile:** `ogvcs-deterministic-cbor-v1`
 
@@ -12,10 +12,11 @@ resource limits for OpenGameVCS repository format v1. It does not define the
 kind-specific object model, a production path or chunking algorithm, physical
 transfer framing, or a repository-complete export.
 
-ADR-0008, ADR-0009, and ADR-0010 are accepted design authorities for this
-release candidate. Format v1 remains unratified while OGVCS-002 is in
-Validation; ADR acceptance and publication of this draft do not authorize
-production writes. Within this directory:
+ADR-0008, ADR-0009, and ADR-0010 are accepted design authorities. OGVCS-002
+completed independent ordinary, packed, and exact-scale acceptance on
+2026-08-24, ratifying format v1 as the encoding and object-model contract.
+Ratification does not authorize a conformance-only or otherwise ineligible
+profile for production writes. Within this directory:
 
 1. this document is normative for encoding mechanics, hash preimages, textual
    forms, canonicality, and decoder behavior;

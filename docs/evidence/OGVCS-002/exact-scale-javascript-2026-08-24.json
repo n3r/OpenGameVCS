@@ -1,0 +1,101 @@
+{
+  "schema": "ogvcs.object-model.javascript-scale-report/v1",
+  "sourceRevision": "9d85d6ee959e47f8f65bca19c4ebb35687c39029",
+  "implementation": "@opengamevcs/object-model/javascript",
+  "packagedCli": {
+    "name": "@opengamevcs/object-model",
+    "tarballSha256Hex": "009275ba22ced3fe973ee5b160ce088e25e0c2d6668068fc95e7a4174ec69f9a",
+    "version": "0.1.0"
+  },
+  "runtime": "v22.23.2",
+  "platform": "linux-x64",
+  "exactV1Scale": true,
+  "recurrence": {
+    "tree": {
+      "seedHex": "a73b9b82eb035d7f2d8bbfa98a94b71be16360dacc1b22a5c2d28bf5fa56fc80",
+      "basename": "ASCII 'e' plus six-digit zero-padded i",
+      "fileId": "first16(SHA-256(seed || 0x46 || uint64be(i) || uint32be(attempt))), retry only zero"
+    },
+    "manifest": {
+      "seedHex": "860f753350ec981c19f401b44ed6a36a0ac76353a5389e31dc36048dd2d78f65",
+      "blockHex": "8e5a7fde9a212a4bdab640aaa5541de91d981498ac28bc8d8a901722ca807a24",
+      "chunk": "repeat SHA-256(seed || 0x43 || ASCII 'repeated-chunk-v1') to exact chunkBytes",
+      "sequence": "repeat the same content-addressed chunk reference chunkCount times"
+    }
+  },
+  "tree": {
+    "entries": 1000000,
+    "objectRef": "ogvcs:v1:tree:sha256:05029e56b56a9481e491f6595ccdfcc0500f12a34161238d45406e1148f79469",
+    "payloadSha256Hex": "2b13fa2c05a014ecc14a2d0e3db3adee5f828f9aa7e223c45357f3ac52d36681",
+    "outputBytes": 111000056,
+    "summary": {
+      "format": 1,
+      "kind": 3,
+      "objectRef": "ogvcs:v1:tree:sha256:05029e56b56a9481e491f6595ccdfcc0500f12a34161238d45406e1148f79469",
+      "entryCount": 1000000,
+      "metadataBytes": 111000056,
+      "logicalBytes": "24000000",
+      "entriesByKind": {
+        "directory": 0,
+        "regular": 1000000,
+        "executable": 0,
+        "symlink": 0
+      }
+    },
+    "summarySha256": "8758fb0fc176841cf4dc376a3a3e9f19bf0d23ecd9527e1730da48611241dc98",
+    "orderedWallTimeNanoseconds": "283793055511",
+    "orderedFileIdPeakScratchBytes": 16000000,
+    "orderedFileIdRuns": 8,
+    "sortedWallTimeNanoseconds": "803141861689",
+    "sortedPeakScratchBytes": 327099408,
+    "sortedInitialRuns": 18,
+    "byteForByteParity": true,
+    "fileIdUniqueness": {
+      "orderedDiskIndex": "verified",
+      "sortedSideIndex": "verified",
+      "cliDiskIndex": "verified"
+    },
+    "cliVerification": {
+      "highestLayer": 3,
+      "objectRef": "ogvcs:v1:tree:sha256:05029e56b56a9481e491f6595ccdfcc0500f12a34161238d45406e1148f79469",
+      "peakScratchBytes": 16000000,
+      "processMaxRssBytes": 311992320,
+      "status": "valid"
+    }
+  },
+  "manifest": {
+    "chunks": 1048576,
+    "chunkBytes": 1048576,
+    "chunkObjectRef": "ogvcs:v1:chunk:sha256:8d40b35dab2f8ff4305af64230cecf10c9c7616c2ca75e606ced44114aa9224a",
+    "rawChunkSha256Hex": "223066858638b498e56e28ecc6fb8a0cd5d1c7d1ac99c3c4ce286df776bedc3f",
+    "logicalBytes": "1099511627776",
+    "wholeFileDigestHex": "4bd995a40b5b50850812ae22899070b142b52f355f96aec8230ab39034135d09",
+    "objectRef": "ogvcs:v1:content-manifest:sha256:c9f3ce3ec078422663929b7e10c1bbb87f95c579179c2e421605e989e7f0886a",
+    "payloadSha256Hex": "18fb1ac61e4c4933181dd4e001df9f8fe3069bba145e5aec44d9c7eb75349cd6",
+    "outputBytes": 52428902,
+    "summary": {
+      "format": 1,
+      "kind": 2,
+      "objectRef": "ogvcs:v1:content-manifest:sha256:c9f3ce3ec078422663929b7e10c1bbb87f95c579179c2e421605e989e7f0886a",
+      "partCount": 1048576,
+      "logicalBytes": "1099511627776",
+      "metadataBytes": 52428902
+    },
+    "summarySha256": "fa4f745115530acb906d6651d3ebc67374aa1d7991d25e46039661952eb23ec8",
+    "wallTimeNanoseconds": "945514716448",
+    "verification": {
+      "contentVerified": true,
+      "contentBytesRead": "1099511627776",
+      "providerReads": 1,
+      "cachedChunks": 1,
+      "cachedBytes": 1048576
+    },
+    "structuralOnly": false
+  },
+  "process": {
+    "maxRssBytes": 655187968,
+    "maxRssSource": "node:process.resourceUsage().maxRSS (reported KiB)",
+    "userCpuTimeMicroseconds": 2016309007,
+    "systemCpuTimeMicroseconds": 52242017
+  }
+}
