@@ -72,6 +72,22 @@ scratch ceilings, 64 MiB chunks, and ten minutes); ingestion is checked before
 objects enter the lookup. Larger graph validation must use an explicitly
 bounded caller-owned lookup/service rather than relying on unbounded defaults.
 
+Manifest content verification uses a bounded verified-byte cache keyed by the
+immutable chunk ObjectRef. The cache consumes at most half of
+`ManifestStreamLimits::max_memory_bytes`; a repeated cached reference updates
+the whole-file digest without another source call, while chunks that do not fit
+continue through the constant-space streaming path. Retained bytes and the
+current borrowed source slice are admitted against the same total ceiling, and
+failed identity or length checks never populate the cache. Callers therefore
+must treat `ManifestChunkSource` as content-addressed retrieval and must not
+depend on one invocation per manifest occurrence.
+
+All SHA-256 entry points share the exactly locked RustCrypto `sha2` backend.
+The crate enables its assembly backend so supported x86-64 and AArch64 targets
+use processor SHA instructions, with the dependency's portable implementation
+as the fallback. Domain separation, canonical preimages, digests, ObjectRefs,
+and public `Sha256Writer` behavior are unchanged.
+
 Ratified `path.opengamevcs/*@1` assignments are owned by OGVCS-004. This crate
 recognizes their registry lifecycle but never treats registry recognition as
 proof that platform/collision semantics ran. Supply an implementation of

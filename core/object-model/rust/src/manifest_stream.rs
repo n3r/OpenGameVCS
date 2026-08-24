@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeMap,
     io::Write,
     time::{Duration, Instant},
 };
@@ -25,8 +26,10 @@ pub struct ManifestStreamLimits {
     pub max_output_bytes: u64,
     pub max_logical_bytes: u64,
     pub max_chunk_bytes: u64,
-    /// Largest single source slice accepted by the verifier. The verifier
-    /// never retains source slices or complete chunk payloads.
+    /// Total manifest-verifier working-memory ceiling. It bounds each borrowed
+    /// source slice together with verifier-owned retained bytes. At most half
+    /// is used for a verified-chunk cache; the verifier never retains a
+    /// caller-owned slice itself.
     pub max_memory_bytes: usize,
     pub max_elapsed: Option<Duration>,
 }
@@ -69,7 +72,9 @@ pub struct ManifestStreamSummary {
 
 /// Supplies a chunk as one or more borrowed slices. Implementations may reuse
 /// one fixed buffer for every part; the verifier consumes each slice before
-/// `stream_chunk` continues.
+/// `stream_chunk` continues. A repeated immutable ObjectRef may be served from
+/// the verifier's bounded verified-byte cache, so callers must not rely on one
+/// source invocation per manifest occurrence.
 pub trait ManifestChunkSource {
     fn stream_chunk(
         &mut self,
@@ -188,6 +193,64 @@ struct ContentPass {
 struct PartPass {
     logical_bytes: u64,
     part_transcript: [u8; 32],
+}
+
+const VERIFIED_CACHE_BASE_BYTES: usize = 1_024;
+const VERIFIED_CACHE_ENTRY_BYTES: usize = 192;
+
+struct VerifiedChunkCache {
+    entries: BTreeMap<ObjectRef, Box<[u8]>>,
+    maximum_bytes: usize,
+    resident_bytes: usize,
+}
+
+impl VerifiedChunkCache {
+    fn new(maximum_memory_bytes: usize) -> Self {
+        Self {
+            entries: BTreeMap::new(),
+            maximum_bytes: maximum_memory_bytes / 2,
+            resident_bytes: 0,
+        }
+    }
+
+    fn get(&self, reference: &ObjectRef) -> Option<&[u8]> {
+        self.entries.get(reference).map(AsRef::as_ref)
+    }
+
+    fn candidate(&self, length: u64) -> Result<Option<(Box<[u8]>, usize)>> {
+        let Ok(length) = usize::try_from(length) else {
+            return Ok(None);
+        };
+        let base = if self.entries.is_empty() {
+            VERIFIED_CACHE_BASE_BYTES
+        } else {
+            0
+        };
+        let Some(projected) = self
+            .resident_bytes
+            .checked_add(base)
+            .and_then(|value| value.checked_add(VERIFIED_CACHE_ENTRY_BYTES))
+            .and_then(|value| value.checked_add(length))
+        else {
+            return Ok(None);
+        };
+        if projected > self.maximum_bytes {
+            return Ok(None);
+        }
+        let mut bytes = Vec::new();
+        bytes
+            .try_reserve_exact(length)
+            .map_err(|_| Error::new(ErrorCode::LimitMemory))?;
+        bytes.resize(length, 0);
+        Ok(Some((bytes.into_boxed_slice(), projected)))
+    }
+
+    fn insert(&mut self, reference: ObjectRef, bytes: Box<[u8]>, resident_bytes: usize) {
+        debug_assert!(!self.entries.contains_key(&reference));
+        debug_assert!(resident_bytes <= self.maximum_bytes);
+        self.entries.insert(reference, bytes);
+        self.resident_bytes = resident_bytes;
+    }
 }
 
 /// Preflights the lightweight part iterator, streams every referenced byte
@@ -450,6 +513,7 @@ where
     let mut whole_file = Sha256Writer::new();
     let mut transcript = Sha256Writer::new();
     let mut best_error = None;
+    let mut cache = VerifiedChunkCache::new(budget.limits.max_memory_bytes);
     for part in parts {
         budget.check_time()?;
         let part_index = count;
@@ -470,24 +534,51 @@ where
         logical_bytes = add_logical(logical_bytes, part.length, budget)?;
         transcript.update(&encode_part(&part));
 
+        if let Some(cached) = cache.get(&part.chunk) {
+            if u64::try_from(cached.len()).ok() != Some(part.length) {
+                observe_manifest_preflight_error(
+                    &mut best_error,
+                    Error::new(ErrorCode::ManifestChunkLengthInvalid),
+                );
+                continue;
+            }
+            whole_file.update(cached);
+            continue;
+        }
+
         let mut emitted = 0u64;
         let mut chunk_hash = ObjectHashWriter::new(
             ObjectKind::Chunk,
             MAX_CHUNK_BYTES as usize,
             MAX_METADATA_BYTES as usize,
         );
+        let mut retained = cache.candidate(part.length)?;
+        let concurrent_resident = retained
+            .as_ref()
+            .map_or(cache.resident_bytes, |(_, projected)| *projected);
         let mut consume = |bytes: &[u8]| -> Result<()> {
             budget.check_time()?;
-            if bytes.len() > budget.limits.max_memory_bytes {
+            if concurrent_resident
+                .checked_add(bytes.len())
+                .is_none_or(|total| total > budget.limits.max_memory_bytes)
+            {
                 return Err(Error::new(ErrorCode::LimitMemory));
             }
             let length = u64::try_from(bytes.len())
+                .map_err(|_| Error::new(ErrorCode::ManifestChunkLengthInvalid))?;
+            let start = usize::try_from(emitted)
                 .map_err(|_| Error::new(ErrorCode::ManifestChunkLengthInvalid))?;
             emitted = emitted
                 .checked_add(length)
                 .ok_or_else(|| Error::new(ErrorCode::ManifestChunkLengthInvalid))?;
             if emitted > part.length {
                 return Err(Error::new(ErrorCode::ManifestChunkLengthInvalid));
+            }
+            if let Some((retained, _)) = retained.as_mut() {
+                let end = start
+                    .checked_add(bytes.len())
+                    .ok_or_else(|| Error::new(ErrorCode::ManifestChunkLengthInvalid))?;
+                retained[start..end].copy_from_slice(bytes);
             }
             chunk_hash.update(bytes)?;
             whole_file.update(bytes);
@@ -508,7 +599,11 @@ where
             continue;
         }
         match chunk_hash.finish() {
-            Ok(actual) if actual == part.chunk => {}
+            Ok(actual) if actual == part.chunk => {
+                if let Some((retained, resident_bytes)) = retained {
+                    cache.insert(part.chunk, retained, resident_bytes);
+                }
+            }
             Ok(_) => observe_manifest_preflight_error(
                 &mut best_error,
                 Error::new(ErrorCode::ObjectIdMismatch),

@@ -2,6 +2,8 @@
 
 **Validation candidate:** 2026-08-21
 
+**Exact-scale and performance update:** 2026-08-24
+
 **Release:** R0 — Engineering Foundation
 
 **Packages:** `@opengamevcs/repository-format-v1` 0.1.0,
@@ -180,42 +182,65 @@ failure. The final candidate retains a finite fifteen-minute platform allowance
 under the workflow's 45-minute outer deadline. Exact run, job, report, and
 archive identities are recorded in the validation evidence packet.
 
-## Deliberately deferred exact-scale acceptance
+## Exact-scale campaign and Rust manifest optimization
 
-The bounded candidate did **not** claim either exact-scale workload:
+The maintainer-authorized final campaign completed in GitHub Actions
+[run 32648023755](https://github.com/n3r/OpenGameVCS/actions/runs/32648023755)
+at source revision `4af57563025af257ecb8eb6430908c862a3c9e4b`. Both
+implementations produced byte-identical one-million-entry trees and logical
+1-TiB manifests under the required resource ceilings; the retained comparison
+result is `byte-identical-and-bounded`.
 
-- `tree-million-entries`; or
-- `manifest-one-tib`.
+The exact shared identities are:
 
-They remain two authenticated inventory-only rows for the final R0 campaign.
-That campaign must retain both implementations' wall time, peak RSS, scratch
-high-water mark, processed counts/bytes, identities, and cross-language result
-comparison. Until then OGVCS-002 cannot be `Done`: AC-02 remains incomplete and
-the exact 1-TiB portion of AC-09 remains incomplete. The bounded candidate does
-not substitute a smaller run for either claim.
+- tree payload SHA-256
+  `2b13fa2c05a014ecc14a2d0e3db3adee5f828f9aa7e223c45357f3ac52d36681`;
+- manifest payload SHA-256
+  `18fb1ac61e4c4933181dd4e001df9f8fe3069bba145e5aec44d9c7eb75349cd6`;
+- whole-file SHA-256
+  `4bd995a40b5b50850812ae22899070b142b52f355f96aec8230ab39034135d09`;
+  and
+- chunk ObjectRef
+  `ogvcs:v1:chunk:sha256:8d40b35dab2f8ff4305af64230cecf10c9c7616c2ca75e606ced44114aa9224a`.
 
-A later final-campaign preflight on GitHub Actions run `32441880044` completed
-the JavaScript million-entry and logical-1-TiB work and reached the Rust
-million-entry tree. Rust independently emitted, reverified, and reproduced the
-same ordered/scratch tree bytes as JavaScript, with payload SHA-256
-`2b13fa2c05a014ecc14a2d0e3db3adee5f828f9aa7e223c45357f3ac52d36681`,
-but a stale Rust-only test constant stopped the run before the Rust 1-TiB pass
-and cross-language scale comparison. Commit `7b4baa0` corrects only that test
-oracle; it changes no codec, vector, registry, or canonical byte.
+The campaign exposed a performance asymmetry rather than a format or
+correctness defect. JavaScript completed its exact phase in 38m12s and its
+manifest in about 16m45s. Rust completed all tree work in about 2m34s but spent
+about 3h01m in the manifest. The Rust path used the in-repository scalar
+SHA-256 implementation, reread and rehashed the same 1 MiB chunk for all
+1,048,576 occurrences, and processed it through 64 KiB callbacks. JavaScript
+used Node/OpenSSL acceleration and a bounded verified-byte cache, so it read
+and authenticated that immutable chunk once while still hashing every logical
+byte into the whole-file digest.
 
-The corrected run `32447152568` passed all ordinary Linux, macOS, Windows, and
-six-report comparison jobs, then was cancelled at maintainer request while the
-opt-in JavaScript scale step was active. Neither diagnostic run is accepted as
-the final scale proof. The two rows remain deferred until one final, complete,
-retained two-language comparison at the R0 release boundary.
+The 2026-08-24 follow-up aligns the Rust hot path without changing canonical
+bytes or validation semantics:
 
-Exact scale now lives in the dedicated release-only
+- `Sha256Writer` now uses exactly pinned RustCrypto `sha2` 0.10.9 with its
+  x86-64/AArch64 assembly backend and portable fallback;
+- manifest verification admits a successfully authenticated chunk into a
+  deterministic cache consuming at most half of the one configured memory
+  ceiling;
+- repeated ObjectRefs update the whole-file hash from verified bytes without
+  another provider call, while insufficient-memory and unique-chunk workloads
+  retain the streaming fallback; and
+- cache candidates, retained entries, record estimates, and concurrent source
+  slices are admitted before allocation, and invalid bytes are never cached.
+
+A release-mode 16 GiB diagnostic on macOS arm64 sustained 2,077 MiB/s in 7.89s
+with one provider read. Straight-line extrapolation is roughly 8m25s for the
+manifest-only 1-TiB workload on that host. This reduced probe is performance
+guidance, not replacement acceptance evidence; the next monthly or major
+release exact campaign must bind the optimized source revision before its
+timing can be promoted to retained cross-platform evidence.
+
+Exact scale remains isolated in the release-only
 `.github/workflows/object-model-scale.yml` workflow. It has no pull-request,
 branch-push, or scheduled trigger and does not repeat the ordinary three-OS
 matrix. Only an explicit manual dispatch or an `ogvcs-002-scale-*` release tag
 can spend the million-entry/1-TiB build minutes. Manual dispatch additionally
-requires the operator to enable the `confirm_exact_scale` boolean; leaving it
-false creates no runner job.
+requires the operator to enable `confirm_exact_scale`; leaving it false creates
+no runner job.
 
 ## Rollout and rollback
 

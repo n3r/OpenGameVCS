@@ -792,6 +792,80 @@ fn repeated_manifest_source_is_constant_space_and_replay_stable() {
 }
 
 #[test]
+fn repeated_manifest_source_uses_bounded_verified_chunk_cache() {
+    let payload = vec![0x3c; 1024];
+    let part = ManifestStreamPart {
+        chunk: ObjectRef {
+            kind: ObjectKind::Chunk,
+            digest: hash_chunk(&payload, 67_108_864).unwrap(),
+        },
+        length: payload.len() as u64,
+    };
+    let mut source_calls = 0u64;
+    let mut source =
+        |_index: u64, _part: &ManifestStreamPart, consume: &mut dyn FnMut(&[u8]) -> Result<()>| {
+            source_calls += 1;
+            for slice in payload.chunks(127) {
+                consume(slice)?;
+            }
+            Ok(())
+        };
+    let summary = encode_content_manifest_stream(
+        io::sink(),
+        257,
+        || std::iter::repeat_n(part, 257),
+        &chunk_profile(),
+        &mut source,
+        &Registry::bundled(),
+        Operation::ConformanceWrite,
+        ManifestStreamLimits {
+            max_memory_bytes: 8_192,
+            ..ManifestStreamLimits::default()
+        },
+    )
+    .unwrap();
+
+    assert_eq!(source_calls, 1);
+    assert_eq!(summary.logical_bytes, 257 * 1024);
+}
+
+#[test]
+fn invalid_repeated_chunk_is_never_admitted_to_verified_cache() {
+    let expected = vec![0x4d; 1024];
+    let supplied = vec![0x4e; 1024];
+    let part = ManifestStreamPart {
+        chunk: ObjectRef {
+            kind: ObjectKind::Chunk,
+            digest: hash_chunk(&expected, 67_108_864).unwrap(),
+        },
+        length: expected.len() as u64,
+    };
+    let mut source_calls = 0u64;
+    let mut source =
+        |_index: u64, _part: &ManifestStreamPart, consume: &mut dyn FnMut(&[u8]) -> Result<()>| {
+            source_calls += 1;
+            consume(&supplied)
+        };
+    let error = encode_content_manifest_stream(
+        io::sink(),
+        3,
+        || std::iter::repeat_n(part, 3),
+        &chunk_profile(),
+        &mut source,
+        &Registry::bundled(),
+        Operation::ConformanceWrite,
+        ManifestStreamLimits {
+            max_memory_bytes: 4_096,
+            ..ManifestStreamLimits::default()
+        },
+    )
+    .unwrap_err();
+
+    assert_eq!(error.code, ErrorCode::ObjectIdMismatch);
+    assert_eq!(source_calls, 3);
+}
+
+#[test]
 fn manifest_rejects_shape_identity_replay_and_resource_failures() {
     let payload = [7u8; 16];
     let valid_part = ManifestStreamPart {
@@ -1348,6 +1422,67 @@ fn scale_implementation_constants_match_the_normative_definitions() {
     );
 }
 
+/// Manual release-mode performance probe for the exact campaign's repeated
+/// chunk shape. This hashes 16 GiB rather than 1 TiB, does not write retained
+/// evidence, and stays ignored in ordinary and monthly exact-scale gates.
+#[test]
+#[ignore = "manual 16 GiB repeated-manifest throughput probe"]
+fn release_repeated_manifest_throughput_probe() {
+    const PARTS: u64 = 16_384;
+    const CHUNK_BYTES: usize = 1_048_576;
+    const LOGICAL_BYTES: u64 = PARTS * CHUNK_BYTES as u64;
+    assert!(
+        !std::hint::black_box(cfg!(debug_assertions)),
+        "run this ignored test with --release"
+    );
+
+    let (_, repeated_chunk) = repeated_scale_chunk(CHUNK_BYTES);
+    let repeated_part = ManifestStreamPart {
+        chunk: ObjectRef {
+            kind: ObjectKind::Chunk,
+            digest: hash_chunk(&repeated_chunk, 67_108_864).unwrap(),
+        },
+        length: CHUNK_BYTES as u64,
+    };
+    let mut provider_reads = 0u64;
+    let mut source =
+        |_index: u64, _part: &ManifestStreamPart, consume: &mut dyn FnMut(&[u8]) -> Result<()>| {
+            provider_reads += 1;
+            for slice in repeated_chunk.chunks(64 * 1024) {
+                consume(slice)?;
+            }
+            Ok(())
+        };
+    let started = Instant::now();
+    let summary = encode_content_manifest_stream(
+        io::sink(),
+        PARTS,
+        || std::iter::repeat_n(repeated_part, PARTS as usize),
+        &chunk_profile(),
+        &mut source,
+        &Registry::bundled(),
+        Operation::ConformanceWrite,
+        ManifestStreamLimits {
+            max_memory_bytes: 64 * 1024 * 1024,
+            ..ManifestStreamLimits::default()
+        },
+    )
+    .unwrap();
+    let elapsed = started.elapsed();
+
+    assert_eq!(provider_reads, 1);
+    assert_eq!(summary.logical_bytes, LOGICAL_BYTES);
+    eprintln!(
+        "{}",
+        serde_json::json!({
+            "elapsedNanoseconds": elapsed.as_nanos().to_string(),
+            "logicalBytes": LOGICAL_BYTES.to_string(),
+            "providerReads": provider_reads,
+            "throughputMiBPerSecond": LOGICAL_BYTES as f64 / 1_048_576.0 / elapsed.as_secs_f64()
+        })
+    );
+}
+
 #[test]
 fn scale_report_is_canonical_private_and_exclusive() {
     let directory = TestDirectory::new("scale-report");
@@ -1584,8 +1719,10 @@ fn release_scale_tree_and_one_tib_manifest() {
     };
     let manifest_path = directory.path().join("one-tib-manifest.cbor");
     let manifest_started = Instant::now();
+    let mut manifest_provider_reads = 0u64;
     let mut source =
         |_index: u64, _part: &ManifestStreamPart, consume: &mut dyn FnMut(&[u8]) -> Result<()>| {
+            manifest_provider_reads += 1;
             for slice in repeated_chunk.chunks(64 * 1024) {
                 consume(slice)?;
             }
@@ -1600,12 +1737,13 @@ fn release_scale_tree_and_one_tib_manifest() {
         &Registry::bundled(),
         Operation::ConformanceWrite,
         ManifestStreamLimits {
-            max_memory_bytes: 64 * 1024,
+            max_memory_bytes: 64 * 1024 * 1024,
             ..ManifestStreamLimits::default()
         },
     )
     .unwrap();
     let manifest_wall = manifest_started.elapsed();
+    assert_eq!(manifest_provider_reads, 1);
     assert_eq!(manifest_summary.logical_bytes, ONE_TIB);
     let manifest_payload_digest = sha256_file(&manifest_path).unwrap();
     assert_eq!(
@@ -1656,7 +1794,9 @@ fn release_scale_tree_and_one_tib_manifest() {
             "objectRef": manifest_summary.object_ref.to_string(),
             "outputBytes": manifest_summary.payload_bytes,
             "wallTimeNanoseconds": manifest_wall.as_nanos().to_string(),
-            "contentVerified": true
+            "contentVerified": true,
+            "providerReads": manifest_provider_reads,
+            "verifiedChunkCache": "bounded-half-memory"
         },
         "process": {
             "maxRssBytes": max_rss,
