@@ -1,42 +1,50 @@
-# OGVCS-002 validation evidence
+# OGVCS-002 completion evidence
 
-**Evidence date:** 2026-08-21
+**Evidence date:** 2026-08-24
 
-**Boundary update:** 2026-08-24
+**Completed artifacts:** `@opengamevcs/repository-format-v1` 0.1.0, `@opengamevcs/object-model` 0.1.0, and `ogvcs-object-model` 0.1.0
 
-**Candidate:** repository-format-v1 0.1.0, `@opengamevcs/object-model` 0.1.0, and `ogvcs-object-model` 0.1.0
-
-**Status:** Ordinary and exact-scale validation passed; optimized-source recurrence and final publication remain open
+**Status:** Completed; ratified-package ordinary/packed and exact-implementation evidence passed
 
 ## Evidence boundary
 
-This packet records the frozen MIT-licensed ordinary candidate at source revision
-`3aba34da7c75a1fc9120476873ee90e382aaab80`. The pinned Node 22 and Rust 1.82
-[hosted run 32420451840](https://github.com/n3r/OpenGameVCS/actions/runs/32420451840)
-builds, tests, lints, packages, and reports the source on Linux, macOS, and
-Windows. Linux additionally rebuilds and runs the exact retained fixture,
-JavaScript, format, and Rust archives in a clean offline consumer. The six
-platform reports have one identical shared projection.
+This packet deliberately binds two source boundaries. The
+[exact implementation revision `9d85d6e`](https://github.com/n3r/OpenGameVCS/commit/9d85d6ee959e47f8f65bca19c4ebb35687c39029)
+contains the optimized JavaScript and Rust implementations. The
+[ratified package revision `45d98fe`](https://github.com/n3r/OpenGameVCS/commit/45d98fe5adfff02e10745a0501123b30e56371bb)
+adds only the three verbatim exact reports and format-status prose; no
+implementation, CDDL, schema, registry, vector, preimage, or canonical-byte rule
+changes between those revisions.
 
-This evidence advances OGVCS-002 to `Validation`; it does not mark the PRD
-`Done` or ratify production writing. The later maintainer-authorized exact
-campaign [run 32648023755](https://github.com/n3r/OpenGameVCS/actions/runs/32648023755)
-completed at revision `4af57563025af257ecb8eb6430908c862a3c9e4b` and retained
-the required two-language one-million-entry tree, logical-1-TiB manifest, and
-cross-language comparison. No reduced, partial, or interrupted scale result is
-presented as a substitute for that acceptance run.
+Pinned Node 22 and Rust 1.82
+[ordinary run 32719990180](https://github.com/n3r/OpenGameVCS/actions/runs/32719990180)
+builds, tests, lints, packages, and reports the ratified package revision on
+Linux, macOS, and Windows. Linux additionally rebuilds and runs the retained
+fixture, JavaScript, format, and Rust archives in a clean offline consumer. The
+six platform reports have one identical shared projection. Workflow helper
+actions are immutable Node 24-compatible releases; Node 22 remains the tested
+library/CLI runtime rather than an accidental action-runtime upgrade.
 
-The 2026-08-24 Rust performance follow-up replaces the scalar SHA-256 hot path
-and adds a bounded verified-chunk cache. A release-mode 16 GiB diagnostic on
-macOS arm64 sustained 2,077 MiB/s with one provider read, projecting roughly
-8m25s for the manifest-only 1-TiB shape on that host. This diagnostic is not a
-new exact-scale acceptance claim. The optimized source will be remeasured in
-the next monthly or major-release campaign rather than on each pull request.
+The maintainer-authorized [exact run 32714126083](https://github.com/n3r/OpenGameVCS/actions/runs/32714126083)
+uses the exact implementation revision. JavaScript and Rust independently execute the
+one-million-entry tree and content-verified logical-1-TiB manifest, after which
+the comparator requires one source revision, byte-identical identities and
+outputs, the installed packaged CLI proof, and every RSS/scratch high-water
+below 1 GiB. All three jobs passed. No reduced, extrapolated, partial, or
+interrupted workload is presented as exact evidence.
 
-The machine-readable candidate record is
-[`candidate-2026-08-21.json`](candidate-2026-08-21.json). The independent review
-is [`docs/reviews/OGVCS-002-critical-review.md`](../../reviews/OGVCS-002-critical-review.md),
-and the three-platform workflow is
+The machine-readable completion record is
+[`completion-2026-08-24.json`](completion-2026-08-24.json). The exact
+[JavaScript](exact-scale-javascript-2026-08-24.json),
+[Rust](exact-scale-rust-2026-08-24.json), and
+[comparison](exact-scale-comparison-2026-08-24.json) reports are checked in
+byte-for-byte, so the proof survives expiry of the corresponding Actions
+archives. Earlier candidate records remain unchanged beside this packet as
+historical provenance; they are not the completion authority.
+
+The independent review is
+[`docs/reviews/OGVCS-002-critical-review.md`](../../reviews/OGVCS-002-critical-review.md),
+and the ordinary three-platform workflow is
 [`.github/workflows/object-model.yml`](../../../.github/workflows/object-model.yml).
 The exact workloads are isolated in the manually dispatched or release-tagged
 [`object-model-scale.yml`](../../../.github/workflows/object-model-scale.yml)
@@ -47,9 +55,8 @@ When authorized, the JavaScript and Rust exact jobs run concurrently and upload
 separate reports. A dependent comparison job downloads both, verifies the
 source/identity/resource contract, and publishes the combined artifact. The
 parallel layout shortens elapsed campaign time but does not reduce the sum of
-billed runner minutes.
-The historical 2026-08-16 candidate remains beside this packet for provenance;
-it is not the current authority.
+billed runner minutes. Exact scale remains a manual monthly/major-release gate,
+not a pull-request or ordinary-push workload.
 
 ## Frozen language-neutral authority
 
@@ -88,21 +95,17 @@ does not carry a Rust toolchain.
 | Full root `npm test` | Passed, including 128/130 fixture tests with two intentional platform/scale skips, all 180 JavaScript object-model tests, all 58,520 mutation executions, dependent R0 contract suites, roadmap 7/7, and report comparison 2/2. |
 | Specification validation and mutation | Passed: current specification valid and 59/59 independent mutation checks rejected. |
 | Vector generation and audit | Passed: generator `--check`, independent 2,815/573/486 audit, and tamper test 1/1. |
-| Protocol predecessor binding | Passed: 92 contract and 29 binding artifacts regenerate byte-for-byte with the exact OGVCS-002 manifest pin. |
+| Protocol predecessor binding | [Run 32719990210](https://github.com/n3r/OpenGameVCS/actions/runs/32719990210) passed on Linux, macOS, and Windows: 92 contract and 29 binding artifacts regenerate byte-for-byte with the exact OGVCS-002 manifest pin. |
 | JavaScript scenario report | Passed: 571 executed, two exact-scale inventory rows, zero failed. |
 | Rust 1.82 source gate | Passed on Linux, macOS, and Windows: formatting, tests, `clippy -D warnings`, package build, registry/Unicode sync, and offline distribution. |
 | Packed Linux consumer | Passed from retained local archives with no repository-private runtime import or network dependency. |
 | Cross-platform comparison | Passed for JavaScript and Rust source reports from all three operating systems. |
 | Diff and package hygiene | `git diff --check`, MIT package contracts, distribution manifests, and bounded package dry-runs passed. |
 
-The fresh hosted campaign found and closed two Windows-specific defects before
-this passing candidate. Native recursive tree semantics overflowed the Windows
-main thread; revision `1fd680d9d0a522cc6a810c48df969ff8ec4af0a1` replaced it with a
-resource-charged explicit DFS stack. The next two runs proved that two complete
-offline Cargo builds can exceed both five and ten minutes on Windows without a
-semantic failure. Revision `3aba34da7c75a1fc9120476873ee90e382aaab80`
-retains a finite fifteen-minute platform allowance beneath the workflow's
-45-minute outer deadline.
+Earlier hosted attempts found and closed a Windows main-thread stack overflow
+and undersized offline-Cargo step allowances. Current run `32719990180` proves
+the explicit bounded traversal and finite fifteen-minute platform allowance on
+all three operating systems beneath the workflow's 45-minute outer deadline.
 
 ## Source and packed conformance
 
@@ -124,57 +127,61 @@ The retained Linux packed comparison independently re-hashes the exact archives:
 |---|---|
 | `opengamevcs-fixture-generator-1.0.0.tgz` | `3096bb6418a774e8f0757377e4b0453adae5e53ad8c37a2a51563d4c77634b93` |
 | `opengamevcs-object-model-0.1.0.tgz` | `009275ba22ced3fe973ee5b160ce088e25e0c2d6668068fc95e7a4174ec69f9a` |
-| `opengamevcs-repository-format-v1-0.1.0.tgz` | `6f11a958b1a7723df8bea1affbd5a274566d5cbef4fb5ec8ab56e71572059cea` |
-| `ogvcs-object-model-0.1.0.crate` | `77cce81e26dc5a65b2bc28b87ed3eafb27b22e8b37a6fe7a61a5d06b32a5cc6a` |
+| `opengamevcs-repository-format-v1-0.1.0.tgz` | `eaf2ad8e45e4cbac32a107606c6fb8d65b415b5aea1378202c2eefb081200d6a` |
+| `ogvcs-object-model-0.1.0.crate` | `679880e40b6ed6d48e9eea61675520f365bc610eafb1b8c501afe652be8fd293` |
 
 GitHub retains the platform reports, six-report comparison, four-archive packed
-proof, standalone format package, and Rust offline distribution. Exact job IDs,
-artifact IDs, GitHub archive digests, sizes, and expiry times are bound in the
-machine-readable candidate record.
+proof, standalone format package, and Rust offline distribution. Run/job IDs,
+artifact archive digests, exact archive identities, sizes, and expiry times are
+bound in the machine-readable completion record. The public version-controlled
+package sources, source-bound retained archive hashes, reproducible package
+contents, and clean offline consumer proof satisfy the durable package boundary;
+external npm/crates/GitHub Release publication is not claimed or required by
+this PRD.
 
 ## Acceptance map
 
 | Criterion | Validation evidence | Verdict |
 |---|---|---|
 | OGVCS-002-AC-01 | Golden object, logical-record, bundle, and reference outcomes agree between both clean-room implementations, source and packed. | Pass |
-| OGVCS-002-AC-02 | Ordered and bounded-sort paths pass ordinary and reduced-resource tests; run 32648023755 retained byte-identical bounded one-million-entry output from both languages. | Pass |
+| OGVCS-002-AC-02 | Exact implementation run 32714126083 proves ordered and bounded disk-sort library paths plus the offline-installed packaged CLI on the byte-identical million-entry tree, with every RSS/scratch value below 1 GiB. | Pass |
 | OGVCS-002-AC-03 | Both public implementations execute all 58,520 mutations. | Pass |
 | OGVCS-002-AC-04 | The installed adapter processes all five fixture profiles; native repository routes run separately. | Pass |
 | OGVCS-002-AC-05 | Public packages require no private service, schema, credential, or proprietary module and ship byte-identical MIT terms. | Pass |
 | OGVCS-002-AC-06 | Root, parent, merge, closure, replay, and cycle cases execute through public routes. | Pass |
 | OGVCS-002-AC-07 | FileID transition, allocation, restore, import, collision, rollback, and concurrency cases execute. | Pass |
 | OGVCS-002-AC-08 | Malformed, truncation, hard-limit, resource, callback, scratch, and combined-invalid cases have exact typed outcomes and no trusted partial state. | Pass |
-| OGVCS-002-AC-09 | Ordinary empty, repeated, multi-part, corrupt, ceiling, profile, and annotation cases agree; run 32648023755 retained the exact byte-identical logical-1-TiB result. | Pass |
+| OGVCS-002-AC-09 | Ordinary empty, repeated, multi-part, corrupt, ceiling, profile, and annotation cases agree; exact implementation run 32714126083 retains the content-verified byte-identical logical-1-TiB result. | Pass |
 | OGVCS-002-AC-10 | Bundle order, identity, transcript, accounting, closure, resource, and forbidden-claim boundaries agree. | Pass |
 | OGVCS-002-AC-11 | Registry shape, immutability, family, lifecycle, forward-preservation, and feature behavior agree. | Pass |
 | OGVCS-002-AC-12 | Entropy, zero rejection, injected collision, and exhaustion cases pass in both languages on all three hosted operating systems. | Pass |
 
-## Exact campaign and remaining `Done` gates
+## Exact campaign and completion boundary
 
-Runs `32441880044` and `32447152568` remain diagnostic provenance only. The
-completed acceptance evidence is run `32648023755`: both implementations passed
-the exact tree and manifest rows and the retained comparison reported
-`byte-identical-and-bounded`. The shared tree payload SHA-256 is
+Exact implementation run `32714126083` reported `byte-identical-and-bounded`. Its
+shared tree payload SHA-256 is
 `2b13fa2c05a014ecc14a2d0e3db3adee5f828f9aa7e223c45357f3ac52d36681`;
-the shared manifest payload SHA-256 is
-`18fb1ac61e4c4933181dd4e001df9f8fe3069bba145e5aec44d9c7eb75349cd6`.
+the manifest payload SHA-256 is
+`18fb1ac61e4c4933181dd4e001df9f8fe3069bba145e5aec44d9c7eb75349cd6`;
+and the logical whole-file digest is
+`4bd995a40b5b50850812ae22899070b142b52f355f96aec8230ab39034135d09`.
 
-Before OGVCS-002 can move to `prd/done`:
+JavaScript completed its exact workload step in 40m46s and its manifest in
+15m45.5s. Rust completed its exact workload step in 12m17s and its manifest in
+10m08.2s, with one authenticated provider read and a bounded verified-chunk
+cache while still hashing all 1,048,576 logical occurrences. Rust process RSS
+peaked at 55,836,672 bytes; JavaScript process RSS peaked at 655,187,968 bytes,
+and its packaged CLI tree-verification process peaked at 311,992,320 bytes.
 
-1. Remeasure the optimized Rust manifest implementation in the next scheduled
-   monthly or major-release exact campaign and bind that source revision to the
-   retained performance report. This is a performance-source recurrence, not
-   a reason to place 1-TiB work on every pull request.
-2. Publish the final versioned artifacts under durable release retention and
-   record their immutable publication identities. Current GitHub Actions
-   artifacts are candidate validation evidence, not final release publication.
-3. Reconcile the optimized recurrence and publication evidence into this packet, the
-   PRD acceptance map, changelog, and review before changing `Validation` to
-   `Done` or enabling production format-v1 writes.
+The three raw reports and completion record are durable version-controlled
+evidence. The checked-in package definitions, source-bound retained packed hashes, clean
+offline installs, three-OS reports, critical review, accepted ADRs 0008–0010,
+and current exact campaign close the PRD Definition of Done. Format v1 is
+ratified as an encoding/object-model contract. OGVCS-002 `*.test` profiles
+remain conformance-only, and production chunk writing remains unavailable until
+OGVCS-007 publishes a ratified chunking profile.
 
-ADRs 0008, 0009, and 0010 are already `Accepted`; ADR status is not an open
-gate. No repository path, payload, FileID, extension value, fixture seed,
-credential, or customer identifier is included in conformance summaries.
-Reports contain only bounded counts, stages, stable errors, platform/runtime
-metadata, resource measurements, and cryptographic identities needed for
-reproduction.
+Future exact campaigns are maintenance evidence only: run them manually once
+per month when needed or for a major release, never on every pull request. No
+repository path, payload, FileID, extension value, fixture seed, credential, or
+customer identifier appears in these summaries.

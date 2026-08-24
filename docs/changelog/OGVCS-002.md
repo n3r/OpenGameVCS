@@ -1,6 +1,6 @@
 # OGVCS-002 — Core object library and open repository format
 
-**Validation candidate:** 2026-08-21
+**Completed:** 2026-08-24
 
 **Exact-scale and performance update:** 2026-08-24
 
@@ -9,7 +9,7 @@
 **Packages:** `@opengamevcs/repository-format-v1` 0.1.0,
 `@opengamevcs/object-model` 0.1.0, and `ogvcs-object-model` 0.1.0
 
-## Delivered candidate
+## Delivered format
 
 OpenGameVCS now has a language-neutral repository-format-v1 authority and two
 independently implemented object-model libraries. The format defines canonical
@@ -19,7 +19,7 @@ typed object references, deterministic metadata codec, repository validation,
 tree and manifest streaming, logical-bundle verification, registry lifecycle,
 and bounded failure model.
 
-The candidate authority contains 2,815 authenticated artifacts, 573 scenario
+The frozen authority contains 2,815 authenticated artifacts, 573 scenario
 envelopes, 486 traceable obligations, 81 stable error codes, and ten ordered
 validation stages. It independently audits 58,520 systematic bit mutations and
 7,303 proper-prefix truncations. Every executable rejection is compared as the
@@ -156,7 +156,7 @@ precomputed expected-value shortcut.
 
 ## Bounded validation result
 
-The frozen language-neutral candidate manifest is
+The frozen language-neutral manifest is
 `2d0acb01a01b64c23d883d855d2802d939a8dc99622f2774de07af1c8af8d2b9`.
 The bounded JavaScript report executes 571 rows with two exact-scale inventory
 rows, zero failures, and result SHA-256
@@ -165,26 +165,29 @@ rows, zero failures, and result SHA-256
 Rust has 550 applicable rows: 548 executable and the same two exact-scale
 inventory rows; 23 JavaScript-only fixture-adapter, host-shape, and
 unrepresentable raw rows are explicitly not applicable.
-Candidate commit `3aba34da7c75a1fc9120476873ee90e382aaab80` runs under pinned
-Rust 1.82 and Node 22 on Linux, macOS, and Windows. The hosted gate compiles,
-formats, lints, packages, and tests Rust; installs and tests the JavaScript
-package; verifies reproducible offline distributions; executes both reporters;
-and requires byte-identical shared results across all six platform reports.
-Linux additionally rebuilds and runs the fixture, JavaScript, format, and Rust
-archives in a clean offline consumer.
+The
+[ratified package source `45d98fe`](https://github.com/n3r/OpenGameVCS/commit/45d98fe5adfff02e10745a0501123b30e56371bb)
+runs under pinned Rust 1.82 and Node 22 on Linux, macOS, and Windows. The hosted
+gate compiles, formats, lints, packages, and tests Rust; installs and tests the
+JavaScript package; verifies reproducible offline distributions; executes both
+reporters; and requires byte-identical shared results across all six platform
+reports. Linux additionally rebuilds and runs the fixture, JavaScript, format,
+and Rust archives in a clean offline consumer. That revision differs from the
+exact implementation source only by the checked-in exact reports and
+ratification-status prose.
 
 The first fresh three-platform attempt exposed a Windows main-thread stack
 overflow in the deep-tree semantic walk. That traversal now uses a
 resource-charged explicit stack while preserving depth-first error order and
 edge accounting. Subsequent attempts proved that two complete offline Cargo
 builds exceed both five- and ten-minute Windows allowances without a semantic
-failure. The final candidate retains a finite fifteen-minute platform allowance
+failure. The completed workflow retains a finite fifteen-minute platform allowance
 under the workflow's 45-minute outer deadline. Exact run, job, report, and
 archive identities are recorded in the validation evidence packet.
 
 ## Exact-scale campaign and Rust manifest optimization
 
-The maintainer-authorized final campaign completed in GitHub Actions
+The first maintainer-authorized campaign completed in GitHub Actions
 [run 32648023755](https://github.com/n3r/OpenGameVCS/actions/runs/32648023755)
 at source revision `4af57563025af257ecb8eb6430908c862a3c9e4b`. Both
 implementations produced byte-identical one-million-entry trees and logical
@@ -229,11 +232,32 @@ bytes or validation semantics:
   slices are admitted before allocation, and invalid bytes are never cached.
 
 A release-mode 16 GiB diagnostic on macOS arm64 sustained 2,077 MiB/s in 7.89s
-with one provider read. Straight-line extrapolation is roughly 8m25s for the
-manifest-only 1-TiB workload on that host. This reduced probe is performance
-guidance, not replacement acceptance evidence; the next monthly or major
-release exact campaign must bind the optimized source revision before its
-timing can be promoted to retained cross-platform evidence.
+with one provider read and guided the implementation, but it was not credited
+as acceptance evidence. The
+[exact implementation source `9d85d6e`](https://github.com/n3r/OpenGameVCS/commit/9d85d6ee959e47f8f65bca19c4ebb35687c39029)
+was exercised by
+[run 32714126083](https://github.com/n3r/OpenGameVCS/actions/runs/32714126083),
+which executed the complete optimized workload. JavaScript completed its exact
+step in 40m46s and manifest in 15m45.5s. Rust completed its exact step in
+12m17s and manifest in 10m08.2s, with one authenticated provider read, while
+still hashing all 1,048,576 logical occurrences. Both produced the unchanged
+identities above and the comparator returned `byte-identical-and-bounded`.
+
+The ratification/evidence revision passed ordinary three-OS
+[run 32719990180](https://github.com/n3r/OpenGameVCS/actions/runs/32719990180),
+including Rust 1.82 formatting/tests/clippy/package/offline proof, JavaScript
+package and CLI checks, six-report comparison, and clean offline packed
+consumers. Dependent protocol
+[run 32719990210](https://github.com/n3r/OpenGameVCS/actions/runs/32719990210)
+also passed its packed candidate and cross-platform comparison on all three
+operating systems. The exact JavaScript, Rust, comparison, and machine completion
+reports are checked into `docs/evidence/OGVCS-002/`; current packed archive
+hashes are bound there as well.
+
+GitHub workflow helper actions are pinned to immutable Node 24-compatible
+releases, eliminating the hosted Node 20 deprecation fallback. The conformance
+payload itself remains deliberately pinned to Node 22, so the action-runtime
+upgrade does not silently change the supported package runtime.
 
 Exact scale remains isolated in the release-only
 `.github/workflows/object-model-scale.yml` workflow. It has no pull-request,
@@ -256,9 +280,12 @@ GitHub still bills the sum of both runners' active minutes.
 
 ## Rollout and rollback
 
-Repository format v1 remains a validation candidate. Readers, schemas,
-registries, vectors, and both codec implementations ship before production
-write enablement. A defective writer or profile can be disabled without
-reinterpreting existing objects; deprecated readers and immutable assignments
-remain available. Any incompatible correction requires a new format version
-and explicit migration preview, never an in-place assignment or preimage change.
+Repository format v1 is ratified as the encoding and object-model contract.
+Readers, schemas, registries, vectors, and both codec implementations are
+version-controlled and independently reproducible. This does not promote
+OGVCS-002 `*.test` profiles: they remain conformance-only, and production chunk
+writing remains unavailable until OGVCS-007 supplies a ratified profile. A
+defective writer or selected profile can be disabled without reinterpreting
+existing objects; deprecated readers and immutable assignments remain
+available. Any incompatible correction requires a new format version and
+explicit migration preview, never an in-place assignment or preimage change.

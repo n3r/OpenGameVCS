@@ -2,7 +2,7 @@
 
 **Roadmap state:** Proposed baseline  
 **Planning horizon:** 42+ months  
-**Last updated:** 2026-08-21
+**Last updated:** 2026-08-24
 **Authoritative status:** file location in [`todo/`](todo/) or [`done/`](done/)  
 **Architecture baseline:** [`architecture.md`](../architecture.md)
 
@@ -65,7 +65,7 @@ These activities are tracked by the program owner in gate evidence. They may val
 | ID | PRD | Priority | Depends on |
 |---|---|---|---|
 | OGVCS-001 | [Deterministic workload fixture generator](done/OGVCS-001-deterministic-workload-fixture-generator.md) | P0 | None |
-| OGVCS-002 | [Core object library and open repository format](todo/OGVCS-002-core-object-library-repository-format.md) | P0 | OGVCS-001 |
+| OGVCS-002 | [Core object library and open repository format](done/OGVCS-002-core-object-library-repository-format.md) | P0 | OGVCS-001 |
 | OGVCS-003 | [Authorization contract package and threat test kit](done/OGVCS-003-authorization-contract-threat-test-kit.md) | P0 | OGVCS-001 |
 | OGVCS-004 | [Cross-platform path and workspace filesystem library](todo/OGVCS-004-cross-platform-path-filesystem-library.md) | P0 | OGVCS-001, OGVCS-002 |
 | OGVCS-041 | [Public protocol baseline and generated bindings](todo/OGVCS-041-public-protocol-baseline-generated-bindings.md) | P0 | OGVCS-002, OGVCS-003, OGVCS-004 |

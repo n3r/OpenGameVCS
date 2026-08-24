@@ -1,13 +1,13 @@
 # OGVCS-002 — Core object library and open repository format
 
-**Status:** Validation
+**Status:** Done
 **Release:** R0 — Engineering Foundation  
 **Priority:** P0  
 **Owner:** Codex and OpenGameVCS maintainers
 **Depends on:** OGVCS-001  
 **Blocks:** OGVCS-004, OGVCS-005, OGVCS-006, OGVCS-007, OGVCS-017, OGVCS-020, OGVCS-029, OGVCS-033, OGVCS-036, OGVCS-041
 **Source:** [ADR-0008 deterministic CBOR and object identity](../../adr/0008-format-v1-deterministic-cbor-and-object-identity.md)
-**Last updated:** 2026-08-21
+**Last updated:** 2026-08-24
 
 ## Outcome
 
@@ -114,7 +114,7 @@ Library and CLI results expose format/kind/profile versions, bytes and objects p
 
 ## Rollout and rollback
 
-Format v1 remains draft while readers, writers, registries, and vectors are under this PRD. Ratification follows read-before-write deployment: both independent readers and all declared consumers must accept the exact frozen corpus before any production profile is writable. A writer or profile can be disabled without changing stored objects; readers, schemas, and vectors remain available indefinitely. Any incompatible correction receives a new format version and explicit migration plan—never an in-place reinterpretation or an assumed export/reimport shortcut.
+Format v1 is ratified as the encoding and object-model contract after both independent readers, packed consumers, the frozen corpus, and the exact scale routes passed. Ratification does not promote OGVCS-002's conformance-only test profiles or invent a production chunker; every production write still requires independently ratified, write-eligible profiles. A writer or profile can be disabled without changing stored objects; readers, schemas, and vectors remain available indefinitely. Any incompatible correction receives a new format version and explicit migration plan—never an in-place reinterpretation or an assumed export/reimport shortcut.
 
 ## Risks and mitigations
 
@@ -129,25 +129,30 @@ Format v1 remains draft while readers, writers, registries, and vectors are unde
 
 ## Completion evidence
 
-The MIT-licensed implementation and frozen ordinary conformance authority are
-merged and ready for validation. Candidate commit
-`3aba34da7c75a1fc9120476873ee90e382aaab80` is exercised by the pinned Rust
-1.82/Node 22 Linux, macOS, and Windows workflow, including packed/offline
-consumers and deterministic cross-language reports. The authority contains
-2,815 authenticated artifacts and 573 scenarios; 571 JavaScript and 548 Rust
-rows execute, the same two exact-scale rows remain inventory-only, and 23
-JavaScript-only fixture-adapter, host-shape, and unrepresentable raw carriers
-are honestly N/A in Rust.
+The [`9d85d6e` exact implementation source](https://github.com/n3r/OpenGameVCS/commit/9d85d6ee959e47f8f65bca19c4ebb35687c39029)
+passes the parallel exact one-million-entry/logical-1-TiB campaign. The
+[`45d98fe` ratified package source](https://github.com/n3r/OpenGameVCS/commit/45d98fe5adfff02e10745a0501123b30e56371bb)
+adds only the three verbatim reports and ratification-status prose, then passes
+pinned Rust 1.82/Node 22 ordinary conformance on Linux, macOS, and Windows plus
+clean packed/offline consumers. The durable completion record binds both source
+boundaries, 2,815 artifacts, 573 scenarios, current ratified-package hashes,
+both language reports, and the byte-identical resource comparison. The final
+independent review found no live P0, P1, or P2.
 
-By maintainer decision, this validation milestone did not run the exact
-one-million-entry tree or logical-1-TiB manifest. They remain reserved for the
-final R0 campaign. Consequently AC-02 and the exact-scale portion of AC-09 are
-still incomplete, final artifacts are not yet ratified for production writing,
-and this PRD remains in `todo` with `Status: Validation` rather than moving to
-`done`.
-
-- Implementation changes: [Detailed candidate changelog](../../docs/changelog/OGVCS-002.md)
-- Test and benchmark results: [Validation evidence packet](../../docs/evidence/OGVCS-002/README.md)
-- Security/reliability review: [Independent critical review](../../docs/reviews/OGVCS-002-critical-review.md)
-- Documentation/runbooks: [Accepted ADRs 0008–0010](../../adr/README.md) and the [validation evidence index](../../docs/evidence/OGVCS-002/README.md)
-- Rollout result: [Hosted ordinary proof and deferred exact-scale boundary](../../docs/evidence/OGVCS-002/README.md#deferred-done-gates)
+- Implementation changes: the frozen [`9d85d6e` implementation](https://github.com/n3r/OpenGameVCS/commit/9d85d6ee959e47f8f65bca19c4ebb35687c39029), [`45d98fe` ratification/package boundary](https://github.com/n3r/OpenGameVCS/commit/45d98fe5adfff02e10745a0501123b30e56371bb), and [detailed changelog](../../docs/changelog/OGVCS-002.md) deliver the normative format, two clean-room codecs, bounded streaming/repository APIs, public CLI/adapter, registries, packages, and release-only exact workflow.
+- Test and benchmark results: the [completion evidence packet](../../docs/evidence/OGVCS-002/README.md) and [machine record](../../docs/evidence/OGVCS-002/completion-2026-08-24.json) bind the ordinary three-OS matrix, offline packages, 573-row conformance authority, million-entry tree, and content-verified logical-1-TiB result.
+- Security/reliability review: the [independent critical review](../../docs/reviews/OGVCS-002-critical-review.md) records the adversarial findings, remediation, requirement matrix, resource review, and final no-P0/P1/P2 verdict.
+- Documentation/runbooks: [accepted ADRs 0008–0010](../../adr/README.md), the [ratified format evidence](../../docs/evidence/OGVCS-002/README.md#exact-campaign-and-completion-boundary), package guides, exact reports, and [changelog](../../docs/changelog/OGVCS-002.md) document compatibility, operations, scheduling, diagnostics, and rollback.
+- Rollout result: [parallel exact run 32714126083](https://github.com/n3r/OpenGameVCS/actions/runs/32714126083) passed the implementation boundary, and [ordinary run 32719990180](https://github.com/n3r/OpenGameVCS/actions/runs/32719990180) passed the ratification/evidence package boundary; exact scale remains manual monthly/major-release maintenance rather than PR work.
+- OGVCS-002-AC-01: the [source and packed conformance evidence](../../docs/evidence/OGVCS-002/README.md#source-and-packed-conformance) proves byte-identical objects, bundles, references, and shared outcomes from independent JavaScript and Rust implementations.
+- OGVCS-002-AC-02: the [exact campaign evidence](../../docs/evidence/OGVCS-002/README.md#exact-campaign-and-completion-boundary) proves ordered and disk-sorted million-entry library paths plus the offline-installed packaged CLI below the 1-GiB RSS/scratch ceiling.
+- OGVCS-002-AC-03: the [frozen authority and acceptance map](../../docs/evidence/OGVCS-002/README.md#acceptance-map) bind all 58,520 bit mutations to rejection or changed authenticated identity.
+- OGVCS-002-AC-04: the [acceptance map](../../docs/evidence/OGVCS-002/README.md#acceptance-map) binds all five installed fixture-adapter profiles and the separate native restore/import/proof/root/shelf/conflict public routes.
+- OGVCS-002-AC-05: the [critical review](../../docs/reviews/OGVCS-002-critical-review.md#acceptance-verdict) confirms that inspection and closure validation require no private service, database schema, credential, proprietary module, or projection/export claim.
+- OGVCS-002-AC-06: the [acceptance map](../../docs/evidence/OGVCS-002/README.md#acceptance-map) covers zero/one/two/eight/nine-parent, missing/duplicate/cross-repository parent, root, closure, and typed cycle cases through both engines.
+- OGVCS-002-AC-07: the [acceptance map](../../docs/evidence/OGVCS-002/README.md#acceptance-map) covers zero/duplicate/reuse/forgery, move/copy/delete/restore/import/collision/concurrency and unchanged-loser state.
+- OGVCS-002-AC-08: the [ordinary gates and review](../../docs/evidence/OGVCS-002/README.md#ordinary-local-and-hosted-gates) bind malformed, truncation, hard-limit, configured-resource, callback, scratch, combined-invalid, and no-partial-state behavior.
+- OGVCS-002-AC-09: the [exact manifest report](../../docs/evidence/OGVCS-002/exact-scale-comparison-2026-08-24.json) and [acceptance map](../../docs/evidence/OGVCS-002/README.md#acceptance-map) prove empty/repeated/multi/corrupt/ceiling/profile/annotation behavior and byte-identical content-verified logical 1 TiB.
+- OGVCS-002-AC-10: the [acceptance map](../../docs/evidence/OGVCS-002/README.md#acceptance-map) covers deterministic bundle ordering, transcript/integrity, bounded closure, duplicate/missing/extra/wrong-kind rejection, and forbidden export/fidelity/projection claims.
+- OGVCS-002-AC-11: the [registry evidence and review](../../docs/evidence/OGVCS-002/README.md#frozen-language-neutral-authority) prove immutable assignments, family/lifecycle behavior, unsupported required-feature refusal, and lossless optional-extension preservation.
+- OGVCS-002-AC-12: the [acceptance map](../../docs/evidence/OGVCS-002/README.md#acceptance-map) binds OS entropy, zero rejection, injected collisions, retry exhaustion, and absence of deterministic fallback on all three hosted operating systems.
