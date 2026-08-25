@@ -64,7 +64,11 @@ async function baselineManifest(t, arguments_) {
   return readJson(path.join(cwd, destination, 'manifest.json'));
 }
 
-async function waitFor(check, message, timeoutMs = 5_000) {
+// Child startup and antivirus/filesystem interception are materially slower on
+// hosted Windows. This is test synchronization, not a product deadline: keep
+// enough time to observe the explicit checkpoint pause without weakening any
+// generator limit or failure assertion.
+async function waitFor(check, message, timeoutMs = 20_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (await check()) return;
@@ -1168,7 +1172,7 @@ test('prepublication deep-verification failure preserves only the owned stage', 
   const generation = runCli(cwd, ['generate', ...arguments_], {
     env: {
       OGVCS_FIXTURE_TEST_PAUSE_AT_CHECKPOINT: '7',
-      OGVCS_FIXTURE_TEST_PAUSE_MILLISECONDS: '600',
+      OGVCS_FIXTURE_TEST_PAUSE_MILLISECONDS: '2000',
     },
   });
   let stage;
@@ -1207,7 +1211,7 @@ test('prefinalize allowlist rejects even reserved artifacts appearing in the wro
   const generation = runCli(cwd, ['generate', ...arguments_], {
     env: {
       OGVCS_FIXTURE_TEST_PAUSE_AT_CHECKPOINT: '7',
-      OGVCS_FIXTURE_TEST_PAUSE_MILLISECONDS: '600',
+      OGVCS_FIXTURE_TEST_PAUSE_MILLISECONDS: '2000',
     },
   });
   let stage;
