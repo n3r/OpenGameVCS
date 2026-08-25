@@ -1,0 +1,164 @@
+{
+  "schema": "ogvcs.path/hosted-validation-evidence/v1",
+  "evidenceDate": "2026-08-25",
+  "status": "completed",
+  "license": {
+    "name": "MIT",
+    "sha256": "6f0f22f485ae8614870468a48f2c084eaf800fe02c5a2c4d9a91d34bc7f58eb4"
+  },
+  "contract": {
+    "version": "1.0.0",
+    "manifestSha256": "2f343e1dac238da527fbd36160419ec6fb53b780ac7e33c01e11acabbdd4782b",
+    "registrySetSha256": "bbabdd95d78cfe0dd9751ab67ccbd9dfa5565bf8c049468aea3129bec787bd42",
+    "unicodeCaseFoldingSha256": "6f1f9c588eb4a5c718d9e8f93b782685e5c7fec872cf05e8e6878053599e09bb",
+    "resultsSha256": "a21941590359b85c6a45cdab432bfec636c66b13d524746c0dadbaf97da41616",
+    "pureRows": 63,
+    "nativeRows": 15,
+    "totalRows": 78
+  },
+  "github": {
+    "repository": "n3r/OpenGameVCS",
+    "workflow": "Path and workspace filesystem conformance",
+    "event": "push",
+    "runId": 32831999325,
+    "runNumber": 13,
+    "runUrl": "https://github.com/n3r/OpenGameVCS/actions/runs/32831999325",
+    "sourceRevision": "4f8a5a0f836ef51b4ac56cab9d795d7f5515926d",
+    "createdAt": "2026-08-25T09:27:02Z",
+    "completedAt": "2026-08-25T09:29:01Z",
+    "conclusion": "success",
+    "jobs": [
+      {
+        "id": 97752560093,
+        "name": "Packed conformance (macos-latest)",
+        "conclusion": "success"
+      },
+      {
+        "id": 97752560367,
+        "name": "Packed conformance (windows-latest)",
+        "conclusion": "success"
+      },
+      {
+        "id": 97752560391,
+        "name": "Packed conformance (ubuntu-latest)",
+        "conclusion": "success"
+      },
+      {
+        "id": 97753040245,
+        "name": "Compare Linux, macOS, and Windows results",
+        "conclusion": "success"
+      }
+    ],
+    "artifacts": [
+      {
+        "id": 9557120878,
+        "name": "path-filesystem-Linux",
+        "sizeBytes": 83295,
+        "githubArchiveDigest": "sha256:e8a27ef9f64ffd9f90fa9a393faf1e6579e366bc376eb02b536c323afa17f559",
+        "expiresAt": "2026-09-24T09:27:33Z"
+      },
+      {
+        "id": 9557116715,
+        "name": "path-filesystem-macOS",
+        "sizeBytes": 79006,
+        "githubArchiveDigest": "sha256:c537ec6cc042d7b35754fd2b08a7ef3be73b60744b1ca9c1018d9f36d88cd5d8",
+        "expiresAt": "2026-09-24T09:27:25Z"
+      },
+      {
+        "id": 9557161255,
+        "name": "path-filesystem-Windows",
+        "sizeBytes": 79009,
+        "githubArchiveDigest": "sha256:438fdbab619af684bbbea116f4964434c12d40b4f6c38d920bb589160b8f43d8",
+        "expiresAt": "2026-09-24T09:28:43Z"
+      }
+    ]
+  },
+  "packedConformance": {
+    "result": "equal-pure-results-and-package-bytes",
+    "reports": 3,
+    "rowsPerReport": 78,
+    "failedPerReport": 0,
+    "packages": [
+      {
+        "filename": "opengamevcs-path-contract-v1-1.0.0.tgz",
+        "name": "@opengamevcs/path-contract-v1",
+        "version": "1.0.0",
+        "sizeBytes": 185899,
+        "sha256": "432f0f59a498186ff826f73e8c1e8c74e9cf836d22a0f57b463822624c962b8e"
+      },
+      {
+        "filename": "opengamevcs-path-filesystem-1.0.0.tgz",
+        "name": "@opengamevcs/path-filesystem",
+        "version": "1.0.0",
+        "sizeBytes": 188459,
+        "sha256": "82a9b9533df0e9b3e9dfecac1e8dc12e146dc1ddb6ec972dfcde86bea21de627"
+      }
+    ],
+    "reportArtifacts": [
+      {
+        "platform": "linux",
+        "filename": "conformance-linux-2026-08-25.json",
+        "sizeBytes": 19111,
+        "sha256": "2a4c15657dba0865365d2d361be54657ccca8b9d3ae05142bd921e7d63517ca7"
+      },
+      {
+        "platform": "macos",
+        "filename": "conformance-macos-2026-08-25.json",
+        "sizeBytes": 19113,
+        "sha256": "ec7e381f346bf5753b34c117278f611a5c0245bc72778b42a6714a5107d413b0"
+      },
+      {
+        "platform": "windows",
+        "filename": "conformance-windows-2026-08-25.json",
+        "sizeBytes": 19116,
+        "sha256": "3cdfabdf3256ab8ad09a50e067389ae8ef6a465d4359e519a0ac082729566098"
+      }
+    ],
+    "packedEvidenceArtifacts": [
+      {
+        "platform": "linux",
+        "filename": "packed-evidence-linux-2026-08-25.json",
+        "sizeBytes": 952,
+        "sha256": "2d6af7b341ed509ae53c89459e828d36bdc29dabd55bc48ba3e7a5847804580d"
+      },
+      {
+        "platform": "macos",
+        "filename": "packed-evidence-macos-2026-08-25.json",
+        "sizeBytes": 952,
+        "sha256": "920945661778e85fc36d80a97d498ef4551326297baaf98df40c11594b027e24"
+      },
+      {
+        "platform": "windows",
+        "filename": "packed-evidence-windows-2026-08-25.json",
+        "sizeBytes": 954,
+        "sha256": "d9ca8255f90bed62689296528d64dd6444ec0c3bb660c73ac7e095d8821a28bb"
+      }
+    ],
+    "comparison": {
+      "filename": "conformance-comparison-2026-08-25.json",
+      "sizeBytes": 781,
+      "sha256": "d756461173ba68883d48c22f45183b5d6de64f2fda106cd9c509326bc54800f1"
+    },
+    "syscallTrace": {
+      "filename": "filesystem-trace-linux-2026-08-25.log",
+      "sizeBytes": 77935,
+      "lines": 586,
+      "sha256": "42679b72183e427bbea91c9689c03ef8e4a6f3fdaf8e66244813d54bccb4ad30",
+      "outsideReferences": 0,
+      "audit": {
+        "filename": "filesystem-trace-audit-2026-08-25.json",
+        "sizeBytes": 181,
+        "sha256": "bd9a49f0ca3a90b40b7e5fd0c249684a1e0d6fd9a69f8e3adc6adfd18c09c875"
+      },
+      "fixture": {
+        "filename": "filesystem-trace-fixture-2026-08-25.json",
+        "sizeBytes": 165,
+        "sha256": "1d06badc9c9d1e1835bc1642efa93bfd419a609e9833f1dcd94d916a9f3b7b76"
+      }
+    }
+  },
+  "exactScale": {
+    "applicable": false,
+    "reason": "The million-entry tree and logical-1-TiB campaign belongs to completed OGVCS-002; OGVCS-004 has only bounded path/materialization acceptance rows."
+  }
+}

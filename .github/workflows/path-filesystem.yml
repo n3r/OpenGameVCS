@@ -123,7 +123,7 @@ jobs:
         run: npm run test:roadmap
       - name: Test report tooling and reference-vector audit
         if: runner.os == 'Linux'
-        run: node --test tools/path-filesystem-conformance-report.test.mjs tools/compare-path-filesystem-reports.test.mjs tools/path-filesystem-trace-audit.test.mjs tools/verify-reference-vectors.test.mjs
+        run: node --test tools/path-filesystem-conformance-report.test.mjs tools/compare-path-filesystem-reports.test.mjs tools/path-filesystem-trace-audit.test.mjs tools/path-filesystem-workflow-policy.test.mjs tools/verify-reference-vectors.test.mjs
       - name: Upload exact packages and conformance evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

@@ -28,7 +28,7 @@
     "test:path:spec": "npm run test --workspace @opengamevcs/path-contract-v1",
     "test:path:report": "node tools/path-filesystem-conformance-report.mjs --output artifacts/path-filesystem-conformance.json",
     "test:path:packed-report": "node tools/run-packed-path-filesystem-conformance.mjs --output artifacts/packed-path-filesystem-conformance",
-    "test:path:ci-report": "node --test tools/path-filesystem-conformance-report.test.mjs tools/compare-path-filesystem-reports.test.mjs tools/path-filesystem-trace-audit.test.mjs",
+    "test:path:ci-report": "node --test tools/path-filesystem-conformance-report.test.mjs tools/compare-path-filesystem-reports.test.mjs tools/path-filesystem-trace-audit.test.mjs tools/path-filesystem-workflow-policy.test.mjs",
     "test:protocol": "npm run test --workspace @opengamevcs/protocol-baseline",
     "test:protocol:adapter": "npm run check --workspace @opengamevcs/protocol-baseline-independent-adapter",
     "test:protocol:spec": "node foundation/protocol-baseline/codegen/generate.mjs --check && npm run check --workspace @opengamevcs/protocol-contract-v1 && node --test spec/protocols/v1/test/package-contract.test.mjs spec/protocols/v1/test/validate-spec.test.mjs",
