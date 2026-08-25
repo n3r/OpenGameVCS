@@ -87,6 +87,15 @@ provided. It materializes only bounded synthetic fixtures. A successful CLI
 result reports the sample count, conformance counts, bundle digest, contract
 manifest, and final status.
 
+Direct `runBenchmarkMatrix` integrations may supply an in-process task service
+only when it is trusted and cooperative: each task receives an `AbortSignal`
+and must settle after that signal aborts. The matrix waits for this settlement
+before releasing the task lane or returning a deadline/cancellation result, so
+no background mutation can outlive the reported run. Put any untrusted,
+blocking, or potentially non-settling implementation behind the external
+process driver; its entire process tree is the enforceable cancellation
+boundary.
+
 For deterministic retained CI evidence with fixed measurement clocks and no
 simulated wall delay, use:
 

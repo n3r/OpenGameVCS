@@ -9,6 +9,7 @@ import { compareResultBundles } from './comparison.mjs';
 import { loadBenchmarkContract } from './contract.mjs';
 import { asHarnessError } from './errors.mjs';
 import { runFaultMatrix, runBrokenServiceSelfTest } from './fault-harness.mjs';
+import { snapshotData } from './input.mjs';
 import { planHarnessMatrix, runReferenceHarness } from './harness.mjs';
 
 export const CLI_HELP = `OpenGameVCS benchmark and fault harness
@@ -50,6 +51,7 @@ async function machineWrite(path, value) {
 }
 
 export async function runCli(argv = process.argv.slice(2)) {
+  argv = snapshotData(argv, 'CLI argument vector');
   const parsed = parseArgs({ args: argv, allowPositionals: true, strict: true, options: {
     help: { type: 'boolean', short: 'h', default: false }, contract: { type: 'string' }, output: { type: 'string' }, profile: { type: 'string' }, seed: { type: 'string' }, workspace: { type: 'string' }, operator: { type: 'string' }, classification: { type: 'string' }, iterations: { type: 'string' }, bundle: { type: 'string' }, baseline: { type: 'string' }, candidate: { type: 'string' }, 'tolerance-ppm': { type: 'string' },
   } });

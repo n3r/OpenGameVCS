@@ -1,5 +1,6 @@
 import { harnessFail } from './errors.mjs';
 import { performance } from 'node:perf_hooks';
+import { snapshotOptions } from './input.mjs';
 
 export const HARNESS_LIMITS = Object.freeze({
   maxControlMessageBytes: 1_048_576,
@@ -41,6 +42,7 @@ export class HarnessDeadline {
     return value;
   }
   constructor(options = {}) {
+    options = snapshotOptions(options, 'deadline options');
     const timeout = boundedInteger(options.timeoutMs, HARNESS_LIMITS.maxTaskTimeMs, HARNESS_LIMITS.maxTaskTimeMs, 'timeoutMs');
     if (options.signal !== undefined && !(options.signal instanceof AbortSignal)) harnessFail('HARNESS_INPUT_INVALID', 'deadline signal must be an AbortSignal');
     this.#now = options.now ?? (() => performance.now());

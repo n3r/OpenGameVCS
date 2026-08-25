@@ -6,6 +6,7 @@ import { canonicalDigest, canonicalJson, canonicalSequenceDigest, deepFreeze } f
 import { harnessFail } from './errors.mjs';
 import { loadBenchmarkContract } from './contract.mjs';
 import { runReferenceHarness } from './harness.mjs';
+import { snapshotOptions } from './input.mjs';
 
 const REPORT_PROFILES = new Set(['local-smoke', 'presubmit', 'nightly']);
 
@@ -24,6 +25,7 @@ function summarySemantics(summary) {
 }
 
 export async function runBenchmarkReport(options = {}) {
+  options = snapshotOptions(options, 'benchmark report options');
   if (typeof options.output !== 'string' || options.output.length < 1 || options.output.includes('\0')) harnessFail('HARNESS_INPUT_INVALID', 'benchmark report output directory is required');
   const profile = options.harnessProfile ?? 'presubmit';
   if (!REPORT_PROFILES.has(profile)) harnessFail('HARNESS_PRIVILEGE_REQUIRED', 'retained reports permit only unprivileged bounded profiles');

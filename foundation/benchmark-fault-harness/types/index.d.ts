@@ -41,6 +41,25 @@ export class NetworkController { constructor(profile: NetworkProfile, options?: 
 
 export interface BenchmarkSample { readonly schemaVersion: 'ogvcs.benchmark/sample/v1'; readonly id: string; readonly taskId: TaskId; readonly corpusId: string; readonly repetition: number; readonly cacheState: CacheState; readonly networkProfile: string; readonly status: 'success' | 'failed' | 'incomplete'; readonly failureCode: HarnessCode | null; readonly wallMicroseconds: number; readonly cpuMicroseconds: number; readonly peakMemoryBytes: number; readonly diskReadBytes: number; readonly diskWriteBytes: number; readonly networkReadBytes: number; readonly networkWriteBytes: number; readonly logicalBytes: number; readonly uniqueBytes: number; readonly retries: number; readonly assertions: readonly { id: string; passed: boolean }[]; readonly faultScheduleDigest: string | null; }
 export interface TaskSummary { readonly schemaVersion: 'ogvcs.benchmark/task-summary/v1'; readonly taskId: TaskId; readonly corpusId: string; readonly cacheState: CacheState; readonly networkProfile: string; readonly [key: string]: JsonValue; }
+export interface BenchmarkCorpus { readonly id: string; readonly verified: true; readonly logicalBytes: number; readonly [key: string]: unknown; }
+export interface BenchmarkTaskService {
+  snapshot(): any;
+  /** Must observe input.signal and settle after it aborts. Use ExternalDriverSession for non-cooperative or untrusted implementations. */
+  executeTask(taskId: TaskId, input: Readonly<Record<string, unknown> & { signal: AbortSignal }>): Promise<any>;
+}
+export interface BenchmarkMatrixOptions {
+  readonly contract: BenchmarkContract;
+  readonly corpora: readonly BenchmarkCorpus[];
+  readonly harnessProfile?: HarnessProfile;
+  readonly iterations?: number;
+  readonly concurrency?: number;
+  readonly taskTimeoutMs?: number;
+  readonly maxWorkingMemoryBytes?: number;
+  readonly signal?: AbortSignal;
+  readonly seed?: string;
+  readonly serviceFactory?: (context: Readonly<Record<string, unknown>>) => BenchmarkTaskService | Promise<BenchmarkTaskService>;
+  readonly [key: string]: unknown;
+}
 export function nearestRank(values: readonly number[], percentile: number): number;
 export function medianAbsoluteDeviation(values: readonly number[]): number;
 export function summarizeSamples(samples: readonly BenchmarkSample[]): readonly TaskSummary[];
@@ -70,7 +89,7 @@ export function startExternalDriver(adapter: readonly string[] | { command: stri
 export function runExternalDriverConformance(adapter: readonly string[] | { command: string; args?: readonly string[]; env?: Record<string, string>; cwd?: string }, contract: BenchmarkContract, options?: Record<string, unknown>): Promise<any>;
 export function serveFakeDriver(contract: BenchmarkContract, options?: Record<string, unknown>): Promise<void>;
 export function runHarnessConformance(contract: BenchmarkContract, options: Record<string, unknown>): Promise<any>;
-export function runBenchmarkMatrix(options: Record<string, unknown> & { contract: BenchmarkContract; corpora: readonly any[] }): Promise<any>;
+export function runBenchmarkMatrix(options: BenchmarkMatrixOptions): Promise<any>;
 export function applyEvidenceToMatrix(matrix: any, evidence?: Record<string, number>): any;
 export function planHarnessMatrix(contract: BenchmarkContract): readonly any[];
 export function runReferenceHarness(options: Record<string, unknown> & { workspace: string }): Promise<any>;

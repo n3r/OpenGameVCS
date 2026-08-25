@@ -1,6 +1,7 @@
 import { cloneData, deepFreeze } from './canonical.mjs';
 import { harnessFail } from './errors.mjs';
 import { HARNESS_LIMITS, checkedAdd } from './limits.mjs';
+import { snapshotOptions } from './input.mjs';
 import { setTimeout as wait } from 'node:timers/promises';
 
 function resetAfterFailedApply(adapter) {
@@ -25,6 +26,7 @@ export class NetworkController {
   #simulateDelay;
   #signal;
   constructor(profile, options = {}) {
+    options = snapshotOptions(options, 'network options');
     try { profile = cloneData(profile); }
     catch (error) { harnessFail('HARNESS_INPUT_INVALID', 'network profile must be inert bounded canonical data', { cause: error }); }
     if (!profile || typeof profile.id !== 'string' || !['simulated', 'privileged'].includes(profile.mode) || !Number.isSafeInteger(profile.rttMs) || profile.rttMs < 0 || profile.rttMs > 200 || !Number.isSafeInteger(profile.bandwidthBytesPerSecond) || profile.bandwidthBytesPerSecond < 0 || !Number.isSafeInteger(profile.lossPartsPerMillion) || profile.lossPartsPerMillion < 0 || profile.lossPartsPerMillion > 1_000_000 || !Number.isSafeInteger(profile.interruptionEvery) || profile.interruptionEvery < 0 || !Number.isSafeInteger(profile.duplicateEvery) || profile.duplicateEvery < 0 || !Number.isSafeInteger(profile.reorderWindow) || profile.reorderWindow < 0 || profile.reorderWindow > 1024) harnessFail('HARNESS_INPUT_INVALID', 'network profile is invalid');

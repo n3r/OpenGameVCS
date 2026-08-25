@@ -28,7 +28,23 @@ function ownData(value) {
   }
 }
 
+function optionRecord(value, label) {
+  if (value === undefined) return Object.create(null);
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) throw new TypeError(`${label} must be a plain inert record`);
+  const { keys, descriptors } = ownData(value);
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null || keys.length > 256 || keys.some((key) => typeof key !== 'string')) throw new TypeError(`${label} must be a bounded plain inert record`);
+  const output = Object.create(null);
+  for (const key of keys) {
+    const descriptor = descriptors[key];
+    if (!descriptor || !Object.hasOwn(descriptor, 'value') || descriptor.enumerable !== true) throw new TypeError(`${label} cannot contain accessors or hidden properties`);
+    Object.defineProperty(output, key, { configurable: true, enumerable: true, value: descriptor.value, writable: true });
+  }
+  return output;
+}
+
 export function canonicalJson(value, options = {}) {
+  options = optionRecord(options, 'canonical options');
   const maximumBytes = boundedOption(options.maxBytes, MAX_CANONICAL_BYTES, MAX_CANONICAL_BYTES, 'maxBytes');
   const maximumNodes = boundedOption(options.maxNodes, MAX_CANONICAL_NODES, MAX_CANONICAL_NODES, 'maxNodes');
   const maximumDepth = boundedOption(options.maxDepth, MAX_CANONICAL_DEPTH, MAX_CANONICAL_DEPTH, 'maxDepth');
@@ -138,6 +154,7 @@ export function canonicalJson(value, options = {}) {
 }
 
 export function canonicalBytes(value, options = {}) {
+  options = optionRecord(options, 'canonical byte options');
   const maximumWorking = boundedOption(options.maxWorkingMemoryBytes, MAX_WORKING_MEMORY_BYTES, MAX_WORKING_MEMORY_BYTES, 'maxWorkingMemoryBytes');
   const text = canonicalJson(value, { ...options, maxWorkingMemoryBytes: maximumWorking });
   const byteLength = Buffer.byteLength(text);
@@ -177,6 +194,7 @@ export function cloneData(value) {
 }
 
 export function parseLargeCanonical(input, options = {}) {
+  options = optionRecord(options, 'canonical parse options');
   const maximum = boundedOption(options.maxBytes, MAX_CANONICAL_BYTES, MAX_CANONICAL_BYTES, 'maxBytes');
   const maximumWorking = boundedOption(options.maxWorkingMemoryBytes, MAX_WORKING_MEMORY_BYTES, MAX_WORKING_MEMORY_BYTES, 'maxWorkingMemoryBytes');
   if (typeof input !== 'string' && !Buffer.isBuffer(input) && !(input instanceof Uint8Array)) throw new TypeError('benchmark JSON input must be text or bytes');

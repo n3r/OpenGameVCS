@@ -1,8 +1,10 @@
 import { codeUnitCompare, deepFreeze } from './canonical.mjs';
 import { harnessFail } from './errors.mjs';
 import { HARNESS_LIMITS, checkedAdd } from './limits.mjs';
+import { snapshotData } from './input.mjs';
 
 function sortedIntegers(values, label) {
+  values = snapshotData(values, label);
   if (!Array.isArray(values) || values.some((value) => !Number.isSafeInteger(value) || value < 0)) harnessFail('HARNESS_INPUT_INVALID', `${label} must contain non-negative safe integers`);
   return [...values].sort((a, b) => a - b);
 }
@@ -31,6 +33,7 @@ export function medianAbsoluteDeviation(values) {
 function sum(samples, field) { return samples.reduce((total, sample) => checkedAdd(total, sample[field], field), 0); }
 
 export function summarizeSamples(samples) {
+  samples = snapshotData(samples, 'summary samples');
   if (!Array.isArray(samples) || samples.length < 1 || samples.length > HARNESS_LIMITS.maxSamples) harnessFail('HARNESS_INPUT_INVALID', 'summary requires a bounded nonempty sample set');
   const groups = new Map();
   for (const sample of samples) {

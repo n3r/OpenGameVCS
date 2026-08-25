@@ -5,6 +5,7 @@ import { captureEnvironment } from './environment.mjs';
 import { harnessFail } from './errors.mjs';
 import { FakeRepositoryService } from './fake-service.mjs';
 import { HARNESS_LIMITS, HarnessDeadline, boundedInteger } from './limits.mjs';
+import { snapshotData, snapshotOptions } from './input.mjs';
 import { measureHarnessOverhead, measureTask, validateHarnessOverhead } from './measurement.mjs';
 import { NetworkController } from './network.mjs';
 import { summarizeSamples } from './statistics.mjs';
@@ -21,6 +22,8 @@ function nonNegative(value, name) {
 }
 
 export function applyEvidenceToMatrix(matrix, evidence = {}) {
+  matrix = snapshotData(matrix, 'benchmark matrix');
+  evidence = snapshotOptions(evidence, 'benchmark matrix evidence');
   const completeEvidence = {
     faultInvariantFailures: nonNegative(evidence.faultInvariantFailures, 'faultInvariantFailures'),
     securityNegativeMisses: nonNegative(evidence.securityNegativeMisses, 'securityNegativeMisses'),
@@ -85,12 +88,16 @@ async function runPool(units, concurrency, operation) {
 }
 
 export async function runBenchmarkMatrix(options) {
+  options = snapshotOptions(options, 'benchmark matrix options');
+  if (options.signal !== undefined && !(options.signal instanceof AbortSignal)) harnessFail('HARNESS_INPUT_INVALID', 'benchmark matrix signal must be an AbortSignal');
+  if (options.signal?.aborted) harnessFail('HARNESS_CANCELLED', 'benchmark matrix was cancelled before adapter startup');
   const { contract } = options ?? {};
-  if (!contract || !Array.isArray(options.corpora) || options.corpora.length < 1 || options.corpora.length > HARNESS_LIMITS.maxCorpora) harnessFail('HARNESS_INPUT_INVALID', 'benchmark matrix requires a contract and bounded corpora');
+  const suppliedCorpora = snapshotData(options.corpora, 'benchmark corpus inventory');
+  if (!contract || !Array.isArray(suppliedCorpora) || suppliedCorpora.length < 1 || suppliedCorpora.length > HARNESS_LIMITS.maxCorpora) harnessFail('HARNESS_INPUT_INVALID', 'benchmark matrix requires a contract and bounded corpora');
   const profile = contract.registries['harness-profiles'].entries.find(({ id }) => id === (options.harnessProfile ?? 'local-smoke'));
   if (!profile) harnessFail('HARNESS_INPUT_INVALID', 'harness profile is not registered');
   const corporaById = new Map();
-  for (const corpus of options.corpora) {
+  for (const corpus of suppliedCorpora) {
     if (!corpus || typeof corpus.id !== 'string' || corpus.verified !== true || corporaById.has(corpus.id)) harnessFail('HARNESS_INPUT_INVALID', 'benchmark corpus inventory is invalid');
     corporaById.set(corpus.id, corpus);
   }
@@ -143,7 +150,19 @@ export async function runBenchmarkMatrix(options) {
       for (const task of tasks) {
         const deadline = new HarnessDeadline({ timeoutMs: taskTimeoutMs, signal: options.signal });
         const measurement = options.measurementFactory ? options.measurementFactory({ ...unit, unitIndex, taskId: task.id }) : options.measurement;
-        const measured = await deadline.race(measureTask(() => service.executeTask(task.id, taskInput(task.id, corpus, runtime, repetition, deadline.signal)), measurement), `task ${task.id}`);
+        deadline.checkpoint();
+        const taskPromise = measureTask(() => service.executeTask(task.id, taskInput(task.id, corpus, runtime, repetition, deadline.signal)), measurement);
+        let measured;
+        try { measured = await deadline.race(taskPromise, `task ${task.id}`); }
+        catch (error) {
+          // A cooperative in-process adapter observes the aborted task signal.
+          // Do not release its cache/network lane or return while its operation
+          // can still mutate state in the background. Untrusted or potentially
+          // non-settling adapters belong behind ExternalDriverSession, whose
+          // process tree can be terminated at the deadline boundary.
+          if (deadline.signal.aborted) await taskPromise.catch(() => {});
+          throw error;
+        }
         const result = measured.value;
         if (!result || !['success', 'failed', 'incomplete'].includes(result.status) || !result.metrics || !Array.isArray(result.assertions)) harnessFail('HARNESS_PROTOCOL_MALFORMED', 'benchmark task returned an invalid result');
         const assertionIds = result.assertions.map(({ id }) => id);

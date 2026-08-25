@@ -6,6 +6,7 @@ import { FaultScheduler, createFaultSchedule } from './faults.mjs';
 import { HARNESS_LIMITS, checkedAdd } from './limits.mjs';
 import { DeterministicCacheController } from './cache.mjs';
 import { NetworkController } from './network.mjs';
+import { snapshotOptions } from './input.mjs';
 
 const CAPABILITIES = ['cache-control', 'deterministic-faults', 'invariant-check', 'lifecycle', 'metrics', 'task-execution'];
 
@@ -35,6 +36,7 @@ async function* lines(stream, maximum) {
 }
 
 export async function serveFakeDriver(contract, options = {}) {
+  options = snapshotOptions(options, 'fake driver options');
   const input = options.input ?? process.stdin; const output = options.output ?? process.stdout;
   const incompatible = options.incompatible === true;
   const hello = {

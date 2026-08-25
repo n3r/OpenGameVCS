@@ -8,6 +8,7 @@ import { ProtocolSchemaValidator } from '@opengamevcs/protocol-baseline';
 import { canonicalBytes, canonicalJson, codeUnitCompare, deepFreeze, parseJson, sha256 } from './canonical.mjs';
 import { BenchmarkHarnessError, harnessFail } from './errors.mjs';
 import { HARNESS_LIMITS, HarnessDeadline, boundedInteger, checkedAdd } from './limits.mjs';
+import { snapshotOptions } from './input.mjs';
 
 const PACKAGE = '@opengamevcs/benchmark-fault-contract-v1';
 const SAFE_ASSET = /^(?:(?:schemas|registries|profiles|thresholds|vectors)\/[A-Za-z0-9._-]+\.json)$/u;
@@ -33,6 +34,7 @@ function assetUrl(root, path) {
 async function readBounded(url, maximum, deadline) {
   let handle;
   try {
+    deadline.checkpoint();
     handle = await deadline.race(open(fileURLToPath(url), fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0)), 'contract open');
     const before = await deadline.race(handle.stat(), 'contract stat');
     if (!before.isFile() || before.size < 1 || before.size > maximum) harnessFail('HARNESS_LIMIT_EXCEEDED', 'benchmark contract artifact exceeds its bound');
@@ -95,6 +97,7 @@ async function load(root, options) {
 }
 
 export async function loadBenchmarkContract(options = {}) {
+  options = snapshotOptions(options, 'benchmark contract options');
   const root = rootUrl(options);
   const settings = {
     deadline: new HarnessDeadline(options),

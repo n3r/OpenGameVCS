@@ -45,3 +45,9 @@ test('hostile command preflight is typed and does not consume a command identity
   assert.equal(configured.id, 'command-000002');
   await session.close();
 });
+
+test('pre-cancelled driver startup rejects before spawning the adapter', async () => {
+  const authority = await contract();
+  const controller = new AbortController(); controller.abort();
+  await assert.rejects(startExternalDriver(['ogvcs-driver-command-that-must-not-spawn'], authority, { signal: controller.signal }), (error) => error.code === 'HARNESS_CANCELLED');
+});

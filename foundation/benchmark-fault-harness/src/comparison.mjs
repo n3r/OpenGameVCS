@@ -1,10 +1,12 @@
 import { canonicalDigest, canonicalJson, canonicalSequenceDigest, codeUnitCompare, deepFreeze } from './canonical.mjs';
 import { validateBenchmarkValue } from './contract.mjs';
 import { harnessFail } from './errors.mjs';
+import { snapshotData, snapshotOptions } from './input.mjs';
 
 function key(row) { return `${row.taskId}/${row.corpusId}/${row.cacheState}/${row.networkProfile}`; }
 
 function view(contract, input, label) {
+  input = snapshotData(input, `${label} comparison input`);
   if (!input || !input.result || !Array.isArray(input.summaries) || !Array.isArray(input.environmentRecords)) harnessFail('HARNESS_INPUT_INVALID', `${label} comparison input must include its authenticated raw summaries and environments`);
   const result = validateBenchmarkValue(contract, 'BenchmarkResultBundle.schema.json', input.result);
   for (const row of input.summaries) validateBenchmarkValue(contract, 'TaskSummary.schema.json', row);
@@ -54,6 +56,7 @@ function deltaPartsPerMillion(baseline, candidate) {
 }
 
 export function compareResultBundles(contract, baselineInput, candidateInput, options = {}) {
+  options = snapshotOptions(options, 'comparison options');
   const baseline = view(contract, baselineInput, 'baseline');
   const candidate = view(contract, candidateInput, 'candidate');
   const authorityTolerance = Math.min(baseline.result.thresholdFile.comparisonTolerancePartsPerMillion, candidate.result.thresholdFile.comparisonTolerancePartsPerMillion);

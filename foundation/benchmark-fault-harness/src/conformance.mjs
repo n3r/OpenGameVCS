@@ -18,6 +18,7 @@ import { redactPublicData } from './redaction.mjs';
 import { runBenchmarkMatrix } from './runner.mjs';
 import { runSecurityNegativeSuites } from './security.mjs';
 import { summarizeSamples } from './statistics.mjs';
+import { snapshotData } from './input.mjs';
 import { evaluateThresholds } from './thresholds.mjs';
 
 function fakeDriverDescriptor(contract, flags = []) {
@@ -93,6 +94,7 @@ async function proveSecondOperatorReproduction(contract, corpora, referencePubli
 }
 
 export async function runHarnessConformance(contract, options) {
+  options = snapshotData(options, 'harness conformance options');
   const cases = contract.vectors.conformance.cases;
   const memo = {};
   const evaluate = async (entry) => {

@@ -5,6 +5,7 @@ import { canonicalDigest, canonicalJson, deepFreeze, parseJson } from './canonic
 import { validateBenchmarkValue } from './contract.mjs';
 import { BenchmarkHarnessError, harnessFail } from './errors.mjs';
 import { HARNESS_LIMITS, HarnessDeadline, boundedInteger, checkedAdd } from './limits.mjs';
+import { snapshotOptions } from './input.mjs';
 
 const REQUIRED_CAPABILITIES = Object.freeze(['cache-control', 'deterministic-faults', 'invariant-check', 'lifecycle', 'metrics', 'task-execution']);
 const MAX_DRIVER_OUTPUT_NODES = 20_000;
@@ -95,6 +96,7 @@ export class ExternalDriverSession {
     return row.value;
   }
   async command(operation, payload = {}, options = {}) {
+    options = snapshotOptions(options, 'driver command options');
     if (this.#closed) harnessFail('HARNESS_DRIVER_FAILED', 'driver session is closed');
     const sequence = checkedAdd(this.#sequence, 1, 'driver command sequence');
     const id = `command-${String(sequence).padStart(6, '0')}`;
@@ -135,6 +137,7 @@ export class ExternalDriverSession {
     }
   }
   async close(options = {}) {
+    options = snapshotOptions(options, 'driver close options');
     if (this.#closed) return;
     try {
       if (options.sendStop !== false) {
@@ -156,8 +159,10 @@ export class ExternalDriverSession {
 }
 
 export async function startExternalDriver(adapter, contract, options = {}) {
+  options = snapshotOptions(options, 'external driver options');
   const spec = descriptor(adapter); const deadline = new HarnessDeadline(options);
   const settings = { maxMessageBytes: boundedInteger(options.maxMessageBytes, HARNESS_LIMITS.maxControlMessageBytes, HARNESS_LIMITS.maxControlMessageBytes, 'maxMessageBytes'), maxStreamBytes: boundedInteger(options.maxStreamBytes, HARNESS_LIMITS.maxStreamBytes, HARNESS_LIMITS.maxStreamBytes, 'maxStreamBytes') };
+  deadline.checkpoint();
   const child = spawn(spec.command, spec.args, { cwd: spec.cwd, detached: process.platform !== 'win32', env: minimalEnvironment(spec.env, contract), shell: false, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
   const state = { child, stdinBytes: 0, stdoutBytes: 0, stderrBytes: 0, failure: undefined };
   state.close = new Promise((resolve, reject) => { child.once('error', reject); child.once('close', (code, signal) => resolve({ code, signal })); });
@@ -178,6 +183,7 @@ export async function startExternalDriver(adapter, contract, options = {}) {
 }
 
 export async function runExternalDriverConformance(adapter, contract, options = {}) {
+  options = snapshotOptions(options, 'driver conformance options');
   const session = await startExternalDriver(adapter, contract, options);
   try {
     const configure = await session.command('configure', { cacheState: 'cold', networkProfile: 'loopback-simulated' });

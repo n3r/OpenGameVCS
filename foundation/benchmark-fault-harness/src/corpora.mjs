@@ -7,6 +7,7 @@ import { createRequest, generateFixture, inspectFixture, verifyFixture } from '@
 import { deepFreeze } from './canonical.mjs';
 import { harnessFail } from './errors.mjs';
 import { HARNESS_LIMITS } from './limits.mjs';
+import { snapshotData, snapshotOptions } from './input.mjs';
 
 export const REFERENCE_CORPORA = Object.freeze(['code-heavy', 'global-studio', 'large-binary', 'unity-like', 'unreal-like']);
 
@@ -65,8 +66,9 @@ export async function loadReferenceCorpus(root, destination) {
 }
 
 export async function materializeReferenceCorpora(root, options = {}) {
+  options = snapshotOptions(options, 'reference corpus options');
   if (typeof root !== 'string' || root.length < 1) harnessFail('HARNESS_INPUT_INVALID', 'fixture workspace root is required');
-  const profiles = options.profiles ?? REFERENCE_CORPORA;
+  const profiles = options.profiles === undefined ? REFERENCE_CORPORA : snapshotData(options.profiles, 'reference corpus profiles');
   if (!Array.isArray(profiles) || profiles.length < 1 || profiles.length > HARNESS_LIMITS.maxCorpora || profiles.some((id) => !REFERENCE_CORPORA.includes(id)) || new Set(profiles).size !== profiles.length) harnessFail('HARNESS_INPUT_INVALID', 'reference corpus selection is invalid');
   const seed = options.seed ?? 'ogvcs-benchmark-smoke-v1';
   const output = [];

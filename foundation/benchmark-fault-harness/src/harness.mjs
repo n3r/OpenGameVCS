@@ -10,6 +10,7 @@ import { harnessFail } from './errors.mjs';
 import { runBrokenServiceSelfTest, runFaultMatrix, proveFaultDeterminism } from './fault-harness.mjs';
 import { runBenchmarkMatrix, applyEvidenceToMatrix } from './runner.mjs';
 import { runSecurityNegativeSuites } from './security.mjs';
+import { snapshotData, snapshotOptions } from './input.mjs';
 
 export function planHarnessMatrix(contract) {
   return deepFreeze(contract.registries['harness-profiles'].entries.map((profile) => ({
@@ -51,10 +52,13 @@ function buildEvidenceReport(contract, faultMatrix, brokenServices, security, de
 }
 
 export async function runReferenceHarness(options) {
+  options = snapshotOptions(options, 'reference harness options');
+  if (options.signal !== undefined && !(options.signal instanceof AbortSignal)) harnessFail('HARNESS_INPUT_INVALID', 'reference harness signal must be an AbortSignal');
+  if (options.signal?.aborted) harnessFail('HARNESS_CANCELLED', 'reference harness was cancelled before workspace creation');
   if (!options || typeof options.workspace !== 'string' || options.workspace.length < 1 || options.workspace.includes('\0')) harnessFail('HARNESS_INPUT_INVALID', 'reference harness workspace is required');
   await mkdir(options.workspace, { recursive: true });
   const contract = options.contract ?? await loadBenchmarkContract({ ...(options.contractRoot ? { root: options.contractRoot } : {}), cache: false });
-  const corpora = options.corpora ?? await materializeReferenceCorpora(options.workspace, { seed: options.seed });
+  const corpora = options.corpora === undefined ? await materializeReferenceCorpora(options.workspace, { seed: options.seed }) : snapshotData(options.corpora, 'reference harness corpora');
   const [faultMatrix, brokenServices, security] = await Promise.all([runFaultMatrix(contract, { seed: options.seed }), runBrokenServiceSelfTest(contract), runSecurityNegativeSuites()]);
   const deterministicFaults = proveFaultDeterminism(contract, options.seed);
   const evidenceReport = buildEvidenceReport(contract, faultMatrix, brokenServices, security, deterministicFaults);

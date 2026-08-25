@@ -8,6 +8,7 @@ import { validateBenchmarkValue } from './contract.mjs';
 import { BenchmarkHarnessError, harnessFail } from './errors.mjs';
 import { FaultScheduler } from './faults.mjs';
 import { HARNESS_LIMITS, checkedAdd } from './limits.mjs';
+import { snapshotArray, snapshotData, snapshotOptions } from './input.mjs';
 import { validateHarnessOverhead } from './measurement.mjs';
 import { redactPublicData } from './redaction.mjs';
 import { expectedSecurityPathCases } from './security.mjs';
@@ -196,6 +197,8 @@ function validateBundleValue(contract, selector, value) {
 }
 
 export function buildResultBundle(contract, matrix, options = {}) {
+  matrix = snapshotData(matrix, 'result matrix');
+  options = snapshotOptions(options, 'result bundle options');
   if (!contract || !matrix || !Array.isArray(matrix.samples) || matrix.samples.length < 1 || matrix.samples.length > HARNESS_LIMITS.maxSamples || !Array.isArray(matrix.environmentRecords) || !Array.isArray(matrix.summaries) || !Array.isArray(matrix.thresholdEvaluations)) harnessFail('HARNESS_INPUT_INVALID', 'result matrix is incomplete or outside its bound');
   for (const sample of matrix.samples) validateBenchmarkValue(contract, 'BenchmarkSample.schema.json', sample);
   for (const environment of matrix.environmentRecords) validateBenchmarkValue(contract, 'EnvironmentRecord.schema.json', environment);
@@ -226,7 +229,7 @@ export function buildResultBundle(contract, matrix, options = {}) {
   const environmentSetDigest = canonicalSequenceDigest(matrix.environmentRecords, 'ogvcs.benchmark/environment-set/v1');
   const sampleSetDigest = canonicalSequenceDigest(matrix.samples, 'ogvcs.benchmark/sample-set/v1');
   const runBasis = { contractManifestSha256: contract.manifestSha256, createdAt: created.toISOString(), classification, seedDigest: canonicalDigest(seed, 'ogvcs.benchmark/seed/v1'), profile: matrix.profile.id, operatorDigest, environmentSetDigest, sampleSetDigest, metadata: publicMetadata.value };
-  const faultSchedules = options.faultSchedules ?? [];
+  const faultSchedules = snapshotData(options.faultSchedules ?? [], 'bundle fault schedules');
   if (!Array.isArray(faultSchedules) || faultSchedules.length > HARNESS_LIMITS.maxFaultEvents) harnessFail('HARNESS_INPUT_INVALID', 'bundle fault schedule inventory is invalid');
   for (const schedule of faultSchedules) validateBenchmarkValue(contract, 'FaultSchedule.schema.json', schedule);
   const bundle = {
@@ -300,6 +303,10 @@ async function syncDirectory(path) {
 }
 
 export async function writeResultBundle(directory, contract, publication) {
+  publication = snapshotOptions(publication, 'result publication');
+  publication.environmentRecords = snapshotArray(publication.environmentRecords, 'publication environments', HARNESS_LIMITS.maxSamples);
+  publication.samples = snapshotArray(publication.samples, 'publication samples', HARNESS_LIMITS.maxSamples);
+  publication.summaries = snapshotArray(publication.summaries, 'publication summaries', HARNESS_LIMITS.maxSamples);
   if (typeof directory !== 'string' || directory.length < 1 || directory.includes('\0')) harnessFail('HARNESS_INPUT_INVALID', 'bundle destination is invalid');
   const bundle = validateBundleValue(contract, 'BenchmarkResultBundle.schema.json', publication?.result);
   if (!Array.isArray(publication?.samples) || publication.samples.length !== bundle.sampleCount || canonicalSequenceDigest(publication.samples, 'ogvcs.benchmark/sample-set/v1') !== bundle.sampleSetDigest || !Array.isArray(publication.environmentRecords) || publication.environmentRecords.length !== bundle.environmentCount || canonicalSequenceDigest(publication.environmentRecords, 'ogvcs.benchmark/environment-set/v1') !== bundle.environmentSetDigest || !Array.isArray(publication.summaries) || publication.summaries.length !== bundle.summaryCount || canonicalSequenceDigest(publication.summaries, 'ogvcs.benchmark/summary-set/v1') !== bundle.summarySetDigest) harnessFail('HARNESS_BUNDLE_INVALID', 'publication raw sets differ from their result envelope');

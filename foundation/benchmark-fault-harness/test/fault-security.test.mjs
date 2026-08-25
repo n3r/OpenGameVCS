@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { FakeRepositoryService, FaultScheduler, createFaultSchedule, proveFaultDeterminism, runBrokenServiceSelfTest, runFaultMatrix, runSecurityNegativeSuites } from '../src/index.mjs';
+import { FakeRepositoryService, FaultScheduler, checkRepositoryInvariants, createFaultSchedule, proveFaultDeterminism, runBrokenServiceSelfTest, runFaultMatrix, runSecurityNegativeSuites } from '../src/index.mjs';
 import { contract } from './helpers.mjs';
 
 test('all durable boundaries reject before/after/error faults without invariant loss', async () => {
@@ -34,4 +34,21 @@ test('post-mutation incomplete task replay is idempotent and retry accounting st
   assert.deepEqual({ status: retry.status, code: retry.code, mutationCount: retry.mutationCount, retries: retry.retries, metricRetries: retry.metrics.retries }, { status: first.status, code: first.code, mutationCount: 0, retries: 1, metricRetries: 1 });
   assert.deepEqual({ mutationCount: secondRetry.mutationCount, retries: secondRetry.retries, metricRetries: secondRetry.metrics.retries }, { mutationCount: 0, retries: 2, metricRetries: 2 });
   assert.equal(service.snapshotDigest(), afterFirst);
+});
+
+test('fake service rejects hostile task records without invoking caller code', async () => {
+  const service = new FakeRepositoryService();
+  let trapCalls = 0;
+  const input = new Proxy({}, { get() { trapCalls += 1; throw new Error('task input trap must not run'); } });
+  await assert.rejects(service.executeTask('setup', input), (error) => error.code === 'HARNESS_INPUT_INVALID');
+  assert.equal(trapCalls, 0); assert.equal(service.mutationCount(), 0);
+  let invariantTrapCalls = 0;
+  const invariantProxy = new Proxy({}, { get() { invariantTrapCalls += 1; throw new Error('invariant trap must not run'); } });
+  assert.throws(() => checkRepositoryInvariants(invariantProxy), (error) => error.code === 'HARNESS_INPUT_INVALID');
+  assert.equal(invariantTrapCalls, 0);
+  let schedulerTrapCalls = 0;
+  const scheduler = new FaultScheduler(createFaultSchedule('hostile-scheduler-v1', ['durable.write'], { count: 1 }));
+  const schedulerProxy = new Proxy(scheduler, { get() { schedulerTrapCalls += 1; throw new Error('scheduler trap must not run'); } });
+  assert.throws(() => service.setFaultScheduler(schedulerProxy), (error) => error.code === 'HARNESS_INPUT_INVALID');
+  assert.equal(schedulerTrapCalls, 0);
 });

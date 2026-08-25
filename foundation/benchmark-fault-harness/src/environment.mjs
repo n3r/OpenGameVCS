@@ -2,6 +2,7 @@ import os from 'node:os';
 
 import { canonicalDigest, deepFreeze } from './canonical.mjs';
 import { harnessFail } from './errors.mjs';
+import { snapshotData, snapshotOptions } from './input.mjs';
 
 function safeLabel(value, fallback) {
   const result = value ?? fallback;
@@ -19,6 +20,10 @@ function capturedDate(clock) {
 }
 
 export function captureEnvironment(options) {
+  options = snapshotOptions(options, 'environment options');
+  if (options.corpus !== undefined) options.corpus = snapshotData(options.corpus, 'environment corpus');
+  if (options.cacheInspection !== undefined) options.cacheInspection = snapshotData(options.cacheInspection, 'environment cache inspection');
+  if (options.network !== undefined) options.network = snapshotData(options.network, 'environment network profile');
   if (!options?.corpus || !options.cacheInspection || !options.network || !options.thresholdDigest || !options.seed) harnessFail('HARNESS_INPUT_INVALID', 'environment capture is incomplete');
   const classification = options.classification ?? 'synthetic';
   if (!['synthetic', 'partner-derived'].includes(classification)) harnessFail('HARNESS_INPUT_INVALID', 'environment classification is invalid');

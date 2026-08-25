@@ -1,6 +1,7 @@
 import { canonicalDigest, deepFreeze } from './canonical.mjs';
 import { harnessFail } from './errors.mjs';
 import { HARNESS_LIMITS, boundedInteger, checkedAdd } from './limits.mjs';
+import { snapshotOptions } from './input.mjs';
 
 const STATES = Object.freeze({
   cold: { localBytes: 0, regionalBytes: 0 },
@@ -19,6 +20,7 @@ export class DeterministicCacheController {
   #regionalHits = 0;
   #maximumBytes;
   constructor(options = {}) {
+    options = snapshotOptions(options, 'cache options');
     this.#maximumBytes = boundedInteger(options.maxBytes, HARNESS_LIMITS.maxWorkingMemoryBytes, HARNESS_LIMITS.maxWorkingMemoryBytes, 'cache maxBytes');
   }
   prepare(state) {

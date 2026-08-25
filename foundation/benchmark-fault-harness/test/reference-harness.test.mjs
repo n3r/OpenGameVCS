@@ -8,6 +8,14 @@ import { buildResultBundle, canonicalDigest, compareResultBundles, runReferenceH
 import { canonicalSequenceDigest } from '../src/canonical.mjs';
 import { contract, fixedMeasurement, FIXED_OVERHEAD } from './helpers.mjs';
 
+test('pre-cancelled reference harness rejects before creating its workspace', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'ogvcs-benchmark-cancelled-')); t.after(() => rm(root, { recursive: true, force: true }));
+  const workspace = join(root, 'workspace');
+  const controller = new AbortController(); controller.abort();
+  await assert.rejects(runReferenceHarness({ contract: await contract(), workspace, signal: controller.signal }), (error) => error.code === 'HARNESS_CANCELLED');
+  await assert.rejects(access(workspace));
+});
+
 test('five-corpus reference smoke publishes raw authenticated reproducible evidence', { timeout: 60_000 }, async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'ogvcs-benchmark-reference-')); t.after(() => rm(root, { recursive: true, force: true }));
   const authority = await contract(); const output = join(root, 'result');
@@ -23,6 +31,21 @@ test('five-corpus reference smoke publishes raw authenticated reproducible evide
   assert.notEqual(alternateIdentity.result.runId, verified.result.runId);
   const comparison = compareResultBundles(authority, verified, verified, { tolerancePartsPerMillion: 0 });
   assert.equal(comparison.reproduced, true); assert.equal(comparison.rows.length, 110);
+  const callerMatrix = structuredClone(run.matrix);
+  const callerSample = callerMatrix.samples[0];
+  const snapshotted = buildResultBundle(authority, callerMatrix, { evidenceReport: run.publication.evidenceReport, faultSchedules: run.publication.result.faultSchedules, conformanceReport: run.publication.conformanceReport, seed: 'reference-test-v1', operator: 'test-operator', classification: 'synthetic', clock: () => new Date('2026-08-21T00:00:00.000Z') });
+  assert.equal(Object.isFrozen(callerMatrix), false); assert.equal(Object.isFrozen(callerSample), false);
+  assert.notEqual(snapshotted.samples, callerMatrix.samples); assert.notEqual(snapshotted.samples[0], callerSample);
+  callerSample.wallMicroseconds += 1;
+  assert.notEqual(snapshotted.samples[0].wallMicroseconds, callerSample.wallMicroseconds);
+  let comparisonTrapCalls = 0;
+  const comparisonProxy = new Proxy({}, { get() { comparisonTrapCalls += 1; throw new Error('comparison input trap must not run'); } });
+  assert.throws(() => compareResultBundles(authority, comparisonProxy, verified), (error) => error.code === 'HARNESS_INPUT_INVALID');
+  assert.equal(comparisonTrapCalls, 0);
+  let scheduleTrapCalls = 0;
+  const scheduleProxy = new Proxy([], { get() { scheduleTrapCalls += 1; throw new Error('fault schedule trap must not run'); } });
+  assert.throws(() => buildResultBundle(authority, run.matrix, { evidenceReport: run.publication.evidenceReport, faultSchedules: scheduleProxy }), (error) => error.code === 'HARNESS_INPUT_INVALID');
+  assert.equal(scheduleTrapCalls, 0);
   const evidenceMismatch = compareResultBundles(authority, verified, { ...verified, result: { ...verified.result, evidenceReportDigest: '0'.repeat(64) } }, { tolerancePartsPerMillion: 0 });
   assert.equal(evidenceMismatch.reproduced, false); assert.ok(evidenceMismatch.reasons.includes('evidence-authority-differs'));
   const changedSummaries = verified.summaries.map((row, index) => index === 0 ? { ...row, durationMicroseconds: { ...row.durationMicroseconds, medianAbsoluteDeviation: row.durationMicroseconds.medianAbsoluteDeviation + 1 } } : row);
@@ -60,6 +83,10 @@ test('five-corpus reference smoke publishes raw authenticated reproducible evide
   const unstableWrite = writeResultBundle(unstableOutput, authority, mutablePublication); mutablePublication.samples[0].wallMicroseconds += 1;
   await assert.rejects(unstableWrite, (error) => error.code === 'HARNESS_BUNDLE_INVALID');
   await assert.rejects(access(unstableOutput));
+  let sampleInventoryTrapCalls = 0;
+  const sampleInventoryProxy = new Proxy([], { get() { sampleInventoryTrapCalls += 1; throw new Error('sample inventory trap must not run'); } });
+  await assert.rejects(writeResultBundle(join(root, 'rejected-hostile-inventory'), authority, { ...run.publication, samples: sampleInventoryProxy }), (error) => error.code === 'HARNESS_INPUT_INVALID');
+  assert.equal(sampleInventoryTrapCalls, 0);
   const published = Buffer.concat(await Promise.all(['result.json', 'evidence.json', 'environments.jsonl', 'samples.jsonl', 'summaries.jsonl'].map((name) => readFile(join(output, name))))).toString('utf8');
   assert.doesNotMatch(published, /partner-canary|credential-canary|command-credential-canary/u); assert.match(published, /retained/u);
 

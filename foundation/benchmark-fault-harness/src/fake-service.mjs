@@ -1,6 +1,9 @@
+import { types as utilTypes } from 'node:util';
+
 import { canonicalDigest, codeUnitCompare, deepFreeze } from './canonical.mjs';
 import { BenchmarkHarnessError, harnessFail } from './errors.mjs';
-import { isInjectedFault } from './faults.mjs';
+import { FaultScheduler, isInjectedFault } from './faults.mjs';
+import { snapshotData, snapshotOptions } from './input.mjs';
 
 const TASKS = new Set(['setup', 'status', 'sync', 'submit', 'lock', 'merge', 'ci', 'verify', 'backup', 'restore', 'export']);
 const INCOMPLETE_CODES = new Set(['HARNESS_RETRYABLE', 'HARNESS_TASK_INCOMPLETE', 'HARNESS_DEADLINE_EXCEEDED', 'HARNESS_CANCELLED', 'HARNESS_IO']);
@@ -43,8 +46,8 @@ export class FakeRepositoryService {
   #idempotency = new Map();
   #mutationCount = 0;
   #brokenMode;
-  constructor(options = {}) { this.#brokenMode = options.brokenMode; }
-  setFaultScheduler(scheduler) { this.#scheduler = scheduler; }
+  constructor(options = {}) { options = snapshotOptions(options, 'fake service options'); this.#brokenMode = options.brokenMode; }
+  setFaultScheduler(scheduler) { if (utilTypes.isProxy(scheduler) || !(scheduler instanceof FaultScheduler)) harnessFail('HARNESS_INPUT_INVALID', 'fake service scheduler must be a non-proxy FaultScheduler'); this.#scheduler = scheduler; }
   mutationCount() { return this.#mutationCount; }
   snapshot() { return deepFreeze(projection(this.#state)); }
   snapshotDigest() { return canonicalDigest(projection(this.#state), 'ogvcs.benchmark/fake-service-state/v1'); }
@@ -54,6 +57,7 @@ export class FakeRepositoryService {
   #requireReady() { if (!this.#state.repositoryReady) harnessFail('HARNESS_TASK_INCOMPLETE', 'repository setup has not completed'); }
 
   async executeTask(taskId, input = {}) {
+    input = snapshotOptions(input, 'fake service task input');
     if (!TASKS.has(taskId)) harnessFail('HARNESS_INPUT_INVALID', 'task is not registered');
     const key = input.idempotencyKey;
     if (typeof key !== 'string' || key.length < 16 || key.length > 256) harnessFail('HARNESS_INPUT_INVALID', 'task idempotency key is invalid');
@@ -79,7 +83,7 @@ export class FakeRepositoryService {
       else if (error instanceof BenchmarkHarnessError) { status = INCOMPLETE_CODES.has(error.code) ? 'incomplete' : 'failed'; code = error.code; output = null; }
       else throw error;
     }
-    const invariants = checkRepositoryInvariants(this.#state);
+    const invariants = checkRepositoryInvariants(this);
     const mutationCount = this.#mutationCount - beforeMutations;
     const assertions = taskAssertions(taskId, invariants, input, output, this.#state, mutationCount);
     if (status === 'success' && assertions.some(({ passed }) => !passed)) { status = 'failed'; code = 'HARNESS_ASSERTION_FAILED'; }
@@ -233,7 +237,7 @@ export class FakeRepositoryService {
     this.#point('index.cursor');
     this.#point('index.cursor', 'after');
     metrics.diskReadBytes += this.#state.objects.size * 128;
-    return { invariants: checkRepositoryInvariants(this.#state) };
+    return { invariants: checkRepositoryInvariants(this) };
   }
 
   #backup(_input, metrics) {
@@ -279,7 +283,7 @@ export class FakeRepositoryService {
 }
 
 export function checkRepositoryInvariants(stateOrService) {
-  const state = stateOrService instanceof FakeRepositoryService ? stateOrService.snapshot() : stateOrService;
+  const state = !utilTypes.isProxy(stateOrService) && stateOrService instanceof FakeRepositoryService ? stateOrService.snapshot() : snapshotData(stateOrService, 'repository invariant state');
   const objects = state.objects instanceof Map ? state.objects : new Map(state.objects);
   const commits = state.commits instanceof Map ? state.commits : new Map(state.commits);
   const branches = state.branches instanceof Map ? state.branches : new Map(state.branches);

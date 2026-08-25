@@ -30,6 +30,10 @@ test('canonical data and redaction reject caller code without invoking it', () =
   assert.throws(() => canonicalJson(proxy), /Proxy/u);
   assert.throws(() => redactPublicData(proxy), (error) => error.code === 'HARNESS_INPUT_INVALID');
   assert.equal(trapCalls, 0);
+  let optionTrapCalls = 0;
+  const optionProxy = new Proxy({}, { get() { optionTrapCalls += 1; throw new Error('canonical option trap must not run'); } });
+  assert.throws(() => canonicalJson({ safe: true }, optionProxy), /Proxy/u);
+  assert.equal(optionTrapCalls, 0);
   let getterCalls = 0;
   const accessor = {};
   Object.defineProperty(accessor, 'accessToken', { enumerable: true, get() { getterCalls += 1; return 'secret'; } });

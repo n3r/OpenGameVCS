@@ -3,6 +3,7 @@ import { deepFreeze } from './canonical.mjs';
 import { FakeRepositoryService, checkRepositoryInvariants } from './fake-service.mjs';
 import { FaultScheduler, createFaultSchedule, isInjectedFault } from './faults.mjs';
 import { NetworkController } from './network.mjs';
+import { snapshotOptions } from './input.mjs';
 
 const TASK_FOR_FAULT = Object.freeze({
   'durable.write': 'submit', 'object.finalize': 'submit', 'policy.decision': 'submit', 'branch.cas': 'submit',
@@ -22,6 +23,7 @@ async function prepare(service, contract, taskId) {
 }
 
 export async function runFaultMatrix(contract, options = {}) {
+  options = snapshotOptions(options, 'fault matrix options');
   const rows = []; const schedules = [];
   for (const entry of contract.registries.faults.entries) {
     for (const action of ['crash-before', 'crash-after', 'error']) {

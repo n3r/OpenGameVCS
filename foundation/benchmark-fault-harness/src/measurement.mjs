@@ -1,11 +1,13 @@
 import { deepFreeze } from './canonical.mjs';
 import { harnessFail } from './errors.mjs';
+import { snapshotData, snapshotOptions } from './input.mjs';
 
 function probe(operation, label) {
   try { return operation(); } catch (error) { harnessFail('HARNESS_INPUT_INVALID', `${label} probe failed`, { cause: error }); }
 }
 
 export function validateHarnessOverhead(value) {
+  value = snapshotData(value, 'measurement overhead evidence');
   if (!value || !Number.isSafeInteger(value.measuredBasisPoints) || value.measuredBasisPoints < 0 || typeof value.correctionApplied !== 'boolean' || !Number.isSafeInteger(value.correctionMicroseconds) || value.correctionMicroseconds < 0 || !['measured-below-threshold', 'measured-and-corrected', 'reported-uncorrected'].includes(value.method)) harnessFail('HARNESS_INPUT_INVALID', 'measurement overhead evidence is invalid');
   const corrected = value.method === 'measured-and-corrected';
   const below = value.method === 'measured-below-threshold';
@@ -14,6 +16,7 @@ export function validateHarnessOverhead(value) {
 }
 
 export async function measureTask(operation, options = {}) {
+  options = snapshotOptions(options, 'measurement options');
   if (typeof operation !== 'function') harnessFail('HARNESS_INPUT_INVALID', 'measured operation must be callable');
   const clock = options.clock ?? (() => process.hrtime.bigint());
   const cpu = options.cpu ?? (() => process.cpuUsage());
@@ -46,6 +49,9 @@ export async function measureTask(operation, options = {}) {
 }
 
 export async function measureHarnessOverhead(options = {}) {
+  options = snapshotOptions(options, 'overhead measurement options');
+  if (options.baselineMicroseconds !== undefined) options.baselineMicroseconds = snapshotData(options.baselineMicroseconds, 'baseline overhead samples');
+  if (options.wrappedMicroseconds !== undefined) options.wrappedMicroseconds = snapshotData(options.wrappedMicroseconds, 'wrapped overhead samples');
   if (Array.isArray(options.baselineMicroseconds) || Array.isArray(options.wrappedMicroseconds)) {
     return overhead(options.baselineMicroseconds, options.wrappedMicroseconds);
   }

@@ -95,3 +95,52 @@ test('matrix failure drains every started execution lane before returning', asyn
   await wait(40);
   assert.equal(completed, completedAtReturn);
 });
+
+test('matrix snapshots corpus data without invoking Proxy traps', async () => {
+  const authority = await contract();
+  let trapCalls = 0;
+  const corpora = new Proxy([], { get() { trapCalls += 1; throw new Error('corpus trap must not run'); } });
+  await assert.rejects(runBenchmarkMatrix({ contract: authority, corpora }), (error) => error.code === 'HARNESS_INPUT_INVALID');
+  assert.equal(trapCalls, 0);
+});
+
+test('pre-cancelled matrix rejects before starting an in-process adapter', async () => {
+  const authority = await contract();
+  const corpora = ['code-heavy', 'global-studio', 'large-binary', 'unity-like', 'unreal-like'].map((id) => ({
+    id, verified: true, logicalBytes: 4096, requestDigest: 'a'.repeat(64), manifestDigest: 'b'.repeat(64), profile: { id, version: '2.0.0' },
+  }));
+  const controller = new AbortController(); controller.abort();
+  let adapterStarts = 0;
+  await assert.rejects(runBenchmarkMatrix({
+    contract: authority, corpora, signal: controller.signal,
+    serviceFactory() { adapterStarts += 1; return new FakeRepositoryService(); },
+  }), (error) => error.code === 'HARNESS_CANCELLED');
+  assert.equal(adapterStarts, 0);
+});
+
+test('matrix deadline waits for the aborted in-process task to settle before returning', async () => {
+  const authority = await contract();
+  const corpora = ['code-heavy', 'global-studio', 'large-binary', 'unity-like', 'unreal-like'].map((id) => ({
+    id, verified: true, logicalBytes: 4096, requestDigest: 'a'.repeat(64), manifestDigest: 'b'.repeat(64), profile: { id, version: '2.0.0' },
+  }));
+  let active = 0; let completed = 0;
+  await assert.rejects(runBenchmarkMatrix({
+    contract: authority, corpora, harnessProfile: 'local-smoke', concurrency: 1, taskTimeoutMs: 5,
+    measurementFactory: () => fixedMeasurement(), overhead: FIXED_OVERHEAD, simulateNetworkDelay: false,
+    serviceFactory: () => {
+      const service = new FakeRepositoryService();
+      return {
+        snapshot: () => service.snapshot(),
+        async executeTask(...arguments_) {
+          active += 1;
+          try { await wait(25); completed += 1; return await service.executeTask(...arguments_); }
+          finally { active -= 1; }
+        },
+      };
+    },
+  }), (error) => error.code === 'HARNESS_DEADLINE_EXCEEDED');
+  assert.equal(active, 0); assert.equal(completed, 1);
+  const completedAtReturn = completed;
+  await wait(40);
+  assert.equal(completed, completedAtReturn);
+});

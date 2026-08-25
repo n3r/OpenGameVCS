@@ -164,6 +164,14 @@ active cache lanes share one aggregate memory ceiling. Resource or deadline
 failure is typed, leaves no trusted partial publication, and does not turn an
 incomplete operation into success.
 
+An in-process matrix task is a trusted cooperative adapter. It receives the
+task deadline's `AbortSignal` and must settle after cancellation; the harness
+drains it before releasing retained resources or returning, preventing a timed
+out task from mutating after publication. Implementations that may ignore the
+signal, block, or run untrusted code use the external-driver process boundary,
+where deadline enforcement includes process-tree termination. The API does not
+claim that arbitrary in-process JavaScript can be forcibly stopped.
+
 Presubmit runs the bounded unprivileged profile. A commit-pinned GitHub Actions
 workflow installs exact dependencies, executes the contract/runtime, packages
 the ten-package dependency closure, installs and runs it offline on Linux,

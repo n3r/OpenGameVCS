@@ -1,6 +1,7 @@
 import { canonicalDigest, deepFreeze } from './canonical.mjs';
 import { harnessFail } from './errors.mjs';
 import { HARNESS_LIMITS, checkedAdd } from './limits.mjs';
+import { snapshotData } from './input.mjs';
 
 const METRICS = new Set(['successRatePartsPerMillion', 'correctnessFailures', 'failed', 'incomplete', 'overheadBasisPoints', 'faultInvariantFailures', 'securityNegativeMisses', 'protocolFailures']);
 
@@ -22,6 +23,9 @@ function actualMetric(entry, summaryIndex, evidence) {
 }
 
 export function evaluateThresholds(thresholdFile, summaries, context) {
+  thresholdFile = snapshotData(thresholdFile, 'threshold file');
+  summaries = snapshotData(summaries, 'threshold summaries');
+  context = snapshotData(context, 'threshold context');
   if (!thresholdFile || !Array.isArray(thresholdFile.entries) || thresholdFile.entries.length < 1 || thresholdFile.entries.length > HARNESS_LIMITS.maxThresholds || !Array.isArray(summaries) || summaries.length > HARNESS_LIMITS.maxSamples || !context || typeof context.harnessProfile !== 'string') harnessFail('HARNESS_INPUT_INVALID', 'threshold file or evaluation context is invalid');
   const summaryIndex = { all: summaries, byTask: new Map() };
   for (const summary of summaries) {

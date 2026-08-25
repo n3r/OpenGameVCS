@@ -69,6 +69,16 @@ idempotent retry, ordered trace limits, no stderr on success, and process-tree
 termination on a protocol failure. Fault hooks start disabled and can be armed
 only after successful authenticated test-mode negotiation and lifecycle start.
 
+`runBenchmarkMatrix` also accepts an in-process `serviceFactory`, but that is a
+trusted, cooperative adapter boundary. Every `executeTask` call receives the
+task's `AbortSignal`; after cancellation or deadline expiry the task must
+observe that signal and settle before the harness can release its cache/network
+lane or return. The harness deliberately drains the task promise so no timed-out
+operation can keep mutating repository state after a result has been reported.
+An adapter that can ignore cancellation, block indefinitely, or execute
+untrusted implementation code must instead use `startExternalDriver`, whose
+process tree is terminated at the deadline boundary.
+
 ## Publication and comparison
 
 `writeResultBundle` stages and synchronizes a publication before one directory
