@@ -48,7 +48,11 @@ will be recorded after the current candidate completes hosted validation.
   speculative cleanup. Directory rename is supported by the same durable
   staged transaction model as files.
 - Directory-sync permission failures remain errors; they are no longer
-  suppressed as durable success. Read-only hints reject hard-linked inodes.
+  suppressed as durable success. Windows' measured lack of directory `fsync`
+  remains an explicit unsupported capability: only the `EPERM` returned by
+  `FileHandle.sync()` after a successful directory open is ignored there;
+  path-open and ACL failures still propagate. Read-only hints reject
+  hard-linked inodes.
 - Locked-file and scanner/antivirus-style interference is retried only within
   the declared bound, then returns `TARGET_BUSY` with recoverable staging and
   never falls back to an unsafe copy. Sparse allocation remains nonidentity;

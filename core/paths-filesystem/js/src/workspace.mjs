@@ -45,7 +45,14 @@ async function syncDirectory(path) {
   try {
     handle = await open(path, constants.O_RDONLY | NO_FOLLOW | DIRECTORY_ONLY);
     if (!(await handle.stat()).isDirectory()) pathFail('UNSAFE_TARGET');
-    await handle.sync();
+    try { await handle.sync(); }
+    catch (error) {
+      // Windows exposes directory handles but does not implement fsync for
+      // them. Keep that measured capability distinction without treating a
+      // real path-open/ACL denial as a successful durability barrier.
+      if (process.platform === 'win32' && error?.code === 'EPERM') return;
+      throw error;
+    }
   }
   catch (error) {
     if (!['EINVAL', 'ENOTSUP', 'EISDIR', 'EBADF'].includes(error?.code)) throw error;

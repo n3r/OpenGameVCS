@@ -140,7 +140,13 @@ async function writeStateFile(path, state, verifyAuthority) {
     try {
       directory = await open(dirname(path), constants.O_RDONLY | NO_FOLLOW | DIRECTORY_ONLY);
       if (!(await directory.stat()).isDirectory()) pathFail('UNSAFE_TARGET');
-      await directory.sync();
+      try { await directory.sync(); }
+      catch (error) {
+        // Directory fsync is unsupported by Windows even after a successful
+        // no-follow open. Do not suppress permission failures from the open
+        // itself, or from platforms that promise directory durability.
+        if (process.platform !== 'win32' || error?.code !== 'EPERM') throw error;
+      }
     } catch (error) {
       if (!['EINVAL', 'ENOTSUP', 'EISDIR', 'EBADF'].includes(error?.code)) throw error;
     } finally { await directory?.close().catch(() => {}); }
