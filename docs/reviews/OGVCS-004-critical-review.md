@@ -4,7 +4,7 @@
 - **Final implementation review:** 2026-08-25
 - **Reviewer:** Independent Codex requirement, filesystem-boundary, and evidence passes
 - **Initial verdict:** Not acceptance-ready
-- **Current verdict:** No known local implementation P0/P1/P2; fresh retained three-host evidence is still required before `Done`
+- **Current verdict:** Acceptance-ready; no live P0, P1, or P2
 
 ## Scope and method
 
@@ -68,14 +68,14 @@ materializer requirement.
 | FR-08 read-only is a hint | Pass | The API reports `authoritative:false`, rejects hard links, and never changes versioned mode. |
 | FR-09 watcher reconciliation | Pass | Stop/open/queue/overflow/gap/corruption tests never let portable notifications establish clean authority. |
 | FR-10 platform outcomes | Pass | All ten outcomes are registered; case/kind/cycle/delete/junction/sparse/busy/symlink/executable paths have executable proof. |
-| NFR-01 cross-host identities/digests | Locally pass; hosted refresh pending | Pure rows and pinned engine/OGVCS-002 identities are comparator-owned. |
-| NFR-02 no outside-root writes | Locally pass; hosted trace refresh pending | Link, target, and ancestor attacks fail before outside access; Linux workflow audits raw syscalls. |
+| NFR-01 cross-host identities/digests | Pass | All 63 pure rows, pinned engine/OGVCS-002 identities, and both normalized archives agree on Linux, macOS, and Windows. |
+| NFR-02 no outside-root writes | Pass | Link, target, and ancestor attacks fail before outside access; retained Linux syscall replay reports zero outside-root references. |
 | NFR-03 capability failure before mutation | Pass | Branded plans revalidate the complete measured capability record before output creation. |
-| AC-01 golden cross-host decisions | Locally pass; hosted refresh pending | 63 pure decisions and exact package/result comparator. |
-| AC-02 symlink/junction/race confinement | Locally pass; hosted refresh pending | Three Linux trace attacks plus required Windows junction row. |
+| AC-01 golden cross-host decisions | Pass | 63 pure decisions and exact package/result comparator passed in the retained three-host run. |
+| AC-02 symlink/junction/race confinement | Pass | Three retained Linux trace attacks plus the required Windows junction row passed. |
 | AC-03 case/NFC rename identity | Pass | Exact pinned tree/bundle identities and preserved FileID; NFD rejection. |
 | AC-04 watcher never falsely clean | Pass | Subscription precedes reconciliation and portable batches never claim queue completeness. |
-| AC-05 engine materialization | Locally pass; hosted refresh pending | Exact Unreal/Unity inventory hashes and paired over-limit result in the retained report. |
+| AC-05 engine materialization | Pass | Exact Unreal/Unity inventory hashes and paired over-limit result passed on all three hosts. |
 
 ## Accepted boundary
 
@@ -88,27 +88,34 @@ directory/journal adapter when those properties are required. Detected change
 always fails; no output or clean state becomes trusted merely because the
 portable API cannot observe a stronger primitive.
 
-## Current local proof
+## Final proof
 
 - Language-neutral path authority: 63 vectors, 23 errors, four profiles; six
   independent contract tests pass.
-- Runtime/package: 53 tests passed before the final queued-event regression;
-  the watcher/report/telemetry rerun then passed 14/14. The final complete rerun
-  is the pre-commit gate.
-- Retained report shape: 78/78 locally (63 pure plus fifteen native rows).
+- Runtime/package: the final complete path suite passed 54/54, including the
+  queued-event, stopped-interval, subscription-order, materialization,
+  property, offline-package, and CLI regressions.
+- Retained report shape: 78/78 on Linux, macOS, and Windows (63 pure plus
+  fifteen native rows), with exact shared result and package identities.
 - Protocol baseline: generated closure, 14 spec tests, 102 runtime tests, and
   independent adapter check pass against the current path predecessor.
 - Benchmark/fault contract and runtime: three spec and nineteen runtime tests
   pass against the current path/protocol predecessors.
 - Generator checks, roadmap validation, offline package/report tooling, and
   `git diff --check` pass.
+- Implementation run
+  [32831999325](https://github.com/n3r/OpenGameVCS/actions/runs/32831999325)
+  passed all three hosts and the strict comparator at source `4f8a5a0`; its raw
+  reports, packed records, comparison, and Linux trace are checked in.
+- Evidence-policy run
+  [32833243994](https://github.com/n3r/OpenGameVCS/actions/runs/32833243994)
+  passed at revision `94f68c8`, including independent byte/hash validation and
+  syscall-trace replay of the durable packet.
 
-## Verdict and remaining gate
+## Final verdict
 
-No known P0, P1, or P2 implementation defect remains after the final local
-review. The historical August 16 evidence is preserved but cannot ratify these
-changed bytes. OGVCS-004 remains `Validation` until the implementation commit
-passes the current three-OS packed workflow and expanded Linux trace, and a new
-source-bound machine record/evidence packet captures those reports, packages,
-jobs, artifacts, hashes, and the final 78-row comparison. Only then is moving
-the PRD to `prd/done` honest.
+No live P0, P1, or P2 remains in the implementation, contract, package, CLI,
+workflow, evidence, or lifecycle boundary. The historical August 16 packet is
+preserved as history; the 2026-08-25 packet binds current implementation bytes,
+jobs, artifacts, packages, reports, exact decisions, and the expanded trace.
+OGVCS-004 satisfies its acceptance criteria and may move to `prd/done`.

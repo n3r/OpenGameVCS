@@ -7,7 +7,26 @@ import { fileURLToPath } from 'node:url';
 
 const evidenceDirectory = new URL('../docs/evidence/OGVCS-004/', import.meta.url);
 const runEvidencePath = new URL('github-actions-run-32831999325.json', evidenceDirectory);
+const policyRunEvidencePath = new URL(
+  'github-actions-run-32833243994.json',
+  evidenceDirectory
+);
 const traceAuditPath = new URL('./path-filesystem-trace-audit.mjs', import.meta.url);
+const evidenceReadmePath = new URL('README.md', evidenceDirectory);
+const completedPrdPath = new URL(
+  '../prd/done/OGVCS-004-cross-platform-path-filesystem-library.md',
+  import.meta.url
+);
+const reviewPath = new URL(
+  '../docs/reviews/OGVCS-004-critical-review.md',
+  import.meta.url
+);
+const changelogPath = new URL('../docs/changelog/OGVCS-004.md', import.meta.url);
+const adrPath = new URL(
+  '../adr/0012-path-and-workspace-filesystem-contract-v1.md',
+  import.meta.url
+);
+const roadmapPath = new URL('../prd/ROADMAP.md', import.meta.url);
 
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
@@ -196,4 +215,59 @@ test('retained Linux syscall trace independently proves outside-root confinement
     targetRace: 'TARGET_CHANGED',
     ancestorRace: 'TARGET_CHANGED'
   });
+});
+
+test('evidence-policy validation is bound to the retained implementation proof', async () => {
+  const policyRun = JSON.parse(await readFile(policyRunEvidencePath));
+  assert.equal(policyRun.schema, 'ogvcs.path/evidence-policy-validation/v1');
+  assert.equal(policyRun.status, 'completed');
+  assert.deepEqual(policyRun.implementationEvidence, {
+    sourceRevision: '4f8a5a0f836ef51b4ac56cab9d795d7f5515926d',
+    runId: 32831999325,
+    machineRecord: 'github-actions-run-32831999325.json'
+  });
+  assert.equal(policyRun.github.runId, 32833243994);
+  assert.equal(
+    policyRun.github.sourceRevision,
+    '94f68c80f9166ef3deb7aa65b9cb268453af714f'
+  );
+  assert.equal(policyRun.github.conclusion, 'success');
+  assert.equal(policyRun.github.jobs.length, 4);
+  assert.ok(policyRun.github.jobs.every(({ conclusion }) => conclusion === 'success'));
+  assert.equal(policyRun.github.artifacts.length, 3);
+  assert.ok(policyRun.github.artifacts.every(
+    ({ id, sizeBytes, githubArchiveDigest }) =>
+      id > 0 && sizeBytes > 0 && /^sha256:[0-9a-f]{64}$/u.test(githubArchiveDigest)
+  ));
+  assert.equal(policyRun.validatedClaims.length, 5);
+});
+
+test('completed OGVCS-004 lifecycle claims stay aligned with durable evidence', async () => {
+  const [evidenceReadme, prd, review, changelog, adr, roadmap] = await Promise.all([
+    readFile(evidenceReadmePath, 'utf8'),
+    readFile(completedPrdPath, 'utf8'),
+    readFile(reviewPath, 'utf8'),
+    readFile(changelogPath, 'utf8'),
+    readFile(adrPath, 'utf8'),
+    readFile(roadmapPath, 'utf8')
+  ]);
+  assert.match(evidenceReadme, /\*\*Status:\*\* Completed/u);
+  assert.match(evidenceReadme, /actions\/runs\/32831999325/u);
+  assert.match(evidenceReadme, /actions\/runs\/32833243994/u);
+  assert.match(evidenceReadme, /63 pure cross-platform rows|Pure cross-platform rows \| 63/u);
+  assert.match(evidenceReadme, /Bounded native filesystem rows \| 15/u);
+  assert.doesNotMatch(evidenceReadme, /Deferred roadmap completion/u);
+
+  assert.match(prd, /\*\*Status:\*\* Done/u);
+  for (const number of [1, 2, 3, 4, 5]) {
+    const id = `OGVCS-004-AC-${String(number).padStart(2, '0')}`;
+    assert.match(prd, new RegExp(`^- ${id}: .*\\[[^\\]]+\\]\\([^)]+\\)`, 'mu'));
+  }
+  assert.match(review, /\*\*Current verdict:\*\* Acceptance-ready; no live P0, P1, or P2/u);
+  assert.match(changelog, /### Hosted completion evidence/u);
+  assert.match(adr, /\*\*Status:\*\* Accepted/u);
+  assert.match(
+    roadmap,
+    /\[Cross-platform path and workspace filesystem library\]\(done\/OGVCS-004-cross-platform-path-filesystem-library\.md\)/u
+  );
 });

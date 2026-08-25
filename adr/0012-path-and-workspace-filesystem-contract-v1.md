@@ -112,15 +112,19 @@ three-operating-system matrix compare every pure result byte-for-byte and run
 native filesystem adversarial cases appropriate to each host.
 
 The 2026-08-16 candidate reproduced 62 pure decisions and ten bounded native
-proofs from offline-installed MIT packages. GitHub Actions run 31939458256
-passed all 72 rows on Linux, macOS, and Windows, compared exact package bytes
-and pure results, and retained a Linux syscall trace with zero outside-root
-references. Its exact hashes and independent critical review are recorded in
-the [OGVCS-004 evidence packet](../docs/evidence/OGVCS-004/README.md).
-That historical evidence was superseded after final review; the current
-ratification record and three-host run are linked from the OGVCS-004 evidence
-packet. OGVCS-002's separate million-tree and logical-1-TiB acceptance campaign
-is complete and is not represented as path-materializer evidence here.
+proofs from offline-installed MIT packages. That historical boundary is
+preserved, but final review expanded the authority to 63 pure decisions and
+fifteen native proofs. GitHub Actions
+[run 32831999325](https://github.com/n3r/OpenGameVCS/actions/runs/32831999325)
+passed all 78 rows on Linux, macOS, and Windows, compared exact package bytes
+and pure results, and retained the three-attack Linux syscall trace with zero
+outside-root references. Evidence-policy
+[run 32833243994](https://github.com/n3r/OpenGameVCS/actions/runs/32833243994)
+then independently validated the checked-in reports, hashes, comparison, and
+trace replay. Exact identities and the independent critical review are in the
+[OGVCS-004 evidence packet](../docs/evidence/OGVCS-004/README.md). OGVCS-002's
+separate million-tree and logical-1-TiB acceptance campaign is complete and is
+not represented as path-materializer evidence here.
 
 Case mode, fold version, and platform profile are repository-immutable. A
 changed mapping, collision rule, or meaning requires a new profile major and a

@@ -1,6 +1,6 @@
 # OGVCS-004 — Cross-platform path and workspace filesystem library
 
-**Current implementation candidate:** 2026-08-25
+**Completed implementation:** 2026-08-25
 
 **Historical validation candidate:** 2026-08-16
 
@@ -117,8 +117,35 @@ will be recorded after the current candidate completes hosted validation.
   and benchmark/fault predecessor chain. Generated checks, independent path
   validation, runtime/package tests, protocol generation/runtime tests,
   benchmark generation/runtime tests, roadmap validation, and diff hygiene are
-  green locally. Fresh three-OS retained evidence remains the sole pre-ratify
-  gate for this candidate.
+  green. The final three-OS retained evidence and its independent integrity
+  replay are also green.
+
+### Hosted completion evidence
+
+- Implementation/package source
+  [`4f8a5a0`](https://github.com/n3r/OpenGameVCS/commit/4f8a5a0f836ef51b4ac56cab9d795d7f5515926d)
+  passed [run 32831999325](https://github.com/n3r/OpenGameVCS/actions/runs/32831999325):
+  78/78 on Linux, macOS, and Windows plus strict cross-host comparison.
+- Evidence-policy revision
+  [`94f68c8`](https://github.com/n3r/OpenGameVCS/commit/94f68c80f9166ef3deb7aa65b9cb268453af714f)
+  passed [run 32833243994](https://github.com/n3r/OpenGameVCS/actions/runs/32833243994),
+  including independent validation of all checked-in byte lengths, SHA-256
+  identities, decisions, packed records, comparison, and syscall trace.
+- The normalized archives are source-bound and identical across hosts:
+  `@opengamevcs/path-contract-v1` is 185,899 bytes with SHA-256
+  `432f0f59a498186ff826f73e8c1e8c74e9cf836d22a0f57b463822624c962b8e`;
+  `@opengamevcs/path-filesystem` is 188,459 bytes with SHA-256
+  `82a9b9533df0e9b3e9dfecac1e8dc12e146dc1ddb6ec972dfcde86bea21de627`.
+- The shared 63-row result digest is
+  `a21941590359b85c6a45cdab432bfec636c66b13d524746c0dadbaf97da41616`.
+  Each host also passed fifteen native rows. The 586-line Linux trace replayed
+  with zero outside-root references.
+- Raw reports, packed records, comparison, trace, fixture result, machine run
+  records, and the complete acceptance map are retained in the
+  [completion evidence packet](../evidence/OGVCS-004/README.md).
+- No million-entry or logical-1-TiB run was executed for OGVCS-004. Those are
+  completed OGVCS-002 format proofs and are deliberately not repeated by this
+  bounded path/materialization PRD.
 
 ## Historical candidate (2026-08-16)
 
@@ -244,17 +271,16 @@ hashes across the complete 72-row report. Linux additionally executes the
 outside-root symlink attack under `strace`, verifies no syscall reaches the
 disjoint outside fixture, and retains the raw trace and audit.
 
-## Rollout and deferred roadmap work
+## Historical rollout status
 
-The OGVCS-004 acceptance criteria are satisfied, but this remains a validation
-item until its OGVCS-002 predecessor is complete. Repositories must pin case
-mode, profile, and contract major at creation; an incompatible fold/profile
-change requires a new version and migration preview. A defective release can
-be withdrawn, but rollback cannot reinterpret existing keys or mark an
-unreconciled workspace clean.
+At the time of the August 16 candidate, OGVCS-004 remained in validation because
+its OGVCS-002 predecessor was incomplete. That dependency is now closed and the
+current 2026-08-25 completion evidence supersedes this historical boundary.
+Repositories still pin case mode, profile, and contract major at creation; an
+incompatible fold/profile change requires a new version and migration preview.
+A defective release can be withdrawn, but rollback cannot reinterpret existing
+keys or mark an unreconciled workspace clean.
 
-Per maintainer direction, no one-million-tree or logical-1-TiB test ran during
-this delivery. Those are OGVCS-002 exact-scale gates deferred to the final R0
-campaign, not smaller OGVCS-004 claims. Because OGVCS-004 depends on OGVCS-002,
-the PRD remains in `Validation` until the final R0 campaign closes the
-predecessor.
+The historical candidate intentionally did not run one-million-tree or
+logical-1-TiB work. Those OGVCS-002 gates later completed in their owning PRD;
+they remain outside OGVCS-004 rather than being duplicated here.

@@ -1,6 +1,6 @@
 # OGVCS-004 — Cross-platform path and workspace filesystem library
 
-**Status:** Validation
+**Status:** Done
 **Release:** R0 — Engineering Foundation  
 **Priority:** P0  
 **Owner:** Codex and OpenGameVCS maintainers
@@ -108,18 +108,23 @@ The contract is fixed before repositories are created. Case mode and normalizati
 
 ## Completion evidence
 
-The MIT-licensed implementation and packed validation candidate are complete.
-GitHub Actions run 31939458256 passed 72/72 rows on Linux, macOS, and Windows,
-accepted exact cross-host package bytes and pure decisions, and retained a
-Linux syscall trace with zero outside-workspace references. Per maintainer
-direction, the OGVCS-002 one-million-tree and logical-1-TiB jobs are deferred
-to the final R0 campaign and do not yet have a complete accepted two-language
-comparison. Those are predecessor format gates rather than OGVCS-004
-materializer tests. This PRD remains in Validation only until OGVCS-002 becomes
-Done.
+The MIT-licensed implementation source
+[`4f8a5a0`](https://github.com/n3r/OpenGameVCS/commit/4f8a5a0f836ef51b4ac56cab9d795d7f5515926d)
+passed 78/78 rows on Linux, macOS, and Windows with exact pure decisions and
+normalized package bytes. Evidence revision
+[`94f68c8`](https://github.com/n3r/OpenGameVCS/commit/94f68c80f9166ef3deb7aa65b9cb268453af714f)
+retains the raw reports, comparison, packed identities, expanded Linux trace,
+machine run record, and an automated independent integrity replay. The final
+critical review found no live P0, P1, or P2. OGVCS-002's separately owned exact
+scale campaign is complete and is not duplicated here.
 
-- Implementation changes: [Detailed candidate changelog](../../docs/changelog/OGVCS-004.md)
-- Test and benchmark results: [Candidate evidence packet](../../docs/evidence/OGVCS-004/README.md)
-- Security/reliability review: [Independent critical review](../../docs/reviews/OGVCS-004-critical-review.md)
-- Documentation/runbooks: [ADR-0012 and its normative documentation index](../../adr/0012-path-and-workspace-filesystem-contract-v1.md)
-- Rollout result: [Hosted proof and deferred dependency](../../docs/evidence/OGVCS-004/README.md#deferred-roadmap-completion)
+- Implementation changes: the [`4f8a5a0` implementation commit](https://github.com/n3r/OpenGameVCS/commit/4f8a5a0f836ef51b4ac56cab9d795d7f5515926d) and [detailed changelog](../../docs/changelog/OGVCS-004.md#2026-08-25-final-review-hardening) deliver the versioned contract, public library/CLI, bound materialization plans, transactional recovery, safe watcher, telemetry, adapters, and generated predecessor closure.
+- Test and benchmark results: the [completion evidence packet](../../docs/evidence/OGVCS-004/README.md#local-and-hosted-gates) binds 63 pure and fifteen native rows per host, 54 runtime/package tests, exact offline archive identities, dependent authority checks, and the retained comparison.
+- Security/reliability review: the [independent final review](../../docs/reviews/OGVCS-004-critical-review.md#final-verdict) records every discovered gap, remediation, accepted private-root/portable-watcher boundary, full requirement matrix, and no-live-P0/P1/P2 verdict.
+- Documentation/runbooks: [ADR-0012](../../adr/0012-path-and-workspace-filesystem-contract-v1.md) and the [completion evidence boundary](../../docs/evidence/OGVCS-004/README.md#completed-evidence-boundary) document immutable profiles, safety, recovery, watcher reconciliation, platform capability, compatibility, and rollback behavior.
+- Rollout result: implementation [run 32831999325](https://github.com/n3r/OpenGameVCS/actions/runs/32831999325) passed the three-host package boundary, and evidence-policy [run 32833243994](https://github.com/n3r/OpenGameVCS/actions/runs/32833243994) passed independent durable-evidence validation.
+- OGVCS-004-AC-01: the [retained cross-host comparison](../../docs/evidence/OGVCS-004/conformance-comparison-2026-08-25.json) proves identical canonical path/collision outcomes and normalized package identities on Linux, macOS, and Windows.
+- OGVCS-004-AC-02: the [retained syscall trace and audit](../../docs/evidence/OGVCS-004/README.md#durable-reports) prove symlink-ancestor, target-race, and ancestor-race confinement with zero outside-root references; the Windows report carries the native junction result.
+- OGVCS-004-AC-03: the [requirement matrix](../../docs/reviews/OGVCS-004-critical-review.md#requirement-and-acceptance-matrix) binds exact case/NFC before/after tree and logical-bundle identities, preserved `FileID`, and reject-before-encode decomposed spelling.
+- OGVCS-004-AC-04: the [acceptance evidence](../../docs/evidence/OGVCS-004/README.md#acceptance-map) covers overflow, gaps, unsupported resume, corrupt/unclean state, subscribe-before-reconcile ordering, and queued notifications without false clean.
+- OGVCS-004-AC-05: the [acceptance evidence](../../docs/evidence/OGVCS-004/README.md#acceptance-map) proves actual Unreal/Unity materialization through one bound plan, exact cross-host inventory digests, and the stable 257-segment depth-limit failure.
