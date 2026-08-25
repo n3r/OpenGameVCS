@@ -450,6 +450,12 @@ for (const supportingDocument of ['README.md', 'TEMPLATE.md', 'done/README.md'])
   const filePath = path.join(prdRoot, supportingDocument);
   validateLocalLinks(filePath, fs.readFileSync(filePath, 'utf8'));
 }
+const repositoryReadmePath = path.resolve(prdRoot, '..', 'README.md');
+if (!fs.existsSync(repositoryReadmePath)) {
+  addError('../README.md', 'missing repository entry-point documentation');
+} else {
+  validateLocalLinks(repositoryReadmePath, fs.readFileSync(repositoryReadmePath, 'utf8'));
+}
 const architecturePath = path.resolve(prdRoot, '..', 'architecture.md');
 validateLocalLinks(architecturePath, fs.readFileSync(architecturePath, 'utf8'));
 const adrRoot = path.resolve(prdRoot, '..', 'adr');

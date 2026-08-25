@@ -20,6 +20,24 @@ function makeFixture(t) {
     path.join(sourceRoot, 'GAME_DEV_VCS_ANALYSIS.md'),
     path.join(root, 'GAME_DEV_VCS_ANALYSIS.md'),
   );
+  const repositoryReadme = fs.readFileSync(path.join(sourceRoot, 'README.md'), 'utf8');
+  fs.writeFileSync(path.join(root, 'README.md'), repositoryReadme);
+  for (const match of repositoryReadme.matchAll(/\[[^\]]*\]\(([^)]+)\)/g)) {
+    const target = match[1];
+    if (/^(?:https?:|mailto:|#)/.test(target)) continue;
+    const relativeTarget = target.split('#')[0];
+    if (!relativeTarget) continue;
+    const sourceTarget = path.resolve(sourceRoot, relativeTarget);
+    assert.ok(fs.existsSync(sourceTarget), `source README link exists: ${target}`);
+    const fixtureTarget = path.resolve(root, relativeTarget);
+    if (fs.existsSync(fixtureTarget)) continue;
+    if (fs.statSync(sourceTarget).isDirectory()) {
+      fs.mkdirSync(fixtureTarget, { recursive: true });
+    } else {
+      fs.mkdirSync(path.dirname(fixtureTarget), { recursive: true });
+      fs.copyFileSync(sourceTarget, fixtureTarget);
+    }
+  }
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   return root;
 }
@@ -138,4 +156,18 @@ test('rejects unexpected Markdown files in lifecycle folders', (t) => {
   const result = runValidator(root);
   assert.notEqual(result.status, 0);
   assert.match(result.output, /unexpected Markdown file/);
+});
+
+test('rejects a missing or broken repository README', (t) => {
+  const missingRoot = makeFixture(t);
+  fs.rmSync(path.join(missingRoot, 'README.md'));
+  const missingResult = runValidator(missingRoot);
+  assert.notEqual(missingResult.status, 0);
+  assert.match(missingResult.output, /missing repository entry-point documentation/);
+
+  const brokenRoot = makeFixture(t);
+  rewrite(path.join(brokenRoot, 'README.md'), (body) => `${body}\n[Broken](missing-document.md)\n`);
+  const brokenResult = runValidator(brokenRoot);
+  assert.notEqual(brokenResult.status, 0);
+  assert.match(brokenResult.output, /broken local link missing-document\.md/);
 });

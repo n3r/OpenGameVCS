@@ -4,6 +4,7 @@ Completed PRDs:
 
 - [OGVCS-001 — Deterministic workload fixture generator](OGVCS-001-deterministic-workload-fixture-generator.md)
 - [OGVCS-002 — Core object library and open repository format](OGVCS-002-core-object-library-repository-format.md)
+- [OGVCS-003 — Authorization contract package and threat test kit](OGVCS-003-authorization-contract-threat-test-kit.md)
 - [OGVCS-004 — Cross-platform path and workspace filesystem library](OGVCS-004-cross-platform-path-filesystem-library.md)
 - [OGVCS-005 — Benchmark, conformance corpus, and fault harness](OGVCS-005-benchmark-and-fault-harness.md)
 - [OGVCS-041 — Public protocol baseline and generated bindings](OGVCS-041-public-protocol-baseline-generated-bindings.md)
