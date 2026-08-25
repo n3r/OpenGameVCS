@@ -68,7 +68,7 @@ These activities are tracked by the program owner in gate evidence. They may val
 | OGVCS-002 | [Core object library and open repository format](done/OGVCS-002-core-object-library-repository-format.md) | P0 | OGVCS-001 |
 | OGVCS-003 | [Authorization contract package and threat test kit](done/OGVCS-003-authorization-contract-threat-test-kit.md) | P0 | OGVCS-001 |
 | OGVCS-004 | [Cross-platform path and workspace filesystem library](done/OGVCS-004-cross-platform-path-filesystem-library.md) | P0 | OGVCS-001, OGVCS-002 |
-| OGVCS-041 | [Public protocol baseline and generated bindings](todo/OGVCS-041-public-protocol-baseline-generated-bindings.md) | P0 | OGVCS-002, OGVCS-003, OGVCS-004 |
+| OGVCS-041 | [Public protocol baseline and generated bindings](done/OGVCS-041-public-protocol-baseline-generated-bindings.md) | P0 | OGVCS-002, OGVCS-003, OGVCS-004 |
 | OGVCS-005 | [Benchmark, conformance corpus, and fault harness](todo/OGVCS-005-benchmark-and-fault-harness.md) | P0 | OGVCS-001, OGVCS-002, OGVCS-003, OGVCS-004, OGVCS-041 |
 
 **R0 exit gate:** every R0 PRD is in `done`; their packages, CLIs, protocol bindings, vectors, and harnesses run from a clean environment; no unresolved decision can change object/FileID identity, root-snapshot encoding, path identity, authorization visibility, public negotiation/retry semantics, or the atomic-commit invariant. Separately, at least two design partners must confirm that the synthetic profiles cover their material Unreal/Unity workflows before the release owner closes the gate.

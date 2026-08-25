@@ -1,6 +1,6 @@
 # OGVCS-041 — Public protocol baseline and generated bindings
 
-**Validation candidate:** 2026-08-16
+**Completed:** 2026-08-25
 
 **Release:** R0 — Engineering Foundation
 
@@ -8,18 +8,18 @@
 `@opengamevcs/protocol-types-v1`, `@opengamevcs/protocol-baseline`, and
 `@opengamevcs/protocol-baseline-independent-adapter` 1.0.0-rc.1
 
-## Delivered candidate
+## Delivered baseline
 
-OpenGameVCS now has one executable public protocol baseline before domain API
+OpenGameVCS now has an executable public protocol baseline before domain API
 implementation. ADR-0013 fixes TLS 1.3 over HTTP/1.1 with bounded I-JSON/JCS
 control messages, explicit canonical-JSONL stream completion, deterministic
 capability negotiation, closed safe errors, idempotency and cursor semantics,
-and an application-neutral HTTP range/resume carrier. Production object routes,
-upload sessions, packs, placement, and availability remain owned by OGVCS-008.
+and an application-neutral HTTP range/resume carrier. OGVCS-008 still owns
+production object routes, upload sessions, packs, placement, and availability.
 
-One numbered declarative model generates 46 closed schemas/messages, 352 field
+One numbered declarative model generates 46 schemas/messages, 352 field
 assignments, 35 finite limits, 25 errors, 16 registries, normative documents,
-and immutable descriptor tables for Rust, C++, C#, and TypeScript. The generated
+and complete descriptor tables for Rust, C++, C#, and TypeScript. The generated
 contract contains 360 executable scenarios: 87 accepts and 273 fail-closed
 results across negotiation, envelopes, idempotency, cursors, streams, transfer,
 release preflight, malformed input, resources, and security.
@@ -31,68 +31,73 @@ release preflight, malformed input, resources, and security.
   Unknown required capabilities, absent tuples, downgrade, forbidden lifecycle
   state, and required-but-unoffered extensions fail before mutation.
 - Mutation receipts bind the exact selected tuple and authority state. Request
-  fingerprints are domain-separated hashes of validated semantic JCS, never raw
-  received JSON bytes.
-- Errors use a closed RFC 9457 subset with fixed safe parameter domains. Free
-  detail, credentials, grants, protected paths/objects, hidden cardinalities,
-  and arbitrary extensions cannot enter an error or retained trace.
-- Idempotency survives lost responses and late mutation settlement, rechecks
+  fingerprints are domain-separated hashes of validated semantic JCS.
+- Errors use a closed RFC 9457 subset with fixed safe parameter domains.
+  Credentials, grants, protected paths/objects, hidden cardinalities, arbitrary
+  details, and arbitrary extensions cannot enter retained problems or traces.
+- Idempotency survives lost responses and late settlement, rechecks
   authorization before replay, rejects semantic key reuse, and never silently
   re-executes an expired committed key.
 - Cursors are opaque, scoped to all five dimensions, expiring, and explicit
-  about gaps. Streams require a registered terminal frame; EOF is incomplete.
+  about gaps. Streams require registered terminal frames; EOF is incomplete.
 - The transfer carrier validates actual range bytes, strong ETags, RFC 9530
   `Content-Digest`, half-open range mapping, interruption, and completion. It
-  carries only compact request-root grants and invokes the exact digest-pinned
-  OGVCS-003 verifier without reinterpreting its claims.
+  invokes the exact digest-pinned OGVCS-003 verifier without claim reinterpretation.
+
+## Final review hardening
+
+Implementation revision
+[`dfdd7ad`](https://github.com/n3r/OpenGameVCS/commit/dfdd7adcf07a3e6c964e97d21434f370c3664250)
+closed the final hostile-input, resource, and lifecycle boundaries:
+
+- all public JavaScript host records and callback results are snapshotted as
+  inert exact data before semantic use; proxies, accessors, inherited fields,
+  mutable collections, and caller exceptions fail through typed protocol paths;
+- one composite working-memory budget now includes scenario plans, traces,
+  canaries, pages, envelopes, streams, transfer data, external-runner input,
+  captured output, and parsed results;
+- operation-scoped deadlines compose abort sources without listener retention
+  and preserve the first authenticated boundary result;
+- schema inventories are authenticated and reused without duplicate full clones,
+  while caller-selected schemas are cloned and charged;
+- idempotency replay is bound to stored authority and immutable committed
+  outcomes, including settlement that crosses a caller deadline;
+- the transfer HTTP body is accounted as transfer data rather than a 64-KiB
+  control string, with a positive valid payload larger than that control limit;
+- external adapter descriptors are validated inertly and charged before process
+  isolation, and stdout/stderr parsing/capture is bounded.
+
+The runtime README now states the trust, cancellation, and composite-resource
+contract explicitly. Regression tests cover each boundary and preserve exact
+error/trace precedence.
 
 ## Independent conformance and packaging
 
-The reference runtime and a separate-process independent adapter share no
-negotiation, idempotency, cursor, mutation, schema, or selector engine. The
-runner randomizes opaque handles and ordering, strips expected outcomes, stages
-only a manifest-authenticated public execution view, and confines the Node
-adapter to its isolated package closure and that view. Protocol and predecessor
-vector packages are physically absent from the permitted closure.
+The reference runtime and a separate-process adapter share no negotiation,
+idempotency, cursor, mutation, schema, or selector engine. The runner randomizes
+opaque handles and ordering, removes expected outcomes, stages only a
+manifest-authenticated execution view, and confines the adapter to its isolated
+package closure. Protocol and predecessor vector corpora are absent from that
+closure.
 
-Both adapters produced the same result and trace digest for all 360 scenarios.
-An additional 28,889-case bounded mutation sweep over all nine operations found
-and drove fixes for combined-invalid precedence, closed cursor scope,
-idempotency schedule and authorization, transfer preflight, canonical nonce,
-receipt authentication, stream framing, and extension selection. A corrected
-stripped-RunnerCase boundary sweep then drove transport, clock, expiry-overflow,
-grant-shape/resource, and range-precedence regressions to exact parity.
+Both adapters produced the same digest for all 360 scenarios. Six exact MIT npm
+archives installed, regenerated, and ran without network access. Hosted run
+[`32843391920`](https://github.com/n3r/OpenGameVCS/actions/runs/32843391920)
+compiled retained Rust/C++/C#/TypeScript consumers and reproduced identical
+package, source, and semantic authorities on Ubuntu, macOS, and Windows. The
+downloaded strict comparison was independently replayed byte-for-byte. The
+current benchmark/fault-harness compatibility workflow also passed in
+[`32843391941`](https://github.com/n3r/OpenGameVCS/actions/runs/32843391941).
 
-Six exact MIT npm archives—the four protocol packages plus the OGVCS-003
-contract/runtime predecessors—install in separate clean consumers without
-network access. The packed proof regenerates checked-in outputs, runs both
-adapters, retains exact package/report/source hashes, and proves the independent
-adapter cannot read either outcome corpus. Commit-pinned hosted workflow run
-[31967884476](https://github.com/n3r/OpenGameVCS/actions/runs/31967884476)
-repeated the proof and compiled retained Rust, C++, C#, and TypeScript consumers
-on Ubuntu, macOS, and Windows. Its final comparator found the packages,
-generated sources, and all six 360-row semantic reports identical.
+## Version lifecycle
 
-## Review remediation
+The delivered contract remains `1.0.0-rc.1`, candidate, and unratified by
+design. OGVCS-041 is complete because it owns the public R0 candidate baseline;
+OGVCS-005 consumes that baseline before a later compatible transition may mark
+`1.0.0` ratified. Consumers must not create a private alternative protocol.
 
-The critical review closed faults in authorization-detail safety, retry commit
-reconciliation, replay authorization, cancellation, working-memory accounting,
-contract loading, stream and transfer framing, cursor semantics, extension
-lifecycle, release semantic drift, generated public types, oracle isolation,
-predecessor provenance, HTTP range/digest/validator precedence, and independent
-adapter parity. No live P0 or P1 remains in the frozen candidate.
-
-## Rollout and deferred work
-
-The candidate version remains `1.0.0-rc.1`; registry state is candidate and is
-not falsely advertised as ratified. Domain services may consume it for R1
-implementation, but a private incompatible protocol is not permitted.
-Withdrawal disables new sessions without reinterpreting existing receipts,
-cursors, idempotency records, assignments, or errors.
-
-OGVCS-041 stays in Validation while OGVCS-002 and OGVCS-004 remain incomplete.
-Per maintainer direction, the OGVCS-002 exact one-million-entry tree and
-logical-1-TiB tests were not run here and remain deferred to the final R0
-campaign. The retained [evidence packet](../evidence/OGVCS-041/README.md)
-records the passing hosted jobs, artifact archive digests, and equal comparison
-result. The candidate remains unratified until its predecessor gates close.
+The separate OGVCS-002 one-million-entry/logical-1-TiB campaign is already
+complete and was not rerun here. Routine protocol pull requests continue to run
+only bounded conformance; exact scale remains monthly or major-release work.
+The durable [completion packet](../evidence/OGVCS-041/README.md) records current
+authorities, packages, reports, jobs, and the full acceptance map.

@@ -1,13 +1,13 @@
 # OGVCS-041 — Public protocol baseline and generated bindings
 
-**Status:** Validation
+**Status:** Done
 **Release:** R0 — Engineering Foundation  
 **Priority:** P0  
 **Owner:** Codex and OpenGameVCS maintainers
 **Depends on:** OGVCS-002, OGVCS-003, OGVCS-004  
 **Blocks:** OGVCS-005, OGVCS-006, OGVCS-008, OGVCS-009, OGVCS-011, OGVCS-019, OGVCS-030, OGVCS-036, OGVCS-042, OGVCS-043  
 **Source:** [ADR-0013 public protocol v1 transport, schema, and generation](../../adr/0013-protocol-v1-transport-schema-and-generation.md)
-**Last updated:** 2026-08-17
+**Last updated:** 2026-08-25
 
 ## Outcome
 
@@ -98,11 +98,13 @@ Reference stubs expose negotiated versions/features, stable error codes, retry c
 
 ## Rollout and rollback
 
-Publish as a draft profile until two adapters and every R0 consumer pass.
-OGVCS-041 remains in validation while OGVCS-002 or OGVCS-004 is incomplete.
-Ratification freezes assigned fields and semantics; corrections require errata
-or a negotiated version. Downstream services may not ship a private alternative
-protocol.
+The delivered R0 public baseline remains `1.0.0-rc.1`, candidate, and
+unratified while OGVCS-005 consumes it. This deliberate lifecycle boundary does
+not permit private alternatives: downstream services negotiate this contract
+or fail closed. A later compatible ratification change may publish `1.0.0`;
+assigned fields and semantics cannot be silently reinterpreted. Withdrawal
+stops new sessions without changing existing receipts, cursors, idempotency
+records, assignments, or errors.
 
 ## Risks and mitigations
 
@@ -114,20 +116,25 @@ protocol.
 
 ## Completion evidence
 
-The MIT-licensed `1.0.0-rc.1` implementation candidate is complete. Two
-independent adapters passed all 360 bounded scenarios with identical semantic
-results, and the six exact npm packages installed, regenerated, and ran fully
-offline. Hosted workflow run
-[31967884476](https://github.com/n3r/OpenGameVCS/actions/runs/31967884476)
-compiled all four generated consumers and proved identical packages, generated
-source, and decisions on Linux, macOS, and Windows. Per maintainer direction,
-the OGVCS-002 one-million-entry tree and logical-1-TiB cases do not yet have a
-complete accepted two-language comparison and remain deferred to the final R0
-campaign. This PRD remains in Validation until its OGVCS-002 and OGVCS-004
-predecessors are Done.
+The MIT-licensed `1.0.0-rc.1` public baseline is complete. Implementation
+revision
+[`dfdd7ad`](https://github.com/n3r/OpenGameVCS/commit/dfdd7adcf07a3e6c964e97d21434f370c3664250)
+passed 111 runtime tests, 14 contract/generation tests, all 360 scenarios through
+two independent adapters, and the retained Rust/C++/C#/TypeScript consumers.
+Hosted workflow
+[`32843391920`](https://github.com/n3r/OpenGameVCS/actions/runs/32843391920)
+proved identical package/source/semantic authorities on Linux, macOS, and
+Windows; the strict comparison was independently replayed byte-for-byte. All
+predecessors are Done. OGVCS-002's separately owned exact-scale campaign is
+already complete and was not duplicated here.
 
-- Implementation changes: [Detailed candidate changelog](../../docs/changelog/OGVCS-041.md)
-- Test and benchmark results: [Candidate evidence packet](../../docs/evidence/OGVCS-041/README.md)
-- Security/reliability review: [Independent critical review](../../docs/reviews/OGVCS-041-critical-review.md)
-- Documentation/runbooks: [Accepted ADR-0013 and generated protocol documentation](../../adr/0013-protocol-v1-transport-schema-and-generation.md)
-- Rollout result: [Local and hosted candidate passed; predecessor completion pending](../../docs/evidence/OGVCS-041/README.md#hosted-validation)
+- Implementation changes: the [`dfdd7ad` implementation commit](https://github.com/n3r/OpenGameVCS/commit/dfdd7adcf07a3e6c964e97d21434f370c3664250) and [detailed changelog](../../docs/changelog/OGVCS-041.md#final-review-hardening) deliver the public runtime, independent adapter, generated consumers, hostile-input/resource hardening, and offline package boundary.
+- Test and benchmark results: the [completion evidence packet](../../docs/evidence/OGVCS-041/README.md#local-and-hosted-gates) binds all 360 cases, six package identities, three host records, four generated-language consumers, comparator replay, and the downstream benchmark compatibility run.
+- Security/reliability review: the [final independent review](../../docs/reviews/OGVCS-041-critical-review.md#final-verdict) records the complete threat/resource assessment, remediation history, requirement matrix, and no-live-P0/P1/P2 verdict.
+- Documentation/runbooks: [ADR-0013](../../adr/0013-protocol-v1-transport-schema-and-generation.md) and the [completion/rollback boundary](../../docs/evidence/OGVCS-041/README.md#completion-and-rollback) document negotiation, transport, compatibility, observability, failure, candidate lifecycle, and rollback.
+- Rollout result: implementation [run 32843391920](https://github.com/n3r/OpenGameVCS/actions/runs/32843391920) passed every Linux/macOS/Windows package job and strict comparison; benchmark integration [run 32843391941](https://github.com/n3r/OpenGameVCS/actions/runs/32843391941) also passed on the same revision.
+- OGVCS-041-AC-01: the [retained comparison and adapter reports](../../docs/evidence/OGVCS-041/README.md#durable-reports) prove exact 360/360 equality between independently built engines using authenticated public authority only.
+- OGVCS-041-AC-02: the [acceptance map](../../docs/evidence/OGVCS-041/README.md#acceptance-map) binds all 273 duplicate/reorder/disconnect/expiry/incompatibility/downgrade/malformed/resource rejects to exact pre-mutation outcomes.
+- OGVCS-041-AC-03: the [hosted gate record](../../docs/evidence/OGVCS-041/github-actions-run-32843391920.json) proves clean generation and retained Rust/C++/C#/TypeScript compilation/execution on all three operating systems.
+- OGVCS-041-AC-04: the [security assessment](../../docs/reviews/OGVCS-041-critical-review.md#security-and-reliability-assessment) covers red-team vectors, permission isolation, canary scans, inert host inputs, safe errors, and empty successful stderr.
+- OGVCS-041-AC-05: the [requirement matrix](../../docs/reviews/OGVCS-041-critical-review.md#requirement-and-acceptance-matrix) records exact release-preflight coverage for unknown requirements, tuple/pin/assignment/lifecycle/semantic drift, and the sole pre-reserved addition.
