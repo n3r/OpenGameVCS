@@ -1,11 +1,122 @@
 # OGVCS-004 — Cross-platform path and workspace filesystem library
 
-**Validation candidate:** 2026-08-16
+**Current implementation candidate:** 2026-08-25
+
+**Historical validation candidate:** 2026-08-16
 
 **Release:** R0 — Engineering Foundation
 
 **Packages:** `@opengamevcs/path-contract-v1` 1.0.0 and
 `@opengamevcs/path-filesystem` 1.0.0
+
+## 2026-08-25 final-review hardening
+
+The final review replaced caller-convention safety with enforceable authority
+at every public materialization boundary and expanded the retained report from
+the historical 72 rows to 78 rows: 63 language-neutral decisions and fifteen
+bounded native filesystem proofs. The earlier 1.0.0 archives were unpublished
+validation candidates; the source-bound final archives and three-host report
+will be recorded after the current candidate completes hosted validation.
+
+### Closed materialization authority
+
+- `preflightWorkspaceMaterialization` now returns a module-branded plan bound
+  to one workspace handle, the complete canonical entry set, immutable case
+  mode/profile, actual host platform, and the complete measured capability
+  record. The plan digest streams canonical entries and binds all of those
+  inputs without retaining one aggregate serialization.
+- Every file, kind replacement, symlink, and rename mutation requires that
+  plan. Each operation re-probes capabilities before creating parents,
+  transaction records, or stages; missing, foreign, incomplete, or changed
+  authority fails before destructive work.
+- OGVCS-002 remains authoritative for asset/sidecar group membership. Once it
+  resolves a group, all members enter one complete-set plan; omitting a
+  sidecar changes the plan digest and requires preflight again.
+- The public CLI and safe-write example use the same measured, workspace-bound
+  plan as the library rather than bypassing the complete-set contract.
+
+### Workspace and recovery hardening
+
+- Workspace roots must be absolute and owner-private. POSIX roots and reserved
+  control directories reject group/other access; root, `.ogvcs`, transaction,
+  and rename directories are identity-bound and rechecked around operations.
+- Existing ancestors, targets, stages, and control files reject symlink,
+  junction-shaped, multiply linked, wrong-kind, or replaced state. Staged bytes
+  are re-hashed and identity-checked immediately before publication.
+- Directory replacement and rename use bounded recursive state fingerprints,
+  so descendant delete/modify races and over-limit subtrees fail without
+  speculative cleanup. Directory rename is supported by the same durable
+  staged transaction model as files.
+- Directory-sync permission failures remain errors; they are no longer
+  suppressed as durable success. Read-only hints reject hard-linked inodes.
+- Locked-file and scanner/antivirus-style interference is retried only within
+  the declared bound, then returns `TARGET_BUSY` with recoverable staging and
+  never falls back to an unsafe copy. Sparse allocation remains nonidentity;
+  the native proof verifies exact logical length and digest after materializing
+  a sparse source.
+
+### Watcher correctness
+
+- The portable Node adapter never treats a stopped `fs.watch` cursor as
+  resumable. Normal close records `unsupported-resume`; reopen requires a new
+  generation and cannot reuse the previous synthetic cursor.
+- Opening now persists a dirty boundary, establishes the native subscription,
+  and only then invokes the required bounded full-reconciliation callback.
+  The callback must update the index and return `true` before the adapter may
+  install a new generation and start the live session. This closes both the
+  stopped-interval gap and the former reconcile-to-subscribe gap.
+- Node exposes no authenticated queue-drained barrier. Delivered notifications
+  therefore advance the synthetic cursor and accelerate indexing but never
+  promote the live state to authoritative clean while another native event may
+  already be queued; a later bounded reconciliation owns that decision.
+- Control events are filtered with the frozen case fold, including `.OGVCS`
+  variants. Watcher state files and their control ancestors are no-follow,
+  single-link, identity-bound, atomically replaced, and durably synchronized.
+- Regressions cover overflow, cursor gaps, corrupt and unclean state,
+  unsupported resume, offline mutation, subscription ordering, cursor
+  generation, and failed reconciliation.
+
+### Contract, portability, and observability
+
+- The reserved `.ogvcs` namespace is rejected case-insensitively by the frozen
+  Unicode 16 fold. The contract now contains 63 exact decisions, including the
+  new reserved-name and unsupported-resume cases, all independently validated.
+- The case/NFC rename integration pins exact before/after OGVCS-002 tree and
+  logical-bundle identities while preserving `FileID`; decomposed spelling is
+  rejected before encoding.
+- Unreal and Unity fixtures are actually materialized through one bound plan
+  and compared by exact canonical inventory digest. The paired 257-segment
+  fixture returns the exact depth-limit diagnostic.
+- A deterministic 2,000-sample property suite exercises canonical path, fold
+  idempotence, and core/profile boundaries. Native rows additionally cover the
+  watcher open boundary, sparse logical bytes, and bounded busy interference.
+- `createPathTelemetry`/`snapshotPathTelemetry` expose a module-branded,
+  callback-free collector for profile IDs, stable preflight failure classes,
+  watcher gaps/reconciliation duration, busy retries, refused atomic
+  fallbacks, and unsafe-path denials. Snapshots never contain paths, link
+  targets, content digests, or temporary names.
+
+### Packaging, tracing, and generated authority
+
+- The offline package test imports every public API—including object-model
+  adapter, workspace preflight, and telemetry—runs all seven documented CLI
+  commands, rejects relative workspace roots, and executes the full 78-row
+  report from packed archives only.
+- Linux tracing now retains one fixture result plus symlink-ancestor,
+  target-rewrite, and ancestor-replacement attacks under `strace`; the audit
+  still requires zero references to the disjoint outside root. Windows must
+  execute the junction fixture rather than silently skip it.
+- The workflow uses current Node-24-based action releases (`checkout@v7`,
+  `setup-node@v7`, `upload-artifact@v7`, and `download-artifact@v8`) while
+  testing the package's supported Node 22 runtime.
+- Regeneration rebounded the final path manifest through the protocol baseline
+  and benchmark/fault predecessor chain. Generated checks, independent path
+  validation, runtime/package tests, protocol generation/runtime tests,
+  benchmark generation/runtime tests, roadmap validation, and diff hygiene are
+  green locally. Fresh three-OS retained evidence remains the sole pre-ratify
+  gate for this candidate.
+
+## Historical candidate (2026-08-16)
 
 ## Delivered candidate
 

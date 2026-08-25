@@ -1,8 +1,12 @@
 import { createHash } from 'node:crypto';
 
+import { hostPlatform, probeFilesystemCapabilities } from './capabilities.mjs';
 import { pathContract } from './contract.mjs';
 import { PathFilesystemError, errorDecision, pathFail } from './errors.mjs';
+import { bindWorkspaceMaterializationPlan } from './materialization-plan.mjs';
 import { findPathCollisions, isUnicodeScalarString, validateRepositoryPath } from './path.mjs';
+import { assertWorkspaceAuthority, assertWorkspaceHandle } from './workspace.mjs';
+import { assertPathTelemetry, recordPathTelemetry } from './telemetry.mjs';
 
 const ENTRY_MODES = Object.freeze({ directory: 'directory', regular: 'regular-file', executable: 'executable-file', symlink: 'symlink' });
 const SAFE_DIAGNOSTIC_ID = /^[A-Za-z0-9._:-]{1,256}$/u;
@@ -20,14 +24,18 @@ function canonicalJson(value) {
   throw new TypeError('value outside canonical plan domain');
 }
 
-function canonicalArraySha256(values) {
+function canonicalPlanSha256(request, entries) {
   const hash = createHash('sha256');
-  hash.update('[');
-  for (let index = 0; index < values.length; index += 1) {
-    if (index > 0) hash.update(',');
-    hash.update(canonicalJson(values[index]));
+  hash.update('{"capabilities":'); hash.update(canonicalJson(request.capabilities));
+  hash.update(',"caseMode":'); hash.update(canonicalJson(request.caseMode));
+  hash.update(',"entries":[');
+  for (let index = 0; index < entries.length; index += 1) {
+    if (index !== 0) hash.update(',');
+    hash.update(canonicalJson(entries[index]));
   }
-  hash.update(']\n');
+  hash.update('],"platform":'); hash.update(canonicalJson(request.platform));
+  hash.update(',"profile":'); hash.update(canonicalJson(request.profile));
+  hash.update('}\n');
   return hash.digest('hex');
 }
 
@@ -76,12 +84,84 @@ export function preflightMaterialization(request, options = {}) {
     const parent = normalized[index].path.includes('/') ? normalized[index].path.slice(0, normalized[index].path.lastIndexOf('/')) : null;
     if (parent !== null && byPath.get(parent)?.kind !== 'directory') pathFail('ENTRY_INVALID', undefined, { entry: index, rule: 'parent-directory' });
   }
-  const planSha256 = canonicalArraySha256(normalized);
+  const frozenCapabilities = Object.freeze({ ...request.capabilities });
+  const planSha256 = canonicalPlanSha256({
+    capabilities: frozenCapabilities, caseMode: request.caseMode,
+    platform: request.platform, profile: request.profile,
+  }, normalized);
   return Object.freeze({
-    request: Object.freeze({ caseMode: request.caseMode, profile: request.profile, platform: request.platform }),
+    request: Object.freeze({
+      capabilities: frozenCapabilities,
+      caseMode: request.caseMode,
+      profile: request.profile,
+      platform: request.platform,
+    }),
     entries: Object.freeze(normalized),
     summary: Object.freeze({ entries: normalized.length, executable, symlinks, nativeExecutableBits: request.capabilities.executableBit === true ? executable : 0, planSha256 }),
   });
+}
+
+function measuredPreflightCapabilities(capabilities) {
+  return Object.freeze({
+    atomicReplace: capabilities.atomicReplace,
+    executableBit: capabilities.executableBit,
+    symlink: capabilities.symlink,
+  });
+}
+
+function validateMeasuredCapabilities(capabilities) {
+  const keys = [
+    'schemaVersion', 'platform', 'caseSensitive', 'normalizationSensitive',
+    'casePreserving', 'atomicReplace', 'directorySync', 'executableBit',
+    'hardlink', 'symlink',
+  ];
+  if (!exactKeys(capabilities, keys)
+    || capabilities.schemaVersion !== 'ogvcs.path/filesystem-capabilities/v1'
+    || !['linux', 'macos', 'windows'].includes(capabilities.platform)
+    || keys.slice(2).some((key) => typeof capabilities[key] !== 'boolean')) {
+    pathFail('CAPABILITY_UNAVAILABLE', undefined, { capability: 'capability-snapshot' });
+  }
+  return capabilities;
+}
+
+async function preflightWorkspaceMaterializationInternal(workspace, request, options) {
+  assertWorkspaceHandle(workspace);
+  const plan = preflightMaterialization(request, options);
+  const capabilityProbe = options.capabilityProbe ?? probeFilesystemCapabilities;
+  if (typeof capabilityProbe !== 'function') pathFail('PATH_INPUT_INVALID');
+  await assertWorkspaceAuthority(workspace);
+  const measured = validateMeasuredCapabilities(await capabilityProbe(workspace.root, options));
+  await assertWorkspaceAuthority(workspace);
+  const platform = hostPlatform();
+  const expected = measuredPreflightCapabilities(measured);
+  if (plan.request.platform !== platform || measured.platform !== platform
+    || canonicalJson(plan.request.capabilities) !== canonicalJson(expected)) {
+    pathFail('CAPABILITY_UNAVAILABLE', undefined, { capability: 'capability-snapshot' });
+  }
+  if (plan.request.profile !== workspace.profile) pathFail('PATH_PROFILE_UNKNOWN');
+  if (plan.request.caseMode !== workspace.caseMode) pathFail('CASE_MODE_INVALID');
+  return bindWorkspaceMaterializationPlan(plan, {
+    workspace,
+    capabilities: measured,
+    reprobe: async () => {
+      await assertWorkspaceAuthority(workspace);
+      const current = validateMeasuredCapabilities(await capabilityProbe(workspace.root, options));
+      await assertWorkspaceAuthority(workspace);
+      return current;
+    },
+  });
+}
+
+export async function preflightWorkspaceMaterialization(workspace, request, options = {}) {
+  const telemetry = assertPathTelemetry(options.telemetry);
+  try {
+    const plan = await preflightWorkspaceMaterializationInternal(workspace, request, options);
+    recordPathTelemetry(telemetry, 'profile', plan.request.profile);
+    return plan;
+  } catch (error) {
+    if (error instanceof PathFilesystemError) recordPathTelemetry(telemetry, 'preflight-failure', error.code);
+    throw error;
+  }
 }
 
 export function evaluatePreflight(request, options = {}) {

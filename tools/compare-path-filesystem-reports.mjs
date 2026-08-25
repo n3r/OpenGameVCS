@@ -19,7 +19,7 @@ function exactKeys(value, expected, label) {
 
 const reports = await Promise.all(paths.map(async (path) => {
   const report = JSON.parse(await readFile(path));
-  if (report.schemaVersion !== 'ogvcs.path/conformance-report/v1' || report.contractVersion !== '1.0.0' || report.total !== 72 || report.passed !== 72 || report.failed !== 0 || !Array.isArray(report.results) || report.results.length !== 72 || !/^[0-9a-f]{64}$/u.test(report.resultsSha256)) throw new Error(`invalid path report: ${path}`);
+  if (report.schemaVersion !== 'ogvcs.path/conformance-report/v1' || report.contractVersion !== '1.0.0' || report.total !== 78 || report.passed !== 78 || report.failed !== 0 || !Array.isArray(report.results) || report.results.length !== 78 || !/^[0-9a-f]{64}$/u.test(report.resultsSha256)) throw new Error(`invalid path report: ${path}`);
   if (sha256(Buffer.from(canonicalJson(report.results), 'utf8')) !== report.resultsSha256) throw new Error(`path result digest differs: ${path}`);
   if (report.results.some(({ passed, expectedSha256, actualSha256 }) => !passed || expectedSha256 !== actualSha256)) throw new Error(`path report contains a failed row: ${path}`);
   if (report.capabilities.atomicReplace !== true || report.capabilities.casePreserving !== true) throw new Error(`required host capability unavailable: ${path}`);

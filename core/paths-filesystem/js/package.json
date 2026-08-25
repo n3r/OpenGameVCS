@@ -15,7 +15,7 @@
     "src"
   ],
   "scripts": {
-    "check": "node scripts/sync-contract.mjs --check && node --check src/index.mjs && node --check src/contract.mjs && node --check src/errors.mjs && node --check src/resource.mjs && node --check src/path.mjs && node --check src/object-model.mjs && node --check src/preflight.mjs && node --check src/rename.mjs && node --check src/capabilities.mjs && node --check src/workspace.mjs && node --check src/watcher.mjs && node --check src/report.mjs && node --check src/cli.mjs && node --check bin/ogvcs-path.mjs",
+    "check": "node scripts/sync-contract.mjs --check && node --check src/index.mjs && node --check src/contract.mjs && node --check src/errors.mjs && node --check src/resource.mjs && node --check src/path.mjs && node --check src/object-model.mjs && node --check src/preflight.mjs && node --check src/materialization-plan.mjs && node --check src/telemetry.mjs && node --check src/rename.mjs && node --check src/capabilities.mjs && node --check src/workspace.mjs && node --check src/watcher.mjs && node --check src/report.mjs && node --check src/cli.mjs && node --check bin/ogvcs-path.mjs",
     "sync:contract": "node scripts/sync-contract.mjs",
     "test": "node scripts/sync-contract.mjs --check && node --test --test-concurrency=1 test/*.test.mjs"
   },

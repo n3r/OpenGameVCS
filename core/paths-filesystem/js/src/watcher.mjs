@@ -4,12 +4,13 @@ import { lstat, open, rename, rm, watch as watchFilesystem } from 'node:fs/promi
 import { dirname, join } from 'node:path';
 
 import { asPathError, PathFilesystemError, errorDecision, pathFail } from './errors.mjs';
-import { validateRepositoryPath } from './path.mjs';
+import { caseFold, validateRepositoryPath } from './path.mjs';
 import { OperationGuard } from './resource.mjs';
-import { assertWorkspaceHandle } from './workspace.mjs';
+import { assertPathTelemetry, recordPathTelemetry } from './telemetry.mjs';
+import { assertWorkspaceAuthority, assertWorkspaceHandle } from './workspace.mjs';
 
 const WATCH_STATE_KEYS = Object.freeze(['schemaVersion', 'adapter', 'cursor', 'generation', 'session', 'authoritativeClean', 'reconciliationRequired', 'reason']);
-const WATCH_REASONS = new Set(['initial-scan', 'overflow', 'cursor-gap', 'unclean-shutdown', 'adapter-error', 'state-corrupt']);
+const WATCH_REASONS = new Set(['initial-scan', 'overflow', 'cursor-gap', 'unclean-shutdown', 'unsupported-resume', 'adapter-error', 'state-corrupt']);
 const SAFE_TOKEN = /^[A-Za-z0-9._:-]+$/u;
 const NO_FOLLOW = constants.O_NOFOLLOW ?? 0;
 const DIRECTORY_ONLY = constants.O_DIRECTORY ?? 0;
@@ -75,13 +76,17 @@ export function transitionWatcher(state, event) {
     if (event.indexUpdated !== true) {
       Object.assign(next, { authoritativeClean: false, reconciliationRequired: true, reason: 'adapter-error' });
     } else {
-      next.authoritativeClean = !state.reconciliationRequired;
+      next.authoritativeClean = event.authoritativeComplete !== false && !state.reconciliationRequired;
     }
     return Object.freeze(next);
   }
   if (event.type === 'stop') {
     if (state.session === null || event.session !== state.session || state.authoritativeClean !== true || state.reconciliationRequired) pathFail('RECONCILIATION_REQUIRED');
-    next.session = null; return Object.freeze(next);
+    next.session = null;
+    if (event.resumeSupported !== true) {
+      Object.assign(next, { authoritativeClean: false, reconciliationRequired: true, reason: 'unsupported-resume' });
+    }
+    return Object.freeze(next);
   }
   if (event.type === 'restart') {
     if (state.session !== null) {
@@ -96,7 +101,7 @@ export function transitionWatcher(state, event) {
 export const completeReconciliation = (state, cursor, generation = state?.generation + 1) => transitionWatcher(state, { type: 'reconcile', cursor, generation });
 export const beginWatcherSession = (state, session) => transitionWatcher(state, { type: 'start', session });
 export const applyWatcherBatch = (state, batch) => transitionWatcher(state, { type: 'batch', ...batch });
-export const stopWatcherSession = (state, session) => transitionWatcher(state, { type: 'stop', session });
+export const stopWatcherSession = (state, session, resumeSupported = false) => transitionWatcher(state, { type: 'stop', session, resumeSupported });
 export const markWatcherRestart = (state) => transitionWatcher(state, { type: 'restart' });
 
 export function evaluateWatcherCase(testCase) {
@@ -122,20 +127,22 @@ function canonicalJson(value) {
   return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
 }
 
-async function writeStateFile(path, state) {
+async function writeStateFile(path, state, verifyAuthority) {
   const temporary = `${path}.${randomUUID().replaceAll('-', '')}.tmp`;
   try {
     const handle = await open(temporary, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, 0o600);
     try { await handle.writeFile(`${canonicalJson(state)}\n`, 'utf8'); await handle.sync(); }
     finally { await handle.close(); }
+    await verifyAuthority();
     await rename(temporary, path);
+    await verifyAuthority();
     let directory;
     try {
       directory = await open(dirname(path), constants.O_RDONLY | NO_FOLLOW | DIRECTORY_ONLY);
       if (!(await directory.stat()).isDirectory()) pathFail('UNSAFE_TARGET');
       await directory.sync();
     } catch (error) {
-      if (!['EINVAL', 'ENOTSUP', 'EISDIR', 'EBADF', 'EPERM', 'EACCES'].includes(error?.code)) throw error;
+      if (!['EINVAL', 'ENOTSUP', 'EISDIR', 'EBADF'].includes(error?.code)) throw error;
     } finally { await directory?.close().catch(() => {}); }
   } catch (error) {
     await rm(temporary, { force: true }).catch(() => {});
@@ -145,20 +152,21 @@ async function writeStateFile(path, state) {
 
 async function readStateFile(path) {
   const pathInfo = await lstat(path);
-  if (!pathInfo.isFile() || pathInfo.isSymbolicLink() || pathInfo.size > 64 * 1024) pathFail('WATCH_STATE_INVALID');
+  if (!pathInfo.isFile() || pathInfo.isSymbolicLink() || pathInfo.nlink !== 1 || pathInfo.size > 64 * 1024) pathFail('WATCH_STATE_INVALID');
   const handle = await open(path, constants.O_RDONLY | NO_FOLLOW);
   try {
     const before = await handle.stat();
-    if (!before.isFile() || before.size > 64 * 1024 || String(before.dev) !== String(pathInfo.dev) || String(before.ino) !== String(pathInfo.ino)) pathFail('WATCH_STATE_INVALID');
+    if (!before.isFile() || before.nlink !== 1 || before.size > 64 * 1024 || String(before.dev) !== String(pathInfo.dev) || String(before.ino) !== String(pathInfo.ino)) pathFail('WATCH_STATE_INVALID');
     const bytes = await handle.readFile();
     const after = await handle.stat();
-    if (String(after.dev) !== String(before.dev) || String(after.ino) !== String(before.ino) || after.size !== before.size || Math.trunc(after.mtimeMs) !== Math.trunc(before.mtimeMs) || bytes.length !== before.size) pathFail('WATCH_STATE_INVALID');
+    if (after.nlink !== 1 || String(after.dev) !== String(before.dev) || String(after.ino) !== String(before.ino) || after.size !== before.size || Math.trunc(after.mtimeMs) !== Math.trunc(before.mtimeMs) || bytes.length !== before.size) pathFail('WATCH_STATE_INVALID');
     return bytes;
   } finally { await handle.close(); }
 }
 
 export async function persistWatcherState(workspace, state, options = {}) {
   assertWorkspaceHandle(workspace);
+  await assertWorkspaceAuthority(workspace);
   const guard = new OperationGuard({ maxTimeMs: options.maxTimeMs ?? 5_000, maxOperations: 64 });
   const validated = validateWatcherState(state);
   const path = join(workspace.control, 'watcher-state.json');
@@ -166,7 +174,9 @@ export async function persistWatcherState(workspace, state, options = {}) {
     const existing = await lstat(path).catch((error) => error?.code === 'ENOENT' ? null : Promise.reject(error));
     if (existing?.isSymbolicLink() || (existing !== null && !existing.isFile())) pathFail('UNSAFE_TARGET');
     await guard.hook(options.hooks, 'before-watcher-state-write', Object.freeze({ generation: validated.generation }));
-    await writeStateFile(path, validated);
+    await assertWorkspaceAuthority(workspace);
+    await writeStateFile(path, validated, () => assertWorkspaceAuthority(workspace));
+    await assertWorkspaceAuthority(workspace);
     guard.checkpoint();
     return validated;
   } catch (error) { if (error instanceof PathFilesystemError) throw error; throw asPathError(error); }
@@ -174,6 +184,7 @@ export async function persistWatcherState(workspace, state, options = {}) {
 
 export async function loadWatcherState(workspace, options = {}) {
   assertWorkspaceHandle(workspace);
+  await assertWorkspaceAuthority(workspace);
   const path = join(workspace.control, 'watcher-state.json');
   let bytes;
   try {
@@ -184,6 +195,7 @@ export async function loadWatcherState(workspace, options = {}) {
     if (error instanceof PathFilesystemError) return Object.freeze({ ...initialWatcherState(options.adapter), reason: 'state-corrupt' });
     throw asPathError(error);
   }
+  await assertWorkspaceAuthority(workspace);
   try {
     const value = JSON.parse(bytes);
     if (!bytes.equals(Buffer.from(`${canonicalJson(value)}\n`, 'utf8'))) pathFail('WATCH_STATE_INVALID');
@@ -211,8 +223,10 @@ export async function applyWatcherEvent(workspace, state, event, options = {}) {
 
 export async function openWorkspaceWatcher(workspace, state, options = {}) {
   assertWorkspaceHandle(workspace);
+  const telemetry = assertPathTelemetry(options.telemetry);
+  recordPathTelemetry(telemetry, 'profile', workspace.profile);
   let current = validateWatcherState(state);
-  if (current.session !== null || current.reconciliationRequired || !current.authoritativeClean) pathFail('RECONCILIATION_REQUIRED');
+  if (current.session !== null) pathFail('RECONCILIATION_REQUIRED');
   const session = options.session ?? randomUUID().replaceAll('-', '');
   if (typeof session !== 'string' || session.length === 0 || session.length > 256 || !SAFE_TOKEN.test(session)) pathFail('WATCH_STATE_INVALID');
   const maxNativeEvents = options.maxNativeEvents ?? 1024;
@@ -222,8 +236,19 @@ export async function openWorkspaceWatcher(workspace, state, options = {}) {
   const controller = new AbortController();
   const createGuard = new OperationGuard({ maxTimeMs: options.maxTimeMs ?? 30_000, maxOperations: 64 });
   const factory = options.iteratorFactory ?? ((root, nativeOptions) => watchFilesystem(root, nativeOptions));
-  if (typeof factory !== 'function') pathFail('WATCH_STATE_INVALID');
-  current = await applyWatcherEvent(workspace, current, { type: 'start', session }, options);
+  const reconcile = options.reconcile;
+  if (typeof factory !== 'function' || typeof reconcile !== 'function') pathFail('RECONCILIATION_REQUIRED');
+
+  // fs.watch has no portable resumable cursor. Persist a dirty boundary before
+  // subscribing, then perform the authoritative scan only after the native
+  // subscription exists. Events produced during that scan remain queued by the
+  // iterator and are applied from the newly installed generation.
+  if (!current.reconciliationRequired || current.authoritativeClean) {
+    current = await persistWatcherState(workspace, {
+      ...current, session: null, authoritativeClean: false,
+      reconciliationRequired: true, reason: 'unsupported-resume',
+    }, options);
+  }
   let iterator;
   try {
     const value = await createGuard.boundary((deadlineSignal) => factory(workspace.root, {
@@ -233,8 +258,27 @@ export async function openWorkspaceWatcher(workspace, state, options = {}) {
     }), true);
     iterator = typeof value?.next === 'function' ? value : value?.[Symbol.asyncIterator]?.();
     if (typeof iterator?.next !== 'function') pathFail('WATCH_STATE_INVALID');
+
+    const generation = current.generation + 1;
+    const cursor = `${generation}:0`;
+    const reconcileStarted = process.hrtime.bigint();
+    const reconciled = await createGuard.boundary((signal) => reconcile(Object.freeze({
+      generation, cursor, previousCursor: current.cursor,
+    }), signal), true);
+    if (reconciled !== true) pathFail('RECONCILIATION_REQUIRED');
+    const reconcileElapsed = Number((process.hrtime.bigint() - reconcileStarted) / 1_000_000n);
+    recordPathTelemetry(telemetry, 'reconciliation', reconcileElapsed);
+    current = await applyWatcherEvent(workspace, current, { type: 'reconcile', cursor, generation }, options);
+    current = await applyWatcherEvent(workspace, current, { type: 'start', session }, options);
   } catch (error) {
-    current = await persistWatcherState(workspace, { ...current, authoritativeClean: false, reconciliationRequired: true, reason: 'adapter-error' }, options);
+    recordPathTelemetry(telemetry, 'watcher-gap');
+    controller.abort();
+    if (typeof iterator?.return === 'function') await Promise.resolve(iterator.return()).catch(() => {});
+    const dirty = {
+      ...current, session: null, authoritativeClean: false,
+      reconciliationRequired: true, reason: 'adapter-error',
+    };
+    await persistWatcherState(workspace, dirty, options).then((value) => { current = value; }).catch(() => {});
     if (error instanceof PathFilesystemError) throw error;
     throw asPathError(error, 'WATCH_UNCLEAN_SHUTDOWN');
   }
@@ -242,6 +286,7 @@ export async function openWorkspaceWatcher(workspace, state, options = {}) {
   let closed = false;
 
   const dirty = async (reason = 'adapter-error') => {
+    recordPathTelemetry(telemetry, 'watcher-gap');
     current = await persistWatcherState(workspace, { ...current, authoritativeClean: false, reconciliationRequired: true, reason }, options);
     return current;
   };
@@ -262,6 +307,7 @@ export async function openWorkspaceWatcher(workspace, state, options = {}) {
         try { result = await nextNative(guard); }
         catch (error) {
           if (error?.code === 'ERR_FS_WATCHER_QUEUE_OVERFLOW') {
+            recordPathTelemetry(telemetry, 'watcher-gap');
             try { await applyWatcherEvent(workspace, current, { type: 'batch', session, fromCursor: current.cursor, toCursor: current.cursor ?? 'overflow', overflow: true, indexUpdated: false }, options); }
             catch (watchError) { if (watchError instanceof PathFilesystemError) { if (watchError.cause !== undefined) current = watchError.cause; throw watchError; } throw watchError; }
           }
@@ -281,7 +327,7 @@ export async function openWorkspaceWatcher(workspace, state, options = {}) {
           await dirty();
           throw new PathFilesystemError('WATCH_GAP', 'watch adapter produced an ambiguous event', { cause: current });
         }
-        if (filename === '.ogvcs' || filename.startsWith('.ogvcs/')) continue;
+        if (caseFold(filename.split('/', 1)[0]) === '.ogvcs') continue;
         let canonical;
         try { canonical = validateRepositoryPath(filename, { profile: workspace.profile }).canonical; }
         catch (error) {
@@ -295,7 +341,15 @@ export async function openWorkspaceWatcher(workspace, state, options = {}) {
         });
         sequence += 1;
         const toCursor = `${current.generation}:${sequence}`;
-        current = await applyWatcherEvent(workspace, current, { type: 'batch', session, fromCursor: current.cursor, toCursor, overflow: false, indexUpdated: indexed === true }, options);
+        current = await applyWatcherEvent(workspace, current, {
+          type: 'batch', session, fromCursor: current.cursor, toCursor,
+          overflow: false, indexUpdated: indexed === true,
+          // promises.watch exposes no queue-drained/barrier proof. Advancing its
+          // synthetic cursor is useful acceleration, but one delivered event
+          // cannot make the index authoritative while more native events may
+          // already be queued.
+          authoritativeComplete: false,
+        }, options);
         if (indexed !== true) pathFail('RECONCILIATION_REQUIRED');
         return Object.freeze({ events: Object.freeze([{ type: event.eventType, path: canonical }]), cursor: toCursor, state: current });
       }
@@ -310,11 +364,11 @@ export async function openWorkspaceWatcher(workspace, state, options = {}) {
         const guard = new OperationGuard({ maxTimeMs: options.maxTimeMs ?? 30_000, maxOperations: 64 });
         await guard.boundary((signal) => iterator.return(signal), true).catch(() => {});
       }
-      if (current.reconciliationRequired || !current.authoritativeClean) {
-        try { await applyWatcherEvent(workspace, current, { type: 'restart' }, options); }
-        catch (error) { if (error instanceof PathFilesystemError && error.cause !== undefined) current = error.cause; throw error; }
-      }
-      current = await applyWatcherEvent(workspace, current, { type: 'stop', session }, options);
+      current = await persistWatcherState(workspace, {
+        ...current, session: null, authoritativeClean: false,
+        reconciliationRequired: true,
+        reason: current.reconciliationRequired ? current.reason : 'unsupported-resume',
+      }, options);
       return current;
     },
   });

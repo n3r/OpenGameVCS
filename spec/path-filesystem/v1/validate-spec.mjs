@@ -12,7 +12,7 @@ const MAX_DEPTH = 32;
 const MAX_NODES = 200_000;
 const EXPECTED = Object.freeze({
   contractVersion: '1.0.0', artifacts: 27, registries: 4, schemas: 7,
-  pathCases: 24, foldCases: 7, collisionCases: 7, preflightCases: 12,
+  pathCases: 25, foldCases: 7, collisionCases: 7, preflightCases: 12,
   renameCases: 6, watcherCases: 6, errors: 23, profiles: 4,
 });
 const EXPECTED_REGISTRY_SHA256 = Object.freeze({
@@ -166,7 +166,7 @@ function validatePath(input, profile) {
     if (bytes > 255 || bytes > profile.limits.segmentUtf8Bytes || segment.length > profile.limits.segmentUtf16Units) return decision('PATH_LIMIT_EXCEEDED', { resource: 'segment', segment: index });
     joinedUtf8Bytes += bytes; joinedUtf16Units += segment.length;
     if (/[\u0000-\u001f\u007f]/u.test(segment)) return decision('PATH_PLATFORM_FORBIDDEN', { rule: 'control', segment: index });
-    if (segment === '.ogvcs') return decision('PATH_PLATFORM_FORBIDDEN', { rule: 'workspace-reserved', segment: index });
+    if (caseFold(segment, mappings) === '.ogvcs') return decision('PATH_PLATFORM_FORBIDDEN', { rule: 'workspace-reserved', segment: index });
     if (profile.rules.windowsNames) {
       if (/[<>:"\\|?*]/u.test(segment)) return decision('PATH_PLATFORM_FORBIDDEN', { rule: 'windows-character', segment: index });
       if (/[. ]$/u.test(segment)) return decision('PATH_PLATFORM_FORBIDDEN', { rule: 'windows-trailing', segment: index });
@@ -260,7 +260,13 @@ function preflight(testCase, profiles, mappings) {
     const parent = normalized[index].path.includes('/') ? normalized[index].path.slice(0, normalized[index].path.lastIndexOf('/')) : null;
     if (parent !== null && byPath.get(parent)?.kind !== 'directory') return decision('ENTRY_INVALID', { entry: index, rule: 'parent-directory' });
   }
-  const planSha256 = sha256(Buffer.from(`${canonicalJson(normalized)}\n`, 'utf8'));
+  const planSha256 = sha256(Buffer.from(`${canonicalJson({
+    capabilities: testCase.capabilities,
+    caseMode: testCase.caseMode,
+    entries: normalized,
+    platform: testCase.platform,
+    profile: testCase.profile,
+  })}\n`, 'utf8'));
   return { accepted: true, summary: { entries: normalized.length, executable, symlinks, nativeExecutableBits: testCase.capabilities.executableBit === true ? executable : 0, planSha256 } };
 }
 
@@ -310,7 +316,9 @@ function watcherTransition(state, event) {
   }
   if (event.type === 'stop') {
     if (state.session === null || event.session !== state.session || state.authoritativeClean !== true || state.reconciliationRequired) return decision('RECONCILIATION_REQUIRED');
-    return { accepted: true, state: { ...next, session: null } };
+    return event.resumeSupported === true
+      ? { accepted: true, state: { ...next, session: null } }
+      : { accepted: true, state: { ...next, session: null, authoritativeClean: false, reconciliationRequired: true, reason: 'unsupported-resume' } };
   }
   if (event.type === 'restart') {
     if (state.session !== null) return { ...decision('WATCH_UNCLEAN_SHUTDOWN'), state: { ...next, session: null, authoritativeClean: false, reconciliationRequired: true, reason: 'unclean-shutdown' } };
@@ -394,7 +402,8 @@ for (const name of schemaFiles) {
 const preflightSchema = (await loadCanonical('schemas/preflight-request.schema.json')).value;
 if (preflightSchema.properties.entries.maxItems !== 100_000 || preflightSchema.properties.entries.items.additionalProperties !== false) fail('preflight schema bounds/closure differ');
 const watcherSchema = (await loadCanonical('schemas/watcher-state.schema.json')).value;
-if (watcherSchema.additionalProperties !== false || watcherSchema.properties.reason.oneOf[1].enum.length !== 6) fail('watcher schema differs');
+if (watcherSchema.additionalProperties !== false || watcherSchema.properties.reason.oneOf[1].enum.length !== 7
+  || !watcherSchema.properties.reason.oneOf[1].enum.includes('unsupported-resume')) fail('watcher schema differs');
 
 const caseFoldingBytes = await boundedFile('data/CaseFolding-16.0.0.txt', 256 * 1024);
 const unicodeLicenseBytes = await boundedFile('data/UNICODE-LICENSE.txt', 16 * 1024);

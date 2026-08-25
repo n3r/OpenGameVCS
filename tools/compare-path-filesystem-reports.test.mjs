@@ -26,7 +26,7 @@ function run(paths) {
 test('comparator requires exact cross-OS decisions and packed package bytes', async t => {
   const scratch = await mkdtemp(join(tmpdir(), 'ogvcs-path-compare-')); t.after(() => rm(scratch, { recursive: true, force: true }));
   const decision = sha256(Buffer.from(canonicalJson('passed')));
-  const results = Array.from({ length: 72 }, (_, index) => ({ id: `row-${index}`, category: 'test', passed: true, expectedSha256: decision, actualSha256: decision }));
+  const results = Array.from({ length: 78 }, (_, index) => ({ id: `row-${index}`, category: 'test', passed: true, expectedSha256: decision, actualSha256: decision }));
   const resultDigest = sha256(Buffer.from(canonicalJson(results)));
   const paths = [];
   for (const platform of ['linux', 'macos', 'windows']) {
@@ -42,7 +42,7 @@ test('comparator requires exact cross-OS decisions and packed package bytes', as
       implementation: { name: 'test', version: '1.0.0', runtime: 'node test' }, platform,
       capabilities: { atomicReplace: true, casePreserving: true, caseSensitive: platform === 'linux', directorySync: true, executableBit: platform !== 'windows', hardlink: true, normalizationSensitive: platform !== 'macos', symlink: platform !== 'windows' },
       manifestSha256: '11'.repeat(32), registrySetSha256: '22'.repeat(32), unicodeCaseFoldingSha256: '33'.repeat(32), resultsSha256: resultDigest,
-      total: 72, passed: 72, failed: 0, results,
+      total: 78, passed: 78, failed: 0, results,
     };
     const reportPath = join(directory, 'conformance-report.json'); await writeJson(reportPath, report); paths.push(reportPath);
     const reportBytes = Buffer.from(`${canonicalJson(report)}\n`);

@@ -54,7 +54,7 @@ test('independent validator accepts the frozen source authority', async () => {
   const result = await run();
   assert.equal(result.code, 0, result.stderr);
   const report = JSON.parse(result.stdout);
-  assert.deepEqual({ vectors: report.vectors, errors: report.errors, profiles: report.profiles, result: report.result }, { vectors: 62, errors: 23, profiles: 4, result: 'valid' });
+  assert.deepEqual({ vectors: report.vectors, errors: report.errors, profiles: report.profiles, result: report.result }, { vectors: 63, errors: 23, profiles: 4, result: 'valid' });
 });
 
 test('validator rejects self-consistent registry reassignment', async () => {

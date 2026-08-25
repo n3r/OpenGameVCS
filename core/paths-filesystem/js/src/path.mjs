@@ -90,7 +90,7 @@ export function validateRepositoryPath(input, options = {}) {
     joinedUtf8Bytes += bytes;
     joinedUtf16Units += segment.length;
     if (OPERATIONAL_CONTROL.test(segment)) pathFail('PATH_PLATFORM_FORBIDDEN', undefined, { rule: 'control', segment: index });
-    if (segment === '.ogvcs') pathFail('PATH_PLATFORM_FORBIDDEN', undefined, { rule: 'workspace-reserved', segment: index });
+    if (caseFold(segment) === '.ogvcs') pathFail('PATH_PLATFORM_FORBIDDEN', undefined, { rule: 'workspace-reserved', segment: index });
     if (profile.rules.windowsNames) {
       if (WINDOWS_FORBIDDEN.test(segment)) pathFail('PATH_PLATFORM_FORBIDDEN', undefined, { rule: 'windows-character', segment: index });
       if (/[. ]$/u.test(segment)) pathFail('PATH_PLATFORM_FORBIDDEN', undefined, { rule: 'windows-trailing', segment: index });

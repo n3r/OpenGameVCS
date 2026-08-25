@@ -9,23 +9,44 @@ kind/mode pair, internal-relative symlink target, platform selection, atomic
 replacement support, configured bounds, and required symlink capability.
 Executable intent remains authoritative even on a host without a native
 executable bit; callers may separately require native application.
+The portable adapter accepts only an absolute owner-private workspace root;
+on POSIX, group/other permission bits must be clear. Its reserved control
+directories are created or revalidated with the same private-authority rule.
 
-Preflight success is bound to the canonical plan digest. A changed plan or
-capability result requires preflight again. Unsupported behavior never silently
-falls back to following links, copying through a target, or stripping mode.
+Preflight success is bound to a canonical digest over the complete entry set,
+repository case mode and profile, selected platform, and declared capability
+snapshot. The host adapter converts that pure result into a module-branded plan
+bound to one workspace handle and the complete measured capability record.
+Every file, kind-replacement, symlink, or rename materialization must present
+that plan. The adapter remeasures capabilities before the first destructive
+boundary; a missing, foreign, changed, or stale plan is rejected before output
+parents or stages are created. A changed entry set, case/profile/platform
+selection, or capability result requires preflight again. Unsupported behavior
+never silently falls back to following links, copying through a target, or
+stripping mode.
+
+OGVCS-002 owns sidecar/asset-group identity, membership, and cardinality. After
+that semantic layer resolves a group, OGVCS-004 requires its complete set of
+asset and sidecar paths to enter one workspace-bound preflight plan. Omitting or
+changing any member changes the plan digest and requires preflight again;
+OGVCS-004 does not reinterpret group records or add group fields to canonical
+path bytes.
 
 ## Mutation protocol
 
 The reference protocol uses a private `.ogvcs` control directory and an
 owner/plan-bound transaction record. Content is written to exclusively created
-temporaries, fully written and flushed, identity-checked, then atomically
-renamed. Existing root/ancestors/target are inspected without following the
-final link; root and target identity are checked before and after each boundary.
+temporaries, fully written and flushed, then its exact identity, length, and
+digest are captured and rechecked immediately before atomic publication.
+Existing root/control directories/ancestors/target are inspected without
+following the final link; their bound identities and target content state are
+checked before and after each declared boundary.
 Directory entries are flushed where the host API supports it. The transaction
 record is removed only after the committed targets and parent metadata are
 durable enough for the host contract.
 
-Case-only renames and every rename cycle stage all sources first beneath an
+Case-only file or directory renames and every supported rename cycle stage all
+sources first beneath an
 owner-bound reserved namespace, then publish in deterministic destination
 order. FileIDs remain unchanged. Directory/file replacement fully stages the
 new object before removing the verified old kind. A source digest/identity
@@ -39,8 +60,10 @@ default permits only relative targets whose lexical resolution from the link's
 parent never leaves the workspace; a nested `../sibling` may therefore be safe,
 while a top-level `../outside`, drive-qualified target, backslash target, or
 absolute target is forbidden. The writer never opens through a newly created
-or pre-existing link. Any existing symlink, junction, mount-like name
-surrogate, or reparse point in an output chain is `UNSAFE_TARGET`.
+or pre-existing link. Any existing symlink or junction-shaped entry in an
+output chain is `UNSAFE_TARGET`. Portable Node APIs do not expose arbitrary
+Windows reparse-tag inspection; deployments admitting other reparse classes
+use a native adapter that rejects them before materialization.
 
 ## Crash recovery and threat boundary
 
@@ -55,7 +78,10 @@ cleanup is not a recovery proof.
 
 The Node reference protects hostile repository data, pre-existing link/junction
 chains, ordinary competing creators, and changes injected at its declared
-boundaries. The supported root and its ancestors must be private from
+boundaries. It fingerprints bounded directory descendants before kind removal,
+rejects multiply linked files before applying a read-only hint, and reports
+directory-sync failures rather than claiming durable success. The supported
+root and its ancestors must be private from
 continuously hostile same-authority namespace mutation. Node does not expose a
 portable Windows/macOS/Linux directory-handle-relative rename family capable of
 preempting such an actor between all host calls. Deployments with same-authority

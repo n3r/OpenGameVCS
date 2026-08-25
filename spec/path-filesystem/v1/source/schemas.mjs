@@ -87,7 +87,7 @@ export const watcherStateSchema = {
     session: { oneOf: [{ type: 'null' }, string({ minLength: 1, maxLength: 256 })] },
     authoritativeClean: { type: 'boolean' },
     reconciliationRequired: { type: 'boolean' },
-    reason: { oneOf: [{ type: 'null' }, { enum: ['initial-scan', 'overflow', 'cursor-gap', 'unclean-shutdown', 'adapter-error', 'state-corrupt'] }] },
+    reason: { oneOf: [{ type: 'null' }, { enum: ['initial-scan', 'overflow', 'cursor-gap', 'unclean-shutdown', 'unsupported-resume', 'adapter-error', 'state-corrupt'] }] },
   }),
 };
 

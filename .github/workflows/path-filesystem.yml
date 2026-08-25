@@ -8,8 +8,7 @@ on:
       - "adr/0012-*.md"
       - "adr/README.md"
       - "architecture.md"
-      - "core/object-model/js/registries/profiles.json"
-      - "core/object-model/js/src/repository.js"
+      - "core/object-model/js/**"
       - "core/object-model/rust/registries/profiles.json"
       - "core/object-model/rust/src/registry.rs"
       - "core/paths-filesystem/**"
@@ -30,6 +29,7 @@ on:
       - "spec/repository-format/v1/vectors/**"
       - "tools/path-filesystem-*.mjs"
       - "tools/compare-path-filesystem-reports.mjs"
+      - "tools/normalize-npm-tarball.mjs"
       - "tools/run-packed-path-filesystem-conformance.mjs"
   push:
     branches:
@@ -41,8 +41,7 @@ on:
       - "adr/0012-*.md"
       - "adr/README.md"
       - "architecture.md"
-      - "core/object-model/js/registries/profiles.json"
-      - "core/object-model/js/src/repository.js"
+      - "core/object-model/js/**"
       - "core/object-model/rust/registries/profiles.json"
       - "core/object-model/rust/src/registry.rs"
       - "core/paths-filesystem/**"
@@ -63,6 +62,7 @@ on:
       - "spec/repository-format/v1/vectors/**"
       - "tools/path-filesystem-*.mjs"
       - "tools/compare-path-filesystem-reports.mjs"
+      - "tools/normalize-npm-tarball.mjs"
       - "tools/run-packed-path-filesystem-conformance.mjs"
   workflow_dispatch:
 
@@ -105,10 +105,12 @@ jobs:
           trace_root="${RUNNER_TEMP}/ogvcs-path-trace-workspace"
           trace_outside="${RUNNER_TEMP}/ogvcs-path-trace-outside"
           mkdir -p "$trace_root" "$trace_outside" "artifacts/path-filesystem-${RUNNER_OS}"
+          chmod 700 "$trace_root" "$trace_outside"
           ln -s "$trace_outside" "$trace_root/escape"
           strace -f -qq -e trace=openat,openat2,rename,renameat,renameat2,unlink,unlinkat,mkdir,mkdirat,link,linkat,symlink,symlinkat \
             -o "artifacts/path-filesystem-${RUNNER_OS}/filesystem-trace.log" \
-            node tools/path-filesystem-trace-fixture.mjs "$trace_root" "$trace_outside"
+            node tools/path-filesystem-trace-fixture.mjs "$trace_root" "$trace_outside" \
+            > "artifacts/path-filesystem-${RUNNER_OS}/filesystem-trace-fixture.json"
           test ! -e "$trace_outside/pwned"
           node tools/path-filesystem-trace-audit.mjs \
             --trace "artifacts/path-filesystem-${RUNNER_OS}/filesystem-trace.log" \

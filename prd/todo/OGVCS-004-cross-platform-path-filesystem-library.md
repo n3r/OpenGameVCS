@@ -7,7 +7,7 @@
 **Depends on:** OGVCS-001, OGVCS-002
 **Blocks:** OGVCS-005, OGVCS-006, OGVCS-007, OGVCS-011, OGVCS-012, OGVCS-033, OGVCS-037, OGVCS-041, OGVCS-042, OGVCS-045
 **Source:** [OpenGameVCS proposal](../../GAME_DEV_VCS_ANALYSIS.md)  
-**Last updated:** 2026-08-16
+**Last updated:** 2026-08-25
 
 ## Outcome
 
@@ -78,10 +78,10 @@ Outputs include joined-path functions, versioned case-fold and collision keys, r
 ## Acceptance criteria
 
 - **OGVCS-004-AC-01:** Golden paths produce identical canonical values and collision decisions on Windows, macOS, and Linux.
-- **OGVCS-004-AC-02:** Malicious symlink/junction/race fixtures cannot cause writes outside a temporary workspace under elevated filesystem tracing.
-- **OGVCS-004-AC-03:** Case-only and Unicode-normalization renames round-trip through OGVCS-002 canonical tree and logical-bundle encoding with FileID preserved and the expected changed tree ID; fidelity export/reimport proof remains outside this PRD.
+- **OGVCS-004-AC-02:** Pre-existing symlink and Windows-junction fixtures plus target and ancestor rename-race fixtures cannot cause writes outside a disjoint temporary workspace. Linux elevated tracing SHALL cover the symlink, target-race, and ancestor-race sequence with zero outside-root filesystem references; the retained three-OS report SHALL carry the host-native junction outcome.
+- **OGVCS-004-AC-03:** Case-only and canonical-NFC Unicode spelling renames round-trip through OGVCS-002 canonical tree and logical-bundle encoding with FileID preserved and exact pinned before/after tree and bundle identities. Decomposed non-NFC spellings are rejected before encoding rather than normalized; fidelity export/reimport proof remains outside this PRD.
 - **OGVCS-004-AC-04:** Watcher overflow and unclean-shutdown tests force reconciliation and never falsely report a clean workspace.
-- **OGVCS-004-AC-05:** Unreal- and Unity-like long/deep path fixtures either materialize identically or fail preflight with stable actionable errors.
+- **OGVCS-004-AC-05:** Accepted Unreal- and Unity-like long/deep path fixtures materialize through one bound complete-set plan and produce exact cross-host canonical inventory digests; a paired over-limit fixture fails preflight with an exact stable actionable error.
 
 ## Verification plan
 

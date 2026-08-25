@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import test from 'node:test';
@@ -13,6 +14,7 @@ import {
   createObjectModelPathProfileAdapter, objectModelPathProfileValidator
 } from '../src/object-model.mjs';
 import { evaluatePath } from '../src/path.mjs';
+import { planRenames } from '../src/rename.mjs';
 
 const BUNDLE = resolve(import.meta.dirname, '../../../../spec/repository-format/v1/vectors/logical-bundles/valid-all-families.cborseq');
 
@@ -70,8 +72,29 @@ test('case and Unicode rename round-trips canonical trees and bundles with FileI
   }).accepted, true);
   const before = build('Café.uasset');
   const after = build('CAFÉ.uasset');
+  const rename = planRenames({
+    caseMode: 'case-folded', profile: 'path.opengamevcs/portable@1',
+    renames: [{
+      fileId: new FileId(before.entry.get(2)).toString().slice(4),
+      from: 'Content/Café.uasset', to: 'Content/CAFÉ.uasset',
+    }],
+  });
+  assert.equal(rename.steps.length, 2);
+  assert.deepEqual(rename.steps.map(({ phase }) => phase), ['stage', 'publish']);
   assert.equal(new FileId(before.entry.get(2)).toString(), new FileId(after.entry.get(2)).toString());
-  assert.notEqual(before.ref.toString(), after.ref.toString());
+  assert.deepEqual({
+    beforeTree: before.ref.toString(),
+    afterTree: after.ref.toString(),
+    beforeBundleSha256: createHash('sha256').update(before.bundle).digest('hex'),
+    afterBundleSha256: createHash('sha256').update(after.bundle).digest('hex'),
+    fileId: new FileId(before.entry.get(2)).toString(),
+  }, {
+    beforeTree: 'ogvcs:v1:tree:sha256:5cf58960dd3473581e5f31b3507f799ca78c9bdc6ee37f789265a2355de3499d',
+    afterTree: 'ogvcs:v1:tree:sha256:9f5845cc395f7f5f87cd76efcb3304eff1bed8a5ae8b461b9155f893d40a8f91',
+    beforeBundleSha256: '79d1649422dc7ad8a254368cb3d8dcf2c633f982f16af6b6775f714dceaf27ff',
+    afterBundleSha256: '7a282b3e4122e6108aab701856d04cc76ba0d5150e1b314027c923b07d8415ff',
+    fileId: 'fid:12121212121212121212121212121212',
+  });
   assert.notDeepEqual(Buffer.from(before.payload), Buffer.from(after.payload));
   assert.notDeepEqual(Buffer.from(before.bundle), Buffer.from(after.bundle));
 });

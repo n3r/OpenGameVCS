@@ -1,7 +1,7 @@
 // Copyright (c) 2026 OpenGameVCS contributors. MIT licensed.
 // @generated; constants only, no JSON or transport runtime.
 export const CONTRACT_VERSION = "1.0.0-rc.1";
-export const CONTRACT_MANIFEST_SHA256 = "1d02d4a858a5b3292511bcaccdb6d9619eaa3e2a8f95f8b89dbee73743de19d4";
+export const CONTRACT_MANIFEST_SHA256 = "bc343842291040b6b0c2c941b183863500c4d60a4618256ffc6e36a1d6afbe72";
 export const PROTOCOL_VERSION = "ogvcs.control.https-json@1";
 export const MESSAGE_SCHEMA_VERSION = "ogvcs.protocol.schema@1";
 export const AUTHORIZATION_CONTRACT = "ogvcs.authorization@1";

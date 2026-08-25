@@ -62,9 +62,13 @@ allow it. Version 1 preserves only the regular-file executable intent bit; it
 does not claim portable ACL, owner, xattr, sparse allocation, or timestamp
 identity. Read-only state is a nonversioned best-effort lock hint.
 
-Workspace mutation uses a closed, preflighted plan, a private owner-bound stage,
-exclusive temporaries, no-follow inspection of every existing component, file
-identity checks around replacement, bounded retry, a durable transaction
+Workspace mutation uses a closed, module-branded preflight plan binding the
+complete output set, repository case/profile selection, platform, measured
+capabilities, and one workspace handle; the capability snapshot is rechecked
+before mutation. It then uses a private owner-bound stage, exclusive
+temporaries, no-follow inspection of every existing component, file and staged
+content identity/digest checks around replacement, bounded directory-state
+fingerprints for kind removal, bounded retry, a durable transaction
 record, and an explicit commit marker. A detected link/reparse point,
 capability mismatch, target identity change, crash remnant, or ambiguous
 replacement fails closed. Case-only renames and rename cycles use deterministic
@@ -83,12 +87,19 @@ native adapter may strengthen this boundary with directory-handle-relative
 operations, but must preserve the same visible outcomes. This boundary never
 turns a detected race into success.
 
-File notifications are acceleration only. A persisted watcher state records an
+The portable Node adapter detects symlinks and junction-shaped entries but
+cannot inspect every Windows reparse tag; a deployment admitting other reparse
+classes supplies a stronger native adapter. File notifications are acceleration only. A persisted watcher state records an
 adapter kind, opaque cursor, generation, clean/reconciling state, and session
 marker. Cursor mismatch, overflow, unsupported resume, adapter error, state
 corruption, or unclean shutdown irreversibly requires bounded reconciliation.
 Only a completed full reconciliation at the expected generation may publish an
-authoritative clean state.
+authoritative clean state. The portable Node adapter subscribes before running
+the required bounded reconciliation callback, so changes in the former
+reconcile-to-subscribe gap are either included by the scan or queued behind its
+new cursor. Because `fs.watch` exposes no queue-drained barrier, its ordinary
+notifications never promote a live index to authoritative clean; a stronger
+journal adapter may do so only when its native cursor proves completeness.
 
 ## Consequences and proof
 
@@ -100,15 +111,16 @@ machine without private repository imports. Offline package tests and a
 three-operating-system matrix compare every pure result byte-for-byte and run
 native filesystem adversarial cases appropriate to each host.
 
-The 2026-08-16 candidate reproduces 62 pure decisions and ten bounded native
+The 2026-08-16 candidate reproduced 62 pure decisions and ten bounded native
 proofs from offline-installed MIT packages. GitHub Actions run 31939458256
 passed all 72 rows on Linux, macOS, and Windows, compared exact package bytes
 and pure results, and retained a Linux syscall trace with zero outside-root
 references. Its exact hashes and independent critical review are recorded in
 the [OGVCS-004 evidence packet](../docs/evidence/OGVCS-004/README.md).
-OGVCS-002's separate million-tree and logical-1-TiB acceptance runs remain
-maintainer-deferred to the final R0 campaign and are not represented as
-path-materializer evidence here.
+That historical evidence was superseded after final review; the current
+ratification record and three-host run are linked from the OGVCS-004 evidence
+packet. OGVCS-002's separate million-tree and logical-1-TiB acceptance campaign
+is complete and is not represented as path-materializer evidence here.
 
 Case mode, fold version, and platform profile are repository-immutable. A
 changed mapping, collision rule, or meaning requires a new profile major and a

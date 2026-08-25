@@ -86,6 +86,7 @@ export const pathCases = Object.freeze([
   { id: 'dotdot', input: 'Game/../file', profile: 'path.opengamevcs/portable@1', caseMode: 'case-sensitive' },
   { id: 'backslash', input: 'Game\\file', profile: 'path.opengamevcs/portable@1', caseMode: 'case-sensitive' },
   { id: 'reserved-control-root', input: '.ogvcs/state', profile: 'path.opengamevcs/portable@1', caseMode: 'case-sensitive' },
+  { id: 'reserved-control-root-case-variant', input: '.OGVCS/state', profile: 'path.opengamevcs/portable@1', caseMode: 'case-sensitive' },
   { id: 'windows-con', input: 'Game/CON', profile: 'path.opengamevcs/portable@1', caseMode: 'case-sensitive' },
   { id: 'windows-nul-extension', input: 'Game/nul.txt', profile: 'path.opengamevcs/portable@1', caseMode: 'case-sensitive' },
   { id: 'windows-superscript', input: 'Game/COM¹.log', profile: 'path.opengamevcs/portable@1', caseMode: 'case-sensitive' },
@@ -203,7 +204,7 @@ export const renameCases = Object.freeze([
 
 export const watcherCases = Object.freeze([
   { id: 'initial-reconcile', events: [{ type: 'reconcile', cursor: 'c0', generation: 1 }] },
-  { id: 'clean-batch', events: [{ type: 'reconcile', cursor: 'c0', generation: 1 }, { type: 'start', session: 's1' }, { type: 'batch', session: 's1', fromCursor: 'c0', toCursor: 'c1', overflow: false, indexUpdated: true }, { type: 'stop', session: 's1' }] },
+  { id: 'clean-batch', events: [{ type: 'reconcile', cursor: 'c0', generation: 1 }, { type: 'start', session: 's1' }, { type: 'batch', session: 's1', fromCursor: 'c0', toCursor: 'c1', overflow: false, indexUpdated: true }, { type: 'stop', session: 's1', resumeSupported: true }] },
   { id: 'cursor-gap', events: [{ type: 'reconcile', cursor: 'c0', generation: 1 }, { type: 'start', session: 's1' }, { type: 'batch', session: 's1', fromCursor: 'wrong', toCursor: 'c2', overflow: false, indexUpdated: true }] },
   { id: 'overflow', events: [{ type: 'reconcile', cursor: 'c0', generation: 1 }, { type: 'start', session: 's1' }, { type: 'batch', session: 's1', fromCursor: 'c0', toCursor: 'c2', overflow: true, indexUpdated: false }] },
   { id: 'unclean-restart', events: [{ type: 'reconcile', cursor: 'c0', generation: 1 }, { type: 'start', session: 's1' }, { type: 'restart' }] },

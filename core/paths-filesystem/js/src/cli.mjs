@@ -4,8 +4,8 @@ import { resolve } from 'node:path';
 
 import { probeFilesystemCapabilities } from './capabilities.mjs';
 import { PathFilesystemError } from './errors.mjs';
-import { evaluateCollisions, evaluatePath } from './path.mjs';
-import { evaluatePreflight } from './preflight.mjs';
+import { evaluateCollisions, evaluatePath, validateRepositoryPath } from './path.mjs';
+import { evaluatePreflight, preflightWorkspaceMaterialization } from './preflight.mjs';
 import { evaluateRenames } from './rename.mjs';
 import { writeConformanceReport } from './report.mjs';
 import { atomicWriteFile, openWorkspaceRoot } from './workspace.mjs';
@@ -60,11 +60,24 @@ export async function runCli(args = process.argv.slice(2)) {
   }
   if (command === 'preflight') { output(evaluatePreflight(await jsonFile(rest[0]))); return 0; }
   if (command === 'renames') { output(evaluateRenames(await jsonFile(rest[0]))); return 0; }
-  if (command === 'capabilities') { output(await probeFilesystemCapabilities(resolve(rest[0]))); return 0; }
+  if (command === 'capabilities') { output(await probeFilesystemCapabilities(rest[0])); return 0; }
   if (command === 'write') {
     if (rest.length !== 3) throw new Error('write requires root, repository path, and source file');
-    const workspace = await openWorkspaceRoot(resolve(rest[0]));
-    output(await atomicWriteFile(workspace, rest[1], await boundedFile(rest[2], 64 * 1024 * 1024), { createParents: true })); return 0;
+    const workspace = await openWorkspaceRoot(rest[0]);
+    const canonical = validateRepositoryPath(rest[1], { profile: workspace.profile }).canonical;
+    const capabilities = await probeFilesystemCapabilities(workspace.root);
+    const segments = canonical.split('/');
+    const entries = segments.slice(0, -1).map((_, index) => ({
+      id: `directory-${index}`, path: segments.slice(0, index + 1).join('/'), kind: 'directory', mode: 'directory',
+    }));
+    entries.push({ id: 'write-target', path: canonical, kind: 'regular', mode: 'regular-file' });
+    const plan = await preflightWorkspaceMaterialization(workspace, {
+      schemaVersion: 'ogvcs.path/preflight-request/v1', caseMode: workspace.caseMode,
+      profile: workspace.profile, platform: capabilities.platform,
+      capabilities: { atomicReplace: capabilities.atomicReplace, executableBit: capabilities.executableBit, symlink: capabilities.symlink },
+      entries,
+    });
+    output(await atomicWriteFile(workspace, canonical, await boundedFile(rest[2], 64 * 1024 * 1024), { createParents: true, plan })); return 0;
   }
   if (command === 'conformance') {
     const destination = valueAfter(rest, '--output');

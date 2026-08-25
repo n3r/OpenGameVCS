@@ -164,7 +164,7 @@ export function validatePath(input, profileRef, profiles) {
     joinedUtf8 += bytes;
     joinedUtf16 += segment.length;
     if (OPERATIONAL_CONTROL.test(segment)) return fail('PATH_PLATFORM_FORBIDDEN', { rule: 'control', segment: index });
-    if (segment === '.ogvcs') return fail('PATH_PLATFORM_FORBIDDEN', { rule: 'workspace-reserved', segment: index });
+    if (caseFoldV1(segment) === '.ogvcs') return fail('PATH_PLATFORM_FORBIDDEN', { rule: 'workspace-reserved', segment: index });
     if (profile.rules.windowsNames) {
       if (WINDOWS_FORBIDDEN.test(segment)) return fail('PATH_PLATFORM_FORBIDDEN', { rule: 'windows-character', segment: index });
       if (/[. ]$/u.test(segment)) return fail('PATH_PLATFORM_FORBIDDEN', { rule: 'windows-trailing', segment: index });
@@ -311,7 +311,13 @@ export function preflightMaterialization(request, profiles) {
       executable,
       symlinks,
       nativeExecutableBits: capabilities?.executableBit === true ? executable : 0,
-      planSha256: sha256(canonicalBytes(normalized)),
+      planSha256: sha256(canonicalBytes({
+        capabilities,
+        caseMode,
+        entries: normalized,
+        platform,
+        profile: profileRef,
+      })),
     },
   };
 }
@@ -400,6 +406,9 @@ export function watcherTransition(state, event) {
   if (event.type === 'stop') {
     if (state.session === null || event.session !== state.session || state.authoritativeClean !== true || state.reconciliationRequired) return fail('RECONCILIATION_REQUIRED');
     next.session = null;
+    if (event.resumeSupported !== true) {
+      next.authoritativeClean = false; next.reconciliationRequired = true; next.reason = 'unsupported-resume';
+    }
     return { accepted: true, state: next };
   }
   if (event.type === 'restart') {
