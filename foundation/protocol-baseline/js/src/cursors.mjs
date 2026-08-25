@@ -22,19 +22,20 @@ function boundedText(value, label, maximum = 256) {
   return value;
 }
 
-function scopeValue(input) {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'cursor scope is invalid');
+function scopeValue(input, options = {}) {
+  const value = cloneJson(input, { ...options, maxBytes: 4096, maxDepth: 4, maxNodes: 32, maxStringBytes: 256, maxCollectionItems: 16 });
+  if (!value || typeof value !== 'object' || Array.isArray(value)) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'cursor scope is invalid');
   const expected = ['operation', 'queryDigest', 'repository', 'subject', 'tenant'];
-  if (Object.keys(input).sort().join('\0') !== expected.join('\0')) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'cursor scope fields are invalid');
+  if (Object.keys(value).sort().join('\0') !== expected.join('\0')) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'cursor scope fields are invalid');
   const result = {
-    subject: boundedText(input.subject, 'cursor subject'),
-    tenant: boundedText(input.tenant, 'cursor tenant'),
-    repository: boundedText(input.repository, 'cursor repository'),
-    operation: boundedText(input.operation, 'cursor operation'),
-    queryDigest: input.queryDigest,
+    subject: boundedText(value.subject, 'cursor subject'),
+    tenant: boundedText(value.tenant, 'cursor tenant'),
+    repository: boundedText(value.repository, 'cursor repository'),
+    operation: boundedText(value.operation, 'cursor operation'),
+    queryDigest: value.queryDigest,
   };
   if (!/^[0-9a-f]{64}$/u.test(result.queryDigest)) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'cursor query digest is invalid');
-  return cloneJson(result, { maxBytes: 4096, maxDepth: 4, maxNodes: 32, maxStringBytes: 256, maxCollectionItems: 16 });
+  return cloneJson(result, { ...options, maxBytes: 4096, maxDepth: 4, maxNodes: 32, maxStringBytes: 256, maxCollectionItems: 16 });
 }
 
 function tokenValue(value) {
@@ -113,13 +114,20 @@ export class CursorStore {
     return `c1.${base64urlEncode(bytes)}`;
   }
 
-  #record(input, now, ttlMs) {
-    const scope = scopeValue(input?.scope);
-    const generation = timeValue(input?.generation, 'cursor generation');
-    const position = timeValue(input?.position, 'cursor position');
-    const state = input?.state ?? 'active';
+  #record(input, now, ttlMs, options = {}) {
+    const value = cloneJson(input, { ...options, maxBytes: 8192, maxDepth: 5, maxNodes: 72, maxStringBytes: 256, maxCollectionItems: 40 });
+    const permitted = ['gapCode', 'generation', 'position', 'scope', 'state'];
+    if (!value || typeof value !== 'object' || Array.isArray(value)
+        || Object.keys(value).some((key) => !permitted.includes(key))
+        || !['generation', 'position', 'scope'].every((key) => Object.hasOwn(value, key))) {
+      protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'cursor operation input is invalid');
+    }
+    const scope = scopeValue(value.scope, options);
+    const generation = timeValue(value.generation, 'cursor generation');
+    const position = timeValue(value.position, 'cursor position');
+    const state = value.state ?? 'active';
     if (!['active', 'gap'].includes(state)) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'cursor state is invalid');
-    const gapCode = input?.gapCode ?? null;
+    const gapCode = value.gapCode ?? null;
     if (state === 'gap' && (typeof gapCode !== 'string' || gapCode.length === 0 || gapCode.length > 128)) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'cursor gap code is invalid');
     if (state === 'active' && gapCode !== null) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'active cursor cannot carry a gap code');
     const expiresAt = expiryValue(now, ttlMs, 'cursor expiry');
@@ -127,11 +135,11 @@ export class CursorStore {
       scope, generation, position, issuedAt: now, expiresAt, state, gapCode,
       tombstoneExpiresAt: expiryValue(expiresAt, this.#tombstoneRetentionMs, 'cursor tombstone expiry'),
     };
-    inspectJson(record, { maxBytes: 8192, maxDepth: 4, maxNodes: 64, maxStringBytes: 256, maxCollectionItems: 32 });
+    inspectJson(record, { ...options, maxBytes: 8192, maxDepth: 4, maxNodes: 64, maxStringBytes: 256, maxCollectionItems: 32 });
     // Reserve the largest permitted gap code up front. `markGap` can then make
     // its bounded in-place state transition without silently growing beyond
     // the configured store ceiling.
-    record.memoryBytes = 512 + canonicalBytes(record).length + 128;
+    record.memoryBytes = 512 + canonicalBytes(record, options).length + 128;
     return record;
   }
 
@@ -139,7 +147,7 @@ export class CursorStore {
     const deadline = deadlineFrom(options);
     const now = options.atUnixMs === undefined ? this.#time() : timeValue(options.atUnixMs, 'cursor time');
     const ttlMs = boundedInteger(options.ttlMs, this.#ttlMs, this.#ttlMs, 'cursor issue ttlMs');
-    const record = this.#record(input, now, ttlMs);
+    const record = this.#record(input, now, ttlMs, { ...options, deadline });
     this.#prune(now, deadline);
     if (this.#entries.size >= this.#maxEntries || this.#memoryBytes + record.memoryBytes > this.#maxBytes) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'cursor store ceiling exceeded');
     let token;
@@ -164,7 +172,7 @@ export class CursorStore {
 
   read(tokenInput, scopeInput, options = {}) {
     const deadline = deadlineFrom(options);
-    const scope = scopeValue(scopeInput);
+    const scope = scopeValue(scopeInput, { ...options, deadline });
     const token = tokenValue(tokenInput);
     const now = options.atUnixMs === undefined ? this.#time() : timeValue(options.atUnixMs, 'cursor time');
     const key = identity(token);
@@ -178,7 +186,7 @@ export class CursorStore {
     if (!sameScope(record.scope, scope)) cursorFailure('scope', 'cursor scope does not match the request');
     if (options.generation !== undefined && timeValue(options.generation, 'cursor expected generation') !== record.generation) cursorFailure('generation', 'cursor generation is stale');
     if (record.state === 'gap') cursorFailure('gap', 'cursor retention gap requires reconciliation');
-    return cloneJson({ generation: record.generation, position: record.position, issuedAt: record.issuedAt, expiresAt: record.expiresAt });
+    return cloneJson({ generation: record.generation, position: record.position, issuedAt: record.issuedAt, expiresAt: record.expiresAt }, options);
   }
 
   readPublic(contract, cursorInput, scopeInput, options = {}) {
@@ -188,7 +196,7 @@ export class CursorStore {
 
   advance(tokenInput, scopeInput, nextInput, options = {}) {
     const deadline = deadlineFrom(options);
-    const scope = scopeValue(scopeInput);
+    const scope = scopeValue(scopeInput, { ...options, deadline });
     const token = tokenValue(tokenInput);
     const now = options.atUnixMs === undefined ? this.#time() : timeValue(options.atUnixMs, 'cursor time');
     const oldKey = identity(token);
@@ -197,10 +205,16 @@ export class CursorStore {
     if (old.expiresAt <= now) { old.state = 'expired'; cursorFailure('expired', 'cursor has expired'); }
     if (!sameScope(old.scope, scope)) cursorFailure('scope', 'cursor scope does not match the request');
     if (old.state === 'gap') cursorFailure('gap', 'cursor retention gap requires reconciliation');
-    const position = timeValue(nextInput?.position, 'cursor next position');
-    const generation = nextInput?.generation === undefined ? old.generation : timeValue(nextInput.generation, 'cursor next generation');
+    const next = cloneJson(nextInput, { ...options, maxBytes: 1024, maxDepth: 2, maxNodes: 8, maxStringBytes: 128, maxCollectionItems: 4, deadline });
+    if (!next || typeof next !== 'object' || Array.isArray(next)
+        || !Object.hasOwn(next, 'position')
+        || Object.keys(next).some((key) => !['generation', 'position'].includes(key))) {
+      protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'cursor advance input is invalid');
+    }
+    const position = timeValue(next.position, 'cursor next position');
+    const generation = next.generation === undefined ? old.generation : timeValue(next.generation, 'cursor next generation');
     if (position < old.position) cursorFailure('position', 'cursor position cannot move backwards');
-    const replacement = this.#record({ scope, generation, position, state: 'active', gapCode: null }, now, this.#ttlMs);
+    const replacement = this.#record({ scope, generation, position, state: 'active', gapCode: null }, now, this.#ttlMs, { ...options, deadline });
     if (this.#memoryBytes - old.memoryBytes + replacement.memoryBytes > this.#maxBytes) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'cursor store memory ceiling exceeded');
     let nextToken;
     let nextKey;

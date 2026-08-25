@@ -6,7 +6,11 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { base64urlDecode, base64urlEncode, canonicalBytes, cloneJson, deepFreeze, parseJson, sha256 } from './canonical.mjs';
 import { RUNTIME_ERROR_CODES, protocolError } from './errors.mjs';
 import { HARD_LIMITS, boundedInteger, deadlineFrom } from './limits.mjs';
-import { ProtocolSchemaValidator, validateProtocolValue } from './schema.mjs';
+import {
+  ProtocolSchemaValidator,
+  protocolSchemaValidatorFromAuthenticatedInventory,
+  validateProtocolValue,
+} from './schema.mjs';
 
 const AUTHORIZATION_PACKAGE = '@opengamevcs/authorization-contract-v1';
 const AUTHORIZATION_PREDECESSOR = Object.freeze({
@@ -36,12 +40,13 @@ function rootUrl(options) {
   }
 }
 
-async function boundedFile(url, maximum, deadline, label) {
+async function boundedFile(url, maximum, maximumWorking, deadline, label) {
   let handle;
   try {
     handle = await deadline.race(open(fileURLToPath(url), fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0)), `open ${label}`);
     const stat = await deadline.race(handle.stat(), `stat ${label}`);
     if (!stat.isFile() || stat.size <= 0 || stat.size > maximum) protocolError(RUNTIME_ERROR_CODES.CONTRACT_INVALID, `${label} is not a bounded regular file`);
+    if (stat.size + 1 >= maximumWorking) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, `${label} exceeds remaining working memory`);
     const storage = Buffer.alloc(stat.size + 1);
     let offset = 0;
     while (offset < storage.length) {
@@ -53,7 +58,13 @@ async function boundedFile(url, maximum, deadline, label) {
     const after = await deadline.race(handle.stat(), `restat ${label}`);
     if (offset !== stat.size || after.size !== stat.size || after.mtimeMs !== stat.mtimeMs) protocolError(RUNTIME_ERROR_CODES.CONTRACT_INVALID, `${label} changed while reading`);
     const bytes = storage.subarray(0, offset);
-    return { bytes, value: parseJson(bytes, { trailingNewline: true, requireCanonical: true, maxBytes: maximum, deadline }) };
+    return { bytes, value: parseJson(bytes, {
+      trailingNewline: true,
+      requireCanonical: true,
+      maxBytes: maximum,
+      maxWorkingMemoryBytes: maximumWorking - storage.length,
+      deadline,
+    }) };
   } catch (error) {
     if (error?.code?.startsWith?.('PROTOCOL_')) throw error;
     protocolError(RUNTIME_ERROR_CODES.IO, `cannot read ${label}`, { cause: error });
@@ -63,9 +74,13 @@ async function boundedFile(url, maximum, deadline, label) {
 }
 
 async function load(root, options) {
-  const manifestAsset = await boundedFile(new URL('manifest.json', root), options.maxAssetBytes, options.deadline, 'authorization manifest');
+  let manifestAsset = await boundedFile(new URL('manifest.json', root), options.maxAssetBytes, options.maxWorkingMemoryBytes, options.deadline, 'authorization manifest');
   const manifest = manifestAsset.value;
   const manifestSha256 = sha256(manifestAsset.bytes);
+  let retainedMemoryBytes = 128 + (4 * manifestAsset.bytes.length);
+  let peakWorkingMemoryBytes = retainedMemoryBytes + manifestAsset.bytes.length + 1;
+  if (!Number.isSafeInteger(retainedMemoryBytes) || retainedMemoryBytes > options.maxWorkingMemoryBytes) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'authorization manifest exceeds working-memory ceiling');
+  manifestAsset = undefined;
   if (manifest?.schemaVersion !== 'ogvcs.authorization/manifest/v1'
     || manifest.contractVersion !== AUTHORIZATION_PREDECESSOR.contractVersion
     || manifest.registrySetSha256 !== AUTHORIZATION_PREDECESSOR.registrySetSha256
@@ -83,17 +98,23 @@ async function load(root, options) {
     options.deadline.checkpoint();
     const expected = byPath.get(path);
     if (!/^[0-9a-f]{64}$/u.test(expected ?? '')) protocolError(RUNTIME_ERROR_CODES.CONTRACT_INVALID, `authorization manifest omits ${path}`);
-    const asset = await boundedFile(new URL(path, root), options.maxAssetBytes, options.deadline, path);
+    let asset = await boundedFile(new URL(path, root), options.maxAssetBytes, options.maxWorkingMemoryBytes - retainedMemoryBytes, options.deadline, path);
     if (sha256(asset.bytes) !== expected) protocolError(RUNTIME_ERROR_CODES.CONTRACT_INVALID, `authorization schema digest mismatch: ${path}`);
+    const reservation = 128 + (4 * asset.bytes.length);
+    if (!Number.isSafeInteger(reservation) || retainedMemoryBytes + reservation > options.maxWorkingMemoryBytes) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, `authorization schema exceeds working-memory ceiling: ${path}`);
+    peakWorkingMemoryBytes = Math.max(peakWorkingMemoryBytes, retainedMemoryBytes + asset.bytes.length + 1 + reservation);
     schemas.set(path.slice('schemas/'.length), asset.value);
+    retainedMemoryBytes += reservation;
+    asset = undefined;
   }
   return deepFreeze({
     manifest,
     manifestSha256,
     registrySetSha256: manifest.registrySetSha256,
     root: root.href,
-    validator: new ProtocolSchemaValidator(schemas),
+    validator: protocolSchemaValidatorFromAuthenticatedInventory(schemas),
     schemas: Object.fromEntries(schemas),
+    workingMemoryBytes: peakWorkingMemoryBytes,
   });
 }
 
@@ -111,10 +132,11 @@ export async function loadAuthorizationGrantContract(options = {}) {
   const root = rootUrl(options);
   const settings = {
     maxAssetBytes: boundedInteger(options.maxAssetBytes, 1024 * 1024, HARD_LIMITS.jsonBytes, 'authorization maxAssetBytes'),
+    maxWorkingMemoryBytes: boundedInteger(options.maxWorkingMemoryBytes, HARD_LIMITS.stateBytes, HARD_LIMITS.stateBytes, 'maxWorkingMemoryBytes'),
     deadline: deadlineFrom(options),
   };
   if (options.cache === false) return load(root, settings);
-  const key = `${root.href}\0${settings.maxAssetBytes}`;
+  const key = `${root.href}\0${settings.maxAssetBytes}\0${settings.maxWorkingMemoryBytes}`;
   if (!cache.has(key)) {
     const shared = { ...settings, deadline: deadlineFrom({ timeoutMs: HARD_LIMITS.timeoutMs }) };
     cache.set(key, load(root, shared).catch((error) => { cache.delete(key); throw error; }));
@@ -138,10 +160,13 @@ export async function validateRequestRootGrant(envelope, authorizationContract, 
   if (typeof verifyGrant !== 'function') protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'transfer grant verifier must be callable');
   const deadline = deadlineFrom(options);
   const inspected = inspectRequestRootGrant(envelope, authorizationContract, { ...options, deadline });
-  const safeContext = cloneJson(context, { maxBytes: 16 * 1024, maxDepth: 8, maxNodes: 256, maxStringBytes: 1024, maxCollectionItems: 128, deadline });
+  const safeContext = cloneJson(context, { ...options, maxBytes: 16 * 1024, maxDepth: 8, maxNodes: 256, maxStringBytes: 1024, maxCollectionItems: 128, deadline });
   let decision;
-  try { decision = await deadline.race(verifyGrant(inspected.envelope, safeContext, { deadline, signal: deadline.signal }), 'transfer grant verification'); } catch (error) {
-    if (error?.code?.startsWith?.('PROTOCOL_')) throw error;
+  try {
+    const supplied = await deadline.race(verifyGrant(inspected.envelope, safeContext, { deadline, signal: deadline.signal }), 'transfer grant verification');
+    decision = cloneJson(supplied, { ...options, maxBytes: 1024, maxDepth: 2, maxNodes: 8, maxStringBytes: 128, maxCollectionItems: 4, deadline });
+  } catch (error) {
+    if ([RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, RUNTIME_ERROR_CODES.DEADLINE_EXCEEDED, RUNTIME_ERROR_CODES.CANCELLED].includes(error?.code)) throw error;
     protocolError(RUNTIME_ERROR_CODES.STATE_CONFLICT, 'transfer grant is invalid', { cause: error });
   }
   if (!decision || typeof decision !== 'object' || Array.isArray(decision)

@@ -610,12 +610,15 @@ function wireCode(error) {
 
 export async function executeReferenceProtocolCase(supplied, context = {}) {
   const contract = context.contract;
-  const tracker = new LimitTracker(supplied.configuredLimits);
+  let tracker;
+  let caseId = 'case-00000000000000000000000000000000';
   let trace = EMPTY_TRACE;
   let mutationCount = 0;
   let code = 'NONE';
   try {
-    validateProtocolValue(contract, 'RunnerCase.schema.json', supplied, { deadline: context.deadline });
+    supplied = validateProtocolValue(contract, 'RunnerCase.schema.json', supplied, context);
+    caseId = supplied.id;
+    tracker = new LimitTracker(supplied.configuredLimits);
     const control = controlFor(supplied);
     if (control.controller.signal.aborted) control.deadline.checkpoint();
     if (!Object.hasOwn(supplied.configuredLimits ?? {}, 'maxOperationTimeMs')
@@ -637,10 +640,11 @@ export async function executeReferenceProtocolCase(supplied, context = {}) {
     control.deadline.checkpoint();
     tracker.requireConfiguredRoutes();
   } catch (error) {
+    tracker ??= new LimitTracker();
     code = wireCode(error);
     if (code === 'DEADLINE_EXCEEDED' && Object.hasOwn(supplied.configuredLimits ?? {}, 'maxOperationTimeMs')) code = 'PROTOCOL_LIMIT_EXCEEDED';
     mutationCount = error?.mutationCount ?? mutationCount;
     trace = error?.trace ?? traceFor(code, error?.limitTracker ?? tracker);
   }
-  return adapterResult(supplied.id, code, { mutationCount, trace });
+  return adapterResult(caseId, code, { mutationCount, trace });
 }

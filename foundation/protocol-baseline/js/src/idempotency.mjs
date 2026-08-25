@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 
-import { canonicalBytes, cloneJson, inspectJson, sha256 } from './canonical.mjs';
+import { canonicalBytes, cloneJson, sha256 } from './canonical.mjs';
 import {
   ProtocolBaselineError, RUNTIME_ERROR_CODES, protocolError, protocolSemanticError,
 } from './errors.mjs';
@@ -51,10 +51,19 @@ function fingerprintValue(value) {
   return value;
 }
 
-function scopeValue(value) {
-  inspectJson(value, { maxBytes: 16 * 1024, maxDepth: 8, maxNodes: 256, maxStringBytes: 1024, maxCollectionItems: 128 });
+function scopeValue(input, options = {}) {
+  const value = cloneJson(input, { ...options, maxBytes: 16 * 1024, maxDepth: 8, maxNodes: 256, maxStringBytes: 1024, maxCollectionItems: 128 });
   if (value === null || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length === 0) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'idempotency scope is invalid');
-  return cloneJson(value, { maxBytes: 16 * 1024, maxDepth: 8, maxNodes: 256, maxStringBytes: 1024, maxCollectionItems: 128 });
+  return value;
+}
+
+function operationInput(input, options = {}) {
+  const value = cloneJson(input, { ...options, maxBytes: 20 * 1024, maxDepth: 9, maxNodes: 272, maxStringBytes: 1024, maxCollectionItems: 132 });
+  if (value === null || typeof value !== 'object' || Array.isArray(value)
+      || Object.keys(value).sort().join('\0') !== 'fingerprint\0key\0scope') {
+    protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'idempotency operation input is invalid');
+  }
+  return value;
 }
 
 export function semanticIdempotencyFingerprint(descriptor, options = {}) {
@@ -102,10 +111,6 @@ export function validateIdempotencyDescriptor(contract, descriptorInput, request
     protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'idempotency descriptor key timestamps do not match');
   }
   return descriptor;
-}
-
-function recordIdentity(scope, key) {
-  return sha256(Buffer.concat([Buffer.from('OGVCS-PROTOCOL-IDEMPOTENCY-KEY-V1\0', 'ascii'), canonicalBytes(scope), Buffer.from([0]), Buffer.from(key, 'utf8')]));
 }
 
 export class IdempotencyReplayStore {
@@ -179,16 +184,17 @@ export class IdempotencyReplayStore {
 
   begin(input, options = {}) {
     const deadline = deadlineFrom(options);
+    const value = operationInput(input, { ...options, deadline });
     const now = options.atUnixMs === undefined ? this.#time() : nowValue(options.atUnixMs);
-    const scope = scopeValue(input?.scope);
-    const parsedKey = keyValue(input?.key);
+    const scope = scopeValue(value.scope, { ...options, deadline });
+    const parsedKey = keyValue(value.key);
     const key = parsedKey.value;
-    const fingerprint = fingerprintValue(input?.fingerprint);
+    const fingerprint = fingerprintValue(value.fingerprint);
     this.#prune(now, deadline);
     if (parsedKey.issuedAtUnixMs > now || parsedKey.expiresAtUnixMs <= now) {
       protocolSemanticError('IDEMPOTENCY_KEY_REQUIRED', 'idempotency key is not valid at the server clock');
     }
-    const identity = recordIdentity(scope, key);
+    const identity = sha256(Buffer.concat([Buffer.from('OGVCS-PROTOCOL-IDEMPOTENCY-KEY-V1\0', 'ascii'), canonicalBytes(scope, { ...options, deadline }), Buffer.from([0]), Buffer.from(key, 'utf8')]));
     const existing = this.#entries.get(identity);
     if (existing) {
       if (existing.fingerprint !== fingerprint) protocolSemanticError('IDEMPOTENCY_KEY_REUSE', 'idempotency key was reused with different semantic input');
@@ -204,7 +210,7 @@ export class IdempotencyReplayStore {
       return decision;
     }
     if (this.#entries.size >= this.#maxEntries) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'idempotency entry ceiling exceeded');
-    const scopeBytes = canonicalBytes(scope).length;
+    const scopeBytes = canonicalBytes(scope, { ...options, deadline }).length;
     const reservedBytes = 512 + scopeBytes + Buffer.byteLength(key, 'utf8') + this.#maxOutcomeBytes;
     if (this.#memoryBytes + reservedBytes > this.#maxBytes) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'idempotency memory ceiling exceeded');
     let resolveCompletion;
@@ -231,14 +237,16 @@ export class IdempotencyReplayStore {
     if (!binding || binding.record.state !== 'pending' || this.#entries.get(binding.identity) !== binding.record) protocolError(RUNTIME_ERROR_CODES.STATE_CONFLICT, 'idempotency lease is stale or invalid');
     const cloned = cloneJson(outcome, { ...options, maxBytes: this.#maxOutcomeBytes });
     deadline.checkpoint();
-    const completionOutcome = cloneJson(cloned);
-    const returnedOutcome = cloneJson(cloned);
     const record = binding.record;
     record.outcome = cloned;
     record.state = 'committed';
     this.#leases.delete(lease);
-    record.resolveCompletion(completionOutcome);
-    return Object.freeze({ kind: 'committed', outcome: returnedOutcome, fingerprint: record.fingerprint });
+    // `cloneJson` returns a deeply frozen JSON graph. Sharing that immutable
+    // outcome between the durable record, pending waiters, and the committing
+    // caller avoids three simultaneous full-size clones without exposing
+    // mutable store-owned state.
+    record.resolveCompletion(cloned);
+    return Object.freeze({ kind: 'committed', outcome: cloned, fingerprint: record.fingerprint });
   }
 
   abort(lease, error = new Error('idempotency operation aborted')) {
@@ -257,15 +265,17 @@ export class IdempotencyReplayStore {
     const deadline = deadlineFrom(options);
     const decision = this.begin(input, { ...options, deadline });
     if (decision.kind === 'replay') {
-      await this.#authorizeReplay(options.authorizeReplay, input, deadline, 'committed');
       const record = this.#decisions.get(decision);
       if (!record || record.state !== 'committed') protocolError(RUNTIME_ERROR_CODES.STATE_CONFLICT, 'idempotency replay state changed during authorization');
-      return Object.freeze({ kind: 'replay', outcome: cloneJson(record.outcome), fingerprint: decision.fingerprint });
+      await this.#authorizeReplay(options.authorizeReplay, record, { ...options, deadline }, 'committed');
+      if (record.state !== 'committed') protocolError(RUNTIME_ERROR_CODES.STATE_CONFLICT, 'idempotency replay state changed during authorization');
+      return Object.freeze({ kind: 'replay', outcome: cloneJson(record.outcome, options), fingerprint: decision.fingerprint });
     }
     if (decision.kind === 'pending') {
-      await this.#authorizeReplay(options.authorizeReplay, input, deadline, 'pending');
       const record = this.#decisions.get(decision);
       if (!record || !['pending', 'committed'].includes(record.state)) protocolError(RUNTIME_ERROR_CODES.STATE_CONFLICT, 'idempotency pending state changed during authorization');
+      await this.#authorizeReplay(options.authorizeReplay, record, { ...options, deadline }, 'pending');
+      if (!['pending', 'committed'].includes(record.state)) protocolError(RUNTIME_ERROR_CODES.STATE_CONFLICT, 'idempotency pending state changed during authorization');
       let outcome;
       try { outcome = await deadline.race(record.completion, 'idempotency replay wait'); } catch (error) {
         if (error?.code === RUNTIME_ERROR_CODES.DEADLINE_EXCEEDED || error?.code === RUNTIME_ERROR_CODES.CANCELLED) {
@@ -273,12 +283,18 @@ export class IdempotencyReplayStore {
         }
         throw error;
       }
-      return Object.freeze({ kind: 'replay', outcome: cloneJson(outcome), fingerprint: decision.fingerprint });
+      return Object.freeze({ kind: 'replay', outcome: cloneJson(outcome, options), fingerprint: decision.fingerprint });
     }
     this.#markStarted(decision.lease);
     const settlement = Promise.resolve().then(() => mutate({ signal: deadline.signal })).then(
       (outcome) => {
-        try { return this.commit(decision.lease, outcome); } catch (error) {
+        // Settlement continues after a caller-visible timeout so the durable
+        // idempotency record can still become replayable. Carry the configured
+        // memory reduction, but never reuse the already-expired caller deadline.
+        const commitOptions = options.maxWorkingMemoryBytes === undefined
+          ? {}
+          : { maxWorkingMemoryBytes: options.maxWorkingMemoryBytes };
+        try { return this.commit(decision.lease, outcome, commitOptions); } catch (error) {
           this.#markIndeterminate(decision.lease, error);
           throw error;
         }
@@ -301,20 +317,22 @@ export class IdempotencyReplayStore {
     }
   }
 
-  async #authorizeReplay(authorizeReplay, input, deadline, state) {
+  async #authorizeReplay(authorizeReplay, record, options, state) {
+    const deadline = options.deadline;
     if (typeof authorizeReplay !== 'function') {
       protocolSemanticError('AUTHORIZATION_DENIED', 'idempotency replay authorization is required');
     }
     let decision;
     try {
-      decision = await deadline.race(authorizeReplay(cloneJson({
-        scope: input.scope,
-        key: input.key,
-        fingerprint: input.fingerprint,
+      const supplied = await deadline.race(authorizeReplay(cloneJson({
+        scope: record.scope,
+        key: record.key,
+        fingerprint: record.fingerprint,
         state,
-      }), { signal: deadline.signal }), 'idempotency replay authorization');
+      }, options), { signal: deadline.signal }), 'idempotency replay authorization');
+      decision = cloneJson(supplied, { ...options, maxBytes: 1024, maxDepth: 2, maxNodes: 8, maxStringBytes: 128, maxCollectionItems: 4 });
     } catch (error) {
-      if (error?.code === RUNTIME_ERROR_CODES.DEADLINE_EXCEEDED || error?.code === RUNTIME_ERROR_CODES.CANCELLED) throw error;
+      if ([RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, RUNTIME_ERROR_CODES.DEADLINE_EXCEEDED, RUNTIME_ERROR_CODES.CANCELLED].includes(error?.code)) throw error;
       protocolSemanticError('AUTHORIZATION_DENIED', 'idempotency replay authorization was denied');
     }
     if (decision === null || typeof decision !== 'object' || Array.isArray(decision)

@@ -1,4 +1,4 @@
-import { canonicalJson, deepFreeze } from './canonical.mjs';
+import { deepFreeze } from './canonical.mjs';
 import { RUNTIME_ERROR_CODES, protocolError, protocolSemanticError } from './errors.mjs';
 import { deadlineFrom } from './limits.mjs';
 import { validateProtocolValue } from './schema.mjs';
@@ -43,6 +43,14 @@ function assignmentKey(value) {
 
 function assignmentNameKey(value) {
   return `${value.kind}\0${value.scope}\0${value.name}`;
+}
+
+function sameAssignment(left, right) {
+  return left?.kind === right?.kind
+    && left?.scope === right?.scope
+    && left?.name === right?.name
+    && left?.code === right?.code
+    && left?.semanticSha256 === right?.semanticSha256;
 }
 
 /**
@@ -109,7 +117,7 @@ export function validateReleasePreflight(contract, candidateInput, options = {})
       && entry.requirement === row.requirement
     ));
     if (!registration) reject('PROTOCOL_UNSUPPORTED');
-    allowed.set(canonicalJson(row.assignment), row.assignment);
+    allowed.set(assignmentKey(row.assignment), row.assignment);
   }
   const proposedByCode = new Map();
   const proposedByName = new Map();
@@ -119,8 +127,8 @@ export function validateReleasePreflight(contract, candidateInput, options = {})
     const nameKey = assignmentNameKey(value);
     const byCode = proposedByCode.get(codeKey);
     const byName = proposedByName.get(nameKey);
-    if (byCode && canonicalJson(byCode) !== canonicalJson(value)
-        || byName && canonicalJson(byName) !== canonicalJson(value)) reject('PROTOCOL_UNSUPPORTED');
+    if (byCode && !sameAssignment(byCode, value)
+        || byName && !sameAssignment(byName, value)) reject('PROTOCOL_UNSUPPORTED');
     proposedByCode.set(codeKey, value);
     proposedByName.set(nameKey, value);
   }
@@ -129,15 +137,15 @@ export function validateReleasePreflight(contract, candidateInput, options = {})
     const byCode = proposedByCode.get(assignmentKey(value));
     const byName = proposedByName.get(assignmentNameKey(value));
     if (byCode === undefined || byName === undefined
-        || canonicalJson(byCode) !== canonicalJson(value)
-        || canonicalJson(byName) !== canonicalJson(value)) {
+        || !sameAssignment(byCode, value)
+        || !sameAssignment(byName, value)) {
       reject('PROTOCOL_UNSUPPORTED');
     }
   }
   for (const value of candidate.proposedAssignments) {
     deadline.checkpoint();
     if (priorByCode.has(assignmentKey(value))) continue;
-    if (!allowed.has(canonicalJson(value))) reject('PROTOCOL_UNSUPPORTED');
+    if (!sameAssignment(allowed.get(assignmentKey(value)), value)) reject('PROTOCOL_UNSUPPORTED');
     if (priorByName.has(assignmentNameKey(value))) reject('PROTOCOL_UNSUPPORTED');
   }
   deadline.checkpoint();

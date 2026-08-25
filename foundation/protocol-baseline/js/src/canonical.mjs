@@ -110,7 +110,18 @@ export function inspectJson(value, options = {}) {
         }
         stack.push({ value: descriptor.value, depth: current.depth + 1 });
       }
-    } else if (typeof item === 'object' && item !== null && (Object.getPrototypeOf(item) === Object.prototype || Object.getPrototypeOf(item) === null)) {
+    } else if (typeof item === 'object' && item !== null) {
+      // `Object.getPrototypeOf(proxy)` invokes the proxy's trap. Reject proxy
+      // containers before any reflective operation so hostile host values can
+      // only produce a typed protocol failure and never execute caller code.
+      if (utilTypes.isProxy(item)) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'JSON proxy objects are forbidden');
+      let prototype;
+      try { prototype = Object.getPrototypeOf(item); } catch (error) {
+        protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'JSON container cannot be inspected safely', { cause: error });
+      }
+      if (prototype !== Object.prototype && prototype !== null) {
+        protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'value is outside the I-JSON domain');
+      }
       const { keys, descriptors } = ownData(item);
       if (keys.some((key) => typeof key !== 'string')) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'JSON object contains a symbol key');
       if (keys.length > limits.maxObjectMembers) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'JSON object-member ceiling exceeded');

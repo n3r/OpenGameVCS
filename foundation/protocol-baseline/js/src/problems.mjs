@@ -110,7 +110,14 @@ export class ProtocolProblemCatalog {
 
   create(code, options = {}) {
     const entry = this.entry(code);
-    const supplied = options.parameters ?? [];
+    const supplied = options.parameters === undefined ? [] : cloneJson(options.parameters, {
+      ...options,
+      maxBytes: HARD_LIMITS.headerBytes,
+      maxDepth: 3,
+      maxNodes: 128,
+      maxStringBytes: HARD_LIMITS.safeParameterBytes,
+      maxCollectionItems: 64,
+    });
     if (!Array.isArray(supplied) || supplied.length > HARD_LIMITS.errorParameters) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'protocol problem parameter ceiling exceeded');
     const names = new Set();
     const parameters = supplied.map((parameter) => {
@@ -137,9 +144,21 @@ export class ProtocolProblemCatalog {
 
   validate(problem, http = {}, options = {}) {
     const value = validateProtocolValue(this.#contract, 'ProblemDetails.schema.json', problem, options);
+    const transport = cloneJson(http, {
+      ...options,
+      maxBytes: HARD_LIMITS.headerBytes + 4096,
+      maxDepth: 4,
+      maxNodes: 2048,
+      maxStringBytes: HARD_LIMITS.headerBytes,
+      maxCollectionItems: 2048,
+    });
+    if (!transport || typeof transport !== 'object' || Array.isArray(transport)
+        || Object.keys(transport).some((key) => !['headers', 'retryAfterMs', 'status'].includes(key))) {
+      protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'HTTP problem metadata is invalid');
+    }
     const entry = this.entry(value.code);
     if (value.type !== entry.type || value.title !== entry.title || value.status !== entry.status || value.retryable !== entry.retryable) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'protocol problem fields do not match their registry assignment');
-    if (http.status !== undefined && http.status !== value.status) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'HTTP status and protocol problem status disagree');
+    if (transport.status !== undefined && transport.status !== value.status) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'HTTP status and protocol problem status disagree');
     const allowed = new Set(entry.safeParameters);
     const names = new Set();
     for (const parameter of value.parameters ?? []) {
@@ -148,8 +167,8 @@ export class ProtocolProblemCatalog {
       parameterValue(parameter.name, parameter.value);
     }
     const retry = value.parameters?.find(({ name }) => name === 'retryAfterMs')?.value;
-    if (http.retryAfterMs !== undefined && String(http.retryAfterMs) !== retry) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'HTTP retry metadata and protocol problem disagree');
-    retryAfterHeaders(http.headers, retry, options);
+    if (transport.retryAfterMs !== undefined && String(transport.retryAfterMs) !== retry) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'HTTP retry metadata and protocol problem disagree');
+    retryAfterHeaders(transport.headers, retry, options);
     return value;
   }
 

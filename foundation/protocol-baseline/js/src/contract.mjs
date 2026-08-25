@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { canonicalBytes, deepFreeze, parseJson, sha256 } from './canonical.mjs';
 import { RUNTIME_ERROR_CODES, protocolError } from './errors.mjs';
 import { HARD_LIMITS, PROTOCOL_LIMITS_BY_NAME, boundedInteger, deadlineFrom } from './limits.mjs';
-import { ProtocolSchemaValidator } from './schema.mjs';
+import { protocolSchemaValidatorFromAuthenticatedInventory } from './schema.mjs';
 
 const PACKAGE = '@opengamevcs/protocol-contract-v1';
 const SAFE_ASSET = /^(?:(?:schemas|registries|profiles)\/[A-Za-z0-9._-]+\.json|vectors\/[A-Za-z0-9._-]+\.(?:json|jsonl)|docs\/[A-Za-z0-9._-]+\.md|LICENSE|README\.md|package\.json)$/u;
@@ -188,7 +188,7 @@ async function load(root, options) {
   }
   const vectorCases = Object.entries(vectors).filter(([name]) => name !== 'manifest').reduce((sum, [, document]) => sum + (Array.isArray(document?.cases) ? document.cases.length : 0), 0);
   if (vectorCases !== manifest.counts?.scenarios) protocolError(RUNTIME_ERROR_CODES.CONTRACT_INVALID, 'protocol scenario count does not match the manifest');
-  const validator = new ProtocolSchemaValidator(schemas);
+  const validator = protocolSchemaValidatorFromAuthenticatedInventory(schemas);
   const contract = {
     manifest,
     manifestSha256,

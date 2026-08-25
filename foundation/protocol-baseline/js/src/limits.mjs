@@ -96,8 +96,10 @@ export function boundedInteger(value, fallback, maximum, label, options = {}) {
 
 export class Deadline {
   #controller;
+  #externalSignal;
   #expiresAt;
   #now;
+  #signal;
 
   constructor(options = {}) {
     const timeoutMs = boundedInteger(options.timeoutMs, HARD_LIMITS.timeoutMs, HARD_LIMITS.timeoutMs, 'timeoutMs');
@@ -105,8 +107,13 @@ export class Deadline {
       protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'deadline signal must be an AbortSignal');
     }
     this.#controller = new AbortController();
-    if (options.signal?.aborted) this.#controller.abort(Object.freeze({ kind: 'cancelled' }));
-    else options.signal?.addEventListener('abort', () => this.#controller.abort(Object.freeze({ kind: 'cancelled' })), { once: true });
+    this.#externalSignal = options.signal;
+    // AbortSignal.any composes cancellation without installing a permanent
+    // user-visible listener on a long-lived caller signal. The previous
+    // listener retained every completed Deadline until that signal aborted.
+    this.#signal = this.#externalSignal === undefined
+      ? this.#controller.signal
+      : AbortSignal.any([this.#controller.signal, this.#externalSignal]);
     this.#now = options.now ?? (() => performance.now());
     if (typeof this.#now !== 'function') protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'deadline clock must be callable');
     const start = this.#now();
@@ -115,8 +122,10 @@ export class Deadline {
   }
 
   checkpoint() {
-    if (this.#controller.signal.aborted) {
-      const code = this.#controller.signal.reason?.kind === 'deadline'
+    if (this.#signal.aborted) {
+      const code = this.#controller.signal.aborted
+          && this.#signal.reason === this.#controller.signal.reason
+          && this.#controller.signal.reason?.kind === 'deadline'
         ? RUNTIME_ERROR_CODES.DEADLINE_EXCEEDED
         : RUNTIME_ERROR_CODES.CANCELLED;
       protocolError(code, code === RUNTIME_ERROR_CODES.CANCELLED ? 'protocol operation was cancelled' : 'protocol operation exceeded its deadline');
@@ -129,7 +138,7 @@ export class Deadline {
   }
 
   get signal() {
-    return this.#controller.signal;
+    return this.#signal;
   }
 
   remainingMs() {
@@ -148,8 +157,12 @@ export class Deadline {
         this.#controller.abort(deadlineBoundary);
         reject(deadlineBoundary);
       }, this.remainingMs());
-      abortListener = () => reject(this.#controller.signal.reason?.kind === 'deadline' ? deadlineBoundary : cancelledBoundary);
-      this.#controller.signal.addEventListener('abort', abortListener, { once: true });
+      abortListener = () => reject(this.#controller.signal.aborted
+        && this.#signal.reason === this.#controller.signal.reason
+        && this.#controller.signal.reason?.kind === 'deadline'
+        ? deadlineBoundary
+        : cancelledBoundary);
+      this.#signal.addEventListener('abort', abortListener, { once: true });
     });
     try {
       const result = await Promise.race([Promise.resolve(promise), boundary]);
@@ -163,7 +176,7 @@ export class Deadline {
       throw error;
     } finally {
       clearTimeout(timer);
-      if (abortListener) this.#controller.signal.removeEventListener('abort', abortListener);
+      if (abortListener) this.#signal.removeEventListener('abort', abortListener);
     }
   }
 }

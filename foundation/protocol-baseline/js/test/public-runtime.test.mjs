@@ -68,6 +68,8 @@ test('public envelopes are canonical, closed, deadline bounded, and idempotency 
   const value = request(contract);
   const encoded = encodeRequestEnvelope(contract, value, { atUnixMs: 1000 });
   assert.deepEqual(parseRequestEnvelope(contract, encoded, { requireCanonical: true, atUnixMs: 1000 }), validateRequestEnvelope(contract, value, { atUnixMs: 1000 }));
+  assert.throws(() => parseRequestEnvelope(contract, encoded, { atUnixMs: 1000, maxWorkingMemoryBytes: 1 }), /working-memory/u);
+  assert.throws(() => encodeRequestEnvelope(contract, value, { atUnixMs: 1000, maxWorkingMemoryBytes: 1 }), (error) => error.code === 'PROTOCOL_LIMIT_EXCEEDED');
   const golden = contract.vectors.idempotency.goldens[0];
   assert.equal(semanticIdempotencyFingerprint(golden.left), golden.fingerprint);
   assert.equal(semanticIdempotencyFingerprint(golden.right), golden.fingerprint);
@@ -90,6 +92,13 @@ test('page state is explicit and empty pages never imply completion', async () =
   const problem = new ProtocolProblemCatalog(contract).create('CURSOR_GAP', { correlationId: 'correlation-0001' });
   assert.equal(createPageEnvelope(contract, { correlationId: 'correlation-0001', items: [], state: 'gap', problem }).problem.code, 'CURSOR_GAP');
   assert.throws(() => createPageEnvelope(contract, { correlationId: 'correlation-0001', items: [], state: 'more' }), /allOf|next cursor/u);
+
+  let traps = 0;
+  const hostile = new Proxy({}, {
+    get() { traps += 1; throw new Error('must not execute'); },
+  });
+  assert.throws(() => createPageEnvelope(contract, hostile), (error) => error.code === 'PROTOCOL_INPUT_INVALID');
+  assert.equal(traps, 0);
 });
 
 test('public stream schemas require kind-specific bodies and delayed writes remain untrusted on timeout', async () => {

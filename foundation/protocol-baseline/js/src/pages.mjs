@@ -1,6 +1,6 @@
 import { cloneJson } from './canonical.mjs';
 import { RUNTIME_ERROR_CODES, protocolError } from './errors.mjs';
-import { HARD_LIMITS } from './limits.mjs';
+import { HARD_LIMITS, boundedInteger } from './limits.mjs';
 import { validateProtocolValue } from './schema.mjs';
 
 export function validateCursor(contract, input, options = {}) {
@@ -22,13 +22,22 @@ export function validatePageEnvelope(contract, input, options = {}) {
 }
 
 export function createPageEnvelope(contract, input, options = {}) {
-  if (input === null || typeof input !== 'object' || Array.isArray(input)) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'page input must be an object');
+  const maximumWorking = boundedInteger(options.maxWorkingMemoryBytes, HARD_LIMITS.stateBytes, HARD_LIMITS.stateBytes, 'maxWorkingMemoryBytes');
+  if (maximumWorking < 2) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'page working-memory ceiling exceeded');
+  const inputWorking = Math.floor(maximumWorking / 2);
+  const value = cloneJson(input, {
+    ...options,
+    maxBytes: HARD_LIMITS.controlMessageBytes,
+    maxArrayItems: HARD_LIMITS.arrayItems,
+    maxWorkingMemoryBytes: inputWorking,
+  });
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'page input must be an object');
   return validatePageEnvelope(contract, {
     schemaVersion: 'ogvcs.protocol/page-envelope/v1',
-    correlationId: input.correlationId,
-    items: cloneJson(input.items, { ...options, maxArrayItems: HARD_LIMITS.pageItems }),
-    state: input.state,
-    ...(input.nextCursor === undefined ? {} : { nextCursor: input.nextCursor }),
-    ...(input.problem === undefined ? {} : { problem: input.problem }),
-  }, options);
+    correlationId: value.correlationId,
+    items: value.items,
+    state: value.state,
+    ...(value.nextCursor === undefined ? {} : { nextCursor: value.nextCursor }),
+    ...(value.problem === undefined ? {} : { problem: value.problem }),
+  }, { ...options, maxWorkingMemoryBytes: maximumWorking - inputWorking });
 }

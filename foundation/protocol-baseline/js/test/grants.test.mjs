@@ -37,6 +37,12 @@ test('grant loader verifies public authorization schema artifacts', async () => 
   const contract = await loadAuthorizationGrantContract({ root: authorizationRoot, cache: false });
   assert.equal(contract.manifest.contractVersion, '1.0.0');
   assert.match(contract.registrySetSha256, /^[0-9a-f]{64}$/u);
+  assert.ok(contract.workingMemoryBytes > 0);
+  await assert.doesNotReject(() => loadAuthorizationGrantContract({ root: authorizationRoot, cache: false, maxWorkingMemoryBytes: contract.workingMemoryBytes }));
+  await assert.rejects(
+    () => loadAuthorizationGrantContract({ root: authorizationRoot, cache: false, maxWorkingMemoryBytes: contract.workingMemoryBytes - 1 }),
+    /working memory|working-memory/u,
+  );
 });
 
 test('compact carrier accepts only request-root grants with an empty explicit set', async () => {
@@ -77,6 +83,15 @@ test('grant validation is bounded and rejects before verifier invocation', async
   );
   assert.equal(called, false);
   assert.throws(() => inspectRequestRootGrant({ ...envelope(), extra: true }, contract), /registered property/u);
+
+  let traps = 0;
+  await assert.rejects(
+    () => validateRequestRootGrant(envelope(), contract, async () => new Proxy({}, {
+      ownKeys() { traps += 1; throw new Error('decision trap'); },
+    }), {}),
+    /grant is invalid/u,
+  );
+  assert.equal(traps, 0);
 });
 
 test('authorization schema cache remains partitioned by receiver ceiling', async () => {

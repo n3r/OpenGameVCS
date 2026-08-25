@@ -60,6 +60,7 @@ test('manifest loader authenticates every declared artifact and builds schema in
   assert.match(contract.manifestSha256, /^[0-9a-f]{64}$/u);
   assert.equal(contract.registries.limits.registry, 'limits');
   assert.equal(contract.vectors.smoke.cases.length, 0);
+  assert.equal(contract.validator.schema('ping.schema.json'), contract.schemas['ping.schema.json']);
   assert.equal(contract.validator.validate({ schemaVersion: 'ogvcs.protocol/ping/v1', value: 'pong' }, 'ogvcs.protocol/ping/v1').value, 'pong');
 });
 

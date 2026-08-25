@@ -1,23 +1,26 @@
-import { canonicalBytes, cloneJson, parseJson } from './canonical.mjs';
+import { canonicalBytes, parseJson } from './canonical.mjs';
 import { RUNTIME_ERROR_CODES, protocolError, protocolSemanticError } from './errors.mjs';
 import { HARD_LIMITS, boundedInteger, deadlineFrom } from './limits.mjs';
 import { validateProtocolValue } from './schema.mjs';
 
-function bytesInput(input, maximum) {
+function bytesInput(input, maximum, maximumWorking) {
   if (!(typeof input === 'string' || Buffer.isBuffer(input) || input instanceof Uint8Array)) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'protocol envelope must be JSON text or bytes');
   if (typeof input === 'string') {
     if (input.length > maximum) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'protocol envelope byte ceiling exceeded');
     const length = Buffer.byteLength(input, 'utf8');
     if (length > maximum) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'protocol envelope byte ceiling exceeded');
+    if (length + 1024 >= maximumWorking) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'protocol envelope working-memory ceiling exceeded');
     const bytes = Buffer.from(input, 'utf8');
     if (new TextDecoder('utf-8', { fatal: true }).decode(bytes) !== input) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'protocol envelope is not well-formed Unicode');
     if (bytes.length === 0) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'protocol envelope is empty');
-    return bytes;
+    return { bytes, ownedBytes: length };
   }
   if (input.byteLength > maximum) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'protocol envelope byte ceiling exceeded');
+  const ownedBytes = Buffer.isBuffer(input) ? 0 : input.byteLength;
+  if (ownedBytes + 1024 >= maximumWorking) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'protocol envelope working-memory ceiling exceeded');
   const bytes = Buffer.isBuffer(input) ? input : Buffer.from(input);
   if (bytes.length === 0) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'protocol envelope is empty');
-  return bytes;
+  return { bytes, ownedBytes };
 }
 
 function extensionCeiling(value, configured) {
@@ -75,8 +78,12 @@ export function validateRequestEnvelope(contract, input, options = {}) {
 export function parseRequestEnvelope(contract, input, options = {}) {
   const deadline = deadlineFrom(options);
   const maximum = boundedInteger(options.maxBytes, HARD_LIMITS.controlMessageBytes, HARD_LIMITS.controlMessageBytes, 'request maxBytes');
-  const value = parseJson(bytesInput(input, maximum), { requireCanonical: options.requireCanonical === true, maxBytes: maximum, deadline });
-  return validateRequestEnvelope(contract, value, { ...options, maxBytes: maximum, deadline });
+  const maximumWorking = boundedInteger(options.maxWorkingMemoryBytes, HARD_LIMITS.stateBytes, HARD_LIMITS.stateBytes, 'maxWorkingMemoryBytes');
+  const { bytes, ownedBytes } = bytesInput(input, maximum, maximumWorking);
+  const graphReservation = 128 + (4 * bytes.length);
+  if (!Number.isSafeInteger(graphReservation) || ownedBytes + (2 * graphReservation) > maximumWorking) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'protocol request working-memory ceiling exceeded');
+  const value = parseJson(bytes, { ...options, requireCanonical: options.requireCanonical === true, maxBytes: maximum, maxWorkingMemoryBytes: maximumWorking - ownedBytes, deadline });
+  return validateRequestEnvelope(contract, value, { ...options, maxBytes: maximum, maxWorkingMemoryBytes: maximumWorking - ownedBytes - graphReservation, deadline });
 }
 
 export function validateResponseEnvelope(contract, input, options = {}) {
@@ -98,14 +105,26 @@ export function validateResponseEnvelope(contract, input, options = {}) {
 export function parseResponseEnvelope(contract, input, options = {}) {
   const deadline = deadlineFrom(options);
   const maximum = boundedInteger(options.maxBytes, HARD_LIMITS.controlMessageBytes, HARD_LIMITS.controlMessageBytes, 'response maxBytes');
-  const value = parseJson(bytesInput(input, maximum), { requireCanonical: options.requireCanonical === true, maxBytes: maximum, deadline });
-  return validateResponseEnvelope(contract, value, { ...options, maxBytes: maximum, deadline });
+  const maximumWorking = boundedInteger(options.maxWorkingMemoryBytes, HARD_LIMITS.stateBytes, HARD_LIMITS.stateBytes, 'maxWorkingMemoryBytes');
+  const { bytes, ownedBytes } = bytesInput(input, maximum, maximumWorking);
+  const graphReservation = 128 + (4 * bytes.length);
+  if (!Number.isSafeInteger(graphReservation) || ownedBytes + (2 * graphReservation) > maximumWorking) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'protocol response working-memory ceiling exceeded');
+  const value = parseJson(bytes, { ...options, requireCanonical: options.requireCanonical === true, maxBytes: maximum, maxWorkingMemoryBytes: maximumWorking - ownedBytes, deadline });
+  return validateResponseEnvelope(contract, value, { ...options, maxBytes: maximum, maxWorkingMemoryBytes: maximumWorking - ownedBytes - graphReservation, deadline });
 }
 
 export function encodeRequestEnvelope(contract, input, options = {}) {
-  return canonicalBytes(validateRequestEnvelope(contract, cloneJson(input, options), options), options);
+  const maximumWorking = boundedInteger(options.maxWorkingMemoryBytes, HARD_LIMITS.stateBytes, HARD_LIMITS.stateBytes, 'maxWorkingMemoryBytes');
+  if (maximumWorking < 2) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'protocol request working-memory ceiling exceeded');
+  const retainedWorking = Math.floor(maximumWorking / 2);
+  const value = validateRequestEnvelope(contract, input, { ...options, maxWorkingMemoryBytes: retainedWorking });
+  return canonicalBytes(value, { ...options, maxWorkingMemoryBytes: maximumWorking - retainedWorking });
 }
 
 export function encodeResponseEnvelope(contract, input, options = {}) {
-  return canonicalBytes(validateResponseEnvelope(contract, cloneJson(input, options), options), options);
+  const maximumWorking = boundedInteger(options.maxWorkingMemoryBytes, HARD_LIMITS.stateBytes, HARD_LIMITS.stateBytes, 'maxWorkingMemoryBytes');
+  if (maximumWorking < 2) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'protocol response working-memory ceiling exceeded');
+  const retainedWorking = Math.floor(maximumWorking / 2);
+  const value = validateResponseEnvelope(contract, input, { ...options, maxWorkingMemoryBytes: retainedWorking });
+  return canonicalBytes(value, { ...options, maxWorkingMemoryBytes: maximumWorking - retainedWorking });
 }

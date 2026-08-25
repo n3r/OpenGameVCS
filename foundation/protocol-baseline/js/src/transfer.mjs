@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { types as utilTypes } from 'node:util';
 
 import { cloneJson, deepFreeze, sha256 } from './canonical.mjs';
 import { RUNTIME_ERROR_CODES, protocolError, protocolSemanticError } from './errors.mjs';
@@ -19,8 +20,41 @@ function semanticValidator(message) {
   protocolSemanticError('TRANSFER_VALIDATOR_MISMATCH', message);
 }
 
-function headerMap(input, label, maximum, deadline) {
+function exactInertRecord(input, label, expectedKeys) {
+  if (!input || typeof input !== 'object' || Array.isArray(input) || utilTypes.isProxy(input)) {
+    protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, `${label} must be an inert object`);
+  }
+  let prototype;
+  let keys;
+  let descriptors;
+  try {
+    prototype = Object.getPrototypeOf(input);
+    keys = Reflect.ownKeys(input);
+    descriptors = Object.getOwnPropertyDescriptors(input);
+  } catch (error) {
+    protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, `${label} cannot be inspected safely`, { cause: error });
+  }
+  if (prototype !== Object.prototype && prototype !== null
+      || keys.some((key) => typeof key !== 'string')
+      || keys.length !== expectedKeys.length
+      || expectedKeys.some((key) => !keys.includes(key))) {
+    protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, `${label} fields are invalid`);
+  }
+  const output = Object.create(null);
+  for (const key of expectedKeys) {
+    const descriptor = descriptors[key];
+    if (!descriptor || !Object.hasOwn(descriptor, 'value') || descriptor.enumerable !== true) {
+      protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, `${label} contains an accessor or hidden field`);
+    }
+    output[key] = descriptor.value;
+  }
+  return Object.freeze(output);
+}
+
+function headerMap(input, label, maximum, options) {
+  const deadline = deadlineFrom(options);
   const headers = cloneJson(input, {
+    ...options,
     deadline,
     maxBytes: maximum,
     maxDepth: 3,
@@ -77,8 +111,7 @@ function requiredContentDigest(value) {
 }
 
 function decodeResponseBodyHex(value, maximumBytes, maximumWorkingBytes, deadline) {
-  if (typeof value !== 'string' || value.length > Math.min(HARD_LIMITS.controlMessageBytes, maximumBytes * 2)
-      || value.length % 2 !== 0 || !/^(?:[0-9a-f]{2})*$/u.test(value)) {
+  if (typeof value !== 'string' || value.length % 2 !== 0) {
     protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'HTTP response body is not lowercase even-length hex');
   }
   const byteLength = value.length / 2;
@@ -87,6 +120,9 @@ function decodeResponseBodyHex(value, maximumBytes, maximumWorkingBytes, deadlin
   if (!Number.isSafeInteger(liveBytes) || liveBytes > maximumWorkingBytes) {
     protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'HTTP response body exceeds the working-memory ceiling');
   }
+  if (!/^(?:[0-9a-f]{2})*$/u.test(value)) {
+    protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'HTTP response body is not lowercase even-length hex');
+  }
   deadline.checkpoint();
   const output = Buffer.from(value, 'hex');
   deadline.checkpoint();
@@ -94,9 +130,10 @@ function decodeResponseBodyHex(value, maximumBytes, maximumWorkingBytes, deadlin
   return output;
 }
 
-function bytesValue(value, maximum, label, deadline) {
+function bytesValue(value, maximum, maximumWorking, label, deadline) {
   if (!(Buffer.isBuffer(value) || value instanceof Uint8Array)) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, `${label} must be bytes`);
   if (value.byteLength > maximum) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, `${label} byte ceiling exceeded`);
+  if (value.byteLength + 1024 > maximumWorking) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, `${label} working-memory ceiling exceeded`);
   deadline.checkpoint();
   const bytes = Buffer.from(value);
   deadline.checkpoint();
@@ -124,14 +161,16 @@ function validatorForTrustedBytes(bytes, deadline) {
 export function strongRepresentationValidator(bytes, options = {}) {
   const deadline = deadlineFrom(options);
   const maximum = boundedInteger(options.maxRepresentationBytes, HARD_LIMITS.assetBytes, HARD_LIMITS.contractBytes, 'maxRepresentationBytes');
-  const value = bytesValue(bytes, maximum, 'representation', deadline);
+  const maximumWorking = boundedInteger(options.maxWorkingMemoryBytes, HARD_LIMITS.stateBytes, HARD_LIMITS.stateBytes, 'maxWorkingMemoryBytes');
+  const value = bytesValue(bytes, maximum, maximumWorking, 'representation', deadline);
   return validatorForTrustedBytes(value, deadline);
 }
 
 export function rfc9530Sha256(bytes, options = {}) {
   const deadline = deadlineFrom(options);
   const maximum = boundedInteger(options.maxBytes, HARD_LIMITS.assetBytes, HARD_LIMITS.contractBytes, 'digest maxBytes');
-  return digestField(bytesValue(bytes, maximum, 'digest input', deadline), deadline);
+  const maximumWorking = boundedInteger(options.maxWorkingMemoryBytes, HARD_LIMITS.stateBytes, HARD_LIMITS.stateBytes, 'maxWorkingMemoryBytes');
+  return digestField(bytesValue(bytes, maximum, maximumWorking, 'digest input', deadline), deadline);
 }
 
 export class SyntheticTransferProbe {
@@ -150,7 +189,7 @@ export class SyntheticTransferProbe {
     if (!(Buffer.isBuffer(representation) || representation instanceof Uint8Array)) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'transfer representation must be bytes');
     if (representation.byteLength + 2048 > maxWorkingMemoryBytes) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'transfer constructor working-memory ceiling exceeded');
     this.#maxRangeBytes = boundedInteger(options.maxRangeBytes, Math.min(1024 * 1024, maxRepresentationBytes), maxRepresentationBytes, 'maxRangeBytes');
-    this.#bytes = bytesValue(representation, maxRepresentationBytes, 'transfer representation', deadline);
+    this.#bytes = bytesValue(representation, maxRepresentationBytes, maxWorkingMemoryBytes, 'transfer representation', deadline);
     if (this.#bytes.length === 0) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'transfer representation must not be empty');
     this.#validator = validatorForTrustedBytes(this.#bytes, deadline);
     this.#representationDigest = digestField(this.#bytes, deadline);
@@ -173,7 +212,7 @@ export class SyntheticTransferProbe {
   read(request, options = {}) {
     const deadline = deadlineFrom(options);
     const maxWorkingMemoryBytes = boundedInteger(options.maxWorkingMemoryBytes, HARD_LIMITS.stateBytes, HARD_LIMITS.stateBytes, 'maxWorkingMemoryBytes');
-    const value = cloneJson(request, { maxBytes: 16 * 1024, maxDepth: 4, maxNodes: 64, maxStringBytes: 512, maxCollectionItems: 32, deadline });
+    const value = cloneJson(request, { ...options, maxBytes: 16 * 1024, maxDepth: 4, maxNodes: 64, maxStringBytes: 512, maxCollectionItems: 32, deadline });
     const keys = Object.keys(value).sort();
     const permitted = ['contentEncoding', 'length', 'offset', 'validator'];
     if (keys.some((key) => !permitted.includes(key)) || !keys.includes('contentEncoding') || !keys.includes('length') || !keys.includes('offset') || !keys.includes('validator')) {
@@ -292,26 +331,39 @@ export function validateTransferHttpRangeCarrier(contract, input, options = {}) 
   const maximumHeaders = boundedInteger(options.maxHeaderBytes, HARD_LIMITS.headerBytes, HARD_LIMITS.headerBytes, 'maxHeaderBytes');
   const maximumRange = boundedInteger(options.maxRangeBytes, HARD_LIMITS.transferRangeBytes, HARD_LIMITS.transferRangeBytes, 'maxRangeBytes');
   const maximumWorking = boundedInteger(options.maxWorkingMemoryBytes, HARD_LIMITS.stateBytes, HARD_LIMITS.stateBytes, 'maxWorkingMemoryBytes');
-  if (!input || typeof input !== 'object' || Array.isArray(input)) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'HTTP range carrier must be an object');
-  const permitted = ['probe', 'requestHeaders', 'responseBodyHex', 'responseHeaders', 'responseStatus', 'transportResponse'];
-  if (Object.keys(input).some((key) => !permitted.includes(key)) || permitted.some((key) => !Object.hasOwn(input, key))) {
-    protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'HTTP range carrier fields are invalid');
-  }
+  input = exactInertRecord(input, 'HTTP range carrier', [
+    'probe',
+    'requestHeaders',
+    'responseBodyHex',
+    'responseHeaders',
+    'responseStatus',
+    'transportResponse',
+  ]);
+  const transportResponse = cloneJson(input.transportResponse, {
+    deadline,
+    maxBytes: 16 * 1024,
+    maxDepth: 4,
+    maxNodes: 64,
+    maxStringBytes: 1024,
+    maxArrayItems: 16,
+    maxCollectionItems: 32,
+    maxWorkingMemoryBytes: maximumWorking,
+  });
   if (!Number.isSafeInteger(input.responseStatus)
-      || !input.transportResponse || typeof input.transportResponse !== 'object' || Array.isArray(input.transportResponse)
-      || !Number.isSafeInteger(input.transportResponse.totalBytes) || input.transportResponse.totalBytes < 0
-      || !Number.isSafeInteger(input.transportResponse.rangeBytes) || input.transportResponse.rangeBytes < 0) {
+      || !transportResponse || typeof transportResponse !== 'object' || Array.isArray(transportResponse)
+      || !Number.isSafeInteger(transportResponse.totalBytes) || transportResponse.totalBytes < 0
+      || !Number.isSafeInteger(transportResponse.rangeBytes) || transportResponse.rangeBytes < 0) {
     protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'HTTP range carrier accounting is invalid');
   }
   if (![200, 206, 416].includes(input.responseStatus)) {
     protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'HTTP range carrier status is unsupported');
   }
-  const probe = validateProtocolValue(contract, 'TransferProbe.schema.json', input.probe, { deadline, maxBytes: HARD_LIMITS.controlMessageBytes });
+  const probe = validateProtocolValue(contract, 'TransferProbe.schema.json', input.probe, { ...options, deadline, maxBytes: HARD_LIMITS.controlMessageBytes });
   if (probe.endOffsetExclusive !== undefined && probe.endOffsetExclusive <= probe.startOffset) semanticRange('transfer range is empty or reversed');
   if (probe.endOffsetExclusive !== undefined && probe.endOffsetExclusive - probe.startOffset > maximumRange) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'HTTP requested range exceeds the receiver ceiling');
-  if (input.transportResponse.rangeBytes > maximumRange) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'HTTP response range exceeds the receiver ceiling');
-  const request = headerMap(input.requestHeaders, 'HTTP request', maximumHeaders, deadline);
-  const response = headerMap(input.responseHeaders, 'HTTP response', maximumHeaders, deadline);
+  if (transportResponse.rangeBytes > maximumRange) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'HTTP response range exceeds the receiver ceiling');
+  const request = headerMap(input.requestHeaders, 'HTTP request', maximumHeaders, { ...options, deadline });
+  const response = headerMap(input.responseHeaders, 'HTTP response', maximumHeaders, { ...options, deadline });
   if (request.bytes + response.bytes > maximumHeaders) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'combined HTTP header ceiling exceeded');
   const body = decodeResponseBodyHex(input.responseBodyHex, maximumRange, maximumWorking, deadline);
 
@@ -320,7 +372,7 @@ export function validateTransferHttpRangeCarrier(contract, input, options = {}) 
   const responseLengthText = response.map.get('content-length');
   if (responseLengthText === undefined) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'HTTP range response requires Content-Length');
   const responseLength = decimalField(responseLengthText, 'Content-Length');
-  if (responseLength !== body.length || responseLength !== input.transportResponse.rangeBytes) semanticRange('HTTP response byte accounting does not match Content-Length');
+  if (responseLength !== body.length || responseLength !== transportResponse.rangeBytes) semanticRange('HTTP response byte accounting does not match Content-Length');
 
   const rangeText = request.map.get('range');
   const ifRangeText = request.map.get('if-range');
@@ -345,10 +397,10 @@ export function validateTransferHttpRangeCarrier(contract, input, options = {}) 
   if (rangeText === undefined) {
     if (ifRangeText !== undefined) semanticValidator('If-Range cannot be sent without Range');
     if (input.responseStatus !== 200 || contentRangeText !== undefined) semanticRange('request without Range requires a 200 response without Content-Range');
-    if (probe.startOffset !== 0 || probe.endOffsetExclusive !== undefined && probe.endOffsetExclusive !== input.transportResponse.totalBytes
-        || body.length !== input.transportResponse.totalBytes) semanticRange('full response does not match the semantic probe');
+    if (probe.startOffset !== 0 || probe.endOffsetExclusive !== undefined && probe.endOffsetExclusive !== transportResponse.totalBytes
+        || body.length !== transportResponse.totalBytes) semanticRange('full response does not match the semantic probe');
     deadline.checkpoint();
-    return deepFreeze({ status: 200, acceptedStart: 0, acceptedEndExclusive: body.length, totalBytes: input.transportResponse.totalBytes, validatorTag, contentSha256 });
+    return deepFreeze({ status: 200, acceptedStart: 0, acceptedEndExclusive: body.length, totalBytes: transportResponse.totalBytes, validatorTag, contentSha256 });
   }
 
   const rangeMatch = /^bytes=(0|[1-9][0-9]{0,15})-(?:(0|[1-9][0-9]{0,15}))?$/u.exec(rangeText);
@@ -366,7 +418,7 @@ export function validateTransferHttpRangeCarrier(contract, input, options = {}) 
     if (quotedValidator(ifRangeText, 'If-Range') !== probe.validatorTag) semanticValidator('If-Range does not match the semantic validator');
   } else if (ifRangeText !== undefined) semanticValidator('If-Range has no semantic validator authority');
 
-  const total = input.transportResponse.totalBytes;
+  const total = transportResponse.totalBytes;
   if (requestedStart >= total) {
     if (input.responseStatus !== 416 || contentRangeText !== `bytes */${total}` || body.length !== 0) semanticRange('unsatisfied Range response is invalid');
     semanticRange('requested Range is unsatisfied');
@@ -377,7 +429,7 @@ export function validateTransferHttpRangeCarrier(contract, input, options = {}) 
   if (expectedBytes > maximumRange) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'HTTP requested range exceeds the receiver ceiling');
   const expectedContentRange = `bytes ${requestedStart}-${acceptedEndExclusive - 1}/${total}`;
   if (input.responseStatus !== 206 || contentRangeText !== expectedContentRange
-      || body.length !== expectedBytes || input.transportResponse.rangeBytes !== expectedBytes) semanticRange('satisfiable Range response does not match the semantic range');
+      || body.length !== expectedBytes || transportResponse.rangeBytes !== expectedBytes) semanticRange('satisfiable Range response does not match the semantic range');
   deadline.checkpoint();
   return deepFreeze({ status: 206, acceptedStart: requestedStart, acceptedEndExclusive, totalBytes: total, validatorTag, contentSha256 });
 }

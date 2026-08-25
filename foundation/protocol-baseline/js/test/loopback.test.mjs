@@ -38,6 +38,10 @@ test('malformed, duplicate, unknown, and oversized requests never reach the hand
   await assert.rejects(() => server.exchange('{"schemaVersion":"ogvcs.protocol/request/v1","schemaVersion":"ogvcs.protocol/request/v1","value":1}'), /duplicate/u);
   await assert.rejects(() => server.exchange('{"extra":1,"schemaVersion":"ogvcs.protocol/request/v1","value":1}'), /registered property/u);
   await assert.rejects(() => server.exchange(Buffer.alloc(129, 0x20)), /byte ceiling/u);
+  await assert.rejects(
+    () => server.exchange('{"schemaVersion":"ogvcs.protocol/request/v1","value":1}', { maxWorkingMemoryBytes: 1 }),
+    /working-memory/u,
+  );
   assert.equal(calls, 0);
 });
 

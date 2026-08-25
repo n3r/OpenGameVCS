@@ -100,4 +100,23 @@ test('runner rejects malformed handshakes and terminates stalled processes at th
   const malformed = `let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const n=s.trimEnd().split('\\n').length;process.stdout.write(Array(n+1).fill('{}').join('\\n')+'\\n')})`;
   await assert.rejects(() => runExternalProtocolConformance(contract, [process.execPath, '-e', malformed]), /handshake/u);
   await assert.rejects(() => runExternalProtocolConformance(contract, [process.execPath, '-e', 'setInterval(()=>{},1000)'], { timeoutMs: 20 }), /deadline/u);
+
+  const oversizedWorkingSet = `process.stdin.resume();process.stdin.on('end',()=>process.stdout.write(JSON.stringify({padding:'x'.repeat(2048)})+'\\n'))`;
+  await assert.rejects(
+    () => runExternalProtocolConformance(contract, [process.execPath, '-e', oversizedWorkingSet], { maxWorkingMemoryBytes: 1024 }),
+    (error) => error.code === 'PROTOCOL_LIMIT_EXCEEDED',
+  );
+});
+
+test('external adapter descriptors are inertly snapshotted before property access', async () => {
+  const contract = await loadProtocolContract({ root: protocolRoot });
+  let traps = 0;
+  const descriptor = new Proxy({}, {
+    ownKeys() { traps += 1; throw new Error('descriptor trap'); },
+  });
+  await assert.rejects(
+    () => runExternalProtocolConformance(contract, descriptor),
+    (error) => error.code === 'PROTOCOL_INPUT_INVALID',
+  );
+  assert.equal(traps, 0);
 });

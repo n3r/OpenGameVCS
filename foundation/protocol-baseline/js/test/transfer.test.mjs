@@ -47,6 +47,8 @@ test('range and representation ceilings are validated before allocation or respo
   const probe = new SyntheticTransferProbe(Buffer.alloc(4), { maxRangeBytes: 2 });
   assert.throws(() => probe.read({ contentEncoding: 'identity', offset: 0, length: 2, validator: null, extra: true }), /fields/u);
   assert.throws(() => probe.verifyComplete(['!!!!']), /canonical base64/u);
+  assert.throws(() => strongRepresentationValidator(Buffer.alloc(4), { maxWorkingMemoryBytes: 1 }), /working-memory/u);
+  assert.throws(() => rfc9530Sha256(Buffer.alloc(4), { maxWorkingMemoryBytes: 1 }), /working-memory/u);
 });
 
 test('assembly streams its digest within the configured working-memory ceiling', () => {
@@ -115,6 +117,31 @@ test('HTTP Range authenticates carried body bytes with mandatory canonical ETag 
   assert.equal(openEnded.status, 200);
   assert.equal(openEnded.acceptedStart, 0);
   assert.equal(openEnded.acceptedEndExclusive, openEnded.totalBytes);
+
+  const largeBody = Buffer.alloc(33 * 1024, 0x5a);
+  const largeValidator = strongRepresentationValidator(largeBody);
+  const largeSha256 = largeValidator.slice('"sha256-'.length, -1);
+  const largeCarrier = carrier('transfer-http-no-range-open-end-200');
+  largeCarrier.probe = { ...largeCarrier.probe, expectedSha256: largeSha256 };
+  largeCarrier.responseBodyHex = largeBody.toString('hex');
+  largeCarrier.responseHeaders = [
+    { name: 'etag', value: largeValidator },
+    { name: 'content-digest', value: rfc9530Sha256(largeBody) },
+    { name: 'content-length', value: String(largeBody.length) },
+  ];
+  largeCarrier.transportResponse = { rangeBytes: largeBody.length, totalBytes: largeBody.length };
+  assert.ok(largeCarrier.responseBodyHex.length > 64 * 1024);
+  assert.equal(validateTransferHttpRangeCarrier(contract, largeCarrier).acceptedEndExclusive, largeBody.length);
+
+  let traps = 0;
+  const hostileCarrier = new Proxy({}, {
+    ownKeys() { traps += 1; throw new Error('must not execute'); },
+  });
+  assert.throws(
+    () => validateTransferHttpRangeCarrier(contract, hostileCarrier),
+    (error) => error.code === 'PROTOCOL_INPUT_INVALID',
+  );
+  assert.equal(traps, 0);
 
   for (const id of [
     'transfer-http-content-digest-missing',

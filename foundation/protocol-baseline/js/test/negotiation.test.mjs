@@ -64,6 +64,24 @@ test('authentication happens before repository-specific requirements are accesse
   assert.deepEqual(order, ['authenticate', 'repository']);
 });
 
+test('authentication and repository callbacks cannot execute proxy traps through their returned data', async () => {
+  let traps = 0;
+  const hostile = () => new Proxy({}, {
+    ownKeys() { traps += 1; throw new Error('callback trap'); },
+  });
+  const authentication = await fixture({ authenticate: async () => hostile() });
+  await assert.rejects(
+    () => authentication.negotiator.negotiate(buildBaselineOffer(authentication.contract)),
+    (error) => error.code === 'AUTHORIZATION_DENIED',
+  );
+  const requirements = await fixture({ repositoryRequirements: async () => hostile() });
+  await assert.rejects(
+    () => requirements.negotiator.negotiate(buildBaselineOffer(requirements.contract)),
+    (error) => error.code === 'AUTHORIZATION_DENIED',
+  );
+  assert.equal(traps, 0);
+});
+
 test('unknown optional extension is ignored while unknown required and empty axes reject', async () => {
   const { contract, negotiator } = await fixture();
   const baseline = buildBaselineOffer(contract);
@@ -223,6 +241,20 @@ test('trusted client minimum removal rejects as downgrade and no receipt is issu
   const baseline = buildBaselineOffer(contract);
   const stripped = { ...baseline, capabilities: { ...baseline.capabilities, requiredCapabilities: baseline.capabilities.requiredCapabilities.filter((value) => value !== 'ogvcs.receipt.hmac-sha256@1') } };
   await assert.rejects(() => negotiator.negotiate(stripped), (error) => error.code === 'NEGOTIATION_DOWNGRADE_REJECTED');
+});
+
+test('minimum capability configuration is finite inert data and never invokes an iterable getter', async () => {
+  let traps = 0;
+  const minimumCapabilities = {};
+  Object.defineProperty(minimumCapabilities, Symbol.iterator, {
+    enumerable: true,
+    get() { traps += 1; throw new Error('must not execute'); },
+  });
+  await assert.rejects(
+    () => fixture({ minimumCapabilities }),
+    (error) => error.code === 'PROTOCOL_INPUT_INVALID',
+  );
+  assert.equal(traps, 0);
 });
 
 test('deprecated compatibility tuples remain readable but are never selected for a new session', async () => {

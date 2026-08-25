@@ -7,8 +7,11 @@ import { validateProtocolValue } from './schema.mjs';
 
 const RECEIPT_DOMAIN = Buffer.from('OGVCS-PROTOCOL-NEGOTIATION-RECEIPT-V1\0', 'ascii');
 
-function keyIdValue(value) {
-  if (typeof value !== 'string' || Buffer.byteLength(value, 'utf8') > 256 || !/^[a-z0-9][a-z0-9._/-]*(?:@[0-9]+)?$/u.test(value)) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'receipt key identifier is invalid');
+function keyIdValue(value, options = {}) {
+  const pattern = options.tokenSegment === true
+    ? /^[a-z0-9][a-z0-9_/-]*(?:@[0-9]+)?$/u
+    : /^[a-z0-9][a-z0-9._/-]*(?:@[0-9]+)?$/u;
+  if (typeof value !== 'string' || Buffer.byteLength(value, 'utf8') > 256 || !pattern.test(value)) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'receipt key identifier is invalid');
   return value;
 }
 
@@ -38,6 +41,7 @@ function mac(key, keyId, claimsBytes) {
 }
 
 function genericFailure(cause) {
+  if ([RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, RUNTIME_ERROR_CODES.DEADLINE_EXCEEDED, RUNTIME_ERROR_CODES.CANCELLED].includes(cause?.code)) throw cause;
   protocolError(RUNTIME_ERROR_CODES.STATE_CONFLICT, 'negotiation receipt is invalid, stale, or foreign', cause === undefined ? undefined : { cause });
 }
 
@@ -50,7 +54,10 @@ export class MacReceiptCodec {
 
   constructor(options = {}) {
     this.#key = keyValue(options.key);
-    this.#keyId = keyIdValue(options.keyId);
+    // The compact token uses `.` as its structural delimiter, so a key ID
+    // accepted here must itself be one token segment. Structured negotiation
+    // receipts keep the wider registered key-ID grammar below.
+    this.#keyId = keyIdValue(options.keyId, { tokenSegment: true });
     this.#maxBytes = boundedInteger(options.maxBytes, 32 * 1024, HARD_LIMITS.jsonBytes, 'receipt maxBytes');
     this.#maxTtlMs = boundedInteger(options.maxTtlMs, 5 * 60 * 1000, HARD_LIMITS.stateTtlMs, 'receipt maxTtlMs');
     this.#now = options.now ?? (() => Date.now());
@@ -63,12 +70,12 @@ export class MacReceiptCodec {
 
   issue(claimsInput, options = {}) {
     const deadline = deadlineFrom(options);
-    const claims = cloneJson(claimsInput, { maxBytes: this.#maxBytes, maxDepth: 16, maxNodes: 10_000, maxStringBytes: 4096, maxCollectionItems: 4096, deadline });
+    const claims = cloneJson(claimsInput, { ...options, maxBytes: this.#maxBytes, maxDepth: 16, maxNodes: 10_000, maxStringBytes: 4096, maxCollectionItems: 4096, deadline });
     const now = this.#time(options.atUnixMs);
     if (!Number.isSafeInteger(claims.issuedAt) || claims.issuedAt !== now || !Number.isSafeInteger(claims.expiresAt) || claims.expiresAt <= now || claims.expiresAt - now > this.#maxTtlMs) {
       protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'receipt validity window is invalid');
     }
-    const claimsBytes = canonicalBytes(claims, { maxBytes: this.#maxBytes, deadline });
+    const claimsBytes = canonicalBytes(claims, { ...options, maxBytes: this.#maxBytes, deadline });
     const signature = mac(this.#key, this.#keyId, claimsBytes);
     const token = `nr1.${this.#keyId}.${base64urlEncode(claimsBytes)}.${base64urlEncode(signature)}`;
     if (Buffer.byteLength(token, 'ascii') > this.#maxBytes) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'receipt byte ceiling exceeded');
@@ -90,13 +97,13 @@ export class MacReceiptCodec {
     const expectedMac = mac(this.#key, this.#keyId, claimsBytes);
     if (!equalBytes(suppliedMac, expectedMac)) genericFailure();
     let claims;
-    try { claims = parseJson(claimsBytes, { requireCanonical: true, maxBytes: this.#maxBytes, deadline }); } catch (error) { genericFailure(error); }
+    try { claims = parseJson(claimsBytes, { ...options, requireCanonical: true, maxBytes: this.#maxBytes, deadline }); } catch (error) { genericFailure(error); }
     const now = this.#time(options.atUnixMs);
     if (!Number.isSafeInteger(claims.issuedAt) || !Number.isSafeInteger(claims.expiresAt) || claims.issuedAt > now || claims.expiresAt <= now || claims.expiresAt - claims.issuedAt > this.#maxTtlMs) genericFailure();
-    const bindings = cloneJson(expectedBindings, { maxBytes: 16 * 1024, maxDepth: 8, maxNodes: 256, maxStringBytes: 1024, maxCollectionItems: 128, deadline });
+    const bindings = cloneJson(expectedBindings, { ...options, maxBytes: 16 * 1024, maxDepth: 8, maxNodes: 256, maxStringBytes: 1024, maxCollectionItems: 128, deadline });
     if (bindings === null || typeof bindings !== 'object' || Array.isArray(bindings) || Object.keys(bindings).length === 0) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'receipt expected bindings are invalid');
     for (const [name, expected] of Object.entries(bindings)) {
-      if (!Object.hasOwn(claims, name) || !equalBytes(canonicalBytes(claims[name]), canonicalBytes(expected))) genericFailure();
+      if (!Object.hasOwn(claims, name) || !equalBytes(canonicalBytes(claims[name], options), canonicalBytes(expected, options))) genericFailure();
     }
     deadline.checkpoint();
     return claims;
@@ -128,26 +135,26 @@ export class NegotiationReceiptCodec {
 
   issue(claimsInput, options = {}) {
     const deadline = deadlineFrom(options);
-    const claims = validateProtocolValue(this.#contract, 'NegotiationReceiptClaims.schema.json', claimsInput, { maxBytes: this.#maxBytes, deadline });
+    const claims = validateProtocolValue(this.#contract, 'NegotiationReceiptClaims.schema.json', claimsInput, { ...options, maxBytes: this.#maxBytes, deadline });
     validateNegotiationServerNonce(claims.serverNonce);
     const now = this.#time(options.atUnixMs);
     if (claims.issuedAtUnixMs !== now || claims.expiresAtUnixMs <= now || claims.expiresAtUnixMs - now > this.#maxTtlMs) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'receipt validity window is invalid');
-    const claimsBytes = canonicalBytes(claims, { maxBytes: this.#maxBytes, deadline });
+    const claimsBytes = canonicalBytes(claims, { ...options, maxBytes: this.#maxBytes, deadline });
     const receipt = {
       algorithm: 'HMAC-SHA-256',
       keyId: this.#keyId,
       claims,
       mac: base64urlEncode(mac(this.#key, this.#keyId, claimsBytes)),
     };
-    return validateProtocolValue(this.#contract, 'NegotiationReceipt.schema.json', receipt, { maxBytes: this.#maxBytes, deadline });
+    return validateProtocolValue(this.#contract, 'NegotiationReceipt.schema.json', receipt, { ...options, maxBytes: this.#maxBytes, deadline });
   }
 
   verify(receiptInput, expectedBindings, options = {}) {
     const deadline = deadlineFrom(options);
     let receipt;
-    try { receipt = validateProtocolValue(this.#contract, 'NegotiationReceipt.schema.json', receiptInput, { maxBytes: this.#maxBytes, deadline }); } catch (error) { genericFailure(error); }
+    try { receipt = validateProtocolValue(this.#contract, 'NegotiationReceipt.schema.json', receiptInput, { ...options, maxBytes: this.#maxBytes, deadline }); } catch (error) { genericFailure(error); }
     if (receipt.algorithm !== 'HMAC-SHA-256' || receipt.keyId !== this.#keyId) genericFailure();
-    const claimsBytes = canonicalBytes(receipt.claims, { maxBytes: this.#maxBytes, deadline });
+    const claimsBytes = canonicalBytes(receipt.claims, { ...options, maxBytes: this.#maxBytes, deadline });
     let suppliedMac;
     try { suppliedMac = base64urlDecode(receipt.mac, { maxBytes: 32 }); } catch (error) { genericFailure(error); }
     if (!equalBytes(suppliedMac, mac(this.#key, this.#keyId, claimsBytes))) genericFailure();
@@ -156,10 +163,10 @@ export class NegotiationReceiptCodec {
     if (receipt.claims.issuedAtUnixMs > now || receipt.claims.expiresAtUnixMs <= now || receipt.claims.expiresAtUnixMs - receipt.claims.issuedAtUnixMs > this.#maxTtlMs) {
       protocolError(RUNTIME_ERROR_CODES.STATE_CONFLICT, 'negotiation receipt has expired', { details: { reason: 'expired' } });
     }
-    const bindings = cloneJson(expectedBindings, { maxBytes: 16 * 1024, maxDepth: 8, maxNodes: 256, maxStringBytes: 1024, maxCollectionItems: 128, deadline });
+    const bindings = cloneJson(expectedBindings, { ...options, maxBytes: 16 * 1024, maxDepth: 8, maxNodes: 256, maxStringBytes: 1024, maxCollectionItems: 128, deadline });
     if (bindings === null || typeof bindings !== 'object' || Array.isArray(bindings) || Object.keys(bindings).length === 0) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'receipt expected bindings are invalid');
     for (const [name, expected] of Object.entries(bindings)) {
-      if (!Object.hasOwn(receipt.claims, name) || !equalBytes(canonicalBytes(receipt.claims[name]), canonicalBytes(expected))) genericFailure();
+      if (!Object.hasOwn(receipt.claims, name) || !equalBytes(canonicalBytes(receipt.claims[name], options), canonicalBytes(expected, options))) genericFailure();
     }
     return receipt.claims;
   }

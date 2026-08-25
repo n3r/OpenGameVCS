@@ -143,6 +143,25 @@ test('cursor validates the complete closed scope before state access', () => {
   assert.throws(() => store.read('c1.bad', missingOperation), /scope fields/u);
   assert.throws(() => store.read('c1.bad', scope), /wrong length|malformed|not canonical/u);
   assert.equal(store.summary().entries, 1);
+
+  let traps = 0;
+  const hostileScope = new Proxy({}, {
+    ownKeys() { traps += 1; throw new Error('must not execute'); },
+  });
+  assert.throws(() => store.read(issued.token, hostileScope), (error) => error.code === 'PROTOCOL_INPUT_INVALID');
+  assert.equal(traps, 0);
+
+  const hostileIssue = {};
+  Object.defineProperty(hostileIssue, 'scope', {
+    enumerable: true,
+    get() { traps += 1; throw new Error('must not execute'); },
+  });
+  assert.throws(() => store.issue(hostileIssue), (error) => error.code === 'PROTOCOL_INPUT_INVALID');
+  const hostileAdvance = new Proxy({}, {
+    ownKeys() { traps += 1; throw new Error('must not execute'); },
+  });
+  assert.throws(() => store.advance(issued.token, scope, hostileAdvance), (error) => error.code === 'PROTOCOL_INPUT_INVALID');
+  assert.equal(traps, 0);
 });
 
 test('unrelated issuance cannot change an expired cursor into invalid during tombstone retention', () => {

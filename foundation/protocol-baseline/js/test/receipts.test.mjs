@@ -60,9 +60,13 @@ test('tamper, downgrade, wrong subject, wrong repository and wrong key fail with
 
 test('receipt windows and keys are bounded before publication', () => {
   assert.throws(() => new MacReceiptCodec({ key: Buffer.alloc(16), keyId: 'key' }), /32 to 64/u);
+  assert.throws(() => new MacReceiptCodec({ key: Buffer.alloc(32), keyId: 'key.with-dot' }), /key identifier/u);
   const codec = new MacReceiptCodec({ key: Buffer.alloc(32), keyId: 'key', now: () => 100, maxTtlMs: 10 });
   assert.throws(() => codec.issue({ ...claims(), expiresAt: 111 }), /validity window/u);
-  assert.throws(() => codec.verify(codec.issue({ ...claims(), expiresAt: 110 }), {}), /expected bindings/u);
+  const token = codec.issue({ ...claims(), expiresAt: 110 });
+  assert.throws(() => codec.verify(token, {}), /expected bindings/u);
+  assert.throws(() => codec.issue({ ...claims(), expiresAt: 110 }, { maxWorkingMemoryBytes: 1 }), (error) => error.code === 'PROTOCOL_LIMIT_EXCEEDED');
+  assert.throws(() => codec.verify(token, bindings, { maxWorkingMemoryBytes: 1 }), (error) => error.code === 'PROTOCOL_LIMIT_EXCEEDED');
 });
 
 function selection(contract) {
@@ -90,6 +94,22 @@ test('structured receipt is schema-valid and binds selected registry tuple plus 
   assert.equal(verified.selection.protocolVersion, 'ogvcs.control.https-json@1');
   assert.throws(() => codec.verify(receipt, { subjectDigest: '33'.repeat(32) }), /invalid, stale, or foreign/u);
   assert.throws(() => codec.verify({ ...receipt, mac: `${receipt.mac.slice(0, -1)}A` }, { subjectDigest: structuredClaims.subjectDigest }), /invalid, stale, or foreign/u);
+});
+
+test('structured receipts retain the registered dotted key identifier grammar', async () => {
+  const contract = await loadProtocolContract({ root: protocolRoot });
+  const now = 10_000;
+  const codec = new NegotiationReceiptCodec({ contract, key: Buffer.alloc(32, 9), keyId: 'receipt.key@1', now: () => now });
+  const structuredClaims = {
+    schemaVersion: 'ogvcs.protocol/negotiation-receipt-claims/v1',
+    selection: selection(contract),
+    subjectDigest: '11'.repeat(32), tenantDigest: '22'.repeat(32), authorityEpoch: 3,
+    sessionId: 'session-00000001', clientNonce: 'A'.repeat(22), serverNonce: Buffer.alloc(16, 1).toString('base64url'),
+    issuedAtUnixMs: now, expiresAtUnixMs: now + 100,
+  };
+  const receipt = codec.issue(structuredClaims);
+  assert.equal(receipt.keyId, 'receipt.key@1');
+  assert.equal(codec.verify(receipt, { subjectDigest: structuredClaims.subjectDigest }).subjectDigest, structuredClaims.subjectDigest);
 });
 
 test('structured receipt distinguishes expiry without disclosing foreign binding details', async () => {

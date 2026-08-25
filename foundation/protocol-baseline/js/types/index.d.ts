@@ -81,7 +81,7 @@ export function base64urlDecode(value: string, options?: RuntimeOptions): Uint8A
 
 export class ProtocolSchemaValidator {
   constructor(schemas: Map<string, JsonObject> | Record<string, JsonObject>);
-  schema(selector: string | JsonObject): JsonObject;
+  schema(selector: string | JsonObject, options?: RuntimeOptions): JsonObject;
   validate<T extends JsonValue>(value: T, selector: string | JsonObject, options?: RuntimeOptions): T;
 }
 export function validateProtocolValue<T extends JsonValue>(contract: ProtocolContract, selector: string | JsonObject, value: T, options?: RuntimeOptions): T;
@@ -127,7 +127,7 @@ export function encodeStreamFrame(frame: JsonObject, options?: RuntimeOptions & 
 export function parseCanonicalStream(input: string | Uint8Array, options?: RuntimeOptions & { contract?: ProtocolContract }): Readonly<{ frames: JsonObject[]; summary: JsonObject }>;
 export function writeCanonicalStream(frames: Iterable<JsonObject>, writable: WritableLike, options?: RuntimeOptions & { contract?: ProtocolContract }): Promise<Readonly<JsonObject>>;
 
-export interface AuthorizationGrantContract { readonly manifest: JsonObject; readonly manifestSha256: string; readonly registrySetSha256: string; readonly root: string; readonly validator: ProtocolSchemaValidator; }
+export interface AuthorizationGrantContract { readonly manifest: JsonObject; readonly manifestSha256: string; readonly registrySetSha256: string; readonly root: string; readonly validator: ProtocolSchemaValidator; readonly workingMemoryBytes: number; }
 export function loadAuthorizationGrantContract(options?: RuntimeOptions & { root?: string | URL; cache?: boolean }): Promise<AuthorizationGrantContract>;
 export function clearAuthorizationGrantCacheForTest(): void;
 export function inspectRequestRootGrant(envelope: JsonObject, authorizationContract: AuthorizationGrantContract, options?: RuntimeOptions): Readonly<JsonObject>;

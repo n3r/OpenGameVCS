@@ -10,6 +10,18 @@ import {
 } from '../src/index.mjs';
 import { protocolRoot } from './roots.mjs';
 
+test('reference case execution snapshots the complete public input before property access', async () => {
+  const contract = await loadProtocolContract({ root: protocolRoot });
+  let traps = 0;
+  const hostile = new Proxy({}, {
+    get() { traps += 1; throw new Error('must not execute'); },
+  });
+  const result = await executeReferenceProtocolCase(hostile, { contract });
+  assert.equal(result.code, 'PROTOCOL_MALFORMED');
+  assert.equal(result.preMutation, true);
+  assert.equal(traps, 0);
+});
+
 test('scenario collection is closed, bounded, unique, and deterministic', async () => {
   const contract = await loadProtocolContract({ root: protocolRoot });
   const scenarios = collectProtocolScenarios(contract);
@@ -22,6 +34,10 @@ test('scenario collection is closed, bounded, unique, and deterministic', async 
   const duplicate = { ...contract, vectors: { one: { cases: [scenarios[0], scenarios[0]] } } };
   assert.throws(() => collectProtocolScenarios(duplicate), /duplicated/u);
   assert.throws(() => collectProtocolScenarios(contract, { maxCases: 1 }), /ceiling/u);
+  assert.throws(
+    () => collectProtocolScenarios(contract, { maxWorkingMemoryBytes: 1 }),
+    (error) => error.code === 'PROTOCOL_LIMIT_EXCEEDED',
+  );
 });
 
 test('reference runner receives no oracle fields and emits exact RunnerReport', async () => {

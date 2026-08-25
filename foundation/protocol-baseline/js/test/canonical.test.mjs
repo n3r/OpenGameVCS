@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { getEventListeners } from 'node:events';
 import test from 'node:test';
 
 import {
@@ -33,6 +34,15 @@ test('emitter refuses accessors, proxies, sparse arrays, cycles, and host object
   Object.defineProperty(accessor, 'value', { enumerable: true, get() { throw new Error('must not execute'); } });
   assert.throws(() => canonicalJson(accessor), /accessor/u);
   assert.throws(() => canonicalJson(new Proxy({}, {})), /proxy/u);
+  let prototypeTraps = 0;
+  const hostileProxy = new Proxy({}, {
+    getPrototypeOf() { prototypeTraps += 1; throw new Error('must not execute'); },
+  });
+  assert.throws(
+    () => canonicalJson(hostileProxy),
+    (error) => error instanceof ProtocolBaselineError && error.code === 'PROTOCOL_INPUT_INVALID',
+  );
+  assert.equal(prototypeTraps, 0);
   assert.throws(() => canonicalJson(new Array(1)), /dense/u);
   assert.throws(() => canonicalJson(new Date()), /I-JSON domain/u);
   const cycle = {};
@@ -62,6 +72,20 @@ test('cancellation is distinct from deadline expiry before and during host work'
 
   let now = 0;
   assert.throws(() => new Deadline({ timeoutMs: 1, now: () => now++ }).checkpoint(), (error) => error.code === 'PROTOCOL_DEADLINE_EXCEEDED');
+
+  let clock = 0;
+  const lateCancellation = new AbortController();
+  const expiredFirst = new Deadline({ signal: lateCancellation.signal, timeoutMs: 1, now: () => clock });
+  clock = 2;
+  assert.throws(() => expiredFirst.checkpoint(), (error) => error.code === 'PROTOCOL_DEADLINE_EXCEEDED');
+  lateCancellation.abort();
+  assert.throws(() => expiredFirst.checkpoint(), (error) => error.code === 'PROTOCOL_DEADLINE_EXCEEDED');
+});
+
+test('completed deadline construction does not retain listeners on a shared caller signal', () => {
+  const controller = new AbortController();
+  for (let index = 0; index < 32; index += 1) new Deadline({ signal: controller.signal }).checkpoint();
+  assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
 });
 
 test('serialized runtime errors never disclose caller-controlled diagnostics', () => {
@@ -69,4 +93,28 @@ test('serialized runtime errors never disclose caller-controlled diagnostics', (
   const error = new ProtocolBaselineError('PROTOCOL_INPUT_INVALID', marker, { details: { path: marker } });
   assert.deepEqual(error.toJSON(), { code: 'PROTOCOL_INPUT_INVALID', safeClass: 'input', preMutation: true });
   assert.doesNotMatch(JSON.stringify(error.toJSON()), /protected|policy|grant/u);
+});
+
+test('runtime error details reject proxies and accessors without invoking caller code', () => {
+  let traps = 0;
+  const hostileProxy = new Proxy({}, {
+    getPrototypeOf() { traps += 1; throw new Error('must not execute'); },
+  });
+  assert.throws(
+    () => new ProtocolBaselineError('PROTOCOL_INPUT_INVALID', 'invalid input', { details: hostileProxy }),
+    /inert data/u,
+  );
+  assert.equal(traps, 0);
+
+  let getters = 0;
+  const accessor = {};
+  Object.defineProperty(accessor, 'path', {
+    enumerable: true,
+    get() { getters += 1; throw new Error('must not execute'); },
+  });
+  assert.throws(
+    () => new ProtocolBaselineError('PROTOCOL_INPUT_INVALID', 'invalid input', { details: accessor }),
+    /inert data/u,
+  );
+  assert.equal(getters, 0);
 });

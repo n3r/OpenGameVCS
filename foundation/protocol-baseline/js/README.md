@@ -72,14 +72,27 @@ independence evidence.
 
 ## Trust and resource boundary
 
+All public wire/data inputs and callback results are copied into bounded inert
+snapshots before semantic use. Proxy traps, accessors, custom iterators, and
+mutable caller-owned objects are not protocol authority. Operation options such
+as functions, clocks, `AbortSignal` instances, and I/O destinations are trusted
+host controls rather than wire data; their completed return values still cross
+the inert-data boundary before they can become protocol results.
+
 All public entry points apply finite hard ceilings, configured reductions, and
-cooperative deadline/cancellation checkpoints. A JavaScript or operating-system
-I/O call already in progress cannot be preempted; callers with strict
-wall-clock SLAs must supply timeout-bounded/cancellable I/O or use process
-isolation. Bytes written to a destination and handler output remain staging and
-untrusted until the operation returns successfully. The in-memory idempotency
-and cursor stores are reference components; multi-process deployments need an
-atomic bounded persistence implementation preserving the same semantics.
+cooperative deadline/cancellation checkpoints. `maxWorkingMemoryBytes` is a
+composite live-operation ceiling: retained contract/scenario/canary inventories,
+adapter input and output, decoded results, canonical staging, stream/envelope
+buffers, and other simultaneously live copies share that allowance. The HTTP
+Range response body is transfer data with its own range and working-memory
+ceilings, not a control-message string; its surrounding carrier metadata is
+still inertly snapshotted. A JavaScript or operating-system I/O call already in
+progress cannot be preempted; callers with strict wall-clock SLAs must supply
+timeout-bounded/cancellable I/O or use process isolation. Bytes written to a
+destination and handler output remain staging and untrusted until the operation
+returns successfully. The in-memory idempotency and cursor stores are reference
+components; multi-process deployments need an atomic bounded persistence
+implementation preserving the same semantics.
 
 `SyntheticTransferProbe` is deliberately application-neutral. It does not
 define production routes, packs, upload sessions, multipart behavior,

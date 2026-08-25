@@ -37,6 +37,23 @@ test('unknown codes, arbitrary parameters, duplicates, status drift, and retry d
   const problem = catalog.create('PROTOCOL_LIMIT_EXCEEDED', { correlationId, parameters: [{ name: 'retryAfterMs', value: '100' }] });
   assert.throws(() => catalog.validate(problem, { status: 400 }), /status.*disagree/u);
   assert.throws(() => catalog.validate(problem, { status: 413, retryAfterMs: 101 }), /retry metadata/u);
+  let traps = 0;
+  assert.throws(
+    () => catalog.validate(problem, new Proxy({}, {
+      ownKeys() { traps += 1; throw new Error('HTTP metadata trap'); },
+    })),
+    (error) => error.code === 'PROTOCOL_INPUT_INVALID',
+  );
+  assert.equal(traps, 0);
+
+  const hostileParameters = new Proxy([], {
+    getPrototypeOf() { traps += 1; throw new Error('parameter trap'); },
+  });
+  assert.throws(
+    () => catalog.create('CURSOR_GAP', { correlationId, parameters: hostileParameters }),
+    (error) => error.code === 'PROTOCOL_INPUT_INVALID',
+  );
+  assert.equal(traps, 0);
 });
 
 test('retryAfterMs accepts only its canonical bounded decimal domain', async () => {

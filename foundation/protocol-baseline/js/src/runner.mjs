@@ -5,13 +5,18 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { canonicalBytes, canonicalJson, parseJson, sha256 } from './canonical.mjs';
+import {
+  canonicalBytes, canonicalJson, cloneJson, parseJson, sha256,
+} from './canonical.mjs';
 import {
   assertNoProtectedAdapterOutput,
-  collectProtocolScenarios,
+  collectProtocolScenarioPlan,
   protectedAdapterOutputForms,
   PROTOCOL_OPERATIONS,
+  protocolJsonRetentionBytes,
+  protocolStringSetRetentionBytes,
   runProtocolConformance,
+  runProtocolConformanceWithPlan,
   scenarioForAdapter,
 } from './conformance.mjs';
 import { RUNTIME_ERROR_CODES, ProtocolBaselineError, protocolError } from './errors.mjs';
@@ -19,8 +24,15 @@ import { executeReferenceProtocolCase } from './evaluator.mjs';
 import { HARD_LIMITS, boundedInteger, deadlineFrom } from './limits.mjs';
 import { validateProtocolValue } from './schema.mjs';
 
-function adapterDescriptor(input) {
-  if (Array.isArray(input)) input = { command: input[0], args: input.slice(1) };
+function adapterDescriptor(input, options = {}) {
+  const descriptor = cloneJson(input, {
+    ...options,
+    maxBytes: HARD_LIMITS.jsonBytes,
+    maxArrayItems: 256,
+    maxObjectMembers: 128,
+    maxStringBytes: HARD_LIMITS.jsonStringBytes,
+  });
+  input = Array.isArray(descriptor) ? { command: descriptor[0], args: descriptor.slice(1) } : descriptor;
   if (!input || typeof input !== 'object' || Array.isArray(input)) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'adapter descriptor must be an object or command array');
   const keys = Object.keys(input).sort();
   if (keys.some((key) => !['args', 'command', 'env'].includes(key)) || typeof input.command !== 'string' || input.command.length === 0 || input.command.length > 16_384 || input.command.includes('\0')) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'adapter command is invalid');
@@ -75,7 +87,12 @@ async function collectCanonicalLines(stream, settings, state) {
   let retainedBytes = 0;
   try {
     for await (const rawChunk of stream) {
-      const chunk = Buffer.from(rawChunk);
+      if (!(Buffer.isBuffer(rawChunk) || rawChunk instanceof Uint8Array)) {
+        protocolError(RUNTIME_ERROR_CODES.ADAPTER_PROTOCOL, 'adapter stdout yielded a non-byte chunk');
+      }
+      const rawLength = rawChunk.byteLength;
+      const copiedChunkBytes = Buffer.isBuffer(rawChunk) ? 0 : rawLength;
+      const chunk = Buffer.isBuffer(rawChunk) ? rawChunk : Buffer.from(rawChunk);
       totalBytes += chunk.length;
       if (!Number.isSafeInteger(totalBytes) || totalBytes > settings.maximumBytes) {
         state.failure ??= new ProtocolBaselineError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'adapter stdout ceiling exceeded');
@@ -83,22 +100,54 @@ async function collectCanonicalLines(stream, settings, state) {
         throw state.failure;
       }
       if (pending.length + chunk.length > settings.maximumLineBytes + 1 && !chunk.includes(0x0a)) protocolError(RUNTIME_ERROR_CODES.ADAPTER_PROTOCOL, 'adapter output line exceeds its ceiling');
-      pending = pending.length === 0 ? chunk : Buffer.concat([pending, chunk], pending.length + chunk.length);
+      const concatenatedBytes = pending.length === 0 ? 0 : pending.length + chunk.length;
+      const assemblyLiveBytes = pending.length + rawLength + copiedChunkBytes + concatenatedBytes;
+      if (!Number.isSafeInteger(assemblyLiveBytes) || retainedBytes + assemblyLiveBytes > settings.maximumWorkingBytes) {
+        protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'adapter stdout working-memory ceiling exceeded before chunk assembly');
+      }
+      const combined = pending.length === 0 ? chunk : Buffer.concat([pending, chunk], concatenatedBytes);
+      let cursor = 0;
       while (true) {
-        const newline = pending.indexOf(0x0a);
+        const newline = combined.indexOf(0x0a, cursor);
         if (newline === -1) break;
-        if (newline === 0 || newline > settings.maximumLineBytes || pending[newline - 1] === 0x0d) protocolError(RUNTIME_ERROR_CODES.ADAPTER_PROTOCOL, 'adapter output line is empty or oversized');
-        const line = pending.subarray(0, newline);
-        pending = pending.subarray(newline + 1);
+        const lineLength = newline - cursor;
+        if (lineLength === 0 || lineLength > settings.maximumLineBytes || combined[newline - 1] === 0x0d) protocolError(RUNTIME_ERROR_CODES.ADAPTER_PROTOCOL, 'adapter output line is empty or oversized');
+        const line = combined.subarray(cursor, newline);
+        // The disclosure-audit text is temporary. Admit it together with the
+        // parser graph, then retain only the decoded graph after the scan.
+        const parseWorkingReservation = 1024 + (6 * line.length);
+        const retainedReservation = 512 + (4 * line.length);
+        if (!Number.isSafeInteger(parseWorkingReservation) || !Number.isSafeInteger(retainedReservation)
+            || retainedBytes + assemblyLiveBytes + parseWorkingReservation > settings.maximumWorkingBytes) {
+          protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'adapter decoded-output working-memory ceiling exceeded before line parse');
+        }
         let text;
         try { text = new TextDecoder('utf-8', { fatal: true }).decode(line); } catch (error) { protocolError(RUNTIME_ERROR_CODES.ADAPTER_PROTOCOL, 'adapter output is not UTF-8', { cause: error }); }
         assertNoProtectedAdapterOutput(text, settings.protectedForms, settings.deadline);
         let value;
-        try { value = parseJson(line, { requireCanonical: true, maxBytes: settings.maximumLineBytes, deadline: settings.deadline }); } catch (error) { protocolError(RUNTIME_ERROR_CODES.ADAPTER_PROTOCOL, 'adapter output is not canonical bounded JSON', { cause: error }); }
-        retainedBytes += 1024 + line.length * 4;
-        if (!Number.isSafeInteger(retainedBytes) || retainedBytes + pending.length > settings.maximumWorkingBytes) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'adapter decoded-output working-memory ceiling exceeded');
-        rows.push({ value, text });
+        try {
+          value = parseJson(line, {
+            requireCanonical: true,
+            maxBytes: settings.maximumLineBytes,
+            maxWorkingMemoryBytes: settings.maximumWorkingBytes - retainedBytes - assemblyLiveBytes - (2 * line.length),
+            deadline: settings.deadline,
+          });
+        } catch (error) { protocolError(RUNTIME_ERROR_CODES.ADAPTER_PROTOCOL, 'adapter output is not canonical bounded JSON', { cause: error }); }
+        retainedBytes += retainedReservation;
+        if (!Number.isSafeInteger(retainedBytes)) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'adapter decoded-output working-memory ceiling exceeded');
+        rows.push({ value, reservation: retainedReservation });
         if (rows.length > settings.maximumLines) protocolError(RUNTIME_ERROR_CODES.ADAPTER_PROTOCOL, 'adapter returned too many protocol lines');
+        cursor = newline + 1;
+      }
+      const tailLength = combined.length - cursor;
+      if (tailLength > settings.maximumLineBytes) protocolError(RUNTIME_ERROR_CODES.ADAPTER_PROTOCOL, 'adapter output line exceeds its ceiling');
+      if (cursor === 0) pending = combined;
+      else if (tailLength === 0) pending = Buffer.alloc(0);
+      else {
+        if (retainedBytes + assemblyLiveBytes + tailLength > settings.maximumWorkingBytes) {
+          protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'adapter stdout working-memory ceiling exceeded before retaining a partial line');
+        }
+        pending = Buffer.from(combined.subarray(cursor));
       }
       if (pending.length > settings.maximumLineBytes) protocolError(RUNTIME_ERROR_CODES.ADAPTER_PROTOCOL, 'adapter output line exceeds its ceiling');
     }
@@ -144,7 +193,7 @@ function opaqueHandle(seen) {
 }
 
 function shuffled(values) {
-  const output = [...values];
+  const output = values;
   for (let index = output.length - 1; index > 0; index -= 1) {
     const selected = randomInt(index + 1);
     [output[index], output[selected]] = [output[selected], output[index]];
@@ -230,23 +279,63 @@ export async function runReferenceProtocolConformance(contract, options = {}) {
 }
 
 export async function runExternalProtocolConformance(contract, adapter, options = {}) {
-  const originalDescriptor = adapterDescriptor(adapter);
   const deadline = deadlineFrom(options);
-  const scenarios = collectProtocolScenarios(contract, options);
+  const maxWorkingMemoryBytes = boundedInteger(options.maxWorkingMemoryBytes, HARD_LIMITS.stateBytes, HARD_LIMITS.stateBytes, 'maxWorkingMemoryBytes');
+  let originalDescriptor = adapterDescriptor(adapter, { ...options, deadline, maxWorkingMemoryBytes });
+  const originalDescriptorReservation = protocolJsonRetentionBytes(originalDescriptor, { deadline });
+  if (originalDescriptorReservation >= maxWorkingMemoryBytes) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'adapter descriptor working-memory ceiling exceeded');
+  const plan = collectProtocolScenarioPlan(contract, {
+    ...options,
+    deadline,
+    maxWorkingMemoryBytes: maxWorkingMemoryBytes - originalDescriptorReservation,
+  });
+  const scenarios = plan.scenarios;
+  let retainedBytes = plan.retainedBytes + originalDescriptorReservation;
   const handles = new Set();
-  const executions = shuffled(scenarios.map((scenario) => {
+  const executions = [];
+  let maximumInputScratchBytes = 0;
+  for (const scenario of scenarios) {
+    if (retainedBytes >= maxWorkingMemoryBytes) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'adapter runner-case working-memory ceiling exceeded');
     const opaqueId = opaqueHandle(handles);
-    const runnerCase = { ...scenarioForAdapter(scenario, contract, { deadline }), id: opaqueId };
-    return { opaqueId, runnerCase, scenario };
-  }));
-  const protectedForms = protectedAdapterOutputForms(contract, scenarios, deadline);
+    const supplied = scenarioForAdapter(scenario, contract, {
+      deadline,
+      maxWorkingMemoryBytes: maxWorkingMemoryBytes - retainedBytes,
+    });
+    const runnerCase = { ...supplied, id: opaqueId };
+    const jsonReservation = protocolJsonRetentionBytes(runnerCase, { deadline });
+    const reservation = jsonReservation + 512;
+    if (!Number.isSafeInteger(reservation) || retainedBytes + reservation > maxWorkingMemoryBytes) {
+      protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'adapter runner-case working-memory ceiling exceeded');
+    }
+    const encodedBytes = (jsonReservation - 128) / 4;
+    maximumInputScratchBytes = Math.max(maximumInputScratchBytes, 1024 + (5 * encodedBytes) + 1);
+    executions.push({ opaqueId, reservation, runnerCase, scenario });
+    retainedBytes += reservation;
+  }
+  shuffled(executions);
+  if (retainedBytes >= maxWorkingMemoryBytes) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'protected-output working-memory ceiling exceeded');
+  const protectedForms = protectedAdapterOutputForms(contract, scenarios, deadline, {
+    maxWorkingMemoryBytes: maxWorkingMemoryBytes - retainedBytes,
+  });
+  const protectedFormsReservation = protocolStringSetRetentionBytes(protectedForms);
+  if (retainedBytes + protectedFormsReservation > maxWorkingMemoryBytes) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'protected-output working-memory ceiling exceeded');
+  retainedBytes += protectedFormsReservation;
+  const byOpaqueReservation = 256 * executions.length;
+  if (!Number.isSafeInteger(byOpaqueReservation) || retainedBytes + byOpaqueReservation > maxWorkingMemoryBytes) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'adapter case-index working-memory ceiling exceeded');
   const byOpaque = new Map(executions.map((value) => [value.opaqueId, value]));
+  retainedBytes += byOpaqueReservation;
   const maxStdoutBytes = boundedInteger(options.maxStdoutBytes, HARD_LIMITS.adapterStdoutBytes, HARD_LIMITS.adapterStdoutBytes, 'maxStdoutBytes');
   const maxStderrBytes = boundedInteger(options.maxStderrBytes, HARD_LIMITS.adapterStderrBytes, HARD_LIMITS.adapterStderrBytes, 'maxStderrBytes');
   const maxLineBytes = boundedInteger(options.maxLineBytes, HARD_LIMITS.jsonBytes, HARD_LIMITS.jsonBytes, 'maxLineBytes');
   const authorityRoot = await stageAuthority(contract);
   try {
     const descriptor = await isolatedDescriptor(originalDescriptor, authorityRoot, options);
+    const descriptorReservation = protocolJsonRetentionBytes(descriptor, { deadline });
+    if (retainedBytes + descriptorReservation > maxWorkingMemoryBytes) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'isolated adapter descriptor working-memory ceiling exceeded');
+    originalDescriptor = undefined;
+    retainedBytes = retainedBytes - originalDescriptorReservation + descriptorReservation;
+    if (retainedBytes + maximumInputScratchBytes >= maxWorkingMemoryBytes) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'adapter process working-memory ceiling exceeded');
+    const stdoutWorkingBytes = maxWorkingMemoryBytes - retainedBytes - maximumInputScratchBytes;
     const child = spawn(descriptor.command, descriptor.args, {
       cwd: authorityRoot,
       detached: process.platform !== 'win32',
@@ -264,7 +353,7 @@ export async function runExternalProtocolConformance(contract, adapter, options 
       maximumBytes: maxStdoutBytes,
       maximumLineBytes: maxLineBytes,
       maximumLines: executions.length + 1,
-      maximumWorkingBytes: HARD_LIMITS.stateBytes,
+      maximumWorkingBytes: stdoutWorkingBytes,
       protectedForms,
     }, state);
     const stderrPromise = requireEmptyStderr(child.stderr, maxStderrBytes, state);
@@ -272,8 +361,16 @@ export async function runExternalProtocolConformance(contract, adapter, options 
     const writePromise = (async () => {
       for (const execution of executions) {
         deadline.checkpoint();
-        const bytes = canonicalBytes(execution.runnerCase, { maxBytes: maxLineBytes, deadline });
+        const bytes = canonicalBytes(execution.runnerCase, {
+          maxBytes: maxLineBytes,
+          maxWorkingMemoryBytes: maximumInputScratchBytes,
+          deadline,
+        });
         if (bytes.length + 1 > maxLineBytes) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'adapter input line ceiling exceeded');
+        const workingBytes = 1024 + (5 * bytes.length) + 1;
+        if (!Number.isSafeInteger(workingBytes) || workingBytes > maximumInputScratchBytes) {
+          protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'adapter input working-memory ceiling exceeded');
+        }
         await deadline.race(writeBytes(child.stdin, Buffer.concat([bytes, Buffer.from('\n')])), 'adapter input write');
       }
       await deadline.race(closeInput(child.stdin), 'adapter input close');
@@ -298,24 +395,63 @@ export async function runExternalProtocolConformance(contract, adapter, options 
     if (state.failure) throw state.failure;
     if (status.code !== 0 || status.signal !== null || stderrBytes !== 0) protocolError(RUNTIME_ERROR_CODES.ADAPTER_FAILED, 'adapter process exited unsuccessfully', { details: { exitCode: status.code ?? -1, stderrBytes } });
     if (lines.length !== executions.length + 1) protocolError(RUNTIME_ERROR_CODES.ADAPTER_PROTOCOL, 'adapter returned the wrong number of protocol lines');
+    const lineRetainedBytes = lines.reduce((total, line) => total + line.reservation, 0);
+    if (!Number.isSafeInteger(lineRetainedBytes) || retainedBytes + lineRetainedBytes > maxWorkingMemoryBytes) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'adapter decoded-output working-memory ceiling exceeded');
+    retainedBytes += lineRetainedBytes;
     let hello;
-    try { hello = validateProtocolValue(contract, 'RunnerHello.schema.json', lines[0].value, { deadline }); } catch (error) { protocolError(RUNTIME_ERROR_CODES.ADAPTER_PROTOCOL, 'adapter handshake is invalid', { cause: error }); }
+    try {
+      hello = validateProtocolValue(contract, 'RunnerHello.schema.json', lines[0].value, {
+        deadline,
+        maxWorkingMemoryBytes: Math.max(1, maxWorkingMemoryBytes - retainedBytes),
+      });
+    } catch (error) { protocolError(RUNTIME_ERROR_CODES.ADAPTER_PROTOCOL, 'adapter handshake is invalid', { cause: error }); }
+    const helloReservation = protocolJsonRetentionBytes(hello, { deadline });
+    retainedBytes = retainedBytes - lines[0].reservation + helloReservation;
+    lines[0] = undefined;
     if (hello.contractManifestSha256 !== contract.manifestSha256 || options.expectedAdapterId !== undefined && hello.adapterId !== options.expectedAdapterId) protocolError(RUNTIME_ERROR_CODES.ADAPTER_PROTOCOL, 'adapter handshake does not bind the requested contract or identity');
     const supported = new Set(hello.operations);
+    const supportedReservation = 128 * supported.size;
+    if (retainedBytes + supportedReservation > maxWorkingMemoryBytes) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'adapter operation-index working-memory ceiling exceeded');
+    retainedBytes += supportedReservation;
     if (PROTOCOL_OPERATIONS.some((operation) => !supported.has(operation))) protocolError(RUNTIME_ERROR_CODES.ADAPTER_PROTOCOL, 'adapter handshake omits a required operation');
     const byStableId = new Map();
-    for (const line of lines.slice(1)) {
+    let byStableReservation = 0;
+    for (let index = 1; index < lines.length; index += 1) {
+      const line = lines[index];
+      if (maxWorkingMemoryBytes - retainedBytes <= 1024) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'adapter result working-memory ceiling exceeded');
       let row;
-      try { row = validateProtocolValue(contract, 'AdapterResult.schema.json', line.value, { deadline }); } catch (error) { protocolError(RUNTIME_ERROR_CODES.ADAPTER_PROTOCOL, 'adapter result is invalid', { cause: error }); }
+      try {
+        row = validateProtocolValue(contract, 'AdapterResult.schema.json', line.value, {
+          deadline,
+          maxWorkingMemoryBytes: maxWorkingMemoryBytes - retainedBytes - 1024,
+        });
+      } catch (error) { protocolError(RUNTIME_ERROR_CODES.ADAPTER_PROTOCOL, 'adapter result is invalid', { cause: error }); }
       const execution = byOpaque.get(row.id);
       if (!execution || byStableId.has(execution.scenario.id)) protocolError(RUNTIME_ERROR_CODES.ADAPTER_PROTOCOL, 'adapter results are missing, duplicated, or use an unknown opaque handle');
-      byStableId.set(execution.scenario.id, { ...row, id: execution.scenario.id });
+      const stableRow = { ...row, id: execution.scenario.id };
+      const stableReservation = protocolJsonRetentionBytes(stableRow, { deadline }) + 256;
+      retainedBytes = retainedBytes - line.reservation + stableReservation;
+      if (retainedBytes > maxWorkingMemoryBytes) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'adapter result working-memory ceiling exceeded');
+      byStableReservation += stableReservation;
+      byStableId.set(execution.scenario.id, stableRow);
+      lines[index] = undefined;
     }
-    return runProtocolConformance(contract, async (runnerCase) => {
+    const adapterId = hello.adapterId;
+    hello = undefined;
+    lines.length = 0;
+    supported.clear();
+    protectedForms.clear();
+    byOpaque.clear();
+    handles.clear();
+    executions.length = 0;
+    retainedBytes = plan.retainedBytes + byStableReservation;
+    if (retainedBytes > maxWorkingMemoryBytes) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'adapter retained-result working-memory ceiling exceeded');
+    return runProtocolConformanceWithPlan(contract, async (runnerCase) => {
       const row = byStableId.get(runnerCase.id);
       if (!row) protocolError(RUNTIME_ERROR_CODES.ADAPTER_PROTOCOL, 'adapter omitted a scenario result');
+      byStableId.delete(runnerCase.id);
       return row;
-    }, { ...options, adapterId: hello.adapterId });
+    }, { ...options, adapterId, deadline, maxWorkingMemoryBytes }, plan, byStableReservation);
   } finally {
     await rm(authorityRoot, { recursive: true, force: true });
   }

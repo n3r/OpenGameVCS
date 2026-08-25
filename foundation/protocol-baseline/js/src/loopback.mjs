@@ -3,10 +3,15 @@ import { parseRequestEnvelope, parseResponseEnvelope, validateRequestEnvelope, v
 import { RUNTIME_ERROR_CODES, protocolError } from './errors.mjs';
 import { HARD_LIMITS, boundedInteger, deadlineFrom } from './limits.mjs';
 
-function byteInput(input, maximum, label) {
+function byteInput(input, maximum, label, options = {}) {
   if (!(typeof input === 'string' || Buffer.isBuffer(input) || input instanceof Uint8Array)) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, `${label} must be JSON text or bytes`);
   if (typeof input === 'string' && (input.length > maximum || Buffer.byteLength(input, 'utf8') > maximum)
       || typeof input !== 'string' && input.byteLength > maximum) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, `${label} byte ceiling exceeded`);
+  const maximumWorking = boundedInteger(options.maxWorkingMemoryBytes, HARD_LIMITS.stateBytes, HARD_LIMITS.stateBytes, 'maxWorkingMemoryBytes');
+  const liveBytes = typeof input === 'string'
+    ? (2 * input.length) + Buffer.byteLength(input, 'utf8') + 1024
+    : (Buffer.isBuffer(input) ? input.byteLength : 2 * input.byteLength) + 1024;
+  if (!Number.isSafeInteger(liveBytes) || liveBytes > maximumWorking) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, `${label} working-memory ceiling exceeded`);
   const bytes = Buffer.isBuffer(input) ? input : Buffer.from(input, typeof input === 'string' ? 'utf8' : undefined);
   if (typeof input === 'string' && new TextDecoder('utf-8', { fatal: true }).decode(bytes) !== input) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, `${label} is not well-formed Unicode`);
   if (bytes.length === 0) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, `${label} is empty`);
@@ -35,16 +40,16 @@ export class BoundedLoopbackServer {
 
   async exchange(input, options = {}) {
     const deadline = deadlineFrom(options);
-    const requestBytes = byteInput(input, this.#settings.maxRequestBytes, 'loopback request');
+    const requestBytes = byteInput(input, this.#settings.maxRequestBytes, 'loopback request', options);
     const request = this.#settings.requestSchema === 'RequestEnvelope.schema.json'
       ? parseRequestEnvelope(this.#settings.contract, requestBytes, { ...options, maxBytes: this.#settings.maxRequestBytes, deadline })
-      : this.#settings.contract.validator.validate(parseJson(requestBytes, { maxBytes: this.#settings.maxRequestBytes, deadline }), this.#settings.requestSchema, { maxBytes: this.#settings.maxRequestBytes, deadline });
+      : this.#settings.contract.validator.validate(parseJson(requestBytes, { ...options, maxBytes: this.#settings.maxRequestBytes, deadline }), this.#settings.requestSchema, { ...options, maxBytes: this.#settings.maxRequestBytes, deadline });
     deadline.checkpoint();
     const responseValue = await deadline.race(this.#handler(request, { deadline, signal: deadline.signal }), 'loopback request handler');
     const response = this.#settings.responseSchema === 'ResponseEnvelope.schema.json'
       ? validateResponseEnvelope(this.#settings.contract, responseValue, { ...options, maxBytes: this.#settings.maxResponseBytes, deadline })
       : this.#settings.contract.validator.validate(responseValue, this.#settings.responseSchema, { maxBytes: this.#settings.maxResponseBytes, deadline });
-    return canonicalBytes(response, { maxBytes: this.#settings.maxResponseBytes, deadline });
+    return canonicalBytes(response, { ...options, maxBytes: this.#settings.maxResponseBytes, deadline });
   }
 }
 
@@ -63,12 +68,12 @@ export class BoundedLoopbackClient {
     const request = this.#settings.requestSchema === 'RequestEnvelope.schema.json'
       ? validateRequestEnvelope(this.#settings.contract, value, { ...options, maxBytes: this.#settings.maxRequestBytes, deadline })
       : this.#settings.contract.validator.validate(value, this.#settings.requestSchema, { maxBytes: this.#settings.maxRequestBytes, deadline });
-    const requestBytes = canonicalBytes(request, { maxBytes: this.#settings.maxRequestBytes, deadline });
+    const requestBytes = canonicalBytes(request, { ...options, maxBytes: this.#settings.maxRequestBytes, deadline });
     const rawResponse = await deadline.race(this.#exchange(requestBytes, { deadline, signal: deadline.signal }), 'loopback exchange');
-    const responseBytes = byteInput(rawResponse, this.#settings.maxResponseBytes, 'loopback response');
+    const responseBytes = byteInput(rawResponse, this.#settings.maxResponseBytes, 'loopback response', options);
     return this.#settings.responseSchema === 'ResponseEnvelope.schema.json'
       ? parseResponseEnvelope(this.#settings.contract, responseBytes, { ...options, maxBytes: this.#settings.maxResponseBytes, deadline })
-      : this.#settings.contract.validator.validate(parseJson(responseBytes, { maxBytes: this.#settings.maxResponseBytes, deadline }), this.#settings.responseSchema, { maxBytes: this.#settings.maxResponseBytes, deadline });
+      : this.#settings.contract.validator.validate(parseJson(responseBytes, { ...options, maxBytes: this.#settings.maxResponseBytes, deadline }), this.#settings.responseSchema, { ...options, maxBytes: this.#settings.maxResponseBytes, deadline });
   }
 }
 

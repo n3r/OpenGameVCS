@@ -1,3 +1,5 @@
+import { types as utilTypes } from 'node:util';
+
 export const RUNTIME_ERROR_CODES = Object.freeze({
   INPUT_INVALID: 'PROTOCOL_INPUT_INVALID',
   CONTRACT_INVALID: 'PROTOCOL_CONTRACT_INVALID',
@@ -44,8 +46,24 @@ function safeDetails(value) {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     throw new TypeError('protocol error details must be an object');
   }
+  if (utilTypes.isProxy(value)) throw new TypeError('protocol error details must be inert data');
+  let prototype;
+  let keys;
+  let descriptors;
+  try {
+    prototype = Object.getPrototypeOf(value);
+    keys = Reflect.ownKeys(value);
+    descriptors = Object.getOwnPropertyDescriptors(value);
+  } catch (error) {
+    throw new TypeError('protocol error details cannot be inspected safely', { cause: error });
+  }
+  if (prototype !== Object.prototype && prototype !== null
+      || keys.some((key) => typeof key !== 'string')
+      || keys.some((key) => !descriptors[key]?.enumerable || !Object.hasOwn(descriptors[key], 'value'))) {
+    throw new TypeError('protocol error details must be inert data');
+  }
   const output = Object.create(null);
-  const entries = Object.entries(value);
+  const entries = keys.map((key) => [key, descriptors[key].value]);
   if (entries.length > 16) throw new TypeError('protocol error details exceed their field ceiling');
   for (const [key, item] of entries) {
     if (!/^[A-Za-z][A-Za-z0-9]*$/u.test(key) || key.length > 64) {

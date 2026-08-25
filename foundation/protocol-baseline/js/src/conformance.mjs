@@ -1,5 +1,5 @@
 import {
-  canonicalBytes, canonicalJson, cloneJson, deepFreeze, parseJson, sha256, sha256Bytes,
+  canonicalBytes, canonicalJson, cloneJson, deepFreeze, inspectJson, parseJson, sha256, sha256Bytes,
 } from './canonical.mjs';
 import { RUNTIME_ERROR_CODES, protocolError } from './errors.mjs';
 import { HARD_LIMITS, PROTOCOL_LIMITS_BY_NAME, boundedInteger, deadlineFrom } from './limits.mjs';
@@ -59,56 +59,81 @@ function configuredLimitObject(value) {
   }
 }
 
-function validateScenario(value) {
+function validateScenario(value, options = {}) {
   checkClosed(value, CASE_FIELDS, 'protocol scenario');
   if (value.schemaVersion !== 'ogvcs.protocol/scenario/v1') protocolError(RUNTIME_ERROR_CODES.CONTRACT_INVALID, 'scenario schemaVersion is invalid');
   boundedText(value.id, 'scenario id', 256);
   boundedText(value.category, 'scenario category', 128);
   if (!OPERATIONS.includes(value.operation)) protocolError(RUNTIME_ERROR_CODES.CONTRACT_INVALID, 'scenario operation is invalid');
   if (!['semantic-value', 'raw-json', 'raw-bytes', 'jsonl'].includes(value.inputKind)) protocolError(RUNTIME_ERROR_CODES.CONTRACT_INVALID, 'scenario inputKind is invalid');
-  cloneJson(value.input, { maxBytes: HARD_LIMITS.jsonBytes });
+  cloneJson(value.input, { ...options, maxBytes: HARD_LIMITS.jsonBytes });
   validateExpected(value.expected);
   configuredLimitObject(value.configuredLimits);
-  cloneJson(value.control, { maxBytes: 16 * 1024, maxDepth: 4, maxNodes: 64, maxStringBytes: 256, maxCollectionItems: 32 });
+  cloneJson(value.control, { ...options, maxBytes: 16 * 1024, maxDepth: 4, maxNodes: 64, maxStringBytes: 256, maxCollectionItems: 32 });
   if (!Array.isArray(value.requirementIds) || value.requirementIds.length === 0 || value.requirementIds.length > 64 || value.requirementIds.some((item) => typeof item !== 'string' || item.length === 0 || item.length > 128)) protocolError(RUNTIME_ERROR_CODES.CONTRACT_INVALID, 'scenario requirement IDs are invalid');
   if (!Array.isArray(value.forbiddenResponseFields) || value.forbiddenResponseFields.length > 64 || value.forbiddenResponseFields.some((item) => typeof item !== 'string' || !/^[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*)*$/u.test(item))) protocolError(RUNTIME_ERROR_CODES.CONTRACT_INVALID, 'scenario forbidden response fields are invalid');
   if (value.hiddenMarkerValues !== undefined) {
     if (!Array.isArray(value.hiddenMarkerValues) || value.hiddenMarkerValues.length < 1 || value.hiddenMarkerValues.length > 32 || value.hiddenMarkerValues.some((item) => typeof item !== 'string' || Buffer.byteLength(item, 'utf8') < 1 || Buffer.byteLength(item, 'utf8') > 1024)) protocolError(RUNTIME_ERROR_CODES.CONTRACT_INVALID, 'scenario hidden marker inventory is invalid');
     if (value.hiddenServerInputs === undefined) protocolError(RUNTIME_ERROR_CODES.CONTRACT_INVALID, 'scenario hidden marker has no protected server input');
-    const protectedText = canonicalJson(value.hiddenServerInputs, { maxBytes: 64 * 1024, maxDepth: 8, maxNodes: 256 });
-    const publicText = canonicalJson({ input: value.input, control: value.control, configuredLimits: value.configuredLimits ?? null });
+    const protectedText = canonicalJson(value.hiddenServerInputs, { ...options, maxBytes: 64 * 1024, maxDepth: 8, maxNodes: 256 });
+    const publicText = canonicalJson({ input: value.input, control: value.control, configuredLimits: value.configuredLimits ?? null }, options);
     for (const marker of value.hiddenMarkerValues) {
       if (!protectedText.includes(marker) || publicText.includes(marker)) protocolError(RUNTIME_ERROR_CODES.CONTRACT_INVALID, 'scenario hidden marker isolation is invalid');
     }
   }
-  if (value.hiddenServerInputs !== undefined) cloneJson(value.hiddenServerInputs, { maxBytes: 64 * 1024, maxDepth: 8, maxNodes: 256, maxStringBytes: 4096, maxCollectionItems: 256 });
-  if (value.resourceWitness !== undefined) cloneJson(value.resourceWitness, { maxBytes: 16 * 1024, maxDepth: 4, maxNodes: 64, maxStringBytes: 512, maxCollectionItems: 32 });
-  if (value.predecessorCase !== undefined) cloneJson(value.predecessorCase, { maxBytes: 16 * 1024, maxDepth: 4, maxNodes: 64, maxStringBytes: 512, maxCollectionItems: 32 });
+  if (value.hiddenServerInputs !== undefined) cloneJson(value.hiddenServerInputs, { ...options, maxBytes: 64 * 1024, maxDepth: 8, maxNodes: 256, maxStringBytes: 4096, maxCollectionItems: 256 });
+  if (value.resourceWitness !== undefined) cloneJson(value.resourceWitness, { ...options, maxBytes: 16 * 1024, maxDepth: 4, maxNodes: 64, maxStringBytes: 512, maxCollectionItems: 32 });
+  if (value.predecessorCase !== undefined) cloneJson(value.predecessorCase, { ...options, maxBytes: 16 * 1024, maxDepth: 4, maxNodes: 64, maxStringBytes: 512, maxCollectionItems: 32 });
 }
 
-export function collectProtocolScenarios(contract, options = {}) {
+export function protocolJsonRetentionBytes(value, options = {}) {
+  const summary = inspectJson(value, { ...options, maxBytes: HARD_LIMITS.jsonBytes });
+  const reservation = 128 + (4 * summary.encodedBytes);
+  if (!Number.isSafeInteger(reservation)) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'protocol retained JSON reservation overflows');
+  return reservation;
+}
+
+export function collectProtocolScenarioPlan(contract, options = {}) {
   if (!contract?.vectors || typeof contract.vectors !== 'object') protocolError(RUNTIME_ERROR_CODES.CONTRACT_INVALID, 'protocol contract has no vectors');
   const maximum = boundedInteger(options.maxCases, HARD_LIMITS.adapterCases, HARD_LIMITS.adapterCases, 'maxCases');
+  const maximumWorking = boundedInteger(options.maxWorkingMemoryBytes, HARD_LIMITS.stateBytes, HARD_LIMITS.stateBytes, 'maxWorkingMemoryBytes');
+  const deadline = deadlineFrom(options);
   const cases = [];
   const ids = new Set();
+  let retainedBytes = 0;
   for (const [name, document] of Object.entries(contract.vectors).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)) {
     if (name === 'manifest') continue;
     if (!Array.isArray(document?.cases)) protocolError(RUNTIME_ERROR_CODES.CONTRACT_INVALID, `protocol vector document has no cases: ${name}`);
     for (const supplied of document.cases) {
       if (cases.length >= maximum) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'protocol scenario ceiling exceeded');
-      const scenario = cloneJson(supplied, { maxBytes: HARD_LIMITS.jsonBytes });
-      validateScenario(scenario);
+      const reservation = protocolJsonRetentionBytes(supplied, { deadline });
+      if (retainedBytes + reservation > maximumWorking) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'protocol scenario working-memory ceiling exceeded');
+      const scenario = cloneJson(supplied, {
+        maxBytes: HARD_LIMITS.jsonBytes,
+        maxWorkingMemoryBytes: maximumWorking - retainedBytes,
+        deadline,
+      });
+      validateScenario(scenario, {
+        maxWorkingMemoryBytes: Math.max(1, maximumWorking - retainedBytes - reservation),
+        deadline,
+      });
       if (ids.has(scenario.id)) protocolError(RUNTIME_ERROR_CODES.CONTRACT_INVALID, 'protocol scenario identifier is duplicated');
       ids.add(scenario.id);
       cases.push(scenario);
+      retainedBytes += reservation;
     }
   }
   cases.sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
-  return deepFreeze(cases);
+  return deepFreeze({ scenarios: deepFreeze(cases), retainedBytes });
+}
+
+export function collectProtocolScenarios(contract, options = {}) {
+  return collectProtocolScenarioPlan(contract, options).scenarios;
 }
 
 export function scenarioForAdapter(scenario, contract, options = {}) {
-  validateScenario(scenario);
+  scenario = cloneJson(scenario, { ...options, maxBytes: HARD_LIMITS.jsonBytes });
+  validateScenario(scenario, options);
   const output = {
     schemaVersion: 'ogvcs.protocol/runner-case/v1',
     id: scenario.id,
@@ -124,16 +149,16 @@ export function scenarioForAdapter(scenario, contract, options = {}) {
     : validateProtocolValue(contract, 'RunnerCase.schema.json', output, options);
 }
 
-function encodedMarkerForms(marker) {
+function visitEncodedMarkerForms(marker, visit) {
   const bytes = Buffer.from(marker, 'utf8');
-  const forms = new Set([
+  const forms = [
     marker,
     bytes.toString('hex'),
     bytes.toString('base64'),
     bytes.toString('base64url'),
     [...bytes].map((value) => `%${value.toString(16).padStart(2, '0')}`).join(''),
     [...bytes].map((value) => `%${value.toString(16).padStart(2, '0').toUpperCase()}`).join(''),
-  ]);
+  ];
   const digestDomains = [
     Buffer.alloc(0),
     Buffer.from('ogvcs.protocol/idempotency/v1\0', 'ascii'),
@@ -143,26 +168,29 @@ function encodedMarkerForms(marker) {
   ];
   for (const domain of digestDomains) {
     const digest = sha256Bytes(Buffer.concat([domain, bytes]));
-    forms.add(digest.toString('hex'));
-    forms.add(digest.toString('base64'));
-    forms.add(digest.toString('base64url'));
+    forms.push(digest.toString('hex'));
+    forms.push(digest.toString('base64'));
+    forms.push(digest.toString('base64url'));
   }
-  for (const value of [...forms]) {
+  for (const value of forms) {
+    visit(value);
     if (value.length < 24) continue;
     const width = Math.min(48, Math.max(16, Math.floor(value.length / 2)));
     // The suffix carries each seeded canary's unique portion. Scanning every
     // short interior window would collide with legitimate public code names
     // such as NEGOTIATION_* and create a disclosure oracle of its own.
-    forms.add(value.slice(-width));
-    if (value !== marker) forms.add(value.slice(0, width));
+    visit(value.slice(-width));
+    if (value !== marker) visit(value.slice(0, width));
   }
-  return forms;
 }
 
-function scanText(value, forms) {
+function scanText(value, forms, deadline) {
   if (typeof value !== 'string' || value.length === 0) return;
+  let inspected = 0;
   for (const form of forms) {
     if (value.includes(form)) protocolError(RUNTIME_ERROR_CODES.ADAPTER_PROTOCOL, 'adapter output disclosed protected material');
+    inspected += 1;
+    if ((inspected & 1023) === 0) deadline?.checkpoint();
   }
 }
 
@@ -186,9 +214,21 @@ function resolveSchemaRef(contract, root, ref) {
   return { schema: fragment === '' ? external : schemaPointer(external, fragment), root: external };
 }
 
-function derivedCanaryCollector() {
+export function protocolStringSetRetentionBytes(values) {
+  let retainedBytes = 0;
+  for (const value of values) {
+    const reservation = 128 + (2 * value.length);
+    retainedBytes += reservation;
+    if (!Number.isSafeInteger(retainedBytes)) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'protected-canary reservation overflows');
+  }
+  return retainedBytes;
+}
+
+function derivedCanaryCollector(options = {}) {
   const values = new Set();
   let totalBytes = 0;
+  let retainedBytes = 0;
+  const maximumWorking = boundedInteger(options.maxWorkingMemoryBytes, HARD_LIMITS.stateBytes, HARD_LIMITS.stateBytes, 'maxWorkingMemoryBytes');
   const add = (value) => {
     if (typeof value !== 'string') return;
     const bytes = Buffer.byteLength(value, 'utf8');
@@ -196,13 +236,23 @@ function derivedCanaryCollector() {
     if (values.size >= MAX_DERIVED_CANARIES || totalBytes + bytes > MAX_DERIVED_CANARY_BYTES) {
       protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'derived protected-canary ceiling exceeded');
     }
+    const reservation = 128 + (2 * value.length);
+    if (!Number.isSafeInteger(reservation) || retainedBytes + reservation > maximumWorking) {
+      protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'derived protected-canary working-memory ceiling exceeded');
+    }
     values.add(value);
     totalBytes += bytes;
+    retainedBytes += reservation;
   };
   const addValue = (value, descendants = false) => {
     if (typeof value === 'string') { add(value); return; }
     if (value === null || typeof value !== 'object') return;
-    const canonical = canonicalJson(value, { maxBytes: HARD_LIMITS.jsonBytes });
+    if (retainedBytes >= maximumWorking) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'derived protected-canary working-memory ceiling exceeded');
+    const canonical = canonicalJson(value, {
+      ...options,
+      maxBytes: HARD_LIMITS.jsonBytes,
+      maxWorkingMemoryBytes: maximumWorking - retainedBytes,
+    });
     add(canonical);
     if (!descendants) return;
     const pending = [value];
@@ -262,9 +312,15 @@ function decodedEnvelopeDocument(input) {
   } catch { return undefined; }
 }
 
-function derivedSensitiveCanaries(contract, scenario) {
-  const supplied = scenarioForAdapter(scenario, contract);
-  const collector = derivedCanaryCollector();
+function derivedSensitiveCanaries(contract, scenario, options = {}) {
+  const maximumWorking = boundedInteger(options.maxWorkingMemoryBytes, HARD_LIMITS.stateBytes, HARD_LIMITS.stateBytes, 'maxWorkingMemoryBytes');
+  const supplied = scenarioForAdapter(scenario, contract, options);
+  const suppliedReservation = protocolJsonRetentionBytes(supplied, { deadline: options.deadline });
+  if (suppliedReservation >= maximumWorking) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'derived protected-canary working-memory ceiling exceeded');
+  const collector = derivedCanaryCollector({
+    ...options,
+    maxWorkingMemoryBytes: maximumWorking - suppliedReservation,
+  });
   const state = { seen: new WeakMap() };
   const inputSchema = contract.schemas[OPERATION_INPUT_SCHEMAS[supplied.operation]];
   if (inputSchema !== undefined) walkSensitiveSchema(contract, supplied.input, inputSchema, inputSchema, collector, state);
@@ -286,30 +342,67 @@ function derivedSensitiveCanaries(contract, scenario) {
   return collector.values;
 }
 
-function compileProtectedForms(contract, scenarios) {
-  const values = new Set();
-  for (const scenario of scenarios) {
-    for (const marker of scenario.hiddenMarkerValues ?? []) values.add(marker);
-    for (const marker of derivedSensitiveCanaries(contract, scenario)) values.add(marker);
-  }
+function compileProtectedForms(contract, scenarios, options = {}) {
+  const maximumWorking = boundedInteger(options.maxWorkingMemoryBytes, HARD_LIMITS.stateBytes, HARD_LIMITS.stateBytes, 'maxWorkingMemoryBytes');
+  const deadline = deadlineFrom(options);
+  const markers = new Set();
   const forms = new Set();
-  for (const marker of values) for (const form of encodedMarkerForms(marker)) forms.add(form);
+  let retainedBytes = 0;
+  const addRetained = (set, value, temporaryBytes = 0) => {
+    if (set.has(value)) return;
+    const reservation = 128 + (2 * value.length);
+    if (!Number.isSafeInteger(reservation) || retainedBytes + temporaryBytes + reservation > maximumWorking) {
+      protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'protected-canary working-memory ceiling exceeded');
+    }
+    set.add(value);
+    retainedBytes += reservation;
+  };
+  const addMarker = (marker, temporaryBytes = 0) => {
+    if (markers.has(marker)) return;
+    addRetained(markers, marker, temporaryBytes);
+    visitEncodedMarkerForms(marker, (form) => addRetained(forms, form, temporaryBytes));
+  };
+  for (const scenario of scenarios) {
+    for (const marker of scenario.hiddenMarkerValues ?? []) addMarker(marker);
+    const derived = derivedSensitiveCanaries(contract, scenario, {
+      deadline,
+      maxWorkingMemoryBytes: Math.max(1, maximumWorking - retainedBytes),
+    });
+    const temporaryBytes = protocolStringSetRetentionBytes(derived);
+    for (const marker of derived) addMarker(marker, temporaryBytes);
+    deadline.checkpoint();
+  }
   return forms;
 }
 
-function inspectTrace(trace, scenario, contract, deadline) {
+function inspectTrace(trace, scenario, contract, options) {
+  const deadline = deadlineFrom(options);
+  const maximumWorking = boundedInteger(options.maxWorkingMemoryBytes, HARD_LIMITS.stateBytes, HARD_LIMITS.stateBytes, 'maxWorkingMemoryBytes');
   const forbidden = new Set(scenario.forbiddenResponseFields);
-  const forms = compileProtectedForms(contract, [scenario]);
+  const forms = compileProtectedForms(contract, [scenario], options);
+  const fixedReservation = protocolStringSetRetentionBytes(forms) + (128 * forbidden.size);
+  if (!Number.isSafeInteger(fixedReservation) || fixedReservation >= maximumWorking) {
+    protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'adapter trace-audit working-memory ceiling exceeded');
+  }
   const stack = [{ value: trace, path: '' }];
   const stringFragments = [];
+  let fragmentUnits = 0;
+  const checkFragments = () => {
+    const fragmentReservation = (32 * stringFragments.length) + (2 * fragmentUnits);
+    if (!Number.isSafeInteger(fragmentReservation) || fixedReservation + fragmentReservation > maximumWorking) {
+      protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'adapter trace-audit working-memory ceiling exceeded');
+    }
+  };
   let nodes = 0;
   while (stack.length > 0) {
     const { value, path } = stack.pop();
     nodes += 1;
     if ((nodes & 1023) === 0) deadline.checkpoint();
     if (typeof value === 'string') {
-      scanText(value, forms);
+      scanText(value, forms, deadline);
       stringFragments.push(value);
+      fragmentUnits += value.length;
+      checkFragments();
     }
     if (value === null || typeof value !== 'object') continue;
     if (Array.isArray(value)) {
@@ -319,28 +412,37 @@ function inspectTrace(trace, scenario, contract, deadline) {
     for (const [key, child] of Object.entries(value)) {
       const dotted = path.length === 0 ? key : `${path}.${key}`;
       if (forbidden.has(key) || forbidden.has(dotted) || [...forbidden].some((candidate) => dotted.endsWith(`.${candidate}`))) protocolError(RUNTIME_ERROR_CODES.ADAPTER_PROTOCOL, 'adapter trace disclosed a forbidden response field');
-      scanText(key, forms);
+      scanText(key, forms, deadline);
       stringFragments.push(key);
+      fragmentUnits += key.length;
+      checkFragments();
       stack.push({ value: child, path: dotted });
     }
   }
-  scanText(stringFragments.join(''), forms);
-  scanText(canonicalJson(trace, { maxBytes: HARD_LIMITS.jsonBytes, deadline }), forms);
+  scanText(stringFragments.join(''), forms, deadline);
+  const retainedAuditBytes = fixedReservation + (32 * stringFragments.length);
+  scanText(canonicalJson(trace, {
+    ...options,
+    maxBytes: HARD_LIMITS.jsonBytes,
+    maxWorkingMemoryBytes: maximumWorking - retainedAuditBytes,
+    deadline,
+  }), forms, deadline);
   deadline.checkpoint();
 }
 
-export function protectedAdapterOutputForms(contract, scenarios, deadline) {
-  const forms = compileProtectedForms(contract, scenarios);
+export function protectedAdapterOutputForms(contract, scenarios, deadline, options = {}) {
+  const forms = compileProtectedForms(contract, scenarios, { ...options, deadline });
   deadline.checkpoint();
   return forms;
 }
 
 export function assertNoProtectedAdapterOutput(text, forms, deadline) {
-  scanText(text, forms);
+  scanText(text, forms, deadline);
   deadline.checkpoint();
 }
 
 function normalizeResult(contract, scenario, value, options) {
+  const maximumWorking = boundedInteger(options.maxWorkingMemoryBytes, HARD_LIMITS.stateBytes, HARD_LIMITS.stateBytes, 'maxWorkingMemoryBytes');
   let adapterResult;
   try {
     adapterResult = validateProtocolValue(contract, 'AdapterResult.schema.json', value, options);
@@ -348,8 +450,11 @@ function normalizeResult(contract, scenario, value, options) {
     protocolError(RUNTIME_ERROR_CODES.ADAPTER_PROTOCOL, `adapter returned an invalid result: ${scenario.id}`, { cause: error });
   }
   if (adapterResult.id !== scenario.id) protocolError(RUNTIME_ERROR_CODES.ADAPTER_PROTOCOL, `adapter result identity is out of order: ${scenario.id}`);
+  const adapterReservation = protocolJsonRetentionBytes(adapterResult, { deadline: options.deadline });
+  if (adapterReservation >= maximumWorking) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'adapter normalized-result working-memory ceiling exceeded');
+  const remainingOptions = { ...options, maxWorkingMemoryBytes: maximumWorking - adapterReservation };
   try {
-    inspectTrace(adapterResult.trace, scenario, contract, options.deadline);
+    inspectTrace(adapterResult.trace, scenario, contract, remainingOptions);
   } catch (error) {
     if (error?.code === RUNTIME_ERROR_CODES.ADAPTER_PROTOCOL) protocolError(RUNTIME_ERROR_CODES.ADAPTER_PROTOCOL, `adapter trace failed disclosure audit: ${scenario.id}`, { cause: error });
     throw error;
@@ -358,10 +463,10 @@ function normalizeResult(contract, scenario, value, options) {
     schemaVersion: 'ogvcs.protocol/runner-result/v1', id: adapterResult.id,
     result: adapterResult.result, code: adapterResult.code,
     preMutation: adapterResult.preMutation, mutationCount: adapterResult.mutationCount,
-    traceDigest: sha256(canonicalBytes(adapterResult.trace, options)),
-    ...(scenario.expected.semanticDigest === undefined ? {} : { semanticDigest: sha256(canonicalBytes(adapterResult.trace.semanticOutput, options)) }),
+    traceDigest: sha256(canonicalBytes(adapterResult.trace, remainingOptions)),
+    ...(scenario.expected.semanticDigest === undefined ? {} : { semanticDigest: sha256(canonicalBytes(adapterResult.trace.semanticOutput, remainingOptions)) }),
   };
-  return validateProtocolValue(contract, 'RunnerResult.schema.json', projected, options);
+  return validateProtocolValue(contract, 'RunnerResult.schema.json', projected, remainingOptions);
 }
 
 function sameOutcome(expected, actual) {
@@ -382,38 +487,90 @@ export function createRunnerHello(contract, adapterId, options = {}) {
   }, options);
 }
 
-export async function runProtocolConformance(contract, evaluator, options = {}) {
+export async function runProtocolConformanceWithPlan(contract, evaluator, options, plan, baseRetainedBytes = 0) {
   if (typeof evaluator !== 'function') protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'protocol scenario evaluator must be callable');
   const adapterId = boundedText(options.adapterId ?? options.implementation, 'adapterId');
   const deadline = deadlineFrom(options);
-  const scenarios = collectProtocolScenarios(contract, options);
+  const maximumWorking = boundedInteger(options.maxWorkingMemoryBytes, HARD_LIMITS.stateBytes, HARD_LIMITS.stateBytes, 'maxWorkingMemoryBytes');
+  if (!plan || !Array.isArray(plan.scenarios) || !Number.isSafeInteger(plan.retainedBytes) || plan.retainedBytes < 0
+      || !Number.isSafeInteger(baseRetainedBytes) || baseRetainedBytes < 0
+      || plan.retainedBytes + baseRetainedBytes > maximumWorking) {
+    protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'protocol runner retained working-memory ceiling exceeded');
+  }
+  const scenarios = plan.scenarios;
   const results = [];
+  let retainedBytes = plan.retainedBytes + baseRetainedBytes;
   let passed = 0;
   for (const scenario of scenarios) {
     deadline.checkpoint();
-    const supplied = scenarioForAdapter(scenario, contract, { deadline });
+    let supplied = scenarioForAdapter(scenario, contract, {
+      deadline,
+      maxWorkingMemoryBytes: Math.max(1, maximumWorking - retainedBytes),
+    });
+    const suppliedReservation = protocolJsonRetentionBytes(supplied, { deadline });
+    if (retainedBytes + suppliedReservation > maximumWorking) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'protocol runner-case working-memory ceiling exceeded');
     let actualValue;
     try {
-      actualValue = await deadline.race(Promise.resolve(evaluator(supplied, { contract, deadline })), `scenario ${scenario.id}`);
+      actualValue = await deadline.race(Promise.resolve(evaluator(supplied, {
+        contract,
+        deadline,
+        maxWorkingMemoryBytes: Math.max(1, maximumWorking - retainedBytes - suppliedReservation),
+      })), `scenario ${scenario.id}`);
     } catch (error) {
       if (error?.code?.startsWith?.('PROTOCOL_')) throw error;
       protocolError(RUNTIME_ERROR_CODES.ADAPTER_FAILED, `scenario evaluator failed: ${scenario.id}`, { cause: error });
     }
-    const actual = normalizeResult(contract, scenario, cloneJson(actualValue, { maxBytes: HARD_LIMITS.jsonBytes, deadline }), { deadline, maxBytes: HARD_LIMITS.jsonBytes });
+    const actualValueReservation = protocolJsonRetentionBytes(actualValue, { deadline });
+    if (retainedBytes + suppliedReservation + (2 * actualValueReservation) > maximumWorking) {
+      protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'protocol runner-result working-memory ceiling exceeded');
+    }
+    const actual = normalizeResult(contract, scenario, actualValue, {
+      deadline,
+      maxBytes: HARD_LIMITS.jsonBytes,
+      maxWorkingMemoryBytes: maximumWorking - retainedBytes - suppliedReservation - actualValueReservation,
+    });
+    actualValue = undefined;
+    supplied = undefined;
     if (sameOutcome(scenario.expected, actual)) passed += 1;
     results.push(actual);
+    retainedBytes += protocolJsonRetentionBytes(actual, { deadline });
   }
-  const frozenResults = cloneJson(results, { maxBytes: HARD_LIMITS.jsonBytes, deadline });
+  const frozenReservation = protocolJsonRetentionBytes(results, { deadline });
+  if (retainedBytes + frozenReservation > maximumWorking) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'protocol report working-memory ceiling exceeded');
+  const frozenResults = cloneJson(results, {
+    maxBytes: HARD_LIMITS.jsonBytes,
+    maxWorkingMemoryBytes: maximumWorking - retainedBytes,
+    deadline,
+  });
+  const resultCount = results.length;
+  results.length = 0;
+  retainedBytes = plan.retainedBytes + baseRetainedBytes + frozenReservation;
+  if (retainedBytes + 512 > maximumWorking) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'protocol report working-memory ceiling exceeded');
   const report = {
     schemaVersion: 'ogvcs.protocol/runner-report/v1',
     adapterId,
     contractManifestSha256: contract.manifestSha256,
     results: frozenResults,
     passed,
-    failed: results.length - passed,
-    reportDigest: sha256(canonicalBytes(frozenResults, { maxBytes: HARD_LIMITS.jsonBytes, deadline })),
+    failed: resultCount - passed,
+    reportDigest: sha256(canonicalBytes(frozenResults, {
+      maxBytes: HARD_LIMITS.jsonBytes,
+      maxWorkingMemoryBytes: maximumWorking - retainedBytes,
+      deadline,
+    })),
   };
-  return deepFreeze(validateProtocolValue(contract, 'RunnerReport.schema.json', report, { maxBytes: HARD_LIMITS.jsonBytes, deadline }));
+  const reportReservation = protocolJsonRetentionBytes(report, { deadline });
+  if (retainedBytes + 512 + reportReservation > maximumWorking) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'protocol report working-memory ceiling exceeded');
+  return deepFreeze(validateProtocolValue(contract, 'RunnerReport.schema.json', report, {
+    maxBytes: HARD_LIMITS.jsonBytes,
+    maxWorkingMemoryBytes: maximumWorking - retainedBytes - 512,
+    deadline,
+  }));
+}
+
+export async function runProtocolConformance(contract, evaluator, options = {}) {
+  const plan = collectProtocolScenarioPlan(contract, options);
+  return runProtocolConformanceWithPlan(contract, evaluator, options, plan);
 }
 
 export { OPERATIONS as PROTOCOL_OPERATIONS };

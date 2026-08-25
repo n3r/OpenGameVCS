@@ -43,11 +43,16 @@ test('stream resource ceilings reject before returning partially trusted frames'
   assert.throws(() => parseCanonicalStream(encoded, { contract, maxRetainedBytes: 600 }), /memory ceiling/u);
   assert.throws(() => parseCanonicalStream(encoded, { contract, maxBytes: encoded.length - 1 }), /byte ceiling/u);
   assert.throws(() => parseCanonicalStream(encoded, { contract, maxRetainedBytes: 10_000, maxWorkingMemoryBytes: 2_000 }), /combined working-memory/u);
+  assert.throws(() => encodeStreamFrame(frames[0], { contract, maxWorkingMemoryBytes: 1 }), /working-memory/u);
 
   let writes = 0;
   const output = new Writable({ write(_chunk, _encoding, callback) { writes += 1; callback(); } });
   await assert.rejects(() => writeCanonicalStream([frames[0]], output, { contract }), /terminal/u);
   assert.equal(writes, 1, 'writer output remains staging/untrusted until the returned promise succeeds');
+
+  writes = 0;
+  await assert.rejects(() => writeCanonicalStream(frames, output, { contract, maxWorkingMemoryBytes: 1 }), /working-memory/u);
+  assert.equal(writes, 0, 'configured working memory fails before the first staged write');
 });
 
 test('stream writer surfaces destination failures', async () => {

@@ -67,6 +67,24 @@ test('schema constructor fails closed on unsupported keywords and unresolved ref
   assert.throws(() => new ProtocolSchemaValidator({ bad: { $id: 'urn:bad', $ref: 'urn:missing' } }), /unresolved/u);
 });
 
+test('ad hoc schema selectors are cloned and audited before evaluation', () => {
+  const validator = new ProtocolSchemaValidator({ child: CHILD });
+  const selector = { type: 'string', pattern: '^[a-z]+$' };
+  assert.equal(validator.validate('valid', selector), 'valid');
+  assert.throws(() => validator.validate('valid', { type: 'string', mystery: true }), /unsupported/u);
+
+  let traps = 0;
+  const hostile = new Proxy({}, {
+    getPrototypeOf() { traps += 1; throw new Error('must not execute'); },
+  });
+  assert.throws(() => validator.validate('valid', hostile), (error) => error.code === 'PROTOCOL_INPUT_INVALID');
+  assert.equal(traps, 0);
+  assert.throws(
+    () => validator.validate('valid', selector, { maxWorkingMemoryBytes: 1 }),
+    (error) => error.code === 'PROTOCOL_LIMIT_EXCEEDED',
+  );
+});
+
 test('schema validator owns an immutable bounded clone of the complete inventory', () => {
   const child = structuredClone(CHILD);
   const parent = structuredClone(PARENT);

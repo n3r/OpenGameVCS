@@ -152,6 +152,36 @@ test('replay authorization runs before a stored result is disclosed', async () =
   );
 });
 
+test('mutable caller projections are rejected inertly before replay authorization', async () => {
+  const replayStore = store();
+  const protectedScope = { ...scope, subject: 'protected-subject' };
+  const alternateScope = { ...scope, subject: 'alternate-subject' };
+  const replayKey = key('stored-reauthorize');
+  const fingerprint = semanticIdempotencyFingerprint({ operation: 'mutate', value: 9 });
+  await replayStore.execute({ scope: protectedScope, key: replayKey, fingerprint }, async () => ({ protected: 'must-not-disclose' }));
+
+  let scopeReads = 0;
+  let authorizedBinding;
+  const mutableInput = {
+    get scope() { scopeReads += 1; return scopeReads === 1 ? protectedScope : alternateScope; },
+    get key() { return replayKey; },
+    get fingerprint() { return fingerprint; },
+  };
+  await assert.rejects(
+    () => replayStore.execute(mutableInput, async () => assert.fail('must not mutate'), {
+      authorizeReplay: async (binding) => {
+        authorizedBinding = binding;
+        return binding.scope.subject === alternateScope.subject
+          ? { result: 'allow', code: 'ALLOW_EXPLICIT' }
+          : { result: 'deny', code: 'DENY_POLICY' };
+      },
+    }),
+    (error) => error.code === 'PROTOCOL_INPUT_INVALID' && !JSON.stringify(error).includes('must-not-disclose'),
+  );
+  assert.equal(scopeReads, 0);
+  assert.equal(authorizedBinding, undefined);
+});
+
 test('replay authorization fails closed for every non-predecessor allow shape', async () => {
   const replayStore = store();
   const input = { scope, key: key('closed-reauthorize'), fingerprint: semanticIdempotencyFingerprint({ operation: 'mutate', value: 3 }) };
@@ -164,6 +194,16 @@ test('replay authorization fails closed for every non-predecessor allow shape', 
     );
     assert.equal(mutated, false);
   }
+  let traps = 0;
+  await assert.rejects(
+    () => replayStore.execute(input, async () => assert.fail('must not mutate'), {
+      authorizeReplay: async () => new Proxy({}, {
+        ownKeys() { traps += 1; throw new Error('decision trap'); },
+      }),
+    }),
+    (error) => error.code === 'AUTHORIZATION_DENIED',
+  );
+  assert.equal(traps, 0);
 });
 
 test('timeout after mutation start retains the reservation and retry replays one settled mutation', async () => {

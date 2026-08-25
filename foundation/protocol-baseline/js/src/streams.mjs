@@ -37,6 +37,7 @@ function primitiveFrameShape(frame) {
 function verifiedFrame(frame, settings) {
   const value = validateProtocolValue(settings.contract, STREAM_FRAME_SCHEMA, frame, {
     maxBytes: settings.maxLineBytes,
+    maxWorkingMemoryBytes: settings.maxWorkingMemoryBytes,
     deadline: settings.deadline,
   });
   primitiveFrameShape(value);
@@ -72,9 +73,19 @@ class FrameSequence {
 
 export function encodeStreamFrame(frame, options = {}) {
   const settings = frameOptions(options);
-  const value = verifiedFrame(frame, settings);
-  const bytes = canonicalBytes(value, { maxBytes: settings.maxLineBytes, deadline: settings.deadline });
+  if (settings.maxWorkingMemoryBytes < 2) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'stream frame working-memory ceiling exceeded');
+  const retainedWorking = Math.floor(settings.maxWorkingMemoryBytes / 2);
+  const value = verifiedFrame(frame, { ...settings, maxWorkingMemoryBytes: retainedWorking });
+  const bytes = canonicalBytes(value, {
+    maxBytes: settings.maxLineBytes,
+    maxWorkingMemoryBytes: settings.maxWorkingMemoryBytes - retainedWorking,
+    deadline: settings.deadline,
+  });
   if (bytes.length > settings.maxLineBytes) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'stream line ceiling exceeded');
+  const workingBytes = 1024 + (5 * bytes.length) + 1;
+  if (!Number.isSafeInteger(workingBytes) || workingBytes > settings.maxWorkingMemoryBytes) {
+    protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'stream frame working-memory ceiling exceeded');
+  }
   return Buffer.concat([bytes, Buffer.from('\n')]);
 }
 
@@ -110,10 +121,17 @@ export function parseCanonicalStream(input, options = {}) {
     if (index === start || bytes[index - 1] === 0x0d) protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'stream line delimiter is invalid');
     const line = bytes.subarray(start, index);
     const parseReservation = 128 + (4 * line.length);
-    if (!Number.isSafeInteger(parseReservation) || inputReservation + retainedBytes + parseReservation > settings.maxWorkingMemoryBytes) {
+    const validationReservation = 512 + (4 * line.length);
+    if (!Number.isSafeInteger(parseReservation) || !Number.isSafeInteger(validationReservation)
+        || inputReservation + retainedBytes + parseReservation + validationReservation > settings.maxWorkingMemoryBytes) {
       protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'stream combined working-memory ceiling exceeded before frame parse');
     }
-    const parsed = parseJson(line, { requireCanonical: true, maxBytes: settings.maxLineBytes, deadline: settings.deadline });
+    const parsed = parseJson(line, {
+      requireCanonical: true,
+      maxBytes: settings.maxLineBytes,
+      maxWorkingMemoryBytes: settings.maxWorkingMemoryBytes,
+      deadline: settings.deadline,
+    });
     const frame = verifiedFrame(parsed, settings);
     sequence.accept(frame);
     retainedBytes += 512 + (line.length * 4);
@@ -161,14 +179,24 @@ export async function writeCanonicalStream(frames, writable, options = {}) {
   if (frames === null || frames === undefined || typeof frames[Symbol.iterator] !== 'function') protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'stream frames must be iterable');
   if (!writable || typeof writable.write !== 'function') protocolError(RUNTIME_ERROR_CODES.INPUT_INVALID, 'stream output must be writable');
   const settings = frameOptions(options);
+  if (settings.maxWorkingMemoryBytes < 2) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'stream frame working-memory ceiling exceeded');
+  const retainedWorking = Math.floor(settings.maxWorkingMemoryBytes / 2);
   const sequence = new FrameSequence(settings);
   let totalBytes = 0;
   for (const supplied of frames) {
     settings.deadline.checkpoint();
-    const frame = verifiedFrame(supplied, settings);
+    const frame = verifiedFrame(supplied, { ...settings, maxWorkingMemoryBytes: retainedWorking });
     sequence.accept(frame);
-    const payload = canonicalBytes(frame, { maxBytes: settings.maxLineBytes, deadline: settings.deadline });
+    const payload = canonicalBytes(frame, {
+      maxBytes: settings.maxLineBytes,
+      maxWorkingMemoryBytes: settings.maxWorkingMemoryBytes - retainedWorking,
+      deadline: settings.deadline,
+    });
     if (payload.length > settings.maxLineBytes) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'stream line ceiling exceeded');
+    const workingBytes = 1024 + (5 * payload.length) + 1;
+    if (!Number.isSafeInteger(workingBytes) || workingBytes > settings.maxWorkingMemoryBytes) {
+      protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'stream frame working-memory ceiling exceeded');
+    }
     totalBytes += payload.length + 1;
     if (!Number.isSafeInteger(totalBytes) || totalBytes > settings.maxBytes) protocolError(RUNTIME_ERROR_CODES.LIMIT_EXCEEDED, 'stream byte ceiling exceeded');
     await writeChunk(writable, Buffer.concat([payload, Buffer.from('\n')]), settings.deadline);
