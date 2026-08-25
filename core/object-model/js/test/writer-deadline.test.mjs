@@ -198,7 +198,10 @@ test('spooled bundle verification bounds input next and return', async t => {
       };
     }
   };
-  await bounded(verifyLogicalBundleStream(source, { semantic: false, scratchDirectory, maxTimeMs: 25 }));
+  // The verifier's deadline includes no-follow scratch setup. Leave enough
+  // room for a loaded Windows runner to reach the caller-owned iterator while
+  // retaining the test's strict two-second external-wait ceiling.
+  await bounded(verifyLogicalBundleStream(source, { semantic: false, scratchDirectory, maxTimeMs: 250 }));
   await Promise.resolve();
   assert.ok(nextSignal instanceof AbortSignal);
   assert.equal(nextSignal.aborted, true);
