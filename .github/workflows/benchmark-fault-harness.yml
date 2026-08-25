@@ -109,7 +109,7 @@ jobs:
         run: npm run test:roadmap
       - name: Test retained report tooling
         if: runner.os == 'Linux'
-        run: node --test tools/benchmark-fault-conformance-report.test.mjs
+        run: npm run test:benchmark:ci-report
       - name: Upload packages, raw bundle, and evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

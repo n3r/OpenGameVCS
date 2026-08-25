@@ -1,165 +1,132 @@
-# OGVCS-005 validation evidence
+# OGVCS-005 completion evidence
 
-**Evidence date:** 2026-08-21
-
-**Status:** Local and hosted three-OS candidate passed; final R0 scale and
-predecessor publication gates remain
+**Evidence date:** 2026-08-25
+**Status:** Completed
+**Implementation:** [`2cd9b76`](https://github.com/n3r/OpenGameVCS/commit/2cd9b767349be1ed7f5bd9ffae87333fc3d9e9ad)
 
 ## Evidence boundary
 
-This packet covers the benchmark/fault contract, reference runtime, test-only
-process driver, five synthetic corpora, cache/network controllers,
-deterministic fault and negative suites, raw result publication and
-recomputation, offline package closure, comparison tooling, and workflow plan.
-The machine-readable local record is
-[`candidate-2026-08-21.json`](candidate-2026-08-21.json), and the independent
-assessment is
-[`docs/reviews/OGVCS-005-critical-review.md`](../../reviews/OGVCS-005-critical-review.md).
+This packet authenticates the MIT-licensed `1.0.0-rc.1` benchmark/fault
+contract and harness, its five reference corpora, four cache states, network
+controllers, deterministic fault schedules, process driver, result publisher,
+offline ten-package closure, release plan, and Linux/macOS/Windows comparison.
+The machine-readable completion record is
+[`completion-2026-08-25.json`](completion-2026-08-25.json); hosted run metadata
+is retained in
+[`github-actions-run-32850158064.json`](github-actions-run-32850158064.json).
+The earlier [`candidate-2026-08-21.json`](candidate-2026-08-21.json) and its run
+record remain historical evidence and are not rewritten.
 
-The candidate packages remain `1.0.0-rc.1`. OGVCS-005 remains in Validation:
-the commit-pinned Linux/macOS/Windows jobs and hosted independent reproduction
-passed in [run 32441625231](https://github.com/n3r/OpenGameVCS/actions/runs/32441625231),
-but OGVCS-002/004/041 remain predecessor validation candidates and the final R0
-scale/publication campaign is still active.
+The final implementation closed a cancellation-transaction defect: an
+in-process task could previously outlive a timeout and mutate shared state
+after the public runner returned. The runner now aborts and drains cooperative
+work before releasing its cache/network lane or returning. Public host inputs
+are snapshotted as inert owned data, pre-cancelled calls fail before adapter,
+workspace, and spawn boundaries, and result bundles do not freeze caller-owned
+arrays. Trusted in-process adapters must honor `AbortSignal`; untrusted or
+noncooperative adapters use the killable external process driver.
 
-The maintainer explicitly deferred OGVCS-002's exact one-million-entry tree and
-logical-1-TiB manifest cases to the final R0 campaign. They were not dispatched
-by this evidence pass. Every retained report records
-`exactScaleExecuted: false`; no reduced case is presented as exact-scale proof.
-
-## Frozen local candidate
+## Frozen authority
 
 | Authority | Value |
 |---|---:|
 | Contract/runtime version | `1.0.0-rc.1` |
-| Contract manifest SHA-256 | `11c3038d6456e690664e705dcab55f2d8f8c8690b66e542a496a8e8a067ea7c3` |
-| Artifact-set SHA-256 | `ba59c8dc9db4c0678fc630357396d9981934ac065b0dd2c8bbbb5c82dccad6d7` |
-| Schema-set SHA-256 | `f186e1cfe4d8905b0fe36acfa641b3a97eed3f8bcb9d245c7a96055d9cd6f706` |
-| Registry-set SHA-256 | `bbe8230b1a115b5c0862537d7dde6e97db61c283b552dad61d2020165b75d532` |
-| Vector-set SHA-256 | `7ab9d07b3f88e94be05f3d48bcd0b8e7bfac79ade49dad3e87f3f1d859a501b7` |
-| Threshold-set SHA-256 | `13a1cf5e4d20dadced0b04bdc3cc8b3d01a5c3b2a42ca04e163b08e147dac7ff` |
-| Fixture profile-set SHA-256 | `6b53f4274d8b2374224728d0cebd499e58ab990c4e6409fa5403bf8f38934b36` |
-| Repository predecessor SHA-256 | `2d0acb01a01b64c23d883d855d2802d939a8dc99622f2774de07af1c8af8d2b9` |
-| MIT text SHA-256 | `6f0f22f485ae8614870468a48f2c084eaf800fe02c5a2c4d9a91d34bc7f58eb4` |
+| Manifest file SHA-256 | `e8e1396ad31407d16b269258be2f55909ed7fed6ca8e7d14af52582db15d6612` |
+| Artifact set | `ba59c8dc9db4c0678fc630357396d9981934ac065b0dd2c8bbbb5c82dccad6d7` |
+| Schema set | `f186e1cfe4d8905b0fe36acfa641b3a97eed3f8bcb9d245c7a96055d9cd6f706` |
+| Registry set | `bbe8230b1a115b5c0862537d7dde6e97db61c283b552dad61d2020165b75d532` |
+| Vector set | `7ab9d07b3f88e94be05f3d48bcd0b8e7bfac79ade49dad3e87f3f1d859a501b7` |
+| Threshold set | `13a1cf5e4d20dadced0b04bdc3cc8b3d01a5c3b2a42ca04e163b08e147dac7ff` |
+| Fixture profile set | `6b53f4274d8b2374224728d0cebd499e58ab990c4e6409fa5403bf8f38934b36` |
+| Repository predecessor | `2d0acb01a01b64c23d883d855d2802d939a8dc99622f2774de07af1c8af8d2b9` |
 
-The authority contains 28 manifested artifacts: 17 schemas, eight registries,
-one driver profile, one threshold file with eight gates/warnings, and one
-35-scenario conformance corpus. It fixes eleven tasks, twelve test-only fault
-points, four cache states, five network profiles, and four execution tiers.
+The authority contains 28 artifacts, 17 schemas, eight registries, 35
+conformance scenarios, eleven tasks, twelve fault points, and eight thresholds.
+It pins the completed authorization, path, repository, protocol, and fixture
+authorities; generation and the independent validator reproduce every pin.
 
-Generation imports the five current fixture profiles and hashes their complete
-semantic values. The independent validator separately recomputes the fixture
-package/version/profile inventory and every other predecessor manifest pin.
-
-## Local bounded execution
-
-Local environment: macOS 26.6.1 build 25G76 arm64, Node.js 24.9.0, npm
-11.6.0.
+## Local and hosted gates
 
 | Gate | Result |
 |---|---|
-| Contract generation, independent predecessor validation, loader, and tamper test | Passed 3/3; 28 artifacts and 35 scenarios reproduce. |
-| Runtime/type/unit/integration suite | Passed 19/19. |
-| Five-corpus retained smoke | Passed 110 samples and 110 summaries across ten environment lanes. |
-| Fault/checker/security proof | Passed 36 boundary/action rows, seven broken modes, and both authorization/path negative suites. |
-| Harness conformance | Passed 35/35 exact rows. |
-| Bounded presubmit | Passed 1,320 samples; semantic digest `64df6eec5143ce21ba21d5375399417f859e0d195b902ffe3b21a18133bfa84c`. |
-| Source/packed/comparator tooling | Passed 3/3, including a ten-package offline install. |
-| Full ordinary repository suite | Passed; fixture 128 pass/2 explicit skips, object model 180/180 plus 58,520 mutations, and every other bounded package/report gate. |
+| Contract generation/validation/tamper | Passed 3/3; all 28 artifacts and 35 scenarios reproduced. |
+| Runtime, TypeScript, unit, and integration | Passed 25/25. |
+| Harness conformance | Passed 35/35. |
+| Fault/security proof | Passed 36 fault rows, seven deliberately broken modes, and both predecessor negative suites. |
+| Local smoke | Passed 110 samples and 110 summaries across ten environment lanes. |
+| Bounded presubmit | Passed 1,320 samples. |
+| Packed public surface | Ten exact archives installed and ran offline with lifecycle scripts disabled. |
+| Hosted portability | [Run 32850158064](https://github.com/n3r/OpenGameVCS/actions/runs/32850158064) passed Linux, macOS, Windows, release-plan validation, and strict comparison. |
 
-The retained local-smoke source report has:
+The hosted run used source revision
+[`2cd9b76`](https://github.com/n3r/OpenGameVCS/commit/2cd9b767349be1ed7f5bd9ffae87333fc3d9e9ad).
+All three retained envelopes share contract manifest
+`e8e1396a…6612`, package set `49f67a2f…81ac`, and semantic results
+`abfc5fcd…ce66`. The independently replayed comparison is `matched`, with
+comparison identity `eb4ba481…7708`.
 
-| Field | Value |
-|---|---:|
-| Overall status | `passed` |
-| Bundle digest | `0d463047b6aba49854e30c67cd18712a65d9e822d93003345dfadd00001522ac` |
-| Semantic-results SHA-256 | `8e14fb0797faae7e9202b2d708029dadcac411365974e8ccb657940cbac80a12` |
-| Report SHA-256 | `74aaa461747e1cf63d576f0ec6f7b535149e6e24a8c56a7b9b9586310b0a4e72` |
-| Conformance failures | `0` |
-| Fault failures | `0` |
-| Broken-checker misses | `0` |
-| Security/path misses | `0` |
-| Exact scale executed | `false` |
+## Durable reports
 
-The report uses fixed clocks for portable semantic comparison. Timing fields in
-that retained conformance report are harness reproducibility evidence, not a
-claim about this workstation's production performance.
-
-## Offline packed proof
-
-Ten exact MIT archives installed together with npm offline, lifecycle scripts
-disabled, and a private empty cache. The installed CLI planned the matrix and
-the installed runtime emitted the same semantic-result digest as source.
-
-| Package | Version | SHA-256 |
+| File | Bytes | SHA-256 |
 |---|---:|---|
-| `@opengamevcs/authorization-contract` | 1.0.0 | `e28a0da4310b2bcdb12acdf6d39c55dea5221bdef451b15a601aaf63939b43c7` |
-| `@opengamevcs/authorization-contract-v1` | 1.0.0 | `766078f881bba7bd7f4e3657f506ce8270992667c425ec8054cf506e13170770` |
-| `@opengamevcs/benchmark-fault-contract-v1` | 1.0.0-rc.1 | `f632073283c311690a8e855056227606cdbb13e45c137e6613682fd86e88a622` |
-| `@opengamevcs/benchmark-fault-harness` | 1.0.0-rc.1 | `c8355a0997941507b94a48afbb7ae353ad65349ed685e59f8062193c05031699` |
-| `@opengamevcs/fixture-generator` | 1.0.0 | `1a4846a936aa466c73aaf7b722eb295eb66eadb7e98c885f17e75e2762a4e2f7` |
-| `@opengamevcs/path-contract-v1` | 1.0.0 | `c376cd1d29d42295f4842491b2fdf76322bd0537198d202f288f788d4271662e` |
-| `@opengamevcs/path-filesystem` | 1.0.0 | `4e726bcfdc5455ff348126ef93b1f3b2341eae92ed2bc40d0945d322a2544b6d` |
-| `@opengamevcs/protocol-baseline` | 1.0.0-rc.1 | `8b3836391046521a5672a08cdfbfb486fb7a55ac9b07e7f6c1eeb9418ac0a097` |
-| `@opengamevcs/protocol-contract-v1` | 1.0.0-rc.1 | `e86e12b892f5247ec8dd9c5510a48036418cc598a02797a1c2d10064f0b32f53` |
-| `@opengamevcs/protocol-types-v1` | 1.0.0-rc.1 | `89e69abe4b062250ce4b16e851742de906ab92597d0f7f74f32dd36d06278e01` |
+| [Linux packed evidence](packed-evidence-linux-2026-08-25.json) | 2,731 | `084aea5a40a0d87703b84c984a79cfae2aa2854f994f7a1299aba85a448f5c77` |
+| [macOS packed evidence](packed-evidence-macos-2026-08-25.json) | 2,734 | `605f1f7b8f7d93eb5d6ce9da4a433ae0acfff36cf5debf654a5bf3cfbfe37e3f` |
+| [Windows packed evidence](packed-evidence-windows-2026-08-25.json) | 2,731 | `a14ad7f40d8eee60ba0a14a84e88312826fbe5f26f8395cef2d5d59ffb2a68fb` |
+| [Linux retained report](retained-report-linux-2026-08-25.json) | 1,303 | `c94456d6a7e242f4fcb58bf199374ae99bc74009136995b2d9aec65889824920` |
+| [macOS retained report](retained-report-macos-2026-08-25.json) | 1,306 | `11e5c1b3573d7df72901843bfacc54ef96270ea8ff1282212aa2aa3f384fc494` |
+| [Windows retained report](retained-report-windows-2026-08-25.json) | 1,303 | `e0fbcc82c83e7304553eb31cd3b5fa204b50605c58d1d14fd3339c12778d2039` |
+| [Strict comparison](cross-platform-comparison-2026-08-25.json) | 524 | `a1f30d08a57e7e2f0be990ae2f3369e5b804ec575312c1938a2f61229c755925` |
+| [Release plan](release-plan-2026-08-25.json) | 774 | `d451c02bc31d30de2169e7a4c300b3b9265051ed18be59317f112dbc96a9c5ff` |
 
-The package-set SHA-256 is
-`4c609f2ecb8eb8c9ad51e6b37e40611f93957b74309439456c34c1718dc01fe9`.
-The packed evidence SHA-256 is
-`fa5911016272003fed6ba69a111230468e183a76afc221b8629126ff6579ad61`.
+The completion policy test authenticates every file and independently derives
+the cross-platform comparison fields from the three retained envelopes. The
+hosted comparator additionally authenticated the actual archives and installed
+them offline before accepting the evidence.
 
-## Hosted three-OS reproduction
+## Offline package authority
 
-GitHub Actions run
-[32441625231](https://github.com/n3r/OpenGameVCS/actions/runs/32441625231)
-checked out commit `327d843f6fcc2fc45616ca9e17feb1e79c7ae7ed`, installed
-the exact lockfile, ran Linux contract/runtime/presubmit/report gates, and
-installed and executed the ten-package closure offline on Linux, macOS, and
-Windows. All jobs and the release-plan validation passed.
+| Package | Version | Bytes | SHA-256 |
+|---|---:|---:|---|
+| `@opengamevcs/authorization-contract` | 1.0.0 | 107,041 | `e28a0da4…43c7` |
+| `@opengamevcs/authorization-contract-v1` | 1.0.0 | 262,197 | `766078f8…0770` |
+| `@opengamevcs/benchmark-fault-contract-v1` | 1.0.0-rc.1 | 109,089 | `bc67dfd3…244c` |
+| `@opengamevcs/benchmark-fault-harness` | 1.0.0-rc.1 | 312,895 | `f5567891…46fe` |
+| `@opengamevcs/fixture-generator` | 1.0.0 | 713,851 | `1a4846a9…e2f7` |
+| `@opengamevcs/path-contract-v1` | 1.0.0 | 185,899 | `432f0f59…2b8e` |
+| `@opengamevcs/path-filesystem` | 1.0.0 | 188,459 | `82a9b953…e627` |
+| `@opengamevcs/protocol-baseline` | 1.0.0-rc.1 | 358,468 | `07354434…539e4` |
+| `@opengamevcs/protocol-contract-v1` | 1.0.0-rc.1 | 3,450,911 | `0be9148e…3407` |
+| `@opengamevcs/protocol-types-v1` | 1.0.0-rc.1 | 126,497 | `d95cd47e…a989` |
 
-The retained machine record is
-[`github-actions-run-32441625231.json`](github-actions-run-32441625231.json).
-After downloading all artifacts, the repository comparator independently
-reproduced:
+## Exact-scale boundary
 
-| Field | Value |
-|---|---:|
-| Platforms | `darwin/arm64`, `linux/x64`, `win32/x64` |
-| Contract manifest SHA-256 | `11c3038d6456e690664e705dcab55f2d8f8c8690b66e542a496a8e8a067ea7c3` |
-| Package-set SHA-256 | `4c609f2ecb8eb8c9ad51e6b37e40611f93957b74309439456c34c1718dc01fe9` |
-| Semantic-results SHA-256 | `8e14fb0797faae7e9202b2d708029dadcac411365974e8ccb657940cbac80a12` |
-| Comparison SHA-256 | `dcf7a133dfbc539cce2f92ab0671016d05d6fdd89f15aa9c2f5f0b9b3a8dbeb3` |
-| Result | `matched` |
-
-The hosted runners are independent of the local publisher and the locally
-redownloaded comparison therefore closes AC-05. The release job only validated
-the authenticated 33,000-sample privileged plan; it did not apply host network
-shaping or claim release-performance evidence.
+OGVCS-005 did **not** dispatch the one-million-entry/1 TiB workloads. Those are
+owned by OGVCS-002 and are intentionally monthly/major-release work, not a PR
+gate. OGVCS-002 already completed the exact JavaScript/Rust campaign in
+[run 32714126083](https://github.com/n3r/OpenGameVCS/actions/runs/32714126083),
+including strict byte/resource comparison. Every OGVCS-005 retained report
+honestly records `exactScaleExecuted: false`; bounded smoke/presubmit evidence
+is not presented as exact-scale proof.
 
 ## Acceptance map
 
-| Criterion | Candidate evidence | Status |
+| Criterion | Completion evidence | Status |
 |---|---|---|
-| OGVCS-005-AC-01 | All five profile-v2 corpora produce schema-valid authenticated bundles; local smoke passed 110 samples. | Pass |
-| OGVCS-005-AC-02 | All four cache states are reset, independently inspected, and assert the declared local/regional byte differences; aggregate cache/matrix memory is bounded. | Pass |
-| OGVCS-005-AC-03 | All 36 injected boundary/action rows preserve invariants and seven intentionally broken modes are detected. | Pass |
-| OGVCS-005-AC-04 | The exact OGVCS-003/004 negative suites detect seeded enumeration and workspace-escape defects with no misses. | Pass |
-| OGVCS-005-AC-05 | Independent hosted Linux/macOS/Windows runners reproduced the exact package and semantic authorities; a local redownload reproduced comparison `dcf7a133…`. | Pass |
-| OGVCS-005-AC-06 | Presubmit executes 1,320 bounded unprivileged samples; nightly is scheduled; release CI validates a 33,000-sample privileged plan without running it. | Pass |
-| OGVCS-005-AC-07 | The process driver passes negotiation, malformed, retry, bounds, lifecycle, trace, and fail-before-mutation tests. | Pass |
+| OGVCS-005-AC-01 | Five profile-v2 corpora produced authenticated bundles across 110 smoke samples on every retained host. | Pass |
+| OGVCS-005-AC-02 | Four cache states are reset and inspected; expected local/regional byte differences and the aggregate memory ceiling are enforced. | Pass |
+| OGVCS-005-AC-03 | All 36 injected boundary/action rows preserve invariants and all seven intentionally broken modes are detected. | Pass |
+| OGVCS-005-AC-04 | Exact authorization/path negative suites detect enumeration and workspace escape with zero misses. | Pass |
+| OGVCS-005-AC-05 | Independent hosted Linux/macOS/Windows jobs reproduce one package/semantic authority and the retained comparison was independently derived. | Pass |
+| OGVCS-005-AC-06 | Presubmit executes 1,320 bounded samples; nightly remains scheduled; release CI validates the authenticated 33,000-sample privileged plan without executing it on ordinary pushes. | Pass |
+| OGVCS-005-AC-07 | The OGVCS-041 driver passes negotiation, malformed, retry, bounds, lifecycle, trace, cancellation, and fail-before-mutation tests. | Pass |
 
-The complete FR/NFR assessment and remediation history are in the
-[critical review](../../reviews/OGVCS-005-critical-review.md).
+## Completion and rollback
 
-## Roadmap boundary
-
-The commit-pinned workflow has now supplied the portability and independent
-reproduction evidence. Its 30-day Actions archives remain validation artifacts,
-not the durable final publication required by OGVCS-002's Done boundary.
-
-OGVCS-002, OGVCS-004, and OGVCS-041 remain in Validation. The candidate is
-therefore correctly kept at `1.0.0-rc.1` and OGVCS-005 remains in
-`prd/todo` with status Validation. The final R0 campaign must still execute the
-two explicitly deferred OGVCS-002 scale cases and settle durable publication
-before dependency closure can move the R0 candidates to Done.
+The final [critical review](../../reviews/OGVCS-005-critical-review.md) records
+no live P0, P1, or P2. All predecessors are Done, the public `1.0.0-rc.1`
+candidate is usable offline, and OGVCS-005 is complete. A later compatible
+release may ratify `1.0.0`; it must preserve the frozen schema, threshold,
+profile, task, and fault identities. If any authenticated package, report, or
+comparison is withdrawn, its claims are invalid until a replacement run binds
+the new source and authority. Exact scale remains a monthly/major-release
+object-model campaign and must not be added to ordinary PR workflows.

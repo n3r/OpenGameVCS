@@ -1,13 +1,13 @@
 # OGVCS-005 — Benchmark, conformance corpus, and fault harness
 
-**Status:** Validation
+**Status:** Done
 **Release:** R0 — Engineering Foundation  
 **Priority:** P0  
 **Owner:** Codex and OpenGameVCS maintainers
 **Depends on:** OGVCS-001, OGVCS-002, OGVCS-003, OGVCS-004, OGVCS-041  
 **Blocks:** OGVCS-006, OGVCS-007, OGVCS-012, OGVCS-028  
 **Source:** [OpenGameVCS proposal](../../GAME_DEV_VCS_ANALYSIS.md)  
-**Last updated:** 2026-08-21
+**Last updated:** 2026-08-25
 
 ## Outcome
 
@@ -108,30 +108,28 @@ Start with local smoke profiles, add nightly scale runs, then release-gate matri
 
 ## Completion evidence
 
-- Implementation changes: the MIT-licensed
-  `@opengamevcs/benchmark-fault-contract-v1` contract under
-  `spec/benchmark-fault/v1` and
-  [`@opengamevcs/benchmark-fault-harness`](../../foundation/benchmark-fault-harness)
-  `1.0.0-rc.1` candidates, retained report/package/comparison tools, and the
-  commit-pinned three-OS workflow at
-  `.github/workflows/benchmark-fault-harness.yml`.
-- Test and benchmark results: the bounded
-  [candidate evidence](../../docs/evidence/OGVCS-005/README.md) records 3/3
-  contract tests, 19/19 runtime tests, 35/35 conformance rows, 36 fault rows,
-  seven broken-service detections, 110 smoke samples, 1,320 presubmit samples,
-  a ten-package offline install, and a passing full ordinary repository suite.
-  The two OGVCS-002 exact-scale cases do not yet have a complete accepted
-  two-language comparison and remain final-R0 work.
-- Security/reliability review: the
-  [critical review](../../docs/reviews/OGVCS-005-critical-review.md) found no
-  remaining local P0/P1 after aggregate-memory, derived/evidence-claim,
-  comparison-authority, reproduction, predecessor-provenance, and workflow-
-  trigger remediation. Hosted run 32441625231 passes three-OS package/semantic
-  comparison and closes AC-05.
-- Documentation/runbooks: [ADR-0014](../../adr/0014-benchmark-fault-harness-contract-v1.md),
-  the [operator runbook](../../docs/benchmark-fault/runbook.md), and the
-  [delivery changelog](../../docs/changelog/OGVCS-005.md).
-- Rollout result: local bounded, packed, and commit-pinned Linux/macOS/Windows
-  candidates pass. Keep the PRD in Validation and packages at `1.0.0-rc.1`
-  until OGVCS-002/004/041 close and the final-R0 exact-scale/publication
-  campaign completes.
+The MIT-licensed `1.0.0-rc.1` contract and harness are complete at
+implementation revision
+[`2cd9b76`](https://github.com/n3r/OpenGameVCS/commit/2cd9b767349be1ed7f5bd9ffae87333fc3d9e9ad).
+Local gates pass 3/3 contract tests, 25/25 runtime/type tests, 35/35
+conformance rows, all 36 fault rows, seven deliberately broken modes, 110
+smoke samples, 1,320 presubmit samples, and the ten-package offline consumer.
+Hosted
+[run 32850158064](https://github.com/n3r/OpenGameVCS/actions/runs/32850158064)
+passes Linux, macOS, Windows, release-plan validation, and strict retained
+comparison. All predecessors are Done. OGVCS-002 already completed its
+separately owned exact JavaScript/Rust campaign; OGVCS-005 did not duplicate
+that monthly/major-release workload.
+
+- Implementation changes: the [`2cd9b76` implementation commit](https://github.com/n3r/OpenGameVCS/commit/2cd9b767349be1ed7f5bd9ffae87333fc3d9e9ad) and [final-review changelog](../../docs/changelog/OGVCS-005.md#final-review-hardening) deliver the generated contract, bounded runner, cooperative timeout drain, inert host-input boundary, fault/process drivers, transactional publication, offline packages, and CI tooling.
+- Test and benchmark results: the [completion packet](../../docs/evidence/OGVCS-005/README.md#local-and-hosted-gates) binds 3/3 contract, 25/25 runtime/type, 35/35 conformance, 36 fault, seven broken-mode, 110 smoke, 1,320 presubmit, ten-package offline, and three-host comparison results.
+- Security/reliability review: the [final independent assessment](../../docs/reviews/OGVCS-005-critical-review.md#security-and-reliability-assessment) records the full hostile-input, cancellation, transaction, resource, process, publication, privacy, and portability review with no live P0/P1/P2.
+- Documentation/runbooks: [ADR-0014](../../adr/0014-benchmark-fault-harness-contract-v1.md), the [operator runbook](../../docs/benchmark-fault/runbook.md), and the [completion/rollback boundary](../../docs/evidence/OGVCS-005/README.md#completion-and-rollback) document authority, operation, failure, scheduling, exact-scale, compatibility, and rollback policy.
+- Rollout result: [hosted run 32850158064](https://github.com/n3r/OpenGameVCS/actions/runs/32850158064) passes all Linux/macOS/Windows jobs and strict comparison; the [durable run record](../../docs/evidence/OGVCS-005/github-actions-run-32850158064.json) binds every job/artifact identity and the release plan.
+- OGVCS-005-AC-01: the [acceptance map](../../docs/evidence/OGVCS-005/README.md#acceptance-map) proves all five reference corpora emitted authenticated bundles across 110 smoke samples on every retained host.
+- OGVCS-005-AC-02: the [requirement matrix](../../docs/reviews/OGVCS-005-critical-review.md#requirement-and-acceptance-matrix) records independent reset/inspection and required byte behavior for all four cache states under one aggregate resource bound.
+- OGVCS-005-AC-03: the [fault evidence summary](../../docs/evidence/OGVCS-005/README.md#local-and-hosted-gates) binds all 36 injected boundary/action rows and all seven deliberately seeded detector cases.
+- OGVCS-005-AC-04: the [security assessment](../../docs/reviews/OGVCS-005-critical-review.md#security-and-reliability-assessment) records exact OGVCS-003/004 authorization and path negative suites with zero misses.
+- OGVCS-005-AC-05: the [strict retained comparison](../../docs/evidence/OGVCS-005/cross-platform-comparison-2026-08-25.json) proves independent Linux/macOS/Windows reproduction of one contract, package-set, and semantic authority.
+- OGVCS-005-AC-06: the [authenticated release plan](../../docs/evidence/OGVCS-005/release-plan-2026-08-25.json) and [scale policy](../../docs/evidence/OGVCS-005/README.md#exact-scale-boundary) prove bounded presubmit, scheduled nightly, isolated release planning, and no per-PR exact-scale dispatch.
+- OGVCS-005-AC-07: the [driver verdict](../../docs/reviews/OGVCS-005-critical-review.md#requirement-and-acceptance-matrix) covers OGVCS-041 negotiation, malformed, retry, bounds, lifecycle, trace, cancellation, and incompatible-before-mutation behavior.

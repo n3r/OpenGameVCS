@@ -1,0 +1,146 @@
+{
+  "schemaVersion": "ogvcs.benchmark/completion-evidence/v1",
+  "evidenceDate": "2026-08-25",
+  "status": "completed",
+  "license": "MIT",
+  "sourceRevision": "2cd9b767349be1ed7f5bd9ffae87333fc3d9e9ad",
+  "contractVersion": "1.0.0-rc.1",
+  "runtimeVersion": "1.0.0-rc.1",
+  "authority": {
+    "manifestFileSha256": "e8e1396ad31407d16b269258be2f55909ed7fed6ca8e7d14af52582db15d6612",
+    "artifactSetSha256": "ba59c8dc9db4c0678fc630357396d9981934ac065b0dd2c8bbbb5c82dccad6d7",
+    "schemaSetSha256": "f186e1cfe4d8905b0fe36acfa641b3a97eed3f8bcb9d245c7a96055d9cd6f706",
+    "registrySetSha256": "bbe8230b1a115b5c0862537d7dde6e97db61c283b552dad61d2020165b75d532",
+    "vectorSetSha256": "7ab9d07b3f88e94be05f3d48bcd0b8e7bfac79ade49dad3e87f3f1d859a501b7",
+    "thresholdSetSha256": "13a1cf5e4d20dadced0b04bdc3cc8b3d01a5c3b2a42ca04e163b08e147dac7ff",
+    "modelSha256": "bdbd0f9c5d5573d8e9ee318cefc31bd8bc3a3d6fa239f8b0dbf49f9c0c8c2099",
+    "generatorSha256": "05d252d450785f628be40771db38ba25b8d22fe251c0b0014cf5a66dc1f93334",
+    "validatorSha256": "95c6a4353bf57cad1659aa4f2e6d305b3b0231fb6ccd9ca8196cb6030839188e",
+    "fixtureProfileSetSha256": "6b53f4274d8b2374224728d0cebd499e58ab990c4e6409fa5403bf8f38934b36",
+    "counts": {
+      "artifacts": 28,
+      "schemas": 17,
+      "registries": 8,
+      "scenarios": 35,
+      "tasks": 11,
+      "faultPoints": 12,
+      "thresholds": 8
+    }
+  },
+  "predecessors": {
+    "repositoryManifestSha256": "2d0acb01a01b64c23d883d855d2802d939a8dc99622f2774de07af1c8af8d2b9",
+    "authorizationManifestSha256": "3fb4dd4a89eb914f93a589b013bda8afcf4744c0d27171ee5849ca3b7bf62447",
+    "authorizationRegistrySetSha256": "293f9ab0be023a9ded33326d04a8314080bda56e7c70dd18d0cca38b70bed9cc",
+    "pathManifestSha256": "2f343e1dac238da527fbd36160419ec6fb53b780ac7e33c01e11acabbdd4782b",
+    "pathRegistrySetSha256": "bbabdd95d78cfe0dd9751ab67ccbd9dfa5565bf8c049468aea3129bec787bd42",
+    "protocolManifestSha256": "bc343842291040b6b0c2c941b183863500c4d60a4618256ffc6e36a1d6afbe72",
+    "protocolRegistrySetSha256": "2a49361363cc16e743948fa3cc5e266cd1bc6e31b312cde15b5dab1ad7e5c5b0"
+  },
+  "implementationHardening": {
+    "timeoutDrain": "The public matrix runner drains cooperative in-process work after cancellation before returning or releasing a shared cache/network lane.",
+    "adapterBoundary": "Trusted in-process adapters must honor AbortSignal; untrusted or noncooperative work uses the killable external process driver.",
+    "hostInputBoundary": "Public option, matrix, inventory, cache, network, publication, scheduler, and driver inputs are snapshotted as exact inert owned data before semantic use.",
+    "publicationOwnership": "Published result structures own their immutable matrix snapshots and never freeze caller-owned arrays.",
+    "preCancellation": "Cancelled calls fail before adapter, workspace, or process-spawn boundaries."
+  },
+  "localGates": {
+    "contract": {
+      "passed": 3,
+      "failed": 0
+    },
+    "runtimeAndTypes": {
+      "passed": 25,
+      "failed": 0
+    },
+    "conformance": {
+      "passed": 35,
+      "failed": 0
+    },
+    "faultRows": 36,
+    "brokenServiceModes": 7,
+    "smokeSamples": 110,
+    "presubmitSamples": 1320,
+    "offlinePackages": 10,
+    "packageDryRun": "passed"
+  },
+  "hosted": {
+    "record": "github-actions-run-32850158064.json",
+    "runId": 32850158064,
+    "runUrl": "https://github.com/n3r/OpenGameVCS/actions/runs/32850158064",
+    "sourceRevision": "2cd9b767349be1ed7f5bd9ffae87333fc3d9e9ad",
+    "conclusion": "success",
+    "comparisonSha256": "eb4ba4819b82d844ef002f6cc19184d026da64f77f04170155267f0009f77708",
+    "packageSetSha256": "49f67a2f0de0a1fc96ff628befa3067252a3b533ea43b84b8fb2b954dbb781ac",
+    "semanticResultsSha256": "abfc5fcd5e2edefa58b2ec1684fa4637689c9f547c0985b7c82dc40f8a63ce66"
+  },
+  "retainedFiles": [
+    {
+      "path": "packed-evidence-linux-2026-08-25.json",
+      "sizeBytes": 2731,
+      "sha256": "084aea5a40a0d87703b84c984a79cfae2aa2854f994f7a1299aba85a448f5c77"
+    },
+    {
+      "path": "packed-evidence-macos-2026-08-25.json",
+      "sizeBytes": 2734,
+      "sha256": "605f1f7b8f7d93eb5d6ce9da4a433ae0acfff36cf5debf654a5bf3cfbfe37e3f"
+    },
+    {
+      "path": "packed-evidence-windows-2026-08-25.json",
+      "sizeBytes": 2731,
+      "sha256": "a14ad7f40d8eee60ba0a14a84e88312826fbe5f26f8395cef2d5d59ffb2a68fb"
+    },
+    {
+      "path": "retained-report-linux-2026-08-25.json",
+      "sizeBytes": 1303,
+      "sha256": "c94456d6a7e242f4fcb58bf199374ae99bc74009136995b2d9aec65889824920"
+    },
+    {
+      "path": "retained-report-macos-2026-08-25.json",
+      "sizeBytes": 1306,
+      "sha256": "11e5c1b3573d7df72901843bfacc54ef96270ea8ff1282212aa2aa3f384fc494"
+    },
+    {
+      "path": "retained-report-windows-2026-08-25.json",
+      "sizeBytes": 1303,
+      "sha256": "e0fbcc82c83e7304553eb31cd3b5fa204b50605c58d1d14fd3339c12778d2039"
+    },
+    {
+      "path": "cross-platform-comparison-2026-08-25.json",
+      "sizeBytes": 524,
+      "sha256": "a1f30d08a57e7e2f0be990ae2f3369e5b804ec575312c1938a2f61229c755925"
+    },
+    {
+      "path": "release-plan-2026-08-25.json",
+      "sizeBytes": 774,
+      "sha256": "d451c02bc31d30de2169e7a4c300b3b9265051ed18be59317f112dbc96a9c5ff"
+    }
+  ],
+  "packages": {
+    "count": 10,
+    "packageSetSha256": "49f67a2f0de0a1fc96ff628befa3067252a3b533ea43b84b8fb2b954dbb781ac",
+    "archives": [
+      { "name": "@opengamevcs/authorization-contract", "version": "1.0.0", "sizeBytes": 107041, "sha256": "e28a0da4310b2bcdb12acdf6d39c55dea5221bdef451b15a601aaf63939b43c7" },
+      { "name": "@opengamevcs/authorization-contract-v1", "version": "1.0.0", "sizeBytes": 262197, "sha256": "766078f881bba7bd7f4e3657f506ce8270992667c425ec8054cf506e13170770" },
+      { "name": "@opengamevcs/benchmark-fault-contract-v1", "version": "1.0.0-rc.1", "sizeBytes": 109089, "sha256": "bc67dfd3434652515ade340839851a4fdaac4e2c351fc063db991f4775ec244c" },
+      { "name": "@opengamevcs/benchmark-fault-harness", "version": "1.0.0-rc.1", "sizeBytes": 312895, "sha256": "f5567891fb3853be664d900881fce7a193e12057b4e2dcce275c2a037be046fe" },
+      { "name": "@opengamevcs/fixture-generator", "version": "1.0.0", "sizeBytes": 713851, "sha256": "1a4846a936aa466c73aaf7b722eb295eb66eadb7e98c885f17e75e2762a4e2f7" },
+      { "name": "@opengamevcs/path-contract-v1", "version": "1.0.0", "sizeBytes": 185899, "sha256": "432f0f59a498186ff826f73e8c1e8c74e9cf836d22a0f57b463822624c962b8e" },
+      { "name": "@opengamevcs/path-filesystem", "version": "1.0.0", "sizeBytes": 188459, "sha256": "82a9b9533df0e9b3e9dfecac1e8dc12e146dc1ddb6ec972dfcde86bea21de627" },
+      { "name": "@opengamevcs/protocol-baseline", "version": "1.0.0-rc.1", "sizeBytes": 358468, "sha256": "07354434b547e77e69735b02a74edfdb668f6c23d394033ccd1caefb8ba539e4" },
+      { "name": "@opengamevcs/protocol-contract-v1", "version": "1.0.0-rc.1", "sizeBytes": 3450911, "sha256": "0be9148e0b4a1be1dafe30435fc788157d4b1cdab2124ee54263856ea17e3407" },
+      { "name": "@opengamevcs/protocol-types-v1", "version": "1.0.0-rc.1", "sizeBytes": 126497, "sha256": "d95cd47eef832db1e336b2732e814b58df5919550a44c2350965385ce124a989" }
+    ]
+  },
+  "exactScale": {
+    "executedForOgvcs005": false,
+    "reason": "OGVCS-005 owns bounded smoke, presubmit, schedule, fault, package, and portability evidence. The expensive exact-scale object-model campaign is monthly/major-release work and was already completed by OGVCS-002.",
+    "predecessor": {
+      "prd": "OGVCS-002",
+      "status": "completed",
+      "runId": 32714126083,
+      "runUrl": "https://github.com/n3r/OpenGameVCS/actions/runs/32714126083",
+      "result": "JavaScript and Rust exact million-entry tree and logical-1-TiB manifest evidence matched and stayed within the declared bounds."
+    }
+  },
+  "remainingGates": []
+}

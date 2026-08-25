@@ -47,7 +47,7 @@
     "test:benchmark:spec": "npm run test --workspace @opengamevcs/benchmark-fault-contract-v1",
     "test:benchmark:report": "node tools/benchmark-fault-conformance-report.mjs --output artifacts/benchmark-fault-source --profile presubmit",
     "test:benchmark:packed-report": "node tools/run-packed-benchmark-fault-conformance.mjs --output artifacts/benchmark-fault-packed --profile presubmit",
-    "test:benchmark:ci-report": "node --test tools/benchmark-fault-conformance-report.test.mjs"
+    "test:benchmark:ci-report": "node --test tools/benchmark-fault-conformance-report.test.mjs tools/benchmark-fault-workflow-policy.test.mjs"
   },
   "engines": {
     "node": ">=22"
