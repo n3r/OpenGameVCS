@@ -308,6 +308,13 @@ async function bindComponents(workspace, canonicalPath, options = {}) {
       if (error?.code === 'ENOENT' && options.createParents && index < segments.length - 1) {
         await mkdir(current, { mode: 0o700 });
         info = await lstat(current);
+        if (!info.isDirectory() || info.isSymbolicLink()) pathFail('UNSAFE_TARGET');
+        const createdIdentity = identity(info);
+        await options.beforeParentSync?.(index);
+        await assertBoundDirectory(current, createdIdentity);
+        await syncDirectory(dirname(current));
+        await assertBoundDirectory(current, createdIdentity);
+        info = await lstat(current);
       } else throw error;
     }
     if (!info.isDirectory() || info.isSymbolicLink()) pathFail('UNSAFE_TARGET');
@@ -500,14 +507,28 @@ async function exactTarget(path, expected) {
   if ((expected === null) !== (current === null) || (expected !== null && !sameIdentity(expected, current))) pathFail('TARGET_CHANGED');
 }
 
-async function writeRecord(path, value) {
-  const temporary = `${path}.${randomUUID().replaceAll('-', '')}.tmp`;
+class AmbiguousRecordTransitionError extends Error {
+  constructor(cause) {
+    super('record replacement completed before its directory sync failed', { cause });
+    this.name = 'AmbiguousRecordTransitionError';
+  }
+}
+
+async function writeRecord(path, value, options = {}) {
+  const temporary = options.stableTemporary === true
+    ? `${path}.next`
+    : `${path}.${randomUUID().replaceAll('-', '')}.tmp`;
+  let replaced = false;
   try {
     await exclusiveFile(temporary, recordBytes(value));
+    await options.afterTemporary?.();
     await rename(temporary, path);
+    replaced = true;
+    await options.afterReplace?.();
     await syncDirectory(dirname(path));
   } catch (error) {
     await removeIfPresent(temporary).catch(() => {});
+    if (replaced && options.preserveAmbiguous === true) throw new AmbiguousRecordTransitionError(error);
     throw error;
   }
 }
@@ -693,6 +714,22 @@ async function recoverWriteStreamRecord(workspace, recordPath, record, observed 
     await rm(recordPath); await syncDirectory(workspace.transactions);
     return Object.freeze({ id: record.id, action: 'finalized' });
   }
+  if (backupInfo === null) {
+    const current = await regularTargetState(target, observed);
+    const priorRestored = record.prior === null
+      ? current === null
+      : current !== null && sameRegularState(record.prior, current)
+        && sameNode(record.prior.identity, current.identity);
+    if (priorRestored) {
+      if (stageInfo !== null) {
+        const staged = await regularTargetState(stage, observed);
+        if (!sameRegularState(record.staged, staged)) pathFail('CRASH_REMNANT');
+        await rm(stage);
+      }
+      await rm(recordPath); await syncDirectory(workspace.transactions);
+      return Object.freeze({ id: record.id, action: 'rolled-back' });
+    }
+  }
   if (stageInfo !== null) {
     const staged = await regularTargetState(stage, observed);
     if (!sameRegularState(record.staged, staged)) pathFail('CRASH_REMNANT');
@@ -746,12 +783,19 @@ async function atomicWriteStreamInternal(workspace, repositoryPath, source, opti
   await settledBoundary(guard, options.signal, () => assertWorkspaceDirectories(workspace));
   let binding;
   try {
-    binding = await settledBoundary(guard, options.signal, () => bindComponents(workspace, canonical, { createParents: options.createParents === true }));
+    binding = await settledBoundary(guard, options.signal, () => bindComponents(workspace, canonical, {
+      createParents: options.createParents === true,
+      beforeParentSync: (index) => guard.hook(
+        options.hooks,
+        'before-created-parent-sync',
+        Object.freeze({ index }),
+      ),
+    }));
   } catch (error) { throw asPathError(error, 'UNSAFE_TARGET'); }
   const { target } = binding;
   if (!confined(workspace.root, target)) pathFail('UNSAFE_TARGET');
   const observed = {
-    guard, maxBytes: options.maxObservedBytes ?? DEFAULT_MAX_BYTES,
+    guard, maxBytes: options.maxObservedBytes ?? Math.max(DEFAULT_MAX_BYTES, limits.maxBytes),
     maxDirectoryBytes: options.maxDirectoryBytes, maxDirectoryEntries: options.maxDirectoryEntries,
     maxDirectoryDepth: options.maxDirectoryDepth,
   };
@@ -765,6 +809,29 @@ async function atomicWriteStreamInternal(workspace, repositoryPath, source, opti
     stage: basename(stage), backup: basename(backup), prior: before, expected, state: 'planned',
   });
   let durableRecord = null;
+  const persistDurableRecord = async (record) => {
+    checkpoint(guard, options.signal);
+    await writeRecord(recordPath, record, {
+      preserveAmbiguous: true,
+      stableTemporary: true,
+      afterTemporary: () => guard.hook(
+        options.hooks,
+        'after-record-temporary',
+        Object.freeze({ state: record.state }),
+      ),
+      afterReplace: () => guard.hook(
+        options.hooks,
+        'before-record-directory-sync',
+        Object.freeze({ state: record.state }),
+      ),
+    });
+    // writeRecord includes the transaction-directory durability barrier. Bind
+    // the in-memory recovery authority before any deadline/cancellation or
+    // test-observer checkpoint can throw after the durable transition.
+    durableRecord = record;
+    await guard.hook(options.hooks, 'after-durable-record', Object.freeze({ state: record.state }));
+    checkpoint(guard, options.signal);
+  };
   try {
     // Reprobe immediately before creating the stage, which is the first
     // destructive boundary when no output parent was requested.
@@ -774,8 +841,7 @@ async function atomicWriteStreamInternal(workspace, repositoryPath, source, opti
     await settledBoundary(guard, options.signal, () => assertWorkspaceDirectories(workspace));
     await settledBoundary(guard, options.signal, () => assertComponentBindings(binding));
     await settledBoundary(guard, options.signal, () => exactRegularTarget(target, before, observed));
-    await settledBoundary(guard, options.signal, () => writeRecord(recordPath, planned));
-    durableRecord = planned;
+    await persistDurableRecord(planned);
     await guardedHook(guard, options.signal, options.hooks, 'after-plan', Object.freeze({}));
     const streamed = await streamToExclusiveFile(
       stage, source, limits, expected.nativeExecutable ? 0o700 : 0o600, guard, options.signal,
@@ -793,8 +859,7 @@ async function atomicWriteStreamInternal(workspace, repositoryPath, source, opti
     await settledBoundary(guard, options.signal, () => syncDirectory(workspace.transactions));
     await guardedHook(guard, options.signal, options.hooks, 'after-backup-link', Object.freeze({ present: before !== null }));
     const stagedRecord = Object.freeze({ ...planned, staged, state: 'staged' });
-    await settledBoundary(guard, options.signal, () => writeRecord(recordPath, stagedRecord));
-    durableRecord = stagedRecord;
+    await persistDurableRecord(stagedRecord);
     await guardedHook(guard, options.signal, options.hooks, 'after-record', Object.freeze({}));
     await guardedHook(guard, options.signal, options.hooks, 'after-backup', Object.freeze({ present: before !== null }));
 
@@ -815,6 +880,9 @@ async function atomicWriteStreamInternal(workspace, repositoryPath, source, opti
     await guardedHook(guard, options.signal, options.hooks, 'before-publish', Object.freeze({}));
     await settledBoundary(guard, options.signal, () => assertWorkspaceDirectories(workspace));
     await settledBoundary(guard, options.signal, () => assertComponentBindings(binding));
+    await settledBoundary(guard, options.signal, () => authorizeWorkspaceMutation(options.plan, workspace, {
+      ...request, capabilities: before === null ? ['atomicReplace'] : ['atomicReplace', 'hardlink'],
+    }));
     await settledBoundary(guard, options.signal, () => exactRegularTarget(stage, staged, observed));
     await settledBoundary(guard, options.signal, () => exactRegularTarget(target, before, { ...observed, expectedLinks: before === null ? 1 : 2 }));
     if (before !== null) {
@@ -828,12 +896,10 @@ async function atomicWriteStreamInternal(workspace, repositoryPath, source, opti
     const current = await settledBoundary(guard, options.signal, () => regularTargetState(target, observed));
     if (!sameRegularState(staged, current)) pathFail('ATOMIC_REPLACE_FAILED');
     const publishedRecord = Object.freeze({ ...stagedRecord, published: current, state: 'published' });
-    await settledBoundary(guard, options.signal, () => writeRecord(recordPath, publishedRecord));
-    durableRecord = publishedRecord;
+    await persistDurableRecord(publishedRecord);
     await guardedHook(guard, options.signal, options.hooks, 'after-publish', Object.freeze({ bytes: staged.bytes }));
     const committedRecord = Object.freeze({ ...publishedRecord, state: 'committed' });
-    await settledBoundary(guard, options.signal, () => writeRecord(recordPath, committedRecord));
-    durableRecord = committedRecord;
+    await persistDurableRecord(committedRecord);
     await guard.hook(options.hooks, 'after-commit', Object.freeze({ bytes: staged.bytes }));
     if (before !== null) {
       const backupState = await regularTargetState(backup, observed);
@@ -848,6 +914,17 @@ async function atomicWriteStreamInternal(workspace, repositoryPath, source, opti
     await syncDirectory(workspace.transactions);
     return Object.freeze({ path: canonical, bytes: staged.bytes, sha256: staged.sha256, transaction: id });
   } catch (error) {
+    if (error instanceof AmbiguousRecordTransitionError) {
+      // The atomic record rename is visible but its directory barrier failed.
+      // Either the previous or new record can survive a crash, and both are
+      // valid for the untouched artifact state. Preserve everything for exact
+      // restart inspection instead of recovering under a guessed state.
+      throw new PathFilesystemError(
+        'ATOMIC_REPLACE_FAILED',
+        'stream publication record durability is ambiguous',
+        { cause: error },
+      );
+    }
     if (durableRecord?.state === 'committed') {
       // The target and committed record have crossed every durability
       // barrier. Cleanup or a post-commit observer cannot turn that durable
@@ -1301,13 +1378,73 @@ function validRecord(record) {
     && (record.state !== 'committed' || validIdentity(record.published));
 }
 
+function streamRecordBase(record) {
+  return {
+    schemaVersion: record.schemaVersion,
+    id: record.id,
+    operation: record.operation,
+    path: record.path,
+    stage: record.stage,
+    backup: record.backup,
+    prior: record.prior,
+    expected: record.expected,
+  };
+}
+
+function validStreamRecordSuccessor(current, next) {
+  if (!validRecord(current) || !validRecord(next)
+    || current.operation !== 'write-stream' || next.operation !== 'write-stream'
+    || !recordBytes(streamRecordBase(current)).equals(recordBytes(streamRecordBase(next)))) return false;
+  const states = ['planned', 'staged', 'published', 'committed'];
+  const currentIndex = states.indexOf(current.state);
+  if (currentIndex < 0 || next.state !== states[currentIndex + 1]) return false;
+  if (current.state !== 'planned'
+    && !recordBytes(current.staged).equals(recordBytes(next.staged))) return false;
+  return current.state !== 'published'
+    || recordBytes(current.published).equals(recordBytes(next.published));
+}
+
+async function reconcileStreamRecordTemporary(workspace, name) {
+  const match = /^([0-9a-f]{32})\.json\.next$/u.exec(name);
+  if (match === null) return false;
+  const nextPath = join(workspace.transactions, name);
+  const nextBytes = await boundedRegularBytes(nextPath, 64 * 1024);
+  let next;
+  try { next = JSON.parse(nextBytes); } catch { pathFail('CRASH_REMNANT'); }
+  if (!validRecord(next) || next.operation !== 'write-stream' || next.id !== match[1]
+    || !nextBytes.equals(recordBytes(next))) pathFail('CRASH_REMNANT');
+  const currentPath = join(workspace.transactions, `${match[1]}.json`);
+  let currentBytes;
+  try { currentBytes = await boundedRegularBytes(currentPath, 64 * 1024); }
+  catch (error) { if (error?.code !== 'ENOENT') throw error; }
+  if (currentBytes === undefined) {
+    if (next.state !== 'planned') pathFail('CRASH_REMNANT');
+  } else {
+    let current;
+    try { current = JSON.parse(currentBytes); } catch { pathFail('CRASH_REMNANT'); }
+    if (!currentBytes.equals(recordBytes(current)) || !validStreamRecordSuccessor(current, next)) {
+      pathFail('CRASH_REMNANT');
+    }
+  }
+  await rm(nextPath);
+  return true;
+}
+
 async function inspectCrashRemnantsInternal(workspace, options = {}) {
   assertWorkspaceHandle(workspace);
   await assertWorkspaceDirectories(workspace);
   const maximum = options.maxRemnants ?? DEFAULT_MAX_REMNANTS;
   if (!Number.isSafeInteger(maximum) || maximum < 0 || maximum > 100_000) pathFail('LIMIT_EXCEEDED', undefined, { resource: 'remnants' });
-  const directoryNames = (await readdir(workspace.transactions)).sort();
+  let directoryNames = (await readdir(workspace.transactions)).sort();
   if (directoryNames.length > maximum * 4 + 16) pathFail('LIMIT_EXCEEDED', undefined, { resource: 'remnants' });
+  let reconciledTemporary = false;
+  for (const name of directoryNames) {
+    if (await reconcileStreamRecordTemporary(workspace, name)) reconciledTemporary = true;
+  }
+  if (reconciledTemporary) {
+    await syncDirectory(workspace.transactions);
+    directoryNames = (await readdir(workspace.transactions)).sort();
+  }
   const names = directoryNames.filter((name) => name.endsWith('.json'));
   if (names.length > maximum) pathFail('LIMIT_EXCEEDED', undefined, { resource: 'remnants' });
   const remnants = []; const allowedNames = new Set(names); const renameTransactions = new Set();

@@ -40,6 +40,7 @@ const plan = await preflightWorkspaceMaterialization(workspace, {
 const expectedBytes = (await stat(sourcePath)).size;
 
 const result = await atomicWriteStream(workspace, canonical, createReadStream(sourcePath), {
+  createParents: true,
   plan,
   expectedBytes,
   expectedSha256,

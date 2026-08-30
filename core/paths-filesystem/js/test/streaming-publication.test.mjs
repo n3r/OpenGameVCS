@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { link, lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, symlink, writeFile } from 'node:fs/promises';
+import { link, lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, symlink, truncate, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -87,7 +87,12 @@ function runCrashChild(root, boundary) {
     await atomicWriteStream(workspace, 'asset.bin', source(), {
       maxBytes: 3, maxScratchBytes: 3, expectedBytes: 3,
       expectedSha256: createHash('sha256').update('new').digest('hex'), plan,
-      hooks: { boundary: (name) => { if (name === boundary) process.exit(71); } },
+      hooks: { boundary: (name, context) => {
+        const temporaryState = boundary.startsWith('after-record-temporary:')
+          ? boundary.slice('after-record-temporary:'.length)
+          : null;
+        if (name === boundary || name === 'after-record-temporary' && context.state === temporaryState) process.exit(71);
+      } },
     });
   `;
   return new Promise((resolvePromise, reject) => {
@@ -144,6 +149,46 @@ test('accepts a web ReadableStream and publishes executable intent', async t => 
   assert.deepEqual(await readFile(join(root, 'Tools/run.bin')), Buffer.from([1, 2, 3, 4]));
   if (process.platform !== 'win32') assert.notEqual((await lstat(join(root, 'Tools/run.bin'))).mode & 0o100, 0);
   assert.deepEqual(await readdir(handle.transactions), []);
+});
+
+test('syncs every newly created nested parent before publication', async t => {
+  const { root, handle } = await createWorkspace(t);
+  const expected = Buffer.from('nested');
+  const observed = [];
+  const bound = await plan(handle, 'a/b/asset.bin');
+  await atomicWriteStream(handle, 'a/b/asset.bin', chunks([expected]), {
+    createParents: true,
+    maxBytes: expected.length,
+    maxScratchBytes: expected.length,
+    expectedBytes: expected.length,
+    expectedSha256: createHash('sha256').update(expected).digest('hex'),
+    plan: bound,
+    hooks: { boundary(name, context) {
+      if (name === 'before-created-parent-sync') observed.push(context.index);
+    } },
+  });
+  assert.deepEqual(observed, [0, 1]);
+  assert.deepEqual(await readFile(join(root, 'a/b/asset.bin')), expected);
+
+  const failed = await createWorkspace(t);
+  const failedPlan = await plan(failed.handle, 'a/b/asset.bin');
+  await assert.rejects(atomicWriteStream(failed.handle, 'a/b/asset.bin', chunks([expected]), {
+    createParents: true,
+    maxBytes: expected.length,
+    maxScratchBytes: expected.length,
+    expectedBytes: expected.length,
+    expectedSha256: createHash('sha256').update(expected).digest('hex'),
+    plan: failedPlan,
+    hooks: { boundary(name, context) {
+      if (name === 'before-created-parent-sync' && context.index === 1) {
+        const error = new Error('injected parent-directory sync fault');
+        error.code = 'EIO';
+        throw error;
+      }
+    } },
+  }), code('UNSAFE_TARGET'));
+  await assert.rejects(readFile(join(failed.root, 'a/b/asset.bin')));
+  assert.deepEqual(await readdir(failed.handle.transactions), []);
 });
 
 test('copies each yielded view before the producer can mutate it', async t => {
@@ -220,6 +265,39 @@ test('capability drift fails before stage creation and is rechecked after source
     plan: noHardlinkPlan, expected: Buffer.from('new'),
   }), code('CAPABILITY_UNAVAILABLE'));
   assert.equal(await readFile(join(root, 'replace.bin'), 'utf8'), 'old');
+  assert.deepEqual(await readdir(handle.transactions), []);
+
+  let current = measured;
+  const finalProbe = async () => current;
+  const finalPlan = await plan(handle, 'final.bin', {
+    capabilities: measured,
+    capabilityProbe: finalProbe,
+  });
+  await assert.rejects(publish(handle, 'final.bin', chunks(['new']), {
+    plan: finalPlan,
+    hooks: { boundary(name) {
+      if (name === 'before-publish') {
+        current = Object.freeze({ ...measured, atomicReplace: false });
+      }
+    } },
+  }), code('CAPABILITY_UNAVAILABLE'));
+  await assert.rejects(readFile(join(root, 'final.bin')));
+  assert.deepEqual(await readdir(handle.transactions), []);
+});
+
+test('the public maxBytes option also bounds observation of a large prior target', async t => {
+  const { root, handle } = await createWorkspace(t);
+  const target = join(root, 'asset.bin');
+  await seed(handle, 'asset.bin', Buffer.from('old'));
+  const priorBytes = 64 * 1024 * 1024 + 1;
+  await truncate(target, priorBytes);
+  const expected = Buffer.from('new');
+  await publish(handle, 'asset.bin', chunks([expected]), {
+    maxBytes: priorBytes,
+    maxScratchBytes: expected.length,
+    expected,
+  });
+  assert.deepEqual(await readFile(target), expected);
   assert.deepEqual(await readdir(handle.transactions), []);
 });
 
@@ -397,14 +475,13 @@ test('revalidates the rollback link after the final caller hook', async t => {
       if (name !== 'before-publish') return;
       const backup = (await readdir(handle.transactions)).find((entry) => entry.endsWith('.backup'));
       assert.ok(backup);
-      await rm(join(handle.transactions, backup));
-      await writeFile(join(handle.transactions, backup), 'forged');
+      const backupPath = join(handle.transactions, backup);
+      await rename(backupPath, `${backupPath}.displaced`);
+      await writeFile(backupPath, 'forged');
     } },
   }), code('ATOMIC_REPLACE_FAILED'));
   assert.equal(await readFile(join(root, 'asset.bin'), 'utf8'), 'old');
-  const [remnant] = await inspectCrashRemnants(handle);
-  assert.equal(remnant.operation, 'write-stream');
-  assert.equal(remnant.state, 'staged');
+  await assert.rejects(inspectCrashRemnants(handle), code('CRASH_REMNANT'));
 });
 
 test('rejects a malformed write-stream crash record before recovery', async t => {
@@ -439,4 +516,126 @@ test('post-commit observer failure preserves durable success and a recoverable c
   assert.equal(remnant.state, 'committed');
   assert.equal((await rollbackCrashRemnant(handle, remnant.id)).action, 'finalized');
   assert.deepEqual(await readdir(handle.transactions), []);
+});
+
+test('durable record transitions bind recovery state before cancellation is observed', async t => {
+  for (const state of ['planned', 'staged', 'published', 'committed']) {
+    const { root, handle } = await createWorkspace(t);
+    await seed(handle, 'asset.bin', Buffer.from('old'));
+    const expected = Buffer.from('new');
+    const controller = new AbortController();
+    const result = publish(handle, 'asset.bin', chunks([expected]), {
+      expected,
+      signal: controller.signal,
+      hooks: { boundary(name, context) {
+        if (name === 'after-durable-record' && context.state === state) controller.abort();
+      } },
+    });
+    if (state === 'committed') {
+      const committed = await result;
+      assert.equal(committed.sha256, createHash('sha256').update(expected).digest('hex'));
+      assert.deepEqual(await readFile(join(root, 'asset.bin')), expected);
+      const [remnant] = await inspectCrashRemnants(handle);
+      assert.equal(remnant.state, 'committed');
+      assert.equal((await rollbackCrashRemnant(handle, remnant.id)).action, 'finalized');
+    } else {
+      await assert.rejects(result, code('IO_ERROR'));
+      assert.equal(await readFile(join(root, 'asset.bin'), 'utf8'), 'old');
+    }
+    assert.deepEqual(await readdir(handle.transactions), []);
+  }
+});
+
+test('record directory-sync faults preserve exact restart recovery state', async t => {
+  for (const state of ['planned', 'staged', 'published', 'committed']) {
+    const { root, handle } = await createWorkspace(t);
+    await seed(handle, 'asset.bin', Buffer.from('old'));
+    const expected = Buffer.from('new');
+    const result = publish(handle, 'asset.bin', chunks([expected]), {
+      expected,
+      hooks: { boundary(name, context) {
+        if (name !== 'before-record-directory-sync' || context.state !== state) return;
+        const error = new Error('injected transaction-directory sync fault');
+        error.code = 'EIO';
+        throw error;
+      } },
+    });
+    await assert.rejects(result, code('ATOMIC_REPLACE_FAILED'));
+    const [remnant] = await inspectCrashRemnants(handle);
+    assert.equal(remnant.state, state);
+    if (state === 'committed') {
+      assert.deepEqual(await readFile(join(root, 'asset.bin')), expected);
+      assert.equal((await rollbackCrashRemnant(handle, remnant.id)).action, 'finalized');
+    } else {
+      assert.equal((await rollbackCrashRemnant(handle, remnant.id)).action, 'rolled-back');
+      assert.equal(await readFile(join(root, 'asset.bin'), 'utf8'), 'old');
+    }
+    assert.deepEqual(await readdir(handle.transactions), []);
+  }
+});
+
+test('recovery is idempotent when interrupted after restoring the prior target', async t => {
+  const { root, handle } = await createWorkspace(t);
+  await seed(handle, 'asset.bin', Buffer.from('old'));
+  const crashed = await runCrashChild(root, 'before-parent-sync');
+  assert.equal(crashed.status, 71, crashed.stderr);
+  const [remnant] = await inspectCrashRemnants(handle);
+  const recordPath = join(handle.transactions, `${remnant.id}.json`);
+  const record = JSON.parse(await readFile(recordPath, 'utf8'));
+  const backupPath = join(handle.transactions, record.backup);
+  await rename(backupPath, join(root, 'asset.bin'));
+  await assert.rejects(readFile(backupPath));
+  assert.equal(await readFile(join(root, 'asset.bin'), 'utf8'), 'old');
+  assert.equal((await rollbackCrashRemnant(handle, remnant.id)).action, 'rolled-back');
+  assert.deepEqual(await readdir(handle.transactions), []);
+
+  const created = await createWorkspace(t);
+  const createdCrash = await runCrashChild(created.root, 'after-record');
+  assert.equal(createdCrash.status, 71, createdCrash.stderr);
+  const [createdRemnant] = await inspectCrashRemnants(created.handle);
+  const createdRecordPath = join(created.handle.transactions, `${createdRemnant.id}.json`);
+  const createdRecord = JSON.parse(await readFile(createdRecordPath, 'utf8'));
+  await rm(join(created.handle.transactions, createdRecord.stage));
+  assert.equal((await rollbackCrashRemnant(created.handle, createdRemnant.id)).action, 'rolled-back');
+  assert.deepEqual(await readdir(created.handle.transactions), []);
+});
+
+test('inspection removes only exact pre-rename stream-record temporaries', async t => {
+  const previousState = {
+    planned: null,
+    staged: 'planned',
+    published: 'staged',
+    committed: 'published',
+  };
+  for (const state of Object.keys(previousState)) {
+    const { root, handle } = await createWorkspace(t);
+    await seed(handle, 'asset.bin', Buffer.from('old'));
+    const crashed = await runCrashChild(root, `after-record-temporary:${state}`);
+    assert.equal(crashed.status, 71, `${state}: ${crashed.stderr}`);
+    assert.ok((await readdir(handle.transactions)).some((name) => name.endsWith('.json.next')));
+    const remnants = await inspectCrashRemnants(handle);
+    assert.ok(!(await readdir(handle.transactions)).some((name) => name.endsWith('.json.next')));
+    if (previousState[state] === null) {
+      assert.deepEqual(remnants, []);
+      assert.equal(await readFile(join(root, 'asset.bin'), 'utf8'), 'old');
+    } else {
+      assert.equal(remnants.length, 1);
+      assert.equal(remnants[0].state, previousState[state]);
+      assert.equal((await rollbackCrashRemnant(handle, remnants[0].id)).action, 'rolled-back');
+      assert.equal(await readFile(join(root, 'asset.bin'), 'utf8'), 'old');
+    }
+    assert.deepEqual(await readdir(handle.transactions), []);
+  }
+
+  const malformed = await createWorkspace(t);
+  await seed(malformed.handle, 'asset.bin', Buffer.from('old'));
+  const malformedCrash = await runCrashChild(malformed.root, 'after-record-temporary:planned');
+  assert.equal(malformedCrash.status, 71, malformedCrash.stderr);
+  const [nextName] = (await readdir(malformed.handle.transactions))
+    .filter((name) => name.endsWith('.json.next'));
+  assert.ok(nextName);
+  const nextPath = join(malformed.handle.transactions, nextName);
+  const next = JSON.parse(await readFile(nextPath, 'utf8'));
+  await writeFile(nextPath, JSON.stringify({ ...next, unknown: true }));
+  await assert.rejects(inspectCrashRemnants(malformed.handle), code('CRASH_REMNANT'));
 });
