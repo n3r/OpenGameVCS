@@ -24,7 +24,7 @@ import {
 import { verifyChunkingSelectionBenchmarkBundle } from './verify-chunking-selection-benchmark-bundle.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..');
-const HOSTED_RECORD_PATH = join(ROOT, 'docs/evidence/OGVCS-007/github-actions-run-33328072458.json');
+const HOSTED_RECORD_PATH = join(ROOT, 'docs/evidence/OGVCS-007/github-actions-run-33339889106.json');
 const CHECKED_IN_BUNDLE_PATH = join(ROOT, 'docs/evidence/OGVCS-007/bounded-selection-bundle-2026-08-31');
 const CHECKED_IN_VALIDATION_PATH = join(ROOT, 'docs/evidence/OGVCS-007/bounded-selection-bundle-validation-2026-08-31.json');
 const WORKER_FIXTURE_PATH = join(ROOT, 'tools/fixtures/chunking-selection-benchmark-worker-fixture.mjs');
@@ -414,12 +414,15 @@ test('retained six-leg hosted reports match their run record and comparator', as
   assert.equal(record.schemaVersion, 'ogvcs.chunking/hosted-evidence/v1');
   assert.equal(record.status, 'bounded-current-source-passed');
   assert.equal(record.exactScaleExecuted, false);
-  assert.equal(record.workflow.runId, 33328072458);
-  assert.equal(record.sourceRevision, 'b098c3e2b8377fdf4cc2ec152e8a6b7b6f37f383');
+  assert.equal(record.workflow.runId, 33339889106);
+  assert.equal(record.sourceRevision, '244776c42866d5995407023a1bf3d17a39644eeb');
   assert.equal(record.jobs.length, 7);
   assert.equal(record.jobs.every(({ conclusion }) => conclusion === 'success'), true);
+  assert.equal(record.parallelMatrix.boundedJobs, 6);
+  assert.equal(record.parallelMatrix.scaleJobs, 0);
+  assert.ok(record.parallelMatrix.startSpanSeconds <= 2);
   assert.equal(record.artifacts.length, 6);
-  assert.equal(record.remainingGates.some((gate) => gate.includes('production acceptor')), true);
+  assert.equal(record.remainingGates.some((gate) => gate.includes('OGVCS-008 service adoption')), true);
   assert.equal(record.remainingGates.some((gate) => gate.includes('completion/release campaign')), true);
 
   const expectedArtifactNames = [

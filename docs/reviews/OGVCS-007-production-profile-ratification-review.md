@@ -492,11 +492,17 @@ seven samples, seven summaries, five OGVCS-005 threshold evaluations, observed
 whole-process peaks from 105,201,664 through 439,959,552 bytes, and
 `exactScaleExecuted: false`. Both public verifiers pass.
 
+Bounded workflow run
+[33339889106](https://github.com/n3r/OpenGameVCS/actions/runs/33339889106)
+then passed exact hosted revision `244776c42866d5995407023a1bf3d17a39644eeb`:
+JavaScript and Rust each passed on Linux, macOS, and Windows, and the aggregate
+job matched all nine cases across all six reports. All six matrix jobs started
+within two seconds, and the workflow contained no scale job.
+
 This refresh supersedes the prior section only for current source/evidence
 identity. It does not change ADR or registry lifecycle state. OGVCS-008
-production adoption, exact-candidate six-leg hosted replay, and the final
-100-GiB AC-03 campaign remain required before ratification or writer
-enablement. The complete requirement matrix and exact additive row,
-regeneration order, enablement, and rollback steps are in the
+production adoption and the final 100-GiB AC-03 campaign remain required before
+ratification or writer enablement. The complete requirement matrix and exact
+additive row, regeneration order, enablement, and rollback steps are in the
 [R1 completion audit](OGVCS-007-r1-completion-audit.md) and
 [production-profile lifecycle runbook](../runbooks/OGVCS-007-production-profile-lifecycle.md).

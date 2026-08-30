@@ -105,7 +105,8 @@ Chunk algorithm is immutable per manifest version. New algorithms are read-befor
 - Test and benchmark results: the
   [current bounded evidence packet](../../docs/evidence/OGVCS-007/README.md)
   and [requirement matrix](../../docs/reviews/OGVCS-007-r1-completion-audit.md#requirement-matrix)
-  retain the completed non-scale results. AC-03 remains open.
+  retain the completed non-scale results, including current-source
+  JavaScript/Rust replay on Linux, macOS, and Windows. AC-03 remains open.
 - Security/reliability review: the
   [R1 completion audit](../../docs/reviews/OGVCS-007-r1-completion-audit.md)
   records hostile receipt, registry, publication, resource, and cancellation
@@ -115,6 +116,5 @@ Chunk algorithm is immutable per manifest version. New algorithms are read-befor
   fixes the exact future row, regeneration order, read-before-write deployment,
   and rollback procedure without applying them.
 - Rollout result: not complete. ADR-0016 remains Proposed, the shared profile
-  row is absent, production writes are disabled, exact-candidate hosted replay
-  and OGVCS-008 adoption remain open, and the 100-GiB run is the final
-  acceptance gate.
+  row is absent, production writes are disabled, OGVCS-008 adoption remains
+  open, and the 100-GiB run is the final acceptance gate.

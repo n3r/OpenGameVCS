@@ -1,7 +1,7 @@
 # OGVCS-007 bounded seven-workload authenticated selection evidence
 
 **Evidence date:** 2026-08-31
-**Status:** Current-source bounded authenticated evidence retained; profile ratification and the final-scale gate remain blocked
+**Status:** Current-source bounded authenticated evidence retained; production adoption, profile ratification, and the final-scale gate remain blocked
 
 This packet retains the bounded OGVCS-007 selection evidence used to close the
 P0-2 authenticated-benchmark finding without attempting the separately deferred
@@ -49,28 +49,26 @@ records
 Both record the same 14-file packed implementation identity
 `b2c779645ffd48a9c52b90dcc255224b393779160885821e5d4ebbac83d0d288`.
 
-## Prior bounded hosted implementation proof
+## Current bounded hosted implementation proof
 
-[Workflow run 33328072458](https://github.com/n3r/OpenGameVCS/actions/runs/33328072458)
-passed the receipt-enabled source revision
-[`b098c3e2b8377fdf4cc2ec152e8a6b7b6f37f383`](https://github.com/n3r/OpenGameVCS/commit/b098c3e2b8377fdf4cc2ec152e8a6b7b6f37f383).
-JavaScript and Rust each passed on Linux, macOS, and Windows; the final job
-matched all nine bounded cases across all six reports. The exact run, job, and
-artifact identities are retained in
-[`github-actions-run-33328072458.json`](github-actions-run-33328072458.json).
+[Workflow run 33339889106](https://github.com/n3r/OpenGameVCS/actions/runs/33339889106)
+passed source revision
+[`244776c42866d5995407023a1bf3d17a39644eeb`](https://github.com/n3r/OpenGameVCS/commit/244776c42866d5995407023a1bf3d17a39644eeb),
+which contains the production-boundary code commit `00ed027` and this bounded
+authenticated packet. JavaScript and Rust each passed on Linux, macOS, and
+Windows; all six matrix jobs started within two seconds, and the final job
+matched all nine bounded cases across all six reports. The exact run, job,
+timing, and artifact identities are retained in
+[`github-actions-run-33339889106.json`](github-actions-run-33339889106.json).
 
-This run predates the current production-boundary source commit. It remains
-valid proof of the unchanged manifest semantics and the six-leg workflow, but
-is not presented as exact-source three-OS proof for `00ed027`. A fresh hosted
-run of the final branch is required before the lifecycle cut.
-
-The run record retains the inner byte count and SHA-256 for each of the six
-platform artifacts. All three JavaScript inner hashes match, as do all three
-Rust inner hashes. One deduplicated exact report blob per language is retained
-under
-[`bounded-conformance-33328072458/`](bounded-conformance-33328072458/) because
-the downloadable artifacts expire on 2026-09-13. The hosted matrix was bounded
-and did not run the 100-GiB campaign.
+The run record retains the archive and inner-report byte counts and SHA-256
+digests for all six artifacts. All three JavaScript reports are byte-identical,
+as are all three Rust reports. They are also byte-identical to the already
+retained deterministic report blobs under
+[`bounded-conformance-33328072458/`](bounded-conformance-33328072458/), so the
+new record reuses those two checked-in blobs instead of duplicating them. The
+hosted matrix was bounded, declares zero scale jobs, and did not run the
+100-GiB campaign.
 
 ## What this evidence proves
 
@@ -121,9 +119,6 @@ The remaining open boundaries from the review are:
 - P0-1 deployment boundary: OGVCS-008 must invoke the package-owned production
   boundary before a `ContentManifestV1` lifecycle record can become available;
   that integration proof is not part of this local evidence packet.
-- Current-source hosted matrix: Linux, macOS, and Windows must replay the final
-  source commit and aggregate all six JavaScript/Rust reports before the
-  lifecycle cut.
 - Generated registry/production lifecycle: portable-encoder regeneration
   mechanically refreshed the chunking, benchmark, repository-metadata, and
   identity manifest/pin chain. The OGVCS-002 profile registry, production-write
