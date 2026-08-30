@@ -14,10 +14,11 @@ stable file identity, atomic snapshots, large-file streaming, explicit locking,
 selective materialization, and open versioned formats.
 
 > [!IMPORTANT]
-> This repository currently delivers the **R0 engineering foundation**, not a
-> complete end-user VCS. It does not yet include the production repository
-> service, native workspace client, submit/sync workflow, or lock service; those
-> begin in R1. See the [delivery roadmap](prd/ROADMAP.md) for the exact boundary.
+> The **R0 engineering foundation is complete** and **R1 Developer Preview is
+> now under active implementation**. This is not yet a complete end-user VCS:
+> the production repository service, native workspace client, atomic submit,
+> selective sync, and lock workflow have not passed the R1 release gate. See the
+> [delivery roadmap](prd/ROADMAP.md) for the exact boundary.
 
 ## Current status
 
@@ -27,10 +28,33 @@ and filesystem contracts, the public protocol baseline, generated bindings,
 and the benchmark/fault harness. Their source-bound conformance evidence is
 retained under [`docs/evidence/`](docs/evidence/).
 
+R1 implementation is proceeding in parallel behind versioned contracts. The
+repository currently contains candidate work for bounded staged workspace
+publication, chunking/content manifests, and repository metadata. Object
+transfer and identity/policy are being security-reviewed before integration.
+Every R1 PRD remains in [`prd/todo/`](prd/todo/) until its implementation and
+retained evidence satisfy the PRD's completion criteria.
+
 The broader R0 release gate also calls for external design-partner confirmation
 that the synthetic Unreal- and Unity-like profiles cover material production
 workflows. Completion of the repository's engineering artifacts does not claim
 that external program prerequisite has occurred.
+
+### R1 work in progress
+
+| Area | Current boundary | PRD |
+|---|---|---|
+| Repository metadata | Versioned metadata contract and PostgreSQL schema candidate; transactional adapter and live database evidence remain under review | [OGVCS-006](prd/todo/OGVCS-006-repository-metadata-snapshot-service.md) |
+| Workspace publication | Bounded, journaled staged-stream publication implemented and passing the three-OS bounded matrix; final lifecycle evidence remains open | [OGVCS-046](prd/todo/OGVCS-046-bounded-staged-workspace-publication.md) |
+| Chunking and manifests | Candidate language-neutral contract plus JavaScript/Rust implementations; production profile ratification and final scale evidence remain open | [OGVCS-007](prd/todo/OGVCS-007-chunking-content-manifest-engine.md) |
+| Object transfer | Resumable-transfer candidate is in correctness and security hardening; it is not integrated into the supported root workspace yet | [OGVCS-008](prd/todo/OGVCS-008-object-storage-transfer-service.md) |
+| Identity and policy | Deny-overrides policy/audit candidate is in independent security review; production stores and OIDC integration remain open | [OGVCS-009](prd/todo/OGVCS-009-identity-path-authorization-audit.md) |
+
+The next integration milestone is a security-reviewed metadata, object-transfer,
+and authorization service boundary. That unlocks atomic submit (OGVCS-010) and
+the native workspace client (OGVCS-011). The large 1 TiB/100 GiB campaigns are
+kept out of pull-request CI and run only at the scheduled final/major-release
+gate.
 
 ## What is included
 
