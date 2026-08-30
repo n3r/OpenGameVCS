@@ -45,6 +45,7 @@ test('bounded chunking selection report covers all seven workload classes and pa
   assert.equal(report.workloads.find(({ workloadId }) => workloadId === 'encrypted-random').compare.reusedBytes, '0');
   assert.equal(report.workloads.find(({ workloadId }) => workloadId === 'insertion').deltas.resynchronization.resynchronizationDistanceBytes, 218510);
   assert.equal(report.workloads.find(({ workloadId }) => workloadId === 'replacement').deltas.resynchronization.resynchronizationDistanceBytes, 895195);
+  assert.equal(report.workloads.some(({ verify }) => 'verificationReceipt' in verify), false);
   assert.deepEqual(report.sourceIdentity, {
     entryCount: report.sourceIdentity.entryCount,
     sourceSetSha256: report.sourceIdentity.sourceSetSha256,

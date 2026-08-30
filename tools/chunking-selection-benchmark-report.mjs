@@ -316,6 +316,8 @@ export async function buildChunkingSelectionReport(options = {}) {
       manifest: candidate.value.manifest.bytes,
       source,
     }));
+    const verificationSummary = { ...verification.value };
+    delete verificationSummary.verificationReceipt;
     const mutationStartByte = firstDifference(baseBytes, candidateBytes);
     const resynchronization = resynchronizationAfterMutation(base.value, candidate.value, mutationStartByte);
     const accounting = {
@@ -365,7 +367,7 @@ export async function buildChunkingSelectionReport(options = {}) {
       success: true,
       workloadId: definition.workloadId,
       verify: {
-        ...verification.value,
+        ...verificationSummary,
         verifyMicroseconds: verification.elapsedMicroseconds,
         throughputBytesPerSecond: throughputBytesPerSecond(candidate.value.logicalLength, verification.elapsedMicroseconds),
       },
