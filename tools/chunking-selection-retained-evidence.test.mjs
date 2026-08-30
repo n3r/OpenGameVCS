@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
@@ -8,6 +9,7 @@ import { ProtocolSchemaValidator } from '@opengamevcs/protocol-baseline';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const REPORT_PATH = join(ROOT, 'docs/evidence/OGVCS-007/bounded-selection-report-2026-08-30.json');
+const HOSTED_RECORD_PATH = join(ROOT, 'docs/evidence/OGVCS-007/github-actions-run-33328072458.json');
 const SPEC_ROOT = join(ROOT, 'spec/chunking-manifest/v1');
 const PACKAGE_ROOT = join(ROOT, 'core/chunking-manifest/js');
 
@@ -105,4 +107,40 @@ test('retained chunking selection report authenticates its identities and self-h
   assert.equal(report.exactScaleExecuted, false);
   assert.equal(report.summary.thresholdFailureCount, report.thresholdEvaluations.filter(({ status }) => status === 'failed').length);
   assert.equal(report.overallStatus, report.summary.thresholdFailureCount === 0 ? 'passed' : 'failed');
+});
+
+test('retained six-leg hosted reports match their run record and comparator', async () => {
+  const record = JSON.parse(await readFile(HOSTED_RECORD_PATH, 'utf8'));
+  assert.equal(record.schemaVersion, 'ogvcs.chunking/hosted-evidence/v1');
+  assert.equal(record.status, 'bounded-current-source-passed');
+  assert.equal(record.exactScaleExecuted, false);
+  assert.equal(record.workflow.runId, 33328072458);
+  assert.equal(record.sourceRevision, 'b098c3e2b8377fdf4cc2ec152e8a6b7b6f37f383');
+  assert.equal(record.jobs.length, 7);
+  assert.equal(record.jobs.every(({ conclusion }) => conclusion === 'success'), true);
+  assert.equal(record.artifacts.length, 6);
+
+  const reports = new Map();
+  for (const retained of record.retainedReports) {
+    const path = join(ROOT, 'docs/evidence/OGVCS-007', retained.path);
+    const bytes = await readFile(path);
+    assert.equal(bytes.length, retained.bytes);
+    assert.equal(sha256(bytes), retained.sha256);
+    const report = JSON.parse(bytes);
+    assert.equal(report.schemaVersion, 'ogvcs.chunking/bounded-conformance-report/v1');
+    assert.equal(report.profile, 'chunking.opengamevcs/gear-fastcdc-1m@1');
+    assert.deepEqual(retained.identicalAcross, ['Linux', 'macOS', 'Windows']);
+    reports.set(retained.language, path);
+  }
+
+  const javascript = reports.get('javascript');
+  const rust = reports.get('rust');
+  assert.ok(javascript);
+  assert.ok(rust);
+  const comparison = spawnSync(process.execPath, [
+    join(ROOT, 'core/chunking-manifest/js/scripts/compare-bounded-reports.mjs'),
+    javascript, javascript, javascript, rust, rust, rust,
+  ], { cwd: ROOT, encoding: 'utf8' });
+  assert.equal(comparison.status, 0, comparison.stderr);
+  assert.equal(comparison.stdout.trim(), record.comparison.result);
 });

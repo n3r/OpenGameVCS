@@ -30,6 +30,22 @@ OGVCS-005 verifier receipt, and does not record observed whole-process peak
 memory. It therefore cannot close the authenticated OGVCS-005 bundle finding
 from P0-2 on its own.
 
+## Bounded hosted implementation proof
+
+[Workflow run 33328072458](https://github.com/n3r/OpenGameVCS/actions/runs/33328072458)
+passed the receipt-enabled source revision
+[`b098c3e2b8377fdf4cc2ec152e8a6b7b6f37f383`](https://github.com/n3r/OpenGameVCS/commit/b098c3e2b8377fdf4cc2ec152e8a6b7b6f37f383).
+JavaScript and Rust each passed on Linux, macOS, and Windows; the final job
+matched all nine bounded cases across all six reports. The exact run, job, and
+artifact identities are retained in
+[`github-actions-run-33328072458.json`](github-actions-run-33328072458.json).
+
+The three JavaScript reports were byte-identical, as were the three Rust
+reports. One exact report per language is retained under
+[`bounded-conformance-33328072458/`](bounded-conformance-33328072458/) because
+the downloadable artifacts expire on 2026-09-13. The hosted matrix was bounded
+and did not run the 100-GiB campaign.
+
 ## What this evidence proves
 
 - A bounded seven-workload corpus and retained local report now exist in source

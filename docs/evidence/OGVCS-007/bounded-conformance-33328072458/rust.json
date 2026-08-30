@@ -1,0 +1,378 @@
+{
+  "cacheKey": {
+    "domain": "OpenGameVCS chunk cache key v1\u0000",
+    "version": "ogvcs:chunk-cache:v1:sha256"
+  },
+  "cases": [
+    {
+      "boundaries": [],
+      "caseId": "empty",
+      "chunks": [],
+      "class": "empty",
+      "logicalLength": 0,
+      "manifestHex": "a7000101020280100011a20001015820e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b85512a300746368756e6b696e672e6f70656e67616d65766373016f676561722d666173746364632d316d02011380",
+      "manifestObjectId": "ogvcs:v1:content-manifest:sha256:8784d119ddf8f8859dbe8a3fc265cf07d6d3d953b5d20d29573eb60c21ef5bed",
+      "partCount": 0,
+      "providerReads": 0,
+      "repeatedBytes": "0",
+      "uniqueBytes": "0",
+      "wholeFileSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "boundaries": [
+        12
+      ],
+      "caseId": "tiny-ascii",
+      "chunks": [
+        {
+          "cacheKey": "ogvcs:chunk-cache:v1:sha256:347ff27524527d52023c28cfd4ae9c31c4c07a43845e6e35006b0102070bfc08",
+          "length": 12,
+          "objectId": "ogvcs:v1:chunk:sha256:944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5"
+        }
+      ],
+      "class": "whole",
+      "logicalLength": 12,
+      "manifestHex": "a7000101020280100c11a2000101582036fcc2e9442be1071c275604af6e41bd93875c743dc2fdaa6037662df74c589412a300746368756e6b696e672e6f70656e67616d65766373016f676561722d666173746364632d316d02011381a200a4000101010201035820944c987f358da73dedecbaa0599a5fcc606c407992708f0c0f6c5f7df6aac5c5010c",
+      "manifestObjectId": "ogvcs:v1:content-manifest:sha256:e8f5b807d1bbe151218d49786347b0811276b841cb1bf2b98d34843f8f12170f",
+      "partCount": 1,
+      "providerReads": 1,
+      "repeatedBytes": "0",
+      "uniqueBytes": "12",
+      "wholeFileSha256": "36fcc2e9442be1071c275604af6e41bd93875c743dc2fdaa6037662df74c5894"
+    },
+    {
+      "boundaries": [
+        262144
+      ],
+      "caseId": "small-maximum",
+      "chunks": [
+        {
+          "cacheKey": "ogvcs:chunk-cache:v1:sha256:43d2dffe7ae8feefe0ce9f2ea9d90b9c75d318236eafd47a74478b8cb9e6a3b7",
+          "length": 262144,
+          "objectId": "ogvcs:v1:chunk:sha256:aa03b9bf2c84a2fa483225c6379204626cbca2b78899e52fa7b144f60f5f9252"
+        }
+      ],
+      "class": "whole",
+      "logicalLength": 262144,
+      "manifestHex": "a7000101020280101a0004000011a20001015820b9b8561490d31103a2783ddcbf67ffcb6aa02b1aa71a9800aad615aeb20c8c5512a300746368756e6b696e672e6f70656e67616d65766373016f676561722d666173746364632d316d02011381a200a4000101010201035820aa03b9bf2c84a2fa483225c6379204626cbca2b78899e52fa7b144f60f5f9252011a00040000",
+      "manifestObjectId": "ogvcs:v1:content-manifest:sha256:e10f6ee679b3172ae92695e2eaf4d7123ca0fe8208f1573c6c492cee1eb0f1d5",
+      "partCount": 1,
+      "providerReads": 1,
+      "repeatedBytes": "0",
+      "uniqueBytes": "262144",
+      "wholeFileSha256": "b9b8561490d31103a2783ddcbf67ffcb6aa02b1aa71a9800aad615aeb20c8c55"
+    },
+    {
+      "boundaries": [
+        1597841,
+        2163826,
+        2562055,
+        3651150,
+        4610636,
+        5754570,
+        6069664,
+        6291456
+      ],
+      "caseId": "counter-a-six-mib",
+      "chunks": [
+        {
+          "cacheKey": "ogvcs:chunk-cache:v1:sha256:ceaeec8ee582864878c9d9712b67aba29ee196a0ac604f488e15e890c18cd75b",
+          "length": 1597841,
+          "objectId": "ogvcs:v1:chunk:sha256:6ff6e0885fbd24f6196af87e3909126761deca97ed992bbe8487202d25e27dca"
+        },
+        {
+          "cacheKey": "ogvcs:chunk-cache:v1:sha256:cf2705ca4363398d91e79043ce2081b5a4c3d4a042c998d084fa690a1f49ecec",
+          "length": 565985,
+          "objectId": "ogvcs:v1:chunk:sha256:1bf7293946372bc19004e1e9cddc0119fa76a708f87b719344477445d77f2479"
+        },
+        {
+          "cacheKey": "ogvcs:chunk-cache:v1:sha256:1dba329f0682aac9f5a0e1bf18e0c905e09e49c71de433a8c0d0c1d9603d4937",
+          "length": 398229,
+          "objectId": "ogvcs:v1:chunk:sha256:8022232c2307c9f1010b44be58955f5c27c29c1f32b6d7de66bd39dc0a3bc394"
+        },
+        {
+          "cacheKey": "ogvcs:chunk-cache:v1:sha256:8a48d85f2feacb8302b732c16577677f9ef85a712c6f72ab01ee4aeff193fd3e",
+          "length": 1089095,
+          "objectId": "ogvcs:v1:chunk:sha256:045db5e1a558b0404f17b680a16de9bde81ba9a45acd352476cd5cb236803414"
+        },
+        {
+          "cacheKey": "ogvcs:chunk-cache:v1:sha256:992c165e8ca1993e4f452c9177774c71e921d5837f37b388a1dc7169aae6a36c",
+          "length": 959486,
+          "objectId": "ogvcs:v1:chunk:sha256:28d460f7628b18109d2e0bbacd5701991c98ef1bfb715b096ca91b2d6e8422fe"
+        },
+        {
+          "cacheKey": "ogvcs:chunk-cache:v1:sha256:59f24cef0a44ad92dc490d0e512aacf6266e808c79bf3323041f4539b88fee61",
+          "length": 1143934,
+          "objectId": "ogvcs:v1:chunk:sha256:5820d5a02ce1094219f93c21ab6bca5d4fc3255a87e087da01c852d596c95f7f"
+        },
+        {
+          "cacheKey": "ogvcs:chunk-cache:v1:sha256:8bb9485a1f573e9a2b8c7ba872d014ca092a6a02809e081654f4771da007f64d",
+          "length": 315094,
+          "objectId": "ogvcs:v1:chunk:sha256:47d12d1e62d1a72d1e9b6cba5aef9cd6739dd12d978e5f59ae7cd11a88727e61"
+        },
+        {
+          "cacheKey": "ogvcs:chunk-cache:v1:sha256:e920479efdbc99d8c79ed12200079590eb917a645aadb45b967da5ec58a5c0a6",
+          "length": 221792,
+          "objectId": "ogvcs:v1:chunk:sha256:1f467e283e9c1bccee8e5f7577151bb7f82a008b4884d35df0a76fbcb48fe49e"
+        }
+      ],
+      "class": "cdc-1m",
+      "logicalLength": 6291456,
+      "manifestHex": "a7000101020280101a0060000011a200010158203a9241132a79baf240f82ea57b6e2ab793f6203271388f4d3fda78fade9383f112a300746368756e6b696e672e6f70656e67616d65766373016f676561722d666173746364632d316d02011388a200a40001010102010358206ff6e0885fbd24f6196af87e3909126761deca97ed992bbe8487202d25e27dca011a00186191a200a40001010102010358201bf7293946372bc19004e1e9cddc0119fa76a708f87b719344477445d77f2479011a0008a2e1a200a40001010102010358208022232c2307c9f1010b44be58955f5c27c29c1f32b6d7de66bd39dc0a3bc394011a00061395a200a4000101010201035820045db5e1a558b0404f17b680a16de9bde81ba9a45acd352476cd5cb236803414011a00109e47a200a400010101020103582028d460f7628b18109d2e0bbacd5701991c98ef1bfb715b096ca91b2d6e8422fe011a000ea3fea200a40001010102010358205820d5a02ce1094219f93c21ab6bca5d4fc3255a87e087da01c852d596c95f7f011a0011747ea200a400010101020103582047d12d1e62d1a72d1e9b6cba5aef9cd6739dd12d978e5f59ae7cd11a88727e61011a0004ced6a200a40001010102010358201f467e283e9c1bccee8e5f7577151bb7f82a008b4884d35df0a76fbcb48fe49e011a00036260",
+      "manifestObjectId": "ogvcs:v1:content-manifest:sha256:e0b75c2bfe33beed28292eb52d53b596599c1379ad2e6688da6486ba8c190237",
+      "partCount": 8,
+      "providerReads": 8,
+      "repeatedBytes": "0",
+      "uniqueBytes": "6291456",
+      "wholeFileSha256": "3a9241132a79baf240f82ea57b6e2ab793f6203271388f4d3fda78fade9383f1"
+    },
+    {
+      "boundaries": [
+        1473077,
+        2824454,
+        4194304
+      ],
+      "caseId": "counter-b-four-mib",
+      "chunks": [
+        {
+          "cacheKey": "ogvcs:chunk-cache:v1:sha256:afbc1d5304e8a08f33193d8b983055a75db8585a80771a29af2d1989f8112256",
+          "length": 1473077,
+          "objectId": "ogvcs:v1:chunk:sha256:36afbfdfc5928a38a33fa91ec344652c6fa5413b10e44a0924126f7aa9591efa"
+        },
+        {
+          "cacheKey": "ogvcs:chunk-cache:v1:sha256:ffd031626e5010d9ab8762cb419ffb041eb6dc95efd5792cf940cd672a5e8233",
+          "length": 1351377,
+          "objectId": "ogvcs:v1:chunk:sha256:5d464789d67a87a3751b0628e334af9f47ad85ac55abd96de02d2e5901266d64"
+        },
+        {
+          "cacheKey": "ogvcs:chunk-cache:v1:sha256:0e74fb87c1442c73cf3cfdaea8a710ab2b5d479a93a9d2425185595fa1899df8",
+          "length": 1369850,
+          "objectId": "ogvcs:v1:chunk:sha256:86f387cfbd684772cee808b91a019767bd9b6c39342fcc16501473d36b7de9e8"
+        }
+      ],
+      "class": "cdc-1m",
+      "logicalLength": 4194304,
+      "manifestHex": "a7000101020280101a0040000011a20001015820d3386617d1c10ab03d6fc54edb62db2fb286ec70325b1b018dfcdd1ef96771e712a300746368756e6b696e672e6f70656e67616d65766373016f676561722d666173746364632d316d02011383a200a400010101020103582036afbfdfc5928a38a33fa91ec344652c6fa5413b10e44a0924126f7aa9591efa011a00167a35a200a40001010102010358205d464789d67a87a3751b0628e334af9f47ad85ac55abd96de02d2e5901266d64011a00149ed1a200a400010101020103582086f387cfbd684772cee808b91a019767bd9b6c39342fcc16501473d36b7de9e8011a0014e6fa",
+      "manifestObjectId": "ogvcs:v1:content-manifest:sha256:8f057b9bcd1ef1ac4ff160a91ac5170a9d2f24192b5fc4dde6b55a98f5064823",
+      "partCount": 3,
+      "providerReads": 3,
+      "repeatedBytes": "0",
+      "uniqueBytes": "4194304",
+      "wholeFileSha256": "d3386617d1c10ab03d6fc54edb62db2fb286ec70325b1b018dfcdd1ef96771e7"
+    },
+    {
+      "boundaries": [
+        2097152,
+        4194304,
+        5242880
+      ],
+      "caseId": "zero-five-mib",
+      "chunks": [
+        {
+          "cacheKey": "ogvcs:chunk-cache:v1:sha256:3fb42d4f2c7d0a5f2ee31aab4101b0da230dd6337d3dd6f67ac16b30e80ca806",
+          "length": 2097152,
+          "objectId": "ogvcs:v1:chunk:sha256:73557ee25a8babffe94c9bd0a862714d1f2dc7792327b683e675e35acd4cd0e3"
+        },
+        {
+          "cacheKey": "ogvcs:chunk-cache:v1:sha256:3fb42d4f2c7d0a5f2ee31aab4101b0da230dd6337d3dd6f67ac16b30e80ca806",
+          "length": 2097152,
+          "objectId": "ogvcs:v1:chunk:sha256:73557ee25a8babffe94c9bd0a862714d1f2dc7792327b683e675e35acd4cd0e3"
+        },
+        {
+          "cacheKey": "ogvcs:chunk-cache:v1:sha256:b8dd5f6049fcd2bdbf8fa287529cbcdf67ea848f26addfee963f60a345a2cacc",
+          "length": 1048576,
+          "objectId": "ogvcs:v1:chunk:sha256:b337755d40092b901c6fcf8b2187f260bbd4e1d7e9d075381ac2fa404e086a19"
+        }
+      ],
+      "class": "cdc-1m",
+      "logicalLength": 5242880,
+      "manifestHex": "a7000101020280101a0050000011a20001015820c036cbb7553a909f8b8877d4461924307f27ecb66cff928eeeafd569c3887e2912a300746368756e6b696e672e6f70656e67616d65766373016f676561722d666173746364632d316d02011383a200a400010101020103582073557ee25a8babffe94c9bd0a862714d1f2dc7792327b683e675e35acd4cd0e3011a00200000a200a400010101020103582073557ee25a8babffe94c9bd0a862714d1f2dc7792327b683e675e35acd4cd0e3011a00200000a200a4000101010201035820b337755d40092b901c6fcf8b2187f260bbd4e1d7e9d075381ac2fa404e086a19011a00100000",
+      "manifestObjectId": "ogvcs:v1:content-manifest:sha256:2db9e791afcdd5fc8fe5484871ce4131a14c161e10332e73fdd8593e03a2d2f6",
+      "partCount": 3,
+      "providerReads": 3,
+      "repeatedBytes": "2097152",
+      "uniqueBytes": "3145728",
+      "wholeFileSha256": "c036cbb7553a909f8b8877d4461924307f27ecb66cff928eeeafd569c3887e29"
+    },
+    {
+      "boundaries": [
+        2097152,
+        4194304,
+        5242880
+      ],
+      "caseId": "ff-five-mib",
+      "chunks": [
+        {
+          "cacheKey": "ogvcs:chunk-cache:v1:sha256:45ac3e4df75b2b9801062ab110cf67f6a97ad99012e5caf32800e33877e31d28",
+          "length": 2097152,
+          "objectId": "ogvcs:v1:chunk:sha256:2b51a8a1aaa06c89f51178c7ed2534167ff1437773090e666ca33da5eac6573f"
+        },
+        {
+          "cacheKey": "ogvcs:chunk-cache:v1:sha256:45ac3e4df75b2b9801062ab110cf67f6a97ad99012e5caf32800e33877e31d28",
+          "length": 2097152,
+          "objectId": "ogvcs:v1:chunk:sha256:2b51a8a1aaa06c89f51178c7ed2534167ff1437773090e666ca33da5eac6573f"
+        },
+        {
+          "cacheKey": "ogvcs:chunk-cache:v1:sha256:36de600fb771dab7c3572b6897a9d2c31284302a1a19ccd38eac9784e369dd9d",
+          "length": 1048576,
+          "objectId": "ogvcs:v1:chunk:sha256:ed4acf1978963df8882a7d6d4468d10e84d577a5bc3450dd6a0491d2ed9b35c0"
+        }
+      ],
+      "class": "cdc-1m",
+      "logicalLength": 5242880,
+      "manifestHex": "a7000101020280101a0050000011a2000101582016f34632ed5fc8556743bb4a5b403edd2cf9845372951b48914b61597a4a0ba712a300746368756e6b696e672e6f70656e67616d65766373016f676561722d666173746364632d316d02011383a200a40001010102010358202b51a8a1aaa06c89f51178c7ed2534167ff1437773090e666ca33da5eac6573f011a00200000a200a40001010102010358202b51a8a1aaa06c89f51178c7ed2534167ff1437773090e666ca33da5eac6573f011a00200000a200a4000101010201035820ed4acf1978963df8882a7d6d4468d10e84d577a5bc3450dd6a0491d2ed9b35c0011a00100000",
+      "manifestObjectId": "ogvcs:v1:content-manifest:sha256:6401956150d94ff2250d0ee5749b2cac47610d9be1fca8dd4a1b5f8b6276e670",
+      "partCount": 3,
+      "providerReads": 3,
+      "repeatedBytes": "2097152",
+      "uniqueBytes": "3145728",
+      "wholeFileSha256": "16f34632ed5fc8556743bb4a5b403edd2cf9845372951b48914b61597a4a0ba7"
+    },
+    {
+      "boundaries": [
+        327861,
+        1267086,
+        2642966,
+        3005661,
+        4242495,
+        5242880
+      ],
+      "caseId": "insertion-base",
+      "chunks": [
+        {
+          "cacheKey": "ogvcs:chunk-cache:v1:sha256:3342a0c01cb624719b626ce22cd496edced9b6453251acf805f5dcba02a599b9",
+          "length": 327861,
+          "objectId": "ogvcs:v1:chunk:sha256:8e76fa9d03a7d5bb4975167bf252f1844d68215d823b21e3c5c6a7cf74a2ffeb"
+        },
+        {
+          "cacheKey": "ogvcs:chunk-cache:v1:sha256:b0677d6b96068f867bfdd9655559ecd4d1943fad7a64bd111a61cb148d87e102",
+          "length": 939225,
+          "objectId": "ogvcs:v1:chunk:sha256:ebf4e12e3412539304678a846e338ffb937f0cb35c128e3c6fb637169f6631f0"
+        },
+        {
+          "cacheKey": "ogvcs:chunk-cache:v1:sha256:7b7eb237ee3cf786ed708f872eedb7f5e22430f654f5029e4470eacf411f43d9",
+          "length": 1375880,
+          "objectId": "ogvcs:v1:chunk:sha256:7ced6b753730074c2eeb17550072cd32cb9ebe09764b4fdc53a79caf667e1de4"
+        },
+        {
+          "cacheKey": "ogvcs:chunk-cache:v1:sha256:d45e30ca76fc38f05f237c686fd43f86eb3d6f27ea3eb2ae6b1602d87f8564da",
+          "length": 362695,
+          "objectId": "ogvcs:v1:chunk:sha256:3b740ec7eb5e89e36ce18d601ddbd84f779edf768d6f0a0a5d11c8752183faa8"
+        },
+        {
+          "cacheKey": "ogvcs:chunk-cache:v1:sha256:b0b88999d460462ffca37e2afa20c35abb2a89b8889b98e96c1667b75c100ea2",
+          "length": 1236834,
+          "objectId": "ogvcs:v1:chunk:sha256:4e6fb5c4b85b117d8bcd59c2ca6ab234bd05cb759df18281a622a64b8f84ec13"
+        },
+        {
+          "cacheKey": "ogvcs:chunk-cache:v1:sha256:8f271ff75cdc616db8f733a9c7b7091ad7ad8e87c163bec3e83f8b8569695971",
+          "length": 1000385,
+          "objectId": "ogvcs:v1:chunk:sha256:72535c70ccad5839bf0c150262e4028a257d1237f92fd433e6328bd9ac2c427d"
+        }
+      ],
+      "class": "cdc-1m",
+      "logicalLength": 5242880,
+      "manifestHex": "a7000101020280101a0050000011a200010158200f0057a4824d03d3cd099db9885771deaac7dcb1b5a7be5551fc4a35297ef79d12a300746368756e6b696e672e6f70656e67616d65766373016f676561722d666173746364632d316d02011386a200a40001010102010358208e76fa9d03a7d5bb4975167bf252f1844d68215d823b21e3c5c6a7cf74a2ffeb011a000500b5a200a4000101010201035820ebf4e12e3412539304678a846e338ffb937f0cb35c128e3c6fb637169f6631f0011a000e54d9a200a40001010102010358207ced6b753730074c2eeb17550072cd32cb9ebe09764b4fdc53a79caf667e1de4011a0014fe88a200a40001010102010358203b740ec7eb5e89e36ce18d601ddbd84f779edf768d6f0a0a5d11c8752183faa8011a000588c7a200a40001010102010358204e6fb5c4b85b117d8bcd59c2ca6ab234bd05cb759df18281a622a64b8f84ec13011a0012df62a200a400010101020103582072535c70ccad5839bf0c150262e4028a257d1237f92fd433e6328bd9ac2c427d011a000f43c1",
+      "manifestObjectId": "ogvcs:v1:content-manifest:sha256:3f6a3a886a063ca3d70abf0166cffb4627f5e384d33ba34bf893ebaa329745ee",
+      "partCount": 6,
+      "providerReads": 6,
+      "repeatedBytes": "0",
+      "uniqueBytes": "5242880",
+      "wholeFileSha256": "0f0057a4824d03d3cd099db9885771deaac7dcb1b5a7be5551fc4a35297ef79d"
+    },
+    {
+      "boundaries": [
+        327861,
+        1267103,
+        2642983,
+        3005678,
+        4242512,
+        5242897
+      ],
+      "caseId": "insertion-plus-17",
+      "chunks": [
+        {
+          "cacheKey": "ogvcs:chunk-cache:v1:sha256:3342a0c01cb624719b626ce22cd496edced9b6453251acf805f5dcba02a599b9",
+          "length": 327861,
+          "objectId": "ogvcs:v1:chunk:sha256:8e76fa9d03a7d5bb4975167bf252f1844d68215d823b21e3c5c6a7cf74a2ffeb"
+        },
+        {
+          "cacheKey": "ogvcs:chunk-cache:v1:sha256:df5b1d177679e2cf6858e7f9ce6d71c7ece1c7c09bea4580d4790b448f23345e",
+          "length": 939242,
+          "objectId": "ogvcs:v1:chunk:sha256:60cc4f1b5a6c6ab76f705bcd519d5bdc69230b890f4f7587e2cc846b46919845"
+        },
+        {
+          "cacheKey": "ogvcs:chunk-cache:v1:sha256:7b7eb237ee3cf786ed708f872eedb7f5e22430f654f5029e4470eacf411f43d9",
+          "length": 1375880,
+          "objectId": "ogvcs:v1:chunk:sha256:7ced6b753730074c2eeb17550072cd32cb9ebe09764b4fdc53a79caf667e1de4"
+        },
+        {
+          "cacheKey": "ogvcs:chunk-cache:v1:sha256:d45e30ca76fc38f05f237c686fd43f86eb3d6f27ea3eb2ae6b1602d87f8564da",
+          "length": 362695,
+          "objectId": "ogvcs:v1:chunk:sha256:3b740ec7eb5e89e36ce18d601ddbd84f779edf768d6f0a0a5d11c8752183faa8"
+        },
+        {
+          "cacheKey": "ogvcs:chunk-cache:v1:sha256:b0b88999d460462ffca37e2afa20c35abb2a89b8889b98e96c1667b75c100ea2",
+          "length": 1236834,
+          "objectId": "ogvcs:v1:chunk:sha256:4e6fb5c4b85b117d8bcd59c2ca6ab234bd05cb759df18281a622a64b8f84ec13"
+        },
+        {
+          "cacheKey": "ogvcs:chunk-cache:v1:sha256:8f271ff75cdc616db8f733a9c7b7091ad7ad8e87c163bec3e83f8b8569695971",
+          "length": 1000385,
+          "objectId": "ogvcs:v1:chunk:sha256:72535c70ccad5839bf0c150262e4028a257d1237f92fd433e6328bd9ac2c427d"
+        }
+      ],
+      "class": "cdc-1m",
+      "logicalLength": 5242897,
+      "manifestHex": "a7000101020280101a0050001111a20001015820d32c8d4d5d0c8f8e568e40109bae872b14805d3f9e9d8a469489e370e4d21bef12a300746368756e6b696e672e6f70656e67616d65766373016f676561722d666173746364632d316d02011386a200a40001010102010358208e76fa9d03a7d5bb4975167bf252f1844d68215d823b21e3c5c6a7cf74a2ffeb011a000500b5a200a400010101020103582060cc4f1b5a6c6ab76f705bcd519d5bdc69230b890f4f7587e2cc846b46919845011a000e54eaa200a40001010102010358207ced6b753730074c2eeb17550072cd32cb9ebe09764b4fdc53a79caf667e1de4011a0014fe88a200a40001010102010358203b740ec7eb5e89e36ce18d601ddbd84f779edf768d6f0a0a5d11c8752183faa8011a000588c7a200a40001010102010358204e6fb5c4b85b117d8bcd59c2ca6ab234bd05cb759df18281a622a64b8f84ec13011a0012df62a200a400010101020103582072535c70ccad5839bf0c150262e4028a257d1237f92fd433e6328bd9ac2c427d011a000f43c1",
+      "manifestObjectId": "ogvcs:v1:content-manifest:sha256:58422f7df8e28da244ca2e5f5dd0e5f1d66cffe176a6306a5abfd9e348945cb9",
+      "partCount": 6,
+      "providerReads": 6,
+      "repeatedBytes": "0",
+      "uniqueBytes": "5242897",
+      "wholeFileSha256": "d32c8d4d5d0c8f8e568e40109bae872b14805d3f9e9d8a469489e370e4d21bef"
+    }
+  ],
+  "errorCodes": [
+    "CHUNK_BOUNDARY_MISMATCH",
+    "CHUNK_COUNT_EXCEEDED",
+    "CHUNK_DECLARED_LENGTH_INVALID",
+    "CHUNK_DIGEST_MISMATCH",
+    "CHUNK_FINGERPRINT_INPUT_INVALID",
+    "CHUNK_FRAGMENT_INVALID",
+    "CHUNK_MANIFEST_MISMATCH",
+    "CHUNK_METADATA_CONFLICT",
+    "CHUNK_PROFILE_UNSUPPORTED",
+    "CHUNK_PUBLICATION_FAILED",
+    "CHUNK_RESOURCE_EXHAUSTED",
+    "CHUNK_RESOURCE_INVALID",
+    "CHUNK_RESOURCE_UNSUPPORTED",
+    "CHUNK_SCRATCH_EXHAUSTED",
+    "CHUNK_SESSION_FAILED",
+    "CHUNK_SESSION_FINISHED",
+    "CHUNK_SINK_FAILED",
+    "CHUNK_SINK_INVALID",
+    "CHUNK_SOURCE_INVALID",
+    "CHUNK_SOURCE_MISSING",
+    "CHUNK_SOURCE_TOO_LONG",
+    "CHUNK_SOURCE_TOO_SHORT"
+  ],
+  "limits": {
+    "chunkCountMaximum": 1048576,
+    "logicalMaximum": 1099511627776,
+    "maximum": 2097152,
+    "minimum": 262144,
+    "scalarWorkingMinimum": 4259840,
+    "smallMaximum": 262144,
+    "target": 1048576,
+    "workingMaximum": 1073741824
+  },
+  "profile": "chunking.opengamevcs/gear-fastcdc-1m@1",
+  "resourceOutcomes": {
+    "belowScalarMinimum": "CHUNK_RESOURCE_EXHAUSTED",
+    "cancellation": "CHUNK_RESOURCE_EXHAUSTED",
+    "unsupportedParallelism": "CHUNK_RESOURCE_UNSUPPORTED"
+  },
+  "schemaVersion": "ogvcs.chunking/bounded-conformance-report/v1",
+  "tableSha256": "76065028f30c5ec5c038c7f0849b0e1ac863474a5cf01ecf383fd431b576da82"
+}
