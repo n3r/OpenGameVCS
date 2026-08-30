@@ -33,6 +33,7 @@ test('offline-installed packed runtime exposes its public API and every document
     assert.equal(runtimePack.code, 0, runtimePack.stderr);
     const [specResult] = JSON.parse(specPack.stdout); const [runtimeResult] = JSON.parse(runtimePack.stdout);
     assert.equal(runtimeResult.name, '@opengamevcs/path-filesystem');
+    assert.equal(runtimeResult.version, '1.1.0');
     const binary = runtimeResult.files.find(({ path }) => path === 'bin/ogvcs-path.mjs');
     assert.ok(binary);
     if (process.platform !== 'win32') assert.ok((binary.mode & 0o111) !== 0);
@@ -174,6 +175,6 @@ process.stdout.write(JSON.stringify(result));
     const conformance = await run(process.execPath, [cli, 'conformance', '--output', reportPath], { cwd: consumer, env: offlineEnvironment });
     assert.equal(conformance.code, 0, conformance.stderr);
     const report = JSON.parse(await readFile(reportPath));
-    assert.equal(report.total, 78); assert.equal(report.passed, 78); assert.equal(report.failed, 0);
+    assert.equal(report.total, 79); assert.equal(report.passed, 79); assert.equal(report.failed, 0);
   } finally { await rm(scratch, { recursive: true, force: true, maxRetries: 8, retryDelay: 50 }); }
 });

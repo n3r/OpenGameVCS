@@ -56,7 +56,9 @@ try {
   const execution = await run(process.execPath, [cli, 'conformance', '--output', reportPath], { cwd: consumer, env: { ...environment, npm_config_offline: 'true' } });
   if (execution.code !== 0) throw new Error(`packed path conformance failed: ${execution.stderr}`);
   const report = JSON.parse(await readFile(reportPath));
-  if (report.total !== 78 || report.passed !== 78 || report.failed !== 0) throw new Error('packed path report does not pass every bounded case');
+  if (report.total !== 79 || report.passed !== 79 || report.failed !== 0) throw new Error('packed path report does not pass every bounded case');
+  if (report.implementation?.name !== '@opengamevcs/path-filesystem' || report.implementation?.version !== '1.1.0') throw new Error('packed path report has the wrong implementation identity');
+  if (report.results?.find(({ id }) => id === 'native:bounded-staged-stream-publication')?.passed !== true) throw new Error('packed path report omits bounded staged stream publication');
   const evidence = {
     schemaVersion: 'ogvcs.path/packed-evidence/v1', contractVersion: report.contractVersion,
     manifestSha256: report.manifestSha256, registrySetSha256: report.registrySetSha256,

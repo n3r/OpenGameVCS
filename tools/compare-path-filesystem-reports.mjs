@@ -19,9 +19,14 @@ function exactKeys(value, expected, label) {
 
 const reports = await Promise.all(paths.map(async (path) => {
   const report = JSON.parse(await readFile(path));
-  if (report.schemaVersion !== 'ogvcs.path/conformance-report/v1' || report.contractVersion !== '1.0.0' || report.total !== 78 || report.passed !== 78 || report.failed !== 0 || !Array.isArray(report.results) || report.results.length !== 78 || !/^[0-9a-f]{64}$/u.test(report.resultsSha256)) throw new Error(`invalid path report: ${path}`);
+  if (report.schemaVersion !== 'ogvcs.path/conformance-report/v1' || report.contractVersion !== '1.0.0'
+    || report.implementation?.name !== '@opengamevcs/path-filesystem' || report.implementation?.version !== '1.1.0'
+    || report.total !== 79 || report.passed !== 79 || report.failed !== 0 || !Array.isArray(report.results)
+    || report.results.length !== 79 || !/^[0-9a-f]{64}$/u.test(report.resultsSha256)) throw new Error(`invalid path report: ${path}`);
   if (sha256(Buffer.from(canonicalJson(report.results), 'utf8')) !== report.resultsSha256) throw new Error(`path result digest differs: ${path}`);
   if (report.results.some(({ passed, expectedSha256, actualSha256 }) => !passed || expectedSha256 !== actualSha256)) throw new Error(`path report contains a failed row: ${path}`);
+  const streamPublication = report.results.find(({ id }) => id === 'native:bounded-staged-stream-publication');
+  if (streamPublication?.category !== 'native-filesystem' || streamPublication.passed !== true) throw new Error(`path report omits bounded staged stream publication: ${path}`);
   if (report.capabilities.atomicReplace !== true || report.capabilities.casePreserving !== true) throw new Error(`required host capability unavailable: ${path}`);
   return { path, report };
 }));
@@ -39,6 +44,7 @@ for (const { path, report } of reports) {
   if (evidence.schemaVersion !== 'ogvcs.path/packed-evidence/v1' || evidence.platform !== report.platform || evidence.resultsSha256 !== report.resultsSha256 || !Array.isArray(evidence.packages) || evidence.packages.length !== 2) throw new Error(`invalid path packed evidence: ${evidencePath}`);
   const names = new Set(evidence.packages.map(({ name }) => name));
   if (!names.has('@opengamevcs/path-contract-v1') || !names.has('@opengamevcs/path-filesystem')) throw new Error(`packed package inventory differs: ${evidencePath}`);
+  if (evidence.packages.find(({ name }) => name === '@opengamevcs/path-filesystem')?.version !== '1.1.0') throw new Error(`packed runtime version differs: ${evidencePath}`);
   for (const item of evidence.packages) {
     exactKeys(item, ['name', 'version', 'filename', 'sha256'], `package evidence ${item.name}`);
     if (basename(item.filename) !== item.filename || sha256(await readFile(join(directory, 'packages', item.filename))) !== item.sha256) throw new Error(`packed package digest differs: ${item.name}`);

@@ -21,8 +21,10 @@ test('source report is bounded, complete, and green', async t => {
   const result = await run('path-filesystem-conformance-report.mjs', ['--output', reportPath]);
   assert.equal(result.code, 0, result.stderr);
   const report = JSON.parse(await readFile(reportPath));
-  assert.deepEqual({ total: report.total, passed: report.passed, failed: report.failed }, { total: 78, passed: 78, failed: 0 });
+  assert.deepEqual({ total: report.total, passed: report.passed, failed: report.failed }, { total: 79, passed: 79, failed: 0 });
   assert.equal(report.results.filter(({ category }) => category !== 'native-filesystem').length, 63);
+  assert.equal(report.results.filter(({ category }) => category === 'native-filesystem').length, 16);
+  assert.equal(report.implementation.version, '1.1.0');
 });
 
 test('packed runner retains both exact archives and its report', async t => {
@@ -35,4 +37,6 @@ test('packed runner retains both exact archives and its report', async t => {
   assert.deepEqual(new Set(evidence.packages.map(({ name }) => name)), new Set(['@opengamevcs/path-contract-v1', '@opengamevcs/path-filesystem']));
   const report = JSON.parse(await readFile(join(output, 'conformance-report.json')));
   assert.equal(report.failed, 0);
+  assert.equal(report.total, 79);
+  assert.equal(evidence.packages.find(({ name }) => name === '@opengamevcs/path-filesystem')?.version, '1.1.0');
 });

@@ -1,6 +1,6 @@
 {
   "name": "@opengamevcs/path-filesystem",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "OpenGameVCS cross-platform path and workspace filesystem library",
   "type": "module",
   "bin": {

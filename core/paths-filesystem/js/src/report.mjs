@@ -12,7 +12,8 @@ import { evaluatePreflight, preflightWorkspaceMaterialization } from './prefligh
 import { evaluateRenames, planRenames } from './rename.mjs';
 import { applyWatcherEvent, evaluateWatcherCase, initialWatcherState, loadWatcherState, openWorkspaceWatcher } from './watcher.mjs';
 import {
-  applyReadOnlyHint, atomicWriteFile as rawAtomicWriteFile, executeRenamePlan as rawExecuteRenamePlan,
+  applyReadOnlyHint, atomicWriteFile as rawAtomicWriteFile, atomicWriteStream as rawAtomicWriteStream,
+  executeRenamePlan as rawExecuteRenamePlan,
   inspectCrashRemnants, materializeSymlink as rawMaterializeSymlink, openWorkspaceRoot,
   replaceWorkspaceEntry as rawReplaceWorkspaceEntry, rollbackCrashRemnant,
 } from './workspace.mjs';
@@ -129,6 +130,42 @@ async function nativeRows(root, capabilities) {
     await atomicWriteFile(workspace, 'Game/data.bin', Buffer.from('first'), capabilities, { createParents: true });
     await atomicWriteFile(workspace, 'Game/data.bin', Buffer.from('second'), capabilities);
     assert.equal(await readFile(join(root, 'Game/data.bin'), 'utf8'), 'second');
+  }));
+  rows.push(await nativeCheck('bounded-staged-stream-publication', async () => {
+    if (!capabilities.atomicReplace || !capabilities.hardlink) throw new Error('stream replacement capabilities unavailable');
+    const path = 'Game/stream-publication.bin';
+    await atomicWriteFile(workspace, path, Buffer.from('prior'), capabilities, { createParents: true });
+    const publication = Buffer.from('bounded staged stream publication');
+    const plan = await workspacePlan(workspace, [{ path, kind: 'regular' }], capabilities);
+    async function *chunks() {
+      yield publication.subarray(0, 8);
+      yield publication.subarray(8, 22);
+      yield publication.subarray(22);
+    }
+    const published = await rawAtomicWriteStream(workspace, path, chunks(), {
+      plan, maxBytes: publication.length, maxScratchBytes: publication.length, maxChunkBytes: 16,
+      expectedBytes: publication.length, expectedSha256: sha256(publication),
+    });
+    assert.equal(published.bytes, publication.length);
+    assert.equal(published.sha256, sha256(publication));
+    assert.deepEqual(await readFile(join(root, 'Game/stream-publication.bin')), publication);
+
+    const prior = await lstat(join(root, 'Game/stream-publication.bin'));
+    const refused = Buffer.from('must roll back');
+    let code;
+    try {
+      await rawAtomicWriteStream(workspace, path, (async function *source() { yield refused; }()), {
+        plan, maxBytes: refused.length, maxScratchBytes: refused.length,
+        expectedBytes: refused.length, expectedSha256: sha256(refused),
+        hooks: { boundary: (name) => {
+          if (name === 'before-parent-sync') { const error = new Error('simulated directory sync fault'); error.code = 'EIO'; throw error; }
+        } },
+      });
+    } catch (error) { code = error?.code; }
+    assert.equal(code, 'ATOMIC_REPLACE_FAILED');
+    assert.equal((await lstat(join(root, 'Game/stream-publication.bin'))).ino, prior.ino);
+    assert.deepEqual(await readFile(join(root, 'Game/stream-publication.bin')), publication);
+    assert.equal((await inspectCrashRemnants(workspace)).length, 0);
   }));
   rows.push(await nativeCheck('target-race-denied', async () => {
     let code;
@@ -330,7 +367,7 @@ export async function buildConformanceReport(options = {}) {
     const passed = results.filter((item) => item.passed).length;
     const report = {
       schemaVersion: 'ogvcs.path/conformance-report/v1', contractVersion: pathContract.contractVersion,
-      implementation: { name: '@opengamevcs/path-filesystem', version: '1.0.0', runtime: `${process.release.name} ${process.version}` },
+      implementation: { name: '@opengamevcs/path-filesystem', version: '1.1.0', runtime: `${process.release.name} ${process.version}` },
       platform: hostPlatform(),
       capabilities: {
         atomicReplace: capabilities.atomicReplace, casePreserving: capabilities.casePreserving,

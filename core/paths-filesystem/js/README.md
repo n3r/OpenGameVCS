@@ -182,7 +182,7 @@ include a full protected path by default.
 The npm archive contains this MIT license, source, CLI, and examples. Its exact
 language-neutral dependency includes the Unicode source/license, normative
 documents, registries, schemas, vectors, and manifest. The three-OS workflow
-installs both archives offline, runs all 63 pure decisions plus fifteen bounded
+installs both archives offline, runs all 63 pure decisions plus sixteen bounded
 native proofs, retains the exact archives and report, and compares package
 hashes and pure outcomes across Windows, macOS, and Linux.
 

@@ -27,6 +27,17 @@ const adrPath = new URL(
   import.meta.url
 );
 const roadmapPath = new URL('../prd/ROADMAP.md', import.meta.url);
+const workflowPath = new URL('../.github/workflows/path-filesystem.yml', import.meta.url);
+const streamingPrdPath = new URL(
+  '../prd/todo/OGVCS-046-bounded-staged-workspace-publication.md',
+  import.meta.url
+);
+const streamingChangelogPath = new URL('../docs/changelog/OGVCS-046.md', import.meta.url);
+const streamingEvidencePath = new URL('../docs/evidence/OGVCS-046/README.md', import.meta.url);
+const streamingRunbookPath = new URL(
+  '../docs/runbooks/OGVCS-046-read-before-write-rollback.md',
+  import.meta.url
+);
 
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
@@ -270,4 +281,54 @@ test('completed OGVCS-004 lifecycle claims stay aligned with durable evidence', 
     roadmap,
     /\[Cross-platform path and workspace filesystem library\]\(done\/OGVCS-004-cross-platform-path-filesystem-library\.md\)/u
   );
+});
+
+test('in-development OGVCS-046 validation is routed without claiming hosted success', async () => {
+  const [workflow, prd, changelog, evidence, runbook] = await Promise.all([
+    readFile(workflowPath, 'utf8'),
+    readFile(streamingPrdPath, 'utf8'),
+    readFile(streamingChangelogPath, 'utf8'),
+    readFile(streamingEvidencePath, 'utf8'),
+    readFile(streamingRunbookPath, 'utf8')
+  ]);
+
+  for (const path of [
+    'docs/changelog/OGVCS-046.md',
+    'docs/evidence/OGVCS-046/**',
+    'docs/runbooks/OGVCS-046-*.md',
+    'prd/todo/OGVCS-046-*.md'
+  ]) {
+    assert.equal(
+      workflow.match(new RegExp(path.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'gu'))?.length,
+      2,
+      `${path} must trigger both pull-request and push validation`
+    );
+  }
+  assert.match(workflow, /- "ogvcs-046\/\*\*"/u);
+  assert.match(workflow, /- "ogvcs046-\*"/u);
+  assert.equal(workflow.match(/node-version: 22/gu)?.length, 2);
+  assert.equal(
+    workflow.match(/actions\/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1/gu)?.length,
+    2
+  );
+  assert.match(
+    workflow,
+    /actions\/setup-node@820762786026740c76f36085b0efc47a31fe5020/u
+  );
+  assert.match(
+    workflow,
+    /actions\/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a/u
+  );
+  assert.match(
+    workflow,
+    /actions\/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c/u
+  );
+
+  assert.match(prd, /\*\*Status:\*\* In development/u);
+  assert.match(changelog, /Hosted Linux, macOS, and Windows validation remains pending/u);
+  assert.match(evidence, /\*\*Status:\*\* Pending hosted validation/u);
+  assert.match(evidence, /79 total rows/u);
+  assert.doesNotMatch(evidence, /actions\/runs\/\d+/u);
+  assert.match(runbook, /readers and recovery tooling before enabling writers/u);
+  assert.match(runbook, /all `write-stream` remnants/u);
 });

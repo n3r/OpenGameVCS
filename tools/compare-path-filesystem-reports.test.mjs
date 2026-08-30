@@ -26,23 +26,24 @@ function run(paths) {
 test('comparator requires exact cross-OS decisions and packed package bytes', async t => {
   const scratch = await mkdtemp(join(tmpdir(), 'ogvcs-path-compare-')); t.after(() => rm(scratch, { recursive: true, force: true }));
   const decision = sha256(Buffer.from(canonicalJson('passed')));
-  const results = Array.from({ length: 78 }, (_, index) => ({ id: `row-${index}`, category: 'test', passed: true, expectedSha256: decision, actualSha256: decision }));
+  const results = Array.from({ length: 79 }, (_, index) => ({ id: `row-${index}`, category: 'test', passed: true, expectedSha256: decision, actualSha256: decision }));
+  results[78] = { ...results[78], id: 'native:bounded-staged-stream-publication', category: 'native-filesystem' };
   const resultDigest = sha256(Buffer.from(canonicalJson(results)));
   const paths = [];
   for (const platform of ['linux', 'macos', 'windows']) {
     const directory = join(scratch, platform); const packagesDirectory = join(directory, 'packages');
     await mkdir(packagesDirectory, { recursive: true });
     const packageItems = [];
-    for (const [name, filename, bytes] of [['@opengamevcs/path-contract-v1', 'contract.tgz', 'contract'], ['@opengamevcs/path-filesystem', 'runtime.tgz', 'runtime']]) {
+    for (const [name, version, filename, bytes] of [['@opengamevcs/path-contract-v1', '1.0.0', 'contract.tgz', 'contract'], ['@opengamevcs/path-filesystem', '1.1.0', 'runtime.tgz', 'runtime']]) {
       const body = Buffer.from(bytes); await writeFile(join(packagesDirectory, filename), body);
-      packageItems.push({ name, version: '1.0.0', filename, sha256: sha256(body) });
+      packageItems.push({ name, version, filename, sha256: sha256(body) });
     }
     const report = {
       schemaVersion: 'ogvcs.path/conformance-report/v1', contractVersion: '1.0.0',
-      implementation: { name: 'test', version: '1.0.0', runtime: 'node test' }, platform,
+      implementation: { name: '@opengamevcs/path-filesystem', version: '1.1.0', runtime: 'node test' }, platform,
       capabilities: { atomicReplace: true, casePreserving: true, caseSensitive: platform === 'linux', directorySync: true, executableBit: platform !== 'windows', hardlink: true, normalizationSensitive: platform !== 'macos', symlink: platform !== 'windows' },
       manifestSha256: '11'.repeat(32), registrySetSha256: '22'.repeat(32), unicodeCaseFoldingSha256: '33'.repeat(32), resultsSha256: resultDigest,
-      total: 78, passed: 78, failed: 0, results,
+      total: 79, passed: 79, failed: 0, results,
     };
     const reportPath = join(directory, 'conformance-report.json'); await writeJson(reportPath, report); paths.push(reportPath);
     const reportBytes = Buffer.from(`${canonicalJson(report)}\n`);
