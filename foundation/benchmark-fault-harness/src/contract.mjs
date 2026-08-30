@@ -63,7 +63,7 @@ async function load(root, options) {
   const manifestBytes = await readBounded(new URL('manifest.json', root), options.maxAssetBytes, options.deadline);
   const manifest = parseJson(manifestBytes, { requireCanonical: true, maxBytes: options.maxAssetBytes });
   const manifestSha256 = sha256(manifestBytes);
-  if (manifest.schemaVersion !== 'ogvcs.benchmark/contract-manifest/v1' || manifest.contractVersion !== '1.0.0-rc.1' || manifest.packageName !== PACKAGE || manifest.license !== 'MIT' || !Array.isArray(manifest.artifacts)) harnessFail('HARNESS_BUNDLE_INVALID', 'benchmark contract manifest envelope is invalid');
+  if (manifest.schemaVersion !== 'ogvcs.benchmark/contract-manifest/v1' || manifest.contractVersion !== '1.0.0-rc.2' || manifest.packageName !== PACKAGE || manifest.license !== 'MIT' || !Array.isArray(manifest.artifacts)) harnessFail('HARNESS_BUNDLE_INVALID', 'benchmark contract manifest envelope is invalid');
   if (manifest.artifacts.length !== manifest.counts?.artifacts || manifest.artifacts.length > options.maxArtifacts) harnessFail('HARNESS_LIMIT_EXCEEDED', 'benchmark contract artifact inventory exceeds its bound');
   const artifacts = new Map();
   let totalBytes = manifestBytes.length;

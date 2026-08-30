@@ -38,38 +38,35 @@ test('OGVCS-005 completion record authenticates durable hosted evidence', async 
   assert.equal(completion.sourceRevision, SOURCE);
   assert.deepEqual(completion.remainingGates, []);
   assert.equal(completion.authority.manifestFileSha256, MANIFEST);
-  const manifestBytes = await readFile(join(ROOT, 'spec/benchmark-fault/v1/manifest.json'));
-  const manifest = JSON.parse(manifestBytes);
-  assert.equal(digest(manifestBytes), MANIFEST);
   assert.deepEqual(completion.authority, {
     manifestFileSha256: MANIFEST,
-    artifactSetSha256: manifest.artifactSetSha256,
-    schemaSetSha256: manifest.schemaSetSha256,
-    registrySetSha256: manifest.registrySetSha256,
-    vectorSetSha256: manifest.vectorSetSha256,
-    thresholdSetSha256: manifest.thresholdSetSha256,
-    modelSha256: manifest.generatedBy.modelSha256,
-    generatorSha256: manifest.generatedBy.generatorSha256,
-    validatorSha256: digest(await readFile(join(ROOT, 'spec/benchmark-fault/v1/validate-spec.mjs'))),
-    fixtureProfileSetSha256: manifest.predecessorPins.fixtures.profileSetSha256,
+    artifactSetSha256: 'ba59c8dc9db4c0678fc630357396d9981934ac065b0dd2c8bbbb5c82dccad6d7',
+    schemaSetSha256: 'f186e1cfe4d8905b0fe36acfa641b3a97eed3f8bcb9d245c7a96055d9cd6f706',
+    registrySetSha256: 'bbe8230b1a115b5c0862537d7dde6e97db61c283b552dad61d2020165b75d532',
+    vectorSetSha256: '7ab9d07b3f88e94be05f3d48bcd0b8e7bfac79ade49dad3e87f3f1d859a501b7',
+    thresholdSetSha256: '13a1cf5e4d20dadced0b04bdc3cc8b3d01a5c3b2a42ca04e163b08e147dac7ff',
+    modelSha256: 'bdbd0f9c5d5573d8e9ee318cefc31bd8bc3a3d6fa239f8b0dbf49f9c0c8c2099',
+    generatorSha256: '05d252d450785f628be40771db38ba25b8d22fe251c0b0014cf5a66dc1f93334',
+    validatorSha256: '95c6a4353bf57cad1659aa4f2e6d305b3b0231fb6ccd9ca8196cb6030839188e',
+    fixtureProfileSetSha256: '6b53f4274d8b2374224728d0cebd499e58ab990c4e6409fa5403bf8f38934b36',
     counts: {
-      artifacts: manifest.counts.artifacts,
-      schemas: manifest.counts.schemas,
-      registries: manifest.counts.registries,
-      scenarios: manifest.counts.scenarios,
-      tasks: manifest.counts.tasks,
-      faultPoints: manifest.counts.faultPoints,
-      thresholds: manifest.counts.thresholds,
+      artifacts: 28,
+      schemas: 17,
+      registries: 8,
+      scenarios: 35,
+      tasks: 11,
+      faultPoints: 12,
+      thresholds: 8,
     },
   });
   assert.deepEqual(completion.predecessors, {
-    repositoryManifestSha256: manifest.predecessorPins.repository.manifestSha256,
-    authorizationManifestSha256: manifest.predecessorPins.authorization.manifestSha256,
-    authorizationRegistrySetSha256: manifest.predecessorPins.authorization.registrySetSha256,
-    pathManifestSha256: manifest.predecessorPins.path.manifestSha256,
-    pathRegistrySetSha256: manifest.predecessorPins.path.registrySetSha256,
-    protocolManifestSha256: manifest.predecessorPins.protocol.manifestSha256,
-    protocolRegistrySetSha256: manifest.predecessorPins.protocol.registrySetSha256,
+    repositoryManifestSha256: '2d0acb01a01b64c23d883d855d2802d939a8dc99622f2774de07af1c8af8d2b9',
+    authorizationManifestSha256: '3fb4dd4a89eb914f93a589b013bda8afcf4744c0d27171ee5849ca3b7bf62447',
+    authorizationRegistrySetSha256: '293f9ab0be023a9ded33326d04a8314080bda56e7c70dd18d0cca38b70bed9cc',
+    pathManifestSha256: '2f343e1dac238da527fbd36160419ec6fb53b780ac7e33c01e11acabbdd4782b',
+    pathRegistrySetSha256: 'bbabdd95d78cfe0dd9751ab67ccbd9dfa5565bf8c049468aea3129bec787bd42',
+    protocolManifestSha256: 'bc343842291040b6b0c2c941b183863500c4d60a4618256ffc6e36a1d6afbe72',
+    protocolRegistrySetSha256: '2a49361363cc16e743948fa3cc5e266cd1bc6e31b312cde15b5dab1ad7e5c5b0',
   });
   assert.equal(completion.hosted.runId, 32850158064);
   assert.equal(completion.hosted.sourceRevision, SOURCE);

@@ -1,10 +1,21 @@
 const DRAFT = 'https://json-schema.org/draft/2020-12/schema';
 const BASE = 'https://schemas.opengamevcs.dev/benchmark-fault/v1/';
 
-export const CONTRACT_VERSION = '1.0.0-rc.1';
+export const CONTRACT_VERSION = '1.0.0-rc.2';
 export const PACKAGE_NAME = '@opengamevcs/benchmark-fault-contract-v1';
 export const TEST_PROFILE_ID = 'ogvcs.benchmark-fault-driver.test@1';
 export const CONTROL_PROFILE_ID = 'ogvcs.control.https-json@1';
+export const REFERENCE_CORPORA = Object.freeze(['code-heavy', 'global-studio', 'large-binary', 'unity-like', 'unreal-like']);
+export const CHUNKING_SELECTION_CORPORA = Object.freeze(['source-like', 'structured', 'already-compressed', 'encrypted-random', 'insertion', 'replacement', 'append']);
+export const BASE_TASK_IDS = Object.freeze(['setup', 'status', 'sync', 'submit', 'lock', 'merge', 'ci', 'verify', 'backup', 'restore', 'export']);
+export const CHUNKING_TASK_ID = 'chunking-verify';
+export const BASE_HARNESS_PROFILE_IDS = Object.freeze(['local-smoke', 'presubmit', 'nightly', 'release']);
+export const CHUNKING_SELECTION_PROFILE_ID = 'chunking-selection-bounded';
+export const FIXTURE_PROFILE_VERSION = '2.0.0';
+export const FIXTURE_GENERATOR_VERSION = '1.0.0';
+export const CHUNKING_PROFILE_VERSION = '0.1.0-rc.1';
+export const CHUNKING_GENERATOR_VERSION = '1.0.0';
+const ALL_CORPORA = [...REFERENCE_CORPORA, ...CHUNKING_SELECTION_CORPORA];
 
 export const LIMITS = Object.freeze({
   maxControlMessageBytes: 1_048_576,
@@ -53,6 +64,15 @@ export const TASK_ENTRIES = Object.freeze([
   task('backup', true, 'metadata generation and content inventory are fixed', 'independently verifiable backup generation is published', ['backup-verifiable', 'content-complete'], ['backup.generate', 'metadata.commit']),
   task('restore', true, 'verified backup generation and empty target are fixed', 'restored target verifies before activation', ['backup-verifiable', 'content-complete', 'activation-atomic'], ['durable.write', 'object.finalize', 'metadata.commit']),
   task('export', true, 'source snapshot and export mode are fixed', 'independently verifiable export is finalized', ['export-verifiable', 'content-complete'], ['durable.write', 'export.finalize']),
+  task(
+    CHUNKING_TASK_ID,
+    false,
+    'bounded base and candidate chunking workload definitions, threshold authority, and immutable chunking sources are fixed',
+    'bounded chunking compare and verify evidence is retained and authenticated',
+    ['chunking-accounting-balanced', 'chunking-derived-claims-recomputed', 'chunking-thresholds-held'],
+    [],
+    ['OGVCS-005-FR-02', 'OGVCS-007-FR-08', 'OGVCS-007-AC-04'],
+  ),
 ]);
 
 export const FAULT_ENTRIES = Object.freeze([
@@ -90,6 +110,12 @@ export const HARNESS_PROFILES = Object.freeze([
   harnessProfile('presubmit', 3, CACHE_STATES.map(({ id }) => id), ['loopback-simulated', 'studio-near-20ms'], true),
   harnessProfile('nightly', 10, CACHE_STATES.map(({ id }) => id), NETWORK_PROFILES.filter(({ mode }) => mode === 'simulated').map(({ id }) => id), true),
   harnessProfile('release', 30, CACHE_STATES.map(({ id }) => id), NETWORK_PROFILES.map(({ id }) => id), true),
+  harnessProfile(CHUNKING_SELECTION_PROFILE_ID, 1, ['cold'], ['loopback-simulated'], false, {
+    corpora: CHUNKING_SELECTION_CORPORA,
+    tasks: [CHUNKING_TASK_ID],
+    corpusAuthority: { manifestPath: 'spec/chunking-manifest/v1/manifest.json', profileVersion: CHUNKING_PROFILE_VERSION, generatorVersion: CHUNKING_GENERATOR_VERSION },
+    reproductionCommand: 'node tools/chunking-selection-benchmark-bundle.mjs --output <bundle-dir> --seed <recorded-seed>',
+  }),
 ]);
 
 export const DRIVER_PROFILE = Object.freeze({
@@ -181,7 +207,34 @@ export const SCHEMAS = Object.freeze({
     capturedAt: { type: 'string', format: 'date-time', maxLength: 64 },
     classification: { enum: ['synthetic', 'partner-derived'] }, operatorDigest: ref('sha256'),
     implementation: strict({ id: ref('id'), version: { type: 'string', minLength: 1, maxLength: 128 }, commit: ref('sha256') }),
-    corpus: strict({ profileId: { enum: ['code-heavy', 'unreal-like', 'unity-like', 'large-binary', 'global-studio'] }, profileVersion: { const: '2.0.0' }, requestDigest: ref('sha256'), manifestDigest: ref('sha256'), generatorVersion: { const: '1.0.0' } }),
+    corpus: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        profileId: { enum: ALL_CORPORA },
+        profileVersion: { type: 'string', minLength: 1, maxLength: 128 },
+        requestDigest: ref('sha256'),
+        manifestDigest: ref('sha256'),
+        generatorVersion: { type: 'string', minLength: 1, maxLength: 128 },
+      },
+      required: ['profileId', 'profileVersion', 'requestDigest', 'manifestDigest', 'generatorVersion'],
+      oneOf: [
+        {
+          properties: {
+            profileId: { enum: REFERENCE_CORPORA },
+            profileVersion: { const: FIXTURE_PROFILE_VERSION },
+            generatorVersion: { const: FIXTURE_GENERATOR_VERSION },
+          },
+        },
+        {
+          properties: {
+            profileId: { enum: CHUNKING_SELECTION_CORPORA },
+            profileVersion: { const: CHUNKING_PROFILE_VERSION },
+            generatorVersion: { const: CHUNKING_GENERATOR_VERSION },
+          },
+        },
+      ],
+    },
     configuration: strict({ harnessVersion: { const: CONTRACT_VERSION }, harnessProfile: { enum: HARNESS_PROFILES.map(({ id }) => id) }, thresholdDigest: ref('sha256'), seedDigest: ref('sha256'), iterations: { type: 'integer', minimum: 1, maximum: LIMITS.maxIterations }, concurrency: { type: 'integer', minimum: 1, maximum: 1024 }, cacheState: { enum: cacheIds }, networkProfile: { enum: networkIds } }),
     hardware: strict({ architecture: { type: 'string', minLength: 1, maxLength: 128 }, cpuModel: { type: 'string', minLength: 1, maxLength: 512 }, cpuCount: { type: 'integer', minimum: 1, maximum: 4096 }, memoryBytes: ref('positive') }),
     platform: strict({ os: { enum: ['linux', 'darwin', 'win32', 'other'] }, release: { type: 'string', minLength: 1, maxLength: 256 }, filesystem: { type: 'string', minLength: 1, maxLength: 128 }, nodeVersion: { type: 'string', minLength: 1, maxLength: 64 } }),
@@ -287,6 +340,16 @@ export const THRESHOLDS = Object.freeze({
       threshold('measurement-overhead-five-percent', 'OGVCS-005-NFR-02', '*', 'overheadBasisPoints', 'maximum', 500, 0, 'warning'),
     ],
   },
+  'chunking-selection-bounded-v1.json': {
+    schemaVersion: 'ogvcs.benchmark/thresholds/v1', version: 1, owner: 'ogvcs-007', comparisonTolerancePartsPerMillion: 0,
+    entries: [
+      threshold('chunking-workloads-succeed', 'OGVCS-005-FR-02', CHUNKING_TASK_ID, 'successRatePartsPerMillion', 'minimum', 1_000_000, CHUNKING_SELECTION_CORPORA.length, 'gate', [CHUNKING_SELECTION_PROFILE_ID]),
+      threshold('chunking-workloads-have-no-correctness-failures', 'OGVCS-007-FR-08', CHUNKING_TASK_ID, 'correctnessFailures', 'maximum', 0, CHUNKING_SELECTION_CORPORA.length, 'gate', [CHUNKING_SELECTION_PROFILE_ID]),
+      threshold('chunking-workloads-have-no-failed-samples', 'OGVCS-005-AC-01', CHUNKING_TASK_ID, 'failed', 'maximum', 0, CHUNKING_SELECTION_CORPORA.length, 'gate', [CHUNKING_SELECTION_PROFILE_ID]),
+      threshold('chunking-workloads-have-no-incomplete-samples', 'OGVCS-005-FR-02', CHUNKING_TASK_ID, 'incomplete', 'maximum', 0, CHUNKING_SELECTION_CORPORA.length, 'gate', [CHUNKING_SELECTION_PROFILE_ID]),
+      threshold('chunking-measurement-overhead-five-percent', 'OGVCS-005-NFR-02', CHUNKING_TASK_ID, 'overheadBasisPoints', 'maximum', 500, 0, 'warning', [CHUNKING_SELECTION_PROFILE_ID]),
+    ],
+  },
 });
 
 export const VECTORS = Object.freeze({
@@ -332,8 +395,8 @@ export const VECTORS = Object.freeze({
   },
 });
 
-function task(id, mutating, startCondition, endCondition, assertions, faultPoints) {
-  return { schemaVersion: 'ogvcs.benchmark/workload-definition/v1', id, mutating, startCondition, endCondition, assertions, faultPoints, requirementIds: ['OGVCS-005-FR-02'] };
+function task(id, mutating, startCondition, endCondition, assertions, faultPoints, requirementIdsValue = ['OGVCS-005-FR-02']) {
+  return { schemaVersion: 'ogvcs.benchmark/workload-definition/v1', id, mutating, startCondition, endCondition, assertions, faultPoints, requirementIds: requirementIdsValue };
 }
 
 function fault(id, boundary, tasks) {
@@ -344,8 +407,19 @@ function network(id, rttMs, bandwidthBytesPerSecond, lossPartsPerMillion, interr
   return { id, rttMs, bandwidthBytesPerSecond, lossPartsPerMillion, interruptionEvery, duplicateEvery, reorderWindow, mode };
 }
 
-function harnessProfile(id, repetitions, cacheStates, networkProfiles, faults) {
-  return { id, repetitions, cacheStates, networkProfiles, tasks: TASK_ENTRIES.map(({ id: taskId }) => taskId), corpora: ['code-heavy', 'global-studio', 'large-binary', 'unity-like', 'unreal-like'], faults, privileged: networkProfiles.some((name) => name.startsWith('privileged-')) };
+function harnessProfile(id, repetitions, cacheStates, networkProfiles, faults, options = {}) {
+  return {
+    id,
+    repetitions,
+    cacheStates,
+    networkProfiles,
+    tasks: options.tasks ?? BASE_TASK_IDS,
+    corpora: options.corpora ?? REFERENCE_CORPORA,
+    faults,
+    privileged: networkProfiles.some((name) => name.startsWith('privileged-')),
+    ...(options.corpusAuthority ? { corpusAuthority: options.corpusAuthority } : {}),
+    ...(options.reproductionCommand ? { reproductionCommand: options.reproductionCommand } : {}),
+  };
 }
 
 function registry(name, entries) {
@@ -357,5 +431,7 @@ function jsonRef() { return { $ref: 'Common.schema.json#/$defs/jsonValue' }; }
 function strict(properties, required = Object.keys(properties)) { return { type: 'object', additionalProperties: false, properties, required }; }
 function requirementId() { return { type: 'string', pattern: '^OGVCS-[0-9]{3}-(?:FR|NFR|AC)-[0-9]{2}$', minLength: 15, maxLength: 20 }; }
 function requirementIds() { return { type: 'array', minItems: 1, maxItems: 32, uniqueItems: true, items: requirementId() }; }
-function threshold(id, requirementIdValue, taskId, metric, operator, value, minimumSamples, severity) { return { id, requirementId: requirementIdValue, taskId, metric, operator, value, minimumSamples, severity, profiles: HARNESS_PROFILES.map(({ id: profileId }) => profileId) }; }
+function threshold(id, requirementIdValue, taskId, metric, operator, value, minimumSamples, severity, profiles = BASE_HARNESS_PROFILE_IDS) {
+  return { id, requirementId: requirementIdValue, taskId, metric, operator, value, minimumSamples, severity, profiles };
+}
 function vector(id, requirementIdsValue, kind, expectedCode, preMutation) { return { id, requirementIds: requirementIdsValue, kind, expected: { code: expectedCode, preMutation } }; }

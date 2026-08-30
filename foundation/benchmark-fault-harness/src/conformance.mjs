@@ -153,7 +153,32 @@ export async function runHarnessConformance(contract, options) {
         return memo.reproduction;
       }
       case 'comparison-tolerance-authority': return codeOf(() => compareResultBundles(contract, options.publication, options.publication, { tolerancePartsPerMillion: contract.thresholds['default-v1'].comparisonTolerancePartsPerMillion + 1 }));
-      case 'tiered-matrix-without-code-edit': return { code: contract.registries['harness-profiles'].entries.map(({ id }) => id).join(',') === 'local-smoke,presubmit,nightly,release' ? 'HARNESS_OK' : 'HARNESS_ASSERTION_FAILED', preMutation: true };
+      case 'tiered-matrix-without-code-edit': {
+        const profiles = contract.registries['harness-profiles'].entries;
+        const baseProfiles = profiles.filter(({ id }) => ['local-smoke', 'presubmit', 'nightly', 'release'].includes(id));
+        const additiveProfiles = profiles.filter(({ id }) => !['local-smoke', 'presubmit', 'nightly', 'release'].includes(id));
+        const exactBase = canonicalDigest(baseProfiles, 'ogvcs.benchmark/conformance-profile-set/v1') === canonicalDigest([
+          { id: 'local-smoke', repetitions: 1, cacheStates: ['cold', 'warm-local-cache'], networkProfiles: ['loopback-simulated'], tasks: ['setup', 'status', 'sync', 'submit', 'lock', 'merge', 'ci', 'verify', 'backup', 'restore', 'export'], corpora: ['code-heavy', 'global-studio', 'large-binary', 'unity-like', 'unreal-like'], faults: false, privileged: false },
+          { id: 'presubmit', repetitions: 3, cacheStates: ['cold', 'warm-local-cache', 'warm-regional-cache', 'mixed-cache'], networkProfiles: ['loopback-simulated', 'studio-near-20ms'], tasks: ['setup', 'status', 'sync', 'submit', 'lock', 'merge', 'ci', 'verify', 'backup', 'restore', 'export'], corpora: ['code-heavy', 'global-studio', 'large-binary', 'unity-like', 'unreal-like'], faults: true, privileged: false },
+          { id: 'nightly', repetitions: 10, cacheStates: ['cold', 'warm-local-cache', 'warm-regional-cache', 'mixed-cache'], networkProfiles: ['loopback-simulated', 'studio-near-20ms', 'regional-80ms', 'intercontinental-200ms'], tasks: ['setup', 'status', 'sync', 'submit', 'lock', 'merge', 'ci', 'verify', 'backup', 'restore', 'export'], corpora: ['code-heavy', 'global-studio', 'large-binary', 'unity-like', 'unreal-like'], faults: true, privileged: false },
+          { id: 'release', repetitions: 30, cacheStates: ['cold', 'warm-local-cache', 'warm-regional-cache', 'mixed-cache'], networkProfiles: ['loopback-simulated', 'studio-near-20ms', 'regional-80ms', 'intercontinental-200ms', 'privileged-netem-80ms'], tasks: ['setup', 'status', 'sync', 'submit', 'lock', 'merge', 'ci', 'verify', 'backup', 'restore', 'export'], corpora: ['code-heavy', 'global-studio', 'large-binary', 'unity-like', 'unreal-like'], faults: true, privileged: true },
+        ], 'ogvcs.benchmark/conformance-profile-set/v1');
+        const exactAdditive = canonicalDigest(additiveProfiles, 'ogvcs.benchmark/conformance-profile-set/v1') === canonicalDigest([
+          {
+            id: 'chunking-selection-bounded',
+            repetitions: 1,
+            cacheStates: ['cold'],
+            networkProfiles: ['loopback-simulated'],
+            tasks: ['chunking-verify'],
+            corpora: ['source-like', 'structured', 'already-compressed', 'encrypted-random', 'insertion', 'replacement', 'append'],
+            faults: false,
+            privileged: false,
+            corpusAuthority: { manifestPath: 'spec/chunking-manifest/v1/manifest.json', profileVersion: '0.1.0-rc.1', generatorVersion: '1.0.0' },
+            reproductionCommand: 'node tools/chunking-selection-benchmark-bundle.mjs --output <bundle-dir> --seed <recorded-seed>',
+          },
+        ], 'ogvcs.benchmark/conformance-profile-set/v1');
+        return { code: exactBase && exactAdditive ? 'HARNESS_OK' : 'HARNESS_ASSERTION_FAILED', preMutation: true };
+      }
       case 'driver-compatible-negotiation': return driverNegotiation(contract);
       case 'driver-incompatible-before-mutation': return codeOf(() => driverNegotiation(contract, ['--incompatible']));
       case 'driver-malformed-line-bounded': return codeOf(() => driverNegotiation(contract, ['--malformed-hello']));

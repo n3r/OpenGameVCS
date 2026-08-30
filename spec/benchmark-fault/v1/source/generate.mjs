@@ -59,6 +59,18 @@ async function manifestPin(relative) {
   };
 }
 
+async function chunkingManifestPin(relative) {
+  const bytes = await readFile(resolve(workspace, relative));
+  const value = JSON.parse(bytes);
+  return {
+    contractVersion: value.contractVersion,
+    manifestPath: relative,
+    manifestSha256: digest(bytes),
+    profile: value.profile,
+    tableSha256: value.tableSha256,
+  };
+}
+
 async function emit(relative, text) {
   const target = resolve(root, relative);
   if (check) {
@@ -127,6 +139,7 @@ async function generate() {
   if (authorizationReport.manifestSha256 !== authorizationPin.manifestSha256 || authorizationReport.registrySetSha256 !== authorizationPin.registrySetSha256 || authorizationReport.adapter !== 'reference-fixture' || authorizationReport.failed !== 0) throw new Error('authorization reference evidence differs from its predecessor authority');
   const predecessorPins = {
     authorization: { ...authorizationPin, referenceAdapter: authorizationReport.adapter, referenceVectors: authorizationReport.vectors, referenceResultsSha256: authorizationReport.resultsSha256 },
+    chunking: await chunkingManifestPin('spec/chunking-manifest/v1/manifest.json'),
     path: await manifestPin('spec/path-filesystem/v1/manifest.json'),
     protocol: await manifestPin('spec/protocols/v1/manifest.json'),
     repository: await manifestPin('spec/repository-format/v1/vectors/manifest.json'),

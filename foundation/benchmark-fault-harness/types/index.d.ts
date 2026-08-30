@@ -1,8 +1,8 @@
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 export type HarnessCode = 'HARNESS_OK' | 'HARNESS_INPUT_INVALID' | 'HARNESS_LIMIT_EXCEEDED' | 'HARNESS_NEGOTIATION_INCOMPATIBLE' | 'HARNESS_PROTOCOL_MALFORMED' | 'HARNESS_DRIVER_FAILED' | 'HARNESS_RETRYABLE' | 'HARNESS_TASK_INCOMPLETE' | 'HARNESS_ASSERTION_FAILED' | 'HARNESS_FAULT_INVARIANT_FAILED' | 'HARNESS_THRESHOLD_FAILED' | 'HARNESS_BUNDLE_INVALID' | 'HARNESS_CACHE_STATE_INVALID' | 'HARNESS_PRIVILEGE_REQUIRED' | 'HARNESS_DEADLINE_EXCEEDED' | 'HARNESS_CANCELLED' | 'HARNESS_IO';
-export type TaskId = 'setup' | 'status' | 'sync' | 'submit' | 'lock' | 'merge' | 'ci' | 'verify' | 'backup' | 'restore' | 'export';
+export type TaskId = 'setup' | 'status' | 'sync' | 'submit' | 'lock' | 'merge' | 'ci' | 'verify' | 'backup' | 'restore' | 'export' | 'chunking-verify';
 export type CacheState = 'cold' | 'warm-local-cache' | 'warm-regional-cache' | 'mixed-cache';
-export type HarnessProfile = 'local-smoke' | 'presubmit' | 'nightly' | 'release';
+export type HarnessProfile = 'local-smoke' | 'presubmit' | 'nightly' | 'release' | 'chunking-selection-bounded';
 
 export class BenchmarkHarnessError extends Error { readonly code: Exclude<HarnessCode, 'HARNESS_OK'>; readonly details?: Readonly<Record<string, unknown>>; }
 export const HARNESS_ERROR_CODES: readonly HarnessCode[];

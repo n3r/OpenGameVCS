@@ -43,6 +43,25 @@ function validateIdentityInventory(rows, key, label) {
 
 function summaryKey(row) { return `${row.taskId}\0${row.corpusId}\0${row.cacheState}\0${row.networkProfile}`; }
 function environmentKey(row) { return `${row.corpus.profileId}\0${row.configuration.cacheState}\0${row.configuration.networkProfile}`; }
+function manifestSha256ForPath(contract, manifestPath) {
+  const predecessor = Object.values(contract.manifest.predecessorPins ?? {}).find((entry) => entry?.manifestPath === manifestPath && typeof entry?.manifestSha256 === 'string');
+  if (predecessor) return predecessor.manifestSha256;
+  const artifact = contract.manifest.artifacts.find((entry) => entry.path === manifestPath);
+  return artifact?.sha256 ?? null;
+}
+function corpusAuthorityForProfile(contract, profile) {
+  const defaults = contract.manifest.predecessorPins.fixtures;
+  const manifestPath = profile?.corpusAuthority?.manifestPath;
+  return {
+    ...(manifestPath ? { manifestPath } : {}),
+    ...(manifestPath && manifestSha256ForPath(contract, manifestPath) ? { manifestDigest: manifestSha256ForPath(contract, manifestPath) } : {}),
+    profileVersion: profile?.corpusAuthority?.profileVersion ?? defaults.profileVersion,
+    generatorVersion: profile?.corpusAuthority?.generatorVersion ?? defaults.packageVersion,
+  };
+}
+function reproductionCommandForProfile(profile) {
+  return profile?.reproductionCommand ?? `ogvcs-benchmark smoke --profile ${profile.id} --seed <recorded-seed>`;
+}
 
 function reproduceMatrix(contract, matrix) {
   const thresholdFile = validateBenchmarkValue(contract, 'ThresholdFile.schema.json', matrix.thresholdFile);
@@ -141,7 +160,9 @@ function assertPublicationClaims(contract, result, evidenceReport, environmentRe
   if (!profile) fail('published result selects an unknown harness profile');
   const cacheAuthority = new Map(contract.registries['cache-states'].entries.map((entry) => [entry.id, entry]));
   const networkAuthority = new Map(contract.registries.networks.entries.map((entry) => [entry.id, entry]));
+  const expectedCorpusAuthority = corpusAuthorityForProfile(contract, profile);
   const expectedEnvironmentKeys = new Set();
+  if (expectedCorpusAuthority.manifestPath && expectedCorpusAuthority.manifestDigest === undefined) fail('published result selects an unauthenticated corpus manifest path');
   for (const corpusId of profile.corpora) for (const cacheState of profile.cacheStates) for (const networkProfile of profile.networkProfiles) expectedEnvironmentKeys.add(`${corpusId}\0${cacheState}\0${networkProfile}`);
   const actualEnvironmentKeys = new Set();
   const seedDigest = canonicalDigest(result.reproduction.seed, 'ogvcs.benchmark/seed/v1');
@@ -154,11 +175,32 @@ function assertPublicationClaims(contract, result, evidenceReport, environmentRe
     const cacheBody = cache && { state: cache.id, localBytes: cache.localBytes, regionalBytes: cache.regionalBytes, reads: 0, localHits: 0, regionalHits: 0, originBytes: 0 };
     const networkBody = network && { rttMs: network.rttMs, bandwidthBytesPerSecond: network.bandwidthBytesPerSecond, lossPartsPerMillion: network.lossPartsPerMillion, interruptionEvery: network.interruptionEvery, duplicateEvery: network.duplicateEvery, reorderWindow: network.reorderWindow, mode: network.mode };
     iterations ??= environment.configuration.iterations; concurrency ??= environment.configuration.concurrency;
-    const corpusAuthority = { profileVersion: environment.corpus.profileVersion, requestDigest: environment.corpus.requestDigest, manifestDigest: environment.corpus.manifestDigest, generatorVersion: environment.corpus.generatorVersion };
-    const priorCorpusAuthority = corpusAuthorities.get(environment.corpus.profileId); if (priorCorpusAuthority === undefined) corpusAuthorities.set(environment.corpus.profileId, corpusAuthority);
+    const observedCorpusAuthority = { profileVersion: environment.corpus.profileVersion, requestDigest: environment.corpus.requestDigest, manifestDigest: environment.corpus.manifestDigest, generatorVersion: environment.corpus.generatorVersion };
+    const priorCorpusAuthority = corpusAuthorities.get(environment.corpus.profileId); if (priorCorpusAuthority === undefined) corpusAuthorities.set(environment.corpus.profileId, observedCorpusAuthority);
     const laneExecutionAuthority = { implementation: environment.implementation, hardware: environment.hardware, platform: environment.platform, topology: environment.topology };
     executionAuthority ??= laneExecutionAuthority;
-    if (!expectedEnvironmentKeys.has(key) || actualEnvironmentKeys.has(key) || environment.classification !== result.classification || environment.configuration.harnessProfile !== profile.id || environment.configuration.thresholdDigest !== result.thresholdFileDigest || environment.configuration.seedDigest !== seedDigest || environment.configuration.iterations !== iterations || environment.configuration.concurrency !== concurrency || environment.configuration.cacheState !== environment.cacheInspection.state || environment.corpus.profileVersion !== contract.manifest.predecessorPins.fixtures.profileVersion || environment.corpus.generatorVersion !== contract.manifest.predecessorPins.fixtures.packageVersion || priorCorpusAuthority && canonicalJson(priorCorpusAuthority) !== canonicalJson(corpusAuthority) || canonicalJson(executionAuthority) !== canonicalJson(laneExecutionAuthority) || !cacheBody || environment.cacheInspection.localBytes !== cache.localBytes || environment.cacheInspection.regionalBytes !== cache.regionalBytes || environment.cacheInspection.stateDigest !== canonicalDigest(cacheBody, 'ogvcs.benchmark/cache-inspection/v1') || !networkBody || canonicalJson(environment.network) !== canonicalJson(networkBody)) fail('published environment inventory differs from its selected profile or authority');
+    if (
+      !expectedEnvironmentKeys.has(key)
+      || actualEnvironmentKeys.has(key)
+      || environment.classification !== result.classification
+      || environment.configuration.harnessProfile !== profile.id
+      || environment.configuration.thresholdDigest !== result.thresholdFileDigest
+      || environment.configuration.seedDigest !== seedDigest
+      || environment.configuration.iterations !== iterations
+      || environment.configuration.concurrency !== concurrency
+      || environment.configuration.cacheState !== environment.cacheInspection.state
+      || environment.corpus.profileVersion !== expectedCorpusAuthority.profileVersion
+      || environment.corpus.generatorVersion !== expectedCorpusAuthority.generatorVersion
+      || (expectedCorpusAuthority.manifestDigest !== undefined && environment.corpus.manifestDigest !== expectedCorpusAuthority.manifestDigest)
+      || priorCorpusAuthority && canonicalJson(priorCorpusAuthority) !== canonicalJson(observedCorpusAuthority)
+      || canonicalJson(executionAuthority) !== canonicalJson(laneExecutionAuthority)
+      || !cacheBody
+      || environment.cacheInspection.localBytes !== cache.localBytes
+      || environment.cacheInspection.regionalBytes !== cache.regionalBytes
+      || environment.cacheInspection.stateDigest !== canonicalDigest(cacheBody, 'ogvcs.benchmark/cache-inspection/v1')
+      || !networkBody
+      || canonicalJson(environment.network) !== canonicalJson(networkBody)
+    ) fail('published environment inventory differs from its selected profile or authority');
     actualEnvironmentKeys.add(key); cacheStates.add(environment.cacheInspection.state); operators.add(environment.operatorDigest);
   }
   if (actualEnvironmentKeys.size !== expectedEnvironmentKeys.size || [...expectedEnvironmentKeys].some((key) => !actualEnvironmentKeys.has(key)) || operators.size !== 1 || iterations === undefined) fail('published environment inventory is incomplete or ambiguous');
@@ -182,7 +224,7 @@ function assertPublicationClaims(contract, result, evidenceReport, environmentRe
   let expectedExpiry;
   try { expectedExpiry = new Date(new Date(result.createdAt).valueOf() + result.redaction.retentionDays * 86_400_000).toISOString(); }
   catch (error) { fail('published retention expiry is outside the supported date range', error); }
-  const expectedCommand = `ogvcs-benchmark smoke --profile ${profile.id} --seed <recorded-seed>`;
+  const expectedCommand = reproductionCommandForProfile(profile);
   if (actualSampleKeys.size !== expectedSampleKeys.size || result.sampleCount !== expectedSampleKeys.size || canonicalJson(result.evidence.cacheStatesInspected) !== canonicalJson(inspectedCacheStates) || result.evidence.faultInvariantFailures !== faultFailures + brokenMisses || result.evidence.securityNegativeMisses !== securityMisses || result.runId !== expectedRunId || result.redaction.expiresAt !== expectedExpiry || result.reproduction.command !== expectedCommand) fail('published result counters, run identity, retention, or reproduction template do not reproduce');
 }
 
@@ -232,6 +274,8 @@ export function buildResultBundle(contract, matrix, options = {}) {
   const faultSchedules = snapshotData(options.faultSchedules ?? [], 'bundle fault schedules');
   if (!Array.isArray(faultSchedules) || faultSchedules.length > HARNESS_LIMITS.maxFaultEvents) harnessFail('HARNESS_INPUT_INVALID', 'bundle fault schedule inventory is invalid');
   for (const schedule of faultSchedules) validateBenchmarkValue(contract, 'FaultSchedule.schema.json', schedule);
+  const profile = contract.registries['harness-profiles'].entries.find(({ id }) => id === matrix.profile.id);
+  if (!profile) harnessFail('HARNESS_INPUT_INVALID', 'result matrix selected an unknown harness profile');
   const bundle = {
     schemaVersion: 'ogvcs.benchmark/result-bundle/v1',
     contractManifestSha256: contract.manifestSha256,
@@ -253,7 +297,7 @@ export function buildResultBundle(contract, matrix, options = {}) {
     overallStatus: matrix.overallStatus,
     overhead: matrix.overhead,
     evidence: { faultInvariantFailures: matrix.evidence.faultInvariantFailures, securityNegativeMisses: matrix.evidence.securityNegativeMisses, protocolFailures: matrix.evidence.protocolFailures, cacheStatesInspected: [...new Set(matrix.environmentRecords.map(({ cacheInspection }) => cacheInspection.state))].sort() },
-    reproduction: { command: `ogvcs-benchmark smoke --profile ${matrix.profile.id} --seed <recorded-seed>`, seed, harnessProfile: matrix.profile.id, tolerancePartsPerMillion: comparisonTolerance },
+    reproduction: { command: reproductionCommandForProfile(profile), seed, harnessProfile: matrix.profile.id, tolerancePartsPerMillion: comparisonTolerance },
     publicMetadata: publicMetadata.value,
     redaction: { retentionDays, expiresAt: expires.toISOString() },
   };

@@ -1,6 +1,6 @@
 # Benchmark and fault-harness runbook
 
-This runbook operates the OGVCS-005 `1.0.0-rc.1` candidate. The normative
+This runbook operates the OGVCS-005 `1.0.0-rc.2` candidate. The normative
 authority is [`spec/benchmark-fault/v1`](../../spec/benchmark-fault/v1), the
 reference runtime is
 [`foundation/benchmark-fault-harness`](../../foundation/benchmark-fault-harness),

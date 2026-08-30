@@ -1,112 +1,247 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readdir, readFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import test from 'node:test';
 
-import { ProtocolSchemaValidator } from '@opengamevcs/protocol-baseline';
+import { buildResultBundle, verifyResultBundle, writeResultBundle } from '../foundation/benchmark-fault-harness/src/index.mjs';
+import {
+  BUNDLE_PROFILE,
+  DEFAULT_OPERATOR,
+  DEFAULT_SEED,
+  buildChunkingSelectionBenchmarkBundle,
+  buildChunkingSelectionPublicMetadata,
+} from './chunking-selection-benchmark-bundle.mjs';
+import { verifyChunkingSelectionBenchmarkBundle } from './verify-chunking-selection-benchmark-bundle.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..');
-const REPORT_PATH = join(ROOT, 'docs/evidence/OGVCS-007/bounded-selection-report-2026-08-30.json');
 const HOSTED_RECORD_PATH = join(ROOT, 'docs/evidence/OGVCS-007/github-actions-run-33328072458.json');
-const SPEC_ROOT = join(ROOT, 'spec/chunking-manifest/v1');
-const PACKAGE_ROOT = join(ROOT, 'core/chunking-manifest/js');
-
-function canonicalJson(value) {
-  if (value === null || typeof value === 'boolean' || typeof value === 'string' || Number.isSafeInteger(value)) return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
-  return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
-}
+const CHECKED_IN_BUNDLE_PATH = join(ROOT, 'docs/evidence/OGVCS-007/bounded-selection-bundle-2026-08-30');
+const CHECKED_IN_VALIDATION_PATH = join(ROOT, 'docs/evidence/OGVCS-007/bounded-selection-bundle-validation-2026-08-30.json');
 
 function sha256(value) {
-  return createHash('sha256').update(typeof value === 'string' || Buffer.isBuffer(value) ? value : canonicalJson(value)).digest('hex');
+  return createHash('sha256').update(value).digest('hex');
 }
 
-async function collectEntries(root, relativePath, results) {
-  const absolutePath = join(root, relativePath);
-  const directoryEntries = await readdir(absolutePath, { withFileTypes: true }).catch(() => null);
-  if (directoryEntries === null) {
-    const bytes = await readFile(absolutePath);
-    results.push({ bytes: bytes.length, path: relativePath.replaceAll('\\', '/'), sha256: sha256(bytes) });
-    return;
-  }
-  for (const entry of directoryEntries) {
-    const entryPath = join(relativePath, entry.name);
-    if (entry.isDirectory()) await collectEntries(root, entryPath, results);
-    else if (entry.isFile()) {
-      const bytes = await readFile(join(root, entryPath));
-      results.push({ bytes: bytes.length, path: entryPath.replaceAll('\\', '/'), sha256: sha256(bytes) });
-    }
-  }
+function republishChunkingBundle(bundle, options = {}) {
+  const matrix = {
+    ...bundle.matrix,
+    ...(options.matrix ?? {}),
+  };
+  const captures = options.captures ?? bundle.publication.result.publicMetadata.chunkingSelection.retainedCaptures;
+  const selectionReport = options.selectionReport ?? bundle.selectionReport;
+  const publicMetadata = options.publicMetadata ?? buildChunkingSelectionPublicMetadata({
+    thresholdFile: matrix.thresholdFile,
+    selectionReport,
+    captures,
+  });
+  return buildResultBundle(bundle.contract, matrix, {
+    seed: DEFAULT_SEED,
+    operator: DEFAULT_OPERATOR,
+    classification: 'synthetic',
+    clock: () => new Date(bundle.publication.result.createdAt),
+    retentionDays: bundle.publication.result.redaction.retentionDays,
+    publicMetadata,
+    evidenceReport: bundle.publication.evidenceReport,
+    faultSchedules: bundle.publication.result.faultSchedules,
+  });
 }
 
-async function fileEntries(root, paths) {
-  const results = [];
-  for (const relativePath of paths) await collectEntries(root, relativePath, results);
-  return results.sort((left, right) => left.path.localeCompare(right.path));
+async function writeBundleInChildDirectory(root, contract, publication, label) {
+  const directory = join(root, label);
+  await writeResultBundle(directory, contract, publication);
+  return directory;
 }
 
-function digestEntries(entries, domain) {
-  return sha256(entries.map(({ path, bytes, sha256: digest }) => ({ path, bytes, sha256: digest, domain })));
-}
+test('chunking selection benchmark bundle emits an authenticated retained-evidence bundle that independent validation can replay', { timeout: 240_000 }, async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'ogvcs-chunking-selection-bundle-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
 
-async function loadSchemaMap() {
-  const names = [
-    'selection-benchmark-thresholds.schema.json',
-    'selection-benchmark-report.schema.json',
-  ];
-  return new Map(await Promise.all(names.map(async (name) => [name, JSON.parse(await readFile(join(SPEC_ROOT, 'schemas', name), 'utf8'))])));
-}
+  const { contract, publication, selectionReport } = await buildChunkingSelectionBenchmarkBundle();
+  await writeResultBundle(directory, contract, publication);
 
-test('retained chunking selection report authenticates its identities and self-hash', async () => {
-  const report = JSON.parse(await readFile(REPORT_PATH, 'utf8'));
-  const validator = new ProtocolSchemaValidator(await loadSchemaMap());
-  validator.validate(report, 'selection-benchmark-report.schema.json');
+  const verified = await verifyResultBundle(directory, contract);
+  const retained = await verifyChunkingSelectionBenchmarkBundle(directory);
 
-  const reportBody = { ...report };
-  delete reportBody.reportSha256;
-  assert.equal(report.reportSha256, sha256(reportBody));
+  assert.equal(publication.result.schemaVersion, 'ogvcs.benchmark/result-bundle/v1');
+  assert.equal(publication.result.reproduction.harnessProfile, BUNDLE_PROFILE);
+  assert.equal(publication.result.reproduction.command, 'node tools/chunking-selection-benchmark-bundle.mjs --output <bundle-dir> --seed <recorded-seed>');
+  assert.equal(publication.result.overallStatus, 'passed');
+  assert.equal(verified.result.overallStatus, 'passed');
+  assert.equal(retained.verified, true);
+  assert.equal(retained.sampleCount, 7);
+  assert.equal(retained.summaryCount, 7);
+  assert.equal(selectionReport.implementation.publishedFileCount, 13);
+  assert.deepEqual(
+    publication.result.publicMetadata.chunkingSelection.retainedCaptures.map(({ workloadId, success }) => ({ workloadId, success })),
+    ['source-like', 'structured', 'already-compressed', 'encrypted-random', 'insertion', 'replacement', 'append'].map((workloadId) => ({ workloadId, success: true })),
+  );
+});
 
-  const contractManifestBytes = await readFile(join(SPEC_ROOT, 'manifest.json'));
-  assert.equal(report.contractManifestSha256, sha256(contractManifestBytes));
+test('incomplete captures stay retained and independently verify as incomplete rows', { timeout: 240_000 }, async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'ogvcs-chunking-selection-bundle-incomplete-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
 
-  const thresholdFile = JSON.parse(await readFile(join(SPEC_ROOT, 'thresholds/selection-bounded-v1.json'), 'utf8'));
-  assert.equal(report.thresholdFileDigest, sha256(thresholdFile));
-  assert.deepEqual(report.thresholdFile, thresholdFile);
+  const { contract, publication } = await buildChunkingSelectionBenchmarkBundle({
+    mutateCaptures(captures) {
+      return captures.map((capture) => capture.workloadId === 'append'
+        ? (() => {
+          const { workload, ...rest } = capture;
+          return {
+            ...rest,
+          success: false,
+          error: { code: 'HARNESS_TASK_INCOMPLETE', name: 'Error', message: 'synthetic retained failure for bundle validation' },
+          process: {
+            ...capture.process,
+            peakMemoryBytes: Math.max(capture.process.peakMemoryBytes, 1),
+          },
+          };
+        })()
+        : capture);
+    },
+  });
+  await writeResultBundle(directory, contract, publication);
+  const verified = await verifyResultBundle(directory, contract);
+  const retained = await verifyChunkingSelectionBenchmarkBundle(directory);
 
-  const workloadFile = JSON.parse(await readFile(join(SPEC_ROOT, 'vectors/selection-benchmark-workloads.json'), 'utf8'));
-  assert.equal(report.workloadDefinitionsDigest, sha256(workloadFile.workloads));
+  assert.equal(publication.result.overallStatus, 'failed');
+  assert.equal(verified.result.overallStatus, 'failed');
+  assert.equal(retained.verified, true);
+  assert.equal(publication.result.sampleCount, 7);
+  assert.equal(publication.result.environmentCount, 7);
+  assert.equal(publication.result.publicMetadata.chunkingSelection.retainedCaptures.length, 7);
+  assert.equal(verified.samples.find(({ corpusId }) => corpusId === 'append')?.status, 'incomplete');
+  assert.equal(
+    verified.result.thresholdEvaluations.find(({ thresholdId }) => thresholdId === 'chunking-workloads-have-no-failed-samples')?.status,
+    'passed',
+  );
+  assert.equal(
+    verified.result.thresholdEvaluations.find(({ thresholdId }) => thresholdId === 'chunking-workloads-have-no-incomplete-samples')?.status,
+    'failed',
+  );
+});
 
-  const packageJsonBytes = await readFile(join(PACKAGE_ROOT, 'package.json'));
-  const packageJson = JSON.parse(packageJsonBytes);
-  const packageEntries = await fileEntries(PACKAGE_ROOT, ['package.json', ...packageJson.files]);
-  assert.equal(report.implementation.packageJsonSha256, sha256(packageJsonBytes));
-  assert.equal(report.implementation.publishedFileCount, packageEntries.length);
-  assert.equal(report.implementation.publishedFileSetSha256, digestEntries(packageEntries, 'ogvcs.chunking/package-files/v1'));
+test('failed captures stay retained, unknown worker codes normalize, and the bundle cannot self-certify overall success', { timeout: 240_000 }, async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'ogvcs-chunking-selection-bundle-failed-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
 
-  const sourceEntries = await fileEntries(ROOT, [
-    'core/chunking-manifest/js/LICENSE',
-    'core/chunking-manifest/js/README.md',
-    'core/chunking-manifest/js/package.json',
-    'core/chunking-manifest/js/src',
-    'spec/chunking-manifest/v1/docs',
-    'spec/chunking-manifest/v1/manifest.json',
-    'spec/chunking-manifest/v1/profiles',
-    'spec/chunking-manifest/v1/registries',
-    'spec/chunking-manifest/v1/schemas',
-    'spec/chunking-manifest/v1/scripts',
-    'spec/chunking-manifest/v1/thresholds',
-    'spec/chunking-manifest/v1/vectors',
-    'tools/chunking-selection-benchmark-report.mjs',
-  ]);
-  assert.equal(report.sourceIdentity.type, 'selection-benchmark-source-set/v1');
-  assert.equal(report.sourceIdentity.entryCount, sourceEntries.length);
-  assert.equal(report.sourceIdentity.sourceSetSha256, digestEntries(sourceEntries, 'ogvcs.chunking/selection-benchmark-source-set/v1'));
+  const { contract, publication } = await buildChunkingSelectionBenchmarkBundle({
+    mutateCaptures(captures) {
+      return captures.map((capture) => capture.workloadId === 'append'
+        ? (() => {
+          const { workload, ...rest } = capture;
+          return {
+            ...rest,
+          success: false,
+          error: { code: 'WORKER_CUSTOM_FAILURE', name: 'Error', message: 'synthetic retained failed row for bundle validation' },
+          };
+        })()
+        : capture);
+    },
+  });
+  await writeResultBundle(directory, contract, publication);
+  const verified = await verifyResultBundle(directory, contract);
+  const retained = await verifyChunkingSelectionBenchmarkBundle(directory);
 
-  assert.equal(report.exactScaleExecuted, false);
-  assert.equal(report.summary.thresholdFailureCount, report.thresholdEvaluations.filter(({ status }) => status === 'failed').length);
-  assert.equal(report.overallStatus, report.summary.thresholdFailureCount === 0 ? 'passed' : 'failed');
+  assert.equal(publication.result.overallStatus, 'failed');
+  assert.equal(verified.result.overallStatus, 'failed');
+  assert.equal(retained.verified, true);
+  assert.equal(verified.samples.find(({ corpusId }) => corpusId === 'append')?.status, 'failed');
+  assert.equal(verified.samples.find(({ corpusId }) => corpusId === 'append')?.failureCode, 'HARNESS_DRIVER_FAILED');
+  assert.equal(
+    verified.result.thresholdEvaluations.find(({ thresholdId }) => thresholdId === 'chunking-workloads-have-no-failed-samples')?.status,
+    'failed',
+  );
+  assert.equal(
+    verified.result.thresholdEvaluations.find(({ thresholdId }) => thresholdId === 'chunking-workloads-have-no-incomplete-samples')?.status,
+    'passed',
+  );
+});
+
+test('chunking publisher and verifier reject corpus-authority and metadata tampering', { timeout: 240_000 }, async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'ogvcs-chunking-selection-bundle-mutations-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+
+  const bundle = await buildChunkingSelectionBenchmarkBundle();
+  const firstEnvironment = bundle.matrix.environmentRecords[0];
+  assert.throws(() => republishChunkingBundle(bundle, {
+    matrix: {
+      environmentRecords: bundle.matrix.environmentRecords.map((environment, index) => index === 0
+        ? {
+          ...environment,
+          corpus: {
+            ...environment.corpus,
+            manifestDigest: '0'.repeat(64),
+          },
+        }
+        : environment),
+    },
+  }), (error) => error.code === 'HARNESS_INPUT_INVALID');
+
+  const thresholdMutation = republishChunkingBundle(bundle, {
+    publicMetadata: {
+      ...bundle.publication.result.publicMetadata,
+      chunkingSelection: {
+        ...bundle.publication.result.publicMetadata.chunkingSelection,
+        bundleThresholdIds: ['forged-threshold'],
+      },
+    },
+  });
+  const thresholdDirectory = await writeBundleInChildDirectory(directory, bundle.contract, thresholdMutation, 'threshold');
+  await assert.rejects(verifyChunkingSelectionBenchmarkBundle(thresholdDirectory), /threshold/i);
+
+  const requestDigestMutation = republishChunkingBundle(bundle, {
+    matrix: {
+      environmentRecords: bundle.matrix.environmentRecords.map((environment, index) => index === 0
+        ? {
+          ...environment,
+          corpus: {
+            ...environment.corpus,
+            requestDigest: '1'.repeat(64),
+          },
+        }
+        : environment),
+    },
+  });
+  const requestDigestDirectory = await writeBundleInChildDirectory(directory, bundle.contract, requestDigestMutation, 'request-digest');
+  await assert.rejects(verifyChunkingSelectionBenchmarkBundle(requestDigestDirectory), /environment corpus authority drifted/u);
+
+  const hostMutation = republishChunkingBundle(bundle, {
+    captures: bundle.publication.result.publicMetadata.chunkingSelection.retainedCaptures.map((capture, index) => index === 0
+      ? {
+        ...capture,
+        host: { ...capture.host, os: 'linux' },
+      }
+      : capture),
+  });
+  const hostDirectory = await writeBundleInChildDirectory(directory, bundle.contract, hostMutation, 'host');
+  await assert.rejects(verifyChunkingSelectionBenchmarkBundle(hostDirectory), /host/i);
+
+  const extraFieldMutation = republishChunkingBundle(bundle, {
+    publicMetadata: {
+      ...bundle.publication.result.publicMetadata,
+      chunkingSelection: {
+        ...bundle.publication.result.publicMetadata.chunkingSelection,
+        extraClaim: true,
+      },
+    },
+  });
+  const extraFieldDirectory = await writeBundleInChildDirectory(directory, bundle.contract, extraFieldMutation, 'extra-field');
+  await assert.rejects(verifyChunkingSelectionBenchmarkBundle(extraFieldDirectory), /chunkingSelection/u);
+
+  const swappedWorkloadMutation = republishChunkingBundle(bundle, {
+    captures: bundle.publication.result.publicMetadata.chunkingSelection.retainedCaptures.map((capture, index, captures) => index === 0
+      ? { ...capture, workload: captures[1].workload }
+      : index === 1
+        ? { ...capture, workload: captures[0].workload }
+        : capture),
+  });
+  const swappedWorkloadDirectory = await writeBundleInChildDirectory(directory, bundle.contract, swappedWorkloadMutation, 'swapped-workload');
+  await assert.rejects(verifyChunkingSelectionBenchmarkBundle(swappedWorkloadDirectory), /workload id/u);
+
+  assert.equal(firstEnvironment.configuration.harnessProfile, BUNDLE_PROFILE);
 });
 
 test('retained six-leg hosted reports match their run record and comparator', async () => {
@@ -157,4 +292,10 @@ test('retained six-leg hosted reports match their run record and comparator', as
   ], { cwd: ROOT, encoding: 'utf8' });
   assert.equal(comparison.status, 0, comparison.stderr);
   assert.equal(comparison.stdout.trim(), record.comparison.result);
+});
+
+test.skip('checked-in bounded selection bundle and retained validation report stay reproducible', async () => {
+  const retained = JSON.parse(await readFile(CHECKED_IN_VALIDATION_PATH, 'utf8'));
+  const replay = await verifyChunkingSelectionBenchmarkBundle(CHECKED_IN_BUNDLE_PATH);
+  assert.deepEqual(replay, retained);
 });

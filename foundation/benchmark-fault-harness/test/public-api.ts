@@ -10,11 +10,15 @@ import {
   redactPublicData,
   type CacheState,
   type HarnessCode,
+  type HarnessProfile,
   type NetworkProfile,
+  type TaskId,
 } from '@opengamevcs/benchmark-fault-harness';
 
 const code: HarnessCode = 'HARNESS_OK';
 const state: CacheState = 'warm-local-cache';
+const diagnosticProfile: HarnessProfile = 'chunking-selection-bounded';
+const diagnosticTask: TaskId = 'chunking-verify';
 const digest: string = canonicalDigest({ code });
 const schedule = createFaultSchedule('type-smoke', ['branch.cas']);
 const cache = new DeterministicCacheController();
@@ -23,7 +27,7 @@ const profile: NetworkProfile = { id: 'test', mode: 'simulated', rttMs: 20, band
 new NetworkController(profile, { simulateDelay: false }).planTransfer(32);
 const deadline: AbortSignal = new HarnessDeadline().signal;
 const redacted = redactPublicData({ operatorId: 'example' });
-void [digest, schedule, deadline, redacted, BenchmarkHarnessError];
+void [digest, schedule, deadline, redacted, BenchmarkHarnessError, diagnosticProfile, diagnosticTask];
 
 const contract = await loadBenchmarkContract();
 planHarnessMatrix(contract);

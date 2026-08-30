@@ -65,6 +65,24 @@ test('five-corpus reference smoke publishes raw authenticated reproducible evide
   assert.throws(() => buildResultBundle(authority, run.matrix, { evidenceReport: forgedBroken, faultSchedules: run.publication.result.faultSchedules }), (error) => error.code === 'HARNESS_INPUT_INVALID');
   const forgedSecurity = { ...run.publication.evidenceReport, security: { ...run.publication.evidenceReport.security, pathCases: run.publication.evidenceReport.security.pathCases.slice(1) } };
   assert.throws(() => buildResultBundle(authority, run.matrix, { evidenceReport: forgedSecurity, faultSchedules: run.publication.result.faultSchedules }), (error) => error.code === 'HARNESS_INPUT_INVALID');
+  const forgedLegacyAuthority = run.matrix.environmentRecords.map((environment, index) => index === 0
+    ? {
+      ...environment,
+      corpus: {
+        ...environment.corpus,
+        profileVersion: '9.9.9',
+      },
+    }
+    : environment);
+  assert.throws(() => buildResultBundle(authority, { ...run.matrix, environmentRecords: forgedLegacyAuthority }, {
+    evidenceReport: run.publication.evidenceReport,
+    faultSchedules: run.publication.result.faultSchedules,
+    conformanceReport: run.publication.conformanceReport,
+    seed: 'reference-test-v1',
+    operator: 'test-operator',
+    classification: 'synthetic',
+    clock: () => new Date('2026-08-21T00:00:00.000Z'),
+  }), (error) => error.code === 'HARNESS_INPUT_INVALID');
   const forgedAuthority = { ...run.publication, result: { ...run.publication.result, contractManifestSha256: '0'.repeat(64) } };
   const rejectedOutput = join(root, 'rejected-authority');
   await assert.rejects(writeResultBundle(rejectedOutput, authority, forgedAuthority), (error) => error.code === 'HARNESS_BUNDLE_INVALID');

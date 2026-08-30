@@ -28,7 +28,7 @@ async function packedEvidence(root, platform, semanticResultsSha256 = 'b'.repeat
   const packages = [];
   const authorities = [
     ['@opengamevcs/authorization-contract', '1.0.0'], ['@opengamevcs/authorization-contract-v1', '1.0.0'],
-    ['@opengamevcs/benchmark-fault-contract-v1', '1.0.0-rc.1'], ['@opengamevcs/benchmark-fault-harness', '1.0.0-rc.1'],
+    ['@opengamevcs/benchmark-fault-contract-v1', '1.0.0-rc.2'], ['@opengamevcs/benchmark-fault-harness', '1.0.0-rc.2'],
     ['@opengamevcs/fixture-generator', '1.0.0'], ['@opengamevcs/path-contract-v1', '1.0.0'], ['@opengamevcs/path-filesystem', '1.1.0'],
     ['@opengamevcs/protocol-baseline', '1.0.0-rc.1'], ['@opengamevcs/protocol-contract-v1', '1.0.0-rc.1'], ['@opengamevcs/protocol-types-v1', '1.0.0-rc.1'],
   ];

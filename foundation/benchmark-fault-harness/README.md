@@ -1,9 +1,12 @@
 # `@opengamevcs/benchmark-fault-harness`
 
-This MIT-licensed Node.js 22 package is the OGVCS-005 reference benchmark,
+This MIT-licensed Node.js 22 package is the OGVCS-005 rc.2 reference benchmark,
 conformance, cache/network-control, process-driver, publication, and fault
 harness. It consumes all five OGVCS-001 fixture profiles and the authenticated
-`@opengamevcs/benchmark-fault-contract-v1` authority.
+`@opengamevcs/benchmark-fault-contract-v1` authority. The four standard
+profiles remain `local-smoke`, `presubmit`, `nightly`, and `release`; rc.2
+also adds an isolated `chunking-selection-bounded` diagnostic profile for the
+seven OGVCS-007 selection workloads.
 
 The harness performs no telemetry or service discovery. Ordinary profiles are
 unprivileged. The only privileged network profile requires an explicit
@@ -48,6 +51,7 @@ performs that complete offline pack/install/run proof.
 | `presubmit` | 3 | all four | loopback, 20 ms | none |
 | `nightly` | 10 | all four | all simulated | none |
 | `release` | 30 | all four | simulated plus netem | isolated adapter required |
+| `chunking-selection-bounded` | 1 | cold | loopback | none |
 
 Every repetition gets a new repository service, cache controller, and network
 controller. Cache state is independently inspected. Simulated profiles model

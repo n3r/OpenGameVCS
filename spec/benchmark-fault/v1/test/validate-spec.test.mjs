@@ -11,7 +11,9 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 
 test('generated contract loads and authenticates every authority set', async () => {
   const contract = await loadBenchmarkContract({ root, cache: false });
-  assert.equal(contract.manifest.counts.tasks, 11);
+  assert.equal(contract.manifest.counts.tasks, 12);
+  assert.deepEqual(contract.registries.tasks.entries.slice(0, 11).map(({ id }) => id), ['setup', 'status', 'sync', 'submit', 'lock', 'merge', 'ci', 'verify', 'backup', 'restore', 'export']);
+  assert.equal(contract.registries.tasks.entries[11]?.id, 'chunking-verify');
   assert.equal(contract.manifest.counts.faultPoints, 12);
   assert.equal(contract.vectors.conformance.cases.length, contract.manifest.counts.scenarios);
   const directoryUrl = pathToFileURL(root.slice(0, -1));

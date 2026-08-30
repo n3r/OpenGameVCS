@@ -10,10 +10,13 @@ The process driver uses the registered OGVCS-041
 not enable its fault hooks. An incompatible driver is rejected from its
 read-only hello before the harness sends a command or enables mutation.
 
-The four harness profiles are `local-smoke`, `presubmit`, `nightly`, and
-`release`. Presubmit is bounded and unprivileged. The complete release matrix
-is schedulable, but expensive fixture-scale campaigns remain explicit manual
-jobs and are not implied by ordinary conformance.
+The four standard harness profiles are `local-smoke`, `presubmit`, `nightly`,
+and `release`. Presubmit is bounded and unprivileged. An additive
+`chunking-selection-bounded` profile is retained for the seven OGVCS-007
+selection workloads and does not change the standard 110/1320/8800/33000
+matrices. The complete release matrix is schedulable, but expensive
+fixture-scale campaigns remain explicit manual jobs and are not implied by
+ordinary conformance.
 
 Public bundles retain the complete selected threshold authority and bounded raw
 environment, sample, summary, fault, negative-suite, and conformance evidence.

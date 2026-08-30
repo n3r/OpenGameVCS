@@ -12,7 +12,7 @@ const SHA256 = /^[0-9a-f]{64}$/u;
 const ARCHIVE_NAME = /^[A-Za-z0-9._-]+\.tgz$/u;
 const EXPECTED_PACKAGES = Object.freeze([
   '@opengamevcs/authorization-contract@1.0.0', '@opengamevcs/authorization-contract-v1@1.0.0',
-  '@opengamevcs/benchmark-fault-contract-v1@1.0.0-rc.1', '@opengamevcs/benchmark-fault-harness@1.0.0-rc.1',
+  '@opengamevcs/benchmark-fault-contract-v1@1.0.0-rc.2', '@opengamevcs/benchmark-fault-harness@1.0.0-rc.2',
   '@opengamevcs/fixture-generator@1.0.0', '@opengamevcs/path-contract-v1@1.0.0', '@opengamevcs/path-filesystem@1.1.0',
   '@opengamevcs/protocol-baseline@1.0.0-rc.1', '@opengamevcs/protocol-contract-v1@1.0.0-rc.1', '@opengamevcs/protocol-types-v1@1.0.0-rc.1',
 ]);
