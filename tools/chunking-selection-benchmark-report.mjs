@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { resolve, dirname, join } from 'node:path';
+import { readdir, readFile, writeFile, mkdir } from 'node:fs/promises';
+import { resolve, dirname, join, relative } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 
@@ -20,6 +20,34 @@ function canonicalJson(value) {
 
 function sha256(value) {
   return createHash('sha256').update(typeof value === 'string' || Buffer.isBuffer(value) ? value : canonicalJson(value)).digest('hex');
+}
+
+async function collectEntries(root, relativePath, results) {
+  const absolutePath = join(root, relativePath);
+  const directoryEntries = await readdir(absolutePath, { withFileTypes: true }).catch(() => null);
+  if (directoryEntries === null) {
+    const bytes = await readFile(absolutePath);
+    results.push({ bytes: bytes.length, path: relativePath.replaceAll('\\', '/'), sha256: sha256(bytes) });
+    return;
+  }
+  for (const entry of directoryEntries) {
+    const entryPath = join(relativePath, entry.name);
+    if (entry.isDirectory()) await collectEntries(root, entryPath, results);
+    else if (entry.isFile()) {
+      const bytes = await readFile(join(root, entryPath));
+      results.push({ bytes: bytes.length, path: entryPath.replaceAll('\\', '/'), sha256: sha256(bytes) });
+    }
+  }
+}
+
+async function fileEntries(root, paths) {
+  const results = [];
+  for (const relativePath of paths) await collectEntries(root, relativePath, results);
+  return results.sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function digestEntries(entries, domain) {
+  return sha256(entries.map(({ path, bytes, sha256: digest }) => ({ path, bytes, sha256: digest, domain })));
 }
 
 async function json(path) {
@@ -128,13 +156,55 @@ function firstDifference(left, right) {
   return maximum;
 }
 
-function sharedSuffixBytes(left, right, prefixBytes) {
-  let count = 0;
-  while (count < left.length - prefixBytes && count < right.length - prefixBytes) {
-    if (left[left.length - 1 - count] !== right[right.length - 1 - count]) break;
-    count += 1;
+function chunkOccurrences(result) {
+  let start = 0;
+  return result.chunks.map((part, index) => {
+    const end = result.boundaries[index];
+    const occurrence = {
+      chunkIndex: index,
+      end,
+      length: part.length,
+      objectId: part.objectId,
+      start,
+    };
+    start = end;
+    return occurrence;
+  });
+}
+
+function resynchronizationAfterMutation(baseResult, candidateResult, mutationStartByte) {
+  const baseOccurrences = chunkOccurrences(baseResult);
+  const candidateOccurrences = chunkOccurrences(candidateResult);
+  const baseByObjectId = new Map();
+  for (const occurrence of baseOccurrences) {
+    if (!baseByObjectId.has(occurrence.objectId)) baseByObjectId.set(occurrence.objectId, []);
+    baseByObjectId.get(occurrence.objectId).push(occurrence);
   }
-  return count;
+  const aligned = candidateOccurrences.find((candidate) => candidate.start >= mutationStartByte
+    && (baseByObjectId.get(candidate.objectId) ?? []).some((base) => base.start >= mutationStartByte));
+  if (!aligned) {
+    return {
+      firstAlignedCandidateChunkIndex: null,
+      firstAlignedCandidateOffset: null,
+      firstAlignedChunkObjectId: null,
+      firstAlignedBaseChunkIndex: null,
+      firstAlignedBaseOffset: null,
+      metric: 'no-post-mutation-aligned-reused-chunk',
+      resynchronizationDistanceBytes: null,
+      schemaVersion: 'ogvcs.chunking/resynchronization-summary/v1',
+    };
+  }
+  const base = baseByObjectId.get(aligned.objectId).find((occurrence) => occurrence.start >= mutationStartByte);
+  return {
+    firstAlignedBaseChunkIndex: base.chunkIndex,
+    firstAlignedBaseOffset: base.start,
+    firstAlignedCandidateChunkIndex: aligned.chunkIndex,
+    firstAlignedCandidateOffset: aligned.start,
+    firstAlignedChunkObjectId: aligned.objectId,
+    metric: 'candidate-offset-to-first-post-mutation-aligned-reused-chunk',
+    resynchronizationDistanceBytes: aligned.start - mutationStartByte,
+    schemaVersion: 'ogvcs.chunking/resynchronization-summary/v1',
+  };
 }
 
 function evaluateThresholds(thresholdFile, workloads) {
@@ -164,7 +234,7 @@ function evaluateThresholds(thresholdFile, workloads) {
         actual = Number(workloadMap.get(entry.workloadId)?.compare.newlyRequiredBytes ?? 0);
         break;
       case 'resynchronizationDistanceBytes': {
-        const value = workloadMap.get(entry.workloadId)?.deltas.resynchronizationDistanceBytes;
+        const value = workloadMap.get(entry.workloadId)?.deltas.resynchronization.resynchronizationDistanceBytes;
         actual = value === null ? Number.MAX_SAFE_INTEGER : value;
         break;
       }
@@ -188,10 +258,45 @@ function evaluateThresholds(thresholdFile, workloads) {
   return rows;
 }
 
-export async function buildChunkingSelectionReport() {
+async function implementationIdentity(packageJson) {
+  const entries = await fileEntries(dirname(PACKAGE_JSON), ['package.json', ...packageJson.files]);
+  return {
+    id: '@opengamevcs/chunking-manifest/javascript',
+    package: packageJson.name,
+    packageJsonSha256: sha256(await readFile(PACKAGE_JSON)),
+    publishedFileCount: entries.length,
+    publishedFileSetSha256: digestEntries(entries, 'ogvcs.chunking/package-files/v1'),
+    version: packageJson.version,
+  };
+}
+
+async function sourceIdentity() {
+  const entries = await fileEntries(ROOT, [
+    'core/chunking-manifest/js/LICENSE',
+    'core/chunking-manifest/js/README.md',
+    'core/chunking-manifest/js/package.json',
+    'core/chunking-manifest/js/src',
+    'spec/chunking-manifest/v1/docs',
+    'spec/chunking-manifest/v1/manifest.json',
+    'spec/chunking-manifest/v1/profiles',
+    'spec/chunking-manifest/v1/registries',
+    'spec/chunking-manifest/v1/schemas',
+    'spec/chunking-manifest/v1/scripts',
+    'spec/chunking-manifest/v1/thresholds',
+    'spec/chunking-manifest/v1/vectors',
+    'tools/chunking-selection-benchmark-report.mjs',
+  ]);
+  return {
+    entryCount: entries.length,
+    sourceSetSha256: digestEntries(entries, 'ogvcs.chunking/selection-benchmark-source-set/v1'),
+    type: 'selection-benchmark-source-set/v1',
+  };
+}
+
+export async function buildChunkingSelectionReport(options = {}) {
   const [contract, thresholdFile, workloadFile, packageJson] = await Promise.all([
     json(join(SPEC_ROOT, 'manifest.json')),
-    json(join(SPEC_ROOT, 'thresholds/selection-bounded-v1.json')),
+    options.thresholdFile ?? json(join(SPEC_ROOT, 'thresholds/selection-bounded-v1.json')),
     json(join(SPEC_ROOT, 'vectors/selection-benchmark-workloads.json')),
     json(PACKAGE_JSON),
   ]);
@@ -211,11 +316,8 @@ export async function buildChunkingSelectionReport() {
       manifest: candidate.value.manifest.bytes,
       source,
     }));
-    const prefixBytes = firstDifference(baseBytes, candidateBytes);
-    const suffixBytes = sharedSuffixBytes(baseBytes, candidateBytes, prefixBytes);
-    const resynchronizationDistanceBytes = suffixBytes > 0 && prefixBytes < candidateBytes.length
-      ? candidateBytes.length - suffixBytes - prefixBytes
-      : null;
+    const mutationStartByte = firstDifference(baseBytes, candidateBytes);
+    const resynchronization = resynchronizationAfterMutation(base.value, candidate.value, mutationStartByte);
     const accounting = {
       balanced: Number(comparison.value.reusedBytes) + Number(comparison.value.newlyRequiredBytes) === Number(comparison.value.uniqueBytes)
         && Number(comparison.value.logicalBytes) === Number(comparison.value.uniqueBytes) + Number(comparison.value.repeatedBytes)
@@ -251,12 +353,10 @@ export async function buildChunkingSelectionReport() {
       },
       deltas: {
         manifestBytesDelta: candidate.value.manifest.bytes.length - base.value.manifest.bytes.length,
-        mutationStartByte: prefixBytes,
+        mutationStartByte,
         partCountDelta: candidate.value.chunks.length - base.value.chunks.length,
-        resynchronizationDistanceBytes,
+        resynchronization,
         reusedRatioPartsPerMillion: Math.floor((Number(comparison.value.reusedBytes) * 1_000_000) / Math.max(1, candidate.value.logicalLength)),
-        sharedPrefixBytes: prefixBytes,
-        sharedSuffixBytes: suffixBytes,
       },
       description: definition.description,
       exactScaleExecuted: false,
@@ -271,42 +371,40 @@ export async function buildChunkingSelectionReport() {
       },
     });
   }
-  const thresholdEvaluations = evaluateThresholds(thresholdFile, workloads);
-  const gateFailed = thresholdEvaluations.some(({ severity, status }) => severity === 'gate' && status === 'failed');
+  const mutatedWorkloads = typeof options.mutateWorkloads === 'function' ? options.mutateWorkloads(workloads) : workloads;
+  const thresholdEvaluations = evaluateThresholds(thresholdFile, mutatedWorkloads);
+  const thresholdFailed = thresholdEvaluations.some(({ status }) => status === 'failed');
   const warningCount = thresholdEvaluations.filter(({ severity, status }) => severity === 'warning' && status === 'failed').length;
   const workloadSetDigest = sha256(workloadFile.workloads);
   const summary = {
-    accountingMismatchCount: workloads.filter(({ accounting }) => !accounting.balanced).length,
-    baseLogicalBytes: workloads.reduce((sum, row) => sum + row.base.logicalBytes, 0),
-    candidateLogicalBytes: workloads.reduce((sum, row) => sum + row.candidate.logicalBytes, 0),
+    accountingMismatchCount: mutatedWorkloads.filter(({ accounting }) => !accounting.balanced).length,
+    baseLogicalBytes: mutatedWorkloads.reduce((sum, row) => sum + row.base.logicalBytes, 0),
+    candidateLogicalBytes: mutatedWorkloads.reduce((sum, row) => sum + row.candidate.logicalBytes, 0),
     exactScaleExecuted: false,
-    successCount: workloads.filter(({ success }) => success).length,
-    totalNewlyRequiredBytes: workloads.reduce((sum, row) => sum + Number(row.compare.newlyRequiredBytes), 0),
-    totalReusedBytes: workloads.reduce((sum, row) => sum + Number(row.compare.reusedBytes), 0),
+    successCount: mutatedWorkloads.filter(({ success }) => success).length,
+    thresholdFailureCount: thresholdEvaluations.filter(({ status }) => status === 'failed').length,
+    totalNewlyRequiredBytes: mutatedWorkloads.reduce((sum, row) => sum + Number(row.compare.newlyRequiredBytes), 0),
+    totalReusedBytes: mutatedWorkloads.reduce((sum, row) => sum + Number(row.compare.reusedBytes), 0),
     warningCount,
-    workloadCount: workloads.length,
+    workloadCount: mutatedWorkloads.length,
   };
   const reportBody = {
     contractManifestSha256: contract.artifacts ? sha256(await readFile(join(SPEC_ROOT, 'manifest.json'))) : contract.manifestSha256,
     exactScaleExecuted: false,
     generatedAt: new Date().toISOString(),
     host: { architecture: process.arch, node: process.versions.node, os: process.platform },
-    implementation: {
-      id: '@opengamevcs/chunking-manifest/javascript',
-      package: packageJson.name,
-      version: packageJson.version,
-    },
-    overallStatus: gateFailed ? 'failed' : 'passed',
+    implementation: await implementationIdentity(packageJson),
+    overallStatus: thresholdFailed ? 'failed' : 'passed',
     profile: contract.profile,
     scalarWorkingMemoryBytesMinimum: LIMITS.scalarWorkingMinimum,
     schemaVersion: 'ogvcs.chunking/selection-benchmark-report/v1',
-    sourceRevision: process.env.OGVCS_SOURCE_STATE ?? process.env.GITHUB_SHA ?? 'working-tree',
+    sourceIdentity: await sourceIdentity(),
     summary,
     thresholdEvaluations,
     thresholdFile,
     thresholdFileDigest: sha256(thresholdFile),
     workloadDefinitionsDigest: workloadSetDigest,
-    workloads,
+    workloads: mutatedWorkloads,
   };
   return { ...reportBody, reportSha256: sha256(reportBody) };
 }

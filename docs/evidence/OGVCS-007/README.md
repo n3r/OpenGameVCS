@@ -21,8 +21,9 @@ The retained report is
 It binds the chunking contract manifest SHA-256, workload-definition digest,
 threshold file and digest, host/runtime identity, exact logical/unique/reused/
 new byte accounting, per-workload chunk counts and manifest sizes, accounted
-ledger memory, observed generation/compare/verify throughput, and bounded
-resynchronization distance where a preserved suffix exists.
+ledger memory, observed generation/compare/verify throughput, exact source
+identity type/value, and bounded chunk-based resynchronization distance where a
+post-mutation aligned reused chunk exists.
 
 ## What this evidence proves
 
@@ -30,6 +31,7 @@ resynchronization distance where a preserved suffix exists.
 - The report is executable from the public JavaScript implementation with:
   `node tools/chunking-selection-benchmark-report.mjs --output <report.json>`.
 - The bounded threshold file is green for this retained report.
+- Every threshold failure forces `overallStatus: "failed"`.
 - Compressed and encrypted/random inputs honestly report poor reuse.
 - Source-like, structured, insertion, replacement, and append workloads record
   observed reuse rather than inferred savings.

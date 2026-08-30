@@ -85,7 +85,7 @@ const manifest = {
     goldenCases: golden.cases.length,
     malformedCases: malformed.cases.length,
     fragmentationCases: fragmentation.cases.length,
-    schemas: 7,
+    schemas: 8,
   },
   generatedBy: { generatorSha256: sha(await readFile(fileURLToPath(import.meta.url))), modelSha256: sha(await readFile(resolve(ROOT, 'scripts/model.mjs'))) },
   license: 'MIT',

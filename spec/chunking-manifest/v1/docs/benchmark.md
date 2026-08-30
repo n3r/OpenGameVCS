@@ -12,8 +12,17 @@ base and candidate, verifies the candidate manifest from its delivered chunks,
 and compares the candidate manifest against the base chunk index without any
 remote service.
 
+For insertion and replacement, `resynchronizationDistanceBytes` is defined from
+actual chunk reuse, not a raw common-suffix span. The runner finds the first
+mutated byte offset, then scans the candidate chunk sequence for the first
+reused chunk whose candidate start offset is at or after that mutation start
+and whose `ChunkID` also appears in a base chunk that starts at or after the
+same mutation start. The metric is that candidate chunk start offset minus the
+mutation start offset. If no such post-mutation aligned reused chunk exists,
+the metric is `null`.
+
 `thresholds/selection-bounded-v1.json` is intentionally documentary rather
-than promotional. It gates only report completeness, successful execution,
+than promotional. It gates report completeness, successful execution,
 byte-accounting integrity, and a few bounded observations that the review
 explicitly named: preserved reuse for source-like and structured inputs,
 honestly poor reuse for compressed and encrypted/random inputs, bounded

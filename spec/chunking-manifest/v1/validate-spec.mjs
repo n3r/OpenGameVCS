@@ -136,5 +136,5 @@ if (artifactSet !== manifest.artifactSetSha256
   || manifest.counts.goldenCases !== golden.cases.length
   || manifest.counts.malformedCases !== malformed.cases.length
   || manifest.counts.fragmentationCases !== fragments.cases.length
-  || manifest.counts.schemas !== 7) fail('contract manifest counts or aggregate digest differ');
+  || manifest.counts.schemas !== 8) fail('contract manifest counts or aggregate digest differ');
 process.stdout.write(`${canonical({ artifactSetSha256: artifactSet, benchmarkWorkloads: selectionWorkloads.workloads.length, goldenCases: golden.cases.length, profile: PROFILE, tableSha256: gearDigest })}\n`);
