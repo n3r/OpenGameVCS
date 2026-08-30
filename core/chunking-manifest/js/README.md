@@ -2,9 +2,10 @@
 
 Independent scalar JavaScript implementation of the Proposed ADR-0016
 `chunking.opengamevcs/gear-fastcdc-1m@1` candidate. It exposes deterministic
-chunk generation and bounded public verification, reconstruction, and
-comparison. It does not provide a CLI, bind a production repository trust
-boundary, or claim the deferred 100-GiB acceptance proof.
+chunk generation and bounded public verification, reconstruction, comparison,
+and an additive `atomicWriteStream` publication adapter that issues a one-use
+private verification receipt. It does not provide a CLI, ratify the profile,
+or claim the deferred 100-GiB acceptance proof.
 
 ```js
 import { createChunker } from '@opengamevcs/chunking-manifest';

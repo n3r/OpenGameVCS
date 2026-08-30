@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 
 const packageDirectory = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const objectModelDirectory = resolve(packageDirectory, '../../object-model/js');
+const pathContractDirectory = resolve(packageDirectory, '../../../spec/path-filesystem/v1');
+const pathFilesystemDirectory = resolve(packageDirectory, '../../paths-filesystem/js');
 const temporary = await mkdtemp(join(tmpdir(), 'ogvcs-chunk-packed-'));
 const environment = { ...process.env, npm_config_cache: join(temporary, 'npm-cache') };
 const npmCli = process.env.npm_execpath
@@ -38,12 +40,14 @@ function pack(directory) {
 
 try {
   const objectModel = pack(objectModelDirectory);
+  const pathContract = pack(pathContractDirectory);
+  const pathFilesystem = pack(pathFilesystemDirectory);
   const chunking = pack(packageDirectory);
   const files = new Set(chunking.files.map(({ path }) => path));
   for (const required of [
     'package.json', 'README.md', 'src/cache-key.mjs', 'src/control.mjs',
     'src/errors.mjs', 'src/gear.mjs', 'src/identity.mjs', 'src/index.mjs',
-    'src/ledger.mjs', 'src/verify.mjs',
+    'src/ledger.mjs', 'src/publication.mjs', 'src/receipt.mjs', 'src/verify.mjs',
   ]) {
     if (!files.has(required)) throw new Error(`packed chunk package is missing ${required}`);
   }
@@ -53,13 +57,20 @@ try {
 
   await writeFile(join(temporary, 'package.json'), '{"private":true,"type":"module"}\n');
   const objectTarball = join(temporary, objectModel.filename);
+  const pathContractTarball = join(temporary, pathContract.filename);
+  const pathTarball = join(temporary, pathFilesystem.filename);
   const chunkTarball = join(temporary, chunking.filename);
   runNpm([
     'install', '--offline', '--ignore-scripts', '--no-audit', '--no-fund',
-    '--package-lock=false', objectTarball, chunkTarball,
+    '--package-lock=false', objectTarball, pathContractTarball, pathTarball, chunkTarball,
   ], temporary);
   await writeFile(join(temporary, 'check.mjs'), `
-    import { chunkBytes, chunkCacheKey, verifyManifest } from '@opengamevcs/chunking-manifest';
+    import { mkdtemp, readFile } from 'node:fs/promises';
+    import { tmpdir } from 'node:os';
+    import { join } from 'node:path';
+    import { createHash } from 'node:crypto';
+    import { openWorkspaceRoot, preflightWorkspaceMaterialization, probeFilesystemCapabilities } from '@opengamevcs/path-filesystem';
+    import { chunkBytes, chunkCacheKey, consumeVerificationReceipt, createAtomicWriteStreamPublicationAdapter, reconstructManifest, verifyManifest } from '@opengamevcs/chunking-manifest';
     const bytes = Buffer.from('packed-offline');
     const generated = await chunkBytes(bytes);
     const source = new Map([[generated.chunks[0].objectId, bytes]]);
@@ -68,6 +79,36 @@ try {
     if (!chunkCacheKey(generated.chunks[0]).startsWith('ogvcs:chunk-cache:v1:sha256:')) {
       throw new Error('cache key mismatch');
     }
+    const root = await mkdtemp(join(tmpdir(), 'ogvcs-chunk-packed-root-'));
+    const workspace = await openWorkspaceRoot(root);
+    const capabilities = await probeFilesystemCapabilities(workspace.root);
+    const plan = await preflightWorkspaceMaterialization(workspace, {
+      schemaVersion: 'ogvcs.path/preflight-request/v1',
+      caseMode: workspace.caseMode,
+      profile: workspace.profile,
+      platform: capabilities.platform,
+      capabilities: { atomicReplace: capabilities.atomicReplace, executableBit: capabilities.executableBit, symlink: capabilities.symlink },
+      entries: [
+        { id: 'parent-1', path: 'Content', kind: 'directory', mode: 'directory' },
+        { id: 'asset', path: 'Content/asset.bin', kind: 'regular', mode: 'regular-file' },
+      ],
+    });
+    const reconstructed = await reconstructManifest({
+      manifest: generated.manifest.bytes,
+      source,
+      publication: createAtomicWriteStreamPublicationAdapter(workspace, 'Content/asset.bin', { manifest: generated.manifest.bytes, createParents: true, plan, maxBytes: bytes.length, maxScratchBytes: bytes.length }),
+    });
+    const workspacePublication = reconstructed.publicationResult.workspacePublication;
+    const fileBytes = await readFile(join(root, 'Content', 'asset.bin'));
+    if (Buffer.compare(fileBytes, bytes) !== 0) throw new Error('reconstruction mismatch');
+    const receipt = consumeVerificationReceipt(reconstructed.verificationReceipt, {
+      manifest: generated.manifest.bytes,
+      manifestObjectId: generated.manifest.objectId,
+      logicalBytes: String(bytes.length),
+      wholeFileSha256: createHash('sha256').update(bytes).digest('hex'),
+      workspacePublication,
+    });
+    if (receipt.workspacePublication.transaction !== workspacePublication.transaction) throw new Error('receipt mismatch');
   `);
   run(process.execPath, [join(temporary, 'check.mjs')], temporary);
   process.stdout.write(`verified ${chunking.filename} from an offline packed install\n`);

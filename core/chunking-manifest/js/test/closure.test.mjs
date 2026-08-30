@@ -1,12 +1,16 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
 import {
-  ChunkingError, ERROR_CODES, PROFILE, chunkBytes, chunkCacheKey, chunkIdentity,
-  compareManifest, contentManifest, createChunker, reconstructManifest, verifyManifest,
+  openWorkspaceRoot, preflightWorkspaceMaterialization, probeFilesystemCapabilities,
+} from '@opengamevcs/path-filesystem';
+import {
+  ChunkingError, ERROR_CODES, PROFILE, VERIFICATION_RECEIPT_VERIFIER, chunkBytes, chunkCacheKey, chunkIdentity,
+  compareManifest, consumeVerificationReceipt, contentManifest, createAtomicWriteStreamPublicationAdapter,
+  createChunker, reconstructManifest, verifyManifest,
 } from '../src/index.mjs';
 
 const CONTRACT = resolve(import.meta.dirname, '../../../../spec/chunking-manifest/v1');
@@ -65,6 +69,33 @@ async function shiftedBoundaryFixture() {
     parts,
   );
   return { manifest, source };
+}
+
+async function publicationPlan(workspace, path) {
+  const capabilities = await probeFilesystemCapabilities(workspace.root);
+  const segments = path.split('/');
+  const entries = [];
+  for (let index = 1; index < segments.length; index += 1) {
+    entries.push({
+      id: `parent-${index}`,
+      path: segments.slice(0, index).join('/'),
+      kind: 'directory',
+      mode: 'directory',
+    });
+  }
+  entries.push({ id: 'asset', path, kind: 'regular', mode: 'regular-file' });
+  return preflightWorkspaceMaterialization(workspace, {
+    schemaVersion: 'ogvcs.path/preflight-request/v1',
+    caseMode: workspace.caseMode,
+    profile: workspace.profile,
+    platform: capabilities.platform,
+    capabilities: {
+      atomicReplace: capabilities.atomicReplace,
+      executableBit: capabilities.executableBit,
+      symlink: capabilities.symlink,
+    },
+    entries,
+  });
 }
 
 test('generated shared registry exactly matches the public JavaScript error surface', () => {
@@ -329,6 +360,68 @@ test('default result compatibility, cancellation/deadline, and cache keys are st
     },
   }), { code: 'CHUNK_RESOURCE_EXHAUSTED' });
   assert.deepEqual({ commits, aborts }, { commits: 0, aborts: 1 });
+});
+
+test('atomic write adapter binds a one-use verification receipt to workspace publication', async () => {
+  const fixture = await prepared('tiny-ascii');
+  const root = await mkdtemp(join(tmpdir(), 'ogvcs-chunk-publication-'));
+  try {
+    const workspace = await openWorkspaceRoot(root);
+    const plan = await publicationPlan(workspace, 'Content/asset.bin');
+    const reconstructed = await reconstructManifest({
+      manifest: fixture.result.manifest.bytes,
+      source: fixture.source,
+      publication: createAtomicWriteStreamPublicationAdapter(workspace, 'Content/asset.bin', {
+        manifest: fixture.result.manifest.bytes,
+        createParents: true,
+        plan,
+        maxBytes: fixture.bytes.length,
+        maxScratchBytes: fixture.bytes.length,
+      }),
+    });
+    const published = reconstructed.publicationResult.workspacePublication;
+    assert.equal(Buffer.compare(await readFile(join(root, 'Content', 'asset.bin')), fixture.bytes), 0);
+    assert.equal(published.path, 'Content/asset.bin');
+    assert.equal(published.bytes, fixture.bytes.length);
+    assert.equal(published.sha256, createHash('sha256').update(fixture.bytes).digest('hex'));
+    const receipt = consumeVerificationReceipt(reconstructed.verificationReceipt, {
+      verifier: VERIFICATION_RECEIPT_VERIFIER,
+      profile: `${PROFILE.namespace}/${PROFILE.id}@${PROFILE.major}`,
+      manifest: fixture.result.manifest.bytes,
+      manifestObjectId: fixture.result.manifest.objectId,
+      logicalBytes: String(fixture.bytes.length),
+      wholeFileSha256: published.sha256,
+      workspacePublication: published,
+    });
+    assert.equal(receipt.workspacePublication.transaction, published.transaction);
+    assert.throws(() => consumeVerificationReceipt(reconstructed.verificationReceipt), { code: 'CHUNK_RESOURCE_INVALID' });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('hostile publication receipts fail closed before trusted publication', async () => {
+  const fixture = await prepared('tiny-ascii');
+  const root = await mkdtemp(join(tmpdir(), 'ogvcs-chunk-hostile-publication-'));
+  try {
+    const workspace = await openWorkspaceRoot(root);
+    const plan = await publicationPlan(workspace, 'Content/asset.bin');
+    const publication = createAtomicWriteStreamPublicationAdapter(workspace, 'Content/asset.bin', {
+      manifest: fixture.result.manifest.bytes,
+      createParents: true,
+      plan,
+      maxBytes: fixture.bytes.length,
+      maxScratchBytes: fixture.bytes.length,
+    });
+    publication.write(fixture.bytes);
+    await assert.rejects(
+      publication.commit({ verificationReceipt: Object.freeze({ verifier: VERIFICATION_RECEIPT_VERIFIER }) }),
+      { code: 'CHUNK_PUBLICATION_FAILED' },
+    );
+    await assert.rejects(readFile(join(root, 'Content', 'asset.bin')), { code: 'ENOENT' });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test('OGVCS-002 structure and content errors precede deferred Gear mismatch', async () => {

@@ -7,6 +7,7 @@ import { fail, normalizeError, wrap } from './errors.mjs';
 import { createBoundaryScanner, LIMITS } from './gear.mjs';
 import { createLedger } from './ledger.mjs';
 import { PROFILE } from './identity.mjs';
+import { createVerificationReceipt } from './receipt.mjs';
 
 const PROFILE_TEXT = `${PROFILE.namespace}/${PROFILE.id}@${PROFILE.major}`;
 const DEFAULT_INDEX_MEMORY_BYTES = 256 * 1024 * 1024;
@@ -283,6 +284,21 @@ function summary(parsed, content, ledger) {
   });
 }
 
+export function parseManifestReceiptRequirements(manifest, options = {}) {
+  const parsed = loadManifest(manifest, options);
+  try {
+    return Object.freeze({
+      profile: PROFILE_TEXT,
+      manifestObjectId: parsed.manifestObjectId,
+      manifestSha256: createHash('sha256').update(parsed.bytes).digest('hex'),
+      logicalBytes: String(parsed.logicalLength),
+      wholeFileSha256: Buffer.from(parsed.wholeFileDigest).toString('hex'),
+    });
+  } finally {
+    parsed.dispose();
+  }
+}
+
 export async function verifyManifest(input = {}) {
   let parsed;
   let control;
@@ -291,7 +307,10 @@ export async function verifyManifest(input = {}) {
     control.check();
     parsed = loadManifest(input.manifest, input);
     const content = await consumeContent(parsed, input.source, undefined, control);
-    return summary(parsed, content, parsed.ledger.metrics());
+    return Object.freeze({
+      ...summary(parsed, content, parsed.ledger.metrics()),
+      verificationReceipt: createVerificationReceipt(parseManifestReceiptRequirements(parsed.bytes, input)),
+    });
   } catch (cause) {
     throw normalizeError(cause, 'CHUNK_SESSION_FAILED');
   } finally {
@@ -316,12 +335,23 @@ export async function reconstructManifest(input = {}) {
     parsed = loadManifest(input.manifest, input);
     transactionOpen = true;
     const content = await consumeContent(parsed, input.source, publication, control);
+    const verificationReceipt = createVerificationReceipt({
+      profile: PROFILE_TEXT,
+      manifestObjectId: parsed.manifestObjectId,
+      manifestSha256: createHash('sha256').update(parsed.bytes).digest('hex'),
+      logicalBytes: String(parsed.logicalLength),
+      wholeFileSha256: Buffer.from(parsed.wholeFileDigest).toString('hex'),
+    });
     const publicationResult = await control.wait(
-      () => publication.commit(control.context),
+      () => publication.commit(Object.freeze({ ...control.context, verificationReceipt })),
       'CHUNK_PUBLICATION_FAILED',
     );
     transactionOpen = false;
-    return Object.freeze({ ...summary(parsed, content, parsed.ledger.metrics()), publicationResult });
+    return Object.freeze({
+      ...summary(parsed, content, parsed.ledger.metrics()),
+      publicationResult,
+      verificationReceipt: publicationResult?.verificationReceipt ?? verificationReceipt,
+    });
   } catch (cause) {
     const error = normalizeError(cause, 'CHUNK_SESSION_FAILED');
     if (transactionOpen) {
