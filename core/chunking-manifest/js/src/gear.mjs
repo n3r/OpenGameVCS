@@ -3,6 +3,9 @@ import { chunkIdentity, contentManifest, PROFILE } from './identity.mjs';
 import { createOperationControl } from './control.mjs';
 import { fail, normalizeError, wrap } from './errors.mjs';
 import { createLedger } from './ledger.mjs';
+import { createVerificationReceipt } from './receipt.mjs';
+
+const PROFILE_TEXT = `${PROFILE.namespace}/${PROFILE.id}@${PROFILE.major}`;
 
 const TABLE_DOMAIN = Buffer.from('OpenGameVCS Gear table v1\0', 'ascii');
 export const LIMITS = Object.freeze({
@@ -184,6 +187,7 @@ export function createChunker(options = {}) {
               yield record;
             }
           };
+          const manifestDigest = createHash('sha256');
           const manifest = await control.wait(
             () => contentManifest(
               declaredLength,
@@ -193,13 +197,24 @@ export function createChunker(options = {}) {
                 partCount: ledger.count,
                 sink: manifestSink === undefined
                   ? undefined
-                  : (bytes) => manifestSink(bytes, control.context),
+                  : (bytes) => {
+                    manifestDigest.update(bytes);
+                    return manifestSink(bytes, control.context);
+                  },
               },
             ),
             'CHUNK_SESSION_FAILED',
           );
           const ledgerMetrics = ledger.metrics();
           const retained = retainEntries ? [...controlledRecords()] : undefined;
+          if (manifest.bytes !== undefined) manifestDigest.update(manifest.bytes);
+          const verificationReceipt = createVerificationReceipt({
+            profile: PROFILE_TEXT,
+            manifestObjectId: manifest.objectId,
+            manifestSha256: manifestDigest.digest('hex'),
+            logicalBytes: String(declaredLength),
+            wholeFileSha256: Buffer.from(wholeFileDigest).toString('hex'),
+          });
           finished = true;
           return Object.freeze({
             boundaries: retained === undefined ? undefined : Object.freeze(retained.map(({ boundary }) => boundary)),
@@ -208,6 +223,7 @@ export function createChunker(options = {}) {
             ledger: ledgerMetrics,
             logicalLength: declaredLength,
             manifest,
+            verificationReceipt,
             wholeFileDigest,
           });
         } catch (error) {

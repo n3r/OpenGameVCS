@@ -1,5 +1,5 @@
 import { atomicWriteStream } from '@opengamevcs/path-filesystem';
-import { normalizeError } from './errors.mjs';
+import { fail, normalizeError } from './errors.mjs';
 import { PROFILE } from './identity.mjs';
 import {
   consumeVerificationReceipt,
@@ -7,6 +7,7 @@ import {
   VERIFICATION_RECEIPT_VERIFIER,
 } from './receipt.mjs';
 import { parseManifestReceiptRequirements } from './verify.mjs';
+import { reconstructManifest } from './verify.mjs';
 
 const PROFILE_TEXT = `${PROFILE.namespace}/${PROFILE.id}@${PROFILE.major}`;
 
@@ -168,4 +169,30 @@ export function createAtomicWriteStreamPublicationAdapter(workspace, repositoryP
       }
     },
   });
+}
+
+export async function reconstructManifestToWorkspace(input = {}) {
+  try {
+    if (!input || typeof input !== 'object' || input.workspace === undefined
+        || typeof input.repositoryPath !== 'string' || input.repositoryPath.length === 0
+        || (input.publicationOptions !== undefined
+          && (!input.publicationOptions || typeof input.publicationOptions !== 'object'
+            || Array.isArray(input.publicationOptions)))) {
+      fail('CHUNK_RESOURCE_INVALID');
+    }
+    const {
+      workspace,
+      repositoryPath,
+      publicationOptions = {},
+      ...verification
+    } = input;
+    const publication = createAtomicWriteStreamPublicationAdapter(workspace, repositoryPath, {
+      ...publicationOptions,
+      manifest: verification.manifest,
+      signal: publicationOptions.signal ?? verification.signal,
+    });
+    return await reconstructManifest({ ...verification, publication });
+  } catch (cause) {
+    throw normalizeError(cause, 'CHUNK_PUBLICATION_FAILED');
+  }
 }

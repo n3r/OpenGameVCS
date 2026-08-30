@@ -47,7 +47,8 @@ try {
   for (const required of [
     'package.json', 'README.md', 'src/cache-key.mjs', 'src/control.mjs',
     'src/errors.mjs', 'src/gear.mjs', 'src/identity.mjs', 'src/index.mjs',
-    'src/ledger.mjs', 'src/publication.mjs', 'src/receipt.mjs', 'src/verify.mjs',
+    'src/ledger.mjs', 'src/production.mjs', 'src/publication.mjs',
+    'src/receipt.mjs', 'src/verify.mjs',
   ]) {
     if (!files.has(required)) throw new Error(`packed chunk package is missing ${required}`);
   }
@@ -70,8 +71,9 @@ try {
     import { join } from 'node:path';
     import { createHash } from 'node:crypto';
     import { rm } from 'node:fs/promises';
+    import { loadBundledRegistry, validateRegistrySet } from '@opengamevcs/object-model';
     import { openWorkspaceRoot, preflightWorkspaceMaterialization, probeFilesystemCapabilities } from '@opengamevcs/path-filesystem';
-    import { chunkBytes, chunkCacheKey, consumeVerificationReceipt, createAtomicWriteStreamPublicationAdapter, reconstructManifest, verifyManifest } from '@opengamevcs/chunking-manifest';
+    import { chunkBytes, chunkCacheKey, commitProductionManifest, consumeVerificationReceipt, reconstructManifestToWorkspace, verifyManifest } from '@opengamevcs/chunking-manifest';
     const bytes = Buffer.from('packed-offline');
     const generated = await chunkBytes(bytes);
     const source = new Map([[generated.chunks[0].objectId, bytes]]);
@@ -95,10 +97,12 @@ try {
           { id: 'asset', path: 'Content/asset.bin', kind: 'regular', mode: 'regular-file' },
         ],
       });
-      const reconstructed = await reconstructManifest({
+      const reconstructed = await reconstructManifestToWorkspace({
+        workspace,
+        repositoryPath: 'Content/asset.bin',
         manifest: generated.manifest.bytes,
         source,
-        publication: createAtomicWriteStreamPublicationAdapter(workspace, 'Content/asset.bin', { manifest: generated.manifest.bytes, createParents: true, plan, maxBytes: bytes.length, maxScratchBytes: bytes.length }),
+        publicationOptions: { createParents: true, plan, maxBytes: bytes.length, maxScratchBytes: bytes.length },
       });
       const workspacePublication = reconstructed.publicationResult.workspacePublication;
       const fileBytes = await readFile(join(root, 'Content', 'asset.bin'));
@@ -111,6 +115,39 @@ try {
         workspacePublication,
       });
       if (receipt.workspacePublication.transaction !== workspacePublication.transaction) throw new Error('receipt mismatch');
+
+      const bundled = await loadBundledRegistry();
+      let productionCallbacks = 0;
+      const production = {
+        write() { productionCallbacks += 1; },
+        commit() { productionCallbacks += 1; return { durable: true }; },
+        abort() { productionCallbacks += 1; },
+      };
+      await commitProductionManifest({
+        registry: bundled,
+        manifest: generated.manifest.bytes,
+        verificationReceipt: generated.verificationReceipt,
+        publication: production,
+      }).then(() => { throw new Error('candidate registry authorized production'); }, (error) => {
+        if (error.code !== 'CHUNK_PROFILE_UNSUPPORTED') throw error;
+      });
+      if (productionCallbacks !== 0) throw new Error('disabled production boundary invoked callbacks');
+
+      const documents = structuredClone(Object.fromEntries(bundled.documents));
+      documents['profiles.json'].entries.push({ family: 'chunking', id: 'gear-fastcdc-1m', major: 1, namespace: 'chunking.opengamevcs', owner: 'OGVCS-007', productionWriteAllowed: true, state: 'ratified' });
+      documents['profiles.json'].entries.sort((left, right) => {
+        const separator = String.fromCharCode(0);
+        const a = left.namespace + separator + left.id + separator + String(left.major).padStart(10, '0');
+        const b = right.namespace + separator + right.id + separator + String(right.major).padStart(10, '0');
+        return a < b ? -1 : a > b ? 1 : 0;
+      });
+      const accepted = await commitProductionManifest({
+        registry: validateRegistrySet(documents),
+        manifest: generated.manifest.bytes,
+        verificationReceipt: generated.verificationReceipt,
+        publication: production,
+      });
+      if (!accepted.publicationResult.durable || productionCallbacks !== 2) throw new Error('production boundary mismatch');
     } finally {
       await rm(root, { recursive: true, force: true });
     }

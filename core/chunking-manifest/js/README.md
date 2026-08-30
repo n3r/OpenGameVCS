@@ -3,9 +3,9 @@
 Independent scalar JavaScript implementation of the Proposed ADR-0016
 `chunking.opengamevcs/gear-fastcdc-1m@1` candidate. It exposes deterministic
 chunk generation and bounded public verification, reconstruction, comparison,
-and an additive `atomicWriteStream` publication adapter that issues a one-use
-private verification receipt. It does not provide a CLI, ratify the profile,
-or claim the deferred 100-GiB acceptance proof.
+an additive `atomicWriteStream` publication adapter, and a production trust
+boundary guarded by one-use private verification receipts. It does not provide
+a CLI, ratify the profile, or claim the deferred 100-GiB acceptance proof.
 
 ```js
 import { createChunker } from '@opengamevcs/chunking-manifest';
@@ -31,7 +31,12 @@ Long-running bounded callers set `retainEntries: false`; `chunkBytes` always
 opts in because its whole input is already resident.
 
 ```js
-import { compareManifest, reconstructManifest, verifyManifest } from '@opengamevcs/chunking-manifest';
+import {
+  compareManifest,
+  reconstructManifest,
+  reconstructManifestToWorkspace,
+  verifyManifest,
+} from '@opengamevcs/chunking-manifest';
 
 await verifyManifest({ manifest, source: chunkLookup });
 const delta = await compareManifest({ manifest, knownChunks: localIndex });
@@ -41,6 +46,14 @@ await reconstructManifest({
   publication: { write: stage, commit: publish, abort: discard },
   signal: cancellation.signal,
   maxElapsedMilliseconds: 30_000,
+});
+
+await reconstructManifestToWorkspace({
+  workspace,
+  repositoryPath: 'Content/example.bin',
+  manifest,
+  source: chunkLookup,
+  publicationOptions: { plan, createParents: true, maxBytes, maxScratchBytes },
 });
 ```
 
@@ -61,7 +74,24 @@ accept cooperative `signal` and `maxElapsedMilliseconds` controls;
 cancellation/deadline expiry is `CHUNK_RESOURCE_EXHAUSTED` and never commits
 partial output.
 
+`createChunker().finish()`, `chunkBytes()`, and `verifyManifest()` issue a
+private, branded, one-use receipt bound to the exact verifier version, profile,
+manifest ObjectID and SHA-256, logical length, and whole-file SHA-256.
+`commitProductionManifest()` is the only package-owned production transition:
+it first requires the caller's complete OGVCS-002 registry snapshot to admit
+this exact profile for `production-write`, then consumes the exact receipt,
+then invokes the caller's transactional `write` and `commit` callbacks. A
+missing, forged, reused, wrong-manifest, or wrong-verifier receipt reaches no
+callback; any callback failure aborts exactly once. A successful durable commit
+remains successful if cancellation arrives after settlement.
+
+The checked-in bundled registry has no assignment for this candidate, so this
+boundary currently returns `CHUNK_PROFILE_UNSUPPORTED` before publication.
+That fail-closed behavior is intentional. A later lifecycle cut may add the
+exact ratified row only after the final acceptance gate; callers must not clone
+or locally promote the registry outside bounded conformance tests.
+
 Manifest encoding and ObjectIDs delegate to the public
 `@opengamevcs/object-model` package. The bundled candidate registry view is
-conformance-only; production writes still require shared registry ratification
-and trust-boundary integration.
+conformance-only. The shared registry remains unchanged and production writes
+remain disabled until ratification and the deferred final gate are complete.

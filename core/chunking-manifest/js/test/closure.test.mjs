@@ -5,13 +5,15 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
+import { loadBundledRegistry, validateRegistrySet } from '@opengamevcs/object-model';
 import {
   openWorkspaceRoot, preflightWorkspaceMaterialization, probeFilesystemCapabilities,
 } from '@opengamevcs/path-filesystem';
 import {
-  ChunkingError, ERROR_CODES, PROFILE, VERIFICATION_RECEIPT_VERIFIER, chunkBytes, chunkCacheKey, chunkIdentity,
-  compareManifest, consumeVerificationReceipt, contentManifest, createAtomicWriteStreamPublicationAdapter,
-  createChunker, reconstructManifest, verifyManifest,
+  ChunkingError, ERROR_CODES, PROFILE, PRODUCTION_BOUNDARY_VERSION, VERIFICATION_RECEIPT_VERIFIER,
+  chunkBytes, chunkCacheKey, chunkIdentity, commitProductionManifest, compareManifest,
+  consumeVerificationReceipt, contentManifest, createAtomicWriteStreamPublicationAdapter,
+  createChunker, reconstructManifest, reconstructManifestToWorkspace, verifyManifest,
 } from '../src/index.mjs';
 import { createVerificationReceipt } from '../src/receipt.mjs';
 
@@ -108,6 +110,26 @@ function fixtureReceiptDetails(fixture) {
     logicalBytes: String(fixture.bytes.length),
     wholeFileSha256: createHash('sha256').update(fixture.bytes).digest('hex'),
   });
+}
+
+async function productionRegistry() {
+  const bundled = await loadBundledRegistry();
+  const documents = structuredClone(Object.fromEntries(bundled.documents));
+  documents['profiles.json'].entries.push({
+    family: 'chunking',
+    id: PROFILE.id,
+    major: PROFILE.major,
+    namespace: PROFILE.namespace,
+    owner: 'OGVCS-007',
+    productionWriteAllowed: true,
+    state: 'ratified',
+  });
+  documents['profiles.json'].entries.sort((left, right) => {
+    const a = `${left.namespace}\0${left.id}\0${String(left.major).padStart(10, '0')}`;
+    const b = `${right.namespace}\0${right.id}\0${String(right.major).padStart(10, '0')}`;
+    return a < b ? -1 : a > b ? 1 : 0;
+  });
+  return validateRegistrySet(documents);
 }
 
 function deferred() {
@@ -389,6 +411,231 @@ test('default result compatibility, cancellation/deadline, and cache keys are st
     },
   }), { code: 'CHUNK_RESOURCE_EXHAUSTED' });
   assert.deepEqual({ commits, aborts }, { commits: 0, aborts: 1 });
+});
+
+test('workspace reconstruction is one public receipt-bound operation', async () => {
+  const fixture = await prepared('tiny-ascii');
+  const root = await mkdtemp(join(tmpdir(), 'ogvcs-chunk-workspace-api-'));
+  try {
+    const workspace = await openWorkspaceRoot(root);
+    const plan = await publicationPlan(workspace, 'Content/asset.bin');
+    const reconstructed = await reconstructManifestToWorkspace({
+      workspace,
+      repositoryPath: 'Content/asset.bin',
+      manifest: fixture.result.manifest.bytes,
+      source: fixture.source,
+      publicationOptions: {
+        createParents: true,
+        maxBytes: fixture.bytes.length,
+        maxScratchBytes: fixture.bytes.length,
+        plan,
+      },
+    });
+    const workspacePublication = reconstructed.publicationResult.workspacePublication;
+    assert.equal(workspacePublication.path, 'Content/asset.bin');
+    assert.equal(Buffer.compare(await readFile(join(root, 'Content', 'asset.bin')), fixture.bytes), 0);
+    consumeVerificationReceipt(reconstructed.verificationReceipt, {
+      ...fixtureReceiptDetails(fixture),
+      verifier: VERIFICATION_RECEIPT_VERIFIER,
+      workspacePublication,
+    });
+    assert.deepEqual(await readdir(workspace.transactions), []);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('production manifest commit stays disabled by the bundled registry and consumes a generated receipt exactly once', async () => {
+  const fixture = await prepared('tiny-ascii');
+  const bundled = await loadBundledRegistry();
+  let callbacks = 0;
+  const unusedPublication = {
+    write() { callbacks += 1; },
+    commit() { callbacks += 1; },
+    abort() { callbacks += 1; },
+  };
+  await assert.rejects(commitProductionManifest({
+    registry: bundled,
+    manifest: fixture.result.manifest.bytes,
+    verificationReceipt: fixture.result.verificationReceipt,
+    publication: unusedPublication,
+  }), { code: 'CHUNK_PROFILE_UNSUPPORTED' });
+  assert.equal(callbacks, 0);
+
+  const registry = await productionRegistry();
+  const writes = [];
+  let commits = 0;
+  let aborts = 0;
+  let commitContext;
+  const accepted = await commitProductionManifest({
+    registry,
+    manifest: fixture.result.manifest.bytes,
+    verificationReceipt: fixture.result.verificationReceipt,
+    publication: {
+      write(bytes, context) {
+        assert.equal(Object.isFrozen(context), true);
+        assert.equal(context.boundary, PRODUCTION_BOUNDARY_VERSION);
+        writes.push(Buffer.from(bytes));
+      },
+      commit(context) {
+        commits += 1;
+        commitContext = context;
+        return Object.freeze({ durable: true });
+      },
+      abort() { aborts += 1; },
+    },
+  });
+  assert.equal(Buffer.concat(writes).equals(fixture.result.manifest.bytes), true);
+  assert.equal(accepted.boundary, PRODUCTION_BOUNDARY_VERSION);
+  assert.equal(accepted.manifestObjectId, fixture.result.manifest.objectId);
+  assert.equal(accepted.publicationResult.durable, true);
+  assert.equal(commitContext.manifestSha256, fixtureReceiptDetails(fixture).manifestSha256);
+  assert.deepEqual([commits, aborts], [1, 0]);
+
+  callbacks = 0;
+  await assert.rejects(commitProductionManifest({
+    registry,
+    manifest: fixture.result.manifest.bytes,
+    verificationReceipt: fixture.result.verificationReceipt,
+    publication: unusedPublication,
+  }), { code: 'CHUNK_PUBLICATION_FAILED' });
+  assert.equal(callbacks, 0);
+});
+
+test('streamed manifest generation binds its receipt to the exact emitted byte sequence', async () => {
+  const bytes = Buffer.from('streamed-production-manifest');
+  const manifestFragments = [];
+  const chunkFragments = [];
+  const chunker = createChunker({
+    declaredLength: bytes.length,
+    manifestSink(fragment) { manifestFragments.push(Buffer.from(fragment)); },
+    onChunk(fragment) { chunkFragments.push(Buffer.from(fragment)); },
+    retainEntries: false,
+  });
+  chunker.update(bytes);
+  const generated = await chunker.finish();
+  assert.equal(generated.manifest.bytes, undefined);
+  assert.equal(generated.boundaries, undefined);
+  const manifest = Buffer.concat(manifestFragments);
+  const registry = await productionRegistry();
+  let written;
+  const accepted = await commitProductionManifest({
+    registry,
+    manifest,
+    verificationReceipt: generated.verificationReceipt,
+    publication: {
+      write(value) { written = Buffer.from(value); },
+      commit() { return Object.freeze({ durable: true }); },
+      abort() { throw new Error('unexpected abort'); },
+    },
+  });
+  assert.equal(Buffer.concat(chunkFragments).equals(bytes), true);
+  assert.equal(written.equals(manifest), true);
+  assert.equal(accepted.manifestObjectId, generated.manifest.objectId);
+});
+
+test('production acceptor admits a full verifier receipt and rejects hostile manifest/receipt pairs before callbacks', async () => {
+  const fixture = await prepared();
+  const registry = await productionRegistry();
+  const verified = await verifyManifest({
+    manifest: fixture.result.manifest.bytes,
+    source: fixture.source,
+  });
+  let writes = 0;
+  await commitProductionManifest({
+    registry,
+    manifest: fixture.result.manifest.bytes,
+    verificationReceipt: verified.verificationReceipt,
+    publication: {
+      write() { writes += 1; },
+      commit() { return 'accepted'; },
+      abort() {},
+    },
+  });
+  assert.equal(writes, 1);
+
+  const fresh = await prepared('tiny-ascii');
+  writes = 0;
+  await assert.rejects(commitProductionManifest({
+    registry: {
+      profiles: new Map([[`${PROFILE.namespace}/${PROFILE.id}@${PROFILE.major}`, {
+        family: 'chunking',
+        productionWriteAllowed: true,
+        state: 'ratified',
+      }]]),
+    },
+    manifest: fresh.result.manifest.bytes,
+    verificationReceipt: fresh.result.verificationReceipt,
+    publication: {
+      write() { writes += 1; },
+      commit() { writes += 1; },
+      abort() { writes += 1; },
+    },
+  }), { code: 'CHUNK_PROFILE_UNSUPPORTED' });
+  assert.equal(writes, 0);
+
+  const shifted = await shiftedBoundaryFixture();
+  await assert.rejects(verifyManifest({ manifest: shifted.manifest.bytes, source: shifted.source }), {
+    code: 'CHUNK_BOUNDARY_MISMATCH',
+  });
+  for (const verificationReceipt of [
+    Object.freeze({ verifier: VERIFICATION_RECEIPT_VERIFIER }),
+    fixture.result.verificationReceipt,
+  ]) {
+    writes = 0;
+    await assert.rejects(commitProductionManifest({
+      registry,
+      manifest: shifted.manifest.bytes,
+      verificationReceipt,
+      publication: {
+        write() { writes += 1; },
+        commit() { writes += 1; },
+        abort() { writes += 1; },
+      },
+    }), { code: 'CHUNK_PUBLICATION_FAILED' });
+    assert.equal(writes, 0);
+  }
+});
+
+test('production publication failures abort once while durable commit settlement remains authoritative', async () => {
+  const registry = await productionRegistry();
+  for (const stage of ['write', 'commit']) {
+    const fixture = await prepared('tiny-ascii');
+    let aborts = 0;
+    await assert.rejects(commitProductionManifest({
+      registry,
+      manifest: fixture.result.manifest.bytes,
+      verificationReceipt: fixture.result.verificationReceipt,
+      publication: {
+        write() {
+          if (stage === 'write') throw new Error('write failure');
+        },
+        commit() { throw new Error('commit failure'); },
+        abort() { aborts += 1; },
+      },
+    }), { code: 'CHUNK_PUBLICATION_FAILED' }, stage);
+    assert.equal(aborts, 1, stage);
+  }
+
+  const fixture = await prepared('tiny-ascii');
+  const controller = new AbortController();
+  let aborts = 0;
+  const result = await commitProductionManifest({
+    registry,
+    manifest: fixture.result.manifest.bytes,
+    verificationReceipt: fixture.result.verificationReceipt,
+    signal: controller.signal,
+    publication: {
+      write() {},
+      commit() {
+        controller.abort();
+        return Object.freeze({ durable: true });
+      },
+      abort() { aborts += 1; },
+    },
+  });
+  assert.equal(result.publicationResult.durable, true);
+  assert.equal(aborts, 0);
 });
 
 test('atomic write adapter binds a one-use verification receipt to workspace publication', async () => {
