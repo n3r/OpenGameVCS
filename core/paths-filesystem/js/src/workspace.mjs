@@ -817,6 +817,10 @@ async function atomicWriteStreamInternal(workspace, repositoryPath, source, opti
     await settledBoundary(guard, options.signal, () => assertComponentBindings(binding));
     await settledBoundary(guard, options.signal, () => exactRegularTarget(stage, staged, observed));
     await settledBoundary(guard, options.signal, () => exactRegularTarget(target, before, { ...observed, expectedLinks: before === null ? 1 : 2 }));
+    if (before !== null) {
+      const backupState = await settledBoundary(guard, options.signal, () => regularTargetState(backup, { ...observed, expectedLinks: 2 }));
+      if (!sameRegularState(before, backupState) || !sameNode(before.identity, backupState.identity)) pathFail('TARGET_CHANGED');
+    }
     await publishWithRetry(stage, target, options, guard);
     await guardedHook(guard, options.signal, options.hooks, 'before-parent-sync', Object.freeze({}));
     await settledBoundary(guard, options.signal, () => syncDirectory(dirname(target)));

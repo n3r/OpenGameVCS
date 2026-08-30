@@ -146,6 +146,20 @@ test('accepts a web ReadableStream and publishes executable intent', async t => 
   assert.deepEqual(await readdir(handle.transactions), []);
 });
 
+test('copies each yielded view before the producer can mutate it', async t => {
+  const { root, handle } = await createWorkspace(t);
+  const yielded = Buffer.from('stable');
+  async function *source() {
+    yield yielded;
+    yielded.fill(0x78);
+  }
+  const expected = Buffer.from('stable');
+  await publish(handle, 'asset.bin', source(), { expected });
+  assert.deepEqual(await readFile(join(root, 'asset.bin')), expected);
+  assert.equal(yielded.toString('utf8'), 'xxxxxx');
+  assert.deepEqual(await readdir(handle.transactions), []);
+});
+
 test('portable executable intent does not require an unsupported native mode bit', async t => {
   const { root, handle } = await createWorkspace(t);
   const measured = await probeFilesystemCapabilities(root);
@@ -342,7 +356,7 @@ test('no-follow component checks reject a symlink or junction ancestor', async t
 });
 
 test('restart recovery owns every partial-stream, rollback-link, publication, and commit boundary', async t => {
-  for (const boundary of ['after-plan', 'during-source', 'after-backup-link', 'after-record', 'after-publish', 'after-commit']) {
+  for (const boundary of ['after-plan', 'during-source', 'after-backup-link', 'after-record', 'before-parent-sync', 'after-publish', 'after-commit']) {
     const { root, handle } = await createWorkspace(t);
     await seed(handle, 'asset.bin', Buffer.from('old'));
     const crashed = await runCrashChild(root, boundary);
@@ -367,6 +381,43 @@ test('restart recovery owns every partial-stream, rollback-link, publication, an
   assert.equal((await rollbackCrashRemnant(handle, remnant.id)).action, 'rolled-back');
   await assert.rejects(readFile(join(root, 'asset.bin')));
   assert.deepEqual(await readdir(handle.transactions), []);
+});
+
+test('revalidates the rollback link after the final caller hook', async t => {
+  const { root, handle } = await createWorkspace(t);
+  await seed(handle, 'asset.bin', Buffer.from('old'));
+  const bound = await plan(handle, 'asset.bin');
+  await assert.rejects(atomicWriteStream(handle, 'asset.bin', chunks(['new']), {
+    maxBytes: 3,
+    maxScratchBytes: 3,
+    expectedBytes: 3,
+    expectedSha256: createHash('sha256').update('new').digest('hex'),
+    plan: bound,
+    hooks: { boundary: async (name) => {
+      if (name !== 'before-publish') return;
+      const backup = (await readdir(handle.transactions)).find((entry) => entry.endsWith('.backup'));
+      assert.ok(backup);
+      await rm(join(handle.transactions, backup));
+      await writeFile(join(handle.transactions, backup), 'forged');
+    } },
+  }), code('ATOMIC_REPLACE_FAILED'));
+  assert.equal(await readFile(join(root, 'asset.bin'), 'utf8'), 'old');
+  const [remnant] = await inspectCrashRemnants(handle);
+  assert.equal(remnant.operation, 'write-stream');
+  assert.equal(remnant.state, 'staged');
+});
+
+test('rejects a malformed write-stream crash record before recovery', async t => {
+  const { root, handle } = await createWorkspace(t);
+  await seed(handle, 'asset.bin', Buffer.from('old'));
+  const crashed = await runCrashChild(root, 'after-record');
+  assert.equal(crashed.status, 71, crashed.stderr);
+  const [recordName] = (await readdir(handle.transactions)).filter((name) => name.endsWith('.json'));
+  assert.ok(recordName);
+  const recordPath = join(handle.transactions, recordName);
+  const record = JSON.parse(await readFile(recordPath, 'utf8'));
+  await writeFile(recordPath, JSON.stringify({ ...record, unknown: true }));
+  await assert.rejects(inspectCrashRemnants(handle), code('CRASH_REMNANT'));
 });
 
 test('post-commit observer failure preserves durable success and a recoverable committed record', async t => {
