@@ -1853,7 +1853,11 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
             .execute(
                 "INSERT INTO ogvcs_metadata.file_id_registry
                  (repository_id, file_id, state, origin, owner_kind, owner_id)
-                 VALUES ($1, $2, 'reserved', $3, $4, $5) ON CONFLICT DO NOTHING",
+                 VALUES ($1, $2, 'reserved',
+                         $3::text::ogvcs_metadata.file_id_origin,
+                         $4::text::ogvcs_metadata.file_id_owner_kind,
+                         $5)
+                 ON CONFLICT DO NOTHING",
                 &[
                     &uuid(reservation.repository_id),
                     &&reservation.file_id.as_bytes()[..],
