@@ -107,4 +107,6 @@ It covers the golden file-manifest/tree/snapshot/reference graph, 100 CAS racers
 authorized transaction/context/token isolation, FileID races/import
 replay/tombstones, transaction poisoning and fault rollbacks, migration
 repeat/checksum/downgrade behavior, and representable replica-lag token behavior.
+The current bounded three-platform result and retained PostgreSQL report are in
+the [OGVCS-006 candidate evidence packet](../../../docs/evidence/OGVCS-006/README.md).
 The exact million-entry campaign remains excluded from ordinary presubmit.

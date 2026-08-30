@@ -1,0 +1,46 @@
+# OGVCS-006 bounded candidate evidence
+
+This packet preserves bounded hosted evidence for the internal PostgreSQL
+metadata adapter. It is not completion evidence for OGVCS-006 and does not
+change the PRD's **In development** status.
+
+## Tested boundary
+
+- Source: [`dd5a5f07a04913d15f8a52060bec6ca6f49099fc`](https://github.com/n3r/OpenGameVCS/commit/dd5a5f07a04913d15f8a52060bec6ca6f49099fc)
+- Workflow: [run 33326767715](https://github.com/n3r/OpenGameVCS/actions/runs/33326767715), completed successfully on 2026-08-30
+- Machine record: [`github-actions-run-33326767715.json`](github-actions-run-33326767715.json)
+- Retained live report: [`repository-metadata-service-report-2026-08-30.jsonl`](repository-metadata-service-report-2026-08-30.jsonl), 711 bytes, SHA-256 `f54d4e449fa0962beefb492276ae709e4fc2b79d1b9e798fa6da3b90a7853491`
+
+Rust 1.82 locked tests passed on Ubuntu, macOS, and Windows. Ubuntu additionally
+ran formatting, Clippy with warnings denied, and the live harness against a
+disposable PostgreSQL 15.19 service. The downloadable Linux artifact is
+`repository-metadata-postgres-Linux` (artifact `9736467198`, archive SHA-256
+`eccef87709a796debe16f799490f869832780418622a35e5ab077fa7f2d6f1ff`).
+The raw report is checked in because the hosted artifact expires on
+2026-09-13.
+
+## Bounded result
+
+All ten live rows passed:
+
+1. v1-to-v2 migration preserves unpublished history;
+2. canonical file graph;
+3. authorization binding and transaction poisoning;
+4. authorized-view item projections;
+5. publication index and FileID lifetime binding;
+6. 100 concurrent CAS racers;
+7. FileID race and tombstone behavior;
+8. rollback, outbox, and idempotency behavior;
+9. repeat/checksum/downgrade migration behavior; and
+10. primary and lagging consistency-token behavior.
+
+## Deliberately unclaimed
+
+`exactScaleExecuted` is `false`. This run did not execute the million-entry
+pagination campaign and does not satisfy OGVCS-006-AC-04. Per the repository's
+scale policy, that campaign remains deferred to the final release-scale run.
+
+This evidence also does not claim the complete public 22-operation API,
+production OGVCS-009/OIDC authorization, HTTP bindings, or production external
+path-profile and chunk-store adapters. Those remain required before OGVCS-006
+can leave **In development**.

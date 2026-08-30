@@ -1,0 +1,58 @@
+{
+  "schemaVersion": "ogvcs.repository-metadata/hosted-evidence/v1",
+  "status": "bounded-candidate-passed",
+  "exactScaleExecuted": false,
+  "sourceRevision": "dd5a5f07a04913d15f8a52060bec6ca6f49099fc",
+  "workflow": {
+    "name": "Repository metadata bounded conformance",
+    "path": ".github/workflows/repository-metadata.yml",
+    "runId": 33326767715,
+    "runAttempt": 1,
+    "event": "push",
+    "createdAt": "2026-08-30T17:59:26Z",
+    "completedAt": "2026-08-30T18:01:02Z",
+    "url": "https://github.com/n3r/OpenGameVCS/actions/runs/33326767715"
+  },
+  "jobs": [
+    {
+      "id": 99298193120,
+      "name": "Locked bounded checks (macOS)",
+      "conclusion": "success"
+    },
+    {
+      "id": 99298193247,
+      "name": "Locked bounded checks and PostgreSQL 15",
+      "conclusion": "success"
+    },
+    {
+      "id": 99298193267,
+      "name": "Locked bounded checks (Windows)",
+      "conclusion": "success"
+    }
+  ],
+  "artifact": {
+    "id": 9736467198,
+    "name": "repository-metadata-postgres-Linux",
+    "archiveBytes": 499,
+    "archiveSha256": "eccef87709a796debe16f799490f869832780418622a35e5ab077fa7f2d6f1ff",
+    "expiresAt": "2026-09-13T18:00:47Z",
+    "retainedReport": "repository-metadata-service-report-2026-08-30.jsonl",
+    "retainedReportBytes": 711,
+    "retainedReportSha256": "f54d4e449fa0962beefb492276ae709e4fc2b79d1b9e798fa6da3b90a7853491"
+  },
+  "result": {
+    "status": "passed",
+    "rowCount": 10,
+    "passedRows": 10,
+    "failedRows": 0,
+    "skippedRows": 0,
+    "casRacers": 100,
+    "database": "disposable PostgreSQL 15.19 on Ubuntu"
+  },
+  "remainingGates": [
+    "complete public 22-operation metadata API and protocol binding",
+    "production OGVCS-009 authorizer and OIDC integration",
+    "production external path-profile and chunk-store adapters",
+    "million-entry bounded pagination campaign under the final scale policy"
+  ]
+}
