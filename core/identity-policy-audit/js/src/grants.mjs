@@ -53,7 +53,7 @@ export class TransferGrantAuthority {
     if (!Number.isSafeInteger(input.ttlSeconds) || input.ttlSeconds < 1 || input.ttlSeconds > RUNTIME_LIMITS.transferGrantMaxTtlSeconds) identityFail('LIMIT_EXCEEDED', 'transfer grant TTL exceeds its bound');
     let claims;
     try {
-      claims = validateTransferGrantClaims({
+      claims = deepFreeze(validateTransferGrantClaims({
         schemaVersion: 'ogvcs.authorization/transfer-grant-claims/v1',
         issuer: this.#issuer,
         keyId: this.#keyId,
@@ -71,7 +71,7 @@ export class TransferGrantAuthority {
         replay: input.replay,
         objectIds: input.objectIds ?? [],
         requestRoot: input.requestRoot ?? null,
-      });
+      }));
     } catch (error) { identityFail('INPUT_INVALID', 'transfer grant claims are invalid', { cause: error }); }
     let envelope;
     try {

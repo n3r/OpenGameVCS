@@ -370,6 +370,21 @@ test('grant signer output must bind the exact post-policy claims', () => {
   );
 });
 
+test('grant signer cannot mutate the authorized claims in place', () => {
+  const context = fixture(); const issued = issueArtist(context);
+  const principal = context.credentials.authenticate(issued.token);
+  const authority = grantAuthority(context, {
+    claimsTransform: (claims) => {
+      claims.subject = 'substituted.subject';
+      return claims;
+    },
+  });
+  assert.throws(
+    () => issueGrant(context, authority, principal),
+    ({ code }) => code === 'POLICY_UNAVAILABLE',
+  );
+});
+
 test('audit reads require a fresh audit.read decision, not a caller-supplied allow value', () => {
   const context = fixture();
   const adminScope = { ...scope(['audit.read', 'policy.administer']), pathPrefixes: [] };
