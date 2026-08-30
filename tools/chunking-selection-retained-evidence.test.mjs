@@ -15,7 +15,12 @@ import {
   buildChunkingSelectionPublicMetadata,
   runWorker,
 } from './chunking-selection-benchmark-bundle.mjs';
-import { RETAINED_ERROR_MESSAGE_LIMIT } from './chunking-selection-benchmark-common.mjs';
+import {
+  RETAINED_ERROR_MESSAGE_LIMIT,
+  normalizeRetainedFailureError,
+  stableFailureMessage,
+  truncateUtf8Scalars,
+} from './chunking-selection-benchmark-common.mjs';
 import { verifyChunkingSelectionBenchmarkBundle } from './verify-chunking-selection-benchmark-bundle.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -60,6 +65,20 @@ async function writeBundleInChildDirectory(root, contract, publication, label) {
 
 function differentOs(current) {
   return current === 'linux' ? 'darwin' : 'linux';
+}
+
+async function waitForProcessExit(pid, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      process.kill(pid, 0);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    } catch (error) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'ESRCH') return true;
+      throw error;
+    }
+  }
+  return false;
 }
 
 test('chunking selection benchmark bundle emits an authenticated retained-evidence bundle that independent validation can replay', { timeout: 240_000 }, async (t) => {
@@ -184,10 +203,58 @@ test('worker bridge retains parent-observed wall time for bounded spawn, timeout
   }
 });
 
-test('producer normalizes failed retained captures to the shared publication limit and redacts absolute paths', { timeout: 240_000 }, async (t) => {
+test('UTF-8 byte truncation stays scalar-safe and retained failure normalization is idempotent', () => {
+  const boundary = `${'a'.repeat(RETAINED_ERROR_MESSAGE_LIMIT - 3)}😀`;
+  const truncated = truncateUtf8Scalars(boundary, RETAINED_ERROR_MESSAGE_LIMIT, 'fallback');
+  assert.equal(Buffer.byteLength(truncated, 'utf8'), RETAINED_ERROR_MESSAGE_LIMIT - 3);
+  assert.equal(truncated, 'a'.repeat(RETAINED_ERROR_MESSAGE_LIMIT - 3));
+  assert.doesNotMatch(truncated, /[\uD800-\uDFFF]/u);
+
+  const normalized = normalizeRetainedFailureError({ code: 'HARNESS_DRIVER_FAILED', message: boundary });
+  assert.deepEqual(normalizeRetainedFailureError(normalized), normalized);
+});
+
+test('retained failure normalization is path-neutral across POSIX, drive, and UNC-looking inputs', () => {
+  for (const message of [
+    '/workspace/build/output/error.log',
+    '/builds/team/project/secret.txt',
+    '/srv/app/releases/current/runtime.json',
+    'D:/build/output/runtime.txt',
+    'D:\\build\\output\\runtime.txt',
+    '\\\\server\\share\\secrets\\runtime.txt',
+  ]) {
+    const normalized = normalizeRetainedFailureError({ code: 'UNREGISTERED_FAILURE', name: 'TypeError', message });
+    assert.deepEqual(normalized, {
+      code: 'HARNESS_DRIVER_FAILED',
+      name: 'Error',
+      message: stableFailureMessage('HARNESS_DRIVER_FAILED'),
+    });
+  }
+});
+
+test('worker timeout terminates a TERM-ignoring process tree with bounded SIGKILL fallback', { skip: process.platform === 'win32' ? 'POSIX-specific process-group kill assertion' : false }, async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'ogvcs-chunking-worker-timeout-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const pidFile = join(directory, 'grandchild.pid');
+  const started = Date.now();
+  const capture = await runWorker('append', {
+    args: [WORKER_FIXTURE_PATH, '--mode', 'ignore-term', '--workload-id', 'append', '--pid-file', pidFile],
+    timeoutMs: 200,
+    terminateGraceMs: 20,
+    terminateKillWaitMs: 20,
+  });
+  const elapsedMs = Date.now() - started;
+  const pid = Number((await readFile(pidFile, 'utf8')).trim());
+  assert.equal(capture.success, false);
+  assert.equal(capture.error.code, 'HARNESS_TASK_INCOMPLETE');
+  assert.equal(elapsedMs < 2_000, true);
+  assert.equal(await waitForProcessExit(pid, 1_000), true);
+});
+
+test('producer normalizes failed retained captures to the shared publication limit with stable path-neutral messages', { timeout: 240_000 }, async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'ogvcs-chunking-selection-bundle-normalized-failure-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
-  const overlongMessage = `${ROOT}/protected-secrets/${'é'.repeat(RETAINED_ERROR_MESSAGE_LIMIT + 1)}`;
+  const overlongMessage = `${'a'.repeat(RETAINED_ERROR_MESSAGE_LIMIT - 3)}😀`;
 
   const { contract, publication } = await buildChunkingSelectionBenchmarkBundle({
     mutateCaptures(captures) {
@@ -208,7 +275,8 @@ test('producer normalizes failed retained captures to the shared publication lim
   assert.equal(retainedCapture.error.code, 'HARNESS_DRIVER_FAILED');
   assert.equal(retainedCapture.error.name, 'Error');
   assert.equal(Buffer.byteLength(retainedCapture.error.message, 'utf8') <= RETAINED_ERROR_MESSAGE_LIMIT, true);
-  assert.doesNotMatch(retainedCapture.error.message, /\/Users\/|\/private\/|\/tmp\/|[A-Za-z]:\\/u);
+  assert.equal(retainedCapture.error.message, stableFailureMessage('HARNESS_DRIVER_FAILED'));
+  assert.doesNotMatch(retainedCapture.error.message, /\/workspace\/|\/builds\/|\/srv\/|[A-Za-z]:[\\/]|\\\\server\\/u);
 
   await writeResultBundle(directory, contract, publication);
   const verified = await verifyResultBundle(directory, contract);

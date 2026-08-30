@@ -15,6 +15,13 @@ export const RETAINED_BUNDLE_SOURCE_PATHS = [
   'tools/chunking-selection-benchmark-worker.mjs',
   'tools/verify-chunking-selection-benchmark-bundle.mjs',
 ];
+const FAILURE_MESSAGES = Object.freeze({
+  HARNESS_ASSERTION_FAILED: 'worker assertion failed before producing a valid retained capture',
+  HARNESS_DRIVER_FAILED: 'worker failed before producing a valid retained capture',
+  HARNESS_IO: 'worker I/O failed before producing a valid retained capture',
+  HARNESS_LIMIT_EXCEEDED: 'worker output exceeded the bounded retained-capture limit',
+  HARNESS_TASK_INCOMPLETE: 'worker did not complete before the bounded deadline',
+});
 
 export function canonicalJson(value, path = '$') {
   if (value === undefined) throw new Error(`canonical JSON cannot encode undefined at ${path}`);
@@ -45,38 +52,36 @@ export function stableFailureCode(code) {
     : 'HARNESS_DRIVER_FAILED';
 }
 
-function sanitizePublicString(value, fallback, maximum) {
+export function truncateUtf8Scalars(value, maximum, fallback) {
   const normalized = (typeof value === 'string' ? value : fallback)
     .normalize('NFC')
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\uD800-\uDFFF]/gu, '');
-  let bounded = normalized.length === 0 ? fallback : normalized;
-  while (Buffer.byteLength(bounded, 'utf8') > maximum) bounded = bounded.slice(0, -1);
-  return bounded.length === 0 ? fallback : bounded;
+  const source = normalized.length === 0 ? fallback : normalized;
+  const units = [];
+  let bytes = 0;
+  for (const scalar of source) {
+    const scalarBytes = Buffer.byteLength(scalar, 'utf8');
+    if (bytes + scalarBytes > maximum) break;
+    units.push(scalar);
+    bytes += scalarBytes;
+  }
+  const bounded = units.join('');
+  if (bounded.length > 0) return bounded;
+  if (fallback === undefined) return '';
+  if (source === fallback) return '';
+  return truncateUtf8Scalars(fallback, maximum);
 }
 
-function redactAbsolutePaths(value) {
-  let output = value;
-  const literalRoots = [ROOT, process.cwd()].map((path) => path.replaceAll('\\', '/'));
-  for (const root of literalRoots) {
-    output = output.split(root).join('<path>');
-    output = output.split(root.replaceAll('/', '\\')).join('<path>');
-  }
-  output = output.replace(/file:\/\/\/[^\s"'`<>]+/gu, '<path>');
-  output = output.replace(/[A-Za-z]:\\(?:[^\\\s"'`<>]+\\)*[^\\\s"'`<>]*/gu, '<path>');
-  output = output.replace(/\/(?:Users|home|private|var|tmp|root|opt|etc|Volumes|mnt)(?:\/[^\s"'`<>]+)+/gu, '<path>');
-  return output;
+export function stableFailureMessage(code) {
+  return FAILURE_MESSAGES[stableFailureCode(code)] ?? FAILURE_MESSAGES.HARNESS_DRIVER_FAILED;
 }
 
 export function normalizeRetainedFailureError(error) {
-  const message = sanitizePublicString(
-    redactAbsolutePaths(sanitizePublicString(error?.message, 'worker failure', RETAINED_ERROR_MESSAGE_LIMIT * 2)),
-    'worker failure',
-    RETAINED_ERROR_MESSAGE_LIMIT,
-  );
+  const stableCode = stableFailureCode(error?.code);
   return {
-    code: stableFailureCode(error?.code),
+    code: stableCode,
     name: 'Error',
-    message,
+    message: truncateUtf8Scalars(stableFailureMessage(stableCode), RETAINED_ERROR_MESSAGE_LIMIT, 'worker failure'),
   };
 }
 

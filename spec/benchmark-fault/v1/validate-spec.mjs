@@ -9,17 +9,6 @@ import { loadBenchmarkContract, validateBenchmarkValue } from '../../../foundati
 import { HARNESS_ERROR_CODES } from '../../../foundation/benchmark-fault-harness/src/errors.mjs';
 import { getProfile, listProfiles } from '../../../foundation/fixture-generator/src/index.mjs';
 import { runThreatVectors } from '../../../core/authz-contract/js/src/index.mjs';
-import {
-  BASE_TASK_IDS,
-  CHUNKING_GENERATOR_VERSION,
-  CHUNKING_PROFILE_VERSION,
-  CHUNKING_SELECTION_CORPORA,
-  CHUNKING_TASK_ID,
-  FIXTURE_GENERATOR_VERSION,
-  FIXTURE_PROFILE_VERSION,
-  REFERENCE_CORPORA,
-  TASK_ENTRIES,
-} from './source/model.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const workspace = resolve(root, '../../..');
@@ -36,15 +25,34 @@ function ordered(value) {
 }
 function canonical(value) { return JSON.stringify(ordered(value)); }
 
-const expectedBaseTasks = [...BASE_TASK_IDS];
-const chunkingTaskId = CHUNKING_TASK_ID;
-const expectedTasks = TASK_ENTRIES.map(({ id }) => id);
-const chunkingCorpora = [...CHUNKING_SELECTION_CORPORA];
+const referenceCorpora = ['code-heavy', 'global-studio', 'large-binary', 'unity-like', 'unreal-like'];
+const chunkingCorpora = ['source-like', 'structured', 'already-compressed', 'encrypted-random', 'insertion', 'replacement', 'append'];
+const expectedBaseTasks = ['setup', 'status', 'sync', 'submit', 'lock', 'merge', 'ci', 'verify', 'backup', 'restore', 'export'];
+const chunkingTaskId = 'chunking-verify';
+const expectedTasks = [...expectedBaseTasks, chunkingTaskId];
+const fixtureProfileVersion = '2.0.0';
+const fixtureGeneratorVersion = '1.0.0';
+const chunkingProfileVersion = '0.1.0-rc.1';
+const chunkingGeneratorVersion = '1.0.0';
+const expectedTaskEntries = [
+  { assertions: ['workspace-isolated', 'repository-ready'], endCondition: 'configured repository is ready', faultPoints: ['durable.write', 'metadata.commit'], id: 'setup', mutating: false, requirementIds: ['OGVCS-005-FR-02'], schemaVersion: 'ogvcs.benchmark/workload-definition/v1', startCondition: 'empty isolated run workspace' },
+  { assertions: ['status-complete', 'no-hidden-mutation'], endCondition: 'status is complete and generation-bound', faultPoints: [], id: 'status', mutating: false, requirementIds: ['OGVCS-005-FR-02'], schemaVersion: 'ogvcs.benchmark/workload-definition/v1', startCondition: 'repository and workspace are ready' },
+  { assertions: ['content-complete', 'cache-state-observed'], endCondition: 'requested projection is materialized and verified', faultPoints: ['durable.write', 'object.finalize'], id: 'sync', mutating: false, requirementIds: ['OGVCS-005-FR-02'], schemaVersion: 'ogvcs.benchmark/workload-definition/v1', startCondition: 'requested immutable snapshot and cache state are declared' },
+  { assertions: ['content-complete', 'authorized', 'single-visible-commit'], endCondition: 'one visible branch generation names only available content', faultPoints: ['durable.write', 'object.finalize', 'policy.decision', 'branch.cas', 'metadata.commit', 'event.publish', 'index.cursor'], id: 'submit', mutating: true, requirementIds: ['OGVCS-005-FR-02'], schemaVersion: 'ogvcs.benchmark/workload-definition/v1', startCondition: 'expected branch head, content closure, policy and lock facts are fixed' },
+  { assertions: ['single-hard-lock', 'lock-generation-fenced'], endCondition: 'one fenced lock generation is visible', faultPoints: ['policy.decision', 'lock.mutation', 'metadata.commit', 'event.publish'], id: 'lock', mutating: true, requirementIds: ['OGVCS-005-FR-02'], schemaVersion: 'ogvcs.benchmark/workload-definition/v1', startCondition: 'FileID, branch domain, owner and expected generation are fixed' },
+  { assertions: ['content-complete', 'merge-base-bound', 'single-visible-commit'], endCondition: 'merge result is verified and publication is atomic', faultPoints: ['durable.write', 'object.finalize', 'policy.decision', 'branch.cas', 'metadata.commit', 'event.publish', 'index.cursor'], id: 'merge', mutating: true, requirementIds: ['OGVCS-005-FR-02'], schemaVersion: 'ogvcs.benchmark/workload-definition/v1', startCondition: 'base, source and target snapshots are immutable and declared' },
+  { assertions: ['content-complete', 'snapshot-bound'], endCondition: 'CI projection is content-complete and digest-verified', faultPoints: ['object.finalize', 'index.cursor'], id: 'ci', mutating: false, requirementIds: ['OGVCS-005-FR-02'], schemaVersion: 'ogvcs.benchmark/workload-definition/v1', startCondition: 'immutable snapshot and selection are declared' },
+  { assertions: ['content-complete', 'references-verifiable'], endCondition: 'all reached objects and mutable invariants are checked and unreachable objects are swept', faultPoints: ['gc.mark', 'gc.sweep', 'index.cursor'], id: 'verify', mutating: true, requirementIds: ['OGVCS-005-FR-02'], schemaVersion: 'ogvcs.benchmark/workload-definition/v1', startCondition: 'repository generation is fixed' },
+  { assertions: ['backup-verifiable', 'content-complete'], endCondition: 'independently verifiable backup generation is published', faultPoints: ['backup.generate', 'metadata.commit'], id: 'backup', mutating: true, requirementIds: ['OGVCS-005-FR-02'], schemaVersion: 'ogvcs.benchmark/workload-definition/v1', startCondition: 'metadata generation and content inventory are fixed' },
+  { assertions: ['backup-verifiable', 'content-complete', 'activation-atomic'], endCondition: 'restored target verifies before activation', faultPoints: ['durable.write', 'object.finalize', 'metadata.commit'], id: 'restore', mutating: true, requirementIds: ['OGVCS-005-FR-02'], schemaVersion: 'ogvcs.benchmark/workload-definition/v1', startCondition: 'verified backup generation and empty target are fixed' },
+  { assertions: ['export-verifiable', 'content-complete'], endCondition: 'independently verifiable export is finalized', faultPoints: ['durable.write', 'export.finalize'], id: 'export', mutating: true, requirementIds: ['OGVCS-005-FR-02'], schemaVersion: 'ogvcs.benchmark/workload-definition/v1', startCondition: 'source snapshot and export mode are fixed' },
+  { assertions: ['chunking-accounting-balanced', 'chunking-derived-claims-recomputed', 'chunking-thresholds-held'], endCondition: 'bounded chunking compare and verify evidence is retained and authenticated', faultPoints: [], id: 'chunking-verify', mutating: false, requirementIds: ['OGVCS-005-FR-02', 'OGVCS-007-FR-08', 'OGVCS-007-AC-04'], schemaVersion: 'ogvcs.benchmark/workload-definition/v1', startCondition: 'bounded base and candidate chunking workload definitions, threshold authority, and immutable chunking sources are fixed' },
+];
 const expectedProfiles = [
-  { id: 'local-smoke', repetitions: 1, cacheStates: ['cold', 'warm-local-cache'], networkProfiles: ['loopback-simulated'], tasks: expectedBaseTasks, corpora: [...REFERENCE_CORPORA], faults: false, privileged: false },
-  { id: 'presubmit', repetitions: 3, cacheStates: ['cold', 'warm-local-cache', 'warm-regional-cache', 'mixed-cache'], networkProfiles: ['loopback-simulated', 'studio-near-20ms'], tasks: expectedBaseTasks, corpora: [...REFERENCE_CORPORA], faults: true, privileged: false },
-  { id: 'nightly', repetitions: 10, cacheStates: ['cold', 'warm-local-cache', 'warm-regional-cache', 'mixed-cache'], networkProfiles: ['loopback-simulated', 'studio-near-20ms', 'regional-80ms', 'intercontinental-200ms'], tasks: expectedBaseTasks, corpora: [...REFERENCE_CORPORA], faults: true, privileged: false },
-  { id: 'release', repetitions: 30, cacheStates: ['cold', 'warm-local-cache', 'warm-regional-cache', 'mixed-cache'], networkProfiles: ['loopback-simulated', 'studio-near-20ms', 'regional-80ms', 'intercontinental-200ms', 'privileged-netem-80ms'], tasks: expectedBaseTasks, corpora: [...REFERENCE_CORPORA], faults: true, privileged: true },
+  { id: 'local-smoke', repetitions: 1, cacheStates: ['cold', 'warm-local-cache'], networkProfiles: ['loopback-simulated'], tasks: expectedBaseTasks, corpora: referenceCorpora, faults: false, privileged: false },
+  { id: 'presubmit', repetitions: 3, cacheStates: ['cold', 'warm-local-cache', 'warm-regional-cache', 'mixed-cache'], networkProfiles: ['loopback-simulated', 'studio-near-20ms'], tasks: expectedBaseTasks, corpora: referenceCorpora, faults: true, privileged: false },
+  { id: 'nightly', repetitions: 10, cacheStates: ['cold', 'warm-local-cache', 'warm-regional-cache', 'mixed-cache'], networkProfiles: ['loopback-simulated', 'studio-near-20ms', 'regional-80ms', 'intercontinental-200ms'], tasks: expectedBaseTasks, corpora: referenceCorpora, faults: true, privileged: false },
+  { id: 'release', repetitions: 30, cacheStates: ['cold', 'warm-local-cache', 'warm-regional-cache', 'mixed-cache'], networkProfiles: ['loopback-simulated', 'studio-near-20ms', 'regional-80ms', 'intercontinental-200ms', 'privileged-netem-80ms'], tasks: expectedBaseTasks, corpora: referenceCorpora, faults: true, privileged: true },
   {
     id: 'chunking-selection-bounded',
     repetitions: 1,
@@ -54,14 +62,14 @@ const expectedProfiles = [
     corpora: chunkingCorpora,
     faults: false,
     privileged: false,
-    corpusAuthority: { manifestPath: 'spec/chunking-manifest/v1/manifest.json', profileVersion: CHUNKING_PROFILE_VERSION, generatorVersion: CHUNKING_GENERATOR_VERSION },
+    corpusAuthority: { manifestPath: 'spec/chunking-manifest/v1/manifest.json', profileVersion: chunkingProfileVersion, generatorVersion: chunkingGeneratorVersion },
     reproductionCommand: 'node tools/chunking-selection-benchmark-bundle.mjs --output <bundle-dir> --seed <recorded-seed>',
   },
 ];
 const tasks = contract.registries.tasks.entries;
 assert(JSON.stringify(tasks.map(({ id }) => id)) === JSON.stringify(expectedTasks), 'task registry differs from the normative operation set');
 assert(new Set(tasks.map(({ id }) => id)).size === tasks.length, 'task registry contains duplicate identities');
-assert(canonical(tasks) === canonical(TASK_ENTRIES), 'task registry bodies drifted from the exact normative operation set');
+assert(canonical(tasks) === canonical(expectedTaskEntries), 'task registry bodies drifted from the exact normative operation set');
 for (const task of tasks) validateBenchmarkValue(contract, 'WorkloadDefinition.schema.json', task);
 assert(JSON.stringify(tasks.find(({ id }) => id === chunkingTaskId)?.assertions) === JSON.stringify(['chunking-accounting-balanced', 'chunking-derived-claims-recomputed', 'chunking-thresholds-held']), 'chunking workload task assertions drifted');
 
@@ -86,16 +94,16 @@ assert(
   canonical(environmentRecordSchema.properties.corpus.oneOf) === canonical([
     {
       properties: {
-        generatorVersion: { const: FIXTURE_GENERATOR_VERSION },
-        profileId: { enum: [...REFERENCE_CORPORA] },
-        profileVersion: { const: FIXTURE_PROFILE_VERSION },
+        generatorVersion: { const: fixtureGeneratorVersion },
+        profileId: { enum: referenceCorpora },
+        profileVersion: { const: fixtureProfileVersion },
       },
     },
     {
       properties: {
-        generatorVersion: { const: CHUNKING_GENERATOR_VERSION },
-        profileId: { enum: [...CHUNKING_SELECTION_CORPORA] },
-        profileVersion: { const: CHUNKING_PROFILE_VERSION },
+        generatorVersion: { const: chunkingGeneratorVersion },
+        profileId: { enum: chunkingCorpora },
+        profileVersion: { const: chunkingProfileVersion },
       },
     },
   ]),

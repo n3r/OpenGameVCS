@@ -1,16 +1,20 @@
 #!/usr/bin/env node
 
+import { spawn } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
 import process from 'node:process';
 
 import { canonicalJson } from '../chunking-selection-benchmark-common.mjs';
 
 function usage() {
-  throw new Error('usage: node tools/fixtures/chunking-selection-benchmark-worker-fixture.mjs --mode <mode> --workload-id <id>');
+  throw new Error('usage: node tools/fixtures/chunking-selection-benchmark-worker-fixture.mjs --mode <mode> --workload-id <id> [--pid-file <path>]');
 }
 
 function parseArguments(argv) {
-  if (argv.length !== 4 || argv[0] !== '--mode' || argv[2] !== '--workload-id' || argv[1].length === 0 || argv[3].length === 0) usage();
-  return { mode: argv[1], workloadId: argv[3] };
+  if (argv.length !== 4 && argv.length !== 6) usage();
+  if (argv[0] !== '--mode' || argv[2] !== '--workload-id' || argv[1].length === 0 || argv[3].length === 0) usage();
+  if (argv.length === 6 && (argv[4] !== '--pid-file' || argv[5].length === 0)) usage();
+  return { mode: argv[1], workloadId: argv[3], pidFile: argv[5] ?? null };
 }
 
 function successCapture(workloadId) {
@@ -48,11 +52,21 @@ function successCapture(workloadId) {
 }
 
 async function main() {
-  const { mode, workloadId } = parseArguments(process.argv.slice(2));
+  const { mode, workloadId, pidFile } = parseArguments(process.argv.slice(2));
   switch (mode) {
     case 'timeout':
       await new Promise((resolve) => setTimeout(resolve, 250));
       break;
+    case 'ignore-term': {
+      const grandchild = spawn(process.execPath, ['-e', "process.on('SIGTERM',()=>{});process.on('SIGINT',()=>{});setInterval(()=>{},1000)"], {
+        stdio: 'ignore',
+      });
+      if (pidFile) writeFileSync(pidFile, `${grandchild.pid}\n`, 'utf8');
+      process.on('SIGTERM', () => {});
+      process.on('SIGINT', () => {});
+      await new Promise(() => {});
+      break;
+    }
     case 'invalid-json':
       process.stdout.write('{');
       break;

@@ -48,6 +48,8 @@ export const CHILD_MAX_RSS_SOURCE = 'node:process.resourceUsage().maxRSS (report
 const DEFAULT_SAMPLE_INTERVAL_MS = 5;
 export const DEFAULT_WORKER_TIMEOUT_MS = 60_000;
 export const DEFAULT_WORKER_OUTPUT_LIMIT_BYTES = 4 * 1024 * 1024;
+export const DEFAULT_WORKER_TERMINATION_GRACE_MS = 250;
+export const DEFAULT_WORKER_KILL_WAIT_MS = 250;
 const WORKER_PARSE_LIMIT_BYTES = 1_048_576;
 const WORKER = fileURLToPath(new URL('./chunking-selection-benchmark-worker.mjs', import.meta.url));
 
@@ -303,6 +305,43 @@ function syntheticFailureCapture(workloadId, code, message, startedWall, sampleI
   };
 }
 
+function processExists(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return !(error instanceof Error) || error.name !== 'Error' || !('code' in error) || error.code !== 'ESRCH';
+  }
+}
+
+function signalProcessTree(child, signal) {
+  if (!child?.pid) return false;
+  if (process.platform !== 'win32') {
+    try {
+      process.kill(-child.pid, signal);
+      return true;
+    } catch {}
+    try {
+      child.kill(signal);
+      return true;
+    } catch {}
+    return false;
+  }
+  try {
+    if (signal === 'SIGKILL') {
+      const killer = spawn('taskkill', ['/T', '/F', '/PID', String(child.pid)], {
+        stdio: 'ignore',
+        windowsHide: true,
+      });
+      killer.once('error', () => {});
+      return true;
+    }
+    child.kill(signal);
+    return true;
+  } catch {}
+  return false;
+}
+
 export async function runWorker(workloadId, options = {}) {
   return new Promise((resolvePromise) => {
     const startedWall = process.hrtime.bigint();
@@ -312,10 +351,13 @@ export async function runWorker(workloadId, options = {}) {
     const outputLimitBytes = options.outputLimitBytes ?? DEFAULT_WORKER_OUTPUT_LIMIT_BYTES;
     const parseLimitBytes = options.parseLimitBytes ?? WORKER_PARSE_LIMIT_BYTES;
     const sampleIntervalMs = options.sampleIntervalMs ?? DEFAULT_SAMPLE_INTERVAL_MS;
+    const terminateGraceMs = options.terminateGraceMs ?? DEFAULT_WORKER_TERMINATION_GRACE_MS;
+    const terminateKillWaitMs = options.terminateKillWaitMs ?? DEFAULT_WORKER_KILL_WAIT_MS;
     let child;
     try {
       child = spawn(command, args, {
         cwd: options.cwd ?? ROOT,
+        detached: process.platform !== 'win32',
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,
       });
@@ -330,23 +372,43 @@ export async function runWorker(workloadId, options = {}) {
     let settled = false;
     let timedOut = false;
     let overflowed = false;
+    let termination = null;
+    let escalationTimeout = null;
+    let forceTimeout = null;
     const timeout = setTimeout(() => {
       timedOut = true;
-      child.kill();
+      beginTermination('HARNESS_TASK_INCOMPLETE', `worker timed out after ${timeoutMs} ms`);
     }, timeoutMs);
     const finish = (value) => {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
+      clearTimeout(escalationTimeout);
+      clearTimeout(forceTimeout);
+      child.stdout?.destroy();
+      child.stderr?.destroy();
       resolvePromise(value);
     };
     const stderrPreview = () => normalizeRetainedFailureError({ message: Buffer.concat(stderr).toString('utf8').trim() }).message;
     const retainFailure = (code, message) => finish(syntheticFailureCapture(workloadId, code, message, startedWall, sampleIntervalMs));
+    const beginTermination = (code, message) => {
+      if (settled || termination) return;
+      termination = { code, message };
+      signalProcessTree(child, 'SIGTERM');
+      escalationTimeout = setTimeout(() => {
+        if (settled) return;
+        signalProcessTree(child, 'SIGKILL');
+        forceTimeout = setTimeout(() => {
+          if (settled) return;
+          finish(syntheticFailureCapture(workloadId, code, message, startedWall, sampleIntervalMs));
+        }, terminateKillWaitMs);
+      }, terminateGraceMs);
+    };
     child.stdout.on('data', (chunk) => {
       stdoutBytes += chunk.length;
       if (stdoutBytes > outputLimitBytes) {
         overflowed = true;
-        child.kill();
+        beginTermination('HARNESS_LIMIT_EXCEEDED', `worker output exceeded ${outputLimitBytes} bytes`);
         return;
       }
       stdout.push(chunk);
@@ -355,7 +417,7 @@ export async function runWorker(workloadId, options = {}) {
       stderrBytes += chunk.length;
       if (stderrBytes > outputLimitBytes) {
         overflowed = true;
-        child.kill();
+        beginTermination('HARNESS_LIMIT_EXCEEDED', `worker output exceeded ${outputLimitBytes} bytes`);
         return;
       }
       stderr.push(chunk);
@@ -363,6 +425,7 @@ export async function runWorker(workloadId, options = {}) {
     child.once('error', (error) => retainFailure('HARNESS_DRIVER_FAILED', `worker spawn failed: ${error instanceof Error ? error.message : String(error)}`));
     child.once('close', (code, signal) => {
       if (settled) return;
+       if (termination) return retainFailure(termination.code, termination.message);
       const output = Buffer.concat(stdout).toString('utf8').trim();
       if (timedOut) return retainFailure('HARNESS_TASK_INCOMPLETE', `worker timed out after ${timeoutMs} ms`);
       if (overflowed) return retainFailure('HARNESS_LIMIT_EXCEEDED', `worker output exceeded ${outputLimitBytes} bytes`);
@@ -371,17 +434,25 @@ export async function runWorker(workloadId, options = {}) {
       try {
         capture = parseJson(output, { requireCanonical: true, maxBytes: parseLimitBytes });
       } catch (error) {
+        beginTermination('HARNESS_DRIVER_FAILED', `worker emitted invalid canonical JSON: ${error instanceof Error ? error.message : String(error)}`);
         return retainFailure('HARNESS_DRIVER_FAILED', `worker emitted invalid canonical JSON: ${error instanceof Error ? error.message : String(error)}`);
       }
       if (capture?.success === false) capture = { ...capture, error: normalizeRetainedFailureError(capture.error) };
       try {
         validateRetainedCapture(capture);
       } catch (error) {
+        beginTermination('HARNESS_DRIVER_FAILED', error instanceof Error ? error.message : String(error));
         return retainFailure('HARNESS_DRIVER_FAILED', error instanceof Error ? error.message : String(error));
       }
       if (capture.workloadId !== workloadId) return retainFailure('HARNESS_DRIVER_FAILED', 'worker capture workload id mismatch');
       if ((code === 0 && signal === null) !== (capture.success === true)) return retainFailure('HARNESS_DRIVER_FAILED', 'worker exit status does not match retained capture success');
       finish(capture);
+    });
+    child.once('exit', () => {
+      if (termination && child.pid && !processExists(child.pid)) {
+        clearTimeout(escalationTimeout);
+        clearTimeout(forceTimeout);
+      }
     });
   });
 }
