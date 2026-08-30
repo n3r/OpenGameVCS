@@ -9,6 +9,7 @@ import { chunkBytes, compareManifest, verifyManifest, LIMITS } from '../core/chu
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const SPEC_ROOT = resolve(ROOT, 'spec/chunking-manifest/v1');
 export const PACKAGE_JSON = resolve(ROOT, 'core/chunking-manifest/js/package.json');
+export const RETAINED_ERROR_MESSAGE_LIMIT = 65_536;
 export const RETAINED_BUNDLE_SOURCE_PATHS = [
   'tools/chunking-selection-benchmark-bundle.mjs',
   'tools/chunking-selection-benchmark-worker.mjs',
@@ -36,6 +37,47 @@ function deterministicGzip(bytes) {
   const output = gzipSync(bytes, { mtime: 0 });
   if (output.length >= 10) output[9] = 255;
   return output;
+}
+
+export function stableFailureCode(code) {
+  return ['HARNESS_ASSERTION_FAILED', 'HARNESS_DRIVER_FAILED', 'HARNESS_TASK_INCOMPLETE', 'HARNESS_IO', 'HARNESS_LIMIT_EXCEEDED'].includes(code)
+    ? code
+    : 'HARNESS_DRIVER_FAILED';
+}
+
+function sanitizePublicString(value, fallback, maximum) {
+  const normalized = (typeof value === 'string' ? value : fallback)
+    .normalize('NFC')
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\uD800-\uDFFF]/gu, '');
+  let bounded = normalized.length === 0 ? fallback : normalized;
+  while (Buffer.byteLength(bounded, 'utf8') > maximum) bounded = bounded.slice(0, -1);
+  return bounded.length === 0 ? fallback : bounded;
+}
+
+function redactAbsolutePaths(value) {
+  let output = value;
+  const literalRoots = [ROOT, process.cwd()].map((path) => path.replaceAll('\\', '/'));
+  for (const root of literalRoots) {
+    output = output.split(root).join('<path>');
+    output = output.split(root.replaceAll('/', '\\')).join('<path>');
+  }
+  output = output.replace(/file:\/\/\/[^\s"'`<>]+/gu, '<path>');
+  output = output.replace(/[A-Za-z]:\\(?:[^\\\s"'`<>]+\\)*[^\\\s"'`<>]*/gu, '<path>');
+  output = output.replace(/\/(?:Users|home|private|var|tmp|root|opt|etc|Volumes|mnt)(?:\/[^\s"'`<>]+)+/gu, '<path>');
+  return output;
+}
+
+export function normalizeRetainedFailureError(error) {
+  const message = sanitizePublicString(
+    redactAbsolutePaths(sanitizePublicString(error?.message, 'worker failure', RETAINED_ERROR_MESSAGE_LIMIT * 2)),
+    'worker failure',
+    RETAINED_ERROR_MESSAGE_LIMIT,
+  );
+  return {
+    code: stableFailureCode(error?.code),
+    name: 'Error',
+    message,
+  };
 }
 
 async function collectEntries(root, relativePath, results) {

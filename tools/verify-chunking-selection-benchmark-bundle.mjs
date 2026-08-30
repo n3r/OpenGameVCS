@@ -14,13 +14,16 @@ import {
   verifyResultBundle,
 } from '../foundation/benchmark-fault-harness/src/index.mjs';
 import {
+  RETAINED_ERROR_MESSAGE_LIMIT,
   ROOT,
   RETAINED_BUNDLE_SOURCE_PATHS,
   buildChunkingSelectionReport,
   buildSelectionReportFromWorkloads,
   canonicalJson,
   loadSelectionAuthority,
+  normalizeRetainedFailureError,
   sha256,
+  stableFailureCode,
 } from './chunking-selection-benchmark-common.mjs';
 import { BUNDLE_PROFILE, BUNDLE_TASK, CHILD_MAX_RSS_SOURCE, PROCESS_PEAK_SOURCE } from './chunking-selection-benchmark-bundle.mjs';
 
@@ -209,6 +212,12 @@ function assertRetainedCapture(capture, environment) {
     assert.equal(capture.error, undefined);
   } else {
     assert.deepEqual(Object.keys(capture.error ?? {}).sort(), ['code', 'message', 'name']);
+    assert.equal(
+      benchmarkCanonicalJson(capture.error),
+      benchmarkCanonicalJson(normalizeRetainedFailureError(capture.error)),
+      'failed retained capture error must be normalized',
+    );
+    assert.equal(Buffer.byteLength(capture.error.message, 'utf8') <= RETAINED_ERROR_MESSAGE_LIMIT, true, 'failed retained capture error message exceeds the shared publication limit');
   }
 }
 
@@ -254,12 +263,6 @@ function captureClaimsValid(workload) {
     && Number(verify.uniqueBytes) === Number(compare.uniqueBytes)
     && Number(verify.repeatedBytes) === Number(compare.repeatedBytes)
     && verify.logicalBytes === compare.logicalBytes;
-}
-
-function stableFailureCode(code) {
-  return ['HARNESS_ASSERTION_FAILED', 'HARNESS_DRIVER_FAILED', 'HARNESS_TASK_INCOMPLETE', 'HARNESS_IO', 'HARNESS_LIMIT_EXCEEDED'].includes(code)
-    ? code
-    : 'HARNESS_DRIVER_FAILED';
 }
 
 function thresholdRowsForWorkload(thresholdFile, workload) {

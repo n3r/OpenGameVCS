@@ -9,6 +9,17 @@ import { loadBenchmarkContract, validateBenchmarkValue } from '../../../foundati
 import { HARNESS_ERROR_CODES } from '../../../foundation/benchmark-fault-harness/src/errors.mjs';
 import { getProfile, listProfiles } from '../../../foundation/fixture-generator/src/index.mjs';
 import { runThreatVectors } from '../../../core/authz-contract/js/src/index.mjs';
+import {
+  BASE_TASK_IDS,
+  CHUNKING_GENERATOR_VERSION,
+  CHUNKING_PROFILE_VERSION,
+  CHUNKING_SELECTION_CORPORA,
+  CHUNKING_TASK_ID,
+  FIXTURE_GENERATOR_VERSION,
+  FIXTURE_PROFILE_VERSION,
+  REFERENCE_CORPORA,
+  TASK_ENTRIES,
+} from './source/model.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const workspace = resolve(root, '../../..');
@@ -25,15 +36,15 @@ function ordered(value) {
 }
 function canonical(value) { return JSON.stringify(ordered(value)); }
 
-const expectedBaseTasks = ['setup', 'status', 'sync', 'submit', 'lock', 'merge', 'ci', 'verify', 'backup', 'restore', 'export'];
-const chunkingTaskId = 'chunking-verify';
-const expectedTasks = [...expectedBaseTasks, chunkingTaskId];
-const chunkingCorpora = ['source-like', 'structured', 'already-compressed', 'encrypted-random', 'insertion', 'replacement', 'append'];
+const expectedBaseTasks = [...BASE_TASK_IDS];
+const chunkingTaskId = CHUNKING_TASK_ID;
+const expectedTasks = TASK_ENTRIES.map(({ id }) => id);
+const chunkingCorpora = [...CHUNKING_SELECTION_CORPORA];
 const expectedProfiles = [
-  { id: 'local-smoke', repetitions: 1, cacheStates: ['cold', 'warm-local-cache'], networkProfiles: ['loopback-simulated'], tasks: expectedBaseTasks, corpora: ['code-heavy', 'global-studio', 'large-binary', 'unity-like', 'unreal-like'], faults: false, privileged: false },
-  { id: 'presubmit', repetitions: 3, cacheStates: ['cold', 'warm-local-cache', 'warm-regional-cache', 'mixed-cache'], networkProfiles: ['loopback-simulated', 'studio-near-20ms'], tasks: expectedBaseTasks, corpora: ['code-heavy', 'global-studio', 'large-binary', 'unity-like', 'unreal-like'], faults: true, privileged: false },
-  { id: 'nightly', repetitions: 10, cacheStates: ['cold', 'warm-local-cache', 'warm-regional-cache', 'mixed-cache'], networkProfiles: ['loopback-simulated', 'studio-near-20ms', 'regional-80ms', 'intercontinental-200ms'], tasks: expectedBaseTasks, corpora: ['code-heavy', 'global-studio', 'large-binary', 'unity-like', 'unreal-like'], faults: true, privileged: false },
-  { id: 'release', repetitions: 30, cacheStates: ['cold', 'warm-local-cache', 'warm-regional-cache', 'mixed-cache'], networkProfiles: ['loopback-simulated', 'studio-near-20ms', 'regional-80ms', 'intercontinental-200ms', 'privileged-netem-80ms'], tasks: expectedBaseTasks, corpora: ['code-heavy', 'global-studio', 'large-binary', 'unity-like', 'unreal-like'], faults: true, privileged: true },
+  { id: 'local-smoke', repetitions: 1, cacheStates: ['cold', 'warm-local-cache'], networkProfiles: ['loopback-simulated'], tasks: expectedBaseTasks, corpora: [...REFERENCE_CORPORA], faults: false, privileged: false },
+  { id: 'presubmit', repetitions: 3, cacheStates: ['cold', 'warm-local-cache', 'warm-regional-cache', 'mixed-cache'], networkProfiles: ['loopback-simulated', 'studio-near-20ms'], tasks: expectedBaseTasks, corpora: [...REFERENCE_CORPORA], faults: true, privileged: false },
+  { id: 'nightly', repetitions: 10, cacheStates: ['cold', 'warm-local-cache', 'warm-regional-cache', 'mixed-cache'], networkProfiles: ['loopback-simulated', 'studio-near-20ms', 'regional-80ms', 'intercontinental-200ms'], tasks: expectedBaseTasks, corpora: [...REFERENCE_CORPORA], faults: true, privileged: false },
+  { id: 'release', repetitions: 30, cacheStates: ['cold', 'warm-local-cache', 'warm-regional-cache', 'mixed-cache'], networkProfiles: ['loopback-simulated', 'studio-near-20ms', 'regional-80ms', 'intercontinental-200ms', 'privileged-netem-80ms'], tasks: expectedBaseTasks, corpora: [...REFERENCE_CORPORA], faults: true, privileged: true },
   {
     id: 'chunking-selection-bounded',
     repetitions: 1,
@@ -43,13 +54,14 @@ const expectedProfiles = [
     corpora: chunkingCorpora,
     faults: false,
     privileged: false,
-    corpusAuthority: { manifestPath: 'spec/chunking-manifest/v1/manifest.json', profileVersion: '0.1.0-rc.1', generatorVersion: '1.0.0' },
+    corpusAuthority: { manifestPath: 'spec/chunking-manifest/v1/manifest.json', profileVersion: CHUNKING_PROFILE_VERSION, generatorVersion: CHUNKING_GENERATOR_VERSION },
     reproductionCommand: 'node tools/chunking-selection-benchmark-bundle.mjs --output <bundle-dir> --seed <recorded-seed>',
   },
 ];
 const tasks = contract.registries.tasks.entries;
 assert(JSON.stringify(tasks.map(({ id }) => id)) === JSON.stringify(expectedTasks), 'task registry differs from the normative operation set');
 assert(new Set(tasks.map(({ id }) => id)).size === tasks.length, 'task registry contains duplicate identities');
+assert(canonical(tasks) === canonical(TASK_ENTRIES), 'task registry bodies drifted from the exact normative operation set');
 for (const task of tasks) validateBenchmarkValue(contract, 'WorkloadDefinition.schema.json', task);
 assert(JSON.stringify(tasks.find(({ id }) => id === chunkingTaskId)?.assertions) === JSON.stringify(['chunking-accounting-balanced', 'chunking-derived-claims-recomputed', 'chunking-thresholds-held']), 'chunking workload task assertions drifted');
 
@@ -68,6 +80,27 @@ assert(networks.some(({ lossPartsPerMillion, interruptionEvery, duplicateEvery, 
 const harnessProfiles = contract.registries['harness-profiles'].entries;
 assert(canonical(harnessProfiles) === canonical(expectedProfiles), 'harness profile registry drifted from the exact bounded matrices');
 assert(harnessProfiles.slice(0, 4).every((profile) => canonical(profile.tasks) === canonical(expectedBaseTasks) && canonical(profile.corpora) === canonical(expectedProfiles[0].corpora)), 'base profiles no longer preserve the original task/corpus matrices');
+
+const environmentRecordSchema = JSON.parse(await readFile(resolve(root, 'schemas/EnvironmentRecord.schema.json'), 'utf8'));
+assert(
+  canonical(environmentRecordSchema.properties.corpus.oneOf) === canonical([
+    {
+      properties: {
+        generatorVersion: { const: FIXTURE_GENERATOR_VERSION },
+        profileId: { enum: [...REFERENCE_CORPORA] },
+        profileVersion: { const: FIXTURE_PROFILE_VERSION },
+      },
+    },
+    {
+      properties: {
+        generatorVersion: { const: CHUNKING_GENERATOR_VERSION },
+        profileId: { enum: [...CHUNKING_SELECTION_CORPORA] },
+        profileVersion: { const: CHUNKING_PROFILE_VERSION },
+      },
+    },
+  ]),
+  'EnvironmentRecord corpus authority branches drifted',
+);
 
 const driverProfile = contract.profiles['benchmark-fault-driver-v1'];
 assert(driverProfile.baseProtocolProfile === 'ogvcs.control.https-json@1' && driverProfile.testModeOnly === true && driverProfile.productionFaultHooks === 'forbidden', 'driver profile does not preserve the OGVCS-041/test-mode boundary');

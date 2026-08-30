@@ -13,13 +13,16 @@ import {
   DEFAULT_SEED,
   buildChunkingSelectionBenchmarkBundle,
   buildChunkingSelectionPublicMetadata,
+  runWorker,
 } from './chunking-selection-benchmark-bundle.mjs';
+import { RETAINED_ERROR_MESSAGE_LIMIT } from './chunking-selection-benchmark-common.mjs';
 import { verifyChunkingSelectionBenchmarkBundle } from './verify-chunking-selection-benchmark-bundle.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const HOSTED_RECORD_PATH = join(ROOT, 'docs/evidence/OGVCS-007/github-actions-run-33328072458.json');
 const CHECKED_IN_BUNDLE_PATH = join(ROOT, 'docs/evidence/OGVCS-007/bounded-selection-bundle-2026-08-30');
 const CHECKED_IN_VALIDATION_PATH = join(ROOT, 'docs/evidence/OGVCS-007/bounded-selection-bundle-validation-2026-08-30.json');
+const WORKER_FIXTURE_PATH = join(ROOT, 'tools/fixtures/chunking-selection-benchmark-worker-fixture.mjs');
 
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
@@ -53,6 +56,10 @@ async function writeBundleInChildDirectory(root, contract, publication, label) {
   const directory = join(root, label);
   await writeResultBundle(directory, contract, publication);
   return directory;
+}
+
+function differentOs(current) {
+  return current === 'linux' ? 'darwin' : 'linux';
 }
 
 test('chunking selection benchmark bundle emits an authenticated retained-evidence bundle that independent validation can replay', { timeout: 240_000 }, async (t) => {
@@ -160,6 +167,56 @@ test('failed captures stay retained, unknown worker codes normalize, and the bun
   );
 });
 
+test('worker bridge retains parent-observed wall time for bounded spawn, timeout, output, parse, and exit failures', async () => {
+  const scenarios = [
+    { label: 'spawn', options: { command: join(ROOT, 'tools/fixtures/does-not-exist') }, expectedCode: 'HARNESS_DRIVER_FAILED' },
+    { label: 'timeout', options: { args: [WORKER_FIXTURE_PATH, '--mode', 'timeout', '--workload-id', 'append'], timeoutMs: 20 }, expectedCode: 'HARNESS_TASK_INCOMPLETE' },
+    { label: 'overflow', options: { args: [WORKER_FIXTURE_PATH, '--mode', 'overflow', '--workload-id', 'append'], outputLimitBytes: 256 }, expectedCode: 'HARNESS_LIMIT_EXCEEDED' },
+    { label: 'parse', options: { args: [WORKER_FIXTURE_PATH, '--mode', 'invalid-json', '--workload-id', 'append'], parseLimitBytes: 256 }, expectedCode: 'HARNESS_DRIVER_FAILED' },
+    { label: 'exit', options: { args: [WORKER_FIXTURE_PATH, '--mode', 'exit-mismatch', '--workload-id', 'append'], parseLimitBytes: 256 }, expectedCode: 'HARNESS_DRIVER_FAILED' },
+  ];
+  for (const scenario of scenarios) {
+    const capture = await runWorker('append', scenario.options);
+    assert.equal(capture.success, false, scenario.label);
+    assert.equal(capture.error.code, scenario.expectedCode, scenario.label);
+    assert.equal(capture.process.totalWallMicroseconds > 0, true, scenario.label);
+    assert.equal(capture.process.sampleIntervalMs > 0, true, scenario.label);
+  }
+});
+
+test('producer normalizes failed retained captures to the shared publication limit and redacts absolute paths', { timeout: 240_000 }, async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'ogvcs-chunking-selection-bundle-normalized-failure-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const overlongMessage = `${ROOT}/protected-secrets/${'é'.repeat(RETAINED_ERROR_MESSAGE_LIMIT + 1)}`;
+
+  const { contract, publication } = await buildChunkingSelectionBenchmarkBundle({
+    mutateCaptures(captures) {
+      return captures.map((capture) => capture.workloadId === 'append'
+        ? (() => {
+          const { workload, ...rest } = capture;
+          return {
+            ...rest,
+            success: false,
+            error: { code: 'UNREGISTERED_FAILURE', name: 'TypeError', message: overlongMessage },
+          };
+        })()
+        : capture);
+    },
+  });
+  const retainedCapture = publication.result.publicMetadata.chunkingSelection.retainedCaptures.find(({ workloadId }) => workloadId === 'append');
+  assert.ok(retainedCapture);
+  assert.equal(retainedCapture.error.code, 'HARNESS_DRIVER_FAILED');
+  assert.equal(retainedCapture.error.name, 'Error');
+  assert.equal(Buffer.byteLength(retainedCapture.error.message, 'utf8') <= RETAINED_ERROR_MESSAGE_LIMIT, true);
+  assert.doesNotMatch(retainedCapture.error.message, /\/Users\/|\/private\/|\/tmp\/|[A-Za-z]:\\/u);
+
+  await writeResultBundle(directory, contract, publication);
+  const verified = await verifyResultBundle(directory, contract);
+  const retained = await verifyChunkingSelectionBenchmarkBundle(directory);
+  assert.equal(verified.samples.find(({ corpusId }) => corpusId === 'append')?.failureCode, 'HARNESS_DRIVER_FAILED');
+  assert.equal(retained.verified, true);
+});
+
 test('chunking publisher and verifier reject corpus-authority and metadata tampering', { timeout: 240_000 }, async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'ogvcs-chunking-selection-bundle-mutations-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
@@ -208,14 +265,17 @@ test('chunking publisher and verifier reject corpus-authority and metadata tampe
   const requestDigestDirectory = await writeBundleInChildDirectory(directory, bundle.contract, requestDigestMutation, 'request-digest');
   await assert.rejects(verifyChunkingSelectionBenchmarkBundle(requestDigestDirectory), /environment corpus authority drifted/u);
 
+  const tamperedOs = differentOs(bundle.publication.result.publicMetadata.chunkingSelection.retainedCaptures[0].host.os);
+  assert.notEqual(tamperedOs, bundle.publication.result.publicMetadata.chunkingSelection.retainedCaptures[0].host.os);
   const hostMutation = republishChunkingBundle(bundle, {
     captures: bundle.publication.result.publicMetadata.chunkingSelection.retainedCaptures.map((capture, index) => index === 0
       ? {
         ...capture,
-        host: { ...capture.host, os: 'linux' },
+        host: { ...capture.host, os: tamperedOs },
       }
       : capture),
   });
+  assert.equal(hostMutation.result.publicMetadata.chunkingSelection.retainedCaptures[0].host.os, tamperedOs);
   const hostDirectory = await writeBundleInChildDirectory(directory, bundle.contract, hostMutation, 'host');
   await assert.rejects(verifyChunkingSelectionBenchmarkBundle(hostDirectory), /host/i);
 

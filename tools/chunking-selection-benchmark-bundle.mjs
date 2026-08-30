@@ -28,12 +28,15 @@ import { harnessFail } from '../foundation/benchmark-fault-harness/src/errors.mj
 import { expectedSecurityPathCases } from '../foundation/benchmark-fault-harness/src/security.mjs';
 import {
   RETAINED_BUNDLE_SOURCE_PATHS,
+  RETAINED_ERROR_MESSAGE_LIMIT,
   ROOT,
   SPEC_ROOT,
   buildSelectionReportFromWorkloads,
   canonicalJson as chunkingCanonicalJson,
   loadSelectionAuthority,
+  normalizeRetainedFailureError,
   sha256,
+  stableFailureCode,
 } from './chunking-selection-benchmark-common.mjs';
 
 export const BUNDLE_PROFILE = 'chunking-selection-bounded';
@@ -43,8 +46,8 @@ export const DEFAULT_SEED = 'ogvcs-007-chunking-selection-v1';
 export const PROCESS_PEAK_SOURCE = 'whole-process child peak via max(process.resourceUsage().maxRSS*1024, sampled process.memoryUsage().rss)';
 export const CHILD_MAX_RSS_SOURCE = 'node:process.resourceUsage().maxRSS (reported KiB)';
 const DEFAULT_SAMPLE_INTERVAL_MS = 5;
-const WORKER_TIMEOUT_MS = 60_000;
-const WORKER_OUTPUT_LIMIT_BYTES = 4 * 1024 * 1024;
+export const DEFAULT_WORKER_TIMEOUT_MS = 60_000;
+export const DEFAULT_WORKER_OUTPUT_LIMIT_BYTES = 4 * 1024 * 1024;
 const WORKER_PARSE_LIMIT_BYTES = 1_048_576;
 const WORKER = fileURLToPath(new URL('./chunking-selection-benchmark-worker.mjs', import.meta.url));
 
@@ -65,28 +68,6 @@ function parseArguments(argv) {
 function cacheInspectionDigest() {
   const body = { state: 'cold', localBytes: 0, regionalBytes: 0, reads: 0, localHits: 0, regionalHits: 0, originBytes: 0 };
   return canonicalDigest(body, 'ogvcs.benchmark/cache-inspection/v1');
-}
-
-function stableFailureCode(code) {
-  return ['HARNESS_ASSERTION_FAILED', 'HARNESS_DRIVER_FAILED', 'HARNESS_TASK_INCOMPLETE', 'HARNESS_IO', 'HARNESS_LIMIT_EXCEEDED'].includes(code)
-    ? code
-    : 'HARNESS_DRIVER_FAILED';
-}
-
-function sanitizePublicString(value, fallback, maximum = 4096) {
-  const normalized = (typeof value === 'string' ? value : fallback)
-    .normalize('NFC')
-    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\uD800-\uDFFF]/gu, '');
-  const bounded = normalized.length === 0 ? fallback : normalized.slice(0, maximum);
-  return bounded.length === 0 ? fallback : bounded;
-}
-
-function sanitizeErrorRecord(error) {
-  return {
-    code: sanitizePublicString(stableFailureCode(error?.code), 'HARNESS_DRIVER_FAILED', 128),
-    name: sanitizePublicString(error?.name, 'Error', 256),
-    message: sanitizePublicString(error?.message, 'unknown worker failure', 4096),
-  };
 }
 
 function correctedWallMicroseconds(totalWallMicroseconds, overhead) {
@@ -192,6 +173,10 @@ export function validateRetainedCapture(capture, environment = null) {
     harnessFail('HARNESS_INPUT_INVALID', 'failed retained capture must include a typed error');
   } else if (chunkingCanonicalJson(Object.keys(capture.error).sort()) !== chunkingCanonicalJson(['code', 'message', 'name'])) {
     harnessFail('HARNESS_INPUT_INVALID', 'retained capture error envelope is invalid');
+  } else if (chunkingCanonicalJson(capture.error) !== chunkingCanonicalJson(normalizeRetainedFailureError(capture.error))) {
+    harnessFail('HARNESS_INPUT_INVALID', 'failed retained capture error must be normalized');
+  } else if (Buffer.byteLength(capture.error.message, 'utf8') > RETAINED_ERROR_MESSAGE_LIMIT) {
+    harnessFail('HARNESS_INPUT_INVALID', 'failed retained capture error message exceeds the shared publication limit');
   }
   if (environment) {
     if (environment.corpus.profileId !== capture.workloadId) harnessFail('HARNESS_INPUT_INVALID', 'retained capture workload id does not match its environment corpus id');
@@ -294,13 +279,50 @@ function buildSelectionReportFromThresholds(thresholdFile, workloads) {
   }).filter(Boolean);
 }
 
-async function runWorker(workloadId) {
+function elapsedMicroseconds(startedWall) {
+  return Number((process.hrtime.bigint() - startedWall) / 1000n);
+}
+
+function syntheticFailureCapture(workloadId, code, message, startedWall, sampleIntervalMs) {
+  return {
+    schemaVersion: 'ogvcs.chunking/selection-workload-capture/v1',
+    workloadId,
+    success: false,
+    host: { architecture: process.arch, node: process.versions.node, os: process.platform },
+    process: {
+      totalWallMicroseconds: elapsedMicroseconds(startedWall),
+      userCpuMicroseconds: 0,
+      systemCpuMicroseconds: 0,
+      peakMemoryBytes: 0,
+      sampledPeakRssBytes: 0,
+      maxRssBytes: 0,
+      maxRssSource: 'unavailable',
+      sampleIntervalMs,
+    },
+    error: normalizeRetainedFailureError({ code, message }),
+  };
+}
+
+export async function runWorker(workloadId, options = {}) {
   return new Promise((resolvePromise) => {
-    const child = spawn(process.execPath, [WORKER, '--workload-id', workloadId], {
-      cwd: ROOT,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      windowsHide: true,
-    });
+    const startedWall = process.hrtime.bigint();
+    const command = options.command ?? process.execPath;
+    const args = options.args ?? [options.workerPath ?? WORKER, '--workload-id', workloadId];
+    const timeoutMs = options.timeoutMs ?? DEFAULT_WORKER_TIMEOUT_MS;
+    const outputLimitBytes = options.outputLimitBytes ?? DEFAULT_WORKER_OUTPUT_LIMIT_BYTES;
+    const parseLimitBytes = options.parseLimitBytes ?? WORKER_PARSE_LIMIT_BYTES;
+    const sampleIntervalMs = options.sampleIntervalMs ?? DEFAULT_SAMPLE_INTERVAL_MS;
+    let child;
+    try {
+      child = spawn(command, args, {
+        cwd: options.cwd ?? ROOT,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true,
+      });
+    } catch (error) {
+      resolvePromise(syntheticFailureCapture(workloadId, 'HARNESS_DRIVER_FAILED', `worker spawn failed: ${error instanceof Error ? error.message : String(error)}`, startedWall, sampleIntervalMs));
+      return;
+    }
     const stdout = [];
     const stderr = [];
     let stdoutBytes = 0;
@@ -311,34 +333,18 @@ async function runWorker(workloadId) {
     const timeout = setTimeout(() => {
       timedOut = true;
       child.kill();
-    }, WORKER_TIMEOUT_MS);
+    }, timeoutMs);
     const finish = (value) => {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
       resolvePromise(value);
     };
-    const stderrPreview = () => sanitizePublicString(Buffer.concat(stderr).toString('utf8').trim(), 'worker emitted stderr', 2048);
-    const retainFailure = (code, message) => finish({
-      schemaVersion: 'ogvcs.chunking/selection-workload-capture/v1',
-      workloadId,
-      success: false,
-      host: { architecture: process.arch, node: process.versions.node, os: process.platform },
-      process: {
-        totalWallMicroseconds: 0,
-        userCpuMicroseconds: 0,
-        systemCpuMicroseconds: 0,
-        peakMemoryBytes: 0,
-        sampledPeakRssBytes: 0,
-        maxRssBytes: 0,
-        maxRssSource: 'unavailable',
-        sampleIntervalMs: DEFAULT_SAMPLE_INTERVAL_MS,
-      },
-      error: sanitizeErrorRecord({ code, name: 'Error', message }),
-    });
+    const stderrPreview = () => normalizeRetainedFailureError({ message: Buffer.concat(stderr).toString('utf8').trim() }).message;
+    const retainFailure = (code, message) => finish(syntheticFailureCapture(workloadId, code, message, startedWall, sampleIntervalMs));
     child.stdout.on('data', (chunk) => {
       stdoutBytes += chunk.length;
-      if (stdoutBytes > WORKER_OUTPUT_LIMIT_BYTES) {
+      if (stdoutBytes > outputLimitBytes) {
         overflowed = true;
         child.kill();
         return;
@@ -347,7 +353,7 @@ async function runWorker(workloadId) {
     });
     child.stderr.on('data', (chunk) => {
       stderrBytes += chunk.length;
-      if (stderrBytes > WORKER_OUTPUT_LIMIT_BYTES) {
+      if (stderrBytes > outputLimitBytes) {
         overflowed = true;
         child.kill();
         return;
@@ -358,15 +364,16 @@ async function runWorker(workloadId) {
     child.once('close', (code, signal) => {
       if (settled) return;
       const output = Buffer.concat(stdout).toString('utf8').trim();
-      if (timedOut) return retainFailure('HARNESS_TASK_INCOMPLETE', `worker timed out after ${WORKER_TIMEOUT_MS} ms`);
-      if (overflowed) return retainFailure('HARNESS_LIMIT_EXCEEDED', `worker output exceeded ${WORKER_OUTPUT_LIMIT_BYTES} bytes`);
+      if (timedOut) return retainFailure('HARNESS_TASK_INCOMPLETE', `worker timed out after ${timeoutMs} ms`);
+      if (overflowed) return retainFailure('HARNESS_LIMIT_EXCEEDED', `worker output exceeded ${outputLimitBytes} bytes`);
       if (output.length === 0) return retainFailure('HARNESS_DRIVER_FAILED', `worker emitted no stdout${stderr.length > 0 ? `: ${stderrPreview()}` : ''}`);
       let capture;
       try {
-        capture = parseJson(output, { requireCanonical: true, maxBytes: WORKER_PARSE_LIMIT_BYTES });
+        capture = parseJson(output, { requireCanonical: true, maxBytes: parseLimitBytes });
       } catch (error) {
         return retainFailure('HARNESS_DRIVER_FAILED', `worker emitted invalid canonical JSON: ${error instanceof Error ? error.message : String(error)}`);
       }
+      if (capture?.success === false) capture = { ...capture, error: normalizeRetainedFailureError(capture.error) };
       try {
         validateRetainedCapture(capture);
       } catch (error) {
@@ -421,7 +428,10 @@ export async function buildChunkingSelectionBenchmarkBundle(options = {}) {
     cacheRegion: 'local-cache',
     clock: options.clock,
   })));
-  for (const [index, capture] of mutatedCaptures.entries()) validateRetainedCapture(capture, environmentRecords[index]);
+  for (const [index, capture] of mutatedCaptures.entries()) {
+    if (capture?.success === false) mutatedCaptures[index] = { ...capture, error: normalizeRetainedFailureError(capture.error) };
+    validateRetainedCapture(mutatedCaptures[index], environmentRecords[index]);
+  }
   const captureHost = mutatedCaptures[0]?.host;
   if (mutatedCaptures.some(({ host }) => chunkingCanonicalJson(host) !== chunkingCanonicalJson(captureHost))) harnessFail('HARNESS_INPUT_INVALID', 'retained captures must share one exact child host identity');
   if (chunkingCanonicalJson(selectionReport.host) !== chunkingCanonicalJson(captureHost)) harnessFail('HARNESS_INPUT_INVALID', 'selection report host must equal the retained child host identity');
