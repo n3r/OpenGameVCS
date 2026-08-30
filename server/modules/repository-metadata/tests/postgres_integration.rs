@@ -2463,7 +2463,7 @@ fn file_id_race(database_url: &str, context: AuthorizationContext, repository_id
             })
             .unwrap_err()
             .code,
-        DomainErrorCode::FileIdConflict
+        DomainErrorCode::MetadataNotFoundOrDenied
     );
     assert_eq!(
         restore.commit().unwrap_err().code,
