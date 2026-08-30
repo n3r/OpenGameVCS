@@ -59,9 +59,15 @@ test('repository metadata report declares every bounded live row without claimin
   assert.equal(report.schemaVersion, 'ogvcs.repository-metadata/service-report/v1');
   assert.equal(report.exactScaleExecuted, false);
   assert.equal(report.status, 'declared');
-  assert.equal(report.rows.length, 10);
+  assert.equal(report.rows.length, 14);
+  assert.equal(new Set(report.rows.map(({ id }) => id)).size, report.rows.length);
   assert.ok(report.rows.every(({ status }) => status === 'declared'));
-  assert.ok(report.rows.some(
-    ({ id }) => id === 'migration-v1-v2-upgrade-preserves-unpublished-history',
-  ));
+  for (const id of [
+    'migration-v1-v5-upgrade-preserves-unpublished-history',
+    'project-repository-list-cursors',
+    'bounded-ancestry-file-path-history',
+    'outbox-lease-ack-release',
+  ]) {
+    assert.ok(report.rows.some((row) => row.id === id), `missing bounded report row ${id}`);
+  }
 });
