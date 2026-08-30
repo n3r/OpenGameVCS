@@ -232,14 +232,14 @@ test('retained failure normalization is path-neutral across POSIX, drive, and UN
   }
 });
 
-test('worker timeout terminates a TERM-ignoring process tree with bounded SIGKILL fallback', { skip: process.platform === 'win32' ? 'POSIX-specific process-group kill assertion' : false }, async (t) => {
+test('worker timeout keeps escalation armed after direct child exit and kills lingering inherited-pipe grandchildren', { skip: process.platform === 'win32' ? 'POSIX-specific process-group kill assertion' : false }, async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'ogvcs-chunking-worker-timeout-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const pidFile = join(directory, 'grandchild.pid');
   const started = Date.now();
   const capture = await runWorker('append', {
-    args: [WORKER_FIXTURE_PATH, '--mode', 'ignore-term', '--workload-id', 'append', '--pid-file', pidFile],
-    timeoutMs: 200,
+    args: [WORKER_FIXTURE_PATH, '--mode', 'exit-on-term-grandchild-inherits-pipes', '--workload-id', 'append', '--pid-file', pidFile],
+    timeoutMs: 150,
     terminateGraceMs: 20,
     terminateKillWaitMs: 20,
   });
@@ -247,6 +247,7 @@ test('worker timeout terminates a TERM-ignoring process tree with bounded SIGKIL
   const pid = Number((await readFile(pidFile, 'utf8')).trim());
   assert.equal(capture.success, false);
   assert.equal(capture.error.code, 'HARNESS_TASK_INCOMPLETE');
+  assert.equal(capture.process.totalWallMicroseconds >= 150_000, true);
   assert.equal(elapsedMs < 2_000, true);
   assert.equal(await waitForProcessExit(pid, 1_000), true);
 });

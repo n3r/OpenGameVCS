@@ -448,12 +448,6 @@ export async function runWorker(workloadId, options = {}) {
       if ((code === 0 && signal === null) !== (capture.success === true)) return retainFailure('HARNESS_DRIVER_FAILED', 'worker exit status does not match retained capture success');
       finish(capture);
     });
-    child.once('exit', () => {
-      if (termination && child.pid && !processExists(child.pid)) {
-        clearTimeout(escalationTimeout);
-        clearTimeout(forceTimeout);
-      }
-    });
   });
 }
 

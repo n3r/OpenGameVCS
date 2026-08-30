@@ -67,6 +67,16 @@ async function main() {
       await new Promise(() => {});
       break;
     }
+    case 'exit-on-term-grandchild-inherits-pipes': {
+      const grandchild = spawn(process.execPath, ['-e', "process.on('SIGTERM',()=>{});process.on('SIGINT',()=>{});setInterval(()=>{},1000)"], {
+        stdio: ['ignore', 'inherit', 'inherit'],
+      });
+      if (pidFile) writeFileSync(pidFile, `${grandchild.pid}\n`, 'utf8');
+      process.on('SIGTERM', () => process.exit(0));
+      process.on('SIGINT', () => process.exit(0));
+      await new Promise(() => {});
+      break;
+    }
     case 'invalid-json':
       process.stdout.write('{');
       break;
