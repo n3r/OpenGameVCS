@@ -18,7 +18,7 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
     );
     assert_eq!(manifest["database"], "postgresql-15-or-newer");
     let entries = manifest["entries"].as_array().unwrap();
-    assert_eq!(entries.len(), 9);
+    assert_eq!(entries.len(), 12);
     let expected = [
         (1, "expand"),
         (1, "migrate"),
@@ -29,6 +29,9 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
         (3, "expand"),
         (3, "migrate"),
         (3, "contract"),
+        (4, "expand"),
+        (4, "migrate"),
+        (4, "contract"),
     ];
     for (entry, (version, phase)) in entries.iter().zip(expected) {
         assert_eq!(entry["version"], version);
@@ -45,6 +48,7 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
     assert_eq!(entries[2]["requiresCompatibilityFence"], true);
     assert_eq!(entries[5]["requiresCompatibilityFence"], true);
     assert_eq!(entries[8]["requiresCompatibilityFence"], true);
+    assert_eq!(entries[11]["requiresCompatibilityFence"], true);
 }
 
 #[test]
@@ -133,6 +137,20 @@ fn version_three_adds_complete_outbox_delivery_state() {
     }
     assert!(contract.contains("DROP INDEX ogvcs_metadata.outbox_events_available"));
     assert!(contract.contains("RENAME TO outbox_events_available"));
+}
+
+#[test]
+fn version_four_adds_deterministic_bounded_ancestry() {
+    let expand = fs::read_to_string(migration_root().join("000004_expand.sql")).unwrap();
+    for evidence in [
+        "bounded_snapshot_ancestry",
+        "requested_maximum_depth > 100000",
+        "requested_maximum_work > 100001",
+        "ORDER BY parent.ordinal",
+        "emitted < requested_maximum_work",
+    ] {
+        assert!(expand.contains(evidence), "missing {evidence}");
+    }
 }
 
 #[test]

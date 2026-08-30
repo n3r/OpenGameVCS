@@ -340,6 +340,16 @@ pub enum AuthorizationResource {
         snapshot: ObjectRef,
         repository_path_utf8: Vec<u8>,
     },
+    SnapshotHistory {
+        repository_id: RepositoryId,
+        snapshot: ObjectRef,
+    },
+    SnapshotHistoryEntry {
+        repository_id: RepositoryId,
+        root_snapshot: ObjectRef,
+        snapshot: ObjectRef,
+        depth: u32,
+    },
     OutboxCollection {
         tenant_id: TenantId,
     },
@@ -360,7 +370,9 @@ impl AuthorizationResource {
             | Self::TreePrefix { repository_id, .. }
             | Self::TreeEntry { repository_id, .. }
             | Self::FileHistory { repository_id, .. }
-            | Self::FileHistoryEntry { repository_id, .. } => Some(*repository_id),
+            | Self::FileHistoryEntry { repository_id, .. }
+            | Self::SnapshotHistory { repository_id, .. }
+            | Self::SnapshotHistoryEntry { repository_id, .. } => Some(*repository_id),
             Self::OutboxCollection { .. } | Self::OutboxDeliveryEvent { .. } => None,
         }
     }
@@ -605,6 +617,33 @@ impl PageRequest {
 pub struct Page<T> {
     pub items: Vec<T>,
     pub next_cursor: Option<CursorToken>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PageState {
+    More,
+    Complete,
+    Incomplete,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum HistoryIncompleteReason {
+    DepthLimit,
+    WorkLimit,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct HistoryPage<T> {
+    pub state: PageState,
+    pub items: Vec<T>,
+    pub next_cursor: Option<CursorToken>,
+    pub incomplete_reason: Option<HistoryIncompleteReason>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AncestryRecord {
+    pub snapshot: ObjectRef,
+    pub depth: u32,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

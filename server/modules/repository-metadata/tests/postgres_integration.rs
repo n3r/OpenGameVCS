@@ -13,15 +13,16 @@ use ogvcs_object_model::{
     Limits, ObjectKind, ObjectRef, ProfileRef, Registry, ValidationMode,
 };
 use ogvcs_repository_metadata::{
-    AuthorizationContext, AuthorizationPort, AuthorizationResource, AuthorizedView, CaseMode,
-    CommitSequence, DomainError, DomainErrorCode, FileHistoryWrite, FileId, FileIdExpectedState,
-    FileIdImportReservation, FileIdOrigin, FileIdOwnerKind, FileIdReservation,
-    FileIdReservationOutcome, IdempotencyReservation, IdempotencyReservationOutcome,
-    MetadataPermission, MetadataTransaction, ObjectPutOutcome, ObjectValidationPort, ObjectWrite,
-    OutboxClaimRequest, OutboxEvent, OutboxLeaseAction, OutboxReleaseRequest, PageRequest,
-    PostgresMetadataStore, ProjectId, ReferenceCasRequest, ReferenceExpected, ReferenceFilter,
-    ReferenceKind, ReferenceName, RepositoryCreate, RepositoryId, RepositorySettings,
-    SnapshotWrite, TenantId, TransactionCapability, TransactionOptions, TreeEntryWrite,
+    AncestryRecord, AuthorizationContext, AuthorizationPort, AuthorizationResource, AuthorizedView,
+    CaseMode, CommitSequence, DomainError, DomainErrorCode, FileHistoryWrite, FileId,
+    FileIdExpectedState, FileIdImportReservation, FileIdOrigin, FileIdOwnerKind, FileIdReservation,
+    FileIdReservationOutcome, HistoryIncompleteReason, IdempotencyReservation,
+    IdempotencyReservationOutcome, MetadataPermission, MetadataTransaction, ObjectPutOutcome,
+    ObjectValidationPort, ObjectWrite, OutboxClaimRequest, OutboxEvent, OutboxLeaseAction,
+    OutboxReleaseRequest, PageRequest, PageState, PostgresMetadataStore, ProjectId,
+    ReferenceCasRequest, ReferenceExpected, ReferenceFilter, ReferenceKind, ReferenceName,
+    RepositoryCreate, RepositoryId, RepositorySettings, SnapshotWrite, TenantId,
+    TransactionCapability, TransactionOptions, TreeEntryWrite,
 };
 use postgres::{Client, NoTls};
 use serde_json::{json, Value};
@@ -112,6 +113,17 @@ impl AuthorizedView for IsolatedAuthorizedView {
                     ..
                 },
             ) => expected_repository == repository_id && expected_file_id == file_id,
+            (
+                AuthorizationResource::SnapshotHistory {
+                    repository_id: expected_repository,
+                    snapshot: expected_root,
+                },
+                AuthorizationResource::SnapshotHistoryEntry {
+                    repository_id,
+                    root_snapshot,
+                    ..
+                },
+            ) => expected_repository == repository_id && expected_root == root_snapshot,
             _ => false,
         }
     }
@@ -345,8 +357,8 @@ fn production_reference_postgres_report() {
         return;
     };
     reset_disposable_schema(&database_url);
-    migration_v1_v3_upgrade_report(&database_url);
-    report("migration-v1-v3-upgrade-preserves-unpublished-history");
+    migration_v1_v4_upgrade_report(&database_url);
+    report("migration-v1-v4-upgrade-preserves-unpublished-history");
     reset_disposable_schema(&database_url);
     migration_report(&database_url);
     report("migration-repeat-checksum-downgrade");
@@ -663,6 +675,16 @@ fn production_reference_postgres_report() {
     report("immutable-settings-object-read");
     outbox_delivery_report(&database_url, &context, tenant_id);
     report("outbox-lease-ack-release");
+    let ancestry_chain =
+        install_published_snapshot_chain(&database_url, repository_id, root_tree, &snapshot);
+    ancestry_report(
+        &database_url,
+        &mut store,
+        &context,
+        repository_id,
+        ancestry_chain,
+    );
+    report("bounded-ancestry-depth-pagination");
 
     assert_eq!(
         store
@@ -1050,7 +1072,222 @@ fn outbox_delivery_report(database_url: &str, context: &AuthorizationContext, te
     assert_eq!(state, (7, 0, 8));
 }
 
-fn migration_v1_v3_upgrade_report(database_url: &str) {
+fn ancestry_report(
+    database_url: &str,
+    store: &mut PostgresMetadataStore<IsolatedAllow, IsolatedConformanceValidation>,
+    context: &AuthorizationContext,
+    repository_id: RepositoryId,
+    chain: [ObjectRef; 3],
+) {
+    let first = store
+        .ancestry_page(
+            context,
+            repository_id,
+            chain[2],
+            10,
+            None,
+            PageRequest {
+                limit: 1,
+                cursor: None,
+            },
+        )
+        .unwrap();
+    assert_eq!(first.state, PageState::More);
+    assert_eq!(
+        first.items,
+        vec![AncestryRecord {
+            snapshot: chain[2],
+            depth: 0,
+        }]
+    );
+    assert_eq!(first.incomplete_reason, None);
+    let first_cursor = first.next_cursor.unwrap();
+    assert_eq!(
+        store
+            .ancestry_page(
+                context,
+                repository_id,
+                chain[2],
+                1,
+                None,
+                PageRequest {
+                    limit: 1,
+                    cursor: Some(first_cursor.clone()),
+                },
+            )
+            .unwrap_err()
+            .code,
+        DomainErrorCode::MetadataNotFoundOrDenied,
+        "cursor must remain bound to the exact depth query",
+    );
+    let second = store
+        .ancestry_page(
+            context,
+            repository_id,
+            chain[2],
+            10,
+            None,
+            PageRequest {
+                limit: 1,
+                cursor: Some(first_cursor),
+            },
+        )
+        .unwrap();
+    assert_eq!(second.state, PageState::More);
+    assert_eq!(second.items[0].snapshot, chain[1]);
+    assert_eq!(second.items[0].depth, 1);
+    let third = store
+        .ancestry_page(
+            context,
+            repository_id,
+            chain[2],
+            10,
+            None,
+            PageRequest {
+                limit: 1,
+                cursor: second.next_cursor,
+            },
+        )
+        .unwrap();
+    assert_eq!(third.state, PageState::Complete);
+    assert_eq!(
+        third.items,
+        vec![AncestryRecord {
+            snapshot: chain[0],
+            depth: 2,
+        }]
+    );
+    assert_eq!(third.next_cursor, None);
+    assert_eq!(third.incomplete_reason, None);
+
+    let depth_limited = store
+        .ancestry_page(
+            context,
+            repository_id,
+            chain[2],
+            1,
+            None,
+            PageRequest {
+                limit: 10,
+                cursor: None,
+            },
+        )
+        .unwrap();
+    assert_eq!(depth_limited.state, PageState::Incomplete);
+    assert_eq!(
+        depth_limited
+            .items
+            .iter()
+            .map(|record| (record.snapshot, record.depth))
+            .collect::<Vec<_>>(),
+        vec![(chain[2], 0), (chain[1], 1)]
+    );
+    assert_eq!(
+        depth_limited.incomplete_reason,
+        Some(HistoryIncompleteReason::DepthLimit)
+    );
+    assert_eq!(
+        store
+            .ancestry_page(
+                context,
+                repository_id,
+                chain[2],
+                100_001,
+                None,
+                PageRequest {
+                    limit: 1,
+                    cursor: None,
+                },
+            )
+            .unwrap_err()
+            .code,
+        DomainErrorCode::HistoryLimitReached,
+    );
+
+    let mut single_use = PostgresMetadataStore::connect(database_url)
+        .unwrap()
+        .with_authorizer(SingleUseAllow)
+        .with_object_validator(IsolatedConformanceValidation);
+    assert_eq!(
+        single_use
+            .ancestry_page(
+                context,
+                repository_id,
+                chain[2],
+                10,
+                None,
+                PageRequest {
+                    limit: 10,
+                    cursor: None,
+                },
+            )
+            .unwrap_err()
+            .code,
+        DomainErrorCode::MetadataNotFoundOrDenied,
+        "history authorization must be revalidated before response",
+    );
+}
+
+fn install_published_snapshot_chain(
+    database_url: &str,
+    repository_id: RepositoryId,
+    root_tree: ObjectRef,
+    base: &(ObjectRef, Vec<u8>),
+) -> [ObjectRef; 3] {
+    let first = snapshot_with_parents(&base.1, &[base.0]);
+    let second = snapshot_with_parents(&base.1, &[first.0]);
+    let mut client = Client::connect(database_url, NoTls).unwrap();
+    let mut transaction = client.transaction().unwrap();
+    for (snapshot, parents) in [(&first, vec![base.0]), (&second, vec![first.0])] {
+        let scanned = scan_metadata(&snapshot.1, Limits::METADATA).unwrap();
+        validate_semantic_object(&scanned, &Registry::bundled(), ValidationMode::Conformance)
+            .unwrap();
+        transaction
+            .execute(
+                "INSERT INTO ogvcs_metadata.metadata_objects
+                 (repository_id, object_kind, digest_algorithm, object_digest,
+                  canonical_bytes, validation_contract)
+                 VALUES ($1, 7, 1, $2, $3, 'ogvcs.repository-format@1')",
+                &[
+                    &Uuid::from_bytes(*repository_id.as_bytes()),
+                    &&snapshot.0.digest[..],
+                    &snapshot.1,
+                ],
+            )
+            .unwrap();
+        transaction
+            .execute(
+                "INSERT INTO ogvcs_metadata.snapshots
+                 (repository_id, snapshot_digest, root_tree_digest, published_commit_sequence)
+                 VALUES ($1, $2, $3, 2)",
+                &[
+                    &Uuid::from_bytes(*repository_id.as_bytes()),
+                    &&snapshot.0.digest[..],
+                    &&root_tree.digest[..],
+                ],
+            )
+            .unwrap();
+        for (ordinal, parent) in parents.iter().enumerate() {
+            transaction
+                .execute(
+                    "INSERT INTO ogvcs_metadata.snapshot_parents
+                     (repository_id, snapshot_digest, ordinal, parent_snapshot_digest)
+                     VALUES ($1, $2, $3, $4)",
+                    &[
+                        &Uuid::from_bytes(*repository_id.as_bytes()),
+                        &&snapshot.0.digest[..],
+                        &i16::try_from(ordinal).unwrap(),
+                        &&parent.digest[..],
+                    ],
+                )
+                .unwrap();
+        }
+    }
+    transaction.commit().unwrap();
+    [base.0, first.0, second.0]
+}
+
+fn migration_v1_v4_upgrade_report(database_url: &str) {
     let mut client = Client::connect(database_url, NoTls).unwrap();
     for migration in &ogvcs_repository_metadata::MIGRATIONS[..3] {
         client.batch_execute(migration.sql).unwrap();
@@ -1153,7 +1390,7 @@ fn migration_v1_v3_upgrade_report(database_url: &str) {
     };
     let mut store = PostgresMetadataStore::connect(database_url).unwrap();
     let upgrade = store.migrate(options).unwrap();
-    assert_eq!((upgrade.applied, upgrade.already_applied), (6, 3));
+    assert_eq!((upgrade.applied, upgrade.already_applied), (9, 3));
     drop(store);
 
     let mut client = Client::connect(database_url, NoTls).unwrap();
@@ -1206,8 +1443,8 @@ fn migration_report(database_url: &str) {
         application_version: "0.1.0",
         compatibility_fence_open: true,
     };
-    assert_eq!(store.migrate(options).unwrap().applied, 9);
-    assert_eq!(store.migrate(options).unwrap().already_applied, 9);
+    assert_eq!(store.migrate(options).unwrap().applied, 12);
+    assert_eq!(store.migrate(options).unwrap().already_applied, 12);
     drop(store);
 
     let mut client = Client::connect(database_url, NoTls).unwrap();
@@ -1336,7 +1573,7 @@ fn migration_report(database_url: &str) {
             "INSERT INTO ogvcs_metadata.schema_migrations
              (version, phase, checksum_sha256, state, minimum_application_version,
               maximum_application_version, completed_at)
-             VALUES (4, 'expand', repeat('a', 64), 'completed', '0.2.0', '0.2.x', clock_timestamp())",
+             VALUES (5, 'expand', repeat('a', 64), 'completed', '0.2.0', '0.2.x', clock_timestamp())",
             &[],
         )
         .unwrap();
@@ -1350,7 +1587,7 @@ fn migration_report(database_url: &str) {
     let mut client = Client::connect(database_url, NoTls).unwrap();
     client
         .execute(
-            "DELETE FROM ogvcs_metadata.schema_migrations WHERE version = 4",
+            "DELETE FROM ogvcs_metadata.schema_migrations WHERE version = 5",
             &[],
         )
         .unwrap();
@@ -3287,6 +3524,26 @@ fn snapshot_index(bytes: &[u8]) -> (ObjectRef, Vec<ObjectRef>) {
         .map(|parent| ObjectRef::from_cbor(parent).unwrap())
         .collect();
     (root, parents)
+}
+
+fn snapshot_with_parents(bytes: &[u8], parents: &[ObjectRef]) -> (ObjectRef, Vec<u8>) {
+    let mut snapshot = decode_canonical(bytes, Limits::METADATA).unwrap();
+    let Cbor::Map(fields) = &mut snapshot else {
+        panic!("snapshot map")
+    };
+    fields
+        .iter_mut()
+        .find(|(key, _)| *key == Cbor::UInt(17))
+        .expect("snapshot parents field")
+        .1 = Cbor::Array(parents.iter().map(|parent| parent.to_cbor()).collect());
+    let canonical_bytes = encode_canonical(&snapshot).unwrap();
+    (
+        ObjectRef {
+            kind: ObjectKind::Snapshot,
+            digest: object_id(ObjectKind::Snapshot, &canonical_bytes).unwrap(),
+        },
+        canonical_bytes,
+    )
 }
 
 fn descriptor_repository_id(bytes: &[u8]) -> RepositoryId {

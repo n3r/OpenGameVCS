@@ -18,24 +18,27 @@ use subtle::ConstantTimeEq;
 use uuid::Uuid;
 
 use crate::{
-    AuthorizationContext, AuthorizationPort, AuthorizationResource, AuthorizedView, CaseMode,
-    CommitSequence, ConsistencyToken, CursorToken, DenyAllAuthorization, DomainError,
+    AncestryRecord, AuthorizationContext, AuthorizationPort, AuthorizationResource, AuthorizedView,
+    CaseMode, CommitSequence, ConsistencyToken, CursorToken, DenyAllAuthorization, DomainError,
     DomainErrorCode, FileHistoryRecord, FileHistoryWrite, FileId, FileIdExpectedState,
     FileIdImportReservation, FileIdOrigin, FileIdOwnerKind, FileIdReservation,
-    FileIdReservationOutcome, IdempotencyReservation, IdempotencyReservationOutcome,
-    MetadataObjectRecord, MetadataPermission, MetadataStore, MetadataTransaction, ObjectPutOutcome,
-    ObjectRef, ObjectValidationPort, ObjectWrite, OutboxClaimRequest, OutboxEvent,
-    OutboxEventRecord, OutboxLeaseAction, OutboxLeaseRecord, OutboxReleaseRequest, Page,
-    PageRequest, ProductionObjectValidator, ReferenceCasRequest, ReferenceCasResult,
-    ReferenceExpected, ReferenceFilter, ReferenceKind, ReferenceName, ReferenceRecord,
-    RepositoryCreate, RepositoryId, RepositorySettings, Result, SnapshotWrite, TenantId,
-    TransactionCapability, TransactionOptions, TreeEntryRecord, TreeEntryWrite,
+    FileIdReservationOutcome, HistoryIncompleteReason, HistoryPage, IdempotencyReservation,
+    IdempotencyReservationOutcome, MetadataObjectRecord, MetadataPermission, MetadataStore,
+    MetadataTransaction, ObjectPutOutcome, ObjectRef, ObjectValidationPort, ObjectWrite,
+    OutboxClaimRequest, OutboxEvent, OutboxEventRecord, OutboxLeaseAction, OutboxLeaseRecord,
+    OutboxReleaseRequest, Page, PageRequest, PageState, ProductionObjectValidator,
+    ReferenceCasRequest, ReferenceCasResult, ReferenceExpected, ReferenceFilter, ReferenceKind,
+    ReferenceName, ReferenceRecord, RepositoryCreate, RepositoryId, RepositorySettings, Result,
+    SnapshotWrite, TenantId, TransactionCapability, TransactionOptions, TreeEntryRecord,
+    TreeEntryWrite,
 };
 
 const VALIDATION_CONTRACT: &str = "ogvcs.repository-format@1";
 const OUTBOX_PAYLOAD_SCHEMA: &str = "ogvcs.repository-metadata/outbox-safe-payload/v1";
 const MAX_REQUIRED_OUTBOX_EVENTS: usize = 10_000;
 const MAX_AUTHORIZATION_SCAN: usize = 100_000;
+const MAX_HISTORY_WORK: usize = 100_000;
+const MAX_HISTORY_DEPTH: u32 = 100_000;
 const MAX_JSON_PREFLIGHT_BYTES: usize = 1_048_576;
 const MAX_JSON_PREFLIGHT_DEPTH: usize = 128;
 const MAX_JSON_PREFLIGHT_NODES: usize = 131_072;
@@ -232,6 +235,120 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
         } else {
             Err(not_found())
         }
+    }
+
+    fn require_published_snapshot(
+        &mut self,
+        repository_id: RepositoryId,
+        snapshot: ObjectRef,
+    ) -> Result<()> {
+        if snapshot.kind != ObjectKind::Snapshot {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        let row = self
+            .client
+            .query_opt(
+                "SELECT snapshot.published_commit_sequence, object.canonical_bytes,
+                        object.validation_contract
+                 FROM ogvcs_metadata.snapshots AS snapshot
+                 JOIN ogvcs_metadata.metadata_objects AS object
+                   ON object.repository_id = snapshot.repository_id
+                  AND object.object_kind = 7
+                  AND object.digest_algorithm = 1
+                  AND object.object_digest = snapshot.snapshot_digest
+                 WHERE snapshot.repository_id = $1 AND snapshot.snapshot_digest = $2",
+                &[&uuid(repository_id), &&snapshot.digest[..]],
+            )
+            .map_err(database_error)?
+            .ok_or_else(not_found)?;
+        let published: Option<i64> = row.get(0);
+        let canonical: Vec<u8> = row.get(1);
+        let validation_contract: String = row.get(2);
+        if published
+            .and_then(|value| positive_u64(value).ok())
+            .is_none()
+            || validation_contract != VALIDATION_CONTRACT
+            || object_id(ObjectKind::Snapshot, &canonical)
+                .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?
+                != snapshot.digest
+        {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        Ok(())
+    }
+
+    fn load_ancestry(
+        &mut self,
+        repository_id: RepositoryId,
+        snapshot: ObjectRef,
+        maximum_depth: u32,
+    ) -> Result<LoadedAncestry> {
+        let fetch_limit = i32::try_from(MAX_HISTORY_WORK + 1)
+            .map_err(|_| DomainError::new(DomainErrorCode::HistoryLimitReached))?;
+        let rows = self
+            .client
+            .query(
+                "SELECT traversal.snapshot_digest, traversal.traversal_depth,
+                        traversal.visit_ordinal, traversal.has_parents,
+                        snapshot.published_commit_sequence
+                 FROM ogvcs_metadata.bounded_snapshot_ancestry($1, $2, $3, $4)
+                      AS traversal
+                 JOIN ogvcs_metadata.snapshots AS snapshot
+                   ON snapshot.repository_id = $1
+                  AND snapshot.snapshot_digest = traversal.snapshot_digest
+                 ORDER BY traversal.visit_ordinal",
+                &[
+                    &uuid(repository_id),
+                    &&snapshot.digest[..],
+                    &i32::try_from(maximum_depth)
+                        .map_err(|_| DomainError::new(DomainErrorCode::HistoryLimitReached))?,
+                    &fetch_limit,
+                ],
+            )
+            .map_err(database_error)?;
+        let work_incomplete = rows.len() > MAX_HISTORY_WORK;
+        let mut nodes = Vec::with_capacity(rows.len().min(MAX_HISTORY_WORK));
+        let mut seen = BTreeSet::new();
+        let mut previous_visit = 0_u32;
+        let mut depth_incomplete = false;
+        for row in rows.into_iter().take(MAX_HISTORY_WORK) {
+            let reference = object_ref(ObjectKind::Snapshot, row.get(0))?;
+            let depth = u32::try_from(row.get::<_, i32>(1))
+                .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            let visit = u32::try_from(row.get::<_, i32>(2))
+                .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            let has_parents: bool = row.get(3);
+            let published: Option<i64> = row.get(4);
+            if visit <= previous_visit
+                || depth > maximum_depth
+                || published
+                    .and_then(|value| positive_u64(value).ok())
+                    .is_none()
+            {
+                return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+            }
+            previous_visit = visit;
+            if depth == maximum_depth && has_parents {
+                depth_incomplete = true;
+            }
+            if seen.insert(reference) {
+                nodes.push(AncestryNode {
+                    snapshot: reference,
+                    depth,
+                    visit,
+                });
+            }
+        }
+        Ok(LoadedAncestry {
+            nodes,
+            incomplete_reason: if work_incomplete {
+                Some(HistoryIncompleteReason::WorkLimit)
+            } else if depth_incomplete {
+                Some(HistoryIncompleteReason::DepthLimit)
+            } else {
+                None
+            },
+        })
     }
 
     /// The only production transaction entry point. OGVCS-010 composes all of
@@ -953,6 +1070,104 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
         Ok(Page { items, next_cursor })
     }
 
+    pub fn ancestry_page(
+        &mut self,
+        context: &AuthorizationContext,
+        repository_id: RepositoryId,
+        snapshot: ObjectRef,
+        maximum_depth: u32,
+        minimum: Option<&ConsistencyToken>,
+        request: PageRequest,
+    ) -> Result<HistoryPage<AncestryRecord>> {
+        let resource = AuthorizationResource::SnapshotHistory {
+            repository_id,
+            snapshot,
+        };
+        let authorized_view =
+            self.authorize_exact(context, MetadataPermission::MetadataRead, &resource)?;
+        crate::verify_schema_compatibility(&mut self.client)?;
+        self.require_repository_tenant(context, repository_id)?;
+        if let Some(token) = minimum {
+            self.require_consistency_authorized(context, repository_id, token)?;
+        }
+        if maximum_depth > MAX_HISTORY_DEPTH || !request.is_bounded() {
+            return Err(DomainError::new(DomainErrorCode::HistoryLimitReached));
+        }
+        self.require_published_snapshot(repository_id, snapshot)?;
+        let query_digest = query_digest(
+            b"history.ancestry-page",
+            repository_id,
+            &snapshot.digest,
+            &maximum_depth.to_be_bytes(),
+        );
+        let after = self.cursor_position(
+            context,
+            repository_id,
+            "history.ancestry-page",
+            query_digest,
+            request.cursor.as_ref(),
+            "visit",
+        )?;
+        let after = decode_visit(after.as_deref())?;
+        let loaded = self.load_ancestry(repository_id, snapshot, maximum_depth)?;
+        let mut authorized = Vec::with_capacity(usize::from(request.limit) + 1);
+        for node in loaded.nodes.iter().filter(|node| node.visit > after) {
+            let exact = AuthorizationResource::SnapshotHistoryEntry {
+                repository_id,
+                root_snapshot: snapshot,
+                snapshot: node.snapshot,
+                depth: node.depth,
+            };
+            if authorized_view.permits(context, MetadataPermission::MetadataRead, &exact) {
+                authorized.push((
+                    AncestryRecord {
+                        snapshot: node.snapshot,
+                        depth: node.depth,
+                    },
+                    node.visit,
+                ));
+                if authorized.len() > usize::from(request.limit) {
+                    break;
+                }
+            }
+        }
+        if !authorized_view.permits(context, MetadataPermission::MetadataRead, &resource) {
+            return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
+        }
+        let has_more = authorized.len() > usize::from(request.limit);
+        authorized.truncate(usize::from(request.limit));
+        let next_cursor = if has_more {
+            let visit = authorized
+                .last()
+                .map(|(_, visit)| visit.to_be_bytes())
+                .ok_or_else(not_found)?;
+            Some(self.issue_cursor(
+                context,
+                repository_id,
+                "history.ancestry-page",
+                query_digest,
+                Some(snapshot),
+                "visit",
+                &visit,
+            )?)
+        } else {
+            None
+        };
+        let state = if has_more {
+            PageState::More
+        } else if loaded.incomplete_reason.is_some() {
+            PageState::Incomplete
+        } else {
+            PageState::Complete
+        };
+        Ok(HistoryPage {
+            state,
+            items: authorized.into_iter().map(|(item, _)| item).collect(),
+            next_cursor,
+            incomplete_reason: (!has_more).then_some(loaded.incomplete_reason).flatten(),
+        })
+    }
+
     pub fn file_history_page(
         &mut self,
         context: &AuthorizationContext,
@@ -1168,6 +1383,19 @@ struct PendingIdempotency {
     operation: String,
     key: String,
     semantic_fingerprint: [u8; 32],
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct AncestryNode {
+    snapshot: ObjectRef,
+    depth: u32,
+    visit: u32,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct LoadedAncestry {
+    nodes: Vec<AncestryNode>,
+    incomplete_reason: Option<HistoryIncompleteReason>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -3330,6 +3558,16 @@ fn decode_history_key(key: Option<&[u8]>) -> Result<(Option<Vec<u8>>, i32)> {
         Some(key[..32].to_vec()),
         i32::from_be_bytes(key[32..].try_into().unwrap()),
     ))
+}
+
+fn decode_visit(value: Option<&[u8]>) -> Result<u32> {
+    match value {
+        None => Ok(0),
+        Some(bytes) => bytes
+            .try_into()
+            .map(u32::from_be_bytes)
+            .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid)),
+    }
 }
 
 fn query_digest(

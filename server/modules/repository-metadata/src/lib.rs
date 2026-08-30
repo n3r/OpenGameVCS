@@ -24,14 +24,15 @@ pub use ports::{
 };
 pub use postgres::{PostgresMetadataStore, PostgresMetadataTransaction};
 pub use types::{
-    AuthorizationContext, AuthorizationResource, CaseMode, CommitSequence, ConsistencyToken,
-    CursorToken, FileHistoryRecord, FileHistoryWrite, FileIdExpectedState, FileIdImportReservation,
-    FileIdOrigin, FileIdOwnerKind, FileIdReservation, FileIdReservationOutcome,
-    IdempotencyReservation, IdempotencyReservationOutcome, MetadataObjectRecord,
-    MetadataPermission, ObjectPutOutcome, ObjectWrite, OutboxClaimRequest, OutboxEvent,
-    OutboxEventRecord, OutboxLeaseAction, OutboxLeaseRecord, OutboxReleaseRequest, Page,
-    PageRequest, ProjectId, ReferenceCasRequest, ReferenceCasResult, ReferenceExpected,
-    ReferenceFilter, ReferenceKind, ReferenceName, ReferenceRecord, RepositoryCreate, RepositoryId,
-    RepositorySettings, SnapshotWrite, TenantId, TransactionCapability, TransactionOptions,
-    TreeEntryRecord, TreeEntryWrite,
+    AncestryRecord, AuthorizationContext, AuthorizationResource, CaseMode, CommitSequence,
+    ConsistencyToken, CursorToken, FileHistoryRecord, FileHistoryWrite, FileIdExpectedState,
+    FileIdImportReservation, FileIdOrigin, FileIdOwnerKind, FileIdReservation,
+    FileIdReservationOutcome, HistoryIncompleteReason, HistoryPage, IdempotencyReservation,
+    IdempotencyReservationOutcome, MetadataObjectRecord, MetadataPermission, ObjectPutOutcome,
+    ObjectWrite, OutboxClaimRequest, OutboxEvent, OutboxEventRecord, OutboxLeaseAction,
+    OutboxLeaseRecord, OutboxReleaseRequest, Page, PageRequest, PageState, ProjectId,
+    ReferenceCasRequest, ReferenceCasResult, ReferenceExpected, ReferenceFilter, ReferenceKind,
+    ReferenceName, ReferenceRecord, RepositoryCreate, RepositoryId, RepositorySettings,
+    SnapshotWrite, TenantId, TransactionCapability, TransactionOptions, TreeEntryRecord,
+    TreeEntryWrite,
 };

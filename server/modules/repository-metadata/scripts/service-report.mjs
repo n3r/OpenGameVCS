@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const cases = [
-  'migration-v1-v3-upgrade-preserves-unpublished-history',
+  'migration-v1-v4-upgrade-preserves-unpublished-history',
   'canonical-file-graph',
   'authorization-binding-and-poisoning',
   'authorized-view-item-projections',
@@ -18,6 +18,7 @@ const cases = [
   'rollback-outbox-idempotency',
   'migration-repeat-checksum-downgrade',
   'consistency-token-primary-and-lag',
+  'bounded-ancestry-depth-pagination',
 ];
 
 function report(status, rows, detail) {
