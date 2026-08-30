@@ -24,10 +24,12 @@ use crate::{
     FileIdImportReservation, FileIdOrigin, FileIdOwnerKind, FileIdReservation,
     FileIdReservationOutcome, IdempotencyReservation, IdempotencyReservationOutcome,
     MetadataPermission, MetadataStore, MetadataTransaction, ObjectPutOutcome, ObjectRef,
-    ObjectValidationPort, ObjectWrite, OutboxEvent, Page, PageRequest, ProductionObjectValidator,
-    ReferenceCasRequest, ReferenceCasResult, ReferenceExpected, ReferenceKind, ReferenceName,
-    ReferenceRecord, RepositoryCreate, RepositoryId, Result, SnapshotWrite, TenantId,
-    TransactionCapability, TransactionOptions, TreeEntryRecord, TreeEntryWrite,
+    ObjectValidationPort, ObjectWrite, OutboxClaimRequest, OutboxEvent, OutboxEventRecord,
+    OutboxLeaseAction, OutboxLeaseRecord, OutboxReleaseRequest, Page, PageRequest,
+    ProductionObjectValidator, ReferenceCasRequest, ReferenceCasResult, ReferenceExpected,
+    ReferenceKind, ReferenceName, ReferenceRecord, RepositoryCreate, RepositoryId, Result,
+    SnapshotWrite, TenantId, TransactionCapability, TransactionOptions, TreeEntryRecord,
+    TreeEntryWrite,
 };
 
 const VALIDATION_CONTRACT: &str = "ogvcs.repository-format@1";
@@ -434,6 +436,167 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
             ));
         }
         Ok(CommitSequence::new(minimum))
+    }
+
+    /// Atomically leases the oldest currently deliverable events in this
+    /// authenticated tenant. Concurrent consumers cannot receive the same
+    /// active lease because selection and update share one row-lock statement.
+    pub fn claim_outbox(
+        &mut self,
+        context: &AuthorizationContext,
+        request: OutboxClaimRequest,
+    ) -> Result<Vec<OutboxLeaseRecord>> {
+        let resource = AuthorizationResource::OutboxCollection {
+            tenant_id: context.tenant_id,
+        };
+        let authorized_view =
+            self.authorize_exact(context, MetadataPermission::ServiceInternal, &resource)?;
+        crate::verify_schema_compatibility(&mut self.client)?;
+        if !request.is_bounded() {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        if request.maximum_items == 0 || request.lease_seconds == 0 {
+            if !authorized_view.permits(context, MetadataPermission::ServiceInternal, &resource) {
+                return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
+            }
+            return Ok(Vec::new());
+        }
+        let lease_id = random_public_uuid()?;
+        let mut transaction = self.client.transaction().map_err(database_error)?;
+        let rows = transaction
+            .query(
+                "WITH candidates AS (
+                    SELECT event_id
+                    FROM ogvcs_metadata.outbox_events
+                    WHERE tenant_id = $1
+                      AND acknowledged_at IS NULL
+                      AND available_at <= clock_timestamp()
+                      AND (lease_expires_at IS NULL OR lease_expires_at <= clock_timestamp())
+                    ORDER BY available_at, event_id
+                    FOR UPDATE SKIP LOCKED
+                    LIMIT $2
+                 )
+                 UPDATE ogvcs_metadata.outbox_events AS event
+                 SET lease_id = $3, leased_by = $4,
+                     lease_expires_at = clock_timestamp() + ($5::bigint * interval '1 second'),
+                     delivery_attempts = delivery_attempts + 1
+                 FROM candidates
+                 WHERE event.event_id = candidates.event_id
+                 RETURNING event.event_id, event.event_type, event.event_version,
+                           event.tenant_id, event.repository_id, event.commit_sequence,
+                           event.correlation_id, event.resource_type,
+                           event.resource_opaque_id, event.safe_payload,
+                           event.lease_id, event.leased_by, event.lease_expires_at,
+                           event.delivery_attempts",
+                &[
+                    &uuid(context.tenant_id),
+                    &i64::from(request.maximum_items),
+                    &Uuid::from_bytes(lease_id),
+                    &request.consumer_id,
+                    &i64::from(request.lease_seconds),
+                ],
+            )
+            .map_err(database_error)?;
+        let leases = rows
+            .iter()
+            .map(outbox_lease_record)
+            .collect::<Result<Vec<_>>>()?;
+        if !authorized_view.permits(context, MetadataPermission::ServiceInternal, &resource) {
+            transaction.rollback().map_err(database_error)?;
+            return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
+        }
+        transaction.commit().map_err(database_error)?;
+        Ok(leases)
+    }
+
+    /// Acknowledges only the caller's exact, still-live lease. The update also
+    /// clears every lease field so an acknowledged row cannot be reclaimed.
+    pub fn acknowledge_outbox(
+        &mut self,
+        context: &AuthorizationContext,
+        request: OutboxLeaseAction,
+    ) -> Result<()> {
+        if !request.is_valid() {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        let resource = AuthorizationResource::OutboxDeliveryEvent {
+            tenant_id: context.tenant_id,
+            event_id: request.event_id,
+        };
+        let authorized_view =
+            self.authorize_exact(context, MetadataPermission::ServiceInternal, &resource)?;
+        crate::verify_schema_compatibility(&mut self.client)?;
+        let mut transaction = self.client.transaction().map_err(database_error)?;
+        let updated = transaction
+            .execute(
+                "UPDATE ogvcs_metadata.outbox_events
+                 SET acknowledged_at = clock_timestamp(),
+                     lease_id = NULL, leased_by = NULL, lease_expires_at = NULL
+                 WHERE tenant_id = $1 AND event_id = $2 AND lease_id = $3
+                   AND leased_by = $4 AND acknowledged_at IS NULL
+                   AND lease_expires_at > clock_timestamp()",
+                &[
+                    &uuid(context.tenant_id),
+                    &Uuid::from_bytes(request.event_id),
+                    &Uuid::from_bytes(request.lease_id),
+                    &request.consumer_id,
+                ],
+            )
+            .map_err(database_error)?;
+        if updated != 1
+            || !authorized_view.permits(context, MetadataPermission::ServiceInternal, &resource)
+        {
+            transaction.rollback().map_err(database_error)?;
+            return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
+        }
+        transaction.commit().map_err(database_error)
+    }
+
+    /// Releases only the exact live lease and moves its next availability
+    /// monotonically forward by the bounded retry delay.
+    pub fn release_outbox(
+        &mut self,
+        context: &AuthorizationContext,
+        request: OutboxReleaseRequest,
+    ) -> Result<()> {
+        if !request.is_bounded() {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        let resource = AuthorizationResource::OutboxDeliveryEvent {
+            tenant_id: context.tenant_id,
+            event_id: request.lease.event_id,
+        };
+        let authorized_view =
+            self.authorize_exact(context, MetadataPermission::ServiceInternal, &resource)?;
+        crate::verify_schema_compatibility(&mut self.client)?;
+        let mut transaction = self.client.transaction().map_err(database_error)?;
+        let updated = transaction
+            .execute(
+                "UPDATE ogvcs_metadata.outbox_events
+                 SET available_at = GREATEST(
+                         available_at,
+                         clock_timestamp() + ($5::bigint * interval '1 second')
+                     ),
+                     lease_id = NULL, leased_by = NULL, lease_expires_at = NULL
+                 WHERE tenant_id = $1 AND event_id = $2 AND lease_id = $3
+                   AND leased_by = $4 AND acknowledged_at IS NULL
+                   AND lease_expires_at > clock_timestamp()",
+                &[
+                    &uuid(context.tenant_id),
+                    &Uuid::from_bytes(request.lease.event_id),
+                    &Uuid::from_bytes(request.lease.lease_id),
+                    &request.lease.consumer_id,
+                    &i64::from(request.retry_after_seconds),
+                ],
+            )
+            .map_err(database_error)?;
+        if updated != 1
+            || !authorized_view.permits(context, MetadataPermission::ServiceInternal, &resource)
+        {
+            transaction.rollback().map_err(database_error)?;
+            return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
+        }
+        transaction.commit().map_err(database_error)
     }
 
     pub fn tree_page(
@@ -2812,6 +2975,67 @@ fn reference_record(row: &Row) -> Result<ReferenceRecord> {
     })
 }
 
+fn outbox_lease_record(row: &Row) -> Result<OutboxLeaseRecord> {
+    let event_id = *row.get::<_, Uuid>(0).as_bytes();
+    let event_type: String = row.get(1);
+    let event_version: i16 = row.get(2);
+    let tenant_id = TenantId::from_bytes(*row.get::<_, Uuid>(3).as_bytes());
+    let repository_id = RepositoryId::from_bytes(*row.get::<_, Uuid>(4).as_bytes());
+    let commit_sequence = CommitSequence::new(positive_u64(row.get(5))?);
+    let correlation_id = *row.get::<_, Uuid>(6).as_bytes();
+    let resource_type: String = row.get(7);
+    let resource_opaque_id: String = row.get(8);
+    let Json(safe_payload): Json<Value> = row.get(9);
+    let lease_id = *row.get::<_, Uuid>(10).as_bytes();
+    let consumer_id: String = row.get(11);
+    let lease_expires_at: SystemTime = row.get(12);
+    let delivery_attempt = u32::try_from(row.get::<_, i32>(13))
+        .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+    let expected_resource_type = match event_type.as_str() {
+        "repository.created" => "repository",
+        "metadata.object-accepted" => "snapshot",
+        "reference.changed" => "reference",
+        "file-id.state-changed" => "path",
+        _ => return Err(DomainError::new(DomainErrorCode::ObjectInvalid)),
+    };
+    if event_version != 1
+        || resource_type != expected_resource_type
+        || !valid_public_uuid(&event_id)
+        || !valid_public_uuid(&correlation_id)
+        || !valid_public_uuid(&lease_id)
+        || consumer_id.is_empty()
+        || consumer_id.len() > 256
+        || consumer_id.contains('\0')
+        || delivery_attempt == 0
+        || resource_opaque_id.len() != 47
+        || !resource_opaque_id.starts_with("rr1.")
+        || !resource_opaque_id[4..]
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
+        || safe_payload.get("schemaVersion").and_then(Value::as_str) != Some(OUTBOX_PAYLOAD_SCHEMA)
+        || json_size(&safe_payload).is_none_or(|size| size > MAX_JSON_PREFLIGHT_BYTES)
+    {
+        return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+    }
+    Ok(OutboxLeaseRecord {
+        lease_id,
+        consumer_id,
+        lease_expires_at,
+        delivery_attempt,
+        event: OutboxEventRecord {
+            event_id,
+            event_type,
+            tenant_id,
+            repository_id,
+            commit_sequence,
+            correlation_id,
+            resource_type,
+            resource_opaque_id,
+            safe_payload,
+        },
+    })
+}
+
 fn parsed_reference_kind(value: &str) -> Result<ReferenceKind> {
     Ok(match value {
         "branch" => ReferenceKind::Branch,
@@ -2945,6 +3169,15 @@ fn opaque_token(prefix: &str) -> Result<String> {
     getrandom::getrandom(&mut entropy)
         .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
     Ok(format!("{prefix}{}", URL_SAFE_NO_PAD.encode(entropy)))
+}
+
+fn random_public_uuid() -> Result<[u8; 16]> {
+    let mut bytes = [0_u8; 16];
+    getrandom::getrandom(&mut bytes)
+        .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    Ok(bytes)
 }
 
 trait UuidId {

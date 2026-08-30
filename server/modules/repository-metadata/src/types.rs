@@ -269,6 +269,7 @@ pub enum MetadataPermission {
     Discover,
     MetadataRead,
     Submit,
+    ServiceInternal,
 }
 
 impl MetadataPermission {
@@ -277,6 +278,7 @@ impl MetadataPermission {
             Self::Discover => "discover",
             Self::MetadataRead => "metadata.read",
             Self::Submit => "submit",
+            Self::ServiceInternal => "service-internal",
         }
     }
 }
@@ -322,10 +324,17 @@ pub enum AuthorizationResource {
         snapshot: ObjectRef,
         repository_path_utf8: Vec<u8>,
     },
+    OutboxCollection {
+        tenant_id: TenantId,
+    },
+    OutboxDeliveryEvent {
+        tenant_id: TenantId,
+        event_id: [u8; 16],
+    },
 }
 
 impl AuthorizationResource {
-    pub const fn repository_id(&self) -> RepositoryId {
+    pub const fn repository_id(&self) -> Option<RepositoryId> {
         match self {
             Self::Repository { repository_id }
             | Self::RepositoryTransaction { repository_id, .. }
@@ -334,7 +343,19 @@ impl AuthorizationResource {
             | Self::TreePrefix { repository_id, .. }
             | Self::TreeEntry { repository_id, .. }
             | Self::FileHistory { repository_id, .. }
-            | Self::FileHistoryEntry { repository_id, .. } => *repository_id,
+            | Self::FileHistoryEntry { repository_id, .. } => Some(*repository_id),
+            Self::OutboxCollection { .. } | Self::OutboxDeliveryEvent { .. } => None,
+        }
+    }
+}
+
+impl AuthorizationResource {
+    pub const fn tenant_id(&self) -> Option<TenantId> {
+        match self {
+            Self::OutboxCollection { tenant_id } | Self::OutboxDeliveryEvent { tenant_id, .. } => {
+                Some(*tenant_id)
+            }
+            _ => None,
         }
     }
 }
@@ -396,6 +417,80 @@ pub struct OutboxEvent {
     pub event_id: [u8; 16],
     pub repository_id: RepositoryId,
     pub correlation_id: [u8; 16],
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OutboxClaimRequest {
+    pub consumer_id: String,
+    pub maximum_items: u16,
+    pub lease_seconds: u16,
+}
+
+impl OutboxClaimRequest {
+    pub fn is_bounded(&self) -> bool {
+        valid_consumer_id(&self.consumer_id)
+            && self.maximum_items <= 1_000
+            && self.lease_seconds <= 3_600
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OutboxLeaseAction {
+    pub consumer_id: String,
+    pub event_id: [u8; 16],
+    pub lease_id: [u8; 16],
+}
+
+impl OutboxLeaseAction {
+    pub fn is_valid(&self) -> bool {
+        valid_consumer_id(&self.consumer_id)
+            && valid_public_uuid(&self.event_id)
+            && valid_public_uuid(&self.lease_id)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OutboxReleaseRequest {
+    pub lease: OutboxLeaseAction,
+    pub retry_after_seconds: u32,
+}
+
+impl OutboxReleaseRequest {
+    pub fn is_bounded(&self) -> bool {
+        self.lease.is_valid() && self.retry_after_seconds <= 86_400
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OutboxEventRecord {
+    pub event_id: [u8; 16],
+    pub event_type: String,
+    pub tenant_id: TenantId,
+    pub repository_id: RepositoryId,
+    pub commit_sequence: CommitSequence,
+    pub correlation_id: [u8; 16],
+    pub resource_type: String,
+    pub resource_opaque_id: String,
+    pub safe_payload: Value,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OutboxLeaseRecord {
+    pub lease_id: [u8; 16],
+    pub consumer_id: String,
+    pub lease_expires_at: SystemTime,
+    pub delivery_attempt: u32,
+    pub event: OutboxEventRecord,
+}
+
+fn valid_consumer_id(value: &str) -> bool {
+    !value.is_empty() && value.len() <= 256 && !value.contains('\0')
+}
+
+fn valid_public_uuid(value: &[u8; 16]) -> bool {
+    let version = value[6] >> 4;
+    let variant = value[8] >> 6;
+    (1..=8).contains(&version) && variant == 0b10
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

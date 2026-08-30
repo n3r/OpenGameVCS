@@ -1,7 +1,8 @@
 use ogvcs_repository_metadata::{
     AuthorizationContext, AuthorizationPort, AuthorizationResource, CaseMode, ConsistencyToken,
     DenyAllAuthorization, DomainErrorCode, IdempotencyReservation, MetadataPermission,
-    ReferenceName, RepositoryId, RepositorySettings, TenantId,
+    OutboxClaimRequest, OutboxLeaseAction, OutboxReleaseRequest, ReferenceName, RepositoryId,
+    RepositorySettings, TenantId,
 };
 use std::time::{Duration, SystemTime};
 
@@ -123,4 +124,40 @@ fn repository_feature_selection_must_be_strictly_sorted() {
     assert!(settings.has_sorted_unique_features());
     settings.required_features = vec![1, 1];
     assert!(!settings.has_sorted_unique_features());
+}
+
+#[test]
+fn outbox_delivery_inputs_are_strictly_bounded() {
+    assert_eq!(
+        MetadataPermission::ServiceInternal.as_str(),
+        "service-internal"
+    );
+    assert!(OutboxClaimRequest {
+        consumer_id: "indexer-a".to_owned(),
+        maximum_items: 1_000,
+        lease_seconds: 3_600,
+    }
+    .is_bounded());
+    assert!(!OutboxClaimRequest {
+        consumer_id: "x".repeat(257),
+        maximum_items: 1,
+        lease_seconds: 1,
+    }
+    .is_bounded());
+    let lease = OutboxLeaseAction {
+        consumer_id: "indexer-a".to_owned(),
+        event_id: [0, 0, 0, 0, 0, 0, 0x40, 0, 0x80, 0, 0, 0, 0, 0, 0, 1],
+        lease_id: [0, 0, 0, 0, 0, 0, 0x40, 0, 0x80, 0, 0, 0, 0, 0, 0, 2],
+    };
+    assert!(lease.is_valid());
+    assert!(OutboxReleaseRequest {
+        lease: lease.clone(),
+        retry_after_seconds: 86_400,
+    }
+    .is_bounded());
+    assert!(!OutboxReleaseRequest {
+        lease,
+        retry_after_seconds: 86_401,
+    }
+    .is_bounded());
 }

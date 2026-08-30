@@ -18,10 +18,10 @@ use ogvcs_repository_metadata::{
     FileIdImportReservation, FileIdOrigin, FileIdOwnerKind, FileIdReservation,
     FileIdReservationOutcome, IdempotencyReservation, IdempotencyReservationOutcome,
     MetadataPermission, MetadataTransaction, ObjectPutOutcome, ObjectValidationPort, ObjectWrite,
-    OutboxEvent, PageRequest, PostgresMetadataStore, ProjectId, ReferenceCasRequest,
-    ReferenceExpected, ReferenceKind, ReferenceName, RepositoryCreate, RepositoryId,
-    RepositorySettings, SnapshotWrite, TenantId, TransactionCapability, TransactionOptions,
-    TreeEntryWrite,
+    OutboxClaimRequest, OutboxEvent, OutboxLeaseAction, OutboxReleaseRequest, PageRequest,
+    PostgresMetadataStore, ProjectId, ReferenceCasRequest, ReferenceExpected, ReferenceKind,
+    ReferenceName, RepositoryCreate, RepositoryId, RepositorySettings, SnapshotWrite, TenantId,
+    TransactionCapability, TransactionOptions, TreeEntryWrite,
 };
 use postgres::{Client, NoTls};
 use serde_json::{json, Value};
@@ -345,8 +345,8 @@ fn production_reference_postgres_report() {
         return;
     };
     reset_disposable_schema(&database_url);
-    migration_v1_v2_upgrade_report(&database_url);
-    report("migration-v1-v2-upgrade-preserves-unpublished-history");
+    migration_v1_v3_upgrade_report(&database_url);
+    report("migration-v1-v3-upgrade-preserves-unpublished-history");
     reset_disposable_schema(&database_url);
     migration_report(&database_url);
     report("migration-repeat-checksum-downgrade");
@@ -652,6 +652,9 @@ fn production_reference_postgres_report() {
     assert_eq!(published_sequence, 2);
     drop(audit);
 
+    outbox_delivery_report(&database_url, &context, tenant_id);
+    report("outbox-lease-ack-release");
+
     assert_eq!(
         store
             .read_reference(
@@ -799,7 +802,146 @@ fn reset_disposable_schema(database_url: &str) {
         .unwrap();
 }
 
-fn migration_v1_v2_upgrade_report(database_url: &str) {
+fn outbox_delivery_report(database_url: &str, context: &AuthorizationContext, tenant_id: TenantId) {
+    let mut store = PostgresMetadataStore::connect(database_url)
+        .unwrap()
+        .with_authorizer(IsolatedAllow);
+    assert!(store
+        .claim_outbox(
+            context,
+            OutboxClaimRequest {
+                consumer_id: "bounded-indexer".to_owned(),
+                maximum_items: 0,
+                lease_seconds: 60,
+            },
+        )
+        .unwrap()
+        .is_empty());
+    let first = store
+        .claim_outbox(
+            context,
+            OutboxClaimRequest {
+                consumer_id: "bounded-indexer".to_owned(),
+                maximum_items: 2,
+                lease_seconds: 60,
+            },
+        )
+        .unwrap();
+    assert_eq!(first.len(), 2);
+    assert!(first.iter().all(|lease| {
+        lease.consumer_id == "bounded-indexer"
+            && lease.delivery_attempt == 1
+            && lease.event.tenant_id == tenant_id
+    }));
+    let remaining = store
+        .claim_outbox(
+            context,
+            OutboxClaimRequest {
+                consumer_id: "bounded-indexer-2".to_owned(),
+                maximum_items: 1_000,
+                lease_seconds: 60,
+            },
+        )
+        .unwrap();
+    assert_eq!(remaining.len(), 5);
+    assert!(remaining.iter().all(|candidate| {
+        first
+            .iter()
+            .all(|leased| candidate.event.event_id != leased.event.event_id)
+    }));
+
+    let released = OutboxLeaseAction {
+        consumer_id: first[0].consumer_id.clone(),
+        event_id: first[0].event.event_id,
+        lease_id: first[0].lease_id,
+    };
+    let mut wrong_consumer = released.clone();
+    wrong_consumer.consumer_id = "wrong-consumer".to_owned();
+    assert_eq!(
+        store
+            .acknowledge_outbox(context, wrong_consumer)
+            .unwrap_err()
+            .code,
+        DomainErrorCode::MetadataNotFoundOrDenied
+    );
+    store
+        .release_outbox(
+            context,
+            OutboxReleaseRequest {
+                lease: released.clone(),
+                retry_after_seconds: 0,
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        store
+            .acknowledge_outbox(context, released)
+            .unwrap_err()
+            .code,
+        DomainErrorCode::MetadataNotFoundOrDenied
+    );
+
+    let acknowledged = OutboxLeaseAction {
+        consumer_id: first[1].consumer_id.clone(),
+        event_id: first[1].event.event_id,
+        lease_id: first[1].lease_id,
+    };
+    store.acknowledge_outbox(context, acknowledged).unwrap();
+    let reclaimed = store
+        .claim_outbox(
+            context,
+            OutboxClaimRequest {
+                consumer_id: "bounded-indexer-3".to_owned(),
+                maximum_items: 1,
+                lease_seconds: 60,
+            },
+        )
+        .unwrap();
+    assert_eq!(reclaimed.len(), 1);
+    assert_eq!(reclaimed[0].event.event_id, first[0].event.event_id);
+    assert_ne!(reclaimed[0].lease_id, first[0].lease_id);
+    assert_eq!(reclaimed[0].delivery_attempt, 2);
+    store
+        .acknowledge_outbox(
+            context,
+            OutboxLeaseAction {
+                consumer_id: reclaimed[0].consumer_id.clone(),
+                event_id: reclaimed[0].event.event_id,
+                lease_id: reclaimed[0].lease_id,
+            },
+        )
+        .unwrap();
+    for lease in remaining {
+        store
+            .acknowledge_outbox(
+                context,
+                OutboxLeaseAction {
+                    consumer_id: lease.consumer_id,
+                    event_id: lease.event.event_id,
+                    lease_id: lease.lease_id,
+                },
+            )
+            .unwrap();
+    }
+    drop(store);
+
+    let mut audit = Client::connect(database_url, NoTls).unwrap();
+    let state: (i64, i64, i64) = {
+        let row = audit
+            .query_one(
+                "SELECT count(*) FILTER (WHERE acknowledged_at IS NOT NULL),
+                        count(*) FILTER (WHERE lease_id IS NOT NULL),
+                        sum(delivery_attempts)::bigint
+                 FROM ogvcs_metadata.outbox_events WHERE tenant_id = $1",
+                &[&Uuid::from_bytes(*tenant_id.as_bytes())],
+            )
+            .unwrap();
+        (row.get(0), row.get(1), row.get(2))
+    };
+    assert_eq!(state, (7, 0, 8));
+}
+
+fn migration_v1_v3_upgrade_report(database_url: &str) {
     let mut client = Client::connect(database_url, NoTls).unwrap();
     for migration in &ogvcs_repository_metadata::MIGRATIONS[..3] {
         client.batch_execute(migration.sql).unwrap();
@@ -902,7 +1044,7 @@ fn migration_v1_v2_upgrade_report(database_url: &str) {
     };
     let mut store = PostgresMetadataStore::connect(database_url).unwrap();
     let upgrade = store.migrate(options).unwrap();
-    assert_eq!((upgrade.applied, upgrade.already_applied), (3, 3));
+    assert_eq!((upgrade.applied, upgrade.already_applied), (6, 3));
     drop(store);
 
     let mut client = Client::connect(database_url, NoTls).unwrap();
@@ -955,8 +1097,8 @@ fn migration_report(database_url: &str) {
         application_version: "0.1.0",
         compatibility_fence_open: true,
     };
-    assert_eq!(store.migrate(options).unwrap().applied, 6);
-    assert_eq!(store.migrate(options).unwrap().already_applied, 6);
+    assert_eq!(store.migrate(options).unwrap().applied, 9);
+    assert_eq!(store.migrate(options).unwrap().already_applied, 9);
     drop(store);
 
     let mut client = Client::connect(database_url, NoTls).unwrap();
@@ -1085,7 +1227,7 @@ fn migration_report(database_url: &str) {
             "INSERT INTO ogvcs_metadata.schema_migrations
              (version, phase, checksum_sha256, state, minimum_application_version,
               maximum_application_version, completed_at)
-             VALUES (3, 'expand', repeat('a', 64), 'completed', '0.2.0', '0.2.x', clock_timestamp())",
+             VALUES (4, 'expand', repeat('a', 64), 'completed', '0.2.0', '0.2.x', clock_timestamp())",
             &[],
         )
         .unwrap();
@@ -1099,7 +1241,7 @@ fn migration_report(database_url: &str) {
     let mut client = Client::connect(database_url, NoTls).unwrap();
     client
         .execute(
-            "DELETE FROM ogvcs_metadata.schema_migrations WHERE version = 3",
+            "DELETE FROM ogvcs_metadata.schema_migrations WHERE version = 4",
             &[],
         )
         .unwrap();

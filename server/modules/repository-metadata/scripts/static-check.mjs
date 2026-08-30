@@ -73,7 +73,7 @@ assert(expandV3.includes('WHERE acknowledged_at IS NULL'), 'version 3 deliverabl
 const adapter = await readFile(resolve(root, 'src/postgres.rs'), 'utf8');
 const ports = await readFile(resolve(root, 'src/ports.rs'), 'utf8');
 assert(
-  adapter.split('crate::verify_schema_compatibility(&mut self.client)?').length - 1 === 6,
+  adapter.split('crate::verify_schema_compatibility(&mut self.client)?').length - 1 === 9,
   'every mutation/read entry point is not schema-compatibility gated',
 );
 assert(ports.includes('ValidationMode::Production'), 'default object validator is not production lifecycle');
@@ -130,6 +130,10 @@ for (const evidence of [
   'is_database_concurrency()',
   '"40001" | "40P01"',
   'clock_timestamp() + interval \'5 minutes\'',
+  'FOR UPDATE SKIP LOCKED',
+  'MetadataPermission::ServiceInternal',
+  'acknowledged_at IS NULL',
+  'lease_expires_at > clock_timestamp()',
   'ORDER BY basename_utf8',
   'ORDER BY reference.reference_kind, reference.reference_name',
   'ORDER BY history.snapshot_digest, history.operation_ordinal',
@@ -146,9 +150,13 @@ assert(liveContract.includes('restore-capability-alias'), 'restore capability al
 assert(liveContract.includes('file-import-tampered-owner'), 'import replay binding regression missing');
 
 const types = await readFile(resolve(root, 'src/types.rs'), 'utf8');
-for (const permission of ['"discover"', '"metadata.read"', '"submit"']) {
+for (const permission of ['"discover"', '"metadata.read"', '"submit"', '"service-internal"']) {
   assert(types.includes(permission), `canonical permission missing: ${permission}`);
 }
+const outboxInputStart = types.indexOf('pub struct OutboxEvent {');
+const outboxInputEnd = types.indexOf('\n}', outboxInputStart);
+assert(outboxInputStart >= 0 && outboxInputEnd > outboxInputStart, 'outbox input type missing');
+const outboxInput = types.slice(outboxInputStart, outboxInputEnd);
 for (const forbiddenCallerField of [
   'pub event_type:',
   'pub event_version:',
@@ -156,7 +164,7 @@ for (const forbiddenCallerField of [
   'pub resource_opaque_id:',
   'pub safe_payload:',
 ]) {
-  assert(!types.includes(forbiddenCallerField), `caller still controls outbox fact: ${forbiddenCallerField}`);
+  assert(!outboxInput.includes(forbiddenCallerField), `caller still controls outbox fact: ${forbiddenCallerField}`);
 }
 
 for (const method of [
