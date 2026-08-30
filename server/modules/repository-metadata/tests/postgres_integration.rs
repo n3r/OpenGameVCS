@@ -808,9 +808,9 @@ fn migration_v1_v2_upgrade_report(database_url: &str) {
     let tenant = Uuid::from_bytes(*tenant_id.as_bytes());
     let repository = Uuid::from_bytes(*repository_id.as_bytes());
     let project = Uuid::from_bytes([83; 16]);
-    let tree_digest = vec![84; 32];
-    let snapshot_digest = vec![85; 32];
-    let file_id = vec![86; 16];
+    let tree_digest = vec![84_u8; 32];
+    let snapshot_digest = vec![85_u8; 32];
+    let file_id = vec![86_u8; 16];
     client
         .execute(
             "INSERT INTO ogvcs_metadata.repositories
