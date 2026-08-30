@@ -25,8 +25,8 @@ import { verifyChunkingSelectionBenchmarkBundle } from './verify-chunking-select
 
 const ROOT = resolve(import.meta.dirname, '..');
 const HOSTED_RECORD_PATH = join(ROOT, 'docs/evidence/OGVCS-007/github-actions-run-33328072458.json');
-const CHECKED_IN_BUNDLE_PATH = join(ROOT, 'docs/evidence/OGVCS-007/bounded-selection-bundle-2026-08-30');
-const CHECKED_IN_VALIDATION_PATH = join(ROOT, 'docs/evidence/OGVCS-007/bounded-selection-bundle-validation-2026-08-30.json');
+const CHECKED_IN_BUNDLE_PATH = join(ROOT, 'docs/evidence/OGVCS-007/bounded-selection-bundle-2026-08-31');
+const CHECKED_IN_VALIDATION_PATH = join(ROOT, 'docs/evidence/OGVCS-007/bounded-selection-bundle-validation-2026-08-31.json');
 const WORKER_FIXTURE_PATH = join(ROOT, 'tools/fixtures/chunking-selection-benchmark-worker-fixture.mjs');
 
 function sha256(value) {

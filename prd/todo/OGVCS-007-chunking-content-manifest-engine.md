@@ -7,7 +7,7 @@
 **Depends on:** OGVCS-002, OGVCS-004, OGVCS-005, OGVCS-046
 **Blocks:** OGVCS-008, OGVCS-013, OGVCS-014, OGVCS-017, OGVCS-020, OGVCS-028, OGVCS-029, OGVCS-033
 **Source:** [OpenGameVCS proposal](../../GAME_DEV_VCS_ANALYSIS.md)  
-**Last updated:** 2026-08-30
+**Last updated:** 2026-08-31
 
 ## Outcome
 
@@ -98,8 +98,23 @@ Chunk algorithm is immutable per manifest version. New algorithms are read-befor
 
 ## Completion evidence
 
-- Implementation changes:
-- Test and benchmark results:
-- Security/reliability review:
-- Documentation/runbooks:
-- Rollout result:
+- Implementation changes: the
+  [audited trust-boundary candidate](../../docs/reviews/OGVCS-007-r1-completion-audit.md#trust-boundary-delivered-by-the-candidate)
+  at `00ed027b798f0114c3817678685b4df7f63d8741` implements the bounded
+  JavaScript/Rust candidate and fail-closed receipt boundary.
+- Test and benchmark results: the
+  [current bounded evidence packet](../../docs/evidence/OGVCS-007/README.md)
+  and [requirement matrix](../../docs/reviews/OGVCS-007-r1-completion-audit.md#requirement-matrix)
+  retain the completed non-scale results. AC-03 remains open.
+- Security/reliability review: the
+  [R1 completion audit](../../docs/reviews/OGVCS-007-r1-completion-audit.md)
+  records hostile receipt, registry, publication, resource, and cancellation
+  coverage plus the remaining production-adoption gate.
+- Documentation/runbooks: the
+  [production-profile lifecycle runbook](../../docs/runbooks/OGVCS-007-production-profile-lifecycle.md)
+  fixes the exact future row, regeneration order, read-before-write deployment,
+  and rollback procedure without applying them.
+- Rollout result: not complete. ADR-0016 remains Proposed, the shared profile
+  row is absent, production writes are disabled, exact-candidate hosted replay
+  and OGVCS-008 adoption remain open, and the 100-GiB run is the final
+  acceptance gate.

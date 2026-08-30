@@ -1,7 +1,7 @@
 # OGVCS-007 bounded seven-workload authenticated selection evidence
 
-**Evidence date:** 2026-08-30
-**Status:** Bounded authenticated OGVCS-007 selection evidence retained; P0-2 closed, profile ratification still blocked
+**Evidence date:** 2026-08-31
+**Status:** Current-source bounded authenticated evidence retained; profile ratification and the final-scale gate remain blocked
 
 This packet retains the bounded OGVCS-007 selection evidence used to close the
 P0-2 authenticated-benchmark finding without attempting the separately deferred
@@ -19,7 +19,7 @@ bundle-embedded report and its same-run captures:
 - append
 
 The retained report is
-[`bounded-selection-report-2026-08-30.json`](bounded-selection-report-2026-08-30.json).
+[`bounded-selection-report-2026-08-31.json`](bounded-selection-report-2026-08-31.json).
 It binds the chunking contract manifest SHA-256, workload-definition digest,
 threshold file and digest, host/runtime identity, exact logical/unique/reused/
 new byte accounting, per-workload chunk counts and manifest sizes, accounted
@@ -28,9 +28,9 @@ identity type/value, and bounded chunk-based resynchronization distance where a
 post-mutation aligned reused chunk exists.
 
 The authenticated OGVCS-005-compatible result bundle is retained under
-[`bounded-selection-bundle-2026-08-30/`](bounded-selection-bundle-2026-08-30/)
+[`bounded-selection-bundle-2026-08-31/`](bounded-selection-bundle-2026-08-31/)
 and independently reverified by
-[`bounded-selection-bundle-validation-2026-08-30.json`](bounded-selection-bundle-validation-2026-08-30.json).
+[`bounded-selection-bundle-validation-2026-08-31.json`](bounded-selection-bundle-validation-2026-08-31.json).
 The validation record is location-independent and stores a repository-relative
 `bundleDirectory`, not an absolute host path.
 
@@ -39,7 +39,17 @@ authenticated `ogvcs.benchmark/result-bundle/v1`, passes the public base and
 product verifiers, retains all seven samples, and records same-run observed
 child-process peak memory for each workload.
 
-## Bounded hosted implementation proof
+The packet is bound to the exact packaged source set introduced by code commit
+`00ed027b798f0114c3817678685b4df7f63d8741`. The standalone report records
+source-set SHA-256
+`34fb64f36261f188ecce30378605f2b9960209c769b740239ebb5e8e63c56fcf`;
+the authenticated bundle adds its producer and independent-verifier sources and
+records
+`28fcaf6ba5f5a15f8d4fdd3ab9e6240b20bda7517cd62e4c594a756b52d587ff`.
+Both record the same 14-file packed implementation identity
+`b2c779645ffd48a9c52b90dcc255224b393779160885821e5d4ebbac83d0d288`.
+
+## Prior bounded hosted implementation proof
 
 [Workflow run 33328072458](https://github.com/n3r/OpenGameVCS/actions/runs/33328072458)
 passed the receipt-enabled source revision
@@ -48,6 +58,11 @@ JavaScript and Rust each passed on Linux, macOS, and Windows; the final job
 matched all nine bounded cases across all six reports. The exact run, job, and
 artifact identities are retained in
 [`github-actions-run-33328072458.json`](github-actions-run-33328072458.json).
+
+This run predates the current production-boundary source commit. It remains
+valid proof of the unchanged manifest semantics and the six-leg workflow, but
+is not presented as exact-source three-OS proof for `00ed027`. A fresh hosted
+run of the final branch is required before the lifecycle cut.
 
 The run record retains the inner byte count and SHA-256 for each of the six
 platform artifacts. All three JavaScript inner hashes match, as do all three
@@ -77,8 +92,9 @@ and did not run the 100-GiB campaign.
 - The report explicitly records `exactScaleExecuted: false`; it does not
   claim the deferred 100 GiB acceptance result.
 - The retained captures record observed whole-process child peaks from fresh
-  worker processes. The current retained range is 104,742,912 to
-  441,155,584 bytes across the seven workloads.
+  worker processes. The current retained range is 105,201,664 to
+  439,959,552 bytes across the seven workloads, and every retained peak equals
+  `max(child maxRSS, sampled child RSS)`.
 
 ## Ratification status
 
@@ -87,10 +103,13 @@ This packet does not ratify
 flip production writes on. Since the original 2026-08-30 review, the bounded
 implementation has closed the code-level portions of two blockers:
 
-- P0-1 is closed in source: full verification issues a private one-use receipt
-  bound to the registered verifier version, profile, manifest identity, logical
-  bytes, and whole-file digest. The workspace adapter consumes it before
-  publication and rejects absent, reused, or mismatched receipts.
+- P0-1 is closed at the package boundary: generation and full verification
+  issue a private one-use receipt bound to the registered verifier version,
+  profile, manifest identity, logical bytes, and whole-file digest.
+  `commitProductionManifest` additionally requires a complete OGVCS-002
+  registry snapshot that admits the exact OGVCS-007-owned ratified row before
+  any caller publication callback can run. The bundled registry has no such
+  row, so the transition currently fails closed.
 - P0-3 is closed in source: `reconstructManifestToWorkspace` verifies the
   ordered content and Gear boundaries before streaming through OGVCS-046
   `atomicWriteStream`. Its one-slot rendezvous applies backpressure, and
@@ -99,15 +118,20 @@ implementation has closed the code-level portions of two blockers:
 
 The remaining open boundaries from the review are:
 
-- P0-1 deployment boundary: the private receipt is enforced by the package
-  adapter, but no production server acceptor/emitter has adopted it yet.
+- P0-1 deployment boundary: OGVCS-008 must invoke the package-owned production
+  boundary before a `ContentManifestV1` lifecycle record can become available;
+  that integration proof is not part of this local evidence packet.
+- Current-source hosted matrix: Linux, macOS, and Windows must replay the final
+  source commit and aggregate all six JavaScript/Rust reports before the
+  lifecycle cut.
 - Generated registry/production lifecycle: portable-encoder regeneration
   mechanically refreshed the chunking, benchmark, repository-metadata, and
   identity manifest/pin chain. The OGVCS-002 profile registry, production-write
   eligibility, ratification state, and downstream release lifecycle remain
   intentionally unchanged and open.
-- Final-scale completion: the separate 100-GiB resource campaign remains an
-  OGVCS-007 completion/release gate after bounded profile ratification.
+- Final-scale completion: the separate 100-GiB resource campaign is the final
+  OGVCS-007 acceptance gate and must pass before profile ratification or writer
+  enablement.
 
 This packet does not ratify `chunking.opengamevcs/gear-fastcdc-1m@1`, change
 the OGVCS-002 registry, or authorize production writes. It closes only the

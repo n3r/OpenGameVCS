@@ -469,5 +469,34 @@ seven-workload OGVCS-005 bundle and same-run observed whole-process peak
 memory. The mechanical chunking, benchmark, repository-metadata, and identity
 manifest/pin refresh is complete; the OGVCS-002 profile-registry and production
 lifecycle cut remains open before any ratification or production-write
-enablement. The 100-GiB campaign remains deferred to final OGVCS-007
-completion/release and is not part of the bounded profile-ratification cut.
+enablement. The 100-GiB campaign remains deferred to the final OGVCS-007
+acceptance gate and must pass before that lifecycle cut.
+
+## R1 production-boundary and evidence refresh (2026-08-31)
+
+Code candidate `00ed027b798f0114c3817678685b4df7f63d8741` adds the
+package-owned repository production transition that the prior review required.
+`commitProductionManifest` authenticates a complete OGVCS-002 registry
+snapshot, requires the exact ratified OGVCS-007-owned profile row, consumes a
+private one-use receipt bound to the manifest and content facts, and only then
+invokes transactional publication callbacks. The current shared registry has
+no row, so the packaged path remains fail closed. Hostile tests cover a
+caller-shaped registry, forged/reused/wrong receipts, shifted boundaries,
+write/commit failure, streamed-manifest receipt hashing, and pre/post-commit
+cancellation settlement.
+
+The current-source bounded evidence is retained as the 2026-08-31 standalone
+report, authenticated bundle, and independent validation under
+`docs/evidence/OGVCS-007/`. The bundle records seven successful captures,
+seven samples, seven summaries, five OGVCS-005 threshold evaluations, observed
+whole-process peaks from 105,201,664 through 439,959,552 bytes, and
+`exactScaleExecuted: false`. Both public verifiers pass.
+
+This refresh supersedes the prior section only for current source/evidence
+identity. It does not change ADR or registry lifecycle state. OGVCS-008
+production adoption, exact-candidate six-leg hosted replay, and the final
+100-GiB AC-03 campaign remain required before ratification or writer
+enablement. The complete requirement matrix and exact additive row,
+regeneration order, enablement, and rollback steps are in the
+[R1 completion audit](OGVCS-007-r1-completion-audit.md) and
+[production-profile lifecycle runbook](../runbooks/OGVCS-007-production-profile-lifecycle.md).
