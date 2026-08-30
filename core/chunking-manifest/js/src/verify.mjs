@@ -284,16 +284,20 @@ function summary(parsed, content, ledger) {
   });
 }
 
+function receiptRequirementsFromParsed(parsed) {
+  return Object.freeze({
+    profile: PROFILE_TEXT,
+    manifestObjectId: parsed.manifestObjectId,
+    manifestSha256: createHash('sha256').update(parsed.bytes).digest('hex'),
+    logicalBytes: String(parsed.logicalLength),
+    wholeFileSha256: Buffer.from(parsed.wholeFileDigest).toString('hex'),
+  });
+}
+
 export function parseManifestReceiptRequirements(manifest, options = {}) {
   const parsed = loadManifest(manifest, options);
   try {
-    return Object.freeze({
-      profile: PROFILE_TEXT,
-      manifestObjectId: parsed.manifestObjectId,
-      manifestSha256: createHash('sha256').update(parsed.bytes).digest('hex'),
-      logicalBytes: String(parsed.logicalLength),
-      wholeFileSha256: Buffer.from(parsed.wholeFileDigest).toString('hex'),
-    });
+    return receiptRequirementsFromParsed(parsed);
   } finally {
     parsed.dispose();
   }
@@ -307,9 +311,10 @@ export async function verifyManifest(input = {}) {
     control.check();
     parsed = loadManifest(input.manifest, input);
     const content = await consumeContent(parsed, input.source, undefined, control);
+    const requirements = receiptRequirementsFromParsed(parsed);
     return Object.freeze({
       ...summary(parsed, content, parsed.ledger.metrics()),
-      verificationReceipt: createVerificationReceipt(parseManifestReceiptRequirements(parsed.bytes, input)),
+      verificationReceipt: createVerificationReceipt(requirements),
     });
   } catch (cause) {
     throw normalizeError(cause, 'CHUNK_SESSION_FAILED');
@@ -335,13 +340,7 @@ export async function reconstructManifest(input = {}) {
     parsed = loadManifest(input.manifest, input);
     transactionOpen = true;
     const content = await consumeContent(parsed, input.source, publication, control);
-    const verificationReceipt = createVerificationReceipt({
-      profile: PROFILE_TEXT,
-      manifestObjectId: parsed.manifestObjectId,
-      manifestSha256: createHash('sha256').update(parsed.bytes).digest('hex'),
-      logicalBytes: String(parsed.logicalLength),
-      wholeFileSha256: Buffer.from(parsed.wholeFileDigest).toString('hex'),
-    });
+    const verificationReceipt = createVerificationReceipt(receiptRequirementsFromParsed(parsed));
     const publicationResult = await control.wait(
       () => publication.commit(Object.freeze({ ...control.context, verificationReceipt })),
       'CHUNK_PUBLICATION_FAILED',

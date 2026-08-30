@@ -1,43 +1,77 @@
 import { atomicWriteStream } from '@opengamevcs/path-filesystem';
 import { normalizeError } from './errors.mjs';
 import { PROFILE } from './identity.mjs';
-import { consumeVerificationReceipt, createVerificationReceipt } from './receipt.mjs';
+import {
+  consumeVerificationReceipt,
+  createVerificationReceipt,
+  VERIFICATION_RECEIPT_VERIFIER,
+} from './receipt.mjs';
 import { parseManifestReceiptRequirements } from './verify.mjs';
 
 const PROFILE_TEXT = `${PROFILE.namespace}/${PROFILE.id}@${PROFILE.major}`;
 
 function createQueueSource() {
-  const queue = [];
   let pending;
+  let slot;
   let closed = false;
+  let terminal;
+
+  function fail(error) {
+    if (terminal === undefined) terminal = error;
+    closed = true;
+    if (slot) {
+      const current = slot;
+      slot = undefined;
+      current.reject(terminal);
+    }
+    if (pending) {
+      const waiter = pending;
+      pending = undefined;
+      waiter.reject(terminal);
+    }
+  }
+
   return Object.freeze({
     async next() {
-      if (queue.length > 0) return { done: false, value: queue.shift() };
+      if (slot) {
+        const current = slot;
+        slot = undefined;
+        current.resolve();
+        return { done: false, value: current.value };
+      }
+      if (terminal !== undefined) throw terminal;
       if (closed) return { done: true, value: undefined };
       return new Promise((resolve, reject) => { pending = { resolve, reject }; });
     },
     push(value) {
+      if (terminal !== undefined) throw terminal;
       if (closed) throw new Error('publication queue closed');
+      if (slot) throw new Error('publication queue already has a pending write');
       if (pending) {
         const waiter = pending;
         pending = undefined;
         waiter.resolve({ done: false, value });
-        return;
+        return Promise.resolve();
       }
-      queue.push(value);
+      return new Promise((resolve, reject) => {
+        slot = { value, resolve, reject };
+      });
     },
-    close(error) {
+    close() {
+      if (terminal !== undefined) return;
       closed = true;
-      if (pending) {
+      if (!slot && pending) {
         const waiter = pending;
         pending = undefined;
-        if (error) waiter.reject(error);
-        else waiter.resolve({ done: true, value: undefined });
+        waiter.resolve({ done: true, value: undefined });
       }
+    },
+    fail(error) {
+      fail(error ?? new Error('publication queue failed'));
     },
     [Symbol.asyncIterator]() { return this; },
     return() {
-      this.close();
+      if (terminal === undefined) this.close();
       return Promise.resolve({ done: true, value: undefined });
     },
   });
@@ -47,53 +81,90 @@ export function createAtomicWriteStreamPublicationAdapter(workspace, repositoryP
   const requirements = parseManifestReceiptRequirements(options.manifest, options);
   const cancellation = new AbortController();
   const source = createQueueSource();
-  const writePromise = atomicWriteStream(workspace, repositoryPath, source, {
-    ...options,
-    expectedBytes: Number(requirements.logicalBytes),
-    expectedSha256: requirements.wholeFileSha256,
-    signal: options.signal ?? cancellation.signal,
-  });
-  let closed = false;
+  const signal = options.signal === undefined
+    ? cancellation.signal
+    : AbortSignal.any([cancellation.signal, options.signal]);
+  let state = 'open';
   let committed = false;
+  let terminalError;
+  let writePromise;
+  let commitPromise;
+
+  function rememberTerminal(cause) {
+    if (terminalError === undefined) terminalError = normalizeError(cause, 'CHUNK_PUBLICATION_FAILED');
+    return terminalError;
+  }
+
+  function ensureWriter() {
+    if (writePromise) return writePromise;
+    writePromise = Promise.resolve(atomicWriteStream(workspace, repositoryPath, source, {
+      ...options,
+      expectedBytes: Number(requirements.logicalBytes),
+      expectedSha256: requirements.wholeFileSha256,
+      signal,
+    })).catch((cause) => {
+      const failure = rememberTerminal(cause);
+      source.fail(failure);
+      throw failure;
+    });
+    return writePromise;
+  }
+
+  async function teardown(cause) {
+    const failure = rememberTerminal(cause);
+    state = 'closed';
+    cancellation.abort();
+    source.fail(failure);
+    if (writePromise) {
+      try { await writePromise; } catch {}
+    }
+    throw failure;
+  }
+
   return Object.freeze({
-    write(fragment) {
-      if (closed || committed) throw new Error('publication queue is not writable');
-      source.push(Buffer.from(fragment));
+    async write(fragment) {
+      if (state !== 'open' || committed) throw terminalError ?? new Error('publication queue is not writable');
+      ensureWriter();
+      return source.push(Buffer.from(fragment));
     },
     async commit(context = {}) {
-      if (closed || committed) throw new Error('publication queue is already closed');
+      if (committed) throw new Error('publication queue is already closed');
+      if (state === 'closed') throw terminalError ?? new Error('publication queue is already closed');
+      if (state === 'committing') return commitPromise;
+      state = 'committing';
+      commitPromise = (async () => {
       try {
         consumeVerificationReceipt(context.verificationReceipt, {
-          verifier: context.verificationReceipt?.verifier,
+          verifier: VERIFICATION_RECEIPT_VERIFIER,
           profile: PROFILE_TEXT,
           manifestObjectId: requirements.manifestObjectId,
           manifestSha256: requirements.manifestSha256,
           logicalBytes: requirements.logicalBytes,
           wholeFileSha256: requirements.wholeFileSha256,
         }, 'CHUNK_PUBLICATION_FAILED');
-        committed = true;
         source.close();
-        const workspacePublication = await writePromise;
+        const workspacePublication = await ensureWriter();
         const verificationReceipt = createVerificationReceipt({
           ...requirements,
           profile: PROFILE_TEXT,
           workspacePublication,
         });
+        committed = true;
         return Object.freeze({ workspacePublication, verificationReceipt });
       } catch (cause) {
-        closed = true;
-        cancellation.abort();
-        source.close(cause);
-        try { await writePromise; } catch {}
-        throw normalizeError(cause, 'CHUNK_PUBLICATION_FAILED');
+        return teardown(cause);
       }
+      })();
+      return commitPromise;
     },
-    async abort() {
-      if (closed || committed) return;
-      closed = true;
+    async abort(cause) {
+      if (committed || state === 'closed') return;
+      state = 'closed';
       cancellation.abort();
-      source.close();
-      try { await writePromise; } catch {}
+      source.fail(cause ?? new Error('publication aborted'));
+      if (writePromise) {
+        try { await writePromise; } catch {}
+      }
     },
   });
 }

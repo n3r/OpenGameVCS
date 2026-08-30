@@ -69,6 +69,7 @@ try {
     import { tmpdir } from 'node:os';
     import { join } from 'node:path';
     import { createHash } from 'node:crypto';
+    import { rm } from 'node:fs/promises';
     import { openWorkspaceRoot, preflightWorkspaceMaterialization, probeFilesystemCapabilities } from '@opengamevcs/path-filesystem';
     import { chunkBytes, chunkCacheKey, consumeVerificationReceipt, createAtomicWriteStreamPublicationAdapter, reconstructManifest, verifyManifest } from '@opengamevcs/chunking-manifest';
     const bytes = Buffer.from('packed-offline');
@@ -80,35 +81,39 @@ try {
       throw new Error('cache key mismatch');
     }
     const root = await mkdtemp(join(tmpdir(), 'ogvcs-chunk-packed-root-'));
-    const workspace = await openWorkspaceRoot(root);
-    const capabilities = await probeFilesystemCapabilities(workspace.root);
-    const plan = await preflightWorkspaceMaterialization(workspace, {
-      schemaVersion: 'ogvcs.path/preflight-request/v1',
-      caseMode: workspace.caseMode,
-      profile: workspace.profile,
-      platform: capabilities.platform,
-      capabilities: { atomicReplace: capabilities.atomicReplace, executableBit: capabilities.executableBit, symlink: capabilities.symlink },
-      entries: [
-        { id: 'parent-1', path: 'Content', kind: 'directory', mode: 'directory' },
-        { id: 'asset', path: 'Content/asset.bin', kind: 'regular', mode: 'regular-file' },
-      ],
-    });
-    const reconstructed = await reconstructManifest({
-      manifest: generated.manifest.bytes,
-      source,
-      publication: createAtomicWriteStreamPublicationAdapter(workspace, 'Content/asset.bin', { manifest: generated.manifest.bytes, createParents: true, plan, maxBytes: bytes.length, maxScratchBytes: bytes.length }),
-    });
-    const workspacePublication = reconstructed.publicationResult.workspacePublication;
-    const fileBytes = await readFile(join(root, 'Content', 'asset.bin'));
-    if (Buffer.compare(fileBytes, bytes) !== 0) throw new Error('reconstruction mismatch');
-    const receipt = consumeVerificationReceipt(reconstructed.verificationReceipt, {
-      manifest: generated.manifest.bytes,
-      manifestObjectId: generated.manifest.objectId,
-      logicalBytes: String(bytes.length),
-      wholeFileSha256: createHash('sha256').update(bytes).digest('hex'),
-      workspacePublication,
-    });
-    if (receipt.workspacePublication.transaction !== workspacePublication.transaction) throw new Error('receipt mismatch');
+    try {
+      const workspace = await openWorkspaceRoot(root);
+      const capabilities = await probeFilesystemCapabilities(workspace.root);
+      const plan = await preflightWorkspaceMaterialization(workspace, {
+        schemaVersion: 'ogvcs.path/preflight-request/v1',
+        caseMode: workspace.caseMode,
+        profile: workspace.profile,
+        platform: capabilities.platform,
+        capabilities: { atomicReplace: capabilities.atomicReplace, executableBit: capabilities.executableBit, symlink: capabilities.symlink },
+        entries: [
+          { id: 'parent-1', path: 'Content', kind: 'directory', mode: 'directory' },
+          { id: 'asset', path: 'Content/asset.bin', kind: 'regular', mode: 'regular-file' },
+        ],
+      });
+      const reconstructed = await reconstructManifest({
+        manifest: generated.manifest.bytes,
+        source,
+        publication: createAtomicWriteStreamPublicationAdapter(workspace, 'Content/asset.bin', { manifest: generated.manifest.bytes, createParents: true, plan, maxBytes: bytes.length, maxScratchBytes: bytes.length }),
+      });
+      const workspacePublication = reconstructed.publicationResult.workspacePublication;
+      const fileBytes = await readFile(join(root, 'Content', 'asset.bin'));
+      if (Buffer.compare(fileBytes, bytes) !== 0) throw new Error('reconstruction mismatch');
+      const receipt = consumeVerificationReceipt(reconstructed.verificationReceipt, {
+        manifest: generated.manifest.bytes,
+        manifestObjectId: generated.manifest.objectId,
+        logicalBytes: String(bytes.length),
+        wholeFileSha256: createHash('sha256').update(bytes).digest('hex'),
+        workspacePublication,
+      });
+      if (receipt.workspacePublication.transaction !== workspacePublication.transaction) throw new Error('receipt mismatch');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   `);
   run(process.execPath, [join(temporary, 'check.mjs')], temporary);
   process.stdout.write(`verified ${chunking.filename} from an offline packed install\n`);

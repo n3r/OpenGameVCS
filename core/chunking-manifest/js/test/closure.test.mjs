@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
 import {
   openWorkspaceRoot, preflightWorkspaceMaterialization, probeFilesystemCapabilities,
@@ -12,6 +13,7 @@ import {
   compareManifest, consumeVerificationReceipt, contentManifest, createAtomicWriteStreamPublicationAdapter,
   createChunker, reconstructManifest, verifyManifest,
 } from '../src/index.mjs';
+import { createVerificationReceipt } from '../src/receipt.mjs';
 
 const CONTRACT = resolve(import.meta.dirname, '../../../../spec/chunking-manifest/v1');
 const golden = JSON.parse(await (await import('node:fs/promises')).readFile(resolve(CONTRACT, 'vectors/golden.json')));
@@ -96,6 +98,31 @@ async function publicationPlan(workspace, path) {
     },
     entries,
   });
+}
+
+function fixtureReceiptDetails(fixture) {
+  return Object.freeze({
+    profile: `${PROFILE.namespace}/${PROFILE.id}@${PROFILE.major}`,
+    manifestObjectId: fixture.result.manifest.objectId,
+    manifestSha256: createHash('sha256').update(fixture.result.manifest.bytes).digest('hex'),
+    logicalBytes: String(fixture.bytes.length),
+    wholeFileSha256: createHash('sha256').update(fixture.bytes).digest('hex'),
+  });
+}
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, reject, resolve };
+}
+
+async function nextTurn() {
+  await Promise.resolve();
+  await delay(0);
 }
 
 test('generated shared registry exactly matches the public JavaScript error surface', () => {
@@ -413,7 +440,7 @@ test('hostile publication receipts fail closed before trusted publication', asyn
       maxBytes: fixture.bytes.length,
       maxScratchBytes: fixture.bytes.length,
     });
-    publication.write(fixture.bytes);
+    await publication.write(fixture.bytes);
     await assert.rejects(
       publication.commit({ verificationReceipt: Object.freeze({ verifier: VERIFICATION_RECEIPT_VERIFIER }) }),
       { code: 'CHUNK_PUBLICATION_FAILED' },
@@ -422,6 +449,242 @@ test('hostile publication receipts fail closed before trusted publication', asyn
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test('publication writes rendezvous with the consumer and apply backpressure', async () => {
+  const fixture = await prepared('tiny-ascii');
+  const root = await mkdtemp(join(tmpdir(), 'ogvcs-chunk-rendezvous-'));
+  try {
+    const workspace = await openWorkspaceRoot(root);
+    const plan = await publicationPlan(workspace, 'Content/asset.bin');
+    const gate = deferred();
+    const publication = createAtomicWriteStreamPublicationAdapter(workspace, 'Content/asset.bin', {
+      manifest: fixture.result.manifest.bytes,
+      createParents: true,
+      hooks: { boundary: async (name) => { if (name === 'after-plan') await gate.promise; } },
+      maxBytes: fixture.bytes.length,
+      maxScratchBytes: fixture.bytes.length,
+      plan,
+    });
+    let settled = false;
+    const write = publication.write(fixture.bytes).then(() => { settled = true; });
+    await delay(20);
+    assert.equal(settled, false);
+    gate.resolve();
+    await write;
+    await publication.abort(new Error('test abort'));
+    assert.deepEqual(await readdir(workspace.transactions), []);
+    await assert.rejects(readFile(join(root, 'Content', 'asset.bin')), { code: 'ENOENT' });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('wrong verifier receipts are rejected against the registered verifier constant', async () => {
+  const fixture = await prepared('tiny-ascii');
+  const root = await mkdtemp(join(tmpdir(), 'ogvcs-chunk-wrong-verifier-'));
+  try {
+    const workspace = await openWorkspaceRoot(root);
+    const plan = await publicationPlan(workspace, 'Content/asset.bin');
+    const publication = createAtomicWriteStreamPublicationAdapter(workspace, 'Content/asset.bin', {
+      manifest: fixture.result.manifest.bytes,
+      createParents: true,
+      maxBytes: fixture.bytes.length,
+      maxScratchBytes: fixture.bytes.length,
+      plan,
+    });
+    await publication.write(fixture.bytes);
+    const wrongVerifier = createVerificationReceipt({
+      ...fixtureReceiptDetails(fixture),
+      verifier: 'ogvcs.chunking-manifest/verifier@999',
+    });
+    await assert.rejects(publication.commit({ verificationReceipt: wrongVerifier }), {
+      code: 'CHUNK_PUBLICATION_FAILED',
+    });
+    assert.deepEqual(await readdir(workspace.transactions), []);
+    await assert.rejects(readFile(join(root, 'Content', 'asset.bin')), { code: 'ENOENT' });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('invalid receipt with caller cancellation signal still cannot publish', async () => {
+  const fixture = await prepared('tiny-ascii');
+  const root = await mkdtemp(join(tmpdir(), 'ogvcs-chunk-invalid-signal-'));
+  try {
+    const workspace = await openWorkspaceRoot(root);
+    const plan = await publicationPlan(workspace, 'Content/asset.bin');
+    const controller = new AbortController();
+    const publication = createAtomicWriteStreamPublicationAdapter(workspace, 'Content/asset.bin', {
+      manifest: fixture.result.manifest.bytes,
+      createParents: true,
+      maxBytes: fixture.bytes.length,
+      maxScratchBytes: fixture.bytes.length,
+      plan,
+      signal: controller.signal,
+    });
+    await publication.write(fixture.bytes);
+    const invalid = createVerificationReceipt({ verifier: VERIFICATION_RECEIPT_VERIFIER });
+    await assert.rejects(publication.commit({ verificationReceipt: invalid }), {
+      code: 'CHUNK_PUBLICATION_FAILED',
+    });
+    assert.deepEqual(await readdir(workspace.transactions), []);
+    await assert.rejects(readFile(join(root, 'Content', 'asset.bin')), { code: 'ENOENT' });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('commit remains abortable through cancellation and deadline until filesystem settlement completes', async () => {
+  const fixture = await prepared('tiny-ascii');
+  const scenarios = [
+    {
+      name: 'caller-cancellation',
+      options() {
+        const controller = new AbortController();
+        return {
+          signal: controller.signal,
+          hooks: {
+            boundary: async (name) => {
+              if (name === 'before-parent-sync') {
+                controller.abort();
+                await delay(20);
+              }
+            },
+          },
+        };
+      },
+    },
+    {
+      name: 'deadline',
+      options() {
+        return {
+          maxTimeMs: 50,
+          hooks: {
+            boundary: async (name) => {
+              if (name === 'before-parent-sync') await delay(100);
+            },
+          },
+        };
+      },
+    },
+  ];
+  for (const scenario of scenarios) {
+    const root = await mkdtemp(join(tmpdir(), `ogvcs-chunk-commit-${scenario.name}-`));
+    try {
+      const workspace = await openWorkspaceRoot(root);
+      const plan = await publicationPlan(workspace, 'Content/asset.bin');
+      const publication = createAtomicWriteStreamPublicationAdapter(workspace, 'Content/asset.bin', {
+        manifest: fixture.result.manifest.bytes,
+        createParents: true,
+        maxBytes: fixture.bytes.length,
+        maxScratchBytes: fixture.bytes.length,
+        plan,
+        ...scenario.options(),
+      });
+      await publication.write(fixture.bytes);
+      const verificationReceipt = createVerificationReceipt(fixtureReceiptDetails(fixture));
+      await assert.rejects(publication.commit({ verificationReceipt }), {
+        code: 'CHUNK_PUBLICATION_FAILED',
+      }, scenario.name);
+      assert.deepEqual(await readdir(workspace.transactions), [], scenario.name);
+      await assert.rejects(readFile(join(root, 'Content', 'asset.bin')), { code: 'ENOENT' }, scenario.name);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test('pre-aborted and invalid-plan adapters stay lazy, clean, and avoid unhandled rejections', async () => {
+  const fixture = await prepared('tiny-ascii');
+  const root = await mkdtemp(join(tmpdir(), 'ogvcs-chunk-lazy-start-'));
+  const unhandled = [];
+  const onUnhandled = (reason) => { unhandled.push(reason); };
+  process.on('unhandledRejection', onUnhandled);
+  try {
+    const workspace = await openWorkspaceRoot(root);
+    const plan = await publicationPlan(workspace, 'Content/asset.bin');
+    const invalidPlan = await publicationPlan(workspace, 'Content/other.bin');
+    const controller = new AbortController();
+    controller.abort();
+    const preAborted = createAtomicWriteStreamPublicationAdapter(workspace, 'Content/asset.bin', {
+      manifest: fixture.result.manifest.bytes,
+      createParents: true,
+      maxBytes: fixture.bytes.length,
+      maxScratchBytes: fixture.bytes.length,
+      plan,
+      signal: controller.signal,
+    });
+    const invalid = createAtomicWriteStreamPublicationAdapter(workspace, 'Content/asset.bin', {
+      manifest: fixture.result.manifest.bytes,
+      createParents: true,
+      maxBytes: fixture.bytes.length,
+      maxScratchBytes: fixture.bytes.length,
+      plan: invalidPlan,
+    });
+    await preAborted.abort();
+    await invalid.abort();
+    await nextTurn();
+    assert.deepEqual(unhandled, []);
+    assert.deepEqual(await readdir(workspace.transactions), []);
+  } finally {
+    process.off('unhandledRejection', onUnhandled);
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('low-memory receipt issuance reuses the parsed manifest state and leaves scratch clean', async () => {
+  const fixture = await prepared();
+  const scratch = await mkdtemp(join(tmpdir(), 'ogvcs-chunk-low-memory-'));
+  const root = await mkdtemp(join(tmpdir(), 'ogvcs-chunk-low-memory-root-'));
+  try {
+    const verified = await verifyManifest({
+      manifest: fixture.result.manifest.bytes,
+      source: fixture.source,
+      maxLedgerMemoryBytes: 0,
+      maxScratchBytes: 1024 * 1024,
+      scratchDirectory: scratch,
+    });
+    consumeVerificationReceipt(verified.verificationReceipt, {
+      ...fixtureReceiptDetails(fixture),
+      verifier: VERIFICATION_RECEIPT_VERIFIER,
+    });
+    assert.deepEqual(await readdir(scratch), []);
+
+    const workspace = await openWorkspaceRoot(root);
+    const plan = await publicationPlan(workspace, 'Content/asset.bin');
+    const reconstructed = await reconstructManifest({
+      manifest: fixture.result.manifest.bytes,
+      source: fixture.source,
+      maxLedgerMemoryBytes: 0,
+      maxScratchBytes: 1024 * 1024,
+      scratchDirectory: scratch,
+      publication: createAtomicWriteStreamPublicationAdapter(workspace, 'Content/asset.bin', {
+        manifest: fixture.result.manifest.bytes,
+        createParents: true,
+        maxBytes: fixture.bytes.length,
+        maxScratchBytes: fixture.bytes.length,
+        plan,
+      }),
+    });
+    consumeVerificationReceipt(reconstructed.verificationReceipt, {
+      ...fixtureReceiptDetails(fixture),
+      verifier: VERIFICATION_RECEIPT_VERIFIER,
+      workspacePublication: reconstructed.publicationResult.workspacePublication,
+    });
+    assert.deepEqual(await readdir(scratch), []);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(scratch, { recursive: true, force: true });
+  }
+});
+
+test('packed offline consumer script removes its temporary workspace root', async () => {
+  const script = await (await import('node:fs/promises')).readFile(
+    resolve(import.meta.dirname, '../scripts/packed-offline.mjs'),
+    'utf8',
+  );
+  assert.match(script, /finally \{\s*await rm\(root, \{ recursive: true, force: true \}\);\s*\}/su);
 });
 
 test('OGVCS-002 structure and content errors precede deferred Gear mismatch', async () => {
