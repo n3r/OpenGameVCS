@@ -18,3 +18,5 @@ This directory records accepted cross-cutting decisions behind the normative beh
 | [0012](0012-path-and-workspace-filesystem-contract-v1.md) | Accepted | Unicode case folding, platform profiles, confined mutation, and watcher recovery |
 | [0013](0013-protocol-v1-transport-schema-and-generation.md) | Accepted | TLS 1.3 HTTP/1.1 JSON control, range/resume carrier, negotiation, and generated models |
 | [0014](0014-benchmark-fault-harness-contract-v1.md) | Accepted | Reproducible workloads, deterministic faults, bounded evidence, and test-driver isolation |
+| [0015](0015-repository-metadata-persistence-cas-consistency.md) | Accepted | PostgreSQL metadata authority, CAS references, idempotency, outbox, and consistency tokens |
+| [0016](0016-chunking-manifest-gear-fastcdc-profile-v1.md) | Proposed | Candidate deterministic GearHash/FastCDC chunk-profile tuple and benchmark gate |
