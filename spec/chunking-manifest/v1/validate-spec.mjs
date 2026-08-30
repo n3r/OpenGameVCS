@@ -104,6 +104,21 @@ const malformed = (await load('vectors/malformed.json')).value;
 if (malformed.cases.length < 8 || new Set(malformed.cases.map(({ caseId }) => caseId)).size !== malformed.cases.length || malformed.cases.some(({ expectedError }) => !/^CHUNK_[A-Z_]+$/u.test(expectedError))) fail('malformed vectors are invalid');
 const fragments = (await load('vectors/fragmentation.json')).value;
 if (fragments.cases.length < 3 || fragments.cases.some(({ caseId, fragmentPatterns }) => !golden.cases.some((item) => item.caseId === caseId) || fragmentPatterns.length < 3 || fragmentPatterns.flat().some((size) => !Number.isSafeInteger(size) || size < 1))) fail('fragmentation vectors are invalid');
+const selectionWorkloads = (await load('vectors/selection-benchmark-workloads.json')).value;
+const expectedWorkloadIds = ['source-like', 'structured', 'already-compressed', 'encrypted-random', 'insertion', 'replacement', 'append'];
+if (selectionWorkloads.profile !== PROFILE
+  || selectionWorkloads.workloads.length !== expectedWorkloadIds.length
+  || canonical(selectionWorkloads.workloads.map(({ workloadId }) => workloadId)) !== canonical(expectedWorkloadIds)) {
+  fail('selection benchmark workloads are invalid');
+}
+const selectionThresholds = (await load('thresholds/selection-bounded-v1.json')).value;
+if (selectionThresholds.profile !== PROFILE
+  || selectionThresholds.owner !== 'ogvcs-007'
+  || selectionThresholds.version !== 1
+  || new Set(selectionThresholds.entries.map(({ id }) => id)).size !== selectionThresholds.entries.length
+  || selectionThresholds.entries.some(({ workloadId, metric, operator, severity, value }) => (workloadId !== '*' && !expectedWorkloadIds.includes(workloadId)) || !['workloadCount', 'successCount', 'accountingMismatchCount', 'reusedBytes', 'newlyRequiredBytes', 'resynchronizationDistanceBytes'].includes(metric) || !['maximum', 'minimum'].includes(operator) || !['gate', 'warning'].includes(severity) || !Number.isSafeInteger(value) || value < 0)) {
+  fail('selection benchmark thresholds are invalid');
+}
 
 const manifestRecord = await load('manifest.json'); const manifest = manifestRecord.value;
 if (manifest.profile !== PROFILE || manifest.tableSha256 !== gearDigest || manifest.contractVersion !== '0.1.0-rc.1') fail('contract manifest header is invalid');
@@ -114,5 +129,12 @@ for (const artifact of manifest.artifacts) {
   if (artifact.path.endsWith('.json') && artifact.path !== 'package.json') await load(artifact.path);
 }
 const artifactSet = hexHash(Buffer.concat(manifest.artifacts.map((item) => Buffer.from(`${item.path}\0${item.sha256}\0${item.bytes}\n`))));
-if (artifactSet !== manifest.artifactSetSha256 || manifest.counts.artifacts !== manifest.artifacts.length || manifest.counts.goldenCases !== golden.cases.length || manifest.counts.malformedCases !== malformed.cases.length || manifest.counts.fragmentationCases !== fragments.cases.length) fail('contract manifest counts or aggregate digest differ');
-process.stdout.write(`${canonical({ artifactSetSha256: artifactSet, goldenCases: golden.cases.length, profile: PROFILE, tableSha256: gearDigest })}\n`);
+if (artifactSet !== manifest.artifactSetSha256
+  || manifest.counts.artifacts !== manifest.artifacts.length
+  || manifest.counts.benchmarkThresholds !== 1
+  || manifest.counts.benchmarkWorkloads !== selectionWorkloads.workloads.length
+  || manifest.counts.goldenCases !== golden.cases.length
+  || manifest.counts.malformedCases !== malformed.cases.length
+  || manifest.counts.fragmentationCases !== fragments.cases.length
+  || manifest.counts.schemas !== 7) fail('contract manifest counts or aggregate digest differ');
+process.stdout.write(`${canonical({ artifactSetSha256: artifactSet, benchmarkWorkloads: selectionWorkloads.workloads.length, goldenCases: golden.cases.length, profile: PROFILE, tableSha256: gearDigest })}\n`);

@@ -3,7 +3,14 @@ import { createHash } from 'node:crypto';
 import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ERRORS, GOLDEN_INPUTS, MALFORMED, PROFILE_TEXT } from './model.mjs';
+import {
+  ERRORS,
+  GOLDEN_INPUTS,
+  MALFORMED,
+  PROFILE_TEXT,
+  SELECTION_BENCHMARK_THRESHOLDS,
+  SELECTION_BENCHMARK_WORKLOADS,
+} from './model.mjs';
 import { calculate, materialize, table, tableSha256 } from './reference.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -42,6 +49,12 @@ const fragmentation = {
   'x-ogvcs-license': 'MIT',
 };
 const malformed = { schemaVersion: 'ogvcs.chunking/malformed-vectors/v1', cases: MALFORMED, 'x-ogvcs-license': 'MIT' };
+const selectionWorkloads = {
+  schemaVersion: 'ogvcs.chunking/selection-benchmark-workloads/v1',
+  profile: PROFILE_TEXT,
+  workloads: SELECTION_BENCHMARK_WORKLOADS,
+  'x-ogvcs-license': 'MIT',
+};
 const errors = {
   schemaVersion: 'ogvcs.chunking/registry/v1',
   registry: 'ogvcs.chunking.errors',
@@ -54,16 +67,26 @@ await output('vectors/gear-table.json', tableDocument);
 await output('vectors/golden.json', golden);
 await output('vectors/fragmentation.json', fragmentation);
 await output('vectors/malformed.json', malformed);
+await output('vectors/selection-benchmark-workloads.json', selectionWorkloads);
 await output('registries/errors.json', errors);
+await output('thresholds/selection-bounded-v1.json', { ...SELECTION_BENCHMARK_THRESHOLDS, profile: PROFILE_TEXT, 'x-ogvcs-license': 'MIT' });
 
-const shipped = ['LICENSE', 'README.md', 'package.json', 'validate-spec.mjs', ...await files('docs'), ...await files('profiles'), ...await files('registries'), ...await files('schemas'), ...await files('scripts'), ...await files('test'), ...await files('vectors')].filter((path) => path !== 'manifest.json').sort();
+const shipped = ['LICENSE', 'README.md', 'package.json', 'validate-spec.mjs', ...await files('docs'), ...await files('profiles'), ...await files('registries'), ...await files('schemas'), ...await files('scripts'), ...await files('test'), ...await files('thresholds'), ...await files('vectors')].filter((path) => path !== 'manifest.json').sort();
 const artifacts = [];
 for (const path of shipped) { const body = await readFile(resolve(ROOT, path)); artifacts.push({ bytes: body.length, path, sha256: sha(body) }); }
 const artifactSetSha256 = sha(Buffer.concat(artifacts.map((item) => Buffer.from(`${item.path}\0${item.sha256}\0${item.bytes}\n`))));
 const manifest = {
   schemaVersion: 'ogvcs.chunking/contract-manifest/v1', contractVersion: '0.1.0-rc.1', profile: PROFILE_TEXT,
   tableSha256, artifactSetSha256, artifacts,
-  counts: { artifacts: artifacts.length, goldenCases: golden.cases.length, malformedCases: malformed.cases.length, fragmentationCases: fragmentation.cases.length, schemas: 5 },
+  counts: {
+    artifacts: artifacts.length,
+    benchmarkThresholds: 1,
+    benchmarkWorkloads: selectionWorkloads.workloads.length,
+    goldenCases: golden.cases.length,
+    malformedCases: malformed.cases.length,
+    fragmentationCases: fragmentation.cases.length,
+    schemas: 7,
+  },
   generatedBy: { generatorSha256: sha(await readFile(fileURLToPath(import.meta.url))), modelSha256: sha(await readFile(resolve(ROOT, 'scripts/model.mjs'))) },
   license: 'MIT',
 };

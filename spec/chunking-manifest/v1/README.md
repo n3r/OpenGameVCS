@@ -14,6 +14,12 @@ cooperative cancellation/deadline and transactional-abort rules. The bounded
 cross-language report compares those cache keys, all identity fields, exact
 error codes, and deterministic resource-admission outcomes.
 
+`vectors/selection-benchmark-workloads.json` and
+`thresholds/selection-bounded-v1.json` add the bounded seven-workload benchmark
+authority required by ADR-0016 and the OGVCS-007 ratification review. They are
+not an exact-scale gate and do not authorize production writes or registry
+ratification on their own.
+
 The candidate is not yet a ratified OGVCS-002 registry assignment and must not
 be used for production writes. Its purpose is independent implementation and
 benchmark selection. Generate and validate without network access:
