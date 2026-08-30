@@ -53,6 +53,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@7d11e79e1714f6b6da93cac39ad8435666f5c337 # 1.82.0
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run test:metadata:spec
+      - run: npm run test:package --workspace @opengamevcs/repository-metadata-contract-v1
       - run: node server/modules/repository-metadata/scripts/static-check.mjs
       - run: node server/modules/repository-metadata/scripts/service-report.mjs --check
       - run: cargo fetch --manifest-path server/modules/repository-metadata/Cargo.toml --locked
@@ -88,6 +89,7 @@ jobs:
           components: clippy, rustfmt
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run test:metadata:spec
+      - run: npm run test:package --workspace @opengamevcs/repository-metadata-contract-v1
       - run: npm run test:metadata
       - run: cargo fetch --manifest-path server/modules/repository-metadata/Cargo.toml --locked
       - run: cargo fmt --manifest-path server/modules/repository-metadata/Cargo.toml -- --check

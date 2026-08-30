@@ -39,6 +39,10 @@ test('repository metadata workflow pins the bounded three-host and PostgreSQL bo
   assert.equal(workflow.match(/cargo fetch .* --locked/gu)?.length, 2);
   assert.equal(workflow.match(/cargo test .* --locked --offline/gu)?.length, 2);
   assert.equal(workflow.match(/npm run test:metadata$/gmu)?.length, 1);
+  assert.equal(
+    workflow.match(/npm run test:package --workspace @opengamevcs\/repository-metadata-contract-v1/gu)?.length,
+    2,
+  );
   assert.equal(workflow.match(/spec\/benchmark-fault\/v1\/\*\*/gu)?.length, 2);
   assert.match(workflow, /cargo clippy .* --locked --offline --all-targets -- -D warnings/u);
   assert.match(workflow, /CARGO_NET_OFFLINE: 'true'/u);
