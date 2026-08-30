@@ -46,22 +46,32 @@ from P0-2 on its own.
 - The report records per-operation ledger peaks only; it does not publish the
   observed process peak memory that P0-2 closure still requires.
 
-## Remaining ratification blockers
+## Ratification status
 
 This packet does not ratify
 `chunking.opengamevcs/gear-fastcdc-1m@1`, change the OGVCS-002 registry, or
-flip production writes on. The remaining P0 blockers from the
-2026-08-30 review are still:
+flip production writes on. Since the original 2026-08-30 review, the bounded
+implementation has closed two code-level blockers:
 
-- P0-1: no production-boundary OGVCS-007 verifier receipt rejects arbitrary
-  boundaries before trusted publication.
+- P0-1 is closed in source: full verification issues a private one-use receipt
+  bound to the registered verifier version, profile, manifest identity, logical
+  bytes, and whole-file digest. The workspace adapter consumes it before
+  publication and rejects absent, reused, or mismatched receipts.
+- P0-3 is closed in source: `reconstructManifestToWorkspace` verifies the
+  ordered content and Gear boundaries before streaming through OGVCS-046
+  `atomicWriteStream`. Its one-slot rendezvous applies backpressure, and
+  cancellation/deadline settlement cannot report failure after a durable
+  commit.
+
+The remaining P0 blocker from the review is:
+
 - P0-2: no authenticated OGVCS-005 result bundle/verifier exists for the
   seven-class bounded run, and no observed process peak memory is retained for
   that run.
-- P0-3: no read-before-write reconstruction/publication path is deployed
-  across the public trust boundary.
 
 Actual P0-2 closure still requires an authenticated OGVCS-005-compatible result
 bundle plus verifier outcome for the bounded seven-class run, along with
 observed process peak memory. Until then, this packet remains narrow retained
-selection evidence only, and the overall verdict stays blocked.
+selection evidence only. Ratification also remains gated by the current-source
+hosted matrix, the generated registry/predecessor-pin lifecycle cut, and the
+separately scheduled final 100-GiB resource campaign.

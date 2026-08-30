@@ -383,3 +383,29 @@ The Linux and Windows legs remain CI evidence, not a local claim. No 100 GiB,
 1 TiB, or exact-scale campaign was run. This closes the no-cherry code/package
 findings but does not change the original ratification verdict or any lifecycle
 state.
+
+## Bounded publication-receipt follow-up (2026-08-30)
+
+The JavaScript package now composes reconstruction with the completed OGVCS-046
+bounded publication boundary. Full content and Gear verification issues a
+private one-use receipt bound to the registered verifier version, profile,
+manifest ObjectID and SHA-256, logical length, and whole-file SHA-256.
+`reconstructManifestToWorkspace` streams verified bytes through a one-slot
+rendezvous into `atomicWriteStream`; the filesystem adapter consumes the receipt
+before publication and returns the bound workspace publication receipt.
+
+Independent hostile review rejected two intermediate implementations. The
+landed follow-ups close unbounded buffering, dropped terminal errors, eager
+writer startup, duplicate manifest parsing, caller-supplied verifier binding,
+post-commit cancellation ambiguity, unhandled writer rejection, and reentrant
+receipt consumption. Deterministic regressions prove that pre-commit
+cancellation rolls back, post-durable-commit cancellation returns success,
+wrong/reused receipts cannot publish, writer errors remain sticky, and temporary
+workspace roots are removed.
+
+This closes P0-1 and P0-3 at the bounded source/API boundary without ratifying
+the profile. The retained seven-workload report remains provisional: P0-2 still
+requires an authenticated OGVCS-005 result bundle/verifier with observed
+whole-process peak memory. Current-source hosted proof, registry/predecessor-pin
+regeneration, and the separately scheduled final 100-GiB campaign also remain
+outside this source-level follow-up.
