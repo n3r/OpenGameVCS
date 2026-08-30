@@ -18,7 +18,7 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
     );
     assert_eq!(manifest["database"], "postgresql-15-or-newer");
     let entries = manifest["entries"].as_array().unwrap();
-    assert_eq!(entries.len(), 6);
+    assert_eq!(entries.len(), 9);
     let expected = [
         (1, "expand"),
         (1, "migrate"),
@@ -26,6 +26,9 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
         (2, "expand"),
         (2, "migrate"),
         (2, "contract"),
+        (3, "expand"),
+        (3, "migrate"),
+        (3, "contract"),
     ];
     for (entry, (version, phase)) in entries.iter().zip(expected) {
         assert_eq!(entry["version"], version);
@@ -41,6 +44,7 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
     }
     assert_eq!(entries[2]["requiresCompatibilityFence"], true);
     assert_eq!(entries[5]["requiresCompatibilityFence"], true);
+    assert_eq!(entries[8]["requiresCompatibilityFence"], true);
 }
 
 #[test]
@@ -108,6 +112,27 @@ fn version_two_adds_enforcement_without_rewriting_version_one() {
     assert!(contract.contains("RENAME TO file_path_history_by_file_id"));
     assert!(!expand.contains("published_commit_sequence"));
     assert!(!migrate.contains("published_commit_sequence"));
+}
+
+#[test]
+fn version_three_adds_complete_outbox_delivery_state() {
+    let root = migration_root();
+    let expand = fs::read_to_string(root.join("000003_expand.sql")).unwrap();
+    let contract = fs::read_to_string(root.join("000003_contract.sql")).unwrap();
+    for evidence in [
+        "lease_id uuid",
+        "leased_by text",
+        "lease_expires_at timestamptz",
+        "delivery_attempts integer NOT NULL DEFAULT 0",
+        "acknowledged_at timestamptz",
+        "outbox_events_lease_complete",
+        "outbox_events_acknowledgement_clears_lease",
+        "WHERE acknowledged_at IS NULL",
+    ] {
+        assert!(expand.contains(evidence), "missing {evidence}");
+    }
+    assert!(contract.contains("DROP INDEX ogvcs_metadata.outbox_events_available"));
+    assert!(contract.contains("RENAME TO outbox_events_available"));
 }
 
 #[test]

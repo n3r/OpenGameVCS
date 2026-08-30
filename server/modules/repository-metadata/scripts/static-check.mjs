@@ -34,7 +34,7 @@ for (const file of rustFiles) {
 
 const manifest = JSON.parse(await readFile(resolve(migrations, 'manifest.json')));
 assert(manifest.schemaVersion === 'ogvcs.repository-metadata/migration-manifest/v1', 'migration manifest schema differs');
-assert(JSON.stringify(manifest.entries.map(({ version, phase }) => [version, phase])) === '[[1,"expand"],[1,"migrate"],[1,"contract"],[2,"expand"],[2,"migrate"],[2,"contract"]]', 'migration phases are not ordered');
+assert(JSON.stringify(manifest.entries.map(({ version, phase }) => [version, phase])) === '[[1,"expand"],[1,"migrate"],[1,"contract"],[2,"expand"],[2,"migrate"],[2,"contract"],[3,"expand"],[3,"migrate"],[3,"contract"]]', 'migration phases are not ordered');
 for (const entry of manifest.entries) {
   const bytes = await readFile(resolve(migrations, entry.path));
   const sql = bytes.toString('utf8');
@@ -65,6 +65,10 @@ assert(
     && !migrateV2.includes('published_commit_sequence'),
   'version 2 infers historical publication markers',
 );
+const expandV3 = await readFile(resolve(migrations, '000003_expand.sql'), 'utf8');
+assert(expandV3.includes('outbox_events_lease_complete'), 'version 3 complete outbox lease invariant missing');
+assert(expandV3.includes('acknowledged_at'), 'version 3 outbox acknowledgement state missing');
+assert(expandV3.includes('WHERE acknowledged_at IS NULL'), 'version 3 deliverable index includes acknowledged events');
 
 const adapter = await readFile(resolve(root, 'src/postgres.rs'), 'utf8');
 const ports = await readFile(resolve(root, 'src/ports.rs'), 'utf8');
