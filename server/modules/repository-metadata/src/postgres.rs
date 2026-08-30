@@ -27,9 +27,9 @@ use crate::{
     ObjectRef, ObjectValidationPort, ObjectWrite, OutboxClaimRequest, OutboxEvent,
     OutboxEventRecord, OutboxLeaseAction, OutboxLeaseRecord, OutboxReleaseRequest, Page,
     PageRequest, ProductionObjectValidator, ReferenceCasRequest, ReferenceCasResult,
-    ReferenceExpected, ReferenceKind, ReferenceName, ReferenceRecord, RepositoryCreate,
-    RepositoryId, RepositorySettings, Result, SnapshotWrite, TenantId, TransactionCapability,
-    TransactionOptions, TreeEntryRecord, TreeEntryWrite,
+    ReferenceExpected, ReferenceFilter, ReferenceKind, ReferenceName, ReferenceRecord,
+    RepositoryCreate, RepositoryId, RepositorySettings, Result, SnapshotWrite, TenantId,
+    TransactionCapability, TransactionOptions, TreeEntryRecord, TreeEntryWrite,
 };
 
 const VALIDATION_CONTRACT: &str = "ogvcs.repository-format@1";
@@ -708,6 +708,28 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
         prefix: &[String],
         request: PageRequest,
     ) -> Result<Page<TreeEntryRecord>> {
+        self.tree_page_consistent(
+            context,
+            repository_id,
+            snapshot,
+            tree,
+            prefix,
+            None,
+            request,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn tree_page_consistent(
+        &mut self,
+        context: &AuthorizationContext,
+        repository_id: RepositoryId,
+        snapshot: ObjectRef,
+        tree: ObjectRef,
+        prefix: &[String],
+        minimum: Option<&ConsistencyToken>,
+        request: PageRequest,
+    ) -> Result<Page<TreeEntryRecord>> {
         if !valid_tree_prefix(prefix) {
             return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
         }
@@ -721,6 +743,9 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
             self.authorize_exact(context, MetadataPermission::MetadataRead, &resource)?;
         crate::verify_schema_compatibility(&mut self.client)?;
         self.require_repository_tenant(context, repository_id)?;
+        if let Some(token) = minimum {
+            self.require_consistency_authorized(context, repository_id, token)?;
+        }
         if snapshot.kind != ObjectKind::Snapshot
             || tree.kind != ObjectKind::Tree
             || !request.is_bounded()
@@ -811,15 +836,38 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
         repository_id: RepositoryId,
         request: PageRequest,
     ) -> Result<Page<ReferenceRecord>> {
+        self.reference_page_filtered(context, repository_id, ReferenceFilter::All, None, request)
+    }
+
+    pub fn reference_page_filtered(
+        &mut self,
+        context: &AuthorizationContext,
+        repository_id: RepositoryId,
+        filter: ReferenceFilter,
+        minimum: Option<&ConsistencyToken>,
+        request: PageRequest,
+    ) -> Result<Page<ReferenceRecord>> {
         let resource = AuthorizationResource::ReferenceCollection { repository_id };
         let authorized_view =
             self.authorize_exact(context, MetadataPermission::Discover, &resource)?;
         crate::verify_schema_compatibility(&mut self.client)?;
         self.require_repository_tenant(context, repository_id)?;
+        if let Some(token) = minimum {
+            self.require_consistency_authorized(context, repository_id, token)?;
+        }
         if !request.is_bounded() {
             return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
         }
-        let query_digest = query_digest(b"reference", repository_id, &[], &[]);
+        let kind_filter = match filter {
+            ReferenceFilter::All => None,
+            ReferenceFilter::Kind(kind) => Some(reference_kind(kind)),
+        };
+        let query_digest = query_digest(
+            b"reference",
+            repository_id,
+            kind_filter.unwrap_or("all").as_bytes(),
+            &[],
+        );
         let after = self.cursor_position(
             context,
             repository_id,
@@ -840,12 +888,14 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
                    ON snapshot.repository_id = reference.repository_id
                   AND snapshot.snapshot_digest = reference.target_snapshot_digest
                  WHERE reference.repository_id = $1
-                   AND ($2::text IS NULL OR
-                        (reference.reference_kind, reference.reference_name) > ($2, $3))
+                   AND ($2::text IS NULL OR reference.reference_kind = $2)
+                   AND ($3::text IS NULL OR
+                        (reference.reference_kind, reference.reference_name) > ($3, $4))
                  ORDER BY reference.reference_kind, reference.reference_name
-                 LIMIT $4",
+                 LIMIT $5",
                 &[
                     &uuid(repository_id),
+                    &kind_filter,
                     &after_kind,
                     &after_name,
                     &((MAX_AUTHORIZATION_SCAN + 1) as i64),
@@ -910,6 +960,17 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
         file_id: FileId,
         request: PageRequest,
     ) -> Result<Page<FileHistoryRecord>> {
+        self.file_history_page_consistent(context, repository_id, file_id, None, request)
+    }
+
+    pub fn file_history_page_consistent(
+        &mut self,
+        context: &AuthorizationContext,
+        repository_id: RepositoryId,
+        file_id: FileId,
+        minimum: Option<&ConsistencyToken>,
+        request: PageRequest,
+    ) -> Result<Page<FileHistoryRecord>> {
         let resource = AuthorizationResource::FileHistory {
             repository_id,
             file_id,
@@ -918,6 +979,9 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
             self.authorize_exact(context, MetadataPermission::MetadataRead, &resource)?;
         crate::verify_schema_compatibility(&mut self.client)?;
         self.require_repository_tenant(context, repository_id)?;
+        if let Some(token) = minimum {
+            self.require_consistency_authorized(context, repository_id, token)?;
+        }
         if !request.is_bounded() {
             return Err(DomainError::new(DomainErrorCode::HistoryLimitReached));
         }

@@ -68,6 +68,12 @@ pub enum ReferenceKind {
     Tag,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ReferenceFilter {
+    All,
+    Kind(ReferenceKind),
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ReferenceName(String);
 

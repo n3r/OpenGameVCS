@@ -19,9 +19,9 @@ use ogvcs_repository_metadata::{
     FileIdReservationOutcome, IdempotencyReservation, IdempotencyReservationOutcome,
     MetadataPermission, MetadataTransaction, ObjectPutOutcome, ObjectValidationPort, ObjectWrite,
     OutboxClaimRequest, OutboxEvent, OutboxLeaseAction, OutboxReleaseRequest, PageRequest,
-    PostgresMetadataStore, ProjectId, ReferenceCasRequest, ReferenceExpected, ReferenceKind,
-    ReferenceName, RepositoryCreate, RepositoryId, RepositorySettings, SnapshotWrite, TenantId,
-    TransactionCapability, TransactionOptions, TreeEntryWrite,
+    PostgresMetadataStore, ProjectId, ReferenceCasRequest, ReferenceExpected, ReferenceFilter,
+    ReferenceKind, ReferenceName, RepositoryCreate, RepositoryId, RepositorySettings,
+    SnapshotWrite, TenantId, TransactionCapability, TransactionOptions, TreeEntryWrite,
 };
 use postgres::{Client, NoTls};
 use serde_json::{json, Value};
@@ -677,6 +677,37 @@ fn production_reference_postgres_report() {
             .generation,
         1
     );
+    assert_eq!(
+        store
+            .reference_page_filtered(
+                &context,
+                repository_id,
+                ReferenceFilter::Kind(ReferenceKind::Branch),
+                None,
+                PageRequest {
+                    limit: 10,
+                    cursor: None,
+                },
+            )
+            .unwrap()
+            .items
+            .len(),
+        1
+    );
+    assert!(store
+        .reference_page_filtered(
+            &context,
+            repository_id,
+            ReferenceFilter::Kind(ReferenceKind::Tag),
+            None,
+            PageRequest {
+                limit: 10,
+                cursor: None,
+            },
+        )
+        .unwrap()
+        .items
+        .is_empty());
     assert!(store
         .tree_page(
             &context,
@@ -781,7 +812,15 @@ fn production_reference_postgres_report() {
         &create_key,
     );
     report("rollback-outbox-idempotency");
-    consistency_report(&database_url, &mut store, &context, repository_id);
+    consistency_report(
+        &database_url,
+        &mut store,
+        &context,
+        repository_id,
+        snapshot.0,
+        tree.0,
+        file_id,
+    );
     report("consistency-token-primary-and-lag");
     drop(store);
 
@@ -2525,6 +2564,9 @@ fn consistency_report(
     store: &mut PostgresMetadataStore<IsolatedAllow, IsolatedConformanceValidation>,
     context: &AuthorizationContext,
     repository_id: RepositoryId,
+    snapshot: ObjectRef,
+    tree: ObjectRef,
+    file_id: FileId,
 ) {
     let mut transaction = store
         .begin_authorized(
@@ -2544,6 +2586,53 @@ fn consistency_report(
             .unwrap(),
         CommitSequence::new(2)
     );
+    assert!(!store
+        .tree_page_consistent(
+            context,
+            repository_id,
+            snapshot,
+            tree,
+            &[],
+            Some(&token),
+            PageRequest {
+                limit: 10,
+                cursor: None,
+            },
+        )
+        .unwrap()
+        .items
+        .is_empty());
+    assert_eq!(
+        store
+            .reference_page_filtered(
+                context,
+                repository_id,
+                ReferenceFilter::All,
+                Some(&token),
+                PageRequest {
+                    limit: 10,
+                    cursor: None,
+                },
+            )
+            .unwrap()
+            .items
+            .len(),
+        1
+    );
+    assert!(!store
+        .file_history_page_consistent(
+            context,
+            repository_id,
+            file_id,
+            Some(&token),
+            PageRequest {
+                limit: 10,
+                cursor: None,
+            },
+        )
+        .unwrap()
+        .items
+        .is_empty());
     for mismatched in [
         AuthorizationContext {
             subject_digest: [44; 32],
@@ -2595,6 +2684,24 @@ fn consistency_report(
     assert_eq!(
         store
             .require_consistency(context, repository_id, &token)
+            .unwrap_err()
+            .code,
+        DomainErrorCode::ConsistencyTokenUnsatisfied
+    );
+    assert_eq!(
+        store
+            .tree_page_consistent(
+                context,
+                repository_id,
+                snapshot,
+                tree,
+                &[],
+                Some(&token),
+                PageRequest {
+                    limit: 10,
+                    cursor: None,
+                },
+            )
             .unwrap_err()
             .code,
         DomainErrorCode::ConsistencyTokenUnsatisfied

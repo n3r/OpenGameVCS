@@ -31,7 +31,7 @@ pub use types::{
     MetadataPermission, ObjectPutOutcome, ObjectWrite, OutboxClaimRequest, OutboxEvent,
     OutboxEventRecord, OutboxLeaseAction, OutboxLeaseRecord, OutboxReleaseRequest, Page,
     PageRequest, ProjectId, ReferenceCasRequest, ReferenceCasResult, ReferenceExpected,
-    ReferenceKind, ReferenceName, ReferenceRecord, RepositoryCreate, RepositoryId,
+    ReferenceFilter, ReferenceKind, ReferenceName, ReferenceRecord, RepositoryCreate, RepositoryId,
     RepositorySettings, SnapshotWrite, TenantId, TransactionCapability, TransactionOptions,
     TreeEntryRecord, TreeEntryWrite,
 };
