@@ -50,6 +50,9 @@ struct SingleUseAllow;
 #[derive(Clone, Copy)]
 struct IsolatedConformanceValidation;
 
+#[derive(Clone, Copy)]
+struct RejectObjectValidation;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct IsolatedAuthorizedView {
     context: AuthorizationContext,
@@ -318,6 +321,20 @@ impl ObjectValidationPort for IsolatedConformanceValidation {
         } else {
             Err(DomainError::new(DomainErrorCode::ObjectInvalid))
         }
+    }
+}
+
+impl ObjectValidationPort for RejectObjectValidation {
+    fn validate(&self, _write: &ObjectWrite<'_>) -> ogvcs_repository_metadata::Result<()> {
+        Err(DomainError::new(DomainErrorCode::ObjectInvalid))
+    }
+
+    fn registry(&self) -> Registry {
+        Registry::bundled()
+    }
+
+    fn validation_mode(&self) -> ValidationMode {
+        ValidationMode::Conformance
     }
 }
 
@@ -1909,11 +1926,16 @@ fn authorization_and_poisoning_report(
         DomainErrorCode::ObjectInvalid
     );
 
-    let invalid_repository = RepositoryId::from_bytes([96; 16]);
+    let invalid_repository = RepositoryId::from_bytes([94; 16]);
+    let invalid_descriptor = descriptor_for_repository(descriptor, invalid_repository);
     let invalid_create_key = idempotency("repository.create", "invalid-create", [15; 32]);
     let (required_features, path_profile, content_policy_profile) =
-        descriptor_settings(&descriptor.1);
-    let mut invalid_create = store
+        descriptor_settings(&invalid_descriptor.1);
+    let mut rejecting_store = PostgresMetadataStore::connect(database_url)
+        .unwrap()
+        .with_authorizer(IsolatedAllow)
+        .with_object_validator(RejectObjectValidation);
+    let mut invalid_create = rejecting_store
         .begin_authorized(
             context,
             TransactionCapability::CreateRepository,
@@ -1945,7 +1967,7 @@ fn authorization_and_poisoning_report(
                     }),
                     tenant_boundary: tenant_id,
                 },
-                descriptor: write(invalid_repository, descriptor),
+                descriptor: write(invalid_repository, &invalid_descriptor),
             })
             .unwrap_err()
             .code,
@@ -2860,6 +2882,29 @@ fn write(repository_id: RepositoryId, fixture: &(ObjectRef, Vec<u8>)) -> ObjectW
         object_ref: &fixture.0,
         canonical_bytes: &fixture.1,
     }
+}
+
+fn descriptor_for_repository(
+    template: &(ObjectRef, Vec<u8>),
+    repository_id: RepositoryId,
+) -> (ObjectRef, Vec<u8>) {
+    let mut descriptor = decode_canonical(&template.1, Limits::METADATA).unwrap();
+    let Cbor::Map(fields) = &mut descriptor else {
+        panic!("repository descriptor map")
+    };
+    fields
+        .iter_mut()
+        .find(|(key, _)| *key == Cbor::UInt(16))
+        .expect("repository id field")
+        .1 = Cbor::Bytes(repository_id.as_bytes().to_vec());
+    let bytes = encode_canonical(&descriptor).unwrap();
+    (
+        ObjectRef {
+            kind: ObjectKind::RepositoryDescriptor,
+            digest: object_id(ObjectKind::RepositoryDescriptor, &bytes).unwrap(),
+        },
+        bytes,
+    )
 }
 
 fn regular_tree_entry(bytes: &[u8]) -> (u32, Vec<u8>, FileId, u16, ObjectRef, u64) {
