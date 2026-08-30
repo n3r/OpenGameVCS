@@ -2,14 +2,23 @@
 
 Independent scalar Rust implementation of the Proposed ADR-0016
 `chunking.opengamevcs/gear-fastcdc-1m@1` candidate. It uses the public
-`ogvcs-object-model` crate for SHA-256, ObjectIDs, profile references, and
-canonical manifest CBOR. Those public-codec bytes are tested byte-for-byte
-against the independent language-neutral oracle. Switching to the public
-registry-aware streaming writer remains an integration step after the candidate
-profile enters the shared registry.
+`ogvcs-object-model` crate for hashing, ObjectIDs, OGVCS-002 framing and schema
+validation, profile references, and canonical manifest CBOR.
 
-This authority cut is not production-write eligible and does not claim CLI,
-workspace reconstruction, benchmark selection, or 100-GiB evidence.
+The public `verify_manifest`, `reconstruct_manifest`, and `compare_manifest`
+APIs perform OGVCS-002 validation before enforcing the exact candidate profile,
+ordered occurrence length/ChunkID, whole-file digest, and Gear boundaries.
+Reconstruction writes through `TransactionalPublication` and commits only after
+complete verification. `KnownChunkIndex` comparison reports exact
+logical/unique/reused/repeated/new bytes and rejects conflicting metadata.
 
-This scalar cut admits one worker, no completed-chunk queue, and the exact
-ADR-0016 scalar working-memory budget of 4,259,840 bytes.
+Generation and reading use the same fixed 48-byte ordered ledger.
+`LedgerOptions` bounds resident and private scratch storage; `Drop` removes
+scratch artifacts on success and every error path. `Chunker::new_bounded` omits
+retained result arrays, while the whole-input `chunk_bytes` convenience retains
+them for compatibility.
+
+The scalar implementation admits one worker, no completed-chunk queue, and the
+ADR-0016 working-memory budget of 4,259,840 bytes. The candidate remains
+conformance-only: it does not claim a CLI, production repository binding,
+benchmark selection, or 100-GiB evidence.

@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
 import { chunkIdentity, contentManifest, PROFILE } from './identity.mjs';
+import { fail, wrap } from './errors.mjs';
+import { createLedger } from './ledger.mjs';
 
 const TABLE_DOMAIN = Buffer.from('OpenGameVCS Gear table v1\0', 'ascii');
 export const LIMITS = Object.freeze({
@@ -19,7 +21,6 @@ export const LIMITS = Object.freeze({
   scalarWorkingMinimum: 4_259_840,
 });
 
-function fail(code) { const error = new Error(code); error.code = code; throw error; }
 function tableEntryBytes(index) {
   const suffix = Buffer.alloc(2); suffix.writeUInt16BE(index);
   return createHash('sha256').update(TABLE_DOMAIN).update(suffix).digest().subarray(0, 8);
@@ -38,28 +39,87 @@ export function gearStepU32(high, low, byte) {
   return Object.freeze({ high: (shiftedHigh + GEAR_HIGH[byte] + carry) >>> 0, low: nextLow });
 }
 
-export function createChunker({ declaredLength, profile = PROFILE, onChunk = () => {}, workerCount = 1, queuedChunks = 0, maxWorkingMemoryBytes = LIMITS.scalarWorkingMinimum } = {}) {
+// Internal profile scanner used by verification. It reports only algorithmic
+// cuts; the final suffix boundary is supplied by the manifest verifier.
+export function createBoundaryScanner(logicalLength) {
+  if (!Number.isSafeInteger(logicalLength) || logicalLength < 0 || logicalLength > LIMITS.logicalMaximum) {
+    fail('CHUNK_DECLARED_LENGTH_INVALID');
+  }
+  let fingerprintHigh = 0;
+  let fingerprintLow = 0;
+  let currentLength = 0;
+  let consumed = 0;
+  let lastBoundary = 0;
+  return Object.freeze({
+    update(fragment, onBoundary) {
+      for (let offset = 0; offset < fragment.byteLength; offset += 1) {
+        const byte = fragment[offset];
+        consumed += 1;
+        currentLength += 1;
+        if (logicalLength <= LIMITS.smallMaximum) continue;
+        const shiftedLow = (fingerprintLow << 1) >>> 0;
+        const shiftedHigh = ((fingerprintHigh << 1) | (fingerprintLow >>> 31)) >>> 0;
+        const nextLow = (shiftedLow + GEAR_LOW[byte]) >>> 0;
+        fingerprintHigh = (shiftedHigh + GEAR_HIGH[byte] + (nextLow < shiftedLow ? 1 : 0)) >>> 0;
+        fingerprintLow = nextLow;
+        if (currentLength >= LIMITS.minimum) {
+          const mask = currentLength < LIMITS.target ? LIMITS.earlyMask : LIMITS.lateMask;
+          if ((fingerprintLow & mask) === 0 || currentLength === LIMITS.maximum) {
+            lastBoundary = consumed;
+            onBoundary(consumed);
+            fingerprintHigh = 0;
+            fingerprintLow = 0;
+            currentLength = 0;
+          }
+        }
+      }
+    },
+    get consumed() { return consumed; },
+    get lastBoundary() { return lastBoundary; },
+  });
+}
+
+export function createChunker({
+  declaredLength,
+  profile = PROFILE,
+  onChunk = () => {},
+  workerCount = 1,
+  queuedChunks = 0,
+  maxWorkingMemoryBytes = LIMITS.scalarWorkingMinimum,
+  maxLedgerMemoryBytes,
+  maxScratchBytes,
+  scratchDirectory,
+  manifestSink,
+  retainEntries = false,
+} = {}) {
   if (!Number.isSafeInteger(declaredLength) || declaredLength < 0 || declaredLength > LIMITS.logicalMaximum) fail('CHUNK_DECLARED_LENGTH_INVALID');
   if (!profile || profile.namespace !== PROFILE.namespace || profile.id !== PROFILE.id || profile.major !== PROFILE.major) fail('CHUNK_PROFILE_UNSUPPORTED');
   if (typeof onChunk !== 'function') fail('CHUNK_SINK_INVALID');
   if (workerCount !== 1 || queuedChunks !== 0) fail('CHUNK_RESOURCE_UNSUPPORTED');
   if (!Number.isSafeInteger(maxWorkingMemoryBytes) || maxWorkingMemoryBytes < LIMITS.scalarWorkingMinimum) fail('CHUNK_RESOURCE_EXHAUSTED');
   if (maxWorkingMemoryBytes > LIMITS.workingMaximum) fail('CHUNK_RESOURCE_INVALID');
+  if (manifestSink !== undefined && typeof manifestSink !== 'function') fail('CHUNK_SINK_INVALID');
+  if (typeof retainEntries !== 'boolean') fail('CHUNK_RESOURCE_INVALID');
   let consumed = 0; let fingerprintHigh = 0; let fingerprintLow = 0; let currentLength = 0; let finished = false; let failed = false;
   const current = Buffer.allocUnsafe(Math.min(declaredLength, LIMITS.maximum));
-  const whole = createHash('sha256'); const parts = []; const boundaries = [];
+  const whole = createHash('sha256');
+  const ledger = createLedger({
+    maxMemoryBytes: maxLedgerMemoryBytes,
+    maxScratchBytes,
+    scratchDirectory,
+  });
 
   function emit() {
-    if (parts.length >= LIMITS.chunkCountMaximum) fail('CHUNK_COUNT_EXCEEDED');
+    if (ledger.count >= LIMITS.chunkCountMaximum) fail('CHUNK_COUNT_EXCEEDED');
     const bytes = Buffer.from(current.subarray(0, currentLength));
     const identity = chunkIdentity(bytes);
     const part = Object.freeze({ digest: identity.digest, length: currentLength, objectId: identity.objectId, reference: identity.reference });
+    ledger.append({ digest: identity.digest, length: currentLength, boundary: consumed });
     try {
-      onChunk(bytes, part, parts.length);
+      onChunk(bytes, part, ledger.count - 1);
     } catch (cause) {
-      const error = new Error('CHUNK_SINK_FAILED', { cause }); error.code = 'CHUNK_SINK_FAILED'; throw error;
+      throw wrap('CHUNK_SINK_FAILED', cause);
     }
-    parts.push(part); boundaries.push(consumed);
     fingerprintHigh = 0; fingerprintLow = 0; currentLength = 0;
   }
 
@@ -91,6 +151,7 @@ export function createChunker({ declaredLength, profile = PROFILE, onChunk = () 
         return consumed;
       } catch (error) {
         failed = true; finished = true;
+        ledger.dispose();
         throw error;
       }
     },
@@ -101,12 +162,20 @@ export function createChunker({ declaredLength, profile = PROFILE, onChunk = () 
         if (consumed !== declaredLength) fail('CHUNK_SOURCE_TOO_SHORT');
         if (currentLength > 0) emit();
         const wholeFileDigest = whole.digest();
-        const manifest = await contentManifest(declaredLength, wholeFileDigest, parts);
+        const manifest = await contentManifest(
+          declaredLength,
+          wholeFileDigest,
+          () => ledger.records(),
+          { partCount: ledger.count, sink: manifestSink },
+        );
+        const ledgerMetrics = ledger.metrics();
+        const retained = retainEntries ? [...ledger.records()] : undefined;
         finished = true;
         return Object.freeze({
-          boundaries: Object.freeze([...boundaries]),
-          chunks: Object.freeze(parts.map(({ digest, reference: _reference, ...part }) => Object.freeze({ ...part, digest: Buffer.from(digest) }))),
+          boundaries: retained === undefined ? undefined : Object.freeze(retained.map(({ boundary }) => boundary)),
+          chunks: retained === undefined ? undefined : Object.freeze(retained.map(({ boundary: _boundary, reference: _reference, ...part }) => Object.freeze({ ...part, digest: Buffer.from(part.digest) }))),
           class: declaredLength === 0 ? 'empty' : declaredLength <= LIMITS.smallMaximum ? 'whole' : 'cdc-1m',
+          ledger: ledgerMetrics,
           logicalLength: declaredLength,
           manifest,
           wholeFileDigest,
@@ -114,7 +183,16 @@ export function createChunker({ declaredLength, profile = PROFILE, onChunk = () 
       } catch (error) {
         failed = true; finished = true;
         throw error;
+      } finally {
+        ledger.dispose();
       }
+    },
+    abort() {
+      if (finished) return false;
+      failed = true;
+      finished = true;
+      ledger.dispose();
+      return true;
     },
   });
 }
@@ -122,7 +200,15 @@ export function createChunker({ declaredLength, profile = PROFILE, onChunk = () 
 export async function chunkBytes(bytes, options = {}) {
   if (!(bytes instanceof Uint8Array)) fail('CHUNK_FRAGMENT_INVALID');
   const chunks = [];
-  const session = createChunker({ declaredLength: options.declaredLength ?? bytes.byteLength, profile: options.profile, workerCount: options.workerCount, queuedChunks: options.queuedChunks, maxWorkingMemoryBytes: options.maxWorkingMemoryBytes, onChunk: (chunk) => chunks.push(Buffer.from(chunk)) });
+  const session = createChunker({
+    ...options,
+    declaredLength: options.declaredLength ?? bytes.byteLength,
+    retainEntries: true,
+    onChunk: (chunk, part, index) => {
+      chunks.push(Buffer.from(chunk));
+      options.onChunk?.(chunk, part, index);
+    },
+  });
   session.update(bytes);
   return Object.freeze({ ...await session.finish(), chunkBytes: Object.freeze(chunks) });
 }

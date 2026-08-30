@@ -298,3 +298,42 @@ Rust compile/test
 ```
 
 No exact-scale, 100 GiB, or 1 TiB campaign was run.
+
+## First bounded closure tranche (2026-08-30)
+
+The additive implementation following this review closes the code-level parts
+of P0-1, P0-3, P1-1, P1-3, and P1-4 without changing the verdict or lifecycle:
+
+- JavaScript and Rust now expose public verify, reconstruct, and compare APIs.
+  Both perform OGVCS-002 framing and known-schema validation before checking the
+  exact Gear candidate. They validate ordered occurrence length/ChunkID,
+  whole-file digest, and every derived boundary; Gear mismatch is reported only
+  after generic content checks succeed.
+- Reconstruction is caller-transactional: fragments are staged, commit occurs
+  only after all checks, and every post-write failure calls abort. Deterministic
+  corruption tests assert zero commits and cleared staged output.
+- Repeated references are read once per occurrence. A bounded exact index
+  rejects one ChunkID paired with conflicting lengths and reports logical,
+  unique, repeated, reused, and newly required bytes without estimates.
+- Generation and reading use a fixed 48-byte record ledger with separately
+  capped memory/scratch tiers and private scratch cleanup. JavaScript exposes
+  explicit abandonment cleanup; Rust owns cleanup through `Drop`.
+- The complete malformed inventory is executed in both language test runners.
+  `registries/errors.json` is generated from the contract model, and exhaustive
+  static gates compare it with both public runtime surfaces.
+- Deterministic golden, property, fragmentation, reconstruction, mutation,
+  repeated-reference, conflicting-metadata, spill, exhaustion, and cleanup
+  tests were added. No large campaign was run.
+- A path-scoped bounded workflow runs JavaScript and Rust as parallel
+  Linux/macOS/Windows matrices, emits canonical nine-case reports, and compares
+  them per platform. It pins Node 24 and Rust 1.82 and contains no scale trigger.
+
+Local JavaScript/spec verification passes. The local host still has no Rust
+toolchain, so the Rust source remains compile-plausible pending the added CI
+matrix; workflow success is required before treating Rust/cross-platform proof
+as closed.
+
+The profile remains Proposed/candidate/conformance-only. Remaining ratification
+blockers are the authenticated seven-class OGVCS-005 selection report, a green
+compiled three-OS/packed proof, production trust-boundary integration and
+receipt/version binding, and the separately scheduled final resource campaign.

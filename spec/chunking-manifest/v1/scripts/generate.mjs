@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { GOLDEN_INPUTS, MALFORMED, PROFILE_TEXT } from './model.mjs';
+import { ERRORS, GOLDEN_INPUTS, MALFORMED, PROFILE_TEXT } from './model.mjs';
 import { calculate, materialize, table, tableSha256 } from './reference.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -42,11 +42,19 @@ const fragmentation = {
   'x-ogvcs-license': 'MIT',
 };
 const malformed = { schemaVersion: 'ogvcs.chunking/malformed-vectors/v1', cases: MALFORMED, 'x-ogvcs-license': 'MIT' };
+const errors = {
+  schemaVersion: 'ogvcs.chunking/registry/v1',
+  registry: 'ogvcs.chunking.errors',
+  version: 1,
+  entries: ERRORS.map((name) => ({ name })),
+  'x-ogvcs-license': 'MIT',
+};
 const tableDocument = { schemaVersion: 'ogvcs.chunking/gear-table/v1', derivationDomainHex: Buffer.from('OpenGameVCS Gear table v1\0').toString('hex'), entries: table.map((value) => value.toString(16).padStart(16, '0')), tableSha256, 'x-ogvcs-license': 'MIT' };
 await output('vectors/gear-table.json', tableDocument);
 await output('vectors/golden.json', golden);
 await output('vectors/fragmentation.json', fragmentation);
 await output('vectors/malformed.json', malformed);
+await output('registries/errors.json', errors);
 
 const shipped = ['LICENSE', 'README.md', 'package.json', 'validate-spec.mjs', ...await files('docs'), ...await files('profiles'), ...await files('registries'), ...await files('schemas'), ...await files('scripts'), ...await files('test'), ...await files('vectors')].filter((path) => path !== 'manifest.json').sort();
 const artifacts = [];

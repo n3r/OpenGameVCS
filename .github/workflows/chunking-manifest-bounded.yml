@@ -1,0 +1,107 @@
+name: Chunking manifest bounded conformance
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/chunking-manifest-bounded.yml'
+      - 'core/chunking-manifest/**'
+      - 'core/object-model/**'
+      - 'spec/chunking-manifest/v1/**'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/chunking-manifest-bounded.yml'
+      - 'core/chunking-manifest/**'
+      - 'core/object-model/**'
+      - 'spec/chunking-manifest/v1/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chunking-bounded-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  javascript:
+    name: JavaScript bounded (${{ matrix.label }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-latest, label: Linux }
+          - { runner: macos-latest, label: macOS }
+          - { runner: windows-latest, label: Windows }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run test --workspace @opengamevcs/chunking-manifest-contract-v1
+      - run: npm run check --workspace @opengamevcs/chunking-manifest
+      - run: npm run test --workspace @opengamevcs/chunking-manifest
+      - run: node core/chunking-manifest/js/scripts/bounded-report.mjs artifacts/javascript.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: chunking-javascript-${{ matrix.label }}
+          path: artifacts/javascript.json
+          if-no-files-found: error
+          retention-days: 14
+
+  rust:
+    name: Rust bounded (${{ matrix.label }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-latest, label: Linux }
+          - { runner: macos-latest, label: macOS }
+          - { runner: windows-latest, label: Windows }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@7d11e79e1714f6b6da93cac39ad8435666f5c337 # 1.82.0
+        with:
+          components: clippy
+      - run: cargo test --manifest-path core/chunking-manifest/rust/Cargo.toml
+      - run: cargo clippy --manifest-path core/chunking-manifest/rust/Cargo.toml --all-targets -- -D warnings
+      - run: cargo run --manifest-path core/chunking-manifest/rust/Cargo.toml --example bounded_report -- artifacts/rust.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: chunking-rust-${{ matrix.label }}
+          path: artifacts/rust.json
+          if-no-files-found: error
+          retention-days: 14
+
+  compare:
+    name: Cross-language parity (${{ matrix.label }})
+    needs: [javascript, rust]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-latest, label: Linux }
+          - { runner: macos-latest, label: macOS }
+          - { runner: windows-latest, label: Windows }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: chunking-javascript-${{ matrix.label }}
+          path: artifacts/javascript
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: chunking-rust-${{ matrix.label }}
+          path: artifacts/rust
+      - run: node core/chunking-manifest/js/scripts/compare-bounded-reports.mjs artifacts/javascript/javascript.json artifacts/rust/rust.json

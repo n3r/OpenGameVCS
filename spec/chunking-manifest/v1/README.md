@@ -7,6 +7,9 @@ candidate limits/errors, and `vectors/` carries exact Gear table, boundary,
 ChunkID, whole-digest, manifest-byte, manifest-ID, malformed, and fragmentation
 expectations.
 
+`registries/errors.json` is generated from `scripts/model.mjs`; JavaScript and
+Rust statically prove that every public stable code matches this authority.
+
 The candidate is not yet a ratified OGVCS-002 registry assignment and must not
 be used for production writes. Its purpose is independent implementation and
 benchmark selection. Generate and validate without network access:

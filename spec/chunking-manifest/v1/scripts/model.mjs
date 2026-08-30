@@ -1,5 +1,32 @@
 export const PROFILE_TEXT = 'chunking.opengamevcs/gear-fastcdc-1m@1';
 
+// Single source for the language-neutral public error authority. The JS and
+// Rust packages have static parity tests against the generated registry.
+export const ERRORS = Object.freeze([
+  'CHUNK_BOUNDARY_MISMATCH',
+  'CHUNK_COUNT_EXCEEDED',
+  'CHUNK_DECLARED_LENGTH_INVALID',
+  'CHUNK_DIGEST_MISMATCH',
+  'CHUNK_FINGERPRINT_INPUT_INVALID',
+  'CHUNK_FRAGMENT_INVALID',
+  'CHUNK_MANIFEST_MISMATCH',
+  'CHUNK_METADATA_CONFLICT',
+  'CHUNK_PROFILE_UNSUPPORTED',
+  'CHUNK_PUBLICATION_FAILED',
+  'CHUNK_RESOURCE_EXHAUSTED',
+  'CHUNK_RESOURCE_INVALID',
+  'CHUNK_RESOURCE_UNSUPPORTED',
+  'CHUNK_SCRATCH_EXHAUSTED',
+  'CHUNK_SESSION_FAILED',
+  'CHUNK_SESSION_FINISHED',
+  'CHUNK_SINK_FAILED',
+  'CHUNK_SINK_INVALID',
+  'CHUNK_SOURCE_INVALID',
+  'CHUNK_SOURCE_MISSING',
+  'CHUNK_SOURCE_TOO_LONG',
+  'CHUNK_SOURCE_TOO_SHORT',
+]);
+
 export const GOLDEN_INPUTS = Object.freeze([
   { caseId: 'empty', recipe: { kind: 'literal', hex: '' } },
   { caseId: 'tiny-ascii', recipe: { kind: 'literal', hex: '4f70656e47616d655643530a' } },

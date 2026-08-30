@@ -13,7 +13,8 @@
     "@opengamevcs/object-model": "0.1.0"
   },
   "scripts": {
-    "check": "node --check src/index.mjs && node --check src/gear.mjs && node --check src/identity.mjs",
+    "check": "node --check src/index.mjs && node --check src/errors.mjs && node --check src/gear.mjs && node --check src/identity.mjs && node --check src/ledger.mjs && node --check src/verify.mjs",
+    "report:bounded": "node scripts/bounded-report.mjs ../../../artifacts/chunking-javascript.json",
     "test": "node --test test/*.test.mjs"
   },
   "engines": {

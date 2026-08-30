@@ -98,14 +98,16 @@ fn source_and_sink_failures_are_terminal() {
     assert!(matches!(Chunker::new_with_resources(0, PROFILE, 1, 0, 2_097_151, |_bytes, _part, _index| Ok(())), Err(ChunkError::ResourceExhausted)));
     assert!(matches!(Chunker::new_with_resources(0, PROFILE, 2, 0, 4_259_840, |_bytes, _part, _index| Ok(())), Err(ChunkError::ResourceUnsupported)));
     let mut oversized = Chunker::new(67_108_865, PROFILE, |_bytes, _part, _index| Ok(())).unwrap();
-    assert_eq!(oversized.update(&vec![0; 67_108_865]).unwrap_err(), ChunkError::FragmentInvalid);
+    let oversized_fragment = vec![0; 67_108_865];
+    assert_eq!(oversized.update(&oversized_fragment).unwrap_err(), ChunkError::FragmentInvalid);
     assert_eq!(oversized.update(&[]).unwrap_err(), ChunkError::SessionFailed);
     let mut short = Chunker::new(2, PROFILE, |_bytes, _part, _index| Ok(())).unwrap();
     short.update(&[1]).unwrap(); assert_eq!(short.finish().unwrap_err(), ChunkError::SourceTooShort);
 
     let mut deliveries = 0;
     let mut failed = Chunker::new(2_097_152, PROFILE, |_bytes, _part, _index| { deliveries += 1; Err(ChunkError::SinkFailed) }).unwrap();
-    assert_eq!(failed.update(&vec![0; 2_097_152]).unwrap_err(), ChunkError::SinkFailed);
+    let failed_fragment = vec![0; 2_097_152];
+    assert_eq!(failed.update(&failed_fragment).unwrap_err(), ChunkError::SinkFailed);
     assert_eq!(failed.update(&[]).unwrap_err(), ChunkError::SessionFailed);
     drop(failed);
     assert_eq!(deliveries, 1);

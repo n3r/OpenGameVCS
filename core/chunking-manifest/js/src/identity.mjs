@@ -1,6 +1,7 @@
 import {
   Digest, ProfileRef, hashObject, loadBundledRegistry, validateRegistrySet, writeContentManifest,
 } from '@opengamevcs/object-model';
+import { wrap } from './errors.mjs';
 
 export const PROFILE = Object.freeze({ namespace: 'chunking.opengamevcs', id: 'gear-fastcdc-1m', major: 1 });
 const PROFILE_REF = new ProfileRef(PROFILE.namespace, PROFILE.id, PROFILE.major);
@@ -26,22 +27,39 @@ export function chunkIdentity(bytes) {
   return Object.freeze({ digest: Buffer.from(reference.digest), objectId: reference.toString(), reference });
 }
 
-export async function contentManifest(logicalLength, wholeFileDigest, parts) {
+export async function contentManifest(logicalLength, wholeFileDigest, parts, options = {}) {
   const output = [];
-  const objectParts = parts.map(({ reference, length }) => new Map([[0, reference.toMap()], [1, length]]));
+  const partCount = options.partCount ?? (Array.isArray(parts) ? parts.length : undefined);
+  const source = typeof parts === 'function'
+    ? (pass, context) => {
+      const values = parts(pass, context);
+      return (function *mapped() {
+        for (const { reference, length } of values) {
+          yield new Map([[0, reference.toMap()], [1, length]]);
+        }
+      })();
+    }
+    : parts.map(({ reference, length }) => new Map([[0, reference.toMap()], [1, length]]));
+  const sink = options.sink === undefined
+    ? (bytes) => { output.push(Buffer.from(bytes)); }
+    : async (bytes) => {
+      try { return await options.sink(bytes); }
+      catch (cause) { throw wrap('CHUNK_SINK_FAILED', cause); }
+    };
   const result = await writeContentManifest({
     registry: REGISTRY,
     operation: 'conformance',
     logicalLength: BigInt(logicalLength),
     wholeFileDigest: new Digest(1, wholeFileDigest),
     chunkProfile: PROFILE_REF,
-    partCount: objectParts.length,
-    parts: objectParts,
-    sink: (bytes) => { output.push(Buffer.from(bytes)); },
+    partCount,
+    parts: source,
+    sink,
   });
   return Object.freeze({
-    bytes: Buffer.concat(output),
+    bytes: options.sink === undefined ? Buffer.concat(output) : undefined,
     objectId: result.objectRef.toString(),
     profile: PROFILE_REF.toString(),
+    summary: result.summary,
   });
 }

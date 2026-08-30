@@ -25,7 +25,7 @@ one byte. Patterns containing values around minimum/target boundaries exercise
 state continuity across reads; they do not authorize fragment-dependent cuts.
 
 Malformed rows name the operation, exact mutation/input, and stable engine
-error. Runtime verifier coverage for boundary/digest/manifest mutations is part
-of the next reconstruction/verification cut; this candidate contract reserves
-the expected outcomes now and the independent validator authenticates their
-closed inventory.
+error. Both language test dispatchers execute the complete closed inventory,
+including boundary shift, chunk corruption, and manifest corruption through
+their public verifier boundaries. The error registry is generated from the
+same model and each runtime has an exhaustive registry-to-public-surface gate.

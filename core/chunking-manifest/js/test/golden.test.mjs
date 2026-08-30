@@ -73,7 +73,7 @@ test('fragment boundaries and public manifest identity do not depend on update f
     const vector = golden.cases.find(({ caseId }) => caseId === fixture.caseId);
     const bytes = materialize(vector.recipe);
     for (const pattern of fixture.fragmentPatterns) {
-      const chunks = []; const session = createChunker({ declaredLength: bytes.length, onChunk: (chunk) => chunks.push(Buffer.from(chunk)) });
+      const chunks = []; const session = createChunker({ declaredLength: bytes.length, retainEntries: true, onChunk: (chunk) => chunks.push(Buffer.from(chunk)) });
       let offset = 0; let cursor = 0;
       while (offset < bytes.length) {
         const take = Math.min(pattern[cursor % pattern.length], bytes.length - offset);
@@ -105,4 +105,11 @@ test('unsupported profile, length mismatches, and sink failure poison the sessio
   assert.throws(() => sinkFailure.update(Buffer.alloc(0)), { code: 'CHUNK_SESSION_FAILED' });
   await assert.rejects(sinkFailure.finish(), { code: 'CHUNK_SESSION_FAILED' });
   assert.equal(deliveries, 1);
+
+  const manifestSinkFailure = createChunker({
+    declaredLength: 0,
+    manifestSink() { throw new Error('manifest sink failed'); },
+  });
+  await assert.rejects(manifestSinkFailure.finish(), { code: 'CHUNK_SINK_FAILED' });
+  assert.throws(() => manifestSinkFailure.update(Buffer.alloc(0)), { code: 'CHUNK_SESSION_FAILED' });
 });
