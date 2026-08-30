@@ -42,6 +42,15 @@ export async function authorizeWorkspaceMutations(plan, workspace, requests) {
     if (request.symlinkTarget !== undefined && entry.symlinkTarget !== request.symlinkTarget) {
       pathFail('ENTRY_INVALID', undefined, { rule: 'preflight-plan-symlink' });
     }
+    if (request.capabilities !== undefined) {
+      if (!Array.isArray(request.capabilities) || request.capabilities.length === 0
+        || request.capabilities.some((capability) => !['atomicReplace', 'hardlink'].includes(capability))) {
+        pathFail('ENTRY_INVALID', undefined, { rule: 'preflight-plan-capabilities' });
+      }
+      for (const capability of request.capabilities) {
+        if (authority.capabilities[capability] !== true) pathFail('CAPABILITY_UNAVAILABLE', undefined, { capability });
+      }
+    }
     entries.push(entry);
   }
   return Object.freeze(entries);

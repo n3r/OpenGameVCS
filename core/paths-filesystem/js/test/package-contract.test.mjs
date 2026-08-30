@@ -51,6 +51,7 @@ import * as api from '@opengamevcs/path-filesystem';
 
 for (const name of [
   'atomicWriteFile',
+  'atomicWriteStream',
   'buildConformanceReport',
   'createPathTelemetry',
   'createObjectModelPathProfileAdapter',
@@ -132,6 +133,36 @@ process.stdout.write(JSON.stringify({ imported: true }));
     assert.equal(write.code, 0, write.stderr);
     assert.equal(JSON.parse(write.stdout).bytes, 17);
     assert.equal(await readFile(join(workspace, 'Content/asset.bin'), 'utf8'), 'packed public CLI');
+
+    const packedStreamSmoke = join(consumer, 'packed-stream-smoke.mjs');
+    await writeFile(packedStreamSmoke, `
+import { createHash } from 'node:crypto';
+import {
+  atomicWriteStream, openWorkspaceRoot, preflightWorkspaceMaterialization, probeFilesystemCapabilities,
+} from '@opengamevcs/path-filesystem';
+const root = process.argv[2];
+const workspace = await openWorkspaceRoot(root);
+const capabilities = await probeFilesystemCapabilities(root);
+const plan = await preflightWorkspaceMaterialization(workspace, {
+  schemaVersion: 'ogvcs.path/preflight-request/v1', caseMode: workspace.caseMode,
+  profile: workspace.profile, platform: capabilities.platform,
+  capabilities: { atomicReplace: capabilities.atomicReplace, executableBit: capabilities.executableBit, symlink: capabilities.symlink },
+  entries: [
+    { id: 'content', path: 'Content', kind: 'directory', mode: 'directory' },
+    { id: 'asset', path: 'Content/asset.bin', kind: 'regular', mode: 'regular-file' },
+  ],
+});
+async function *source() { yield Buffer.from('packed '); yield Buffer.from('stream'); }
+const result = await atomicWriteStream(workspace, 'Content/asset.bin', source(), {
+  maxBytes: 13, maxScratchBytes: 13, expectedBytes: 13,
+  expectedSha256: createHash('sha256').update('packed stream').digest('hex'), plan,
+});
+process.stdout.write(JSON.stringify(result));
+`);
+    const packedStream = await run(process.execPath, [packedStreamSmoke, workspace], { cwd: consumer, env: offlineEnvironment });
+    assert.equal(packedStream.code, 0, packedStream.stderr);
+    assert.equal(JSON.parse(packedStream.stdout).bytes, 13);
+    assert.equal(await readFile(join(workspace, 'Content/asset.bin'), 'utf8'), 'packed stream');
 
     for (const args of [['capabilities', 'relative-root'], ['write', 'relative-root', 'Content/asset.bin', source]]) {
       const rejected = await run(process.execPath, [cli, ...args], { cwd: consumer, env: offlineEnvironment });

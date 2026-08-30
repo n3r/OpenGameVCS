@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
-import { lstat, mkdir, open, opendir, readdir, readlink, realpath, rename, rm } from 'node:fs/promises';
+import { link, lstat, mkdir, open, opendir, readdir, readlink, realpath, rename, rm } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 import { asPathError, PathFilesystemError, pathFail } from './errors.mjs';
@@ -12,6 +12,7 @@ import { assertPathTelemetry, recordPathTelemetry } from './telemetry.mjs';
 
 const RECORD_VERSION = 'ogvcs.path/workspace-transaction/v1';
 const DEFAULT_MAX_BYTES = 64 * 1024 * 1024;
+const DEFAULT_MAX_STREAM_CHUNK_BYTES = 8 * 1024 * 1024;
 const DEFAULT_MAX_REMNANTS = 1024;
 const DEFAULT_MAX_DIRECTORY_ENTRIES = 100_000;
 const DEFAULT_MAX_DIRECTORY_DEPTH = 256;
@@ -63,6 +64,155 @@ async function exclusiveFile(path, bytes, mode = 0o600) {
   const handle = await open(path, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, mode);
   try { await handle.writeFile(bytes); await syncFile(handle); }
   finally { await handle.close(); }
+}
+
+function abortError() {
+  return new PathFilesystemError('IO_ERROR', 'stream publication was cancelled', { details: { resource: 'cancellation' } });
+}
+
+function deadlineError() {
+  return new PathFilesystemError('LIMIT_EXCEEDED', 'stream publication exceeded its deadline', { details: { resource: 'time' } });
+}
+
+function assertAbortSignal(signal) {
+  if (signal === undefined) return;
+  if (signal === null || typeof signal !== 'object' || typeof signal.aborted !== 'boolean'
+    || typeof signal.addEventListener !== 'function' || typeof signal.removeEventListener !== 'function') pathFail('PATH_INPUT_INVALID');
+}
+
+function checkpoint(guard, signal) {
+  if (signal?.aborted) throw abortError();
+  guard.checkpoint();
+}
+
+function raceSignals(promise, deadlineSignal, callerSignal) {
+  return new Promise((resolvePromise, reject) => {
+    let settled = false;
+    const finish = (action, value) => {
+      if (settled) return;
+      settled = true;
+      deadlineSignal?.removeEventListener('abort', onDeadline);
+      callerSignal?.removeEventListener('abort', onCaller);
+      action(value);
+    };
+    const onDeadline = () => finish(reject, deadlineError());
+    const onCaller = () => finish(reject, abortError());
+    if (deadlineSignal?.aborted) { onDeadline(); return; }
+    if (callerSignal?.aborted) { onCaller(); return; }
+    deadlineSignal?.addEventListener('abort', onDeadline, { once: true });
+    callerSignal?.addEventListener('abort', onCaller, { once: true });
+    Promise.resolve(promise).then(
+      (value) => finish(resolvePromise, value),
+      (error) => finish(reject, error),
+    );
+  });
+}
+
+async function guardedBoundary(guard, signal, action) {
+  checkpoint(guard, signal);
+  return guard.boundary((deadlineSignal) => raceSignals(Promise.resolve().then(action), deadlineSignal, signal), true);
+}
+
+async function settledBoundary(guard, signal, action) {
+  checkpoint(guard, signal);
+  const result = await action();
+  checkpoint(guard, signal);
+  return result;
+}
+
+function streamingLimits(options) {
+  const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
+  const maxScratchBytes = options.maxScratchBytes ?? maxBytes;
+  const maxChunkBytes = options.maxChunkBytes ?? Math.min(maxBytes, DEFAULT_MAX_STREAM_CHUNK_BYTES);
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 0
+    || !Number.isSafeInteger(maxScratchBytes) || maxScratchBytes < 0
+    || !Number.isSafeInteger(maxChunkBytes) || maxChunkBytes < 0) {
+    pathFail('LIMIT_EXCEEDED', undefined, { resource: 'configuration' });
+  }
+  return Object.freeze({ maxBytes, maxScratchBytes, maxChunkBytes });
+}
+
+function streamChunk(value, maximum) {
+  let view;
+  if (value instanceof ArrayBuffer) view = new Uint8Array(value);
+  else if (ArrayBuffer.isView(value)) view = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+  else pathFail('PATH_INPUT_INVALID');
+  if (view.byteLength > maximum) pathFail('LIMIT_EXCEEDED', undefined, { resource: 'chunkBytes' });
+  return Buffer.from(view);
+}
+
+function byteSource(source) {
+  let getReader;
+  try { getReader = source !== null && typeof source === 'object' ? source.getReader : undefined; }
+  catch (error) { throw asPathError(error, 'IO_ERROR', 'stream source could not be opened'); }
+  if (typeof getReader === 'function') {
+    let reader;
+    try { reader = getReader.call(source); } catch (error) { throw asPathError(error, 'IO_ERROR', 'stream source could not be opened'); }
+    return Object.freeze({
+      next: () => reader.read(),
+      close: (error) => error === undefined ? Promise.resolve(reader.releaseLock()) : reader.cancel(error).finally(() => reader.releaseLock()),
+    });
+  }
+  let factory;
+  try { factory = source?.[Symbol.asyncIterator]; }
+  catch (error) { throw asPathError(error, 'IO_ERROR', 'stream source could not be opened'); }
+  if (typeof factory !== 'function') pathFail('PATH_INPUT_INVALID');
+  let iterator;
+  try { iterator = factory.call(source); } catch (error) { throw asPathError(error, 'IO_ERROR', 'stream source could not be opened'); }
+  if (iterator === null || typeof iterator !== 'object' || typeof iterator.next !== 'function') pathFail('PATH_INPUT_INVALID');
+  return Object.freeze({
+    next: () => iterator.next(),
+    close: (error) => error === undefined || typeof iterator.return !== 'function' ? Promise.resolve() : Promise.resolve(iterator.return()),
+  });
+}
+
+async function streamToExclusiveFile(path, source, limits, mode, guard, signal) {
+  const adapter = byteSource(source);
+  let handle; let sourceFailure; let closeFailure; let result; let bytes = 0;
+  const hasher = createHash('sha256');
+  try {
+    handle = await settledBoundary(guard, signal, () => open(path, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY | NO_FOLLOW, mode));
+    const opened = await settledBoundary(guard, signal, () => handle.stat());
+    if (!opened.isFile() || opened.nlink !== 1) pathFail('UNSAFE_TARGET');
+    for (;;) {
+      let item;
+      try { item = await guardedBoundary(guard, signal, () => adapter.next()); }
+      catch (error) {
+        if (error instanceof PathFilesystemError) throw error;
+        throw asPathError(error, 'IO_ERROR', 'stream source failed');
+      }
+      if (item === null || typeof item !== 'object' || typeof item.done !== 'boolean') pathFail('PATH_INPUT_INVALID');
+      if (item.done) break;
+      const chunk = streamChunk(item.value, limits.maxChunkBytes);
+      if (bytes > limits.maxBytes - chunk.length) pathFail('LIMIT_EXCEEDED', undefined, { resource: 'bytes' });
+      if (bytes > limits.maxScratchBytes - chunk.length) pathFail('LIMIT_EXCEEDED', undefined, { resource: 'scratchBytes' });
+      let offset = 0;
+      while (offset < chunk.length) {
+        const result = await settledBoundary(guard, signal, () => handle.write(chunk, offset, chunk.length - offset, null));
+        if (!Number.isSafeInteger(result?.bytesWritten) || result.bytesWritten <= 0) pathFail('IO_ERROR');
+        offset += result.bytesWritten;
+      }
+      hasher.update(chunk);
+      bytes += chunk.length;
+    }
+    await settledBoundary(guard, signal, () => handle.sync());
+    const after = await settledBoundary(guard, signal, () => handle.stat());
+    if (!after.isFile() || after.nlink !== 1 || after.size !== bytes || !sameNode(identity(opened), identity(after))) pathFail('TARGET_CHANGED');
+    result = Object.freeze({ bytes, sha256: hasher.digest('hex') });
+  } catch (error) {
+    sourceFailure = error;
+  } finally {
+    await handle?.close().catch(() => {});
+    try {
+      const closeGuard = new OperationGuard({ maxTimeMs: 1000, maxOperations: 4 });
+      await closeGuard.boundary(
+        (deadlineSignal) => raceSignals(Promise.resolve().then(() => adapter.close(sourceFailure)), deadlineSignal), true,
+      );
+    } catch (error) { closeFailure = error; }
+  }
+  if (sourceFailure !== undefined) throw sourceFailure;
+  if (closeFailure !== undefined) throw asPathError(closeFailure, 'IO_ERROR', 'stream source could not be closed');
+  return result;
 }
 
 async function removeIfPresent(path) {
@@ -189,11 +339,13 @@ async function regularTargetState(path, options = {}) {
   let pathInfo;
   try { pathInfo = await lstat(path); }
   catch (error) { if (error?.code === 'ENOENT') return null; throw error; }
-  if (!pathInfo.isFile() || pathInfo.isSymbolicLink() || pathInfo.nlink !== 1) pathFail('UNSAFE_TARGET');
+  const expectedLinks = options.expectedLinks ?? 1;
+  if (!Number.isSafeInteger(expectedLinks) || expectedLinks < 1) pathFail('LIMIT_EXCEEDED', undefined, { resource: 'configuration' });
+  if (!pathInfo.isFile() || pathInfo.isSymbolicLink() || pathInfo.nlink !== expectedLinks) pathFail('UNSAFE_TARGET');
   const handle = await open(path, constants.O_RDONLY | NO_FOLLOW);
   try {
     const before = await handle.stat();
-    if (!before.isFile() || before.nlink !== 1 || !sameNode(identity(pathInfo), identity(before))) pathFail('TARGET_CHANGED');
+    if (!before.isFile() || before.nlink !== expectedLinks || !sameNode(identity(pathInfo), identity(before))) pathFail('TARGET_CHANGED');
     const maximum = options.maxBytes ?? DEFAULT_MAX_BYTES;
     if (!Number.isSafeInteger(maximum) || maximum < 0 || before.size > maximum) pathFail('LIMIT_EXCEEDED', undefined, { resource: 'observedBytes' });
     const hasher = createHash('sha256');
@@ -208,7 +360,7 @@ async function regularTargetState(path, options = {}) {
       offset += bytesRead;
     }
     const after = await handle.stat();
-    if (after.nlink !== 1 || !sameIdentity(identity(before), identity(after)) || offset !== before.size) pathFail('TARGET_CHANGED');
+    if (after.nlink !== expectedLinks || !sameIdentity(identity(before), identity(after)) || offset !== before.size) pathFail('TARGET_CHANGED');
     return Object.freeze({ identity: identity(after), sha256: hasher.digest('hex'), bytes: offset });
   } finally { await handle.close(); }
 }
@@ -450,6 +602,254 @@ async function atomicWriteFileInternal(workspace, repositoryPath, content, optio
     if (!recordDurable) {
       const recordExists = await lstat(recordPath).then(() => true, (failure) => failure?.code === 'ENOENT' ? false : Promise.reject(failure)).catch(() => true);
       if (!recordExists) await removeIfPresent(stage).catch(() => {});
+    }
+    if (error instanceof PathFilesystemError) throw error;
+    throw asPathError(error, 'ATOMIC_REPLACE_FAILED');
+  }
+}
+
+async function guardedHook(guard, signal, hooks, name, context = Object.freeze({})) {
+  checkpoint(guard, signal);
+  await guard.hook(hooks, name, context);
+  checkpoint(guard, signal);
+}
+
+async function removeStreamingArtifact(path) {
+  const info = await lstat(path).catch((error) => error?.code === 'ENOENT' ? null : Promise.reject(error));
+  if (info === null) return;
+  if (!info.isFile() || info.isSymbolicLink()) pathFail('TARGET_CHANGED');
+  await rm(path);
+}
+
+async function assertOwnedPartialStage(path) {
+  const pathInfo = await lstat(path);
+  if (!pathInfo.isFile() || pathInfo.isSymbolicLink() || pathInfo.nlink !== 1) pathFail('CRASH_REMNANT');
+  const handle = await open(path, constants.O_RDONLY | NO_FOLLOW);
+  try {
+    const opened = await handle.stat();
+    if (!opened.isFile() || opened.nlink !== 1 || !sameNode(identity(pathInfo), identity(opened))) pathFail('CRASH_REMNANT');
+  } finally { await handle.close(); }
+}
+
+async function createRollbackLink(target, backup, prior, observed, guard, signal) {
+  await settledBoundary(guard, signal, () => link(target, backup));
+  const linkedObserved = { ...observed, expectedLinks: 2 };
+  const current = await settledBoundary(guard, signal, () => regularTargetState(target, linkedObserved));
+  const backupState = await settledBoundary(guard, signal, () => regularTargetState(backup, linkedObserved));
+  if (!sameRegularState(prior, current) || !sameRegularState(prior, backupState)
+    || !sameNode(current.identity, backupState.identity)) pathFail('TARGET_CHANGED');
+  return backupState;
+}
+
+function streamExpectation(options, limits) {
+  const expectedBytes = options.expectedBytes;
+  const expectedSha256 = options.expectedSha256;
+  if (!Number.isSafeInteger(expectedBytes) || expectedBytes < 0
+    || typeof expectedSha256 !== 'string' || !/^[0-9a-f]{64}$/u.test(expectedSha256)) pathFail('PATH_INPUT_INVALID');
+  if (expectedBytes > limits.maxBytes) pathFail('LIMIT_EXCEEDED', undefined, { resource: 'bytes' });
+  if (expectedBytes > limits.maxScratchBytes) pathFail('LIMIT_EXCEEDED', undefined, { resource: 'scratchBytes' });
+  return Object.freeze({ bytes: expectedBytes, sha256: expectedSha256, executable: options.executable === true });
+}
+
+async function recoverWriteStreamRecord(workspace, recordPath, record, observed = {}) {
+  const canonical = validateRepositoryPath(record.path, { profile: workspace.profile }).canonical;
+  const binding = await bindComponents(workspace, canonical);
+  const target = binding.target;
+  const stage = join(workspace.transactions, record.stage);
+  const backup = join(workspace.transactions, record.backup);
+  if (!confined(workspace.root, target) || !confined(workspace.transactions, stage) || !confined(workspace.transactions, backup)) pathFail('CRASH_REMNANT');
+  await assertWorkspaceDirectories(workspace);
+  await assertComponentBindings(binding);
+  const stageInfo = await lstat(stage).catch((error) => error?.code === 'ENOENT' ? null : Promise.reject(error));
+  const backupInfo = await lstat(backup).catch((error) => error?.code === 'ENOENT' ? null : Promise.reject(error));
+  if (record.state === 'planned') {
+    if (stageInfo !== null) await assertOwnedPartialStage(stage);
+    if (backupInfo === null) {
+      await exactRegularTarget(target, record.prior, observed);
+    } else {
+      if (record.prior === null) pathFail('CRASH_REMNANT');
+      const linked = { ...observed, expectedLinks: 2 };
+      const current = await regularTargetState(target, linked);
+      const backupState = await regularTargetState(backup, linked);
+      if (!sameRegularState(record.prior, current) || !sameRegularState(record.prior, backupState)
+        || !sameNode(current.identity, backupState.identity)) pathFail('CRASH_REMNANT');
+      await rm(backup);
+    }
+    if (stageInfo !== null) await rm(stage);
+    await rm(recordPath); await syncDirectory(workspace.transactions);
+    return Object.freeze({ id: record.id, action: 'rolled-back' });
+  }
+  if (record.state === 'committed') {
+    if (stageInfo !== null) pathFail('CRASH_REMNANT');
+    const current = await regularTargetState(target, observed);
+    if (!sameRegularState(record.published, current) || !sameRegularState(record.staged, current)) pathFail('CRASH_REMNANT');
+    if (record.prior === null) {
+      if (backupInfo !== null) pathFail('CRASH_REMNANT');
+    } else if (backupInfo !== null) {
+      const backupState = await regularTargetState(backup, observed);
+      if (!sameRegularState(record.prior, backupState) || !sameNode(record.prior.identity, backupState.identity)) pathFail('CRASH_REMNANT');
+      await rm(backup);
+    }
+    await rm(recordPath); await syncDirectory(workspace.transactions);
+    return Object.freeze({ id: record.id, action: 'finalized' });
+  }
+  if (stageInfo !== null) {
+    const staged = await regularTargetState(stage, observed);
+    if (!sameRegularState(record.staged, staged)) pathFail('CRASH_REMNANT');
+    if (record.prior === null) {
+      if (backupInfo !== null) pathFail('CRASH_REMNANT');
+      await exactRegularTarget(target, null, observed);
+    } else {
+      if (backupInfo === null) pathFail('CRASH_REMNANT');
+      const linked = { ...observed, expectedLinks: 2 };
+      const current = await regularTargetState(target, linked);
+      const backupState = await regularTargetState(backup, linked);
+      if (!sameRegularState(record.prior, current) || !sameRegularState(record.prior, backupState)
+        || !sameNode(current.identity, backupState.identity)) pathFail('CRASH_REMNANT');
+      await rm(backup);
+    }
+    await rm(stage);
+  } else {
+    const current = await regularTargetState(target, observed);
+    if (!sameRegularState(record.staged, current)) pathFail('CRASH_REMNANT');
+    if (record.prior === null) {
+      if (backupInfo !== null) pathFail('CRASH_REMNANT');
+      await rm(target);
+    } else {
+      if (backupInfo === null) pathFail('CRASH_REMNANT');
+      const backupState = await regularTargetState(backup, observed);
+      if (!sameRegularState(record.prior, backupState) || !sameNode(record.prior.identity, backupState.identity)) pathFail('CRASH_REMNANT');
+      await rename(backup, target);
+    }
+    await syncDirectory(dirname(target));
+  }
+  await rm(recordPath); await syncDirectory(workspace.transactions);
+  return Object.freeze({ id: record.id, action: 'rolled-back' });
+}
+
+async function atomicWriteStreamInternal(workspace, repositoryPath, source, options = {}) {
+  assertWorkspaceHandle(workspace);
+  assertAbortSignal(options.signal);
+  const guard = new OperationGuard(options);
+  const limits = streamingLimits(options);
+  const expected = streamExpectation(options, limits);
+  const canonical = validateRepositoryPath(repositoryPath, { profile: workspace.profile }).canonical;
+  const request = {
+    path: canonical, kinds: [options.executable === true ? 'executable' : 'regular'], capabilities: ['atomicReplace'],
+  };
+  await settledBoundary(guard, options.signal, () => authorizeWorkspaceMutation(options.plan, workspace, request));
+  await settledBoundary(guard, options.signal, () => assertWorkspaceDirectories(workspace));
+  let binding;
+  try {
+    binding = await settledBoundary(guard, options.signal, () => bindComponents(workspace, canonical, { createParents: options.createParents === true }));
+  } catch (error) { throw asPathError(error, 'UNSAFE_TARGET'); }
+  const { target } = binding;
+  if (!confined(workspace.root, target)) pathFail('UNSAFE_TARGET');
+  const observed = {
+    guard, maxBytes: options.maxObservedBytes ?? DEFAULT_MAX_BYTES,
+    maxDirectoryBytes: options.maxDirectoryBytes, maxDirectoryEntries: options.maxDirectoryEntries,
+    maxDirectoryDepth: options.maxDirectoryDepth,
+  };
+  const before = await settledBoundary(guard, options.signal, () => regularTargetState(target, observed));
+  const id = randomUUID().replaceAll('-', '');
+  const stage = join(workspace.transactions, `${id}.stage`);
+  const backup = join(workspace.transactions, `${id}.backup`);
+  const recordPath = join(workspace.transactions, `${id}.json`);
+  const planned = Object.freeze({
+    schemaVersion: RECORD_VERSION, id, operation: 'write-stream', path: canonical,
+    stage: basename(stage), backup: basename(backup), prior: before, expected, state: 'planned',
+  });
+  let durableRecord = null;
+  try {
+    // Reprobe immediately before creating the stage, which is the first
+    // destructive boundary when no output parent was requested.
+    await settledBoundary(guard, options.signal, () => authorizeWorkspaceMutation(options.plan, workspace, {
+      ...request, capabilities: before === null ? ['atomicReplace'] : ['atomicReplace', 'hardlink'],
+    }));
+    await settledBoundary(guard, options.signal, () => assertWorkspaceDirectories(workspace));
+    await settledBoundary(guard, options.signal, () => assertComponentBindings(binding));
+    await settledBoundary(guard, options.signal, () => exactRegularTarget(target, before, observed));
+    await settledBoundary(guard, options.signal, () => writeRecord(recordPath, planned));
+    durableRecord = planned;
+    await guardedHook(guard, options.signal, options.hooks, 'after-plan', Object.freeze({}));
+    const streamed = await streamToExclusiveFile(
+      stage, source, limits, options.executable === true ? 0o700 : 0o600, guard, options.signal,
+    );
+    if (streamed.bytes !== expected.bytes || streamed.sha256 !== expected.sha256) pathFail('TARGET_CHANGED');
+    await guardedHook(guard, options.signal, options.hooks, 'after-stage', Object.freeze({ bytes: streamed.bytes }));
+    await settledBoundary(guard, options.signal, () => assertWorkspaceDirectories(workspace));
+    const staged = await settledBoundary(guard, options.signal, () => regularTargetState(stage, observed));
+    if (staged === null || staged.bytes !== streamed.bytes || staged.sha256 !== streamed.sha256
+      || ((staged.identity.mode & 0o100) !== 0) !== expected.executable) pathFail('TARGET_CHANGED');
+    if (before !== null) {
+      await settledBoundary(guard, options.signal, () => authorizeWorkspaceMutation(options.plan, workspace, { ...request, capabilities: ['atomicReplace', 'hardlink'] }));
+      await createRollbackLink(target, backup, before, observed, guard, options.signal);
+    }
+    await settledBoundary(guard, options.signal, () => syncDirectory(workspace.transactions));
+    await guardedHook(guard, options.signal, options.hooks, 'after-backup-link', Object.freeze({ present: before !== null }));
+    const stagedRecord = Object.freeze({ ...planned, staged, state: 'staged' });
+    await settledBoundary(guard, options.signal, () => writeRecord(recordPath, stagedRecord));
+    durableRecord = stagedRecord;
+    await guardedHook(guard, options.signal, options.hooks, 'after-record', Object.freeze({}));
+    await guardedHook(guard, options.signal, options.hooks, 'after-backup', Object.freeze({ present: before !== null }));
+
+    // The source can run for a long time, so bind the original closed plan to
+    // a fresh capability measurement again immediately before publication.
+    await settledBoundary(guard, options.signal, () => authorizeWorkspaceMutation(options.plan, workspace, {
+      ...request, capabilities: before === null ? ['atomicReplace'] : ['atomicReplace', 'hardlink'],
+    }));
+    await settledBoundary(guard, options.signal, () => assertWorkspaceDirectories(workspace));
+    await settledBoundary(guard, options.signal, () => assertComponentBindings(binding));
+    await settledBoundary(guard, options.signal, () => inspectComponents(workspace, canonical));
+    await settledBoundary(guard, options.signal, () => exactRegularTarget(stage, staged, observed));
+    await settledBoundary(guard, options.signal, () => exactRegularTarget(target, before, { ...observed, expectedLinks: before === null ? 1 : 2 }));
+    if (before !== null) {
+      const backupState = await settledBoundary(guard, options.signal, () => regularTargetState(backup, { ...observed, expectedLinks: 2 }));
+      if (!sameRegularState(before, backupState) || !sameNode(before.identity, backupState.identity)) pathFail('TARGET_CHANGED');
+    }
+    await guardedHook(guard, options.signal, options.hooks, 'before-publish', Object.freeze({}));
+    await settledBoundary(guard, options.signal, () => assertWorkspaceDirectories(workspace));
+    await settledBoundary(guard, options.signal, () => assertComponentBindings(binding));
+    await settledBoundary(guard, options.signal, () => exactRegularTarget(stage, staged, observed));
+    await settledBoundary(guard, options.signal, () => exactRegularTarget(target, before, { ...observed, expectedLinks: before === null ? 1 : 2 }));
+    await publishWithRetry(stage, target, options, guard);
+    await guardedHook(guard, options.signal, options.hooks, 'before-parent-sync', Object.freeze({}));
+    await settledBoundary(guard, options.signal, () => syncDirectory(dirname(target)));
+    await settledBoundary(guard, options.signal, () => syncDirectory(workspace.transactions));
+    const current = await settledBoundary(guard, options.signal, () => regularTargetState(target, observed));
+    if (!sameRegularState(staged, current)) pathFail('ATOMIC_REPLACE_FAILED');
+    const publishedRecord = Object.freeze({ ...stagedRecord, published: current, state: 'published' });
+    await settledBoundary(guard, options.signal, () => writeRecord(recordPath, publishedRecord));
+    durableRecord = publishedRecord;
+    await guardedHook(guard, options.signal, options.hooks, 'after-publish', Object.freeze({ bytes: staged.bytes }));
+    const committedRecord = Object.freeze({ ...publishedRecord, state: 'committed' });
+    await settledBoundary(guard, options.signal, () => writeRecord(recordPath, committedRecord));
+    durableRecord = committedRecord;
+    await guard.hook(options.hooks, 'after-commit', Object.freeze({ bytes: staged.bytes }));
+    if (before !== null) {
+      const backupState = await regularTargetState(backup, observed);
+      if (!sameRegularState(before, backupState) || !sameNode(before.identity, backupState.identity)) pathFail('TARGET_CHANGED');
+      await rm(backup);
+    }
+    await rm(recordPath);
+    return Object.freeze({ path: canonical, bytes: staged.bytes, sha256: staged.sha256, transaction: id });
+  } catch (error) {
+    let cleanupError;
+    try {
+      if (durableRecord === null) {
+        await removeStreamingArtifact(backup); await removeStreamingArtifact(stage); await removeIfPresent(recordPath);
+      } else if (durableRecord.state === 'committed') {
+        // The durable commit is the point of no cancellation. Any cleanup
+        // fault remains an owner-bound remnant that restart recovery finalizes.
+        throw error;
+      } else {
+        await recoverWriteStreamRecord(workspace, recordPath, durableRecord, { maxBytes: observed.maxBytes });
+      }
+    } catch (failure) { cleanupError = failure; }
+    if (cleanupError !== undefined) {
+      throw new PathFilesystemError('ATOMIC_REPLACE_FAILED', 'stream publication rollback failed', {
+        cause: new AggregateError([error, cleanupError], 'publication and rollback failed'),
+      });
     }
     if (error instanceof PathFilesystemError) throw error;
     throw asPathError(error, 'ATOMIC_REPLACE_FAILED');
@@ -813,6 +1213,13 @@ function validReplacementIntent(value) {
     : value?.kind === 'directory' && exactKeys(value, ['kind']);
 }
 
+function validStreamExpectation(value) {
+  return exactKeys(value, ['bytes', 'sha256', 'executable'])
+    && Number.isSafeInteger(value.bytes) && value.bytes >= 0
+    && typeof value.sha256 === 'string' && /^[0-9a-f]{64}$/u.test(value.sha256)
+    && typeof value.executable === 'boolean';
+}
+
 function validRenameNext(value, completed) {
   return value === null || (exactKeys(value, ['index', 'from', 'to', 'source'])
     && Number.isSafeInteger(value.index) && value.index === completed && value.index >= 0
@@ -822,7 +1229,7 @@ function validRenameNext(value, completed) {
 }
 
 function validRecord(record) {
-  if (record?.schemaVersion !== RECORD_VERSION || !transactionId(record.id) || !['write-file', 'symlink', 'rename', 'replace-kind'].includes(record.operation)) return false;
+  if (record?.schemaVersion !== RECORD_VERSION || !transactionId(record.id) || !['write-file', 'write-stream', 'symlink', 'rename', 'replace-kind'].includes(record.operation)) return false;
   if (record.operation === 'rename') {
     return record.state === 'staged' && exactKeys(record, ['schemaVersion', 'id', 'operation', 'transaction', 'planSha256', 'state', 'completed', 'next'])
       && renameTransactionId(record.transaction) && record.id === `${record.transaction}00000000`
@@ -837,6 +1244,22 @@ function validRecord(record) {
       && record.backup === `${record.id}.backup` && validEntryState(record.prior)
       && (record.state === 'planned' ? validReplacementIntent(record.replacement) : validEntryState(record.replacement))
       && record.prior.kind !== record.replacement.kind;
+  }
+  if (record.operation === 'write-stream') {
+    if (!['planned', 'staged', 'published', 'committed'].includes(record.state)) return false;
+    const hasStaged = record.state !== 'planned';
+    const hasPublished = ['published', 'committed'].includes(record.state);
+    const keys = ['schemaVersion', 'id', 'operation', 'path', 'stage', 'backup', 'prior', 'expected', 'state',
+      ...(hasStaged ? ['staged'] : []), ...(hasPublished ? ['published'] : [])];
+    return exactKeys(record, keys)
+      && typeof record.path === 'string' && record.path.length > 0 && record.path.length <= 4096
+      && record.stage === `${record.id}.stage` && record.backup === `${record.id}.backup`
+      && (record.prior === null || validRegularState(record.prior)) && validStreamExpectation(record.expected)
+      && (!hasStaged || validRegularState(record.staged)
+        && record.staged.bytes === record.expected.bytes && record.staged.sha256 === record.expected.sha256
+        && (((record.staged.identity.mode & 0o100) !== 0) === record.expected.executable))
+      && (!hasPublished || validRegularState(record.published)
+        && sameRegularState(record.staged, record.published));
   }
   if (!['planned', 'staged', 'committed'].includes(record.state)) return false;
   if (typeof record.path !== 'string' || typeof record.stage !== 'string' || record.stage.includes('/')) return false;
@@ -881,6 +1304,10 @@ async function inspectCrashRemnantsInternal(workspace, options = {}) {
         allowedNames.add(record.backup);
         const backupInfo = await lstat(join(workspace.transactions, record.backup)).catch((error) => error?.code === 'ENOENT' ? null : Promise.reject(error));
         remnants.push(Object.freeze({ id: record.id, operation: record.operation, path: record.path, state: record.state, stagePresent: stageInfo !== null, backupPresent: backupInfo !== null }));
+      } else if (record.operation === 'write-stream') {
+        allowedNames.add(record.backup);
+        const backupInfo = await lstat(join(workspace.transactions, record.backup)).catch((error) => error?.code === 'ENOENT' ? null : Promise.reject(error));
+        remnants.push(Object.freeze({ id: record.id, operation: record.operation, path: record.path, state: record.state, stagePresent: stageInfo !== null, backupPresent: backupInfo !== null }));
       } else {
         remnants.push(Object.freeze({ id: record.id, operation: record.operation, path: record.path, state: record.state, stagePresent: stageInfo !== null }));
       }
@@ -898,8 +1325,9 @@ async function inspectCrashRemnantsInternal(workspace, options = {}) {
   return Object.freeze(remnants);
 }
 
-async function rollbackCrashRemnantInternal(workspace, id) {
+async function rollbackCrashRemnantInternal(workspace, id, options = {}) {
   assertWorkspaceHandle(workspace);
+  const guard = new OperationGuard(options);
   await assertWorkspaceDirectories(workspace);
   if (!transactionId(id)) pathFail('CRASH_REMNANT');
   const recordPath = join(workspace.transactions, `${id}.json`);
@@ -908,6 +1336,11 @@ async function rollbackCrashRemnantInternal(workspace, id) {
   try { record = JSON.parse(bytes); } catch { pathFail('CRASH_REMNANT'); }
   if (!validRecord(record) || !bytes.equals(recordBytes(record))) pathFail('CRASH_REMNANT');
   if (record.operation === 'rename') pathFail('CRASH_REMNANT');
+  if (record.operation === 'write-stream') {
+    return recoverWriteStreamRecord(workspace, recordPath, record, {
+      guard, maxBytes: options.maxBytes ?? DEFAULT_MAX_BYTES,
+    });
+  }
   if (record.operation === 'replace-kind') {
     const canonical = validateRepositoryPath(record.path, { profile: workspace.profile }).canonical;
     const target = await inspectComponents(workspace, canonical);
@@ -1043,6 +1476,9 @@ export const openWorkspaceRoot = (root, options) => publicFilesystemOperation(()
 export const atomicWriteFile = (workspace, repositoryPath, content, options) => publicFilesystemOperation(
   () => atomicWriteFileInternal(workspace, repositoryPath, content, options), 'ATOMIC_REPLACE_FAILED', options?.telemetry,
 );
+export const atomicWriteStream = (workspace, repositoryPath, source, options) => publicFilesystemOperation(
+  () => atomicWriteStreamInternal(workspace, repositoryPath, source, options), 'ATOMIC_REPLACE_FAILED', options?.telemetry,
+);
 export const replaceWorkspaceEntry = (workspace, repositoryPath, replacement, options) => publicFilesystemOperation(
   () => replaceWorkspaceEntryInternal(workspace, repositoryPath, replacement, options), 'ATOMIC_REPLACE_FAILED', options?.telemetry,
 );
@@ -1058,8 +1494,8 @@ export const resumeRenamePlan = (workspace, plan, options) => publicFilesystemOp
 export const inspectCrashRemnants = (workspace, options) => publicFilesystemOperation(
   () => inspectCrashRemnantsInternal(workspace, options), 'CRASH_REMNANT', options?.telemetry,
 );
-export const rollbackCrashRemnant = (workspace, id) => publicFilesystemOperation(
-  () => rollbackCrashRemnantInternal(workspace, id), 'CRASH_REMNANT',
+export const rollbackCrashRemnant = (workspace, id, options) => publicFilesystemOperation(
+  () => rollbackCrashRemnantInternal(workspace, id, options), 'CRASH_REMNANT', options?.telemetry,
 );
 export const applyReadOnlyHint = (workspace, repositoryPath, readOnly) => publicFilesystemOperation(
   () => applyReadOnlyHintInternal(workspace, repositoryPath, readOnly),

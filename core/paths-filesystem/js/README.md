@@ -43,6 +43,7 @@ import {
   probeFilesystemCapabilities,
   openWorkspaceRoot,
   atomicWriteFile,
+  atomicWriteStream,
 } from '@opengamevcs/path-filesystem';
 
 const keys = pathCollisionKeys('Content/Characters/Hero.uasset', {
@@ -70,6 +71,43 @@ const plan = await preflightWorkspaceMaterialization(workspace, {
 await atomicWriteFile(workspace, keys.canonical, bytes, { createParents: true, plan });
 ```
 
+Large reconstructed files can be published without retaining the whole file:
+
+```js
+await atomicWriteStream(workspace, keys.canonical, reconstructedChunks, {
+  plan,
+  expectedBytes: manifest.logicalLength,
+  expectedSha256: manifest.wholeFileSha256,
+  maxBytes: repositoryLimits.maxFileBytes,
+  maxScratchBytes: repositoryLimits.maxFileBytes,
+  maxChunkBytes: repositoryLimits.maxChunkBytes,
+  maxTimeMs: repositoryLimits.materializationTimeMs,
+  signal,
+});
+```
+
+`atomicWriteStream` accepts an `AsyncIterable` (including a Node readable) or
+a Web `ReadableStream` of `ArrayBuffer`/typed-array chunks. It copies and writes
+one bounded chunk at a time, verifies the required final byte length and
+lowercase SHA-256 before publication, and closes or cancels the source on every
+exit. `maxBytes`, `maxScratchBytes`, `maxChunkBytes`, the cooperative deadline,
+operation count, and caller abort signal are enforced with stable typed errors.
+The default byte/scratch ceiling is 64 MiB and the default per-chunk ceiling is
+8 MiB; large-file callers must deliberately raise them.
+
+The stream stage and transaction journal live under the private, same-filesystem
+`.ogvcs/transactions` directory. Replacing an existing file additionally
+requires the preflight-bound hardlink capability so its exact inode remains a
+rollback link until the new file and both affected parent directories cross the
+durability barrier. Source, integrity, limit, cancellation, target-race, sync,
+or rename failures restore the prior target and eagerly clean owned artifacts
+when their bound namespace is still present. A process termination, or an
+ancestor race that makes immediate cleanup unsafe, leaves a versioned
+`write-stream` remnant; `inspectCrashRemnants` reports it and
+`rollbackCrashRemnant` either restores the uncommitted target or finalizes an
+already committed publication. Cancellation is authoritative until the durable
+commit record; committed cleanup is recovery-owned.
+
 The deterministic APIs are `caseFold`, `validateRepositoryPath`,
 `pathCollisionKeys`, `findPathCollisions`, `preflightMaterialization`, and
 `planRenames`. Their `evaluate*` counterparts return the frozen decision shape
@@ -84,7 +122,7 @@ keys across the complete expanded set.
 
 The host APIs are `probeFilesystemCapabilities`, `openWorkspaceRoot`,
 `preflightWorkspaceMaterialization`,
-`atomicWriteFile`, `replaceWorkspaceEntry`, `materializeSymlink`,
+`atomicWriteFile`, `atomicWriteStream`, `replaceWorkspaceEntry`, `materializeSymlink`,
 `executeRenamePlan`, `resumeRenamePlan`, `inspectCrashRemnants`,
 `rollbackCrashRemnant`, and `applyReadOnlyHint`. Workspace handles are
 module-branded; copying their visible fields does not confer mutation access.

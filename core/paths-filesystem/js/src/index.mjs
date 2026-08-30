@@ -9,5 +9,5 @@ export { evaluatePreflight, preflightMaterialization, preflightWorkspaceMaterial
 export { evaluateRenames, planRenames } from './rename.mjs';
 export { createPathTelemetry, snapshotPathTelemetry } from './telemetry.mjs';
 export { applyWatcherBatch, applyWatcherEvent, beginWatcherSession, completeReconciliation, evaluateWatcherCase, initialWatcherState, loadWatcherState, markWatcherRestart, openWorkspaceWatcher, persistWatcherState, stopWatcherSession, transitionWatcher, validateWatcherState } from './watcher.mjs';
-export { applyReadOnlyHint, atomicWriteFile, executeRenamePlan, inspectCrashRemnants, materializeSymlink, openWorkspaceRoot, replaceWorkspaceEntry, resumeRenamePlan, rollbackCrashRemnant } from './workspace.mjs';
+export { applyReadOnlyHint, atomicWriteFile, atomicWriteStream, executeRenamePlan, inspectCrashRemnants, materializeSymlink, openWorkspaceRoot, replaceWorkspaceEntry, resumeRenamePlan, rollbackCrashRemnant } from './workspace.mjs';
 export { buildConformanceReport, writeConformanceReport } from './report.mjs';
