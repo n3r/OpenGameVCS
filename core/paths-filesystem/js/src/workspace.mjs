@@ -732,12 +732,17 @@ async function atomicWriteStreamInternal(workspace, repositoryPath, source, opti
   assertAbortSignal(options.signal);
   const guard = new OperationGuard(options);
   const limits = streamingLimits(options);
-  const expected = streamExpectation(options, limits);
+  const portableExpected = streamExpectation(options, limits);
   const canonical = validateRepositoryPath(repositoryPath, { profile: workspace.profile }).canonical;
   const request = {
     path: canonical, kinds: [options.executable === true ? 'executable' : 'regular'], capabilities: ['atomicReplace'],
   };
   await settledBoundary(guard, options.signal, () => authorizeWorkspaceMutation(options.plan, workspace, request));
+  const expected = Object.freeze({
+    ...portableExpected,
+    nativeExecutable: portableExpected.executable
+      && options.plan.request.capabilities.executableBit === true,
+  });
   await settledBoundary(guard, options.signal, () => assertWorkspaceDirectories(workspace));
   let binding;
   try {
@@ -773,14 +778,14 @@ async function atomicWriteStreamInternal(workspace, repositoryPath, source, opti
     durableRecord = planned;
     await guardedHook(guard, options.signal, options.hooks, 'after-plan', Object.freeze({}));
     const streamed = await streamToExclusiveFile(
-      stage, source, limits, options.executable === true ? 0o700 : 0o600, guard, options.signal,
+      stage, source, limits, expected.nativeExecutable ? 0o700 : 0o600, guard, options.signal,
     );
     if (streamed.bytes !== expected.bytes || streamed.sha256 !== expected.sha256) pathFail('TARGET_CHANGED');
     await guardedHook(guard, options.signal, options.hooks, 'after-stage', Object.freeze({ bytes: streamed.bytes }));
     await settledBoundary(guard, options.signal, () => assertWorkspaceDirectories(workspace));
     const staged = await settledBoundary(guard, options.signal, () => regularTargetState(stage, observed));
     if (staged === null || staged.bytes !== streamed.bytes || staged.sha256 !== streamed.sha256
-      || ((staged.identity.mode & 0o100) !== 0) !== expected.executable) pathFail('TARGET_CHANGED');
+      || ((staged.identity.mode & 0o100) !== 0) !== expected.nativeExecutable) pathFail('TARGET_CHANGED');
     if (before !== null) {
       await settledBoundary(guard, options.signal, () => authorizeWorkspaceMutation(options.plan, workspace, { ...request, capabilities: ['atomicReplace', 'hardlink'] }));
       await createRollbackLink(target, backup, before, observed, guard, options.signal);
@@ -1214,10 +1219,11 @@ function validReplacementIntent(value) {
 }
 
 function validStreamExpectation(value) {
-  return exactKeys(value, ['bytes', 'sha256', 'executable'])
+  return exactKeys(value, ['bytes', 'sha256', 'executable', 'nativeExecutable'])
     && Number.isSafeInteger(value.bytes) && value.bytes >= 0
     && typeof value.sha256 === 'string' && /^[0-9a-f]{64}$/u.test(value.sha256)
-    && typeof value.executable === 'boolean';
+    && typeof value.executable === 'boolean' && typeof value.nativeExecutable === 'boolean'
+    && (!value.nativeExecutable || value.executable);
 }
 
 function validRenameNext(value, completed) {
@@ -1257,7 +1263,7 @@ function validRecord(record) {
       && (record.prior === null || validRegularState(record.prior)) && validStreamExpectation(record.expected)
       && (!hasStaged || validRegularState(record.staged)
         && record.staged.bytes === record.expected.bytes && record.staged.sha256 === record.expected.sha256
-        && (((record.staged.identity.mode & 0o100) !== 0) === record.expected.executable))
+        && (((record.staged.identity.mode & 0o100) !== 0) === record.expected.nativeExecutable))
       && (!hasPublished || validRegularState(record.published)
         && sameRegularState(record.staged, record.published));
   }

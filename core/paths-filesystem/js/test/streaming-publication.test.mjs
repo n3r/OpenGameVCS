@@ -146,6 +146,24 @@ test('accepts a web ReadableStream and publishes executable intent', async t => 
   assert.deepEqual(await readdir(handle.transactions), []);
 });
 
+test('portable executable intent does not require an unsupported native mode bit', async t => {
+  const { root, handle } = await createWorkspace(t);
+  const measured = await probeFilesystemCapabilities(root);
+  const withoutExecutableBit = Object.freeze({ ...measured, executableBit: false });
+  const capabilityProbe = async () => withoutExecutableBit;
+  const bound = await plan(handle, 'Tools/portable.bin', {
+    kind: 'executable', capabilities: withoutExecutableBit, capabilityProbe,
+  });
+  const bytes = Buffer.from([5, 6, 7, 8]);
+  await atomicWriteStream(handle, 'Tools/portable.bin', chunks([bytes]), {
+    createParents: true, executable: true, maxBytes: bytes.length, maxScratchBytes: bytes.length,
+    expectedBytes: bytes.length, expectedSha256: createHash('sha256').update(bytes).digest('hex'), plan: bound,
+  });
+  assert.deepEqual(await readFile(join(root, 'Tools/portable.bin')), bytes);
+  assert.equal((await lstat(join(root, 'Tools/portable.bin'))).mode & 0o100, 0);
+  assert.deepEqual(await readdir(handle.transactions), []);
+});
+
 test('requires the exact branded workspace and closed owner-bound preflight plan', async t => {
   const { handle } = await createWorkspace(t);
   const { handle: other } = await createWorkspace(t);
