@@ -9,36 +9,41 @@ carrier and OGVCS-009 supplies the production authorizer. The built-in
 authorizer denies every request.
 
 The Rust surface is an internal persistence/composition port, not an
-implementation claim for the contract's complete 22-operation public API.
-Public request parsing and UUID/FileID grammar, repository settings/list and
-object-get, reference-kind filtering, ancestry/path-history traversal,
-minimum-consistency fields on every paged request, idempotency status, and
-outbox consumer lease/acknowledgement operations remain deferred with the HTTP
-binding. The internal page ports deliberately use a stricter 1,000-item cap.
-They must not be presented as the generated `MetadataOperationRequest` or
-`PageResult` wire contract.
+implementation claim for the contract's complete 22-operation public API. It
+now implements immutable settings/object reads, project-scoped repository
+listing, reference-kind filtering, minimum-consistency-aware repository pages,
+bounded ancestry plus snapshot-rooted FileID/path histories, and outbox
+lease/acknowledgement/release. Public request parsing and response encoding,
+`file-id.allocate`, `idempotency.status`, and the HTTP binding remain open. The
+internal page ports deliberately use a stricter 1,000-item cap and do not yet
+carry the public `PageResult` consistency-token field. They must not be
+presented as generated wire-contract implementations.
 
-Each write transaction is bound at construction to one repository, the complete
-`AuthorizationContext`, one typed operation capability, and the `AuthorizedView`
-returned by the authorizer. The adapter derives the canonical OGVCS permission;
-callers cannot supply a permission string. Reads authorize and revalidate an
-exact repository, reference, reference collection, tree-prefix, or FileID-history
-projection before SQL. Repository arguments retained for OGVCS-010 composition
-are checked against that binding before validation or SQL. Idempotency scope is
-derived from the same binding; callers cannot supply or reuse an authenticated-
-scope digest. A
+The current development transaction boundary binds one repository, a caller
+supplied `AuthorizationContext`, one typed operation capability, and the
+`AuthorizedView` returned by the injected authorizer. The adapter derives the
+canonical OGVCS permission; callers cannot supply a permission string. This is
+not the production OGVCS-009 boundary: credential evidence, current authority
+epoch/policy generation, authorization, and the decision commitment still must
+be checked and appended inside the same PostgreSQL transaction before writes
+can be enabled. The default authorizer denies all requests. Reads authorize and
+revalidate exact typed resource projections before returning data. Repository
+arguments retained for OGVCS-010 composition are checked against their binding
+before validation or SQL. Idempotency scope is derived from that development
+binding; callers cannot supply a digest. A
 committed replay is completed with `finish_committed_replay`, which rolls back
 the probe transaction and returns the stored safe result without entering the
 serialization retry loop.
 
 Tree reads bind the authorized view to the published snapshot, exact tree, and
 root-relative path-segment prefix, then authorize each returned child by its
-complete repository path and FileID. Reference and FileID-history collection
-views likewise authorize every returned item and are revalidated before any
-response or cursor is issued. A missing or non-positive snapshot publication
-marker is never inferred from a live reference: exact reference/tree reads fail
-closed, authorized reference listing rejects that item, and history excludes
-the unproven snapshot.
+complete repository path and FileID. Repository, reference, ancestry, and
+FileID/path-history collection views likewise authorize every returned item and
+are revalidated before any response or cursor is issued. History never exposes
+an incomplete/depth reason unless the same view permits every traversed ancestry
+node. A missing or non-positive snapshot publication marker is never inferred
+from a live reference: exact reference/tree/history reads fail closed and
+authorized reference listing rejects that item.
 
 Mutation recovery facts are authority-owned and tracked by exact repository,
 snapshot, reference, or FileID identity. The public event input carries only
@@ -63,6 +68,12 @@ unavailable until OGVCS-002/OGVCS-010 provide a proof-bound API capable of
 demonstrating the original repository lifetime; an unused ID cannot manufacture
 a restore lifetime through this adapter.
 
+`file-id.allocate` is also deliberately not counterfeited. The candidate wire
+request has no allocation receipt or claim key that `file-id.register` can bind,
+so reserving an ID during allocation would either make it unclaimable or make
+the bare FileID a bearer secret. The candidate contract needs an additive,
+authenticated claim binding before this mutation can be implemented safely.
+
 Run static checks and tests:
 
 ```sh
@@ -78,13 +89,16 @@ authenticated outer transaction frame, and records each phase and checksum in
 the same database transaction as its SQL. Contract phases require the explicit
 compatibility fence. Existing ledger checksums are verified even while that
 fence is closed, and mutation transaction construction requires every bundled
-phase to be present, compatible, completed, and checksummed.
+phase to be present, compatible, completed, and checksummed. Schema v4 adds the
+bounded deterministic ancestry primitive; v5 adds the project-list cursor
+ledger without rewriting historical migration bytes.
 
 Production persistence deployment evidence, a production OGVCS-009/OIDC
-adapter, public API/HTTP bindings, external chunk-store composition, and hosted
-production-service evidence remain deferred. The bounded workflow runs the live
-harness against a disposable PostgreSQL 15 service on Ubuntu and compiles the
-locked crate on macOS and Windows. The built-in authorizer denies all access;
+same-transaction participant, public API/HTTP bindings, external chunk-store
+composition, and hosted production-service evidence remain deferred. The
+bounded workflow checks the contract package inventory, runs the live harness
+against a disposable PostgreSQL 15 service on Ubuntu, and compiles the locked
+crate on macOS and Windows. The built-in authorizer denies all access;
 the built-in production object validator also has no external path-profile
 adapter or chunk resolver, so ratified external paths and content-bearing
 publication fail closed until those production adapters are injected. No live
@@ -104,9 +118,11 @@ OGVCS_METADATA_DATABASE_URL=postgresql://.../ogvcs_metadata_test_local \
 The harness refuses to reset a database unless `current_database()` begins with
 `ogvcs_metadata_test_` and contains only ASCII letters, digits, and underscores.
 It covers the golden file-manifest/tree/snapshot/reference graph, 100 CAS racers,
-authorized transaction/context/token isolation, FileID races/import
-replay/tombstones, transaction poisoning and fault rollbacks, migration
-repeat/checksum/downgrade behavior, and representable replica-lag token behavior.
+project-list cursor isolation, bounded ancestry/FileID/path history,
+authorization non-disclosure and revalidation, outbox delivery leases, FileID
+races/import replay/tombstones, transaction poisoning and fault rollbacks,
+migration repeat/checksum/downgrade behavior, and representable replica-lag
+token behavior.
 The current bounded three-platform result and retained PostgreSQL report are in
 the [OGVCS-006 candidate evidence packet](../../../docs/evidence/OGVCS-006/README.md).
 The exact million-entry campaign remains excluded from ordinary presubmit.
