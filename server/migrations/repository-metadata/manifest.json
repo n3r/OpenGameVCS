@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "ogvcs.repository-metadata/migration-manifest/v1",
+  "database": "postgresql-15-or-newer",
+  "migrationLock": "pg-advisory-lock:ogvcs-metadata-migrations-v1",
+  "entries": [
+    {
+      "version": 1,
+      "phase": "expand",
+      "path": "000001_expand.sql",
+      "sha256": "58b53c7cd61b5f8b0e6fca4184a36379c049947a34751bedb1bd77ded674d53c",
+      "restartable": true,
+      "minimumApplicationVersion": "0.1.0",
+      "maximumApplicationVersion": "0.1.x"
+    },
+    {
+      "version": 1,
+      "phase": "migrate",
+      "path": "000001_migrate.sql",
+      "sha256": "a9463826cf3d29c8ba21e3912e9d8ef766db728f0cbd71a090de32ad6186128d",
+      "restartable": true,
+      "minimumApplicationVersion": "0.1.0",
+      "maximumApplicationVersion": "0.1.x"
+    },
+    {
+      "version": 1,
+      "phase": "contract",
+      "path": "000001_contract.sql",
+      "sha256": "d48496191956898e9d2b6ded8a3baffe50a196a055c8afa59300d055673b5480",
+      "restartable": true,
+      "minimumApplicationVersion": "0.1.0",
+      "maximumApplicationVersion": "0.1.x",
+      "requiresCompatibilityFence": true
+    }
+  ]
+}

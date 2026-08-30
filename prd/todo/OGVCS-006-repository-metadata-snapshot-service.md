@@ -1,13 +1,13 @@
 # OGVCS-006 — Repository metadata and snapshot service
 
-**Status:** Todo  
+**Status:** In development
 **Release:** R1 — Developer Preview  
 **Priority:** P0  
-**Owner:** Unassigned  
+**Owner:** Codex and OpenGameVCS maintainers
 **Depends on:** OGVCS-002, OGVCS-003, OGVCS-004, OGVCS-005, OGVCS-041  
 **Blocks:** OGVCS-009, OGVCS-010, OGVCS-011, OGVCS-015, OGVCS-016, OGVCS-018, OGVCS-021, OGVCS-028  
 **Source:** [OpenGameVCS proposal](../../GAME_DEV_VCS_ANALYSIS.md)  
-**Last updated:** 2026-08-14
+**Last updated:** 2026-08-30
 
 ## Outcome
 

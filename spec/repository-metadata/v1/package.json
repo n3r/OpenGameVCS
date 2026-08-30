@@ -1,0 +1,33 @@
+{
+  "name": "@opengamevcs/repository-metadata-contract-v1",
+  "version": "0.1.0",
+  "description": "Language-neutral OpenGameVCS repository metadata service contract",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    "./manifest.json": "./manifest.json",
+    "./registries/*": "./registries/*",
+    "./schemas/*": "./schemas/*",
+    "./vectors/*": "./vectors/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "docs",
+    "registries",
+    "schemas",
+    "vectors",
+    "manifest.json",
+    "validate-spec.mjs",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "generate": "node source/generate.mjs",
+    "check": "node source/generate.mjs --check && node validate-spec.mjs",
+    "test": "node source/generate.mjs --check && node validate-spec.mjs && node --test test/*.test.mjs",
+    "test:package": "npm pack --dry-run --json"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
