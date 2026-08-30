@@ -68,7 +68,11 @@ async function baselineManifest(t, arguments_) {
 // hosted Windows. This is test synchronization, not a product deadline: keep
 // enough time to observe the explicit checkpoint pause without weakening any
 // generator limit or failure assertion.
-async function waitFor(check, message, timeoutMs = 20_000) {
+async function waitFor(
+  check,
+  message,
+  timeoutMs = process.platform === 'win32' ? 60_000 : 20_000,
+) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (await check()) return;
