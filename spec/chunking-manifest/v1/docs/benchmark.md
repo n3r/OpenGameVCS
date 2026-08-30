@@ -1,9 +1,10 @@
 # Bounded seven-workload benchmark authority
 
-This contract adds the smallest bounded benchmark authority required by the
-2026-08-30 OGVCS-007 ratification review without attempting the deferred
-100 GiB acceptance campaign. `vectors/selection-benchmark-workloads.json`
-declares seven deterministic workload pairs: source-like, structured,
+This contract adds the bounded workload definitions and documentary thresholds
+used to retain narrow, provisional OGVCS-007 selection evidence for the
+2026-08-30 ratification review without attempting the deferred 100 GiB
+acceptance campaign. `vectors/selection-benchmark-workloads.json` declares
+seven deterministic workload pairs: source-like, structured,
 already-compressed, encrypted/random, insertion, replacement, and append.
 
 Each workload fixes both the base bytes and the edited candidate bytes through
@@ -29,3 +30,9 @@ honestly poor reuse for compressed and encrypted/random inputs, bounded
 resynchronization for insertion and replacement, and a bounded new-tail cost
 for append. It does not ratify the profile, change the OGVCS-002 registry, or
 substitute for the later 100 GiB resource run.
+
+These inputs do not by themselves close P0-2 from the ratification review.
+Actual closure still requires an authenticated OGVCS-005 result bundle/verifier
+for the bounded seven-class run and retained observed process peak memory. The
+retained JSON report is therefore provisional bounded OGVCS-007 selection
+evidence, not an authenticated OGVCS-005 closure packet.

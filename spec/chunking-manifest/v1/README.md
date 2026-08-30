@@ -18,7 +18,9 @@ error codes, and deterministic resource-admission outcomes.
 `thresholds/selection-bounded-v1.json` add the bounded seven-workload benchmark
 authority required by ADR-0016 and the OGVCS-007 ratification review. They are
 not an exact-scale gate and do not authorize production writes or registry
-ratification on their own.
+ratification on their own. They support only provisional bounded OGVCS-007
+selection evidence until an authenticated OGVCS-005 result bundle/verifier and
+observed process peak memory are retained for the same seven-class run.
 
 The candidate is not yet a ratified OGVCS-002 registry assignment and must not
 be used for production writes. Its purpose is independent implementation and
