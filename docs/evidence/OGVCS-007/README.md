@@ -1,6 +1,6 @@
 # OGVCS-007 provisional bounded seven-workload selection evidence
 
-**Evidence date:** 2026-08-30  
+**Evidence date:** 2026-08-30
 **Status:** Provisional bounded OGVCS-007 selection evidence retained; P0-2 remains open
 
 This packet retains a narrow, provisional OGVCS-007 selection-evidence record
