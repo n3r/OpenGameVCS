@@ -1,13 +1,13 @@
 # OGVCS-007 — Chunking and content-manifest engine
 
-**Status:** Todo  
+**Status:** In development
 **Release:** R1 — Developer Preview  
 **Priority:** P0  
-**Owner:** Unassigned  
+**Owner:** Codex and OpenGameVCS maintainers
 **Depends on:** OGVCS-002, OGVCS-004, OGVCS-005, OGVCS-046
 **Blocks:** OGVCS-008, OGVCS-013, OGVCS-014, OGVCS-017, OGVCS-020, OGVCS-028, OGVCS-029, OGVCS-033
 **Source:** [OpenGameVCS proposal](../../GAME_DEV_VCS_ANALYSIS.md)  
-**Last updated:** 2026-08-15
+**Last updated:** 2026-08-30
 
 ## Outcome
 

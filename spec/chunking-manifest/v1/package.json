@@ -1,0 +1,27 @@
+{
+  "name": "@opengamevcs/chunking-manifest-contract-v1",
+  "version": "0.1.0-rc.1",
+  "description": "Language-neutral candidate contract for OpenGameVCS deterministic content-defined chunking",
+  "type": "module",
+  "files": [
+    "docs",
+    "LICENSE",
+    "manifest.json",
+    "profiles",
+    "README.md",
+    "registries",
+    "schemas",
+    "scripts",
+    "test",
+    "validate-spec.mjs",
+    "vectors"
+  ],
+  "scripts": {
+    "check": "node scripts/generate.mjs --check && node validate-spec.mjs",
+    "test": "node scripts/generate.mjs --check && node validate-spec.mjs && node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT"
+}

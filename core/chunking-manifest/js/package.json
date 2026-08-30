@@ -1,0 +1,23 @@
+{
+  "name": "@opengamevcs/chunking-manifest",
+  "version": "0.1.0",
+  "description": "Scalar reference implementation of the OpenGameVCS Gear/FastCDC chunk profile",
+  "type": "module",
+  "exports": "./src/index.mjs",
+  "files": [
+    "LICENSE",
+    "README.md",
+    "src"
+  ],
+  "dependencies": {
+    "@opengamevcs/object-model": "0.1.0"
+  },
+  "scripts": {
+    "check": "node --check src/index.mjs && node --check src/gear.mjs && node --check src/identity.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT"
+}
