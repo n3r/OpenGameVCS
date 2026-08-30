@@ -63,6 +63,12 @@ async function writeBundleInChildDirectory(root, contract, publication, label) {
   return directory;
 }
 
+async function unpublishedBundleDirectory(t, prefix) {
+  const parent = await mkdtemp(join(tmpdir(), prefix));
+  t.after(() => rm(parent, { recursive: true, force: true }));
+  return join(parent, 'bundle');
+}
+
 function differentOs(current) {
   return current === 'linux' ? 'darwin' : 'linux';
 }
@@ -81,9 +87,22 @@ async function waitForProcessExit(pid, timeoutMs) {
   return false;
 }
 
+async function waitForPidFile(path, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const pid = Number((await readFile(path, 'utf8')).trim());
+      if (Number.isSafeInteger(pid) && pid > 0) return pid;
+    } catch (error) {
+      if (!error || typeof error !== 'object' || !('code' in error) || error.code !== 'ENOENT') throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  return null;
+}
+
 test('chunking selection benchmark bundle emits an authenticated retained-evidence bundle that independent validation can replay', { timeout: 240_000 }, async (t) => {
-  const directory = await mkdtemp(join(tmpdir(), 'ogvcs-chunking-selection-bundle-'));
-  t.after(() => rm(directory, { recursive: true, force: true }));
+  const directory = await unpublishedBundleDirectory(t, 'ogvcs-chunking-selection-bundle-');
 
   const { contract, publication, selectionReport } = await buildChunkingSelectionBenchmarkBundle();
   await writeResultBundle(directory, contract, publication);
@@ -107,8 +126,7 @@ test('chunking selection benchmark bundle emits an authenticated retained-eviden
 });
 
 test('incomplete captures stay retained and independently verify as incomplete rows', { timeout: 240_000 }, async (t) => {
-  const directory = await mkdtemp(join(tmpdir(), 'ogvcs-chunking-selection-bundle-incomplete-'));
-  t.after(() => rm(directory, { recursive: true, force: true }));
+  const directory = await unpublishedBundleDirectory(t, 'ogvcs-chunking-selection-bundle-incomplete-');
 
   const { contract, publication } = await buildChunkingSelectionBenchmarkBundle({
     mutateCaptures(captures) {
@@ -150,8 +168,7 @@ test('incomplete captures stay retained and independently verify as incomplete r
 });
 
 test('failed captures stay retained, unknown worker codes normalize, and the bundle cannot self-certify overall success', { timeout: 240_000 }, async (t) => {
-  const directory = await mkdtemp(join(tmpdir(), 'ogvcs-chunking-selection-bundle-failed-'));
-  t.after(() => rm(directory, { recursive: true, force: true }));
+  const directory = await unpublishedBundleDirectory(t, 'ogvcs-chunking-selection-bundle-failed-');
 
   const { contract, publication } = await buildChunkingSelectionBenchmarkBundle({
     mutateCaptures(captures) {
@@ -232,29 +249,48 @@ test('retained failure normalization is path-neutral across POSIX, drive, and UN
   }
 });
 
-test('worker timeout keeps escalation armed after direct child exit and kills lingering inherited-pipe grandchildren', { skip: process.platform === 'win32' ? 'POSIX-specific process-group kill assertion' : false }, async (t) => {
+test('worker timeout keeps escalation armed after direct child exit and kills lingering inherited-pipe grandchildren', {
+  skip: process.platform === 'win32' ? 'POSIX-specific process-group kill assertion' : false,
+  timeout: 10_000,
+}, async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'ogvcs-chunking-worker-timeout-'));
-  t.after(() => rm(directory, { recursive: true, force: true }));
   const pidFile = join(directory, 'grandchild.pid');
+  let pid = null;
+  t.after(async () => {
+    try {
+      if (pid === null) pid = await waitForPidFile(pidFile, 50);
+      if (pid === null || await waitForProcessExit(pid, 20)) return;
+      try {
+        process.kill(pid, 'SIGKILL');
+      } catch (error) {
+        if (!error || typeof error !== 'object' || !('code' in error) || error.code !== 'ESRCH') throw error;
+        return;
+      }
+      await waitForProcessExit(pid, 1_000);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
   const started = Date.now();
-  const capture = await runWorker('append', {
+  const capturePromise = runWorker('append', {
     args: [WORKER_FIXTURE_PATH, '--mode', 'exit-on-term-grandchild-inherits-pipes', '--workload-id', 'append', '--pid-file', pidFile],
-    timeoutMs: 150,
+    timeoutMs: 1_000,
     terminateGraceMs: 20,
     terminateKillWaitMs: 20,
   });
+  pid = await waitForPidFile(pidFile, 750);
+  const capture = await capturePromise;
   const elapsedMs = Date.now() - started;
-  const pid = Number((await readFile(pidFile, 'utf8')).trim());
+  assert.notEqual(pid, null, 'worker fixture did not publish its grandchild PID before the timeout window');
   assert.equal(capture.success, false);
   assert.equal(capture.error.code, 'HARNESS_TASK_INCOMPLETE');
-  assert.equal(capture.process.totalWallMicroseconds >= 150_000, true);
-  assert.equal(elapsedMs < 2_000, true);
+  assert.equal(capture.process.totalWallMicroseconds >= 1_000_000, true);
+  assert.equal(elapsedMs < 3_000, true);
   assert.equal(await waitForProcessExit(pid, 1_000), true);
 });
 
 test('producer normalizes failed retained captures to the shared publication limit with stable path-neutral messages', { timeout: 240_000 }, async (t) => {
-  const directory = await mkdtemp(join(tmpdir(), 'ogvcs-chunking-selection-bundle-normalized-failure-'));
-  t.after(() => rm(directory, { recursive: true, force: true }));
+  const directory = await unpublishedBundleDirectory(t, 'ogvcs-chunking-selection-bundle-normalized-failure-');
   const overlongMessage = `${'a'.repeat(RETAINED_ERROR_MESSAGE_LIMIT - 3)}😀`;
 
   const { contract, publication } = await buildChunkingSelectionBenchmarkBundle({
