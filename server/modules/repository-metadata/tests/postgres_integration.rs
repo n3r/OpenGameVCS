@@ -2639,7 +2639,7 @@ fn file_id_race(database_url: &str, context: AuthorizationContext, repository_id
     let mut client = Client::connect(database_url, NoTls).unwrap();
     let state: String = client
         .query_one(
-            "SELECT state FROM ogvcs_metadata.file_id_registry
+            "SELECT state::text FROM ogvcs_metadata.file_id_registry
              WHERE repository_id = $1 AND file_id = $2",
             &[
                 &Uuid::from_bytes(*repository_id.as_bytes()),
