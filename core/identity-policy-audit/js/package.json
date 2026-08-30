@@ -1,0 +1,35 @@
+{
+  "name": "@opengamevcs/identity-policy-audit",
+  "version": "0.1.0",
+  "description": "Candidate OpenGameVCS identity, path-policy, epoch, revocation, and audit runtime",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./testing": "./src/testing.mjs",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "check": "node --check src/index.mjs && node --check src/contract.mjs && node --check src/errors.mjs && node --check src/validate.mjs && node --check src/policy.mjs && node --check src/credentials.mjs && node --check src/grants.mjs && node --check src/audit.mjs && node --check src/views.mjs && node --check src/rate.mjs && node --check src/adapters.mjs && node --check src/runtime.mjs && node --check src/testing.mjs",
+    "test": "npm run check && node --test --test-concurrency=1 test/*.test.mjs",
+    "test:package": "npm pack --dry-run --json"
+  },
+  "dependencies": {
+    "@opengamevcs/authorization-contract": "1.0.0",
+    "@opengamevcs/authorization-contract-v1": "1.0.0",
+    "@opengamevcs/identity-policy-audit-contract-v1": "0.1.0",
+    "@opengamevcs/path-contract-v1": "1.0.0",
+    "@opengamevcs/path-filesystem": "1.1.0",
+    "@opengamevcs/protocol-baseline": "1.0.0-rc.1",
+    "@opengamevcs/protocol-contract-v1": "1.0.0-rc.1",
+    "@opengamevcs/repository-metadata-contract-v1": "0.1.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

@@ -1,13 +1,13 @@
 # OGVCS-009 — Identity, path authorization, and audit
 
-**Status:** Todo  
+**Status:** In development
 **Release:** R1 — Developer Preview  
 **Priority:** P0  
-**Owner:** Unassigned  
+**Owner:** Codex and OpenGameVCS maintainers
 **Depends on:** OGVCS-003, OGVCS-006, OGVCS-041  
 **Blocks:** OGVCS-010, OGVCS-011, OGVCS-013, OGVCS-016, OGVCS-018, OGVCS-019, OGVCS-021, OGVCS-025, OGVCS-026, OGVCS-027, OGVCS-028, OGVCS-032, OGVCS-033, OGVCS-035, OGVCS-036, OGVCS-042, OGVCS-045  
 **Source:** [Architecture ADR-0004](../../adr/0004-dr-authority-security-epochs.md)  
-**Last updated:** 2026-08-14
+**Last updated:** 2026-08-30
 
 ## Outcome
 
