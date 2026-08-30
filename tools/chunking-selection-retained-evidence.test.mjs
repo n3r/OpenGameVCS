@@ -119,6 +119,14 @@ test('retained six-leg hosted reports match their run record and comparator', as
   assert.equal(record.jobs.length, 7);
   assert.equal(record.jobs.every(({ conclusion }) => conclusion === 'success'), true);
   assert.equal(record.artifacts.length, 6);
+  assert.equal(record.remainingGates.some((gate) => gate.includes('production acceptor')), true);
+  assert.equal(record.remainingGates.some((gate) => gate.includes('completion/release campaign')), true);
+
+  const expectedArtifactNames = [
+    'chunking-javascript-Linux', 'chunking-javascript-macOS', 'chunking-javascript-Windows',
+    'chunking-rust-Linux', 'chunking-rust-macOS', 'chunking-rust-Windows',
+  ];
+  assert.deepEqual(record.artifacts.map(({ name }) => name), expectedArtifactNames);
 
   const reports = new Map();
   for (const retained of record.retainedReports) {
@@ -133,13 +141,19 @@ test('retained six-leg hosted reports match their run record and comparator', as
     reports.set(retained.language, path);
   }
 
-  const javascript = reports.get('javascript');
-  const rust = reports.get('rust');
-  assert.ok(javascript);
-  assert.ok(rust);
+  const reportPaths = [];
+  for (const artifact of record.artifacts) {
+    const path = join(ROOT, 'docs/evidence/OGVCS-007', artifact.retainedReportPath);
+    const bytes = await readFile(path);
+    assert.equal(bytes.length, artifact.reportBytes);
+    assert.equal(sha256(bytes), artifact.reportSha256);
+    const language = artifact.name.includes('javascript') ? 'javascript' : 'rust';
+    assert.equal(path, reports.get(language));
+    reportPaths.push(path);
+  }
   const comparison = spawnSync(process.execPath, [
     join(ROOT, 'core/chunking-manifest/js/scripts/compare-bounded-reports.mjs'),
-    javascript, javascript, javascript, rust, rust, rust,
+    ...reportPaths,
   ], { cwd: ROOT, encoding: 'utf8' });
   assert.equal(comparison.status, 0, comparison.stderr);
   assert.equal(comparison.stdout.trim(), record.comparison.result);

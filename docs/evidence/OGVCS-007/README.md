@@ -40,8 +40,10 @@ matched all nine bounded cases across all six reports. The exact run, job, and
 artifact identities are retained in
 [`github-actions-run-33328072458.json`](github-actions-run-33328072458.json).
 
-The three JavaScript reports were byte-identical, as were the three Rust
-reports. One exact report per language is retained under
+The run record retains the inner byte count and SHA-256 for each of the six
+platform artifacts. All three JavaScript inner hashes match, as do all three
+Rust inner hashes. One deduplicated exact report blob per language is retained
+under
 [`bounded-conformance-33328072458/`](bounded-conformance-33328072458/) because
 the downloadable artifacts expire on 2026-09-13. The hosted matrix was bounded
 and did not run the 100-GiB campaign.
@@ -67,7 +69,7 @@ and did not run the 100-GiB campaign.
 This packet does not ratify
 `chunking.opengamevcs/gear-fastcdc-1m@1`, change the OGVCS-002 registry, or
 flip production writes on. Since the original 2026-08-30 review, the bounded
-implementation has closed two code-level blockers:
+implementation has closed the code-level portions of two blockers:
 
 - P0-1 is closed in source: full verification issues a private one-use receipt
   bound to the registered verifier version, profile, manifest identity, logical
@@ -79,8 +81,10 @@ implementation has closed two code-level blockers:
   cancellation/deadline settlement cannot report failure after a durable
   commit.
 
-The remaining P0 blocker from the review is:
+The remaining P0 boundaries from the review are:
 
+- P0-1 deployment boundary: the private receipt is enforced by the package
+  adapter, but no production server acceptor/emitter has adopted it yet.
 - P0-2: no authenticated OGVCS-005 result bundle/verifier exists for the
   seven-class bounded run, and no observed process peak memory is retained for
   that run.
@@ -89,5 +93,7 @@ Actual P0-2 closure still requires an authenticated OGVCS-005-compatible result
 bundle plus verifier outcome for the bounded seven-class run, along with
 observed process peak memory. Until then, this packet remains narrow retained
 selection evidence only. The current-source bounded hosted matrix is retained
-above; ratification still requires the generated registry/predecessor-pin
-lifecycle cut and the separately scheduled final 100-GiB resource campaign.
+above; ratification still requires production trust-boundary adoption and the
+generated registry/predecessor-pin lifecycle cut. The 100-GiB resource campaign
+remains a separately scheduled OGVCS-007 completion/release gate after bounded
+profile ratification.

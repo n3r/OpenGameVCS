@@ -4,16 +4,30 @@ on:
   pull_request:
     paths:
       - '.github/workflows/chunking-manifest-bounded.yml'
+      - 'package.json'
+      - 'package-lock.json'
       - 'core/chunking-manifest/**'
       - 'core/object-model/**'
+      - 'core/paths-filesystem/**'
+      - 'foundation/benchmark-fault-harness/**'
+      - 'spec/benchmark-fault/v1/**'
       - 'spec/chunking-manifest/v1/**'
+      - 'tools/chunking-selection-*'
+      - 'docs/evidence/OGVCS-007/**'
   push:
     branches: [main]
     paths:
       - '.github/workflows/chunking-manifest-bounded.yml'
+      - 'package.json'
+      - 'package-lock.json'
       - 'core/chunking-manifest/**'
       - 'core/object-model/**'
+      - 'core/paths-filesystem/**'
+      - 'foundation/benchmark-fault-harness/**'
+      - 'spec/benchmark-fault/v1/**'
       - 'spec/chunking-manifest/v1/**'
+      - 'tools/chunking-selection-*'
+      - 'docs/evidence/OGVCS-007/**'
   workflow_dispatch:
 
 permissions:
@@ -46,6 +60,8 @@ jobs:
       - run: npm run check --workspace @opengamevcs/chunking-manifest
       - run: npm run test --workspace @opengamevcs/chunking-manifest
       - run: npm run test:packed --workspace @opengamevcs/chunking-manifest
+      - if: matrix.label == 'Linux'
+        run: npm run test:chunking:report
       - run: node core/chunking-manifest/js/scripts/bounded-report.mjs artifacts/javascript.json
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

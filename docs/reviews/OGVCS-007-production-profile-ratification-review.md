@@ -333,10 +333,12 @@ toolchain, so the Rust source remains compile-plausible pending the added CI
 matrix; workflow success is required before treating Rust/cross-platform proof
 as closed.
 
-The profile remains Proposed/candidate/conformance-only. Remaining ratification
-blockers are the authenticated seven-class OGVCS-005 selection report, a green
-compiled three-OS/packed proof, production trust-boundary integration and
-receipt/version binding, and the separately scheduled final resource campaign.
+At that checkpoint the profile remained Proposed/candidate/conformance-only.
+Bounded ratification still required the authenticated seven-class OGVCS-005
+selection report, compiled three-OS/packed proof, and production trust-boundary
+receipt/version binding. The separately scheduled final resource campaign is an
+OGVCS-007 completion/release gate, not a prerequisite for bounded profile
+ratification.
 
 ## No-cherry follow-up to the first tranche (2026-08-30)
 
@@ -410,3 +412,18 @@ whole-process peak memory. Bounded current-source JavaScript/Rust proof is
 retained from all three hosted operating systems; registry/predecessor-pin
 regeneration and the separately scheduled final 100-GiB campaign remain outside
 this source-level follow-up.
+
+## Current bounded status (2026-08-30)
+
+The current bounded contract passes 3/3 tests, the JavaScript package passes
+32/32 tests, and the report/evidence tools pass 6/6 tests. Rust retains 12
+source tests and passed the Node 24/Rust 1.82 Linux, macOS, and Windows workflow
+in [run 33328072458](https://github.com/n3r/OpenGameVCS/actions/runs/33328072458),
+whose six reports matched all nine bounded cases.
+
+P0-1 and P0-3 are closed at the package/API boundary. P0-1 still requires a
+production acceptor/emitter to consume the private verification receipt before
+writes can be enabled. P0-2 remains open until the seven workloads are published
+and verified through OGVCS-005 with same-run observed whole-process peak memory.
+The 100-GiB campaign remains deferred to final OGVCS-007 completion/release and
+is not part of the bounded profile-ratification cut.
