@@ -835,18 +835,31 @@ async function atomicWriteStreamInternal(workspace, repositoryPath, source, opti
       const backupState = await regularTargetState(backup, observed);
       if (!sameRegularState(before, backupState) || !sameNode(before.identity, backupState.identity)) pathFail('TARGET_CHANGED');
       await rm(backup);
+      // Make the rollback-link removal durable while the committed journal is
+      // still present. A crash can then expose either a recoverable committed
+      // record or no rollback link, never an unowned rollback artifact.
+      await syncDirectory(workspace.transactions);
     }
     await rm(recordPath);
+    await syncDirectory(workspace.transactions);
     return Object.freeze({ path: canonical, bytes: staged.bytes, sha256: staged.sha256, transaction: id });
   } catch (error) {
+    if (durableRecord?.state === 'committed') {
+      // The target and committed record have crossed every durability
+      // barrier. Cleanup or a post-commit observer cannot turn that durable
+      // publication into an ambiguous failure; retained state is finalized by
+      // the normal crash-remnant recovery path.
+      return Object.freeze({
+        path: canonical,
+        bytes: durableRecord.published.bytes,
+        sha256: durableRecord.published.sha256,
+        transaction: id,
+      });
+    }
     let cleanupError;
     try {
       if (durableRecord === null) {
         await removeStreamingArtifact(backup); await removeStreamingArtifact(stage); await removeIfPresent(recordPath);
-      } else if (durableRecord.state === 'committed') {
-        // The durable commit is the point of no cancellation. Any cleanup
-        // fault remains an owner-bound remnant that restart recovery finalizes.
-        throw error;
       } else {
         await recoverWriteStreamRecord(workspace, recordPath, durableRecord, { maxBytes: observed.maxBytes });
       }

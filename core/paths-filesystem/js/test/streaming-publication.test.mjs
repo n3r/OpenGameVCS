@@ -368,3 +368,24 @@ test('restart recovery owns every partial-stream, rollback-link, publication, an
   await assert.rejects(readFile(join(root, 'asset.bin')));
   assert.deepEqual(await readdir(handle.transactions), []);
 });
+
+test('post-commit observer failure preserves durable success and a recoverable committed record', async t => {
+  const { root, handle } = await createWorkspace(t);
+  await seed(handle, 'asset.bin', Buffer.from('old'));
+  const expected = Buffer.from('new');
+  const result = await publish(handle, 'asset.bin', chunks([expected]), {
+    expected,
+    hooks: { boundary(name) {
+      if (name === 'after-commit') throw new Error('post-commit observer failed');
+    } },
+  });
+  assert.equal(result.bytes, expected.length);
+  assert.equal(result.sha256, createHash('sha256').update(expected).digest('hex'));
+  assert.deepEqual(await readFile(join(root, 'asset.bin')), expected);
+
+  const [remnant] = await inspectCrashRemnants(handle);
+  assert.equal(remnant.operation, 'write-stream');
+  assert.equal(remnant.state, 'committed');
+  assert.equal((await rollbackCrashRemnant(handle, remnant.id)).action, 'finalized');
+  assert.deepEqual(await readdir(handle.transactions), []);
+});
