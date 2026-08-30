@@ -2,7 +2,7 @@
 
 - **Review date:** 2026-08-30
 - **Reviewer:** Independent Codex requirement, filesystem-boundary, package, and evidence passes
-- **Current verdict:** Implementation acceptance-ready; lifecycle ratification pending
+- **Current verdict:** Acceptance-ready; no live P0, P1, or P2
 
 ## Scope and method
 
@@ -83,6 +83,9 @@ Windows directory-sync `EPERM` after successful open and identity verification.
   roadmap policy pass.
 - [Run 33322266963](https://github.com/n3r/OpenGameVCS/actions/runs/33322266963)
   passed Linux, macOS, and Windows at source `a4e5951`, 79/79 on each host.
+- [Evidence-policy run 33322803382](https://github.com/n3r/OpenGameVCS/actions/runs/33322803382)
+  passed the retained evidence reconstruction, workflow policy, roadmap policy,
+  and strict cross-host comparator at source `8c24a16`.
 - The retained [comparison](../evidence/OGVCS-046/conformance-comparison-2026-08-30.json)
   proves exact shared decisions and normalized package identities.
 - The retained [Linux trace and audit](../evidence/OGVCS-046/README.md#durable-reports)
@@ -92,8 +95,8 @@ Windows directory-sync `EPERM` after successful open and identity verification.
 ## Final verdict
 
 No live P0, P1, or P2 remains in the bounded staged-publication implementation,
-public API, package, or journal/recovery path. The retained implementation run
-is complete. OGVCS-046 remains in `prd/todo` until the evidence-policy commit
-itself passes hosted validation; only then may the lifecycle files move to
-`Done`. The downstream OGVCS-007 100-GiB campaign and production chunk profile
+public API, package, journal/recovery path, documentation, workflow, or retained
+evidence boundary. The implementation and evidence-policy runs are complete,
+so OGVCS-046 satisfies its acceptance criteria and is moved to `prd/done`.
+The downstream OGVCS-007 100-GiB campaign and production chunk profile
 ratification remain separately owned gates and are not claimed here.

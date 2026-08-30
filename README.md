@@ -28,24 +28,24 @@ and filesystem contracts, the public protocol baseline, generated bindings,
 and the benchmark/fault harness. Their source-bound conformance evidence is
 retained under [`docs/evidence/`](docs/evidence/).
 
-R1 implementation is proceeding in parallel behind versioned contracts. The
-repository currently contains candidate work for bounded staged workspace
-publication, chunking/content manifests, and repository metadata. Object
-transfer and identity/policy are being security-reviewed before integration.
-Every R1 PRD remains in [`prd/todo/`](prd/todo/) until its implementation and
-retained evidence satisfy the PRD's completion criteria.
+R1 implementation is proceeding in parallel behind versioned contracts.
+Bounded staged workspace publication is complete with retained three-OS
+evidence; chunking/content manifests and repository metadata remain candidate
+work. Object transfer and identity/policy are being security-reviewed before
+integration. Incomplete R1 PRDs remain in [`prd/todo/`](prd/todo/) until their
+implementation and retained evidence satisfy the PRD's completion criteria.
 
 The broader R0 release gate also calls for external design-partner confirmation
 that the synthetic Unreal- and Unity-like profiles cover material production
 workflows. Completion of the repository's engineering artifacts does not claim
 that external program prerequisite has occurred.
 
-### R1 work in progress
+### R1 delivery
 
 | Area | Current boundary | PRD |
 |---|---|---|
 | Repository metadata | Versioned metadata contract and PostgreSQL schema candidate; transactional adapter and live database evidence remain under review | [OGVCS-006](prd/todo/OGVCS-006-repository-metadata-snapshot-service.md) |
-| Workspace publication | Bounded, journaled staged-stream publication implemented and passing the three-OS bounded matrix; final lifecycle evidence remains open | [OGVCS-046](prd/todo/OGVCS-046-bounded-staged-workspace-publication.md) |
+| Workspace publication | Bounded, journaled staged-stream publication is complete with exact offline package identities and retained Linux/macOS/Windows evidence | [OGVCS-046](prd/done/OGVCS-046-bounded-staged-workspace-publication.md) |
 | Chunking and manifests | Candidate language-neutral contract plus JavaScript/Rust implementations; production profile ratification and final scale evidence remain open | [OGVCS-007](prd/todo/OGVCS-007-chunking-content-manifest-engine.md) |
 | Object transfer | Resumable-transfer candidate is in correctness and security hardening; it is not integrated into the supported root workspace yet | [OGVCS-008](prd/todo/OGVCS-008-object-storage-transfer-service.md) |
 | Identity and policy | Security-reviewed deny-overrides policy/audit candidate is integrated; production stores, real OIDC, and endpoint/API binding remain open | [OGVCS-009](prd/todo/OGVCS-009-identity-path-authorization-audit.md) |

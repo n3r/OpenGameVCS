@@ -1,0 +1,76 @@
+{
+  "schema": "ogvcs.path/evidence-policy-validation/v1",
+  "evidenceDate": "2026-08-30",
+  "status": "completed",
+  "implementationEvidence": {
+    "sourceRevision": "a4e59519ea25bf7d53785268024f2e261f4e0646",
+    "runId": 33322266963,
+    "machineRecord": "github-actions-run-33322266963.json"
+  },
+  "github": {
+    "repository": "n3r/OpenGameVCS",
+    "workflow": "Path and workspace filesystem conformance",
+    "event": "push",
+    "runId": 33322803382,
+    "runNumber": 27,
+    "runAttempt": 1,
+    "runUrl": "https://github.com/n3r/OpenGameVCS/actions/runs/33322803382",
+    "sourceRevision": "8c24a16c74266edcc4f63d2bfe8041b0b0982a51",
+    "createdAt": "2026-08-30T16:33:46Z",
+    "completedAt": "2026-08-30T16:35:27Z",
+    "conclusion": "success",
+    "jobs": [
+      {
+        "id": 99287627986,
+        "name": "Packed conformance (ubuntu-latest)",
+        "conclusion": "success"
+      },
+      {
+        "id": 99287628037,
+        "name": "Packed conformance (macos-latest)",
+        "conclusion": "success"
+      },
+      {
+        "id": 99287627969,
+        "name": "Packed conformance (windows-latest)",
+        "conclusion": "success"
+      },
+      {
+        "id": 99287808266,
+        "name": "Compare Linux, macOS, and Windows results",
+        "conclusion": "success"
+      }
+    ],
+    "artifacts": [
+      {
+        "id": 9735372498,
+        "name": "path-filesystem-Linux",
+        "sizeBytes": 90280,
+        "githubArchiveDigest": "sha256:e774adb11707a7745bd621a9148a053dd81ecc9b0853f5fd2093b88dfcac6015",
+        "expiresAt": "2026-09-29T16:34:20Z"
+      },
+      {
+        "id": 9735375145,
+        "name": "path-filesystem-macOS",
+        "sizeBytes": 85911,
+        "githubArchiveDigest": "sha256:89d88f15c24cf9656314d493b64c0e364756a689c83298ad94db7514f18b39f6",
+        "expiresAt": "2026-09-29T16:34:31Z"
+      },
+      {
+        "id": 9735382472,
+        "name": "path-filesystem-Windows",
+        "sizeBytes": 85918,
+        "githubArchiveDigest": "sha256:2d7ffcb3807dcd2641ed648ca02dc7dd301bb0b69a4292c2497ed8fa6090195e",
+        "expiresAt": "2026-09-29T16:35:08Z"
+      }
+    ]
+  },
+  "validatedClaims": [
+    "all retained OGVCS-046 implementation-evidence files match their recorded byte lengths and SHA-256 identities",
+    "all three retained 79-row reports are green and share one exact language-neutral decision set",
+    "both packed package archives have identical recorded identities on Linux, macOS, and Windows",
+    "the retained cross-platform comparison is independently reconstructed from the retained reports and packed identities",
+    "the retained Linux confinement trace independently replays with zero outside-root references",
+    "implementation-evidence prose and the still-pending PRD lifecycle are mutually consistent"
+  ]
+}

@@ -29,7 +29,7 @@ const adrPath = new URL(
 const roadmapPath = new URL('../prd/ROADMAP.md', import.meta.url);
 const workflowPath = new URL('../.github/workflows/path-filesystem.yml', import.meta.url);
 const streamingPrdPath = new URL(
-  '../prd/todo/OGVCS-046-bounded-staged-workspace-publication.md',
+  '../prd/done/OGVCS-046-bounded-staged-workspace-publication.md',
   import.meta.url
 );
 const streamingChangelogPath = new URL('../docs/changelog/OGVCS-046.md', import.meta.url);
@@ -37,6 +37,10 @@ const streamingEvidenceDirectory = new URL('../docs/evidence/OGVCS-046/', import
 const streamingEvidencePath = new URL('README.md', streamingEvidenceDirectory);
 const streamingRunEvidencePath = new URL(
   'github-actions-run-33322266963.json',
+  streamingEvidenceDirectory
+);
+const streamingPolicyRunEvidencePath = new URL(
+  'github-actions-run-33322803382.json',
   streamingEvidenceDirectory
 );
 const streamingReviewPath = new URL(
@@ -47,6 +51,8 @@ const streamingRunbookPath = new URL(
   '../docs/runbooks/OGVCS-046-read-before-write-rollback.md',
   import.meta.url
 );
+const doneIndexPath = new URL('../prd/done/README.md', import.meta.url);
+const rootReadmePath = new URL('../README.md', import.meta.url);
 
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
@@ -299,37 +305,57 @@ test('completed OGVCS-004 lifecycle claims stay aligned with durable evidence', 
   );
 });
 
-test('OGVCS-046 implementation evidence is source-bound while lifecycle remains pending', async () => {
+test('completed OGVCS-046 evidence and lifecycle remain source-bound', async () => {
   const runEvidence = JSON.parse(await readFile(streamingRunEvidencePath));
   assert.equal(runEvidence.schema, 'ogvcs.path/hosted-validation-evidence/v1');
+  assert.equal(runEvidence.evidenceDate, '2026-08-30');
   assert.equal(runEvidence.status, 'completed');
-  assert.equal(runEvidence.github.repository, 'n3r/OpenGameVCS');
-  assert.equal(runEvidence.github.runId, 33322266963);
-  assert.equal(
-    runEvidence.github.sourceRevision,
-    'a4e59519ea25bf7d53785268024f2e261f4e0646'
-  );
-  assert.equal(runEvidence.github.conclusion, 'success');
-  assert.equal(runEvidence.github.jobs.length, 4);
-  assert.ok(runEvidence.github.jobs.every(({ conclusion }) => conclusion === 'success'));
-  assert.deepEqual(
-    new Set(runEvidence.github.jobs.map(({ name }) => name)),
-    new Set([
-      'Packed conformance (macos-latest)',
-      'Packed conformance (windows-latest)',
-      'Packed conformance (ubuntu-latest)',
-      'Compare Linux, macOS, and Windows results'
-    ])
-  );
-  assert.deepEqual(
-    new Set(runEvidence.github.artifacts.map(({ name }) => name)),
-    new Set(['path-filesystem-Linux', 'path-filesystem-macOS', 'path-filesystem-Windows'])
-  );
-  assert.ok(runEvidence.github.artifacts.every(
-    ({ id, sizeBytes, githubArchiveDigest, expiresAt }) =>
-      id > 0 && sizeBytes > 0 && /^sha256:[0-9a-f]{64}$/u.test(githubArchiveDigest)
-      && /^2026-09-29T/u.test(expiresAt)
-  ));
+  assert.deepEqual(runEvidence.license, {
+    name: 'MIT',
+    sha256: '6f0f22f485ae8614870468a48f2c084eaf800fe02c5a2c4d9a91d34bc7f58eb4'
+  });
+  assert.deepEqual(runEvidence.github, {
+    repository: 'n3r/OpenGameVCS',
+    workflow: 'Path and workspace filesystem conformance',
+    event: 'push',
+    runId: 33322266963,
+    runNumber: 26,
+    runAttempt: 1,
+    runUrl: 'https://github.com/n3r/OpenGameVCS/actions/runs/33322266963',
+    sourceRevision: 'a4e59519ea25bf7d53785268024f2e261f4e0646',
+    createdAt: '2026-08-30T16:22:21Z',
+    completedAt: '2026-08-30T16:23:35Z',
+    conclusion: 'success',
+    jobs: [
+      { id: 99286198017, name: 'Packed conformance (macos-latest)', conclusion: 'success' },
+      { id: 99286198146, name: 'Packed conformance (windows-latest)', conclusion: 'success' },
+      { id: 99286198127, name: 'Packed conformance (ubuntu-latest)', conclusion: 'success' },
+      { id: 99286327607, name: 'Compare Linux, macOS, and Windows results', conclusion: 'success' }
+    ],
+    artifacts: [
+      {
+        id: 9735225864,
+        name: 'path-filesystem-Linux',
+        sizeBytes: 90268,
+        githubArchiveDigest: 'sha256:a5367d8dde040323789190ad40442a979f799b84e2977f6b5f02fe0fcf4067ec',
+        expiresAt: '2026-09-29T16:23:04Z'
+      },
+      {
+        id: 9735222314,
+        name: 'path-filesystem-macOS',
+        sizeBytes: 85911,
+        githubArchiveDigest: 'sha256:7bcf61d3a9fab0f5612a0069f56152e3950f5fbd20da7bf402154e5035a4d042',
+        expiresAt: '2026-09-29T16:22:48Z'
+      },
+      {
+        id: 9735228956,
+        name: 'path-filesystem-Windows',
+        sizeBytes: 85918,
+        githubArchiveDigest: 'sha256:84033b5ce1ea3e8bda88c41b68e9681a74da09c3826ac099a8b5305372230a09',
+        expiresAt: '2026-09-29T16:23:18Z'
+      }
+    ]
+  });
   assert.deepEqual(runEvidence.contract, {
     version: '1.0.0',
     manifestSha256: '2f343e1dac238da527fbd36160419ec6fb53b780ac7e33c01e11acabbdd4782b',
@@ -340,6 +366,36 @@ test('OGVCS-046 implementation evidence is source-bound while lifecycle remains 
     nativeRows: 16,
     totalRows: 79
   });
+  assert.deepEqual(runEvidence.packedConformance.packages, [
+    {
+      filename: 'opengamevcs-path-contract-v1-1.0.0.tgz',
+      name: '@opengamevcs/path-contract-v1',
+      version: '1.0.0',
+      sizeBytes: 185899,
+      sha256: '432f0f59a498186ff826f73e8c1e8c74e9cf836d22a0f57b463822624c962b8e'
+    },
+    {
+      filename: 'opengamevcs-path-filesystem-1.1.0.tgz',
+      name: '@opengamevcs/path-filesystem',
+      version: '1.1.0',
+      sizeBytes: 227376,
+      sha256: '6932e0fc6a17c0b546d291aec10eaebbf57ef596186ec667d3b0994b996cd161'
+    }
+  ]);
+  assert.deepEqual(
+    {
+      result: runEvidence.packedConformance.result,
+      reports: runEvidence.packedConformance.reports,
+      rowsPerReport: runEvidence.packedConformance.rowsPerReport,
+      failedPerReport: runEvidence.packedConformance.failedPerReport
+    },
+    {
+      result: 'equal-pure-results-and-package-bytes',
+      reports: 3,
+      rowsPerReport: 79,
+      failedPerReport: 0
+    }
+  );
 
   const reports = [];
   for (const expected of runEvidence.packedConformance.reportArtifacts) {
@@ -455,13 +511,76 @@ test('OGVCS-046 implementation evidence is source-bound while lifecycle remains 
     reason: 'OGVCS-046 validates bounded streaming retention and crash-safe publication. Its acceptance criteria contain no million-entry, 100-GiB, or 1-TiB campaign.'
   });
 
-  const [workflow, prd, changelog, evidence, review, runbook] = await Promise.all([
+  const policyRun = JSON.parse(await readFile(streamingPolicyRunEvidencePath));
+  assert.equal(policyRun.schema, 'ogvcs.path/evidence-policy-validation/v1');
+  assert.equal(policyRun.evidenceDate, '2026-08-30');
+  assert.equal(policyRun.status, 'completed');
+  assert.deepEqual(policyRun.implementationEvidence, {
+    sourceRevision: 'a4e59519ea25bf7d53785268024f2e261f4e0646',
+    runId: 33322266963,
+    machineRecord: 'github-actions-run-33322266963.json'
+  });
+  assert.deepEqual(policyRun.github, {
+    repository: 'n3r/OpenGameVCS',
+    workflow: 'Path and workspace filesystem conformance',
+    event: 'push',
+    runId: 33322803382,
+    runNumber: 27,
+    runAttempt: 1,
+    runUrl: 'https://github.com/n3r/OpenGameVCS/actions/runs/33322803382',
+    sourceRevision: '8c24a16c74266edcc4f63d2bfe8041b0b0982a51',
+    createdAt: '2026-08-30T16:33:46Z',
+    completedAt: '2026-08-30T16:35:27Z',
+    conclusion: 'success',
+    jobs: [
+      { id: 99287627986, name: 'Packed conformance (ubuntu-latest)', conclusion: 'success' },
+      { id: 99287628037, name: 'Packed conformance (macos-latest)', conclusion: 'success' },
+      { id: 99287627969, name: 'Packed conformance (windows-latest)', conclusion: 'success' },
+      { id: 99287808266, name: 'Compare Linux, macOS, and Windows results', conclusion: 'success' }
+    ],
+    artifacts: [
+      {
+        id: 9735372498,
+        name: 'path-filesystem-Linux',
+        sizeBytes: 90280,
+        githubArchiveDigest: 'sha256:e774adb11707a7745bd621a9148a053dd81ecc9b0853f5fd2093b88dfcac6015',
+        expiresAt: '2026-09-29T16:34:20Z'
+      },
+      {
+        id: 9735375145,
+        name: 'path-filesystem-macOS',
+        sizeBytes: 85911,
+        githubArchiveDigest: 'sha256:89d88f15c24cf9656314d493b64c0e364756a689c83298ad94db7514f18b39f6',
+        expiresAt: '2026-09-29T16:34:31Z'
+      },
+      {
+        id: 9735382472,
+        name: 'path-filesystem-Windows',
+        sizeBytes: 85918,
+        githubArchiveDigest: 'sha256:2d7ffcb3807dcd2641ed648ca02dc7dd301bb0b69a4292c2497ed8fa6090195e',
+        expiresAt: '2026-09-29T16:35:08Z'
+      }
+    ]
+  });
+  assert.deepEqual(policyRun.validatedClaims, [
+    'all retained OGVCS-046 implementation-evidence files match their recorded byte lengths and SHA-256 identities',
+    'all three retained 79-row reports are green and share one exact language-neutral decision set',
+    'both packed package archives have identical recorded identities on Linux, macOS, and Windows',
+    'the retained cross-platform comparison is independently reconstructed from the retained reports and packed identities',
+    'the retained Linux confinement trace independently replays with zero outside-root references',
+    'implementation-evidence prose and the still-pending PRD lifecycle are mutually consistent'
+  ]);
+
+  const [workflow, prd, changelog, evidence, review, runbook, roadmap, doneIndex, rootReadme] = await Promise.all([
     readFile(workflowPath, 'utf8'),
     readFile(streamingPrdPath, 'utf8'),
     readFile(streamingChangelogPath, 'utf8'),
     readFile(streamingEvidencePath, 'utf8'),
     readFile(streamingReviewPath, 'utf8'),
-    readFile(streamingRunbookPath, 'utf8')
+    readFile(streamingRunbookPath, 'utf8'),
+    readFile(roadmapPath, 'utf8'),
+    readFile(doneIndexPath, 'utf8'),
+    readFile(rootReadmePath, 'utf8')
   ]);
 
   for (const path of [
@@ -500,20 +619,44 @@ test('OGVCS-046 implementation evidence is source-bound while lifecycle remains 
     /actions\/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c/u
   );
 
-  assert.match(prd, /\*\*Status:\*\* In development/u);
-  assert.match(changelog, /\*\*Status:\*\* Validation/u);
+  assert.match(prd, /\*\*Status:\*\* Done/u);
+  for (const number of [1, 2, 3, 4, 5]) {
+    const id = `OGVCS-046-AC-${String(number).padStart(2, '0')}`;
+    assert.match(prd, new RegExp(`^- ${id}: .*\\[[^\\]]+\\]\\([^)]+\\)`, 'mu'));
+  }
+  for (const label of [
+    'Implementation changes',
+    'Test and benchmark results',
+    'Security/reliability review',
+    'Documentation/runbooks',
+    'Rollout result'
+  ]) {
+    assert.match(prd, new RegExp(`^- ${label}: .*\\[[^\\]]+\\]\\([^)]+\\)`, 'mu'));
+  }
+  assert.match(changelog, /\*\*Status:\*\* Completed/u);
   assert.match(changelog, /actions\/runs\/33322266963/u);
-  assert.match(
-    evidence,
-    /\*\*Status:\*\* Implementation proof complete; lifecycle ratification pending/u
-  );
+  assert.match(changelog, /actions\/runs\/33322803382/u);
+  assert.match(evidence, /\*\*Status:\*\* Completed/u);
   assert.match(evidence, /actions\/runs\/33322266963/u);
+  assert.match(evidence, /actions\/runs\/33322803382/u);
   assert.match(evidence, /Full package suite passed 74\/74/u);
   assert.match(evidence, /focused staged-publication suite passed 20\/20/u);
-  assert.match(review, /Implementation acceptance-ready; lifecycle ratification pending/u);
+  assert.match(review, /Acceptance-ready; no live P0, P1, or P2/u);
   assert.match(review, /No live P0, P1, or P2 remains in the bounded staged-publication implementation/u);
   assert.match(runbook, /readers and recovery tooling before enabling writers/u);
   assert.match(runbook, /\.json\.next/u);
   assert.match(runbook, /On Windows, Node can open and identity-check/u);
   assert.match(runbook, /all `write-stream` remnants/u);
+  assert.match(
+    roadmap,
+    /\[Bounded staged workspace publication\]\(done\/OGVCS-046-bounded-staged-workspace-publication\.md\)/u
+  );
+  assert.match(
+    doneIndex,
+    /\[OGVCS-046 — Bounded staged workspace publication\]\(OGVCS-046-bounded-staged-workspace-publication\.md\)/u
+  );
+  assert.match(
+    rootReadme,
+    /\[OGVCS-046\]\(prd\/done\/OGVCS-046-bounded-staged-workspace-publication\.md\)/u
+  );
 });

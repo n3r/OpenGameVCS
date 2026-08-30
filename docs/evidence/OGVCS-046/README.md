@@ -1,14 +1,17 @@
-# OGVCS-046 implementation evidence
+# OGVCS-046 completion evidence
 
 **Evidence date:** 2026-08-30
 
-**Status:** Implementation proof complete; lifecycle ratification pending
+**Status:** Completed
 
 **Implementation and package source:**
 [`a4e59519ea25bf7d53785268024f2e261f4e0646`](https://github.com/n3r/OpenGameVCS/commit/a4e59519ea25bf7d53785268024f2e261f4e0646)
 
 **Hosted bounded proof:**
 [GitHub Actions run 33322266963](https://github.com/n3r/OpenGameVCS/actions/runs/33322266963)
+
+**Hosted evidence-policy proof:**
+[GitHub Actions run 33322803382](https://github.com/n3r/OpenGameVCS/actions/runs/33322803382)
 
 ## Proven boundary
 
@@ -28,9 +31,13 @@ pre-rename crash; recovery tolerates an interruption after restoring the prior
 target; cancellation cannot override a durable commit; and deadline timers
 remain referenced while they are the only authority able to stop a hung source.
 
-The machine record is
+The implementation machine record is
 [`github-actions-run-33322266963.json`](github-actions-run-33322266963.json).
-Raw reports, packed-package records, the independently replayed comparison, and
+Evidence-policy revision
+[`8c24a16`](https://github.com/n3r/OpenGameVCS/commit/8c24a16c74266edcc4f63d2bfe8041b0b0982a51)
+passed all four hosted jobs; its durable machine record is
+[`github-actions-run-33322803382.json`](github-actions-run-33322803382.json).
+Raw reports, packed-package records, the independently reconstructed comparison, and
 the Linux confinement trace are retained beside this README. Invalid run
 33322087536 is intentionally not retained or cited: its Ubuntu job exposed the
 deadline-timer defect fixed by source `a4e5951`.
@@ -64,6 +71,7 @@ logical-1-TiB campaigns are not part of this bounded API PRD and were not run.
 | Offline packed consumer | Imported and executed `atomicWriteStream` from the normalized 1.1.0 archive without network access. |
 | Three-host conformance | Linux, macOS, and Windows each passed 79/79; strict comparison accepted one exact result set and identical normalized package bytes. |
 | Inherited confinement trace | The OGVCS-004 `atomicWriteFile` trace fixture retained symlink-ancestor, target-race, and ancestor-race syscalls; independent replay reports zero outside-root references. It is a package-boundary regression, not direct `atomicWriteStream` syscall proof. |
+| Evidence governance | Run 33322803382 rehashed and reconstructed the retained evidence in its Ubuntu job; the macOS and Windows package jobs and the cross-host comparator also passed. |
 
 The exact normalized packages retained by every host are:
 
@@ -142,9 +150,11 @@ device, or reparse changes fail closed. Windows exposes no supported directory
 identity-verified directory is treated as unavailable. This is not a claim of
 hardware power-loss durability on Windows.
 
-## Remaining lifecycle gate
+## Completed evidence boundary
 
-The implementation and package proof is complete, but OGVCS-046 remains in
-`prd/todo` until this retained packet and its independent policy reconstruction
-pass the same hosted workflow. That evidence-policy run will be recorded before
-the PRD, roadmap, done index, and root status are moved to `Done`.
+Implementation run 33322266963 proves the exact source and packed public API.
+Evidence-policy run 33322803382 independently proves the retained packet and
+its then-pending lifecycle claims on Ubuntu, alongside green macOS and Windows
+package jobs and the strict cross-host comparator. The PRD, roadmap, done index,
+and root status now consume those two immutable records; the final lifecycle
+workflow must stay green before this boundary is treated as settled.

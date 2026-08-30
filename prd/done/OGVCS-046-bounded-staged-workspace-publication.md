@@ -1,12 +1,12 @@
 # OGVCS-046 — Bounded staged workspace publication
 
-**Status:** In development
+**Status:** Done
 **Release:** R1 — Developer Preview
 **Priority:** P0
 **Owner:** Codex and OpenGameVCS maintainers
 **Depends on:** OGVCS-004
 **Blocks:** OGVCS-007
-**Source:** [OGVCS-007 integration requirement](OGVCS-007-chunking-content-manifest-engine.md)
+**Source:** [OGVCS-007 integration requirement](../todo/OGVCS-007-chunking-content-manifest-engine.md)
 **Last updated:** 2026-08-30
 
 ## Outcome
@@ -31,7 +31,7 @@ OGVCS-004 provides safe atomic publication for caller-owned in-memory bytes, whi
 ### Out of scope
 
 - Content-defined chunking algorithms, manifests, profiles, or OGVCS-007 identity decisions.
-- Root package/workspace changes, roadmap integration, or amendments to completed OGVCS-004 requirements.
+- Root package/workspace dependency changes or amendments to completed OGVCS-004 requirements.
 - A stronger native directory-handle adapter for continuously hostile same-authority namespace mutation.
 
 ## Users and journeys
@@ -102,8 +102,24 @@ The API and journal operation are additive. OGVCS-007 consumes the package-root 
 
 ## Completion evidence
 
-- Implementation changes:
-- Test and benchmark results:
-- Security/reliability review:
-- Documentation/runbooks:
-- Rollout result:
+The final MIT-licensed implementation source
+[`a4e5951`](https://github.com/n3r/OpenGameVCS/commit/a4e59519ea25bf7d53785268024f2e261f4e0646)
+passed 79/79 retained rows on Linux, macOS, and Windows with exact shared
+decisions and normalized package bytes. Evidence revision
+[`8c24a16`](https://github.com/n3r/OpenGameVCS/commit/8c24a16c74266edcc4f63d2bfe8041b0b0982a51)
+retains the raw reports, comparison, packed identities, Linux confinement
+trace, machine implementation record, and independent reconstruction policy.
+The evidence-policy reconstruction passed on Ubuntu alongside green macOS and
+Windows package jobs and the strict cross-host comparator. No exact-scale
+campaign is applicable to this bounded publication API.
+
+- Implementation changes: the [`a4e5951` implementation source](https://github.com/n3r/OpenGameVCS/commit/a4e59519ea25bf7d53785268024f2e261f4e0646) and [detailed changelog](../../docs/changelog/OGVCS-046.md#added) deliver the public bounded stream API, complete-plan binding, integrity verification, atomic rollback publication, authoritative deadlines, and restart-idempotent journal recovery.
+- Test and benchmark results: the [implementation-evidence packet](../../docs/evidence/OGVCS-046/README.md#local-and-hosted-gates) binds 74/74 package tests, 20/20 focused stream tests, 63 pure plus sixteen native rows per host, exact offline archive identities, and the retained comparison. OGVCS-046 has no benchmark or exact-scale acceptance row.
+- Security/reliability review: the [independent final review](../../docs/reviews/OGVCS-046-critical-review.md#final-verdict) records every discovered crash, race, durability, resource, and event-loop gap, its remediation, the full FR/NFR/AC matrix, accepted platform boundary, and no-live-P0/P1/P2 implementation verdict.
+- Documentation/runbooks: the [read-before-write and rollback runbook](../../docs/runbooks/OGVCS-046-read-before-write-rollback.md) and [evidence boundary](../../docs/evidence/OGVCS-046/README.md#security-and-reliability-boundary) document reader-first rollout, `.json.next` reconciliation, repeat recovery, resource controls, parent barriers, downgrade, and the Windows directory-sync limitation.
+- Rollout result: implementation [run 33322266963](https://github.com/n3r/OpenGameVCS/actions/runs/33322266963) passed the exact source/package boundary, and evidence-policy [run 33322803382](https://github.com/n3r/OpenGameVCS/actions/runs/33322803382) passed retained-evidence reconstruction on Ubuntu alongside green macOS and Windows package jobs and the strict cross-host comparator.
+- OGVCS-046-AC-01: the [acceptance map](../../docs/evidence/OGVCS-046/README.md#acceptance-map) binds exact multi-chunk output and one-configured-chunk retained source memory.
+- OGVCS-046-AC-02: the [requirement matrix](../../docs/reviews/OGVCS-046-critical-review.md#requirement-and-acceptance-matrix) binds source, cancellation, limit, integrity, stage, namespace, sync, rename, and record-transition failures to preserved prior bytes or an honest recoverable journal.
+- OGVCS-046-AC-03: the [restart evidence](../../docs/evidence/OGVCS-046/README.md#acceptance-map) covers partial source, rollback link, all durable records, immediate post-rename, all pre-record-rename temporaries, malformed successors, and interrupted recovery with no owned remnant after completion.
+- OGVCS-046-AC-04: the [packed evidence](../../docs/evidence/OGVCS-046/README.md#durable-reports) binds offline package-root import and execution on all three hosts.
+- OGVCS-046-AC-05: the [retained cross-host comparison](../../docs/evidence/OGVCS-046/conformance-comparison-2026-08-30.json) proves the same 79-row decisions and normalized package identities on Linux, macOS, and Windows, while unsupported rollback-link capability fails closed.

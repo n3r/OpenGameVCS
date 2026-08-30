@@ -1,6 +1,6 @@
 # OGVCS-046 — Bounded staged workspace publication
 
-**Status:** Validation
+**Status:** Completed
 **Package:** `@opengamevcs/path-filesystem` 1.1.0
 **Date:** 2026-08-30
 
@@ -42,9 +42,12 @@ link and journal removal. It also made a durable `committed` record authoritativ
 a cleanup or post-commit observer failure now returns the committed result and
 leaves a recoverable remnant instead of falsely reporting publication failure.
 
-The PRD remains in development until the retained evidence and independent
-reconstruction policy pass the same hosted workflow. Lifecycle ratification is
-therefore not claimed by this implementation-evidence entry.
+Evidence-policy [run 33322803382](https://github.com/n3r/OpenGameVCS/actions/runs/33322803382)
+passed the retained file identities, report/comparison reconstruction, Linux
+trace replay, workflow routing, and then-pending lifecycle assertions at
+evidence revision
+[`8c24a16`](https://github.com/n3r/OpenGameVCS/commit/8c24a16c74266edcc4f63d2bfe8041b0b0982a51).
+The PRD lifecycle is therefore complete.
 
 No million-entry, 100-GiB, or 1-TiB campaign was run for this bounded API PRD.
 The 100-GiB content campaign remains an OGVCS-007 final/major-release gate.
