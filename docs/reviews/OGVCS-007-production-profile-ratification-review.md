@@ -406,6 +406,7 @@ workspace roots are removed.
 This closes P0-1 and P0-3 at the bounded source/API boundary without ratifying
 the profile. The retained seven-workload report remains provisional: P0-2 still
 requires an authenticated OGVCS-005 result bundle/verifier with observed
-whole-process peak memory. Current-source hosted proof, registry/predecessor-pin
-regeneration, and the separately scheduled final 100-GiB campaign also remain
-outside this source-level follow-up.
+whole-process peak memory. Bounded current-source JavaScript/Rust proof is
+retained from all three hosted operating systems; registry/predecessor-pin
+regeneration and the separately scheduled final 100-GiB campaign remain outside
+this source-level follow-up.

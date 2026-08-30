@@ -88,6 +88,6 @@ The remaining P0 blocker from the review is:
 Actual P0-2 closure still requires an authenticated OGVCS-005-compatible result
 bundle plus verifier outcome for the bounded seven-class run, along with
 observed process peak memory. Until then, this packet remains narrow retained
-selection evidence only. Ratification also remains gated by the current-source
-hosted matrix, the generated registry/predecessor-pin lifecycle cut, and the
-separately scheduled final 100-GiB resource campaign.
+selection evidence only. The current-source bounded hosted matrix is retained
+above; ratification still requires the generated registry/predecessor-pin
+lifecycle cut and the separately scheduled final 100-GiB resource campaign.
