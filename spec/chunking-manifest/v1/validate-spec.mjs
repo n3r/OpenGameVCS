@@ -122,6 +122,16 @@ if (selectionThresholds.profile !== PROFILE
 
 const manifestRecord = await load('manifest.json'); const manifest = manifestRecord.value;
 if (manifest.profile !== PROFILE || manifest.tableSha256 !== gearDigest || manifest.contractVersion !== '0.1.0-rc.1') fail('contract manifest header is invalid');
+const manifestSchema = (await load('schemas/manifest.schema.json')).value;
+const countSchema = manifestSchema.properties?.counts;
+const expectedCountKeys = ['artifacts', 'benchmarkThresholds', 'benchmarkWorkloads', 'fragmentationCases', 'goldenCases', 'malformedCases', 'schemas'];
+if (countSchema?.additionalProperties !== false
+  || canonical(countSchema.required) !== canonical(expectedCountKeys)
+  || countSchema.properties?.benchmarkThresholds?.const !== 1
+  || countSchema.properties?.benchmarkWorkloads?.const !== expectedWorkloadIds.length
+  || countSchema.properties?.schemas?.const !== 8) {
+  fail('contract manifest schema does not describe the current count authority');
+}
 if (new Set(manifest.artifacts.map(({ path }) => path)).size !== manifest.artifacts.length || manifest.artifacts.some(({ path }, index) => !/^[A-Za-z0-9._/-]+$/u.test(path) || path.startsWith('/') || path.split('/').includes('..') || index > 0 && manifest.artifacts[index - 1].path >= path)) fail('contract artifact inventory is unsafe, duplicated, or unsorted');
 for (const artifact of manifest.artifacts) {
   const body = await readFile(resolve(ROOT, artifact.path));
