@@ -2560,7 +2560,8 @@ fn file_id_race(database_url: &str, context: AuthorizationContext, repository_id
 
     let mut store = PostgresMetadataStore::connect(database_url)
         .unwrap()
-        .with_authorizer(IsolatedAllow);
+        .with_authorizer(IsolatedAllow)
+        .with_object_validator(IsolatedConformanceValidation);
     let mut wrong_expected_state = store
         .begin_authorized(
             &context,
