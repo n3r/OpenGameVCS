@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const cases = [
   'canonical-file-graph',
+  'authorization-binding-and-poisoning',
   'cas-100-racers',
   'file-id-race-and-tombstone',
   'rollback-outbox-idempotency',

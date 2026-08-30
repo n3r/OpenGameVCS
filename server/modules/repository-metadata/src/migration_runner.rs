@@ -43,10 +43,76 @@ pub fn run_migrations(
     match (result, unlock) {
         (Ok(report), Ok(_)) => Ok(report),
         (Err(error), _) => Err(error),
-        (Ok(_), Err(_)) => Err(DomainError::new(
-            DomainErrorCode::TransactionRetryExhausted,
-        )),
+        (Ok(_), Err(_)) => Err(DomainError::new(DomainErrorCode::MigrationIncompatible)),
     }
+}
+
+/// Proves that every phase required by this binary is present, completed, and
+/// byte-for-byte identical to the migration source bundled into the binary.
+/// Mutation entry points call this before opening a database transaction.
+pub fn verify_schema_compatibility(client: &mut Client) -> Result<()> {
+    if !compatible(env!("CARGO_PKG_VERSION"), "0.1.0", "0.1.x") {
+        return Err(DomainError::new(DomainErrorCode::MigrationIncompatible));
+    }
+    let ledger_exists: bool = client
+        .query_one(
+            "SELECT to_regclass('ogvcs_metadata.schema_migrations') IS NOT NULL",
+            &[],
+        )
+        .map_err(database_error)?
+        .get(0);
+    if !ledger_exists {
+        return Err(DomainError::new(DomainErrorCode::MigrationIncompatible));
+    }
+    let newest: Option<i64> = client
+        .query_one(
+            "SELECT max(version) FROM ogvcs_metadata.schema_migrations",
+            &[],
+        )
+        .map_err(database_error)?
+        .get(0);
+    if newest.unwrap_or(0) > MAXIMUM_SCHEMA_VERSION {
+        return Err(DomainError::new(DomainErrorCode::MigrationIncompatible));
+    }
+
+    for migration in MIGRATIONS {
+        validate_source(migration)?;
+        if !compatible(
+            env!("CARGO_PKG_VERSION"),
+            migration.minimum_application_version,
+            migration.maximum_application_version,
+        ) {
+            return Err(DomainError::new(DomainErrorCode::MigrationIncompatible));
+        }
+        let row = client
+            .query_opt(
+                "SELECT checksum_sha256, state, minimum_application_version,
+                        maximum_application_version
+                 FROM ogvcs_metadata.schema_migrations
+                 WHERE version = $1 AND phase = $2",
+                &[&(migration.version as i64), &migration.phase.as_str()],
+            )
+            .map_err(database_error)?
+            .ok_or_else(|| DomainError::new(DomainErrorCode::MigrationIncompatible))?;
+        let checksum: String = row.get(0);
+        let state: String = row.get(1);
+        let minimum_application_version: String = row.get(2);
+        let maximum_application_version: String = row.get(3);
+        if checksum != migration.checksum_sha256 {
+            return Err(DomainError::new(
+                DomainErrorCode::MigrationChecksumMismatch,
+            ));
+        }
+        if state != "completed" {
+            return Err(DomainError::new(DomainErrorCode::MigrationIncompatible));
+        }
+        if minimum_application_version != migration.minimum_application_version
+            || maximum_application_version != migration.maximum_application_version
+        {
+            return Err(DomainError::new(DomainErrorCode::MigrationIncompatible));
+        }
+    }
+    Ok(())
 }
 
 fn run_locked(client: &mut Client, options: MigrationRunOptions) -> Result<MigrationRunReport> {
@@ -64,7 +130,7 @@ fn run_locked(client: &mut Client, options: MigrationRunOptions) -> Result<Migra
     if ledger_exists {
         let newest: Option<i64> = client
             .query_one(
-                "SELECT max(version) FROM ogvcs_metadata.schema_migrations WHERE state = 'completed'",
+                "SELECT max(version) FROM ogvcs_metadata.schema_migrations",
                 &[],
             )
             .map_err(database_error)?
@@ -76,12 +142,7 @@ fn run_locked(client: &mut Client, options: MigrationRunOptions) -> Result<Migra
 
     let mut report = MigrationRunReport::default();
     for migration in MIGRATIONS {
-        let actual = format!("{:x}", Sha256::digest(migration.sql.as_bytes()));
-        if actual != migration.checksum_sha256 {
-            return Err(DomainError::new(
-                DomainErrorCode::MigrationChecksumMismatch,
-            ));
-        }
+        validate_source(migration)?;
         if !compatible(
             options.application_version,
             migration.minimum_application_version,
@@ -89,14 +150,12 @@ fn run_locked(client: &mut Client, options: MigrationRunOptions) -> Result<Migra
         ) {
             return Err(DomainError::new(DomainErrorCode::MigrationIncompatible));
         }
-        if migration.requires_compatibility_fence && !options.compatibility_fence_open {
-            continue;
-        }
-
         let existing = if ledger_exists || report.applied > 0 {
             client
                 .query_opt(
-                    "SELECT checksum_sha256, state FROM ogvcs_metadata.schema_migrations WHERE version = $1 AND phase = $2",
+                    "SELECT checksum_sha256, state, minimum_application_version,
+                            maximum_application_version
+                     FROM ogvcs_metadata.schema_migrations WHERE version = $1 AND phase = $2",
                     &[&(migration.version as i64), &migration.phase.as_str()],
                 )
                 .map_err(database_error)?
@@ -106,10 +165,17 @@ fn run_locked(client: &mut Client, options: MigrationRunOptions) -> Result<Migra
         if let Some(row) = existing {
             let checksum: String = row.get(0);
             let state: String = row.get(1);
+            let minimum_application_version: String = row.get(2);
+            let maximum_application_version: String = row.get(3);
             if checksum != migration.checksum_sha256 {
                 return Err(DomainError::new(
                     DomainErrorCode::MigrationChecksumMismatch,
                 ));
+            }
+            if minimum_application_version != migration.minimum_application_version
+                || maximum_application_version != migration.maximum_application_version
+            {
+                return Err(DomainError::new(DomainErrorCode::MigrationIncompatible));
             }
             if state == "completed" {
                 report.already_applied += 1;
@@ -118,6 +184,9 @@ fn run_locked(client: &mut Client, options: MigrationRunOptions) -> Result<Migra
             if !migration.restartable {
                 return Err(DomainError::new(DomainErrorCode::MigrationIncompatible));
             }
+        }
+        if migration.requires_compatibility_fence && !options.compatibility_fence_open {
+            continue;
         }
 
         let body = transaction_body(migration.sql)?;
@@ -146,6 +215,17 @@ fn run_locked(client: &mut Client, options: MigrationRunOptions) -> Result<Migra
         report.applied += 1;
     }
     Ok(report)
+}
+
+fn validate_source(migration: crate::Migration) -> Result<()> {
+    let actual = format!("{:x}", Sha256::digest(migration.sql.as_bytes()));
+    if actual == migration.checksum_sha256 {
+        Ok(())
+    } else {
+        Err(DomainError::new(
+            DomainErrorCode::MigrationChecksumMismatch,
+        ))
+    }
 }
 
 fn transaction_body(sql: &str) -> Result<&str> {
@@ -185,5 +265,5 @@ fn version_triplet(value: &str) -> Option<(u64, u64, u64)> {
 }
 
 fn database_error(_error: postgres::Error) -> DomainError {
-    DomainError::new(DomainErrorCode::TransactionRetryExhausted)
+    DomainError::new(DomainErrorCode::MigrationIncompatible)
 }

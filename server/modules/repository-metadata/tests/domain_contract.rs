@@ -49,16 +49,17 @@ fn semantic_idempotency_keys_self_bind_issue_and_expiry() {
     let issued_at = SystemTime::UNIX_EPOCH + Duration::from_millis(1_000);
     let expires_at = issued_at + Duration::from_secs(60);
     let mut reservation = IdempotencyReservation {
-        authenticated_scope_digest: [1; 32],
         operation: "reference.cas".to_owned(),
         key: format!("ik1.1000.61000.{}", "A".repeat(22)),
         semantic_fingerprint: [2; 32],
         issued_at,
         expires_at,
     };
-    assert!(reservation.is_valid());
+    assert!(reservation.is_valid_at(issued_at + Duration::from_secs(1)));
+    assert!(!reservation.is_valid_at(issued_at - Duration::from_millis(1)));
+    assert!(!reservation.is_valid_at(expires_at));
     reservation.key = format!("ik1.1001.61000.{}", "A".repeat(22));
-    assert!(!reservation.is_valid());
+    assert!(!reservation.is_valid_at(issued_at + Duration::from_secs(1)));
 }
 
 #[test]

@@ -265,7 +265,6 @@ pub struct OutboxEvent {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct IdempotencyReservation {
-    pub authenticated_scope_digest: [u8; 32],
     pub operation: String,
     pub key: String,
     pub semantic_fingerprint: [u8; 32],
@@ -275,6 +274,19 @@ pub struct IdempotencyReservation {
 
 impl IdempotencyReservation {
     pub fn is_valid(&self) -> bool {
+        self.is_valid_at(SystemTime::now())
+    }
+
+    pub fn is_valid_at(&self, now: SystemTime) -> bool {
+        if now.duration_since(self.issued_at).is_err() {
+            return false;
+        }
+        let Ok(remaining) = self.expires_at.duration_since(now) else {
+            return false;
+        };
+        if remaining.is_zero() {
+            return false;
+        }
         let Ok(issued_ms) = self
             .issued_at
             .duration_since(SystemTime::UNIX_EPOCH)

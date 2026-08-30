@@ -14,7 +14,9 @@ mod types;
 
 pub use error::{DomainError, DomainErrorCode, Result};
 pub use migration::{Migration, MigrationPhase, MIGRATIONS};
-pub use migration_runner::{run_migrations, MigrationRunOptions, MigrationRunReport};
+pub use migration_runner::{
+    run_migrations, verify_schema_compatibility, MigrationRunOptions, MigrationRunReport,
+};
 pub use ogvcs_object_model::{FileId, ObjectRef};
 pub use ports::{
     AuthorizationPort, DenyAllAuthorization, MetadataStore, MetadataTransaction,

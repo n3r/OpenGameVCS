@@ -87,9 +87,18 @@ fn migration_runner_declares_lock_checksum_compatibility_and_fence_gates() {
         "MAXIMUM_SCHEMA_VERSION",
         "compatibility_fence_open",
         "transaction_body",
+        "pub fn verify_schema_compatibility",
+        "state != \"completed\"",
     ] {
         assert!(source.contains(evidence), "migration runner missing {evidence}");
     }
+    assert!(
+        source.find("let existing =").unwrap()
+            < source
+                .find("migration.requires_compatibility_fence")
+                .unwrap(),
+        "closed fences must not bypass checksum validation"
+    );
 }
 
 #[test]

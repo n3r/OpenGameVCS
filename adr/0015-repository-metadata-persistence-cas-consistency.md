@@ -98,6 +98,13 @@ origins. Import mapping insertion and lifetime reservation are one transaction;
 retry of the same importer/source tuple returns the original FileID. Concurrent
 collisions have one winner and typed losers without partial metadata.
 
+The generic reservation API accepts only native create/copy. Import is available
+only through the mapping-bound import operation. A proof-bound restore and
+tombstone-reactivation API is intentionally unavailable until OGVCS-002 and
+OGVCS-010 define the allocation proof carrier and authorization decision; the
+adapter must reject `restore` even for an otherwise unused FileID so it cannot
+forge a repository lifetime.
+
 ### Idempotency and outbox
 
 Every retryable mutation uses the OGVCS-041 semantic fingerprint. The service
@@ -105,6 +112,12 @@ atomically reserves `(authenticated_scope_digest, operation, key)`. Equal
 fingerprints join or return the committed safe outcome; a different fingerprint
 returns the frozen protocol idempotency-reuse error before mutation. The
 committed outcome is retained through the key's embedded expiry.
+
+The authenticated scope digest is derived inside the transaction from its bound
+subject digest, tenant, authorization epoch, and repository; it is never a
+caller-supplied field. Issue and expiry are checked against both host and
+database time. A committed replay rolls back its probe transaction and returns
+the stored safe outcome through a non-retried API path.
 
 Every metadata mutation requiring notification inserts an immutable outbox row
 in the same transaction and commit sequence as the state change. The worker
@@ -142,8 +155,10 @@ declared compatibility fence and backup gate.
 
 The application refuses to start for mutation when the database schema is newer
 than its maximum or older than its minimum. Unknown compatibility stops
-reference writes. Rollback deploys the prior compatible application before a
-contract phase; it never attempts an automatic database downgrade.
+reference writes. Mutation start verifies the source and ledger checksum of
+every required phase, including a previously applied contract phase while its
+compatibility fence is closed. Rollback deploys the prior compatible application
+before a contract phase; it never attempts an automatic database downgrade.
 
 ### Domain contract and frozen protocol
 
@@ -158,7 +173,10 @@ the HTTP adapter remains disabled outside isolated tests.
 Production authorization is an injected OGVCS-009 port. The default development
 implementation denies. An allow fake exists only in authenticated isolated test
 mode. Authorized-view construction precedes pagination, counts, cursors, and
-history traversal.
+history traversal. A mutation transaction owns the exact authorized repository,
+complete authorization context, and returned authorized view for its lifetime;
+redundant repository arguments are rejected against that binding before any
+operation SQL, and token issuance derives context solely from that binding.
 
 ## Alternatives considered
 

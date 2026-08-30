@@ -25,3 +25,10 @@ applicable; a later negotiated protocol release must define the public mapping.
 Object byte streams remain staged and untrusted until complete canonical/identity
 validation and transaction commit. Exact duplicate bytes are idempotent. A
 different byte sequence under the same ObjectID is a security/corruption result.
+
+`file-id.register` retains the `restore` origin assignment, but this version has
+no public proof carrier that can authorize reactivation of an existing lifetime.
+The PostgreSQL domain adapter therefore rejects generic restore reservation for
+both unused and tombstoned FileIDs. Legitimate restore remains unavailable until
+OGVCS-002/OGVCS-010 define and bind the allocation proof; import must use the
+mapping-bound import operation.

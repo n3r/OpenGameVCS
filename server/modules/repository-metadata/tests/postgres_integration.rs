@@ -1,8 +1,13 @@
-use std::{env, fs, sync::{Arc, Barrier}, thread, time::{Duration, SystemTime}};
+use std::{
+    env, fs,
+    sync::{Arc, Barrier},
+    thread,
+    time::{Duration, SystemTime},
+};
 
 use ogvcs_object_model::{
-    decode_canonical, object_id, scan_metadata, validate_semantic_object, Cbor, Limits, ObjectKind,
-    ObjectRef, ProfileRef, Registry, ValidationMode,
+    decode_canonical, encode_canonical, object_id, scan_metadata, validate_semantic_object, Cbor,
+    Limits, ObjectKind, ObjectRef, ProfileRef, Registry, ValidationMode,
 };
 use ogvcs_repository_metadata::{
     AuthorizationContext, AuthorizationPort, CaseMode, CommitSequence, DomainErrorCode,
@@ -25,17 +30,26 @@ struct IsolatedAllow;
 #[derive(Clone, Copy)]
 struct IsolatedConformanceValidation;
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct IsolatedAuthorizedView {
+    context: AuthorizationContext,
+    repository_id: RepositoryId,
+}
+
 impl AuthorizationPort for IsolatedAllow {
-    type AuthorizedView = ();
+    type AuthorizedView = IsolatedAuthorizedView;
 
     fn authorize(
         &self,
-        _context: &AuthorizationContext,
+        context: &AuthorizationContext,
         _permission: &'static str,
         _resource_type: &'static str,
-        _repository_id: RepositoryId,
+        repository_id: RepositoryId,
     ) -> ogvcs_repository_metadata::Result<Self::AuthorizedView> {
-        Ok(())
+        Ok(IsolatedAuthorizedView {
+            context: context.clone(),
+            repository_id,
+        })
     }
 }
 
@@ -90,6 +104,15 @@ fn production_reference_postgres_report() {
             TransactionOptions::Serializable { maximum_retries: 8 },
         )
         .unwrap();
+    assert_eq!(transaction.authorized_repository_id(), repository_id);
+    assert_eq!(transaction.authorization_context(), &context);
+    assert_eq!(
+        transaction.authorized_view(),
+        &IsolatedAuthorizedView {
+            context: context.clone(),
+            repository_id,
+        }
+    );
     assert_eq!(
         transaction.reserve_idempotency(create_key.clone()).unwrap(),
         IdempotencyReservationOutcome::Reserved
@@ -106,7 +129,12 @@ fn production_reference_postgres_report() {
                 path_profile: path_profile.clone(),
                 platform_profile: path_profile,
                 content_policy_profile,
-                structural_limits: json!({"maxTreeEntries": 999999}),
+                structural_limits: json!({
+                    "maxTreeEntries": 999999,
+                    "maxPathBytes": 4096,
+                    "maxPathSegments": 256,
+                    "maxSnapshotParents": 8
+                }),
                 tenant_boundary: tenant_id,
             },
             descriptor: write(repository_id, &descriptor),
@@ -189,7 +217,13 @@ fn production_reference_postgres_report() {
         .commit_idempotency(&publish_key, json!({"generation": reference.generation}))
         .unwrap();
     transaction
-        .append_outbox(event(repository_id, 2, "reference.changed", "reference"))
+        .append_outbox(event(repository_id, 2, "metadata.object-accepted", "snapshot"))
+        .unwrap();
+    transaction
+        .append_outbox(event(repository_id, 3, "file-id.state-changed", "path"))
+        .unwrap();
+    transaction
+        .append_outbox(event(repository_id, 4, "reference.changed", "reference"))
         .unwrap();
     assert_eq!(transaction.commit().unwrap(), CommitSequence::new(2));
 
@@ -249,6 +283,17 @@ fn production_reference_postgres_report() {
     immutable_settings(&database_url, repository_id);
     report("canonical-file-graph");
 
+    authorization_and_poisoning_report(
+        &database_url,
+        &mut store,
+        &context,
+        repository_id,
+        tenant_id,
+        &descriptor,
+        &create_key,
+    );
+    report("authorization-binding-and-poisoning");
+
     rollback_report(
         &database_url,
         &mut store,
@@ -298,6 +343,65 @@ fn migration_report(database_url: &str) {
     client
         .execute(
             "UPDATE ogvcs_metadata.schema_migrations SET checksum_sha256 = repeat('0', 64)
+             WHERE version = 1 AND phase = 'contract'",
+            &[],
+        )
+        .unwrap();
+    drop(client);
+    let mut store = PostgresMetadataStore::connect(database_url).unwrap();
+    assert_eq!(
+        store
+            .migrate(ogvcs_repository_metadata::MigrationRunOptions {
+                application_version: "0.1.0",
+                compatibility_fence_open: false,
+            })
+            .unwrap_err()
+            .code,
+        DomainErrorCode::MigrationChecksumMismatch
+    );
+    drop(store);
+    let mut client = Client::connect(database_url, NoTls).unwrap();
+    client
+        .execute(
+            "UPDATE ogvcs_metadata.schema_migrations SET checksum_sha256 = $1
+             WHERE version = 1 AND phase = 'contract'",
+            &[&ogvcs_repository_metadata::MIGRATIONS[2].checksum_sha256],
+        )
+        .unwrap();
+    client
+        .execute(
+            "DELETE FROM ogvcs_metadata.schema_migrations
+             WHERE version = 1 AND phase = 'contract'",
+            &[],
+        )
+        .unwrap();
+    drop(client);
+    let mut store = PostgresMetadataStore::connect(database_url)
+        .unwrap()
+        .with_authorizer(IsolatedAllow);
+    let compatibility_error = match store.begin_authorized(
+        &AuthorizationContext {
+            subject_digest: [1; 32],
+            tenant_id: TenantId::from_bytes([2; 16]),
+            authorization_epoch: 1,
+        },
+        "repository.create",
+        RepositoryId::from_bytes([3; 16]),
+        TransactionOptions::Serializable { maximum_retries: 0 },
+    ) {
+        Ok(_) => panic!("mutation started without a completed contract migration"),
+        Err(error) => error,
+    };
+    assert_eq!(compatibility_error.code, DomainErrorCode::MigrationIncompatible);
+    drop(store);
+    let mut store = PostgresMetadataStore::connect(database_url).unwrap();
+    assert_eq!(store.migrate(options).unwrap().applied, 1);
+    drop(store);
+
+    let mut client = Client::connect(database_url, NoTls).unwrap();
+    client
+        .execute(
+            "UPDATE ogvcs_metadata.schema_migrations SET checksum_sha256 = repeat('0', 64)
              WHERE version = 1 AND phase = 'expand'",
             &[],
         )
@@ -338,6 +442,26 @@ fn object_replay_and_collision(
     repository_id: RepositoryId,
     manifest: &(ObjectRef, Vec<u8>),
 ) {
+    let mut unbound = store
+        .begin_authorized(
+            context,
+            "repository.object.put",
+            repository_id,
+            TransactionOptions::Serializable { maximum_retries: 0 },
+        )
+        .unwrap();
+    assert_eq!(
+        unbound
+            .put_object(write(repository_id, manifest))
+            .unwrap_err()
+            .code,
+        DomainErrorCode::ObjectInvalid
+    );
+    assert_eq!(
+        unbound.commit().unwrap_err().code,
+        DomainErrorCode::ObjectInvalid
+    );
+
     let mut transaction = store
         .begin_authorized(
             context,
@@ -346,11 +470,68 @@ fn object_replay_and_collision(
             TransactionOptions::Serializable { maximum_retries: 2 },
         )
         .unwrap();
+    let replay_key = idempotency("object.put", "object-replay", [12; 32]);
+    assert_eq!(
+        transaction.reserve_idempotency(replay_key.clone()).unwrap(),
+        IdempotencyReservationOutcome::Reserved
+    );
     assert_eq!(
         transaction.put_object(write(repository_id, manifest)).unwrap(),
         ObjectPutOutcome::ExactReplay
     );
+    transaction
+        .commit_idempotency(&replay_key, json!({"replayed": true}))
+        .unwrap();
     transaction.commit().unwrap();
+
+    let mut foreign_tree = decode_canonical(
+        &fixture(ObjectKind::Tree, "03-tree.cbor").1,
+        Limits::METADATA,
+    )
+    .unwrap();
+    let Cbor::Map(fields) = &mut foreign_tree else {
+        panic!("tree map");
+    };
+    let descriptor_field = fields
+        .iter_mut()
+        .find(|(key, _)| *key == Cbor::UInt(16))
+        .unwrap();
+    let foreign_descriptor = ObjectRef {
+        kind: ObjectKind::RepositoryDescriptor,
+        digest: [88; 32],
+    };
+    descriptor_field.1 = foreign_descriptor.to_cbor();
+    let foreign_tree_bytes = encode_canonical(&foreign_tree).unwrap();
+    let foreign_tree = (
+        ObjectRef {
+            kind: ObjectKind::Tree,
+            digest: object_id(ObjectKind::Tree, &foreign_tree_bytes).unwrap(),
+        },
+        foreign_tree_bytes,
+    );
+    let settings_key = idempotency("object.put", "foreign-descriptor", [16; 32]);
+    let mut settings_validation = store
+        .begin_authorized(
+            context,
+            "repository.object.put",
+            repository_id,
+            TransactionOptions::Serializable { maximum_retries: 0 },
+        )
+        .unwrap();
+    settings_validation
+        .reserve_idempotency(settings_key)
+        .unwrap();
+    assert_eq!(
+        settings_validation
+            .put_object(write(repository_id, &foreign_tree))
+            .unwrap_err()
+            .code,
+        DomainErrorCode::ObjectInvalid
+    );
+    assert_eq!(
+        settings_validation.commit().unwrap_err().code,
+        DomainErrorCode::ObjectInvalid
+    );
 
     let change_set = fixture(ObjectKind::ChangeSet, "04-change-set.cbor");
     let mut client = Client::connect(database_url, NoTls).unwrap();
@@ -375,6 +556,8 @@ fn object_replay_and_collision(
             TransactionOptions::Serializable { maximum_retries: 0 },
         )
         .unwrap();
+    let collision_key = idempotency("object.put", "object-collision", [13; 32]);
+    transaction.reserve_idempotency(collision_key).unwrap();
     assert_eq!(
         transaction
             .put_object(write(repository_id, &change_set))
@@ -394,6 +577,197 @@ fn immutable_settings(database_url: &str, repository_id: RepositoryId) {
         )
         .unwrap_err();
     assert_eq!(error.as_db_error().unwrap().code().code(), "55000");
+}
+
+#[allow(clippy::too_many_arguments)]
+fn authorization_and_poisoning_report(
+    database_url: &str,
+    store: &mut PostgresMetadataStore<IsolatedAllow, IsolatedConformanceValidation>,
+    context: &AuthorizationContext,
+    repository_id: RepositoryId,
+    tenant_id: TenantId,
+    descriptor: &(ObjectRef, Vec<u8>),
+    committed_key: &IdempotencyReservation,
+) {
+    let mut replay = store
+        .begin_authorized(
+            context,
+            "repository.create",
+            repository_id,
+            TransactionOptions::Serializable { maximum_retries: 0 },
+        )
+        .unwrap();
+    assert_eq!(
+        replay.reserve_idempotency(committed_key.clone()).unwrap(),
+        IdempotencyReservationOutcome::CommittedReplay(json!({"created": true}))
+    );
+    assert_eq!(
+        replay.finish_committed_replay().unwrap(),
+        json!({"created": true})
+    );
+
+    let cross_subject = AuthorizationContext {
+        subject_digest: [7; 32],
+        ..context.clone()
+    };
+    let mut independently_scoped = store
+        .begin_authorized(
+            &cross_subject,
+            "repository.create",
+            repository_id,
+            TransactionOptions::Serializable { maximum_retries: 0 },
+        )
+        .unwrap();
+    assert_eq!(
+        independently_scoped
+            .reserve_idempotency(committed_key.clone())
+            .unwrap(),
+        IdempotencyReservationOutcome::Reserved
+    );
+    independently_scoped.rollback().unwrap();
+
+    let future_issued = SystemTime::now() + Duration::from_secs(60);
+    let future_key = idempotency_window(
+        "repository.create",
+        "future-issued",
+        [17; 32],
+        future_issued,
+        future_issued + Duration::from_secs(300),
+    );
+    let mut future = store
+        .begin_authorized(
+            context,
+            "repository.create",
+            repository_id,
+            TransactionOptions::Serializable { maximum_retries: 0 },
+        )
+        .unwrap();
+    assert_eq!(
+        future
+            .reserve_idempotency(future_key)
+            .unwrap_err()
+            .code,
+        DomainErrorCode::ObjectInvalid
+    );
+    assert_eq!(
+        future.commit().unwrap_err().code,
+        DomainErrorCode::ObjectInvalid
+    );
+
+    let wrong_tenant = AuthorizationContext {
+        subject_digest: context.subject_digest,
+        tenant_id: TenantId::from_bytes([99; 16]),
+        authorization_epoch: context.authorization_epoch,
+    };
+    let tenant_error = match store.begin_authorized(
+        &wrong_tenant,
+        "repository.publish",
+        repository_id,
+        TransactionOptions::Serializable { maximum_retries: 0 },
+    ) {
+        Ok(_) => panic!("cross-tenant transaction was opened"),
+        Err(error) => error,
+    };
+    assert_eq!(
+        tenant_error.code,
+        DomainErrorCode::MetadataNotFoundOrDenied
+    );
+
+    let other_repository = RepositoryId::from_bytes([98; 16]);
+    let cross_repository_key = idempotency("file-id.reserve", "cross-repository", [14; 32]);
+    let mut cross_repository = store
+        .begin_authorized(
+            context,
+            "repository.file-id.reserve",
+            repository_id,
+            TransactionOptions::Serializable { maximum_retries: 0 },
+        )
+        .unwrap();
+    cross_repository
+        .reserve_idempotency(cross_repository_key.clone())
+        .unwrap();
+    assert_eq!(
+        cross_repository
+            .reserve_file_id(FileIdReservation {
+                repository_id: other_repository,
+                file_id: FileId::new([97; 16]).unwrap(),
+                origin: FileIdOrigin::Create,
+                owner_kind: FileIdOwnerKind::Draft,
+                owner_id: "cross-repository".to_owned(),
+            })
+            .unwrap_err()
+            .code,
+        DomainErrorCode::MetadataNotFoundOrDenied
+    );
+    assert_eq!(
+        cross_repository.commit().unwrap_err().code,
+        DomainErrorCode::ObjectInvalid
+    );
+
+    let invalid_repository = RepositoryId::from_bytes([96; 16]);
+    let invalid_create_key = idempotency("repository.create", "invalid-create", [15; 32]);
+    let (required_features, path_profile, content_policy_profile) =
+        descriptor_settings(&descriptor.1);
+    let mut invalid_create = store
+        .begin_authorized(
+            context,
+            "repository.create",
+            invalid_repository,
+            TransactionOptions::Serializable { maximum_retries: 0 },
+        )
+        .unwrap();
+    invalid_create
+        .reserve_idempotency(invalid_create_key.clone())
+        .unwrap();
+    assert_eq!(
+        invalid_create
+            .create_repository(RepositoryCreate {
+                repository_id: invalid_repository,
+                tenant_id,
+                project_id: ProjectId::from_bytes([95; 16]),
+                settings: RepositorySettings {
+                    repository_format: "ogvcs.repository-format@1".to_owned(),
+                    required_features,
+                    case_mode: CaseMode::CaseSensitive,
+                    path_profile: path_profile.clone(),
+                    platform_profile: path_profile,
+                    content_policy_profile,
+                    structural_limits: json!({
+                        "maxTreeEntries": 1,
+                        "maxPathBytes": 4096,
+                        "maxPathSegments": 256,
+                        "maxSnapshotParents": 8
+                    }),
+                    tenant_boundary: tenant_id,
+                },
+                descriptor: write(invalid_repository, descriptor),
+            })
+            .unwrap_err()
+            .code,
+        DomainErrorCode::ObjectInvalid
+    );
+    assert_eq!(
+        invalid_create.commit().unwrap_err().code,
+        DomainErrorCode::ObjectInvalid
+    );
+
+    let mut client = Client::connect(database_url, NoTls).unwrap();
+    let row = client
+        .query_one(
+            "SELECT
+               (SELECT count(*) FROM ogvcs_metadata.repositories WHERE repository_id = $1),
+               (SELECT count(*) FROM ogvcs_metadata.file_id_registry WHERE repository_id = $2),
+               (SELECT count(*) FROM ogvcs_metadata.idempotency_records
+                WHERE idempotency_key IN ($3, $4))",
+            &[
+                &Uuid::from_bytes(*invalid_repository.as_bytes()),
+                &Uuid::from_bytes(*other_repository.as_bytes()),
+                &invalid_create_key.key,
+                &cross_repository_key.key,
+            ],
+        )
+        .unwrap();
+    assert_eq!((row.get::<_, i64>(0), row.get::<_, i64>(1), row.get::<_, i64>(2)), (0, 0, 0));
 }
 
 fn rollback_report(
@@ -465,6 +839,84 @@ fn rollback_report(
         transaction.rollback().unwrap();
         assert_eq!(counts(database_url, repository_id), baseline, "fault point {fault}");
     }
+    let event_binding_key = idempotency("file-id.reserve", "event-binding", [39; 32]);
+    let mut event_binding = store
+        .begin_authorized(
+            context,
+            "repository.file-id.reserve",
+            repository_id,
+            TransactionOptions::Serializable { maximum_retries: 0 },
+        )
+        .unwrap();
+    event_binding
+        .reserve_idempotency(event_binding_key.clone())
+        .unwrap();
+    event_binding
+        .reserve_file_id(FileIdReservation {
+            repository_id,
+            file_id: FileId::new([39; 16]).unwrap(),
+            origin: FileIdOrigin::Create,
+            owner_kind: FileIdOwnerKind::Draft,
+            owner_id: "event-binding".to_owned(),
+        })
+        .unwrap();
+    event_binding
+        .commit_idempotency(&event_binding_key, json!({"reserved": true}))
+        .unwrap();
+    assert_eq!(
+        event_binding
+            .append_outbox(event(repository_id, 29, "reference.changed", "reference"))
+            .unwrap_err()
+            .code,
+        DomainErrorCode::ObjectInvalid
+    );
+    assert_eq!(
+        event_binding.commit().unwrap_err().code,
+        DomainErrorCode::ObjectInvalid
+    );
+    assert_eq!(counts(database_url, repository_id), baseline);
+
+    let event_cardinality_key =
+        idempotency("file-id.reserve", "event-cardinality", [38; 32]);
+    let mut event_cardinality = store
+        .begin_authorized(
+            context,
+            "repository.file-id.reserve",
+            repository_id,
+            TransactionOptions::Serializable { maximum_retries: 0 },
+        )
+        .unwrap();
+    event_cardinality
+        .reserve_idempotency(event_cardinality_key.clone())
+        .unwrap();
+    for byte in [37_u8, 38_u8] {
+        event_cardinality
+            .reserve_file_id(FileIdReservation {
+                repository_id,
+                file_id: FileId::new([byte; 16]).unwrap(),
+                origin: FileIdOrigin::Create,
+                owner_kind: FileIdOwnerKind::Draft,
+                owner_id: format!("event-cardinality-{byte}"),
+            })
+            .unwrap();
+    }
+    event_cardinality
+        .commit_idempotency(&event_cardinality_key, json!({"reserved": 2}))
+        .unwrap();
+    event_cardinality
+        .append_outbox(event(
+            repository_id,
+            28,
+            "file-id.state-changed",
+            "path",
+        ))
+        .unwrap();
+    assert_eq!(
+        event_cardinality.commit().unwrap_err().code,
+        DomainErrorCode::ObjectInvalid
+    );
+    assert_eq!(counts(database_url, repository_id), baseline);
+
     let mut reuse = store
         .begin_authorized(
             context,
@@ -481,7 +933,7 @@ fn rollback_report(
     );
     assert_eq!(
         reuse.commit().unwrap_err().code,
-        DomainErrorCode::TransactionRetryExhausted
+        DomainErrorCode::ObjectInvalid
     );
     assert_eq!(counts(database_url, repository_id), baseline);
 }
@@ -501,12 +953,45 @@ fn consistency_report(
         )
         .unwrap();
     let token = transaction
-        .issue_consistency_token(context, repository_id, CommitSequence::new(2))
+        .issue_consistency_token(CommitSequence::new(2))
         .unwrap();
     transaction.commit().unwrap();
     assert_eq!(
         store.require_consistency(context, repository_id, &token).unwrap(),
         CommitSequence::new(2)
+    );
+    for mismatched in [
+        AuthorizationContext {
+            subject_digest: [44; 32],
+            ..context.clone()
+        },
+        AuthorizationContext {
+            tenant_id: TenantId::from_bytes([45; 16]),
+            ..context.clone()
+        },
+        AuthorizationContext {
+            authorization_epoch: context.authorization_epoch + 1,
+            ..context.clone()
+        },
+    ] {
+        assert_eq!(
+            store
+                .require_consistency(&mismatched, repository_id, &token)
+                .unwrap_err()
+                .code,
+            DomainErrorCode::ConsistencyTokenUnsatisfied
+        );
+    }
+    assert_eq!(
+        store
+            .require_consistency(
+                context,
+                RepositoryId::from_bytes([46; 16]),
+                &token,
+            )
+            .unwrap_err()
+            .code,
+        DomainErrorCode::ConsistencyTokenUnsatisfied
     );
     let mut client = Client::connect(database_url, NoTls).unwrap();
     client
@@ -532,6 +1017,55 @@ fn consistency_report(
 }
 
 fn file_id_race(database_url: &str, context: AuthorizationContext, repository_id: RepositoryId) {
+    let unused_restore = FileId::new([69; 16]).unwrap();
+    let unused_restore_key = idempotency("file-id.restore", "unused-restore", [79; 32]);
+    let mut restore_store = PostgresMetadataStore::connect(database_url)
+        .unwrap()
+        .with_authorizer(IsolatedAllow);
+    let mut restore = restore_store
+        .begin_authorized(
+            &context,
+            "repository.file-id.restore",
+            repository_id,
+            TransactionOptions::Serializable { maximum_retries: 0 },
+        )
+        .unwrap();
+    restore
+        .reserve_idempotency(unused_restore_key.clone())
+        .unwrap();
+    assert_eq!(
+        restore
+            .reserve_file_id(FileIdReservation {
+                repository_id,
+                file_id: unused_restore,
+                origin: FileIdOrigin::Restore,
+                owner_kind: FileIdOwnerKind::Draft,
+                owner_id: "unproved-unused-restore".to_owned(),
+            })
+            .unwrap_err()
+            .code,
+        DomainErrorCode::FileIdConflict
+    );
+    assert_eq!(
+        restore.commit().unwrap_err().code,
+        DomainErrorCode::ObjectInvalid
+    );
+    let mut client = Client::connect(database_url, NoTls).unwrap();
+    let unused_rows: i64 = client
+        .query_one(
+            "SELECT count(*) FROM ogvcs_metadata.file_id_registry
+             WHERE repository_id = $1 AND file_id = $2",
+            &[
+                &Uuid::from_bytes(*repository_id.as_bytes()),
+                &&unused_restore.as_bytes()[..],
+            ],
+        )
+        .unwrap()
+        .get(0);
+    assert_eq!(unused_rows, 0);
+    drop(client);
+    drop(restore_store);
+
     let file_id = FileId::new([70; 16]).unwrap();
     let barrier = Arc::new(Barrier::new(2));
     let mut workers = Vec::new();
@@ -609,6 +1143,8 @@ fn file_id_race(database_url: &str, context: AuthorizationContext, repository_id
             TransactionOptions::Serializable { maximum_retries: 0 },
         )
         .unwrap();
+    let recreate_key = idempotency("file-id.restore", "tombstoned-restore", [85; 32]);
+    recreate.reserve_idempotency(recreate_key).unwrap();
     assert_eq!(
         recreate
             .reserve_file_id(FileIdReservation {
@@ -622,7 +1158,55 @@ fn file_id_race(database_url: &str, context: AuthorizationContext, repository_id
             .code,
         DomainErrorCode::FileIdConflict
     );
-    drop(recreate);
+    assert_eq!(
+        recreate.commit().unwrap_err().code,
+        DomainErrorCode::ObjectInvalid
+    );
+    let mut client = Client::connect(database_url, NoTls).unwrap();
+    let state: String = client
+        .query_one(
+            "SELECT state FROM ogvcs_metadata.file_id_registry
+             WHERE repository_id = $1 AND file_id = $2",
+            &[
+                &Uuid::from_bytes(*repository_id.as_bytes()),
+                &&file_id.as_bytes()[..],
+            ],
+        )
+        .unwrap()
+        .get(0);
+    assert_eq!(state, "tombstoned");
+    drop(client);
+
+    let recreate_create_key =
+        idempotency("file-id.reserve", "tombstoned-create", [87; 32]);
+    let mut recreate_create = store
+        .begin_authorized(
+            &context,
+            "repository.file-id.reserve",
+            repository_id,
+            TransactionOptions::Serializable { maximum_retries: 0 },
+        )
+        .unwrap();
+    recreate_create
+        .reserve_idempotency(recreate_create_key)
+        .unwrap();
+    assert_eq!(
+        recreate_create
+            .reserve_file_id(FileIdReservation {
+                repository_id,
+                file_id,
+                origin: FileIdOrigin::Create,
+                owner_kind: FileIdOwnerKind::Draft,
+                owner_id: "forged-recreate".to_owned(),
+            })
+            .unwrap_err()
+            .code,
+        DomainErrorCode::FileIdConflict
+    );
+    assert_eq!(
+        recreate_create.commit().unwrap_err().code,
+        DomainErrorCode::ObjectInvalid
+    );
 
     let imported = FileId::new([71; 16]).unwrap();
     let import = FileIdImportReservation {
@@ -666,10 +1250,17 @@ fn file_id_race(database_url: &str, context: AuthorizationContext, repository_id
             TransactionOptions::Serializable { maximum_retries: 4 },
         )
         .unwrap();
+    let import_replay_key = idempotency("file-id.import", "file-import-replay", [86; 32]);
+    replay
+        .reserve_idempotency(import_replay_key.clone())
+        .unwrap();
     assert_eq!(
         replay.reserve_imported_file_id(import).unwrap(),
         FileIdReservationOutcome::ExactImportReplay
     );
+    replay
+        .commit_idempotency(&import_replay_key, json!({"replayed": true}))
+        .unwrap();
     replay.commit().unwrap();
 }
 
@@ -826,10 +1417,19 @@ fn field(value: &Cbor, key: u64) -> &Cbor {
 fn idempotency(operation: &str, key: &str, fingerprint: [u8; 32]) -> IdempotencyReservation {
     let issued_at = SystemTime::now();
     let expires_at = issued_at + Duration::from_secs(300);
+    idempotency_window(operation, key, fingerprint, issued_at, expires_at)
+}
+
+fn idempotency_window(
+    operation: &str,
+    key: &str,
+    fingerprint: [u8; 32],
+    issued_at: SystemTime,
+    expires_at: SystemTime,
+) -> IdempotencyReservation {
     let issued_ms = issued_at.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis();
     let expires_ms = expires_at.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis();
     IdempotencyReservation {
-        authenticated_scope_digest: [9; 32],
         operation: operation.to_owned(),
         key: format!("ik1.{issued_ms}.{expires_ms}.{key}{}", "A".repeat(22)),
         semantic_fingerprint: fingerprint,

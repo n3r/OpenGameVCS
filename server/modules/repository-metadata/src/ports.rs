@@ -82,6 +82,8 @@ pub trait MetadataTransaction {
     fn index_tree_entry(&mut self, entry: TreeEntryWrite) -> Result<()>;
     fn index_snapshot(&mut self, snapshot: SnapshotWrite) -> Result<()>;
     fn append_file_history(&mut self, history: FileHistoryWrite) -> Result<()>;
+    /// Reserves a native create/copy lifetime. Restore requires the future
+    /// proof-bound OGVCS-002/010 API and import uses `reserve_imported_file_id`.
     fn reserve_file_id(&mut self, reservation: FileIdReservation) -> Result<()>;
     fn reserve_imported_file_id(
         &mut self,
@@ -113,8 +115,6 @@ pub trait MetadataTransaction {
     fn append_outbox(&mut self, event: OutboxEvent) -> Result<()>;
     fn issue_consistency_token(
         &mut self,
-        context: &AuthorizationContext,
-        repository_id: RepositoryId,
         minimum: CommitSequence,
     ) -> Result<ConsistencyToken>;
     fn commit(self) -> Result<CommitSequence>;

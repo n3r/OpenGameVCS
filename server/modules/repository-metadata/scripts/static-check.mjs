@@ -65,13 +65,60 @@ for (const evidence of [
   'ON CONFLICT DO NOTHING RETURNING 1',
   'generation = generation + 1',
   'KeyReuseRejected',
-  'self.outbox_required && !self.outbox_written',
-  'self.outbox_required && !self.idempotency_committed',
+  'authorized_repository_id: RepositoryId',
+  'authorization_context: AuthorizationContext',
+  'authorized_view: AuthorizedView',
+  'finish_committed_replay',
+  'self.required_events != self.written_events',
+  'self.event_references.contains(&identity)',
+  'self.event_file_ids.contains(&file_id)',
+  'self.mutation_started && !self.idempotency_committed',
+  'reservation.is_valid_at(server_now)',
+  'idempotency_scope_digest',
+  'repository_object_matches_settings',
+  '"40001" | "40P01"',
   'clock_timestamp() + interval \'5 minutes\'',
   'ORDER BY basename_utf8',
   'ORDER BY reference_kind, reference_name',
   'ORDER BY snapshot_digest, operation_ordinal',
 ]) assert(adapter.includes(evidence), `PostgreSQL adapter evidence missing: ${evidence}`);
+
+for (const method of [
+  'create_repository',
+  'put_object',
+  'index_tree_entry',
+  'index_snapshot',
+  'append_file_history',
+  'reserve_file_id',
+  'reserve_imported_file_id',
+  'activate_file_id',
+  'tombstone_file_id',
+  'reserve_idempotency',
+  'commit_idempotency',
+  'compare_and_swap_reference',
+  'append_outbox',
+  'issue_consistency_token',
+]) {
+  const start = adapter.indexOf(`    fn ${method}(`);
+  const end = adapter.indexOf('\n    fn ', start + 8);
+  assert(start >= 0, `transaction method missing: ${method}`);
+  assert(
+    adapter.slice(start, end < 0 ? adapter.length : end).includes('poison_transaction_on_error!'),
+    `transaction method does not poison every Err: ${method}`,
+  );
+}
+assert(
+  adapter.indexOf('reservation.origin == FileIdOrigin::Restore')
+    < adapter.indexOf('INSERT INTO ogvcs_metadata.file_id_registry'),
+  'generic FileID restore is not rejected before SQL',
+);
+
+const migrationRunner = await readFile(resolve(root, 'src/migration_runner.rs'), 'utf8');
+assert(migrationRunner.includes('pub fn verify_schema_compatibility'), 'mutation schema compatibility gate missing');
+assert(
+  migrationRunner.indexOf('let existing =') < migrationRunner.indexOf('migration.requires_compatibility_fence'),
+  'closed migration fence bypasses ledger checksum validation',
+);
 
 const reportDriver = await readFile(resolve(root, 'scripts/service-report.mjs'), 'utf8');
 assert(reportDriver.includes('exactScaleExecuted: false'), 'service report does not exclude exact scale');
