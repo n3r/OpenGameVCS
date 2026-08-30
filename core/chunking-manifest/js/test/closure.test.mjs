@@ -81,10 +81,14 @@ test('static Rust stable-code mapping has exact generated-registry parity', asyn
 });
 
 test('bounded workflow keeps languages parallel and excludes scale campaigns', async () => {
-  const workflow = await (await import('node:fs/promises')).readFile(
-    resolve(import.meta.dirname, '../../../../.github/workflows/chunking-manifest-bounded.yml'),
-    'utf8',
-  );
+  const { readFile } = await import('node:fs/promises');
+  const [workflow, packedConsumer] = await Promise.all([
+    readFile(
+      resolve(import.meta.dirname, '../../../../.github/workflows/chunking-manifest-bounded.yml'),
+      'utf8',
+    ),
+    readFile(resolve(import.meta.dirname, '../scripts/packed-offline.mjs'), 'utf8'),
+  ]);
   assert.match(workflow, /^  javascript:\n/m);
   assert.match(workflow, /^  rust:\n/m);
   assert.match(workflow, /node-version: 24/);
@@ -93,6 +97,8 @@ test('bounded workflow keeps languages parallel and excludes scale campaigns', a
   assert.match(workflow, /cargo package .* --offline/);
   assert.match(workflow, /npm run test:packed/);
   assert.doesNotMatch(workflow, /(?:100\s*GiB|1\s*TiB|exact-scale)/i);
+  assert.match(packedConsumer, /process\.env\.npm_execpath/);
+  assert.match(packedConsumer, /process\.platform === 'win32'/);
 });
 
 test('every golden manifest verifies and shuffled lookup order does not affect reconstruction', async () => {

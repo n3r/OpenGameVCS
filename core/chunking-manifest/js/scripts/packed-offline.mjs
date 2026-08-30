@@ -9,6 +9,10 @@ const packageDirectory = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const objectModelDirectory = resolve(packageDirectory, '../../object-model/js');
 const temporary = await mkdtemp(join(tmpdir(), 'ogvcs-chunk-packed-'));
 const environment = { ...process.env, npm_config_cache: join(temporary, 'npm-cache') };
+const npmCli = process.env.npm_execpath
+  ?? (process.platform === 'win32'
+    ? join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js')
+    : null);
 
 function run(command, arguments_, cwd) {
   const result = spawnSync(command, arguments_, { cwd, encoding: 'utf8', env: environment });
@@ -18,8 +22,14 @@ function run(command, arguments_, cwd) {
   return result.stdout;
 }
 
+function runNpm(arguments_, cwd) {
+  return npmCli
+    ? run(process.execPath, [npmCli, ...arguments_], cwd)
+    : run('npm', arguments_, cwd);
+}
+
 function pack(directory) {
-  const report = JSON.parse(run('npm', [
+  const report = JSON.parse(runNpm([
     'pack', '--ignore-scripts', '--json', '--pack-destination', temporary,
   ], directory));
   if (report.length !== 1) throw new Error(`unexpected npm pack report for ${directory}`);
@@ -44,7 +54,7 @@ try {
   await writeFile(join(temporary, 'package.json'), '{"private":true,"type":"module"}\n');
   const objectTarball = join(temporary, objectModel.filename);
   const chunkTarball = join(temporary, chunking.filename);
-  run('npm', [
+  runNpm([
     'install', '--offline', '--ignore-scripts', '--no-audit', '--no-fund',
     '--package-lock=false', objectTarball, chunkTarball,
   ], temporary);
