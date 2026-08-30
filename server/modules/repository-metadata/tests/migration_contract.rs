@@ -68,9 +68,28 @@ fn expand_schema_contains_every_authoritative_boundary() {
     assert!(sql.contains("FOREIGN KEY (repository_id, tenant_boundary)"));
     assert!(sql.contains("(entry_kind = 1 AND target_kind = 3)"));
     assert!(sql.contains("(entry_kind IN (2, 3, 4) AND target_kind = 2)"));
+    assert!(sql.contains("CREATE TRIGGER repository_settings_immutable"));
+    assert!(sql.contains("file_id, snapshot_digest, operation_ordinal"));
     assert!(sql.contains("'path'"));
     assert!(!sql.contains("CREATE TABLE ogvcs_metadata.chunks"));
     assert!(!sql.contains("object_kind IN (1,"));
+}
+
+#[test]
+fn migration_runner_declares_lock_checksum_compatibility_and_fence_gates() {
+    let source = fs::read_to_string(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/migration_runner.rs"),
+    )
+    .unwrap();
+    for evidence in [
+        "pg_advisory_lock",
+        "MigrationChecksumMismatch",
+        "MAXIMUM_SCHEMA_VERSION",
+        "compatibility_fence_open",
+        "transaction_body",
+    ] {
+        assert!(source.contains(evidence), "migration runner missing {evidence}");
+    }
 }
 
 #[test]

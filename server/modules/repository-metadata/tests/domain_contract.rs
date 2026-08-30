@@ -1,6 +1,9 @@
 use ogvcs_repository_metadata::{
-    CaseMode, ConsistencyToken, DomainErrorCode, ReferenceName, RepositorySettings, TenantId,
+    AuthorizationContext, AuthorizationPort, CaseMode, ConsistencyToken, DenyAllAuthorization,
+    DomainErrorCode, IdempotencyReservation, ReferenceName, RepositoryId, RepositorySettings,
+    TenantId,
 };
+use std::time::{Duration, SystemTime};
 
 #[test]
 fn rust_error_assignments_match_the_domain_contract() {
@@ -24,6 +27,41 @@ fn rust_error_assignments_match_the_domain_contract() {
 }
 
 #[test]
+fn production_default_authorizer_denies_without_disclosing_existence() {
+    let context = AuthorizationContext {
+        subject_digest: [1; 32],
+        tenant_id: TenantId::from_bytes([2; 16]),
+        authorization_epoch: 0,
+    };
+    let error = DenyAllAuthorization
+        .authorize(
+            &context,
+            "repository.read",
+            "repository",
+            RepositoryId::from_bytes([3; 16]),
+        )
+        .unwrap_err();
+    assert_eq!(error.code, DomainErrorCode::MetadataNotFoundOrDenied);
+}
+
+#[test]
+fn semantic_idempotency_keys_self_bind_issue_and_expiry() {
+    let issued_at = SystemTime::UNIX_EPOCH + Duration::from_millis(1_000);
+    let expires_at = issued_at + Duration::from_secs(60);
+    let mut reservation = IdempotencyReservation {
+        authenticated_scope_digest: [1; 32],
+        operation: "reference.cas".to_owned(),
+        key: format!("ik1.1000.61000.{}", "A".repeat(22)),
+        semantic_fingerprint: [2; 32],
+        issued_at,
+        expires_at,
+    };
+    assert!(reservation.is_valid());
+    reservation.key = format!("ik1.1001.61000.{}", "A".repeat(22));
+    assert!(!reservation.is_valid());
+}
+
+#[test]
 fn opaque_tokens_and_bounded_reference_names_fail_closed() {
     assert!(ConsistencyToken::from_opaque(format!("ct1.{}", "A".repeat(43))).is_some());
     assert!(ConsistencyToken::from_opaque("ct1.repository.42".to_owned()).is_none());
@@ -35,11 +73,13 @@ fn opaque_tokens_and_bounded_reference_names_fail_closed() {
 #[test]
 fn repository_feature_selection_must_be_strictly_sorted() {
     let mut settings = RepositorySettings {
+        repository_format: "ogvcs.repository-format@1".to_owned(),
         required_features: vec![1, 2, 9],
         case_mode: CaseMode::CaseSensitive,
         path_profile: "path.opengamevcs/portable@1".to_owned(),
         platform_profile: "path.opengamevcs/portable@1".to_owned(),
         content_policy_profile: "content-policy.test/opaque@1".to_owned(),
+        structural_limits: serde_json::json!({"maxTreeEntries": 999999}),
         tenant_boundary: TenantId::from_bytes([1; 16]),
     };
     assert!(settings.has_sorted_unique_features());

@@ -1,4 +1,6 @@
 use ogvcs_object_model::{FileId, ObjectRef};
+use serde_json::Value;
+use std::time::SystemTime;
 
 macro_rules! opaque_id {
     ($name:ident) => {
@@ -19,6 +21,7 @@ macro_rules! opaque_id {
 
 opaque_id!(TenantId);
 opaque_id!(RepositoryId);
+opaque_id!(ProjectId);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct CommitSequence(u64);
@@ -41,11 +44,13 @@ pub enum CaseMode {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RepositorySettings {
+    pub repository_format: String,
     pub required_features: Vec<u16>,
     pub case_mode: CaseMode,
     pub path_profile: String,
     pub platform_profile: String,
     pub content_policy_profile: String,
+    pub structural_limits: Value,
     pub tenant_boundary: TenantId,
 }
 
@@ -67,7 +72,7 @@ pub struct ReferenceName(String);
 impl ReferenceName {
     pub fn new(value: String) -> Option<Self> {
         let length = value.len();
-        (length > 0 && length <= 512).then_some(Self(value))
+        (length > 0 && length <= 512 && !value.contains('\0')).then_some(Self(value))
     }
 
     pub fn as_str(&self) -> &str {
@@ -98,6 +103,15 @@ pub struct ReferenceCasResult {
     pub commit_sequence: CommitSequence,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ReferenceRecord {
+    pub kind: ReferenceKind,
+    pub name: ReferenceName,
+    pub target: ObjectRef,
+    pub generation: u64,
+    pub commit_sequence: CommitSequence,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FileIdOrigin {
     Create,
@@ -122,17 +136,70 @@ pub struct FileIdReservation {
     pub owner_id: String,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FileIdImportReservation {
+    pub reservation: FileIdReservation,
+    pub importer_profile: String,
+    pub source_namespace_digest: [u8; 32],
+    pub source_identity_digest: [u8; 32],
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FileIdReservationOutcome {
+    Reserved,
+    ExactImportReplay,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ObjectPutOutcome {
     Inserted,
     ExactReplay,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ObjectWrite<'a> {
     pub repository_id: RepositoryId,
     pub object_ref: &'a ObjectRef,
     pub canonical_bytes: &'a [u8],
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RepositoryCreate<'a> {
+    pub repository_id: RepositoryId,
+    pub tenant_id: TenantId,
+    pub project_id: ProjectId,
+    pub settings: RepositorySettings,
+    pub descriptor: ObjectWrite<'a>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TreeEntryWrite {
+    pub repository_id: RepositoryId,
+    pub tree: ObjectRef,
+    pub ordinal: u32,
+    pub basename_utf8: Vec<u8>,
+    pub file_id: FileId,
+    pub entry_kind: u16,
+    pub target: ObjectRef,
+    pub logical_size: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SnapshotWrite {
+    pub repository_id: RepositoryId,
+    pub snapshot: ObjectRef,
+    pub root_tree: ObjectRef,
+    pub parents: Vec<ObjectRef>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FileHistoryWrite {
+    pub repository_id: RepositoryId,
+    pub snapshot: ObjectRef,
+    pub operation_ordinal: u32,
+    pub file_id: FileId,
+    pub repository_path_utf8: Vec<u8>,
+    pub operation_kind: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -141,6 +208,24 @@ pub struct ConsistencyToken(String);
 impl ConsistencyToken {
     pub fn from_opaque(value: String) -> Option<Self> {
         let payload = value.strip_prefix("ct1.")?;
+        (payload.len() == 43
+            && payload
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-'))
+        .then_some(Self(value))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CursorToken(String);
+
+impl CursorToken {
+    pub fn from_opaque(value: String) -> Option<Self> {
+        let payload = value.strip_prefix("cur1.")?;
         (payload.len() == 43
             && payload
                 .bytes()
@@ -171,6 +256,111 @@ pub struct OutboxEvent {
     pub event_id: [u8; 16],
     pub repository_id: RepositoryId,
     pub event_type: &'static str,
+    pub event_version: u16,
+    pub correlation_id: [u8; 16],
     pub resource_type: &'static str,
     pub resource_opaque_id: String,
+    pub safe_payload: Value,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct IdempotencyReservation {
+    pub authenticated_scope_digest: [u8; 32],
+    pub operation: String,
+    pub key: String,
+    pub semantic_fingerprint: [u8; 32],
+    pub issued_at: SystemTime,
+    pub expires_at: SystemTime,
+}
+
+impl IdempotencyReservation {
+    pub fn is_valid(&self) -> bool {
+        let Ok(issued_ms) = self
+            .issued_at
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map(|duration| duration.as_millis() as u64)
+        else {
+            return false;
+        };
+        let Ok(expires_ms) = self
+            .expires_at
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map(|duration| duration.as_millis() as u64)
+        else {
+            return false;
+        };
+        if expires_ms <= issued_ms || expires_ms - issued_ms > 86_400_000 {
+            return false;
+        }
+        let mut parts = self.key.split('.');
+        let valid_number = |text: &str| {
+            !text.is_empty()
+                && text.len() <= 16
+                && (text == "0" || !text.starts_with('0'))
+                && text.bytes().all(|byte| byte.is_ascii_digit())
+        };
+        let prefix = parts.next();
+        let issued = parts.next();
+        let expires = parts.next();
+        let entropy = parts.next();
+        prefix == Some("ik1")
+            && parts.next().is_none()
+            && issued.is_some_and(valid_number)
+            && expires.is_some_and(valid_number)
+            && issued.and_then(|value| value.parse().ok()) == Some(issued_ms)
+            && expires.and_then(|value| value.parse().ok()) == Some(expires_ms)
+            && entropy.is_some_and(|value| {
+                (22..=218).contains(&value.len())
+                    && value
+                        .bytes()
+                        .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
+            })
+            && (30..=256).contains(&self.key.len())
+            && !self.operation.is_empty()
+            && self.operation.len() <= 256
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum IdempotencyReservationOutcome {
+    Reserved,
+    CommittedReplay(Value),
+    KeyReuseRejected,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PageRequest {
+    pub limit: u16,
+    pub cursor: Option<CursorToken>,
+}
+
+impl PageRequest {
+    pub fn is_bounded(&self) -> bool {
+        (1..=1000).contains(&self.limit)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Page<T> {
+    pub items: Vec<T>,
+    pub next_cursor: Option<CursorToken>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TreeEntryRecord {
+    pub ordinal: u32,
+    pub basename_utf8: Vec<u8>,
+    pub file_id: FileId,
+    pub entry_kind: u16,
+    pub target: ObjectRef,
+    pub logical_size: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FileHistoryRecord {
+    pub snapshot: ObjectRef,
+    pub operation_ordinal: u32,
+    pub file_id: FileId,
+    pub repository_path_utf8: Vec<u8>,
+    pub operation_kind: String,
 }
