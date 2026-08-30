@@ -652,6 +652,15 @@ fn production_reference_postgres_report() {
     assert_eq!(published_sequence, 2);
     drop(audit);
 
+    immutable_read_report(
+        &database_url,
+        &mut store,
+        &context,
+        repository_id,
+        tenant_id,
+        &manifest,
+    );
+    report("immutable-settings-object-read");
     outbox_delivery_report(&database_url, &context, tenant_id);
     report("outbox-lease-ack-release");
 
@@ -800,6 +809,67 @@ fn reset_disposable_schema(database_url: &str) {
     client
         .batch_execute("DROP SCHEMA IF EXISTS ogvcs_metadata CASCADE")
         .unwrap();
+}
+
+fn immutable_read_report(
+    database_url: &str,
+    store: &mut PostgresMetadataStore<IsolatedAllow, IsolatedConformanceValidation>,
+    context: &AuthorizationContext,
+    repository_id: RepositoryId,
+    tenant_id: TenantId,
+    manifest: &(ObjectRef, Vec<u8>),
+) {
+    let settings = store
+        .get_repository_settings(context, repository_id, None)
+        .unwrap();
+    assert_eq!(settings.repository_format, "ogvcs.repository-format@1");
+    assert_eq!(settings.case_mode, CaseMode::CaseSensitive);
+    assert_eq!(settings.tenant_boundary, tenant_id);
+    assert!(settings.has_sorted_unique_features());
+    let object = store
+        .get_object(context, repository_id, manifest.0, None)
+        .unwrap();
+    assert_eq!(object.object_ref, manifest.0);
+    assert_eq!(object.canonical_bytes, manifest.1);
+
+    let mut single_use = PostgresMetadataStore::connect(database_url)
+        .unwrap()
+        .with_authorizer(SingleUseAllow)
+        .with_object_validator(IsolatedConformanceValidation);
+    assert_eq!(
+        single_use
+            .get_repository_settings(context, repository_id, None)
+            .unwrap_err()
+            .code,
+        DomainErrorCode::MetadataNotFoundOrDenied
+    );
+    assert_eq!(
+        single_use
+            .get_object(context, repository_id, manifest.0, None)
+            .unwrap_err()
+            .code,
+        DomainErrorCode::MetadataNotFoundOrDenied
+    );
+
+    let wrong_tenant = AuthorizationContext {
+        subject_digest: context.subject_digest,
+        tenant_id: TenantId::from_bytes([99; 16]),
+        authorization_epoch: context.authorization_epoch,
+    };
+    assert_eq!(
+        store
+            .get_repository_settings(&wrong_tenant, repository_id, None)
+            .unwrap_err()
+            .code,
+        DomainErrorCode::MetadataNotFoundOrDenied
+    );
+    assert_eq!(
+        store
+            .get_object(&wrong_tenant, repository_id, manifest.0, None)
+            .unwrap_err()
+            .code,
+        DomainErrorCode::MetadataNotFoundOrDenied
+    );
 }
 
 fn outbox_delivery_report(database_url: &str, context: &AuthorizationContext, tenant_id: TenantId) {

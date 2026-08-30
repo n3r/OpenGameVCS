@@ -23,13 +23,13 @@ use crate::{
     DomainErrorCode, FileHistoryRecord, FileHistoryWrite, FileId, FileIdExpectedState,
     FileIdImportReservation, FileIdOrigin, FileIdOwnerKind, FileIdReservation,
     FileIdReservationOutcome, IdempotencyReservation, IdempotencyReservationOutcome,
-    MetadataPermission, MetadataStore, MetadataTransaction, ObjectPutOutcome, ObjectRef,
-    ObjectValidationPort, ObjectWrite, OutboxClaimRequest, OutboxEvent, OutboxEventRecord,
-    OutboxLeaseAction, OutboxLeaseRecord, OutboxReleaseRequest, Page, PageRequest,
-    ProductionObjectValidator, ReferenceCasRequest, ReferenceCasResult, ReferenceExpected,
-    ReferenceKind, ReferenceName, ReferenceRecord, RepositoryCreate, RepositoryId, Result,
-    SnapshotWrite, TenantId, TransactionCapability, TransactionOptions, TreeEntryRecord,
-    TreeEntryWrite,
+    MetadataObjectRecord, MetadataPermission, MetadataStore, MetadataTransaction, ObjectPutOutcome,
+    ObjectRef, ObjectValidationPort, ObjectWrite, OutboxClaimRequest, OutboxEvent,
+    OutboxEventRecord, OutboxLeaseAction, OutboxLeaseRecord, OutboxReleaseRequest, Page,
+    PageRequest, ProductionObjectValidator, ReferenceCasRequest, ReferenceCasResult,
+    ReferenceExpected, ReferenceKind, ReferenceName, ReferenceRecord, RepositoryCreate,
+    RepositoryId, RepositorySettings, Result, SnapshotWrite, TenantId, TransactionCapability,
+    TransactionOptions, TreeEntryRecord, TreeEntryWrite,
 };
 
 const VALIDATION_CONTRACT: &str = "ogvcs.repository-format@1";
@@ -324,6 +324,106 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
             }
         }
         Err(DomainError::new(DomainErrorCode::TransactionRetryExhausted))
+    }
+
+    pub fn get_repository_settings(
+        &mut self,
+        context: &AuthorizationContext,
+        repository_id: RepositoryId,
+        minimum: Option<&ConsistencyToken>,
+    ) -> Result<RepositorySettings> {
+        let resource = AuthorizationResource::Repository { repository_id };
+        let authorized_view =
+            self.authorize_exact(context, MetadataPermission::MetadataRead, &resource)?;
+        crate::verify_schema_compatibility(&mut self.client)?;
+        self.require_repository_tenant(context, repository_id)?;
+        if let Some(token) = minimum {
+            self.require_consistency_authorized(context, repository_id, token)?;
+        }
+        let row = self
+            .client
+            .query_opt(
+                "SELECT settings.repository_format, settings.required_features,
+                        settings.case_mode, settings.path_profile, settings.platform_profile,
+                        settings.content_policy_profile, settings.structural_limits,
+                        settings.tenant_boundary, settings.settings_generation,
+                        settings.descriptor_digest, descriptor.canonical_bytes,
+                        descriptor.validation_contract
+                 FROM ogvcs_metadata.repository_settings AS settings
+                 JOIN ogvcs_metadata.metadata_objects AS descriptor
+                   ON descriptor.repository_id = settings.repository_id
+                  AND descriptor.object_kind = 6
+                  AND descriptor.digest_algorithm = 1
+                  AND descriptor.object_digest = settings.descriptor_digest
+                 WHERE settings.repository_id = $1",
+                &[&uuid(repository_id)],
+            )
+            .map_err(database_error)?
+            .ok_or_else(not_found)?;
+        let settings = repository_settings_record(&row, repository_id, context.tenant_id)?;
+        if !authorized_view.permits(context, MetadataPermission::MetadataRead, &resource) {
+            return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
+        }
+        Ok(settings)
+    }
+
+    pub fn get_object(
+        &mut self,
+        context: &AuthorizationContext,
+        repository_id: RepositoryId,
+        reference: ObjectRef,
+        minimum: Option<&ConsistencyToken>,
+    ) -> Result<MetadataObjectRecord> {
+        let resource = AuthorizationResource::MetadataObject {
+            repository_id,
+            object_ref: reference,
+        };
+        let authorized_view =
+            self.authorize_exact(context, MetadataPermission::MetadataRead, &resource)?;
+        crate::verify_schema_compatibility(&mut self.client)?;
+        self.require_repository_tenant(context, repository_id)?;
+        if let Some(token) = minimum {
+            self.require_consistency_authorized(context, repository_id, token)?;
+        }
+        if !metadata_kind(reference.kind) {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        let row = self
+            .client
+            .query_opt(
+                "SELECT canonical_bytes, validation_contract
+                 FROM ogvcs_metadata.metadata_objects
+                 WHERE repository_id = $1 AND object_kind = $2
+                   AND digest_algorithm = 1 AND object_digest = $3",
+                &[
+                    &uuid(repository_id),
+                    &(reference.kind.code() as i16),
+                    &&reference.digest[..],
+                ],
+            )
+            .map_err(database_error)?
+            .ok_or_else(not_found)?;
+        let canonical_bytes: Vec<u8> = row.get(0);
+        let validation_contract: String = row.get(1);
+        let scanned = scan_metadata(&canonical_bytes, Limits::METADATA)
+            .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        let kind = validate_metadata_schema(&scanned)
+            .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        let digest = object_id(kind, &canonical_bytes)
+            .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        if validation_contract != VALIDATION_CONTRACT
+            || kind != reference.kind
+            || digest != reference.digest
+        {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        if !authorized_view.permits(context, MetadataPermission::MetadataRead, &resource) {
+            return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
+        }
+        Ok(MetadataObjectRecord {
+            object_ref: reference,
+            canonical_bytes,
+        })
     }
 
     pub fn read_reference(
@@ -2959,6 +3059,68 @@ fn tree_entry(row: Row) -> Result<TreeEntryRecord> {
         logical_size: logical_size
             .parse()
             .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?,
+    })
+}
+
+fn repository_settings_record(
+    row: &Row,
+    repository_id: RepositoryId,
+    expected_tenant: TenantId,
+) -> Result<RepositorySettings> {
+    let repository_format: String = row.get(0);
+    let Json(required_features_json): Json<Value> = row.get(1);
+    let case_mode_text: String = row.get(2);
+    let path_profile: String = row.get(3);
+    let platform_profile: String = row.get(4);
+    let content_policy_profile: String = row.get(5);
+    let Json(structural_limits): Json<Value> = row.get(6);
+    let tenant_boundary = TenantId::from_bytes(*row.get::<_, Uuid>(7).as_bytes());
+    let settings_generation: i64 = row.get(8);
+    let descriptor_digest: Vec<u8> = row.get(9);
+    let descriptor_bytes: Vec<u8> = row.get(10);
+    let validation_contract: String = row.get(11);
+    let required_features = json_features(&required_features_json)
+        .filter(|features| {
+            features.len() <= 128 && features.windows(2).all(|pair| pair[0] < pair[1])
+        })
+        .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+    let case_mode = match case_mode_text.as_str() {
+        "case-sensitive" => CaseMode::CaseSensitive,
+        "case-folded" => CaseMode::CaseFolded,
+        _ => return Err(DomainError::new(DomainErrorCode::ObjectInvalid)),
+    };
+    let descriptor = object_ref(ObjectKind::RepositoryDescriptor, descriptor_digest)?;
+    if repository_format != VALIDATION_CONTRACT
+        || validation_contract != VALIDATION_CONTRACT
+        || settings_generation != 1
+        || tenant_boundary != expected_tenant
+        || !valid_structural_limits(&structural_limits)
+        || json_size(&structural_limits).is_none_or(|size| size > 65_536)
+        || path_profile.parse::<ProfileRef>().is_err()
+        || platform_profile.parse::<ProfileRef>().is_err()
+        || content_policy_profile.parse::<ProfileRef>().is_err()
+        || object_id(ObjectKind::RepositoryDescriptor, &descriptor_bytes)
+            .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?
+            != descriptor.digest
+        || !descriptor_matches_repository_settings(
+            repository_id,
+            &required_features,
+            &path_profile,
+            &content_policy_profile,
+            &descriptor_bytes,
+        )
+    {
+        return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+    }
+    Ok(RepositorySettings {
+        repository_format,
+        required_features,
+        case_mode,
+        path_profile,
+        platform_profile,
+        content_policy_profile,
+        structural_limits,
+        tenant_boundary,
     })
 }
 

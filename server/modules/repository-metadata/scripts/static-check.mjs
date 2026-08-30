@@ -73,7 +73,7 @@ assert(expandV3.includes('WHERE acknowledged_at IS NULL'), 'version 3 deliverabl
 const adapter = await readFile(resolve(root, 'src/postgres.rs'), 'utf8');
 const ports = await readFile(resolve(root, 'src/ports.rs'), 'utf8');
 assert(
-  adapter.split('crate::verify_schema_compatibility(&mut self.client)?').length - 1 === 9,
+  adapter.split('crate::verify_schema_compatibility(&mut self.client)?').length - 1 === 11,
   'every mutation/read entry point is not schema-compatibility gated',
 );
 assert(ports.includes('ValidationMode::Production'), 'default object validator is not production lifecycle');
@@ -121,6 +121,9 @@ for (const evidence of [
   'authorized_view.permits(context',
   'require_repository_tenant',
   'require_published_snapshot_tree',
+  'pub fn get_repository_settings(',
+  'pub fn get_object(',
+  'AuthorizationResource::MetadataObject',
   'resolve_tree_prefix',
   'valid_tree_prefix',
   'traversed_edges > limits.max_edges',

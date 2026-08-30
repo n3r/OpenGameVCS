@@ -181,6 +181,12 @@ pub struct ObjectWrite<'a> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MetadataObjectRecord {
+    pub object_ref: ObjectRef,
+    pub canonical_bytes: Vec<u8>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RepositoryCreate<'a> {
     pub repository_id: RepositoryId,
     pub tenant_id: TenantId,
@@ -289,6 +295,10 @@ pub enum AuthorizationResource {
     Repository {
         repository_id: RepositoryId,
     },
+    MetadataObject {
+        repository_id: RepositoryId,
+        object_ref: ObjectRef,
+    },
     RepositoryTransaction {
         repository_id: RepositoryId,
         capability: TransactionCapability,
@@ -337,6 +347,7 @@ impl AuthorizationResource {
     pub const fn repository_id(&self) -> Option<RepositoryId> {
         match self {
             Self::Repository { repository_id }
+            | Self::MetadataObject { repository_id, .. }
             | Self::RepositoryTransaction { repository_id, .. }
             | Self::Reference { repository_id, .. }
             | Self::ReferenceCollection { repository_id }

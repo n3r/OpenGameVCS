@@ -11,6 +11,7 @@ const cases = [
   'authorization-binding-and-poisoning',
   'authorized-view-item-projections',
   'publication-index-and-lifetime-binding',
+  'immutable-settings-object-read',
   'outbox-lease-ack-release',
   'cas-100-racers',
   'file-id-race-and-tombstone',
