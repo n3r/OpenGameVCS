@@ -1,0 +1,103 @@
+# OGVCS-007 R1 completion audit
+
+**Audit date:** 2026-08-31
+**Code candidate:** `00ed027b798f0114c3817678685b4df7f63d8741`
+**Verdict:** not Done; bounded implementation is stageable, final-scale and
+production-adoption gates remain open
+
+This audit maps every OGVCS-007 requirement and acceptance criterion to the
+current public source or retained evidence. It deliberately does not move the
+PRD to `done`, accept ADR-0016, add the shared registry row, or authorize a
+production writer.
+
+## Trust boundary delivered by the candidate
+
+The JavaScript package now exposes one high-level workspace reconstruction API
+and one package-owned repository production transition:
+
+- `reconstructManifestToWorkspace()` composes full ordered-content and Gear
+  verification with the bounded OGVCS-046 atomic workspace writer.
+- generation and verification issue private one-use receipts bound to verifier
+  version, profile, manifest ObjectID and SHA-256, logical bytes, and whole-file
+  SHA-256;
+- `commitProductionManifest()` requires a complete, validated OGVCS-002
+  `RegistrySnapshot` whose exact row is `family: chunking`, `owner: OGVCS-007`,
+  `state: ratified`, and `productionWriteAllowed: true`; it consumes the exact
+  receipt before calling `write` or `commit`;
+- malformed, forged, reused, wrong-manifest, wrong-verifier, caller-shaped
+  registry, and arbitrary-boundary inputs reach no publication callback;
+- pre-commit callback/cancellation failures abort once, while a resolved durable
+  commit remains successful if cancellation arrives afterward.
+
+The shared registry intentionally lacks that row. The current package therefore
+rejects the production transition with `CHUNK_PROFILE_UNSUPPORTED` before any
+callback. The synthetic ratified registry used in tests is a complete validated
+snapshot and is never shipped as production authority.
+
+## Requirement matrix
+
+| Requirement | Current result | Evidence and remaining work |
+|---|---|---|
+| FR-01 | Bounded pass; ratification pending | ADR-0016 and the generated profile freeze initialization, recurrence, masks, min/target/max, size classes, table provenance, and unchanged OGVCS-002 ChunkID preimage. JavaScript and Rust execute the independent vectors. The row is not yet ratified. |
+| FR-02 | Bounded pass; lifecycle pending | Both implementations reproduce the exact OGVCS-002 manifest bytes, ObjectID, profile reference, logical length, whole digest, and ordered parts. The candidate registry is conformance-only; production emission remains fail closed. |
+| FR-03 | Bounded pass | JavaScript generation, verification, comparison, and reconstruction are streaming. Scalar execution admits one worker/no completed-chunk queue, a fixed budget, bounded fragments, and a disk-backed bounded ledger. Rust has the corresponding bounded scalar reader/verifier. |
+| FR-04 | Pass | Empty and 1..262,144-byte whole-file cases use the same canonical manifest and full verifier contract; malformed and corrupt small-file cases reject through the same error authority. |
+| FR-05 | Pass at library/workspace boundary; server adoption pending | `reconstructManifestToWorkspace()` verifies every occurrence, length, ChunkID, Gear boundary, and final digest before atomic publication. The returned private receipt binds the exact workspace publication. OGVCS-008 adoption is still required before repository availability. |
+| FR-06 | Pass | `compareManifest()` accepts a local known-chunk index and reports exact logical, unique, repeated, reused, newly required bytes and unique chunks without remote access; conflicting known lengths reject. |
+| FR-07 | Pass in bounded suites | Generated 22-code authority, malformed vectors, overflow/count/resource admission, corrupt/short/long/missing delivery, conflicting metadata/index cases, repeated ordered references, callback/iterator failures, cancellation, scratch exhaustion, and hostile receipt/registry tests execute public APIs. |
+| FR-08 | Pass in bounded scope | The [current authenticated packet](../evidence/OGVCS-007/README.md) retains source-like, structured, already-compressed, encrypted/random, insertion, replacement, and append results separately. |
+| NFR-01 | Semantic pass; exact-candidate hosted replay pending | JavaScript/Rust reports match nine golden cases, and the prior workflow proves all six OS/language legs. A fresh six-leg run must bind the final candidate revision because the production-boundary source is newer. |
+| NFR-02 | Pending final gate | Bounded runs prove bounded admission and record observed child-process peaks, but only the deferred 100-GiB campaign can satisfy the required file-length-independent measured peak. |
+| NFR-03 | Pass | Report and independent verifier recompute `reused + newlyRequired = unique` and `unique + repeated = logical`; poor reuse is retained rather than hidden. |
+| AC-01 | Pass; exact-candidate hosted replay pending | Independent JavaScript and Rust implementations generate identical golden manifest bytes on the retained six-leg matrix; rerun on the final source revision before lifecycle mutation. |
+| AC-02 | Pass | Every golden corpus reconstructs exactly after shuffled lookup order; first/middle/last corruption and short/truncated/long/missing delivery reject. |
+| AC-03 | **Open final gate** | No 100-GiB campaign was run in this work. It must be the final acceptance run, not a per-PR job. |
+| AC-04 | Pass in authenticated bounded evidence | Insertion and replacement retain bounded post-mutation resynchronization; compressed and encrypted/random rows report zero observed reuse for the retained inputs. |
+| AC-05 | Bounded pass | Deterministic property fragmentation, independent recurrence differential checks, malformed vectors, resource/scratch bounds, iterator/callback hostility, digest mismatch, and process teardown tests complete without panic, out-of-bounds access, unbounded queueing, or accepted mismatch. |
+
+## Current authenticated packet
+
+The fresh packet is generated from the clean code candidate and includes:
+
+- [standalone seven-workload report](../evidence/OGVCS-007/bounded-selection-report-2026-08-31.json);
+- [authenticated OGVCS-005 bundle](../evidence/OGVCS-007/bounded-selection-bundle-2026-08-31/manifest.json);
+- [independent product validation](../evidence/OGVCS-007/bounded-selection-bundle-validation-2026-08-31.json).
+
+The base bundle verifier and OGVCS-007 verifier both pass. The retained
+validation records bundle digest
+`ef52b4384c4d483c62f78a4a8b2dd52629044a88624064df5f80d8bf1e174d36`,
+seven samples, seven summaries, five threshold evaluations, report/result
+status `passed`, and selection report SHA-256
+`9c253b3230af89dadb90ba80f934651a067bd2bd14fe9ae0973f47a597064ac0`.
+All seven captures succeed. Their observed process peaks range from
+105,201,664 to 439,959,552 bytes and each equals the maximum of child `maxRSS`
+and sampled child RSS. Every report and result says
+`exactScaleExecuted: false`.
+
+The evidence contains repository-relative paths only. It does not contain a
+workspace root, temporary directory, user path, file contents, or protected
+repository path.
+
+## Bounded gates executed locally
+
+- JavaScript syntax and package tests: 37/37 passed.
+- Chunking contract generation/independent validation: 4/4 passed.
+- Offline packed npm consumer, workspace publication, production-boundary
+  disabled/ratified simulations, and temporary-root cleanup: passed.
+- Generated authenticated-bundle test and current retained bundle replay:
+  passed.
+- No 100-GiB, 1-TiB, or other exact-scale campaign was run.
+
+## Open gates and lifecycle disposition
+
+Three facts keep the PRD and ADR open:
+
+1. OGVCS-008 has not yet demonstrated that a `ContentManifestV1` can become
+   repository-available only through the private receipt boundary.
+2. The final candidate still needs exact-revision Linux/macOS/Windows
+   JavaScript/Rust replay and six-report aggregation.
+3. OGVCS-007-AC-03 still requires the separately scheduled 100-GiB campaign.
+
+Only after those gates pass may maintainers execute the exact registry,
+profile, predecessor-pin, enablement, and rollback procedure in the
+[production-profile lifecycle runbook](../runbooks/OGVCS-007-production-profile-lifecycle.md).
