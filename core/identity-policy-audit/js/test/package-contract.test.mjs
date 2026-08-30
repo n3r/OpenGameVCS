@@ -2,10 +2,14 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import test from 'node:test';
 
 const ROOT = resolve(import.meta.dirname, '../../../..');
+const NPM_CLI = process.env.npm_execpath
+  ?? (process.platform === 'win32'
+    ? join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js')
+    : null);
 
 function run(command, arguments_, options = {}) {
   return new Promise((resolvePromise, reject) => {
@@ -15,6 +19,12 @@ function run(command, arguments_, options = {}) {
     child.once('error', reject);
     child.once('close', (code) => resolvePromise({ code, stdout: Buffer.concat(stdout).toString('utf8'), stderr: Buffer.concat(stderr).toString('utf8') }));
   });
+}
+
+function npm(arguments_, options = {}) {
+  return NPM_CLI
+    ? run(process.execPath, [NPM_CLI, ...arguments_], options)
+    : run('npm', arguments_, options);
 }
 
 test('offline packed consumer imports the candidate contract, runtime, and isolated testing adapters', async (t) => {
@@ -36,7 +46,7 @@ test('offline packed consumer imports the candidate contract, runtime, and isola
   ];
   const archives = [];
   for (const packageRoot of packageRoots) {
-    const packed = await run('npm', ['pack', resolve(ROOT, packageRoot), '--pack-destination', packages, '--json', '--ignore-scripts'], {
+    const packed = await npm(['pack', resolve(ROOT, packageRoot), '--pack-destination', packages, '--json', '--ignore-scripts'], {
       env: { ...process.env, npm_config_cache: cache },
     });
     assert.equal(packed.code, 0, packed.stderr);
@@ -44,7 +54,7 @@ test('offline packed consumer imports the candidate contract, runtime, and isola
     archives.push(join(packages, record.filename));
   }
   await writeFile(join(consumer, 'package.json'), JSON.stringify({ name: 'ogvcs-identity-packed-consumer', private: true, type: 'module' }));
-  const installed = await run('npm', ['install', '--offline', '--ignore-scripts', '--no-audit', '--no-fund', '--package-lock=false', ...archives], {
+  const installed = await npm(['install', '--offline', '--ignore-scripts', '--no-audit', '--no-fund', '--package-lock=false', ...archives], {
     cwd: consumer,
     env: { ...process.env, npm_config_cache: cache },
   });
