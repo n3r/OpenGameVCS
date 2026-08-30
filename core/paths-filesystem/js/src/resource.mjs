@@ -38,7 +38,6 @@ export class OperationGuard {
         controller.abort();
         try { pathFail('LIMIT_EXCEEDED', undefined, { resource: 'time' }); } catch (error) { reject(error); }
       }, remaining + 1);
-      timer.unref?.();
     });
     try { return await Promise.race([operation, timeout]); }
     finally { clearTimeout(timer); }
