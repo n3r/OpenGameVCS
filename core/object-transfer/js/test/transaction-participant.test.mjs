@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import test from 'node:test';
+import { chunkBytes } from '@opengamevcs/chunking-manifest';
+import { loadBundledRegistry, validateRegistrySet } from '@opengamevcs/object-model';
 import {
   LIFECYCLE_TRANSACTION_CONTRACT_VERSION,
   createLifecycleTransactionBoundary,
@@ -21,6 +23,59 @@ const transactionVectors = JSON.parse(await readFile(resolve(
   '../../../../spec/object-transfer/v1/vectors/transaction-participant.json',
 ))).cases;
 const vector = (id) => transactionVectors.find((entry) => entry.id === id);
+
+async function productionRegistry() {
+  const bundled = await loadBundledRegistry();
+  const documents = structuredClone(Object.fromEntries(bundled.documents));
+  documents['profiles.json'].entries.push({
+    family: 'chunking',
+    id: 'gear-fastcdc-1m',
+    major: 1,
+    namespace: 'chunking.opengamevcs',
+    owner: 'OGVCS-007',
+    productionWriteAllowed: true,
+    state: 'ratified',
+  });
+  documents['profiles.json'].entries.sort((left, right) => {
+    const a = `${left.namespace}\0${left.id}\0${String(left.major).padStart(10, '0')}`;
+    const b = `${right.namespace}\0${right.id}\0${String(right.major).padStart(10, '0')}`;
+    return a < b ? -1 : a > b ? 1 : 0;
+  });
+  return validateRegistrySet(documents);
+}
+
+async function contentManifestFixture(text = 'OpenGameVCS object-transfer content-manifest fixture\n') {
+  const bytes = Buffer.from(text, 'utf8');
+  const generated = await chunkBytes(bytes);
+  return Object.freeze({
+    manifest: generated.manifest.bytes,
+    objectId: generated.manifest.objectId,
+    verificationReceipt: generated.verificationReceipt,
+  });
+}
+
+function requiresContentManifestPublication(capability, object) {
+  return object.objectId.includes(':content-manifest:')
+    && (capability === 'transfer.record-available'
+      || capability === 'submit.consume-publication' && object.expectedState === 'quarantined');
+}
+
+function privateContext(capability, objects, fixtures = new Map()) {
+  return {
+    contentManifestPublications: objects
+      .filter((object) => requiresContentManifestPublication(capability, object))
+      .map((object) => {
+        const fixture = fixtures.get(object.objectId);
+        assert.ok(fixture, `missing content-manifest fixture for ${object.objectId}`);
+        return {
+          manifest: fixture.manifest,
+          objectId: object.objectId,
+          opaqueKey: object.opaqueKey,
+          verificationReceipt: fixture.verificationReceipt,
+        };
+      }),
+  };
+}
 
 function objectBinding(overrides = {}) {
   return {
@@ -90,9 +145,12 @@ function adapterResult(command) {
 
 test('one branded submit participant call revives and links an exact closure in its owner transaction', async () => {
   const submit = vector('submit-consume-publication');
+  const manifestFixture = await contentManifestFixture();
+  const fixtures = new Map([[manifestFixture.objectId, manifestFixture]]);
   const transaction = { audit: [], outbox: [] };
   let applications = 0;
   const boundary = createLifecycleTransactionBoundary({
+    contentManifestProduction: { registry: await productionRegistry() },
     resourceSecret: secret,
     poison: async (value) => { value.poisoned = true; },
     apply: async (value, command) => {
@@ -110,7 +168,12 @@ test('one branded submit participant call revives and links an exact closure in 
       return adapterResult(command);
     },
   });
-  const context = boundary.owner.bind(transaction, claims(submit.input.capability, submit.input.objects));
+  assert.equal(submit.input.objects[1].objectId, manifestFixture.objectId);
+  const context = boundary.owner.bind(
+    transaction,
+    claims(submit.input.capability, submit.input.objects),
+    privateContext(submit.input.capability, submit.input.objects, fixtures),
+  );
   const [first, replay] = await Promise.all([
     boundary.participant.consumePublication(context),
     boundary.participant.consumePublication(context),
@@ -123,14 +186,21 @@ test('one branded submit participant call revives and links an exact closure in 
 });
 
 test('every lifecycle transaction capability has one exact state/generation outcome', async () => {
+  const manifestFixture = await contentManifestFixture();
+  const fixtures = new Map([[manifestFixture.objectId, manifestFixture]]);
   for (const entry of transactionVectors.filter(({ id }) => id !== 'submit-consume-publication')) {
     const transaction = {};
     const boundary = createLifecycleTransactionBoundary({
+      contentManifestProduction: { registry: await productionRegistry() },
       resourceSecret: secret,
       poison: async () => {},
       apply: async (_value, command) => adapterResult(command),
     });
-    const context = boundary.owner.bind(transaction, claims(entry.input.capability, entry.input.objects));
+    const context = boundary.owner.bind(
+      transaction,
+      claims(entry.input.capability, entry.input.objects),
+      privateContext(entry.input.capability, entry.input.objects, fixtures),
+    );
     const result = await boundary.participant[entry.input.method](context);
     assert.deepEqual(result.objects.map(({ priorState, nextState, nextGeneration, reachabilityRecorded }) => ({
       priorState, nextState, nextGeneration, reachabilityRecorded,
@@ -167,9 +237,12 @@ test('structural, cross-boundary, and wrong-capability contexts cannot invoke a 
 
 test('adapter substitution or failure poisons the exact transaction and never becomes a replayable success', async () => {
   for (const mode of ['substitute', 'fail']) {
+    const manifestFixture = await contentManifestFixture();
+    const fixtures = new Map([[manifestFixture.objectId, manifestFixture]]);
     const transaction = {};
     let poisonings = 0;
     const boundary = createLifecycleTransactionBoundary({
+      contentManifestProduction: { registry: await productionRegistry() },
       resourceSecret: secret,
       poison: async (value) => { assert.equal(value, transaction); poisonings += 1; },
       apply: async (_value, command) => {
@@ -183,7 +256,12 @@ test('adapter substitution or failure poisons the exact transaction and never be
         return result;
       },
     });
-    const context = boundary.owner.bind(transaction, claims('submit.consume-publication'));
+    const submit = vector('submit-consume-publication');
+    const context = boundary.owner.bind(
+      transaction,
+      claims(submit.input.capability, submit.input.objects),
+      privateContext(submit.input.capability, submit.input.objects, fixtures),
+    );
     await assert.rejects(() => boundary.participant.consumePublication(context), mode === 'substitute'
       ? { code: 'TRANSFER_BACKEND_CORRUPT' }
       : { code: 'PRIVATE_DATABASE_SERIALIZATION' });
@@ -192,4 +270,133 @@ test('adapter substitution or failure poisons the exact transaction and never be
     });
     assert.equal(poisonings, 1);
   }
+});
+
+test('content-manifest available CAS requires the exact one-use OGVCS-007 receipt', async () => {
+  const fixture = await contentManifestFixture();
+  const entry = vector('transfer-record-available');
+  assert.equal(entry.input.objects[0].objectId, fixture.objectId);
+  let applications = 0;
+  const boundary = createLifecycleTransactionBoundary({
+    contentManifestProduction: { registry: await productionRegistry() },
+    resourceSecret: secret,
+    poison: async () => {},
+    apply: async (_value, command) => { applications += 1; return adapterResult(command); },
+  });
+  const context = boundary.owner.bind(
+    {},
+    claims(entry.input.capability, entry.input.objects),
+    {
+      contentManifestPublications: [{
+        manifest: fixture.manifest,
+        objectId: fixture.objectId,
+        opaqueKey: entry.input.objects[0].opaqueKey,
+        verificationReceipt: { ...fixture.verificationReceipt },
+      }],
+    },
+  );
+  await assert.rejects(() => boundary.participant.recordAvailable(context), {
+    code: 'TRANSFER_AUTHORIZATION_DENIED',
+  });
+  assert.equal(applications, 0);
+});
+
+test('content-manifest production receipt is one-use across independent lifecycle contexts', async () => {
+  const fixture = await contentManifestFixture();
+  const entry = vector('transfer-record-available');
+  const registry = await productionRegistry();
+  const boundary = createLifecycleTransactionBoundary({
+    contentManifestProduction: { registry },
+    resourceSecret: secret,
+    poison: async () => {},
+    apply: async (_value, command) => adapterResult(command),
+  });
+  const claimsValue = claims(entry.input.capability, entry.input.objects);
+  const first = boundary.owner.bind({}, claimsValue, {
+    contentManifestPublications: [{
+      manifest: fixture.manifest,
+      objectId: fixture.objectId,
+      opaqueKey: entry.input.objects[0].opaqueKey,
+      verificationReceipt: fixture.verificationReceipt,
+    }],
+  });
+  await boundary.participant.recordAvailable(first);
+  const replay = boundary.owner.bind({}, claimsValue, {
+    contentManifestPublications: [{
+      manifest: fixture.manifest,
+      objectId: fixture.objectId,
+      opaqueKey: entry.input.objects[0].opaqueKey,
+      verificationReceipt: fixture.verificationReceipt,
+    }],
+  });
+  await assert.rejects(() => boundary.participant.recordAvailable(replay), {
+    code: 'TRANSFER_AUTHORIZATION_DENIED',
+  });
+});
+
+test('content-manifest production registry must explicitly allow OGVCS-007 production writes', async () => {
+  const fixture = await contentManifestFixture();
+  const entry = vector('transfer-record-available');
+  const boundary = createLifecycleTransactionBoundary({
+    contentManifestProduction: { registry: await loadBundledRegistry() },
+    resourceSecret: secret,
+    poison: async () => {},
+    apply: async (_value, command) => adapterResult(command),
+  });
+  const context = boundary.owner.bind({}, claims(entry.input.capability, entry.input.objects), {
+    contentManifestPublications: [{
+      manifest: fixture.manifest,
+      objectId: fixture.objectId,
+      opaqueKey: entry.input.objects[0].opaqueKey,
+      verificationReceipt: fixture.verificationReceipt,
+    }],
+  });
+  await assert.rejects(() => boundary.participant.recordAvailable(context), {
+    code: 'TRANSFER_AUTHORIZATION_DENIED',
+  });
+});
+
+test('stale content-manifest availability burns the one-use receipt and cannot be retried with a fresh generation', async () => {
+  const fixture = await contentManifestFixture();
+  const entry = vector('transfer-record-available');
+  let attempts = 0;
+  const boundary = createLifecycleTransactionBoundary({
+    contentManifestProduction: { registry: await productionRegistry() },
+    resourceSecret: secret,
+    poison: async () => {},
+    apply: async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        const error = new Error('stale generation');
+        error.code = 'TRANSFER_LIFECYCLE_STALE';
+        throw error;
+      }
+      return adapterResult({
+        contextDigestSha256: sha('0'),
+        context: claims(entry.input.capability, entry.input.objects),
+        expectedObjects: [],
+        expectedFacts: [],
+      });
+    },
+  });
+  const privateValue = {
+    contentManifestPublications: [{
+      manifest: fixture.manifest,
+      objectId: fixture.objectId,
+      opaqueKey: entry.input.objects[0].opaqueKey,
+      verificationReceipt: fixture.verificationReceipt,
+    }],
+  };
+  const stale = boundary.owner.bind({}, claims(entry.input.capability, entry.input.objects), privateValue);
+  await assert.rejects(() => boundary.participant.recordAvailable(stale), {
+    code: 'TRANSFER_LIFECYCLE_STALE',
+  });
+  const retry = boundary.owner.bind({}, claims(entry.input.capability, [{
+    ...entry.input.objects[0],
+    expectedGeneration: entry.input.objects[0].expectedGeneration + 1,
+  }]), privateValue);
+  await assert.rejects(() => boundary.participant.recordAvailable(retry), {
+    code: 'TRANSFER_AUTHORIZATION_DENIED',
+  });
+  assert.equal(attempts, 1);
 });

@@ -16,7 +16,11 @@ exact `deleting` generation, and the backend durably records that intent before
 unlink so response-loss retry can finish the lifecycle receipt. A later upload
 for that same exact key can reopen only through a private reupload permit bound
 to the current `deleted` generation, deletion receipt, and next authority
-binding.
+binding. When the shared lifecycle transaction participant would make a
+`content-manifest` generation become `available`, it also requires the exact
+same-process OGVCS-007 production verification receipt and manifest bytes at
+`bind(...)`; it admits that receipt through `commitProductionManifest()` and
+only then lets the single metadata `apply(...)` commit proceed.
 
 Every service operation re-verifies a grant using the service clock with the configured audience,
 authority epoch, key generation, tenant/repository/subject context, operation,
@@ -26,9 +30,9 @@ diagnostics do not return ObjectIDs or grant details.
 This first cut supports objects through 64 MiB, parts through 4 MiB, ranges
 through 8 MiB, and 1,024 parts/sessions, with a 256-session per-tenant default.
 Expired locks and retained part/session copies are reclaimed within bounded
-scans. It does not claim S3 parity, production
-routes, GC reachability, automatic staging cleanup, 100-GiB execution, or
-reference throughput.
+scans. It does not claim S3 parity, direct public production routes, GC
+reachability, automatic staging cleanup, 100-GiB execution, or reference
+throughput.
 
 The portable Node adapter assumes the private storage root and its ancestors
 are not concurrently renamed by untrusted code with the same OS authority.

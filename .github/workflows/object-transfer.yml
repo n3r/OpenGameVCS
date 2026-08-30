@@ -5,6 +5,7 @@ on:
     paths:
       - ".github/workflows/object-transfer.yml"
       - "core/authz-contract/**"
+      - "core/chunking-manifest/**"
       - "core/object-model/js/**"
       - "core/object-transfer/**"
       - "docs/reviews/OGVCS-010-contract-boundary-review.md"
@@ -14,6 +15,7 @@ on:
       - "prd/ROADMAP.md"
       - "prd/todo/OGVCS-008-*.md"
       - "spec/authorization/v1/**"
+      - "spec/chunking-manifest/v1/**"
       - "spec/object-transfer/v1/**"
       - "spec/repository-format/v1/vectors/**"
       - "tools/object-transfer-workflow-policy.test.mjs"
@@ -25,6 +27,7 @@ on:
     paths:
       - ".github/workflows/object-transfer.yml"
       - "core/authz-contract/**"
+      - "core/chunking-manifest/**"
       - "core/object-model/js/**"
       - "core/object-transfer/**"
       - "docs/reviews/OGVCS-010-contract-boundary-review.md"
@@ -34,6 +37,7 @@ on:
       - "prd/ROADMAP.md"
       - "prd/todo/OGVCS-008-*.md"
       - "spec/authorization/v1/**"
+      - "spec/chunking-manifest/v1/**"
       - "spec/object-transfer/v1/**"
       - "spec/repository-format/v1/vectors/**"
       - "tools/object-transfer-workflow-policy.test.mjs"
@@ -67,5 +71,6 @@ jobs:
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run test:transfer:spec
       - run: npm run test:transfer
+      - run: npm run test:packed --workspace @opengamevcs/chunking-manifest
       - run: npm run test:roadmap
         if: runner.os == 'Linux'

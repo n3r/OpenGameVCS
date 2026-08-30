@@ -22,7 +22,10 @@ test('object transfer workflow pins the bounded three-host JavaScript contract/r
   assert.match(workflow, /npm ci --ignore-scripts --no-audit --no-fund/u);
   assert.match(workflow, /npm run test:transfer:spec/u);
   assert.match(workflow, /npm run test:transfer$/mu);
+  assert.match(workflow, /npm run test:packed --workspace @opengamevcs\/chunking-manifest/u);
   assert.match(workflow, /npm run test:roadmap/u);
+  assert.match(workflow, /core\/chunking-manifest\/\*\*/u);
+  assert.match(workflow, /spec\/chunking-manifest\/v1\/\*\*/u);
   assert.match(workflow, /spec\/object-transfer\/v1\/\*\*/u);
   assert.match(workflow, /core\/object-transfer\/\*\*/u);
   assert.match(workflow, /tools\/object-transfer-workflow-policy\.test\.mjs/u);

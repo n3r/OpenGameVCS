@@ -84,6 +84,17 @@ and adapter result additionally define the exact same-transaction hand-off that
 OGVCS-006/010 consume when a current metadata transaction needs OGVCS-008 to
 link publication reachability, acquire deletion, complete deletion, revive a
 deleted generation, or record availability without a second database commit.
+When that hand-off would make an OGVCS-002 `content-manifest` object become
+`available` (`quarantined -> available` or `staged -> available`), the public
+context must carry a non-null `verificationReceiptSha256` commitment and the
+same-process owner must also supply the exact OGVCS-007 one-use production
+verification receipt plus the exact manifest bytes in a private companion
+binding at `bind(...)`. The participant admits every required receipt through
+the OGVCS-007 `commitProductionManifest()` boundary and executes the single
+metadata `apply(...)` only from the shared `publication.commit(...)` barrier
+after all required receipts have reached commit. A generic backend durability
+receipt, manifest ObjectID, or registry row is never enough to authorize a
+`content-manifest` availability CAS.
 
 Grant expiry uses only the service clock. Caller-provided time and consumed
 nonce observations are ignored. A verified single-use nonce is claimed by an

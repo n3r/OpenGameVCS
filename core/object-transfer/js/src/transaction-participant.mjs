@@ -1,10 +1,17 @@
 import { createHash, createHmac } from 'node:crypto';
+import {
+  commitProductionManifest,
+  PROFILE as CHUNKING_PROFILE,
+  PRODUCTION_BOUNDARY_VERSION,
+  VERIFICATION_RECEIPT_VERIFIER,
+} from '@opengamevcs/chunking-manifest';
 import { ObjectRef } from '@opengamevcs/object-model';
 import { canonicalBytes, cloneJson } from '@opengamevcs/protocol-baseline';
 import { transferError } from './errors.mjs';
 
-export const LIFECYCLE_TRANSACTION_CONTRACT_VERSION = '0.1.0-rc.4';
+export const LIFECYCLE_TRANSACTION_CONTRACT_VERSION = '0.1.0-rc.5';
 export const LIFECYCLE_TRANSACTION_LIMITS = Object.freeze({ objectsMaximum: 1024 });
+const PRIVATE_CONTENT_MANIFEST_BYTES_MAX = 256 * 1024 * 1024;
 
 const SHA = /^[0-9a-f]{64}$/u;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -56,6 +63,23 @@ const RESULT_OBJECT_KEYS = [
   'reachabilityRecorded',
 ].sort().join('\0');
 const FACT_ACK_KEYS = ['auditRecordId', 'factSha256', 'outboxEventId'].sort().join('\0');
+const PRIVATE_CONTEXT_KEYS = ['contentManifestPublications'].sort().join('\0');
+const CONTENT_MANIFEST_PUBLICATION_KEYS = [
+  'manifest',
+  'objectId',
+  'opaqueKey',
+  'verificationReceipt',
+].sort().join('\0');
+const CONTENT_MANIFEST_PRODUCTION_STATEMENT_KEYS = [
+  'boundary',
+  'logicalBytes',
+  'manifestObjectId',
+  'manifestSha256',
+  'profile',
+  'verifier',
+  'wholeFileSha256',
+].sort().join('\0');
+const CHUNKING_PROFILE_TEXT = `${CHUNKING_PROFILE.namespace}/${CHUNKING_PROFILE.id}@${CHUNKING_PROFILE.major}`;
 
 const CAPABILITIES = Object.freeze({
   'submit.consume-publication': Object.freeze({
@@ -127,6 +151,14 @@ function nullableSha(value, label) {
   return value;
 }
 
+function objectRef(value) {
+  return ObjectRef.parse(value);
+}
+
+function isContentManifestObjectId(value) {
+  return objectRef(value).kindName === 'content-manifest';
+}
+
 function generation(value, nullable, label) {
   if (nullable && value === null) return value;
   if (!Number.isSafeInteger(value) || value < 1) {
@@ -141,6 +173,7 @@ function validateObject(input, capability) {
     transferError('TRANSFER_INPUT_INVALID', 'lifecycle transaction object binding is invalid');
   }
   canonicalObjectId(input.objectId);
+  const isContentManifest = isContentManifestObjectId(input.objectId);
   generation(input.expectedGeneration, false, 'lifecycle expected generation');
   generation(input.expectedHealthGeneration, true, 'lifecycle health generation');
   nullableSha(input.backendReceiptSha256, 'lifecycle backend receipt');
@@ -176,7 +209,9 @@ function validateObject(input, capability) {
       transferError('TRANSFER_INPUT_INVALID', 'deleted reverification binding is incomplete');
     }
   } else if (input.expectedHealth !== 'not-applicable' || input.expectedHealthGeneration !== null
-      || input.backendReceiptSha256 === null || input.verificationReceiptSha256 !== null
+      || input.backendReceiptSha256 === null
+      || (!isContentManifest && input.verificationReceiptSha256 !== null)
+      || (isContentManifest && input.verificationReceiptSha256 === null)
       || input.deletionReceiptSha256 !== null) {
     transferError('TRANSFER_INPUT_INVALID', 'available recording binding is incomplete');
   }
@@ -231,10 +266,193 @@ function transitionFor(capability, object) {
         reachabilityRecorded: false, receiptSha256: object.verificationReceiptSha256, result: 'deleted-generation-reopened' };
     case 'transfer.record-available':
       return { nextState: 'available', nextGeneration: object.expectedGeneration + 1,
-        reachabilityRecorded: false, receiptSha256: object.backendReceiptSha256, result: 'availability-recorded' };
+        reachabilityRecorded: false,
+        receiptSha256: object.verificationReceiptSha256 ?? object.backendReceiptSha256,
+        result: 'availability-recorded' };
     default:
       transferError('TRANSFER_INPUT_INVALID', 'lifecycle transaction capability is unknown');
   }
+}
+
+function requiredContentManifestPublications(claims) {
+  return claims.objects.filter((object) => {
+    const transition = transitionFor(claims.capability, object);
+    return isContentManifestObjectId(object.objectId)
+      && transition.nextState === 'available'
+      && transition.nextGeneration !== object.expectedGeneration;
+  });
+}
+
+function validatePrivateContext(input, claims, production) {
+  const required = requiredContentManifestPublications(claims);
+  if (required.length === 0) {
+    if (input === undefined || input === null) return Object.freeze([]);
+    if (!exactKeys(input, PRIVATE_CONTEXT_KEYS)
+        || !Array.isArray(input.contentManifestPublications)
+        || input.contentManifestPublications.length !== 0) {
+      transferError('TRANSFER_INPUT_INVALID', 'lifecycle private content-manifest bindings are invalid');
+    }
+    return Object.freeze([]);
+  }
+  if (!production?.registry) {
+    transferError('TRANSFER_INPUT_INVALID', 'content-manifest production boundary is unavailable');
+  }
+  if (!exactKeys(input, PRIVATE_CONTEXT_KEYS)
+      || !Array.isArray(input.contentManifestPublications)
+      || input.contentManifestPublications.length !== required.length) {
+    transferError('TRANSFER_AUTHORIZATION_DENIED', 'content-manifest production receipt was denied');
+  }
+  let totalManifestBytes = 0;
+  const bindings = input.contentManifestPublications.map((binding, index) => {
+    const object = required[index];
+    if (!exactKeys(binding, CONTENT_MANIFEST_PUBLICATION_KEYS)
+        || !SHA.test(binding.opaqueKey ?? '')
+        || binding.opaqueKey !== object.opaqueKey
+        || typeof binding.objectId !== 'string'
+        || binding.objectId !== object.objectId
+        || !(binding.manifest instanceof Uint8Array)
+        || !binding.verificationReceipt
+        || typeof binding.verificationReceipt !== 'object') {
+      transferError('TRANSFER_AUTHORIZATION_DENIED', 'content-manifest production receipt was denied');
+    }
+    totalManifestBytes += binding.manifest.byteLength;
+    if (!Number.isSafeInteger(totalManifestBytes) || totalManifestBytes > PRIVATE_CONTENT_MANIFEST_BYTES_MAX) {
+      transferError('TRANSFER_LIMIT_EXCEEDED', 'content-manifest production manifests exceed the bounded aggregate limit');
+    }
+    canonicalObjectId(binding.objectId, 'content-manifest production ObjectID');
+    return Object.freeze({
+      manifest: binding.manifest,
+      objectId: binding.objectId,
+      opaqueKey: binding.opaqueKey,
+      verificationReceipt: binding.verificationReceipt,
+    });
+  });
+  return Object.freeze(bindings);
+}
+
+function contentManifestProductionStatement(input) {
+  const statement = {
+    boundary: input.boundary,
+    logicalBytes: input.logicalBytes,
+    manifestObjectId: input.manifestObjectId,
+    manifestSha256: input.manifestSha256,
+    profile: input.profile,
+    verifier: input.verifier,
+    wholeFileSha256: input.wholeFileSha256,
+  };
+  if (!exactKeys(statement, CONTENT_MANIFEST_PRODUCTION_STATEMENT_KEYS)
+      || statement.boundary !== PRODUCTION_BOUNDARY_VERSION
+      || statement.verifier !== VERIFICATION_RECEIPT_VERIFIER
+      || statement.profile !== CHUNKING_PROFILE_TEXT
+      || statement.manifestObjectId !== input.manifestObjectId
+      || !SHA.test(statement.manifestSha256 ?? '')
+      || !SHA.test(statement.wholeFileSha256 ?? '')
+      || typeof statement.logicalBytes !== 'string'
+      || !/^(0|[1-9][0-9]*)$/u.test(statement.logicalBytes)) {
+    transferError('TRANSFER_AUTHORIZATION_DENIED', 'content-manifest production receipt was denied');
+  }
+  return Object.freeze(statement);
+}
+
+function contentManifestProductionStatementSha256(statement) {
+  return sha256(Buffer.concat([
+    Buffer.from('OGVCS-OBJECT-TRANSFER-CONTENT-MANIFEST-PRODUCTION-V1\0'),
+    canonicalBytes(statement),
+  ]));
+}
+
+function productionApplyBarrier(bound, apply, requiredCount) {
+  let arrivals = 0;
+  let applyPromise = null;
+  let failure = null;
+  let released = false;
+  let resolveRelease;
+  const release = new Promise((resolve) => {
+    resolveRelease = resolve;
+  });
+  return Object.freeze({
+    reject(error) {
+      if (released) return;
+      failure = error;
+      released = true;
+      resolveRelease();
+    },
+    async commit() {
+      arrivals += 1;
+      if (arrivals === requiredCount) {
+        applyPromise = (async () => validateAdapterResult(await apply(bound.transaction, bound.command), bound.command))();
+        if (!released) {
+          released = true;
+          resolveRelease();
+        }
+      } else if (!applyPromise) {
+        await release;
+      }
+      if (failure) throw failure;
+      return applyPromise;
+    },
+    get result() {
+      if (failure) throw failure;
+      return applyPromise;
+    },
+  });
+}
+
+function productionPublicationFor(object, barrier) {
+  let wrote = false;
+  return Object.freeze({
+    write(_bytes, context) {
+      if (wrote || context.manifestObjectId !== object.objectId) {
+        transferError('TRANSFER_AUTHORIZATION_DENIED', 'content-manifest production receipt was denied');
+      }
+      wrote = true;
+    },
+    commit(context) {
+      if (!wrote || context.manifestObjectId !== object.objectId) {
+        transferError('TRANSFER_AUTHORIZATION_DENIED', 'content-manifest production receipt was denied');
+      }
+      const statement = contentManifestProductionStatement(context);
+      if (contentManifestProductionStatementSha256(statement) !== object.verificationReceiptSha256) {
+        transferError('TRANSFER_AUTHORIZATION_DENIED', 'content-manifest production receipt was denied');
+      }
+      return barrier.commit();
+    },
+    abort() {
+      wrote = false;
+      return true;
+    },
+  });
+}
+
+async function authorizeContentManifestPublications(bound, production, apply) {
+  const required = requiredContentManifestPublications(bound.command.context);
+  if (required.length === 0) {
+    return validateAdapterResult(await apply(bound.transaction, bound.command), bound.command);
+  }
+  const barrier = productionApplyBarrier(bound, apply, required.length);
+  const pending = required.map((object, index) => {
+    const binding = bound.privateContentManifestPublications[index];
+    return commitProductionManifest({
+      registry: production.registry,
+      manifest: binding.manifest,
+      verificationReceipt: binding.verificationReceipt,
+      publication: productionPublicationFor(object, barrier),
+    }).catch((error) => {
+      barrier.reject(error);
+      throw error;
+    });
+  });
+  const settled = await Promise.allSettled(pending);
+  const failure = settled.find((entry) => entry.status === 'rejected');
+  if (failure) {
+    const cause = failure.reason;
+    if (cause && typeof cause === 'object' && 'code' in cause && `${cause.code}`.startsWith('CHUNK_')) {
+      if (cause.code === 'CHUNK_PUBLICATION_FAILED' && cause.cause) throw cause.cause;
+      transferError('TRANSFER_AUTHORIZATION_DENIED', 'content-manifest production receipt was denied', { cause });
+    }
+    throw cause;
+  }
+  return barrier.result;
 }
 
 function resourceId(secret, claims, object) {
@@ -326,7 +544,7 @@ function validateAdapterResult(input, command) {
   return deepFreeze(value);
 }
 
-export function createLifecycleTransactionBoundary({ apply, poison, resourceSecret } = {}) {
+export function createLifecycleTransactionBoundary({ apply, contentManifestProduction, poison, resourceSecret } = {}) {
   if (typeof apply !== 'function' || typeof poison !== 'function'
       || !(resourceSecret instanceof Uint8Array) || resourceSecret.byteLength < 32) {
     transferError('TRANSFER_INPUT_INVALID', 'lifecycle transaction boundary configuration is invalid');
@@ -334,18 +552,25 @@ export function createLifecycleTransactionBoundary({ apply, poison, resourceSecr
   const secret = Buffer.from(resourceSecret);
   const contexts = new WeakMap();
   const owner = Object.freeze({
-    bind(transaction, input) {
+    bind(transaction, input, privateContext = undefined) {
       if (!transaction || !['object', 'function'].includes(typeof transaction)) {
         transferError('TRANSFER_INPUT_INVALID', 'lifecycle transaction owner handle is invalid');
       }
       const claims = validateClaims(input);
       const command = expectedCommand(secret, claims);
+      const privateContentManifestPublications = validatePrivateContext(privateContext, claims, contentManifestProduction);
       const context = Object.freeze({
         schemaVersion: 'ogvcs.object-transfer/lifecycle-transaction-capability/v1',
         capability: claims.capability,
         contextDigestSha256: command.contextDigestSha256,
       });
-      contexts.set(context, { transaction, command, state: 'ready', outcome: null });
+      contexts.set(context, {
+        transaction,
+        command,
+        privateContentManifestPublications,
+        state: 'ready',
+        outcome: null,
+      });
       return context;
     },
   });
@@ -362,7 +587,7 @@ export function createLifecycleTransactionBoundary({ apply, poison, resourceSecr
     bound.state = 'running';
     bound.outcome = (async () => {
       try {
-        const result = validateAdapterResult(await apply(bound.transaction, bound.command), bound.command);
+        const result = await authorizeContentManifestPublications(bound, contentManifestProduction, apply);
         bound.state = 'complete';
         return result;
       } catch (error) {
