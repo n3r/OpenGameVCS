@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
-import { gzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 
 import { chunkBytes, compareManifest, verifyManifest, LIMITS } from '../core/chunking-manifest/js/src/index.mjs';
@@ -40,10 +39,138 @@ function compareCodeUnitStrings(left, right) {
   return 0;
 }
 
-function deterministicGzip(bytes) {
-  const output = gzipSync(bytes, { mtime: 0 });
-  if (output.length >= 10) output[9] = 255;
-  return output;
+export const PORTABLE_GZIP_ENCODER = 'ogvcs.portable-gzip-fixed-lz77/v1';
+
+const LENGTH_BASES = Object.freeze([3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258]);
+const LENGTH_EXTRA_BITS = Object.freeze([0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0]);
+const DISTANCE_BASES = Object.freeze([1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577]);
+const DISTANCE_EXTRA_BITS = Object.freeze([0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13]);
+
+const CRC32_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let index = 0; index < table.length; index += 1) {
+    let value = index;
+    for (let bit = 0; bit < 8; bit += 1) value = (value & 1) === 1 ? (0xedb88320 ^ (value >>> 1)) : (value >>> 1);
+    table[index] = value >>> 0;
+  }
+  return table;
+})();
+
+function crc32(bytes) {
+  let value = 0xffffffff;
+  for (const byte of bytes) value = CRC32_TABLE[(value ^ byte) & 0xff] ^ (value >>> 8);
+  return (value ^ 0xffffffff) >>> 0;
+}
+
+function reverseBits(value, count) {
+  let reversed = 0;
+  for (let index = 0; index < count; index += 1) {
+    reversed = (reversed << 1) | (value & 1);
+    value >>>= 1;
+  }
+  return reversed;
+}
+
+class DeflateBitWriter {
+  #bytes = [];
+  #pending = 0;
+  #pendingBits = 0;
+
+  writeBits(value, count) {
+    this.#pending |= value << this.#pendingBits;
+    this.#pendingBits += count;
+    while (this.#pendingBits >= 8) {
+      this.#bytes.push(this.#pending & 0xff);
+      this.#pending >>>= 8;
+      this.#pendingBits -= 8;
+    }
+  }
+
+  finish() {
+    if (this.#pendingBits > 0) this.#bytes.push(this.#pending & 0xff);
+    return Buffer.from(this.#bytes);
+  }
+}
+
+function writeFixedSymbol(writer, symbol) {
+  if (symbol <= 143) writer.writeBits(reverseBits(0x30 + symbol, 8), 8);
+  else if (symbol <= 255) writer.writeBits(reverseBits(0x190 + symbol - 144, 9), 9);
+  else if (symbol <= 279) writer.writeBits(reverseBits(symbol - 256, 7), 7);
+  else writer.writeBits(reverseBits(0xc0 + symbol - 280, 8), 8);
+}
+
+function tableIndex(value, bases) {
+  for (let index = bases.length - 1; index >= 0; index -= 1) {
+    if (value >= bases[index]) return index;
+  }
+  throw new Error('portable gzip table lookup failed');
+}
+
+function writeLengthDistance(writer, length, distance) {
+  const lengthIndex = tableIndex(length, LENGTH_BASES);
+  const lengthExtraBits = LENGTH_EXTRA_BITS[lengthIndex];
+  writeFixedSymbol(writer, 257 + lengthIndex);
+  if (lengthExtraBits > 0) writer.writeBits(length - LENGTH_BASES[lengthIndex], lengthExtraBits);
+
+  const distanceIndex = tableIndex(distance, DISTANCE_BASES);
+  const distanceExtraBits = DISTANCE_EXTRA_BITS[distanceIndex];
+  writer.writeBits(reverseBits(distanceIndex, 5), 5);
+  if (distanceExtraBits > 0) writer.writeBits(distance - DISTANCE_BASES[distanceIndex], distanceExtraBits);
+}
+
+function threeByteHash(bytes, offset) {
+  return (((bytes[offset] * 251) + bytes[offset + 1]) * 251 + bytes[offset + 2]) & 0xffff;
+}
+
+function portableDeflateFixed(bytes) {
+  const writer = new DeflateBitWriter();
+  const latest = new Int32Array(65_536);
+  latest.fill(-1);
+  writer.writeBits(1, 1); // BFINAL
+  writer.writeBits(1, 2); // BTYPE=01, fixed Huffman
+
+  let offset = 0;
+  while (offset < bytes.length) {
+    let matchLength = 0;
+    let matchDistance = 0;
+    if (offset + 2 < bytes.length) {
+      const hash = threeByteHash(bytes, offset);
+      const previous = latest[hash];
+      latest[hash] = offset;
+      if (previous >= 0 && offset - previous <= 32_768) {
+        const maximum = Math.min(258, bytes.length - offset);
+        let length = 0;
+        while (length < maximum && bytes[previous + length] === bytes[offset + length]) length += 1;
+        if (length >= 3) {
+          matchLength = length;
+          matchDistance = offset - previous;
+        }
+      }
+    }
+
+    if (matchLength >= 3) {
+      writeLengthDistance(writer, matchLength, matchDistance);
+      const end = offset + matchLength;
+      for (let skipped = offset + 1; skipped < end && skipped + 2 < bytes.length; skipped += 1) {
+        latest[threeByteHash(bytes, skipped)] = skipped;
+      }
+      offset = end;
+    } else {
+      writeFixedSymbol(writer, bytes[offset]);
+      offset += 1;
+    }
+  }
+  writeFixedSymbol(writer, 256);
+  return writer.finish();
+}
+
+export function deterministicGzip(bytes) {
+  const source = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
+  const header = Buffer.from([0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff]);
+  const trailer = Buffer.alloc(8);
+  trailer.writeUInt32LE(crc32(source), 0);
+  trailer.writeUInt32LE(source.length >>> 0, 4);
+  return Buffer.concat([header, portableDeflateFixed(source), trailer]);
 }
 
 export function stableFailureCode(code) {
@@ -173,6 +300,7 @@ export function materialize(recipe) {
     case 'structured-records':
       return structuredRecords(recipe);
     case 'gzip':
+      if (recipe.encoder !== PORTABLE_GZIP_ENCODER) throw new Error(`unsupported portable gzip encoder ${recipe.encoder}`);
       return deterministicGzip(materialize(recipe.source));
     case 'insert': {
       const base = materialize(recipe.base);

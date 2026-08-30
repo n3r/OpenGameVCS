@@ -1,13 +1,29 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
+import { gunzipSync } from 'node:zlib';
 
+import { deterministicGzip, materialize, PORTABLE_GZIP_ENCODER } from './chunking-selection-benchmark-common.mjs';
 import { buildChunkingSelectionReport } from './chunking-selection-benchmark-report.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..');
+
+test('portable gzip workload encoder has frozen bytes and round-trips', () => {
+  assert.equal(PORTABLE_GZIP_ENCODER, 'ogvcs.portable-gzip-fixed-lz77/v1');
+  const input = Buffer.from('OpenGameVCS portable gzip vector v1\n'.repeat(257));
+  const encoded = deterministicGzip(input);
+  assert.equal(encoded.length, 133);
+  assert.equal(createHash('sha256').update(encoded).digest('hex'), '9239e4e3e55134b644a59217a1a0c77a10ce4ba80bd515dfc25d509d78c28647');
+  assert.deepEqual(gunzipSync(encoded), input);
+  assert.throws(
+    () => materialize({ kind: 'gzip', encoder: 'native-zlib', source: { kind: 'literal', hex: '' } }),
+    /unsupported portable gzip encoder/,
+  );
+});
 
 function run(script, args) {
   return new Promise((resolvePromise, reject) => {

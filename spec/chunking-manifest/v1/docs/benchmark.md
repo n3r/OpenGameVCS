@@ -7,6 +7,12 @@ acceptance campaign. `vectors/selection-benchmark-workloads.json` declares
 seven deterministic workload pairs: source-like, structured,
 already-compressed, encrypted/random, insertion, replacement, and append.
 
+The `already-compressed` pair uses the closed
+`ogvcs.portable-gzip-fixed-lz77/v1` encoder. It emits a canonical gzip wrapper
+and a deterministic fixed-Huffman DEFLATE stream from the recipe bytes; native
+or system zlib output is not part of the authority. This keeps the workload
+byte-identical across supported hosts and runtime zlib versions.
+
 Each workload fixes both the base bytes and the edited candidate bytes through
 closed recipes. The report runner materializes those bytes locally, chunks the
 base and candidate, verifies the candidate manifest from its delivered chunks,

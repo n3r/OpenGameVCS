@@ -77,10 +77,12 @@ export const SELECTION_BENCHMARK_WORKLOADS = Object.freeze([
     description: 'Deterministic gzip of the source-like corpus to show that small logical edits can still yield poor chunk reuse after compression.',
     baseRecipe: {
       kind: 'gzip',
+      encoder: 'ogvcs.portable-gzip-fixed-lz77/v1',
       source: { kind: 'source-like-text', lines: 220000, salt: 0, editStartLine: 0, editLineCount: 0 },
     },
     candidateRecipe: {
       kind: 'gzip',
+      encoder: 'ogvcs.portable-gzip-fixed-lz77/v1',
       source: { kind: 'source-like-text', lines: 220000, salt: 11, editStartLine: 90000, editLineCount: 3000 },
     },
   },

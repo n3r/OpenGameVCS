@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-30
 
-**Reviewed source:** `cca6b87888ea9c28f3275c996b9b58336de2047f`
+**Reviewed source boundary:** parent revision `a8a7d975deef56b5500dce74a891ab5c2a844bdc`, plus the portable-gzip source and evidence retained in this revision; the linked report, bundle, and validation artifacts authenticate their exact source sets
 
 **Profile:** `chunking.opengamevcs/gear-fastcdc-1m@1`
 
@@ -27,9 +27,12 @@ evidence packet, but the profile is still blocked from ratification because
 production trust-boundary adoption and the generated registry/predecessor-pin
 lifecycle cut remain open.
 
-This review therefore makes no registry, profile-state, ADR-status, generated
-authority, predecessor-pin, package-workspace, lockfile, roadmap, or PRD-status
-change. The exact tuple and its vectors remain available for read-before-write
+This review therefore makes no OGVCS-002 registry, profile-state, ADR-status,
+package-workspace, lockfile, roadmap, or PRD-status change. It does regenerate
+the bounded chunking authority for the portable gzip recipe and mechanically
+refreshes the benchmark, repository-metadata, and identity predecessor-manifest
+pins. Those authority changes do not ratify the profile or authorize production
+writes. The exact tuple and its vectors remain available for read-before-write
 implementation work.
 
 The 100 GiB acceptance campaign remains intentionally deferred to the final
@@ -435,8 +438,8 @@ lifecycle. The checked-in artifacts are:
 
 The retained validation records:
 
-- `bundleDigest`: `704381159fb0cc9989ceaa609d4374f4d229d0f67b0bc1df0a3f18ab8f2b74d0`
-- `selectionReportSha256`: `5413ac852c72f4741959e1cf7a333e02549512eefe56689f910f381d6196faee`
+- `bundleDigest`: `049723cf07bf07c040cb00b502e3e4ade781fce403e22a261c81d47722a43b20`
+- `selectionReportSha256`: `6422186ccc905a2e88702a145795eac2f90fba833efb841cb7e40cf6d7e70299`
 - `sampleCount`: `7`
 - `summaryCount`: `7`
 - `thresholdEvaluationCount`: `5`
@@ -444,15 +447,15 @@ The retained validation records:
 - `resultOverallStatus`: `passed`
 
 The retained child-process peak range for the seven workloads is
-105,086,976 to 434,978,816 bytes. The run keeps `exactScaleExecuted: false`,
+104,742,912 to 441,155,584 bytes. The run keeps `exactScaleExecuted: false`,
 so it does not claim the deferred final-scale campaign.
 
 ## Current bounded status (2026-08-30)
 
 The bounded benchmark contract passes 4/4 tests, the benchmark harness passes
 25/25 tests, benchmark CI report/policy passes 6/6 tests, the chunking
-contract passes 3/3 tests, the chunking JavaScript package passes 32/32 tests,
-and the chunking report/evidence tools pass 15/15 tests. Metadata passes 4/4
+contract passes 4/4 tests, the chunking JavaScript package passes 32/32 tests,
+and the chunking report/evidence tools pass 16/16 tests. Metadata passes 4/4
 spec tests plus 2/2 workflow/report tests. Identity passes 3/3 spec tests plus
 36/36 runtime tests. Rust retains 12 source tests and passed the Node 24/Rust
 1.82 Linux, macOS, and Windows workflow in
@@ -463,7 +466,8 @@ P0-1 and P0-3 are closed at the package/API boundary. P0-1 still requires a
 production acceptor/emitter to consume the private verification receipt before
 writes can be enabled. P0-2 is now closed in bounded scope by the authenticated
 seven-workload OGVCS-005 bundle and same-run observed whole-process peak
-memory. Registry/predecessor-pin regeneration and the generated lifecycle cut
-remain open before any ratification or production-write enablement. The
-100-GiB campaign remains deferred to final OGVCS-007 completion/release and is
-not part of the bounded profile-ratification cut.
+memory. The mechanical chunking, benchmark, repository-metadata, and identity
+manifest/pin refresh is complete; the OGVCS-002 profile-registry and production
+lifecycle cut remains open before any ratification or production-write
+enablement. The 100-GiB campaign remains deferred to final OGVCS-007
+completion/release and is not part of the bounded profile-ratification cut.

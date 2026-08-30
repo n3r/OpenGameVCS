@@ -154,6 +154,8 @@ test('bounded workflow keeps languages parallel and excludes scale campaigns', a
   assert.match(workflow, /cargo test .* --locked/);
   assert.match(workflow, /cargo package .* --offline/);
   assert.match(workflow, /npm run test:packed/);
+  assert.match(workflow, /- run: npm run test:chunking:report/);
+  assert.doesNotMatch(workflow, /if:[^\n]+\n\s+run: npm run test:chunking:report/);
   assert.doesNotMatch(workflow, /(?:100\s*GiB|1\s*TiB|exact-scale)/i);
   assert.match(packedConsumer, /process\.env\.npm_execpath/);
   assert.match(packedConsumer, /process\.platform === 'win32'/);

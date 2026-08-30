@@ -40,3 +40,23 @@ test('independent validator rejects stale manifest count schema', async () => {
   assert.notEqual(validation.status, 0);
   assert.match(validation.stderr, /count authority/u);
 });
+
+test('independent validator rejects coordinated portable-gzip authority drift', async () => {
+  const temporary = await mkdtemp(join(tmpdir(), 'ogvcs-chunk-contract-'));
+  await cp(ROOT, temporary, { recursive: true });
+  const workloadPath = join(temporary, 'vectors/selection-benchmark-workloads.json');
+  const schemaPath = join(temporary, 'schemas/selection-benchmark-workloads.schema.json');
+  const workloads = JSON.parse(await readFile(workloadPath, 'utf8'));
+  const compressed = workloads.workloads.find(({ workloadId }) => workloadId === 'already-compressed');
+  compressed.baseRecipe.encoder = 'native-zlib';
+  compressed.candidateRecipe.encoder = 'native-zlib';
+  const schema = JSON.parse(await readFile(schemaPath, 'utf8'));
+  schema.$defs.recipe.allOf[0].then.properties.encoder.const = 'native-zlib';
+  await Promise.all([
+    writeFile(workloadPath, `${JSON.stringify(workloads)}\n`),
+    writeFile(schemaPath, `${JSON.stringify(schema)}\n`),
+  ]);
+  const validation = run('validate-spec.mjs', [], { OGVCS_CHUNK_CONTRACT_ROOT: temporary });
+  assert.notEqual(validation.status, 0);
+  assert.match(validation.stderr, /portable gzip encoder/u);
+});

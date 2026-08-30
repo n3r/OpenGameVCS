@@ -77,8 +77,8 @@ and did not run the 100-GiB campaign.
 - The report explicitly records `exactScaleExecuted: false`; it does not
   claim the deferred 100 GiB acceptance result.
 - The retained captures record observed whole-process child peaks from fresh
-  worker processes. The current retained range is 105,086,976 to
-  434,978,816 bytes across the seven workloads.
+  worker processes. The current retained range is 104,742,912 to
+  441,155,584 bytes across the seven workloads.
 
 ## Ratification status
 
@@ -101,9 +101,11 @@ The remaining open boundaries from the review are:
 
 - P0-1 deployment boundary: the private receipt is enforced by the package
   adapter, but no production server acceptor/emitter has adopted it yet.
-- Generated registry/predecessor-pin lifecycle: the profile registry,
-  repository-metadata pins, and downstream release lifecycle remain intentionally
-  unchanged in this evidence tranche.
+- Generated registry/production lifecycle: portable-encoder regeneration
+  mechanically refreshed the chunking, benchmark, repository-metadata, and
+  identity manifest/pin chain. The OGVCS-002 profile registry, production-write
+  eligibility, ratification state, and downstream release lifecycle remain
+  intentionally unchanged and open.
 - Final-scale completion: the separate 100-GiB resource campaign remains an
   OGVCS-007 completion/release gate after bounded profile ratification.
 

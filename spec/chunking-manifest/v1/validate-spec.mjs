@@ -111,6 +111,19 @@ if (selectionWorkloads.profile !== PROFILE
   || canonical(selectionWorkloads.workloads.map(({ workloadId }) => workloadId)) !== canonical(expectedWorkloadIds)) {
   fail('selection benchmark workloads are invalid');
 }
+const portableGzipEncoder = 'ogvcs.portable-gzip-fixed-lz77/v1';
+const compressedWorkload = selectionWorkloads.workloads.find(({ workloadId }) => workloadId === 'already-compressed');
+if (compressedWorkload?.baseRecipe?.kind !== 'gzip'
+  || compressedWorkload?.candidateRecipe?.kind !== 'gzip'
+  || compressedWorkload.baseRecipe.encoder !== portableGzipEncoder
+  || compressedWorkload.candidateRecipe.encoder !== portableGzipEncoder) {
+  fail('already-compressed workload does not bind the portable gzip encoder');
+}
+const workloadSchema = (await load('schemas/selection-benchmark-workloads.schema.json')).value;
+if (workloadSchema.$defs?.recipe?.allOf?.[0]?.then?.properties?.encoder?.const !== portableGzipEncoder
+  || !workloadSchema.$defs.recipe.allOf[0].then.required.includes('encoder')) {
+  fail('selection workload schema does not require the portable gzip encoder');
+}
 const selectionThresholds = (await load('thresholds/selection-bounded-v1.json')).value;
 if (selectionThresholds.profile !== PROFILE
   || selectionThresholds.owner !== 'ogvcs-007'
