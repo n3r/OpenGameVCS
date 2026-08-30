@@ -107,6 +107,7 @@ export function createAtomicWriteStreamPublicationAdapter(workspace, repositoryP
       source.fail(failure);
       throw failure;
     });
+    writePromise.catch(() => {});
     return writePromise;
   }
 

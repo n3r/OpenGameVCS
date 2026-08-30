@@ -341,10 +341,12 @@ export async function reconstructManifest(input = {}) {
     transactionOpen = true;
     const content = await consumeContent(parsed, input.source, publication, control);
     const verificationReceipt = createVerificationReceipt(receiptRequirementsFromParsed(parsed));
-    const publicationResult = await control.wait(
-      () => publication.commit(Object.freeze({ ...control.context, verificationReceipt })),
-      'CHUNK_PUBLICATION_FAILED',
-    );
+    control.check();
+    const publicationResult = await Promise.resolve().then(() =>
+      publication.commit(Object.freeze({ ...control.context, verificationReceipt })),
+    ).catch((cause) => {
+      throw normalizeError(cause, 'CHUNK_PUBLICATION_FAILED');
+    });
     transactionOpen = false;
     return Object.freeze({
       ...summary(parsed, content, parsed.ledger.metrics()),

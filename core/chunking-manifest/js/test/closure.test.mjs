@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -559,10 +559,10 @@ test('commit remains abortable through cancellation and deadline until filesyste
       name: 'deadline',
       options() {
         return {
-          maxTimeMs: 50,
+          maxTimeMs: 200,
           hooks: {
             boundary: async (name) => {
-              if (name === 'before-parent-sync') await delay(100);
+              if (name === 'before-parent-sync') await delay(300);
             },
           },
         };
@@ -591,6 +591,90 @@ test('commit remains abortable through cancellation and deadline until filesyste
       await assert.rejects(readFile(join(root, 'Content', 'asset.bin')), { code: 'ENOENT' }, scenario.name);
     } finally {
       await rm(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test('reconstructManifest returns the committed publication receipt when outer cancellation or deadline fires after commit', async () => {
+  const fixture = await prepared('tiny-ascii');
+  const scenarios = [
+    {
+      name: 'outer-cancellation',
+      control(root) {
+        const controller = new AbortController();
+        return {
+          reconstruction: { signal: controller.signal },
+          publication: {
+            hooks: {
+              boundary: async (name) => {
+                if (name === 'after-commit') {
+                  controller.abort();
+                  await delay(20);
+                }
+              },
+            },
+          },
+          assertCommitted: async ({ publishedPath }) => {
+            assert.equal(Buffer.compare(await readFile(publishedPath), fixture.bytes), 0);
+          },
+        };
+      },
+    },
+    {
+      name: 'outer-deadline',
+      control() {
+        return {
+          reconstruction: { maxElapsedMilliseconds: 500 },
+          publication: {
+            hooks: {
+              boundary: async (name) => {
+                if (name === 'after-commit') await delay(700);
+              },
+            },
+          },
+          assertCommitted: async ({ publishedPath }) => {
+            assert.equal(Buffer.compare(await readFile(publishedPath), fixture.bytes), 0);
+          },
+        };
+      },
+    },
+  ];
+  for (const existing of [false, true]) {
+    for (const scenario of scenarios) {
+      const root = await mkdtemp(join(tmpdir(), `ogvcs-chunk-post-commit-${scenario.name}-`));
+      try {
+        const workspace = await openWorkspaceRoot(root);
+        const publishedPath = join(root, 'Content', 'asset.bin');
+        if (existing) {
+          await mkdir(join(root, 'Content'), { recursive: true });
+          await writeFile(publishedPath, 'old');
+        }
+        const plan = await publicationPlan(workspace, 'Content/asset.bin');
+        const control = scenario.control(root);
+        const reconstructed = await reconstructManifest({
+          manifest: fixture.result.manifest.bytes,
+          source: fixture.source,
+          publication: createAtomicWriteStreamPublicationAdapter(workspace, 'Content/asset.bin', {
+            manifest: fixture.result.manifest.bytes,
+            createParents: true,
+            maxBytes: fixture.bytes.length,
+            maxScratchBytes: fixture.bytes.length,
+            plan,
+            ...control.publication,
+          }),
+          ...control.reconstruction,
+        });
+        assert.equal(reconstructed.publicationResult.workspacePublication.path, 'Content/asset.bin', `${scenario.name}:${existing ? 'existing' : 'absent'}`);
+        consumeVerificationReceipt(reconstructed.verificationReceipt, {
+          ...fixtureReceiptDetails(fixture),
+          verifier: VERIFICATION_RECEIPT_VERIFIER,
+          workspacePublication: reconstructed.publicationResult.workspacePublication,
+        });
+        await control.assertCommitted({ publishedPath });
+        assert.deepEqual(await readdir(workspace.transactions), [], `${scenario.name}:${existing ? 'existing' : 'absent'}`);
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
     }
   }
 });
@@ -631,6 +715,78 @@ test('pre-aborted and invalid-plan adapters stay lazy, clean, and avoid unhandle
     process.off('unhandledRejection', onUnhandled);
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test('caught writer failures stay sticky, clean remnants, and never emit rejection lifecycle events', async () => {
+  const fixture = await prepared('tiny-ascii');
+  const root = await mkdtemp(join(tmpdir(), 'ogvcs-chunk-write-failure-'));
+  const unhandled = [];
+  const handled = [];
+  const onUnhandled = (reason) => { unhandled.push(reason); };
+  const onHandled = (promise) => { handled.push(promise); };
+  process.on('unhandledRejection', onUnhandled);
+  process.on('rejectionHandled', onHandled);
+  try {
+    const workspace = await openWorkspaceRoot(root);
+    const plan = await publicationPlan(workspace, 'Content/asset.bin');
+    const publication = createAtomicWriteStreamPublicationAdapter(workspace, 'Content/asset.bin', {
+      manifest: fixture.result.manifest.bytes,
+      createParents: true,
+      maxBytes: fixture.bytes.length,
+      maxScratchBytes: fixture.bytes.length,
+      plan,
+      hooks: {
+        boundary(name) {
+          if (name === 'after-plan') throw new Error('simulated writer failure');
+        },
+      },
+    });
+    let failure;
+    await assert.rejects(publication.write(fixture.bytes), (error) => {
+      failure = error;
+      return error instanceof ChunkingError && error.code === 'CHUNK_PUBLICATION_FAILED';
+    });
+    const verificationReceipt = createVerificationReceipt(fixtureReceiptDetails(fixture));
+    await assert.rejects(publication.commit({ verificationReceipt }), (error) => error === failure);
+    await assert.rejects(publication.write(fixture.bytes), (error) => error === failure);
+    await nextTurn();
+    await nextTurn();
+    assert.deepEqual(unhandled, []);
+    assert.deepEqual(handled, []);
+    assert.deepEqual(await readdir(workspace.transactions), []);
+    await assert.rejects(readFile(join(root, 'Content', 'asset.bin')), { code: 'ENOENT' });
+  } finally {
+    process.off('unhandledRejection', onUnhandled);
+    process.off('rejectionHandled', onHandled);
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('verification receipt consumption reserves before caller getters and recursive access cannot consume twice', async () => {
+  const fixture = await prepared('tiny-ascii');
+  const receipt = createVerificationReceipt(fixtureReceiptDetails(fixture));
+  let recursiveAttempts = 0;
+  let recursiveSuccesses = 0;
+  const requirements = {};
+  Object.defineProperty(requirements, 'manifest', {
+    configurable: true,
+    enumerable: true,
+    get() {
+      recursiveAttempts += 1;
+      try {
+        consumeVerificationReceipt(receipt);
+        recursiveSuccesses += 1;
+      } catch (error) {
+        assert.equal(error.code, 'CHUNK_RESOURCE_INVALID');
+      }
+      return fixture.result.manifest.bytes;
+    },
+  });
+  const payload = consumeVerificationReceipt(receipt, requirements);
+  assert.equal(payload.manifestObjectId, fixture.result.manifest.objectId);
+  assert.equal(recursiveAttempts, 1);
+  assert.equal(recursiveSuccesses, 0);
+  assert.throws(() => consumeVerificationReceipt(receipt), { code: 'CHUNK_RESOURCE_INVALID' });
 });
 
 test('low-memory receipt issuance reuses the parsed manifest state and leaves scratch clean', async () => {

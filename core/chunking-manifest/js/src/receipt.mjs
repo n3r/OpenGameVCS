@@ -30,24 +30,32 @@ export function createVerificationReceipt(details) {
 export function consumeVerificationReceipt(receipt, requirements = {}, code = 'CHUNK_RESOURCE_INVALID') {
   const state = RECEIPT_STATE.get(receipt);
   if (state === undefined || state.used) fail(code, { resource: 'verificationReceipt' });
+  state.used = true;
   const { payload } = state;
-  optionalExact(requirements.verifier, payload.verifier, 'verifier', code);
-  optionalExact(requirements.profile, payload.profile, 'profile', code);
-  optionalExact(requirements.manifestObjectId, payload.manifestObjectId, 'manifestObjectId', code);
-  if (requirements.manifest !== undefined) {
-    optionalExact(manifestSha256Hex(requirements.manifest), payload.manifestSha256, 'manifestSha256', code);
+  const verifier = requirements.verifier;
+  const profile = requirements.profile;
+  const manifestObjectId = requirements.manifestObjectId;
+  const manifest = requirements.manifest;
+  const manifestSha256 = requirements.manifestSha256;
+  const logicalBytes = requirements.logicalBytes;
+  const wholeFileSha256 = requirements.wholeFileSha256;
+  const workspacePublication = requirements.workspacePublication;
+  optionalExact(verifier, payload.verifier, 'verifier', code);
+  optionalExact(profile, payload.profile, 'profile', code);
+  optionalExact(manifestObjectId, payload.manifestObjectId, 'manifestObjectId', code);
+  if (manifest !== undefined) {
+    optionalExact(manifestSha256Hex(manifest), payload.manifestSha256, 'manifestSha256', code);
   }
-  optionalExact(requirements.manifestSha256, payload.manifestSha256, 'manifestSha256', code);
-  optionalExact(requirements.logicalBytes, payload.logicalBytes, 'logicalBytes', code);
-  optionalExact(requirements.wholeFileSha256, payload.wholeFileSha256, 'wholeFileSha256', code);
-  if (requirements.workspacePublication !== undefined) {
-    const expected = requirements.workspacePublication;
+  optionalExact(manifestSha256, payload.manifestSha256, 'manifestSha256', code);
+  optionalExact(logicalBytes, payload.logicalBytes, 'logicalBytes', code);
+  optionalExact(wholeFileSha256, payload.wholeFileSha256, 'wholeFileSha256', code);
+  if (workspacePublication !== undefined) {
+    const expected = workspacePublication;
     const actual = payload.workspacePublication;
     if (!actual || expected.path !== actual.path || expected.bytes !== actual.bytes
       || expected.sha256 !== actual.sha256 || expected.transaction !== actual.transaction) {
       fail(code, { field: 'workspacePublication' });
     }
   }
-  state.used = true;
   return payload;
 }
