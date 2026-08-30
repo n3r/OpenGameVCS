@@ -1,12 +1,14 @@
-# OGVCS-007 provisional bounded seven-workload selection evidence
+# OGVCS-007 bounded seven-workload authenticated selection evidence
 
 **Evidence date:** 2026-08-30
-**Status:** Provisional bounded OGVCS-007 selection evidence retained; P0-2 remains open
+**Status:** Bounded authenticated OGVCS-007 selection evidence retained; P0-2 closed, profile ratification still blocked
 
-This packet retains a narrow, provisional OGVCS-007 selection-evidence record
-for the 2026-08-30 ratification review without attempting the deferred
-100 GiB acceptance campaign. It records one deterministic local bounded run of
-seven workload classes:
+This packet retains the bounded OGVCS-007 selection evidence used to close the
+P0-2 authenticated-benchmark finding without attempting the separately deferred
+100 GiB acceptance campaign. It retains two deterministic local bounded report
+executions over the same seven workload classes: the standalone selection
+report and the authenticated bundle run. The bundle validation binds the
+bundle-embedded report and its same-run captures:
 
 - source-like
 - structured
@@ -25,10 +27,17 @@ ledger memory, observed generation/compare/verify throughput, exact source
 identity type/value, and bounded chunk-based resynchronization distance where a
 post-mutation aligned reused chunk exists.
 
-It is not an authenticated OGVCS-005 result bundle, does not carry an
-OGVCS-005 verifier receipt, and does not record observed whole-process peak
-memory. It therefore cannot close the authenticated OGVCS-005 bundle finding
-from P0-2 on its own.
+The authenticated OGVCS-005-compatible result bundle is retained under
+[`bounded-selection-bundle-2026-08-30/`](bounded-selection-bundle-2026-08-30/)
+and independently reverified by
+[`bounded-selection-bundle-validation-2026-08-30.json`](bounded-selection-bundle-validation-2026-08-30.json).
+The validation record is location-independent and stores a repository-relative
+`bundleDirectory`, not an absolute host path.
+
+This closes P0-2 in bounded scope: the seven-workload run now emits an
+authenticated `ogvcs.benchmark/result-bundle/v1`, passes the public base and
+product verifiers, retains all seven samples, and records same-run observed
+child-process peak memory for each workload.
 
 ## Bounded hosted implementation proof
 
@@ -50,19 +59,26 @@ and did not run the 100-GiB campaign.
 
 ## What this evidence proves
 
-- A bounded seven-workload corpus and retained local report now exist in source
-  control as provisional OGVCS-007 selection evidence.
+- A bounded seven-workload corpus, retained local report, authenticated result
+  bundle, and independent retained-validation record now exist in source
+  control as OGVCS-007 bounded selection evidence.
 - The report is executable from the public JavaScript implementation with:
   `node tools/chunking-selection-benchmark-report.mjs --output <report.json>`.
-- The bounded threshold file is green for this retained local report.
+- The authenticated bundle is executable from the public publisher with:
+  `node tools/chunking-selection-benchmark-bundle.mjs --output <bundle-dir>`.
+- The public OGVCS-005 verifier and the independent OGVCS-007 product verifier
+  both accept the retained bundle.
+- The bounded threshold file is green for the retained report and the retained
+  bundle.
 - Every threshold failure forces `overallStatus: "failed"`.
 - Compressed and encrypted/random inputs honestly report poor reuse.
 - Source-like, structured, insertion, replacement, and append workloads record
   observed reuse rather than inferred savings.
 - The report explicitly records `exactScaleExecuted: false`; it does not
   claim the deferred 100 GiB acceptance result.
-- The report records per-operation ledger peaks only; it does not publish the
-  observed process peak memory that P0-2 closure still requires.
+- The retained captures record observed whole-process child peaks from fresh
+  worker processes. The current retained range is 105,086,976 to
+  434,978,816 bytes across the seven workloads.
 
 ## Ratification status
 
@@ -81,19 +97,16 @@ implementation has closed the code-level portions of two blockers:
   cancellation/deadline settlement cannot report failure after a durable
   commit.
 
-The remaining P0 boundaries from the review are:
+The remaining open boundaries from the review are:
 
 - P0-1 deployment boundary: the private receipt is enforced by the package
   adapter, but no production server acceptor/emitter has adopted it yet.
-- P0-2: no authenticated OGVCS-005 result bundle/verifier exists for the
-  seven-class bounded run, and no observed process peak memory is retained for
-  that run.
+- Generated registry/predecessor-pin lifecycle: the profile registry,
+  repository-metadata pins, and downstream release lifecycle remain intentionally
+  unchanged in this evidence tranche.
+- Final-scale completion: the separate 100-GiB resource campaign remains an
+  OGVCS-007 completion/release gate after bounded profile ratification.
 
-Actual P0-2 closure still requires an authenticated OGVCS-005-compatible result
-bundle plus verifier outcome for the bounded seven-class run, along with
-observed process peak memory. Until then, this packet remains narrow retained
-selection evidence only. The current-source bounded hosted matrix is retained
-above; ratification still requires production trust-boundary adoption and the
-generated registry/predecessor-pin lifecycle cut. The 100-GiB resource campaign
-remains a separately scheduled OGVCS-007 completion/release gate after bounded
-profile ratification.
+This packet does not ratify `chunking.opengamevcs/gear-fastcdc-1m@1`, change
+the OGVCS-002 registry, or authorize production writes. It closes only the
+bounded authenticated-evidence requirement that previously blocked P0-2.

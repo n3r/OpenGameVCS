@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-30
 
-**Reviewed source:** `3e2da7415028ed6f444c3c7301c756ec6cdc0dd5`
+**Reviewed source:** `cca6b87888ea9c28f3275c996b9b58336de2047f`
 
 **Profile:** `chunking.opengamevcs/gear-fastcdc-1m@1`
 
@@ -19,9 +19,13 @@ nine checked-in manifests. A ratified registry row says that a new production
 manifest carrying this `ProfileRef` has the profile's boundary semantics. The
 current public production-write boundary can prove the OGVCS-002 container,
 ChunkIDs, lengths, and whole-file digest, but no production route invokes the
-additional OGVCS-007 boundary verifier required by ADR-0016. The candidate also
-lacks the benchmark authority that ADR-0016 names as a precondition to
-ratification.
+additional OGVCS-007 boundary verifier required by ADR-0016. The original
+review also lacked the benchmark authority that ADR-0016 names as a
+precondition to ratification. That bounded benchmark gap is now closed by the
+authenticated seven-workload OGVCS-005 bundle retained in the 2026-08-30
+evidence packet, but the profile is still blocked from ratification because
+production trust-boundary adoption and the generated registry/predecessor-pin
+lifecycle cut remain open.
 
 This review therefore makes no registry, profile-state, ADR-status, generated
 authority, predecessor-pin, package-workspace, lockfile, roadmap, or PRD-status
@@ -111,25 +115,33 @@ Required closure:
 - prove the arbitrary-boundary reproduction above is rejected as
   `CHUNK_BOUNDARY_MISMATCH` before any trusted publication.
 
-### P0-2: the required authenticated selection benchmark does not exist
+### P0-2 (closed in bounded scope): the required authenticated selection benchmark now exists
 
 ADR-0016 keeps production writes disabled until OGVCS-007 FR-08/AC-04 evidence
-passes. No OGVCS-007 evidence packet, benchmark profile, threshold file, or
-authenticated OGVCS-005-compatible report exists in this source.
+passes. That bounded evidence now exists in source:
 
-The two insertion vectors cannot substitute for the gate. The required report
-must separate source-like, structured, already-compressed, encrypted/random,
-insertion, replacement, and append workloads and record observed throughput,
-peak memory, chunk count/manifest cost, resynchronization distance, and exact
-logical/unique/reused/new bytes. It must never infer savings from a nominal
-ratio. Compressed and random inputs are expected to report poor reuse honestly.
+- [`docs/evidence/OGVCS-007/bounded-selection-report-2026-08-30.json`](../evidence/OGVCS-007/bounded-selection-report-2026-08-30.json)
+  retains the seven-class bounded report.
+- [`docs/evidence/OGVCS-007/bounded-selection-bundle-2026-08-30/`](../evidence/OGVCS-007/bounded-selection-bundle-2026-08-30/)
+  retains an authenticated `ogvcs.benchmark/result-bundle/v1`.
+- [`docs/evidence/OGVCS-007/bounded-selection-bundle-validation-2026-08-30.json`](../evidence/OGVCS-007/bounded-selection-bundle-validation-2026-08-30.json)
+  independently re-reads the checked-in bundle, calls the base verifier first,
+  and recomputes the OGVCS-007 derived claims from retained evidence.
 
-Required closure is a bounded ordinary benchmark corpus and authenticated
-OGVCS-005 result bundle covering all seven workload classes. The later 100 GiB
-resource run remains a scheduled final/release job, not a per-PR prerequisite
-for developing this bounded report.
+The retained run covers source-like, structured, already-compressed,
+encrypted/random, insertion, replacement, and append workloads under the
+isolated `chunking-selection-bounded` profile. It records exact logical/unique/
+reused/new bytes, chunk counts and manifest sizes, observed throughput,
+same-run whole-process child peak memory, and bounded resynchronization detail
+where aligned reused chunks still exist. The public base verifier and the
+product verifier both accept the retained bundle; the retained validation is
+location-independent and stores only the repository-relative bundle path.
 
-### P0-3: there is no read-before-write reconstruction path
+This closes P0-2 in bounded scope. It does not ratify the profile, does not
+change the OGVCS-002 registry, and does not satisfy the separately scheduled
+100 GiB final/release campaign.
+
+### P0-3 (historical): there was no read-before-write reconstruction path
 
 The public JavaScript and Rust packages expose chunk generation, but not the
 PRD's `verify`, `reconstruct`, `compare`, or cache-key interfaces. Neither can
@@ -231,7 +243,7 @@ These tests do not change the profile tuple and do not require a large campaign:
 - one generated cross-language parity record so constant, error, result, and
   vector drift cannot hide behind two separately green suites.
 
-## Requirement status at this revision
+## Requirement status at the original 2026-08-30 review revision
 
 | Requirement | Status | Review result |
 |---|---|---|
@@ -406,24 +418,52 @@ wrong/reused receipts cannot publish, writer errors remain sticky, and temporary
 workspace roots are removed.
 
 This closes P0-1 and P0-3 at the bounded source/API boundary without ratifying
-the profile. The retained seven-workload report remains provisional: P0-2 still
-requires an authenticated OGVCS-005 result bundle/verifier with observed
-whole-process peak memory. Bounded current-source JavaScript/Rust proof is
+the profile. Bounded current-source JavaScript/Rust proof is
 retained from all three hosted operating systems; registry/predecessor-pin
 regeneration and the separately scheduled final 100-GiB campaign remain outside
 this source-level follow-up.
 
+## Authenticated bounded benchmark follow-up (2026-08-30)
+
+The bounded seven-workload benchmark is now retained as authenticated OGVCS-005
+evidence and closes P0-2 in bounded scope without changing the profile
+lifecycle. The checked-in artifacts are:
+
+- report: `bounded-selection-report-2026-08-30.json`
+- result bundle: `bounded-selection-bundle-2026-08-30/`
+- retained validation: `bounded-selection-bundle-validation-2026-08-30.json`
+
+The retained validation records:
+
+- `bundleDigest`: `704381159fb0cc9989ceaa609d4374f4d229d0f67b0bc1df0a3f18ab8f2b74d0`
+- `selectionReportSha256`: `5413ac852c72f4741959e1cf7a333e02549512eefe56689f910f381d6196faee`
+- `sampleCount`: `7`
+- `summaryCount`: `7`
+- `thresholdEvaluationCount`: `5`
+- `reportOverallStatus`: `passed`
+- `resultOverallStatus`: `passed`
+
+The retained child-process peak range for the seven workloads is
+105,086,976 to 434,978,816 bytes. The run keeps `exactScaleExecuted: false`,
+so it does not claim the deferred final-scale campaign.
+
 ## Current bounded status (2026-08-30)
 
-The current bounded contract passes 3/3 tests, the JavaScript package passes
-32/32 tests, and the report/evidence tools pass 6/6 tests. Rust retains 12
-source tests and passed the Node 24/Rust 1.82 Linux, macOS, and Windows workflow
-in [run 33328072458](https://github.com/n3r/OpenGameVCS/actions/runs/33328072458),
+The bounded benchmark contract passes 4/4 tests, the benchmark harness passes
+25/25 tests, benchmark CI report/policy passes 6/6 tests, the chunking
+contract passes 3/3 tests, the chunking JavaScript package passes 32/32 tests,
+and the chunking report/evidence tools pass 15/15 tests. Metadata passes 4/4
+spec tests plus 2/2 workflow/report tests. Identity passes 3/3 spec tests plus
+36/36 runtime tests. Rust retains 12 source tests and passed the Node 24/Rust
+1.82 Linux, macOS, and Windows workflow in
+[run 33328072458](https://github.com/n3r/OpenGameVCS/actions/runs/33328072458),
 whose six reports matched all nine bounded cases.
 
 P0-1 and P0-3 are closed at the package/API boundary. P0-1 still requires a
 production acceptor/emitter to consume the private verification receipt before
-writes can be enabled. P0-2 remains open until the seven workloads are published
-and verified through OGVCS-005 with same-run observed whole-process peak memory.
-The 100-GiB campaign remains deferred to final OGVCS-007 completion/release and
-is not part of the bounded profile-ratification cut.
+writes can be enabled. P0-2 is now closed in bounded scope by the authenticated
+seven-workload OGVCS-005 bundle and same-run observed whole-process peak
+memory. Registry/predecessor-pin regeneration and the generated lifecycle cut
+remain open before any ratification or production-write enablement. The
+100-GiB campaign remains deferred to final OGVCS-007 completion/release and is
+not part of the bounded profile-ratification cut.

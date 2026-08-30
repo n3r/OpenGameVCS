@@ -423,7 +423,7 @@ test('retained six-leg hosted reports match their run record and comparator', as
   assert.equal(comparison.stdout.trim(), record.comparison.result);
 });
 
-test.skip('checked-in bounded selection bundle and retained validation report stay reproducible', async () => {
+test('checked-in bounded selection bundle and retained validation report stay reproducible', async () => {
   const retained = JSON.parse(await readFile(CHECKED_IN_VALIDATION_PATH, 'utf8'));
   const replay = await verifyChunkingSelectionBenchmarkBundle(CHECKED_IN_BUNDLE_PATH);
   assert.deepEqual(replay, retained);
