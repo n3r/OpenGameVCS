@@ -5,11 +5,11 @@ Use this runbook when enabling or disabling bounded staged streaming publication
 ## Read-before-write rollout
 
 1. Deploy `@opengamevcs/path-filesystem` 1.1.0 readers and recovery tooling before enabling writers or an OGVCS-007 consumer.
-2. Quiesce existing workspace mutation and call `inspectCrashRemnants(workspace)`. Resolve every valid pre-existing transaction and investigate malformed or unsafe records before proceeding.
+2. Quiesce existing workspace mutation and call `inspectCrashRemnants(workspace)`. Resolve every valid pre-existing transaction and investigate malformed or unsafe records before proceeding. Inspection also reconciles an exact owner-bound `<transaction>.json.next` left by a crash before the journal rename; a malformed, mismatched, or non-successor temporary fails `CRASH_REMNANT` and is never guessed away.
 3. Confirm the workspace reports atomic-replace support. Replacing an existing target additionally requires hardlink support; the API fails closed before replacement when a rollback link cannot be created.
 4. Construct a closed, owner-bound materialization preflight plan for the exact file path. Supply the producer's independently known `expectedBytes` and lowercase `expectedSha256`.
 5. Set workload-specific `maxBytes`, `maxScratchBytes`, `maxChunkBytes`, `maxTimeMs`, and `maxOperations`. Reserve same-filesystem scratch capacity for the staged file and, when replacing a target, its rollback link.
-6. Enable writers gradually. Treat a resolved call as committed only after the API completes its file and directory durability barriers; a cancellation or deadline request is a cooperative stop signal, not permission to abandon an in-flight filesystem operation.
+6. Enable writers gradually. When `createParents: true` is used, each new ancestor entry is identity-checked and its containing directory is synchronized before publication continues. Treat a resolved call as committed only after the API completes its file and directory durability barriers; a cancellation or deadline request is a cooperative stop signal, not permission to abandon an in-flight filesystem operation.
 
 ## Recovery after interruption
 
@@ -17,10 +17,17 @@ Use this runbook when enabling or disabling bounded staged streaming publication
 2. Open the repository through the branded workspace API; do not manipulate `.ogvcs/transactions` directly.
 3. Call `inspectCrashRemnants(workspace)`. A valid `write-stream` entry exposes only its stable operation, state, canonical repository path, and artifact-presence fields.
 4. For every returned transaction identifier, call `rollbackCrashRemnant(workspace, id, { maxBytes, maxTimeMs, maxOperations })` with limits appropriate to the repository. Noncommitted publication states restore the prior target or remove a new target; committed states are finalized.
-5. Repeat inspection until it returns no valid remnants. Stop and investigate any typed unsafe, corrupt, or authority-change failure rather than deleting an artifact by pathname.
+5. Repeat inspection until it returns no valid remnants. Recovery is restart-idempotent: an interruption after restoring the prior target or removing an owned stage can be retried against the same journal. Stop and investigate any typed unsafe, corrupt, or authority-change failure rather than deleting an artifact by pathname.
 6. Verify the target byte length and SHA-256 against the producer's expected identity before re-enabling publication.
 
 Recovery depends on the private workspace/control root and its ancestors remaining within the same trusted authority. Portable Node filesystem APIs cannot provide a continuously bound native directory handle across every namespace operation; detected symlink, junction, reparse, identity, or device changes fail closed.
+
+On Windows, Node can open and identity-check a directory handle but reports
+`EPERM` for the directory `FileHandle.sync()` operation. The runtime treats
+only that exact `win32` post-open sync result as an unavailable durability
+capability; open, ACL, identity, and every non-Windows sync failure remain
+terminal. Operators must not interpret this portability limitation as proof of
+hardware power-loss durability on Windows.
 
 ## Rollback or downgrade
 

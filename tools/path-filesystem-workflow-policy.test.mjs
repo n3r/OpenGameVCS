@@ -33,7 +33,16 @@ const streamingPrdPath = new URL(
   import.meta.url
 );
 const streamingChangelogPath = new URL('../docs/changelog/OGVCS-046.md', import.meta.url);
-const streamingEvidencePath = new URL('../docs/evidence/OGVCS-046/README.md', import.meta.url);
+const streamingEvidenceDirectory = new URL('../docs/evidence/OGVCS-046/', import.meta.url);
+const streamingEvidencePath = new URL('README.md', streamingEvidenceDirectory);
+const streamingRunEvidencePath = new URL(
+  'github-actions-run-33322266963.json',
+  streamingEvidenceDirectory
+);
+const streamingReviewPath = new URL(
+  '../docs/reviews/OGVCS-046-critical-review.md',
+  import.meta.url
+);
 const streamingRunbookPath = new URL(
   '../docs/runbooks/OGVCS-046-read-before-write-rollback.md',
   import.meta.url
@@ -58,6 +67,13 @@ function canonicalJson(value) {
 
 async function readBoundArtifact(expected) {
   const bytes = await readFile(new URL(expected.filename, evidenceDirectory));
+  assert.equal(bytes.length, expected.sizeBytes, `${expected.filename}: byte length drifted`);
+  assert.equal(sha256(bytes), expected.sha256, `${expected.filename}: SHA-256 drifted`);
+  return { bytes, value: JSON.parse(bytes) };
+}
+
+async function readStreamingBoundArtifact(expected) {
+  const bytes = await readFile(new URL(expected.filename, streamingEvidenceDirectory));
   assert.equal(bytes.length, expected.sizeBytes, `${expected.filename}: byte length drifted`);
   assert.equal(sha256(bytes), expected.sha256, `${expected.filename}: SHA-256 drifted`);
   return { bytes, value: JSON.parse(bytes) };
@@ -283,20 +299,179 @@ test('completed OGVCS-004 lifecycle claims stay aligned with durable evidence', 
   );
 });
 
-test('in-development OGVCS-046 validation is routed without claiming hosted success', async () => {
-  const [workflow, prd, changelog, evidence, runbook] = await Promise.all([
+test('OGVCS-046 implementation evidence is source-bound while lifecycle remains pending', async () => {
+  const runEvidence = JSON.parse(await readFile(streamingRunEvidencePath));
+  assert.equal(runEvidence.schema, 'ogvcs.path/hosted-validation-evidence/v1');
+  assert.equal(runEvidence.status, 'completed');
+  assert.equal(runEvidence.github.repository, 'n3r/OpenGameVCS');
+  assert.equal(runEvidence.github.runId, 33322266963);
+  assert.equal(
+    runEvidence.github.sourceRevision,
+    'a4e59519ea25bf7d53785268024f2e261f4e0646'
+  );
+  assert.equal(runEvidence.github.conclusion, 'success');
+  assert.equal(runEvidence.github.jobs.length, 4);
+  assert.ok(runEvidence.github.jobs.every(({ conclusion }) => conclusion === 'success'));
+  assert.deepEqual(
+    new Set(runEvidence.github.jobs.map(({ name }) => name)),
+    new Set([
+      'Packed conformance (macos-latest)',
+      'Packed conformance (windows-latest)',
+      'Packed conformance (ubuntu-latest)',
+      'Compare Linux, macOS, and Windows results'
+    ])
+  );
+  assert.deepEqual(
+    new Set(runEvidence.github.artifacts.map(({ name }) => name)),
+    new Set(['path-filesystem-Linux', 'path-filesystem-macOS', 'path-filesystem-Windows'])
+  );
+  assert.ok(runEvidence.github.artifacts.every(
+    ({ id, sizeBytes, githubArchiveDigest, expiresAt }) =>
+      id > 0 && sizeBytes > 0 && /^sha256:[0-9a-f]{64}$/u.test(githubArchiveDigest)
+      && /^2026-09-29T/u.test(expiresAt)
+  ));
+  assert.deepEqual(runEvidence.contract, {
+    version: '1.0.0',
+    manifestSha256: '2f343e1dac238da527fbd36160419ec6fb53b780ac7e33c01e11acabbdd4782b',
+    registrySetSha256: 'bbabdd95d78cfe0dd9751ab67ccbd9dfa5565bf8c049468aea3129bec787bd42',
+    unicodeCaseFoldingSha256: '6f1f9c588eb4a5c718d9e8f93b782685e5c7fec872cf05e8e6878053599e09bb',
+    resultsSha256: 'cb7f48edcf6e5951fddae3f489e33a0fa3e40a4220365104f2941fb2bf2cc68e',
+    pureRows: 63,
+    nativeRows: 16,
+    totalRows: 79
+  });
+
+  const reports = [];
+  for (const expected of runEvidence.packedConformance.reportArtifacts) {
+    const { value: report } = await readStreamingBoundArtifact(expected);
+    assert.equal(report.schemaVersion, 'ogvcs.path/conformance-report/v1');
+    assert.equal(report.contractVersion, runEvidence.contract.version);
+    assert.equal(report.manifestSha256, runEvidence.contract.manifestSha256);
+    assert.equal(report.registrySetSha256, runEvidence.contract.registrySetSha256);
+    assert.equal(
+      report.unicodeCaseFoldingSha256,
+      runEvidence.contract.unicodeCaseFoldingSha256
+    );
+    assert.equal(report.resultsSha256, runEvidence.contract.resultsSha256);
+    assert.deepEqual(
+      { total: report.total, passed: report.passed, failed: report.failed },
+      { total: 79, passed: 79, failed: 0 }
+    );
+    assert.equal(report.results.length, 79);
+    assert.equal(
+      report.results.filter(({ category }) => category !== 'native-filesystem').length,
+      63
+    );
+    assert.equal(
+      report.results.filter(({ category }) => category === 'native-filesystem').length,
+      16
+    );
+    assert.equal(
+      sha256(Buffer.from(canonicalJson(report.results), 'utf8')),
+      report.resultsSha256
+    );
+    assert.ok(report.results.every(
+      ({ passed, expectedSha256, actualSha256 }) =>
+        passed === true && expectedSha256 === actualSha256
+    ));
+    assert.equal(
+      report.results.find(({ id }) => id === 'native:bounded-staged-stream-publication')
+        ?.passed,
+      true
+    );
+    reports.push(report);
+  }
+  assert.deepEqual(
+    new Set(reports.map(({ platform }) => platform)),
+    new Set(['linux', 'macos', 'windows'])
+  );
+  assert.ok(reports.slice(1).every(
+    ({ results }) => canonicalJson(results) === canonicalJson(reports[0].results)
+  ));
+
+  const packedEvidence = [];
+  for (const expected of runEvidence.packedConformance.packedEvidenceArtifacts) {
+    const { value: packed } = await readStreamingBoundArtifact(expected);
+    assert.equal(packed.schemaVersion, 'ogvcs.path/packed-evidence/v1');
+    assert.equal(packed.resultsSha256, runEvidence.contract.resultsSha256);
+    const reportExpected = runEvidence.packedConformance.reportArtifacts.find(
+      ({ platform }) => platform === packed.platform
+    );
+    assert.ok(reportExpected, `${packed.platform}: missing report evidence`);
+    assert.equal(packed.report.sha256, reportExpected.sha256);
+    packedEvidence.push(packed);
+  }
+  const expectedPackages = runEvidence.packedConformance.packages.map(
+    ({ filename, name, version, sha256: digest }) => ({ filename, name, version, sha256: digest })
+  );
+  for (const packed of packedEvidence) assert.deepEqual(packed.packages, expectedPackages);
+
+  const { value: comparison } = await readStreamingBoundArtifact(
+    runEvidence.packedConformance.comparison
+  );
+  assert.deepEqual(comparison, {
+    schemaVersion: 'ogvcs.path/comparison/v1',
+    reports: 3,
+    platforms: ['linux', 'macos', 'windows'],
+    contractVersion: runEvidence.contract.version,
+    manifestSha256: runEvidence.contract.manifestSha256,
+    registrySetSha256: runEvidence.contract.registrySetSha256,
+    unicodeCaseFoldingSha256: runEvidence.contract.unicodeCaseFoldingSha256,
+    resultsSha256: runEvidence.contract.resultsSha256,
+    packages: expectedPackages.map(({ name, version, sha256: digest }) => ({
+      name,
+      version,
+      sha256: digest
+    })),
+    total: 79,
+    result: 'equal'
+  });
+
+  const traceExpected = runEvidence.packedConformance.syscallTrace;
+  const trace = await readFile(new URL(traceExpected.filename, streamingEvidenceDirectory));
+  assert.equal(trace.length, traceExpected.sizeBytes);
+  assert.equal(sha256(trace), traceExpected.sha256);
+  assert.equal((trace.toString('utf8').match(/\n/gu) ?? []).length, traceExpected.lines);
+  const traceAudit = await readStreamingBoundArtifact(traceExpected.audit);
+  const traceReplay = spawnSync(process.execPath, [
+    fileURLToPath(traceAuditPath),
+    '--trace', fileURLToPath(new URL(traceExpected.filename, streamingEvidenceDirectory)),
+    '--workspace', '/home/runner/work/_temp/ogvcs-path-trace-workspace',
+    '--outside', '/home/runner/work/_temp/ogvcs-path-trace-outside'
+  ], { encoding: 'utf8' });
+  assert.equal(traceReplay.status, 0, traceReplay.stderr);
+  assert.deepEqual(JSON.parse(traceReplay.stdout), traceAudit.value);
+  assert.equal(traceAudit.value.outsideReferences, 0);
+  const traceFixture = await readStreamingBoundArtifact(traceExpected.fixture);
+  assert.deepEqual(traceFixture.value, {
+    schemaVersion: 'ogvcs.path/trace-fixture-result/v1',
+    denied: true,
+    symlinkAncestor: 'UNSAFE_TARGET',
+    targetRace: 'TARGET_CHANGED',
+    ancestorRace: 'TARGET_CHANGED'
+  });
+  assert.deepEqual(runEvidence.exactScale, {
+    applicable: false,
+    reason: 'OGVCS-046 validates bounded streaming retention and crash-safe publication. Its acceptance criteria contain no million-entry, 100-GiB, or 1-TiB campaign.'
+  });
+
+  const [workflow, prd, changelog, evidence, review, runbook] = await Promise.all([
     readFile(workflowPath, 'utf8'),
     readFile(streamingPrdPath, 'utf8'),
     readFile(streamingChangelogPath, 'utf8'),
     readFile(streamingEvidencePath, 'utf8'),
+    readFile(streamingReviewPath, 'utf8'),
     readFile(streamingRunbookPath, 'utf8')
   ]);
 
   for (const path of [
     'docs/changelog/OGVCS-046.md',
     'docs/evidence/OGVCS-046/**',
+    'docs/reviews/OGVCS-046-critical-review.md',
     'docs/runbooks/OGVCS-046-*.md',
-    'prd/todo/OGVCS-046-*.md'
+    'prd/todo/OGVCS-046-*.md',
+    'prd/done/OGVCS-046-*.md',
+    'prd/done/README.md'
   ]) {
     assert.equal(
       workflow.match(new RegExp(path.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'gu'))?.length,
@@ -304,6 +479,7 @@ test('in-development OGVCS-046 validation is routed without claiming hosted succ
       `${path} must trigger both pull-request and push validation`
     );
   }
+  assert.equal(workflow.match(/^      - "README\.md"$/gmu)?.length, 2);
   assert.match(workflow, /- "ogvcs-046\/\*\*"/u);
   assert.match(workflow, /- "ogvcs046-\*"/u);
   assert.equal(workflow.match(/node-version: 22/gu)?.length, 2);
@@ -325,10 +501,19 @@ test('in-development OGVCS-046 validation is routed without claiming hosted succ
   );
 
   assert.match(prd, /\*\*Status:\*\* In development/u);
-  assert.match(changelog, /Hosted Linux, macOS, and Windows validation remains pending/u);
-  assert.match(evidence, /\*\*Status:\*\* Pending hosted validation/u);
-  assert.match(evidence, /79 total rows/u);
-  assert.doesNotMatch(evidence, /actions\/runs\/\d+/u);
+  assert.match(changelog, /\*\*Status:\*\* Validation/u);
+  assert.match(changelog, /actions\/runs\/33322266963/u);
+  assert.match(
+    evidence,
+    /\*\*Status:\*\* Implementation proof complete; lifecycle ratification pending/u
+  );
+  assert.match(evidence, /actions\/runs\/33322266963/u);
+  assert.match(evidence, /Full package suite passed 74\/74/u);
+  assert.match(evidence, /focused staged-publication suite passed 20\/20/u);
+  assert.match(review, /Implementation acceptance-ready; lifecycle ratification pending/u);
+  assert.match(review, /No live P0, P1, or P2 remains in the bounded staged-publication implementation/u);
   assert.match(runbook, /readers and recovery tooling before enabling writers/u);
+  assert.match(runbook, /\.json\.next/u);
+  assert.match(runbook, /On Windows, Node can open and identity-check/u);
   assert.match(runbook, /all `write-stream` remnants/u);
 });
