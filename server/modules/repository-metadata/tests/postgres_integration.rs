@@ -153,6 +153,23 @@ impl AuthorizedView for IsolatedAuthorizedView {
                     && expected_file_id == file_id
             }
             (
+                AuthorizationResource::SnapshotFileHistory {
+                    repository_id: expected_repository,
+                    root_snapshot: expected_root,
+                    ..
+                }
+                | AuthorizationResource::SnapshotPathHistory {
+                    repository_id: expected_repository,
+                    root_snapshot: expected_root,
+                    ..
+                },
+                AuthorizationResource::SnapshotHistoryEntry {
+                    repository_id,
+                    root_snapshot,
+                    ..
+                },
+            ) => expected_repository == repository_id && expected_root == root_snapshot,
+            (
                 AuthorizationResource::SnapshotPathHistory {
                     repository_id: expected_repository,
                     root_snapshot: expected_root,
@@ -1465,6 +1482,44 @@ fn ancestry_report(
             .code,
         DomainErrorCode::HistoryLimitReached,
     );
+
+    let mut collection_only = PostgresMetadataStore::connect(database_url)
+        .unwrap()
+        .with_authorizer(CollectionOnlyAllow)
+        .with_object_validator(IsolatedConformanceValidation);
+    let hidden_ancestry = collection_only
+        .ancestry_page(
+            context,
+            repository_id,
+            chain[2],
+            1,
+            None,
+            PageRequest {
+                limit: 10,
+                cursor: None,
+            },
+        )
+        .unwrap();
+    assert!(hidden_ancestry.items.is_empty());
+    assert_eq!(hidden_ancestry.state, PageState::Complete);
+    assert_eq!(hidden_ancestry.incomplete_reason, None);
+    let hidden_file_history = collection_only
+        .history_file_id_page(
+            context,
+            repository_id,
+            chain[2],
+            file_id,
+            1,
+            None,
+            PageRequest {
+                limit: 10,
+                cursor: None,
+            },
+        )
+        .unwrap();
+    assert!(hidden_file_history.items.is_empty());
+    assert_eq!(hidden_file_history.state, PageState::Complete);
+    assert_eq!(hidden_file_history.incomplete_reason, None);
 
     let mut single_use = PostgresMetadataStore::connect(database_url)
         .unwrap()

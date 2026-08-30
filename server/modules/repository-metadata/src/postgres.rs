@@ -1297,14 +1297,18 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
         let after = decode_visit(after.as_deref())?;
         let loaded = self.load_ancestry(repository_id, snapshot, maximum_depth)?;
         let mut authorized = Vec::with_capacity(usize::from(request.limit) + 1);
-        for node in loaded.nodes.iter().filter(|node| node.visit > after) {
+        let mut complete_traversal_visible = true;
+        for node in &loaded.nodes {
             let exact = AuthorizationResource::SnapshotHistoryEntry {
                 repository_id,
                 root_snapshot: snapshot,
                 snapshot: node.snapshot,
                 depth: node.depth,
             };
-            if authorized_view.permits(context, MetadataPermission::MetadataRead, &exact) {
+            let permitted =
+                authorized_view.permits(context, MetadataPermission::MetadataRead, &exact);
+            complete_traversal_visible &= permitted;
+            if permitted && node.visit > after {
                 authorized.push((
                     AncestryRecord {
                         snapshot: node.snapshot,
@@ -1312,9 +1316,6 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
                     },
                     node.visit,
                 ));
-                if authorized.len() > usize::from(request.limit) {
-                    break;
-                }
             }
         }
         if !authorized_view.permits(context, MetadataPermission::MetadataRead, &resource) {
@@ -1339,9 +1340,12 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
         } else {
             None
         };
+        let incomplete_reason = complete_traversal_visible
+            .then_some(loaded.incomplete_reason)
+            .flatten();
         let state = if has_more {
             PageState::More
-        } else if loaded.incomplete_reason.is_some() {
+        } else if incomplete_reason.is_some() {
             PageState::Incomplete
         } else {
             PageState::Complete
@@ -1350,7 +1354,7 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
             state,
             items: authorized.into_iter().map(|(item, _)| item).collect(),
             next_cursor,
-            incomplete_reason: (!has_more).then_some(loaded.incomplete_reason).flatten(),
+            incomplete_reason: (!has_more).then_some(incomplete_reason).flatten(),
         })
     }
 
@@ -1398,6 +1402,18 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
         )?;
         let (after_visit, after_ordinal) = decode_snapshot_history_key(after.as_deref())?;
         let ancestry = self.load_ancestry(repository_id, snapshot, maximum_depth)?;
+        let complete_traversal_visible = ancestry.nodes.iter().all(|node| {
+            authorized_view.permits(
+                context,
+                MetadataPermission::MetadataRead,
+                &AuthorizationResource::SnapshotHistoryEntry {
+                    repository_id,
+                    root_snapshot: snapshot,
+                    snapshot: node.snapshot,
+                    depth: node.depth,
+                },
+            )
+        });
         let (rows, truncated) = self.load_snapshot_history_rows(
             repository_id,
             &ancestry,
@@ -1430,7 +1446,9 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
             "history.file-id-page",
             query_digest,
             request.limit,
-            ancestry.incomplete_reason,
+            complete_traversal_visible
+                .then_some(ancestry.incomplete_reason)
+                .flatten(),
             truncated,
             authorized_view.permits(context, MetadataPermission::MetadataRead, &resource),
             items,
@@ -1485,6 +1503,18 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
         )?;
         let (after_visit, after_ordinal) = decode_snapshot_history_key(after.as_deref())?;
         let ancestry = self.load_ancestry(repository_id, snapshot, maximum_depth)?;
+        let complete_traversal_visible = ancestry.nodes.iter().all(|node| {
+            authorized_view.permits(
+                context,
+                MetadataPermission::MetadataRead,
+                &AuthorizationResource::SnapshotHistoryEntry {
+                    repository_id,
+                    root_snapshot: snapshot,
+                    snapshot: node.snapshot,
+                    depth: node.depth,
+                },
+            )
+        });
         let (rows, truncated) = self.load_snapshot_history_rows(
             repository_id,
             &ancestry,
@@ -1517,7 +1547,9 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
             "history.path-page",
             query_digest,
             request.limit,
-            ancestry.incomplete_reason,
+            complete_traversal_visible
+                .then_some(ancestry.incomplete_reason)
+                .flatten(),
             truncated,
             authorized_view.permits(context, MetadataPermission::MetadataRead, &resource),
             items,
