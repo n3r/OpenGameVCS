@@ -1,0 +1,1 @@
+{"entries":[{"from":"available","to":"quarantined"},{"from":"deleting","to":"deleted"},{"from":"quarantined","to":"available"},{"from":"quarantined","to":"deleting"},{"from":"staged","to":"available"}],"registry":"ogvcs.object-transfer.lifecycle-transitions","schemaVersion":"ogvcs.object-transfer/registry/v1","version":1,"x-ogvcs-license":"MIT"}

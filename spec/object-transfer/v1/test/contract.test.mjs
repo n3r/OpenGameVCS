@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { cp, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import test from 'node:test';
+
+const ROOT = resolve(import.meta.dirname, '..');
+function run(path, args = [], env = {}) { return spawnSync(process.execPath, [resolve(ROOT, path), ...args], { cwd: ROOT, encoding: 'utf8', env: { ...process.env, ...env } }); }
+test('generated transfer contract is current and independently validates', () => { const generated = run('scripts/generate.mjs', ['--check']); assert.equal(generated.status, 0, generated.stderr); const validated = run('validate-spec.mjs'); assert.equal(validated.status, 0, validated.stderr); assert.match(JSON.parse(validated.stdout).artifactSetSha256, /^[0-9a-f]{64}$/u); });
+test('validator rejects changed lifecycle authority', async () => { const copy = await mkdtemp(join(tmpdir(), 'ogvcs-transfer-contract-')); await cp(ROOT, copy, { recursive: true }); const path = join(copy, 'registries/transitions.json'); const value = JSON.parse(await readFile(path)); value.entries[0].to = 'deleted'; await writeFile(path, `${JSON.stringify(value)}\n`); const result = run('validate-spec.mjs', [], { OGVCS_OBJECT_TRANSFER_CONTRACT_ROOT: copy }); assert.notEqual(result.status, 0); });
+test('validator rejects changed lifecycle transaction capability vectors', async () => { const copy = await mkdtemp(join(tmpdir(), 'ogvcs-transfer-transaction-contract-')); await cp(ROOT, copy, { recursive: true }); const path = join(copy, 'vectors/transaction-participant.json'); const value = JSON.parse(await readFile(path)); value.cases[0].input.capability = 'transfer.record-available'; await writeFile(path, `${JSON.stringify(value)}\n`); const result = run('validate-spec.mjs', [], { OGVCS_OBJECT_TRANSFER_CONTRACT_ROOT: copy }); assert.notEqual(result.status, 0); });

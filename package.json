@@ -9,6 +9,7 @@
     "foundation/fixture-generator",
     "core/object-model/js",
     "core/chunking-manifest/js",
+    "core/object-transfer/js",
     "core/authz-contract/js",
     "core/identity-policy-audit/js",
     "core/paths-filesystem/js",
@@ -18,6 +19,7 @@
     "foundation/benchmark-fault-harness",
     "spec/authorization/v1",
     "spec/chunking-manifest/v1",
+    "spec/object-transfer/v1",
     "spec/identity-policy-audit/v1",
     "spec/path-filesystem/v1",
     "spec/protocols/v1",
@@ -25,7 +27,7 @@
     "spec/repository-metadata/v1"
   ],
   "scripts": {
-    "test": "npm run test --workspace @opengamevcs/fixture-generator && npm run test --workspace @opengamevcs/object-model && npm run test:chunking:spec && npm run test:chunking:js && npm run test:chunking:report && npm run test:metadata:spec && npm run test:metadata && npm run test:identity:spec && npm run test:identity && npm run test --workspace @opengamevcs/authorization-contract && npm run test:authz:spec && npm run test:authz:ci-report && npm run test --workspace @opengamevcs/path-filesystem && npm run test:path:spec && npm run test:path:ci-report && npm run test:protocol:spec && npm run test:protocol && npm run test:protocol:adapter && npm run test:protocol:ci-report && npm run test:spec && npm run test:vectors && node --test prd/validate-roadmap.test.mjs && npm run test:object-model:ci-report && npm run test:benchmark:spec && npm run test:benchmark && npm run test:benchmark:ci-report",
+    "test": "npm run test --workspace @opengamevcs/fixture-generator && npm run test --workspace @opengamevcs/object-model && npm run test:chunking:spec && npm run test:chunking:js && npm run test:chunking:report && npm run test:metadata:spec && npm run test:metadata && npm run test:transfer:spec && npm run test:transfer && npm run test:identity:spec && npm run test:identity && npm run test --workspace @opengamevcs/authorization-contract && npm run test:authz:spec && npm run test:authz:ci-report && npm run test --workspace @opengamevcs/path-filesystem && npm run test:path:spec && npm run test:path:ci-report && npm run test:protocol:spec && npm run test:protocol && npm run test:protocol:adapter && npm run test:protocol:ci-report && npm run test:spec && npm run test:vectors && node --test prd/validate-roadmap.test.mjs && npm run test:object-model:ci-report && npm run test:benchmark:spec && npm run test:benchmark && npm run test:benchmark:ci-report",
     "test:authz": "npm run test --workspace @opengamevcs/authorization-contract",
     "test:authz:spec": "npm run test --workspace @opengamevcs/authorization-contract-v1",
     "test:authz:ci-report": "node --test tools/authorization-contract-report.test.mjs",
@@ -39,6 +41,8 @@
     "test:chunking:report": "node --test tools/chunking-selection-benchmark-report.test.mjs tools/chunking-selection-retained-evidence.test.mjs",
     "test:metadata:spec": "npm run test --workspace @opengamevcs/repository-metadata-contract-v1",
     "test:metadata": "node server/modules/repository-metadata/scripts/static-check.mjs && node server/modules/repository-metadata/scripts/service-report.mjs --check && node --test tools/repository-metadata-workflow-policy.test.mjs",
+    "test:transfer": "npm run test --workspace @opengamevcs/object-transfer && node --test tools/object-transfer-workflow-policy.test.mjs",
+    "test:transfer:spec": "npm run test --workspace @opengamevcs/object-transfer-contract-v1",
     "test:identity": "npm run test --workspace @opengamevcs/identity-policy-audit",
     "test:identity:spec": "npm run test --workspace @opengamevcs/identity-policy-audit-contract-v1",
     "test:protocol": "npm run test --workspace @opengamevcs/protocol-baseline",

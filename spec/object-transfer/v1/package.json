@@ -1,0 +1,13 @@
+{
+  "name": "@opengamevcs/object-transfer-contract-v1",
+  "version": "0.1.0-rc.4",
+  "description": "Candidate filesystem object-transfer, lifecycle, and resumable-session contract",
+  "type": "module",
+  "files": ["docs", "LICENSE", "manifest.json", "profiles", "README.md", "registries", "schemas", "scripts", "test", "validate-spec.mjs", "vectors"],
+  "scripts": {
+    "check": "node scripts/generate.mjs --check && node validate-spec.mjs",
+    "test": "node scripts/generate.mjs --check && node validate-spec.mjs && node --test test/*.test.mjs"
+  },
+  "engines": { "node": ">=22" },
+  "license": "MIT"
+}

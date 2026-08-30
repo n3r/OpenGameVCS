@@ -1,0 +1,19 @@
+{
+  "name": "@opengamevcs/object-transfer",
+  "version": "0.1.0",
+  "description": "Bounded filesystem object backend and resumable transfer state machine",
+  "type": "module",
+  "exports": "./src/index.mjs",
+  "files": ["LICENSE", "README.md", "src"],
+  "dependencies": {
+    "@opengamevcs/authorization-contract": "1.0.0",
+    "@opengamevcs/object-model": "0.1.0",
+    "@opengamevcs/protocol-baseline": "1.0.0-rc.1"
+  },
+  "scripts": {
+    "check": "node --check src/index.mjs && node --check src/backend.mjs && node --check src/delete-permit.mjs && node --check src/fs-util.mjs && node --check src/lifecycle.mjs && node --check src/service.mjs && node --check src/transaction-participant.mjs",
+    "test": "node --preserve-symlinks --test --test-concurrency=1 test/*.test.mjs"
+  },
+  "engines": { "node": ">=22" },
+  "license": "MIT"
+}

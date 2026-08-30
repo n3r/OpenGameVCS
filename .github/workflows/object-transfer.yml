@@ -1,0 +1,71 @@
+name: Object transfer bounded conformance
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/object-transfer.yml"
+      - "core/authz-contract/**"
+      - "core/object-model/js/**"
+      - "core/object-transfer/**"
+      - "docs/reviews/OGVCS-010-contract-boundary-review.md"
+      - "foundation/protocol-baseline/**"
+      - "package.json"
+      - "package-lock.json"
+      - "prd/ROADMAP.md"
+      - "prd/todo/OGVCS-008-*.md"
+      - "spec/authorization/v1/**"
+      - "spec/object-transfer/v1/**"
+      - "spec/repository-format/v1/vectors/**"
+      - "tools/object-transfer-workflow-policy.test.mjs"
+  push:
+    branches:
+      - main
+      - "ogvcs-008/**"
+      - "ogvcs008-*"
+    paths:
+      - ".github/workflows/object-transfer.yml"
+      - "core/authz-contract/**"
+      - "core/object-model/js/**"
+      - "core/object-transfer/**"
+      - "docs/reviews/OGVCS-010-contract-boundary-review.md"
+      - "foundation/protocol-baseline/**"
+      - "package.json"
+      - "package-lock.json"
+      - "prd/ROADMAP.md"
+      - "prd/todo/OGVCS-008-*.md"
+      - "spec/authorization/v1/**"
+      - "spec/object-transfer/v1/**"
+      - "spec/repository-format/v1/vectors/**"
+      - "tools/object-transfer-workflow-policy.test.mjs"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: object-transfer-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  javascript:
+    name: JavaScript bounded (${{ matrix.label }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-latest, label: Linux }
+          - { runner: macos-latest, label: macOS }
+          - { runner: windows-latest, label: Windows }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run test:transfer:spec
+      - run: npm run test:transfer
+      - run: npm run test:roadmap
+        if: runner.os == 'Linux'
