@@ -12,13 +12,17 @@ const MAX_DEPTH = 32;
 const MAX_NODES = 200000;
 const GRANT_DOMAIN = Buffer.from('OGVCS-AUTH-GRANT-V1\0', 'ascii');
 const REQUEST_ROOT_DOMAIN = Buffer.from('OGVCS-AUTH-REQUEST-ROOT-V1\0', 'ascii');
-const EXPECTED = Object.freeze({ schemas: 10, registries: 13, policies: 2, decisionVectors: 40, abuseVectors: 30, grantVectors: 16, roadmapPrds: 45 });
+const EXPECTED = Object.freeze({ schemas: 10, registries: 13, policies: 2, decisionVectors: 40, abuseVectors: 30, grantVectors: 16, roadmapPrds: 46 });
 const EXPECTED_REGISTRIES = new Set([
   'abuse-cases', 'actor-classes', 'audit-classes', 'credential-classes',
   'data-flows', 'decision-codes', 'permissions', 'resources',
   'revocation-classes', 'roadmap-surfaces', 'sandbox-profiles', 'threats',
   'trust-zones',
 ]);
+// OGVCS-046 is an additive public maintenance PRD for the already-registered
+// OGVCS-004 path/filesystem surface. It introduces no protected resource,
+// permission, audit behavior, or authorization decision of its own.
+const SUBSUMED_PUBLIC_AMENDMENT_PRDS = new Set(['OGVCS-046']);
 const REGISTRY_IDENTITY_FIELDS = Object.freeze({
   'abuse-cases': 'name',
   'actor-classes': 'name',
@@ -388,7 +392,10 @@ const roadmapText = await readFile(resolve(REPOSITORY_ROOT, 'prd/ROADMAP.md'), '
 const roadmapPrds = new Set(roadmapText.match(/OGVCS-[0-9]{3}/g));
 if (roadmapPrds.size !== EXPECTED.roadmapPrds) fail('unexpected roadmap PRD cardinality');
 const surfaceEntries = registries.get('roadmap-surfaces').entries;
-exactSet(new Set(surfaceEntries.map(({ prd }) => prd)), roadmapPrds, 'roadmap surface coverage');
+const authorizationBearingPrds = new Set(
+  [...roadmapPrds].filter((prd) => !SUBSUMED_PUBLIC_AMENDMENT_PRDS.has(prd)),
+);
+exactSet(new Set(surfaceEntries.map(({ prd }) => prd)), authorizationBearingPrds, 'roadmap surface coverage');
 for (const surface of surfaceEntries) {
   if (!['public-contract', 'protected', 'mixed'].includes(surface.classification) || !['public-no-audit', 'authorization-decision', 'privileged-append-only'].includes(surface.auditBehavior) || !Array.isArray(surface.surfaces) || surface.surfaces.length === 0) fail(`invalid roadmap surface: ${surface.prd}`);
   if (surface.classification === 'public-contract' && (surface.resourceTypes.length !== 0 || surface.permissions.length !== 0)) fail(`public surface carries protected permission: ${surface.prd}`);

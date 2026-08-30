@@ -83,7 +83,7 @@ test('checked-in authorization contract validates in an isolated repository', (t
     abuseVectors: report.abuseVectors,
     grantVectors: report.grantVectors,
     roadmapPrds: report.roadmapPrds,
-  }, { result: 'valid', schemas: 10, registries: 13, decisionVectors: 40, abuseVectors: 30, grantVectors: 16, roadmapPrds: 45 });
+  }, { result: 'valid', schemas: 10, registries: 13, decisionVectors: 40, abuseVectors: 30, grantVectors: 16, roadmapPrds: 46 });
 });
 
 const mutations = [

@@ -23,8 +23,12 @@ object's membership; possession of a root identifier alone conveys no authority.
 
 - `schemas/` contains the ten closed Draft 2020-12 request, decision, policy,
   grant, audit, sandbox, threat-vector, and runner-report schemas.
-- `registries/` contains 13 immutable vocabularies, including all 45 roadmap
-  surfaces and their public/protected classification and audit behavior.
+- `registries/` contains 13 immutable vocabularies, including all 45
+  authorization-bearing roadmap surfaces. Public maintenance PRD OGVCS-046 is
+  subsumed by the existing OGVCS-004 path/filesystem surface because it adds no
+  protected resource, permission, audit behavior, or authorization decision.
+  Each registered surface carries its public/protected classification and audit
+  behavior.
 - `policies/` contains the internal-team and restricted-outsourcer fixtures.
 - `vectors/` contains 40 policy decisions, 30 abuse cases, 16 grant cases, the
   mixed-visibility authorized view, and their digest manifest.
