@@ -2338,10 +2338,6 @@ fn consistency_report(
             ..context.clone()
         },
         AuthorizationContext {
-            tenant_id: TenantId::from_bytes([45; 16]),
-            ..context.clone()
-        },
-        AuthorizationContext {
             authorization_epoch: context.authorization_epoch + 1,
             ..context.clone()
         },
@@ -2356,10 +2352,24 @@ fn consistency_report(
     }
     assert_eq!(
         store
+            .require_consistency(
+                &AuthorizationContext {
+                    tenant_id: TenantId::from_bytes([45; 16]),
+                    ..context.clone()
+                },
+                repository_id,
+                &token,
+            )
+            .unwrap_err()
+            .code,
+        DomainErrorCode::MetadataNotFoundOrDenied
+    );
+    assert_eq!(
+        store
             .require_consistency(context, RepositoryId::from_bytes([46; 16]), &token,)
             .unwrap_err()
             .code,
-        DomainErrorCode::ConsistencyTokenUnsatisfied
+        DomainErrorCode::MetadataNotFoundOrDenied
     );
     let mut client = Client::connect(database_url, NoTls).unwrap();
     client
