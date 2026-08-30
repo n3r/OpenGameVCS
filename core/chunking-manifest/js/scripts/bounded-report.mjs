@@ -2,7 +2,10 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
-import { chunkBytes, verifyManifest } from '../src/index.mjs';
+import {
+  CACHE_KEY_DOMAIN, CACHE_KEY_VERSION, ERROR_CODES, GEAR_TABLE_SHA256, LIMITS,
+  PROFILE, chunkBytes, chunkCacheKey, createChunker, verifyManifest,
+} from '../src/index.mjs';
 
 const output = process.argv[2];
 if (!output) throw new Error('usage: bounded-report.mjs <output.json>');
@@ -38,18 +41,51 @@ for (const vector of golden.cases) {
     boundaries: generated.boundaries,
     caseId: vector.caseId,
     class: generated.class,
+    chunks: generated.chunks.map((part) => ({
+      cacheKey: chunkCacheKey(part),
+      length: part.length,
+      objectId: part.objectId,
+    })),
     logicalLength: generated.logicalLength,
+    manifestHex: generated.manifest.bytes.toString('hex'),
     manifestObjectId: generated.manifest.objectId,
     partCount: verified.partCount,
+    providerReads: verified.providerReads,
     repeatedBytes: verified.repeatedBytes,
     uniqueBytes: verified.uniqueBytes,
     wholeFileSha256: generated.wholeFileDigest.toString('hex'),
   });
 }
+function errorCode(operation) {
+  try { operation(); return null; } catch (error) { return error.code; }
+}
+const cancellation = new AbortController(); cancellation.abort();
+const resourceOutcomes = {
+  belowScalarMinimum: errorCode(() => createChunker({
+    declaredLength: 0,
+    maxWorkingMemoryBytes: LIMITS.scalarWorkingMinimum - 1,
+  })),
+  cancellation: errorCode(() => createChunker({ declaredLength: 0, signal: cancellation.signal })),
+  unsupportedParallelism: errorCode(() => createChunker({ declaredLength: 0, workerCount: 2 })),
+};
 const report = {
+  cacheKey: { domain: CACHE_KEY_DOMAIN, version: CACHE_KEY_VERSION },
   cases,
-  profile: golden.profile,
+  errorCodes: ERROR_CODES,
+  limits: {
+    chunkCountMaximum: LIMITS.chunkCountMaximum,
+    logicalMaximum: LIMITS.logicalMaximum,
+    maximum: LIMITS.maximum,
+    minimum: LIMITS.minimum,
+    scalarWorkingMinimum: LIMITS.scalarWorkingMinimum,
+    smallMaximum: LIMITS.smallMaximum,
+    target: LIMITS.target,
+    workingMaximum: LIMITS.workingMaximum,
+  },
+  profile: `${PROFILE.namespace}/${PROFILE.id}@${PROFILE.major}`,
+  resourceOutcomes,
   schemaVersion: 'ogvcs.chunking/bounded-conformance-report/v1',
+  tableSha256: GEAR_TABLE_SHA256,
 };
 await mkdir(dirname(resolve(output)), { recursive: true });
 await writeFile(resolve(output), `${JSON.stringify(report, null, 2)}\n`);

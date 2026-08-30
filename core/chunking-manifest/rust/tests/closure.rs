@@ -3,12 +3,13 @@ use std::{
     fs::{create_dir, read_dir, remove_dir},
     path::PathBuf,
     sync::atomic::{AtomicU64, Ordering},
+    time::Duration,
 };
 
 use ogvcs_chunking_manifest::{
-    chunk_bytes, compare_manifest, reconstruct_manifest, verify_manifest, ChunkError, ChunkPart,
-    ChunkSource, Chunker, KnownChunkIndex, LedgerOptions, ManifestPart,
-    TransactionalPublication, VerifyOptions, PROFILE,
+    chunk_bytes, chunk_cache_key, compare_manifest, reconstruct_manifest, verify_manifest,
+    ChunkError, ChunkPart, ChunkSource, Chunker, KnownChunkIndex, LedgerOptions, ManifestPart,
+    OperationControl, TransactionalPublication, VerifyOptions, PROFILE,
 };
 use ogvcs_object_model::{
     encode_canonical, object_id, sha256, Cbor, ObjectKind, ObjectRef, ProfileRef,
@@ -16,7 +17,8 @@ use ogvcs_object_model::{
 use serde_json::Value;
 
 const GOLDEN: &str = include_str!("../../../../spec/chunking-manifest/v1/vectors/golden.json");
-const MALFORMED: &str = include_str!("../../../../spec/chunking-manifest/v1/vectors/malformed.json");
+const MALFORMED: &str =
+    include_str!("../../../../spec/chunking-manifest/v1/vectors/malformed.json");
 const ERRORS: &str = include_str!("../../../../spec/chunking-manifest/v1/registries/errors.json");
 
 fn decode_hex(text: &str) -> Vec<u8> {
@@ -29,7 +31,10 @@ fn decode_hex(text: &str) -> Vec<u8> {
 fn source(recipe: &Value) -> Vec<u8> {
     match recipe["kind"].as_str().unwrap() {
         "literal" => decode_hex(recipe["hex"].as_str().unwrap()),
-        "repeat" => vec![recipe["byte"].as_u64().unwrap() as u8; recipe["length"].as_u64().unwrap() as usize],
+        "repeat" => vec![
+            recipe["byte"].as_u64().unwrap() as u8;
+            recipe["length"].as_u64().unwrap() as usize
+        ],
         "sha256-counter" => {
             let length = recipe["length"].as_u64().unwrap() as usize;
             let seed = recipe["seed"].as_str().unwrap().as_bytes();
@@ -101,16 +106,30 @@ fn manifest(logical: u64, whole: [u8; 32], parts: &[(ObjectRef, u64)]) -> Vec<u8
         (Cbor::UInt(1), Cbor::UInt(2)),
         (Cbor::UInt(2), Cbor::Array(Vec::new())),
         (Cbor::UInt(16), Cbor::UInt(logical)),
-        (Cbor::UInt(17), Cbor::Map(vec![
-            (Cbor::UInt(0), Cbor::UInt(1)),
-            (Cbor::UInt(1), Cbor::Bytes(whole.to_vec())),
-        ])),
+        (
+            Cbor::UInt(17),
+            Cbor::Map(vec![
+                (Cbor::UInt(0), Cbor::UInt(1)),
+                (Cbor::UInt(1), Cbor::Bytes(whole.to_vec())),
+            ]),
+        ),
         (Cbor::UInt(18), profile.to_cbor()),
-        (Cbor::UInt(19), Cbor::Array(parts.iter().map(|(reference, length)| Cbor::Map(vec![
-            (Cbor::UInt(0), reference.to_cbor()),
-            (Cbor::UInt(1), Cbor::UInt(*length)),
-        ])).collect())),
-    ])).unwrap()
+        (
+            Cbor::UInt(19),
+            Cbor::Array(
+                parts
+                    .iter()
+                    .map(|(reference, length)| {
+                        Cbor::Map(vec![
+                            (Cbor::UInt(0), reference.to_cbor()),
+                            (Cbor::UInt(1), Cbor::UInt(*length)),
+                        ])
+                    })
+                    .collect(),
+            ),
+        ),
+    ]))
+    .unwrap()
 }
 
 fn vector(case_id: &str) -> Value {
@@ -143,7 +162,12 @@ fn every_golden_manifest_verifies_and_reconstructs_transactionally() {
     for item in golden["cases"].as_array().unwrap() {
         let bytes = source(&item["recipe"]);
         let (result, mut chunks) = generated(&bytes);
-        let summary = verify_manifest(&result.manifest.bytes, &mut chunks, &VerifyOptions::default()).unwrap();
+        let summary = verify_manifest(
+            &result.manifest.bytes,
+            &mut chunks,
+            &VerifyOptions::default(),
+        )
+        .unwrap();
         assert_eq!(summary.logical_bytes, bytes.len() as u64);
 
         let (_, mut chunks) = generated(&bytes);
@@ -153,7 +177,8 @@ fn every_golden_manifest_verifies_and_reconstructs_transactionally() {
             &mut chunks,
             &mut publication,
             &VerifyOptions::default(),
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(reconstructed.logical_bytes, bytes.len() as u64);
         assert_eq!(publication.staged, bytes);
         assert_eq!((publication.commits, publication.aborts), (1, 0));
@@ -195,20 +220,38 @@ impl KnownChunkIndex for Known {
 fn repeated_reference_accounting_and_conflicts_are_exact() {
     let bytes = source(&vector("zero-five-mib")["recipe"]);
     let (result, mut chunks) = generated(&bytes);
-    let summary = verify_manifest(&result.manifest.bytes, &mut chunks, &VerifyOptions::default()).unwrap();
+    let summary = verify_manifest(
+        &result.manifest.bytes,
+        &mut chunks,
+        &VerifyOptions::default(),
+    )
+    .unwrap();
     assert!(summary.repeated_bytes > 0);
     assert_eq!(summary.provider_reads, result.parts.len());
     let first = &result.parts[0];
     let mut known = Known(BTreeMap::from([(first.object_id.clone(), first.length)]));
-    let compared = compare_manifest(&result.manifest.bytes, &mut known, &VerifyOptions::default()).unwrap();
+    let compared = compare_manifest(
+        &result.manifest.bytes,
+        &mut known,
+        &VerifyOptions::default(),
+    )
+    .unwrap();
     assert_eq!(compared.reused_bytes, first.length);
-    assert_eq!(compared.unique_bytes, compared.reused_bytes + compared.newly_required_bytes);
+    assert_eq!(
+        compared.unique_bytes,
+        compared.reused_bytes + compared.newly_required_bytes
+    );
     let exhausted_options = VerifyOptions {
         max_index_memory_bytes: 0,
         ..VerifyOptions::default()
     };
     assert_eq!(
-        compare_manifest(&result.manifest.bytes, &mut Known(BTreeMap::new()), &exhausted_options).unwrap_err(),
+        compare_manifest(
+            &result.manifest.bytes,
+            &mut Known(BTreeMap::new()),
+            &exhausted_options
+        )
+        .unwrap_err(),
         ChunkError::ResourceExhausted
     );
 
@@ -236,11 +279,195 @@ fn corrupt_reconstruction_aborts_without_commit() {
             &mut chunks,
             &mut publication,
             &VerifyOptions::default(),
-        ).unwrap_err(),
+        )
+        .unwrap_err(),
         ChunkError::DigestMismatch
     );
     assert_eq!((publication.commits, publication.aborts), (0, 1));
     assert!(publication.staged.is_empty());
+}
+
+#[derive(Default)]
+struct FailingPublication {
+    writes: usize,
+    commits: usize,
+    aborts: usize,
+    fail_write: bool,
+    fail_commit: bool,
+}
+
+impl TransactionalPublication for FailingPublication {
+    fn write(&mut self, _bytes: &[u8], _occurrence: usize) -> Result<(), ChunkError> {
+        self.writes += 1;
+        if self.fail_write {
+            Err(ChunkError::SessionFailed)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn commit(&mut self) -> Result<(), ChunkError> {
+        self.commits += 1;
+        if self.fail_commit {
+            Err(ChunkError::SessionFailed)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn abort(&mut self, _cause: ChunkError) -> Result<(), ChunkError> {
+        self.aborts += 1;
+        Ok(())
+    }
+}
+
+struct SwallowingSource(Vec<u8>);
+
+impl ChunkSource for SwallowingSource {
+    fn stream_chunk(
+        &mut self,
+        _part: &ManifestPart,
+        _occurrence: usize,
+        consume: &mut dyn FnMut(&[u8]) -> Result<(), ChunkError>,
+    ) -> Result<(), ChunkError> {
+        let _ignored = consume(&self.0);
+        Ok(())
+    }
+}
+
+struct CancellingSource(OperationControl);
+
+impl ChunkSource for CancellingSource {
+    fn stream_chunk(
+        &mut self,
+        _part: &ManifestPart,
+        _occurrence: usize,
+        _consume: &mut dyn FnMut(&[u8]) -> Result<(), ChunkError>,
+    ) -> Result<(), ChunkError> {
+        self.0.cancel();
+        Ok(())
+    }
+}
+
+#[test]
+fn swallowed_publication_callback_failure_is_sticky_and_aborts_once() {
+    let bytes = source(&vector("tiny-ascii")["recipe"]);
+    let (result, _) = generated(&bytes);
+    let mut publication = FailingPublication {
+        fail_write: true,
+        ..FailingPublication::default()
+    };
+    assert_eq!(
+        reconstruct_manifest(
+            &result.manifest.bytes,
+            &mut SwallowingSource(bytes),
+            &mut publication,
+            &VerifyOptions::default(),
+        )
+        .unwrap_err(),
+        ChunkError::PublicationFailed
+    );
+    assert_eq!(
+        (publication.writes, publication.commits, publication.aborts),
+        (1, 0, 1)
+    );
+}
+
+#[test]
+fn pre_write_and_empty_commit_failures_abort_once_without_commit() {
+    let bytes = source(&vector("tiny-ascii")["recipe"]);
+    let (result, _) = generated(&bytes);
+    let mut missing_publication = FailingPublication::default();
+    assert_eq!(
+        reconstruct_manifest(
+            &result.manifest.bytes,
+            &mut MapSource::default(),
+            &mut missing_publication,
+            &VerifyOptions::default(),
+        )
+        .unwrap_err(),
+        ChunkError::SourceMissing
+    );
+    assert_eq!(
+        (
+            missing_publication.writes,
+            missing_publication.commits,
+            missing_publication.aborts
+        ),
+        (0, 0, 1)
+    );
+
+    let empty = chunk_bytes(&[], |_chunk, _part, _index| Ok(())).unwrap();
+    let mut commit_failure = FailingPublication {
+        fail_commit: true,
+        ..FailingPublication::default()
+    };
+    assert_eq!(
+        reconstruct_manifest(
+            &empty.manifest.bytes,
+            &mut MapSource::default(),
+            &mut commit_failure,
+            &VerifyOptions::default(),
+        )
+        .unwrap_err(),
+        ChunkError::PublicationFailed
+    );
+    assert_eq!(
+        (
+            commit_failure.writes,
+            commit_failure.commits,
+            commit_failure.aborts
+        ),
+        (0, 1, 1)
+    );
+}
+
+#[test]
+fn cancellation_deadline_and_cache_key_are_public_and_stable() {
+    let control = OperationControl::new(Some(Duration::ZERO));
+    assert_eq!(
+        Chunker::new_controlled(0, PROFILE, control, |_chunk, _part, _index| Ok(()))
+            .err()
+            .unwrap(),
+        ChunkError::ResourceExhausted
+    );
+    assert_eq!(
+        Chunker::new_checked(-1, PROFILE, |_chunk, _part, _index| Ok(()))
+            .err()
+            .unwrap(),
+        ChunkError::DeclaredLengthInvalid
+    );
+
+    let reference = ObjectRef {
+        kind: ObjectKind::Chunk,
+        digest: object_id(ObjectKind::Chunk, b"cache-key").unwrap(),
+    };
+    let key = chunk_cache_key(&reference).unwrap();
+    assert!(key.starts_with("ogvcs:chunk-cache:v1:sha256:"));
+    assert_eq!(key.len(), "ogvcs:chunk-cache:v1:sha256:".len() + 64);
+
+    let bytes = source(&vector("tiny-ascii")["recipe"]);
+    let (generated, _) = generated(&bytes);
+    let cancellation = OperationControl::default();
+    let options = VerifyOptions {
+        control: cancellation.clone(),
+        ..VerifyOptions::default()
+    };
+    let mut publication = FailingPublication::default();
+    assert_eq!(
+        reconstruct_manifest(
+            &generated.manifest.bytes,
+            &mut CancellingSource(cancellation),
+            &mut publication,
+            &options,
+        )
+        .unwrap_err(),
+        ChunkError::ResourceExhausted
+    );
+    assert_eq!(
+        (publication.writes, publication.commits, publication.aborts),
+        (0, 0, 1)
+    );
 }
 
 fn scratch_directory() -> PathBuf {
@@ -271,8 +498,33 @@ fn ledger_spill_and_exhaustion_clean_private_scratch() {
             delivered.push((part.clone(), chunk.to_vec()));
             Ok(())
         },
-    ).unwrap();
+    )
+    .unwrap();
     chunker.update(&bytes).unwrap();
+    let entries = read_dir(&directory)
+        .unwrap()
+        .map(|entry| entry.unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(entries.len(), 1);
+    let scratch_name = entries[0].file_name().into_string().unwrap();
+    assert!(scratch_name.starts_with(".ogvcs-chunk-ledger-"));
+    assert_eq!(scratch_name.len(), ".ogvcs-chunk-ledger-".len() + 32);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            entries[0].metadata().unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+        assert_eq!(
+            std::fs::metadata(entries[0].path().join("records.bin"))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o600
+        );
+    }
     let result = chunker.finish().unwrap();
     assert!(result.ledger.spilled);
     assert_eq!(read_dir(&directory).unwrap().count(), 0);
@@ -286,9 +538,13 @@ fn ledger_spill_and_exhaustion_clean_private_scratch() {
             scratch_directory: directory.clone(),
         },
         |_chunk, _part, _index| Ok(()),
-    ).unwrap();
+    )
+    .unwrap();
     let exhausted_fragment = vec![0; 2_097_152];
-    assert_eq!(exhausted.update(&exhausted_fragment).unwrap_err(), ChunkError::ScratchExhausted);
+    assert_eq!(
+        exhausted.update(&exhausted_fragment).unwrap_err(),
+        ChunkError::ScratchExhausted
+    );
     assert_eq!(read_dir(&directory).unwrap().count(), 0);
     remove_dir(directory).unwrap();
 }
@@ -304,26 +560,40 @@ fn every_malformed_vector_is_dispatched_and_executed() {
         let expected = case["expectedError"].as_str().unwrap();
         let parameters = &case["parameters"];
         let error = match case_id {
-            "declared-negative" => parameters["declaredLength"]
-                .as_u64()
-                .map(|_| ChunkError::SessionFailed)
-                .unwrap_or(ChunkError::DeclaredLengthInvalid),
+            "declared-negative" => Chunker::new_checked(
+                parameters["declaredLength"].as_i64().unwrap() as i128,
+                PROFILE,
+                |_chunk, _part, _index| Ok(()),
+            )
+            .err()
+            .unwrap(),
             "declared-over-limit" => Chunker::new(
-                parameters["declaredLength"].as_u64().unwrap(), PROFILE,
-                |_chunk, _part, _index| Ok(())
-            ).err().unwrap(),
+                parameters["declaredLength"].as_u64().unwrap(),
+                PROFILE,
+                |_chunk, _part, _index| Ok(()),
+            )
+            .err()
+            .unwrap(),
             "source-short" => {
                 let mut chunker = Chunker::new(4, PROFILE, |_chunk, _part, _index| Ok(())).unwrap();
-                chunker.update(&decode_hex(parameters["sourceHex"].as_str().unwrap())).unwrap();
+                chunker
+                    .update(&decode_hex(parameters["sourceHex"].as_str().unwrap()))
+                    .unwrap();
                 chunker.finish().unwrap_err()
             }
             "source-long" => {
                 let mut chunker = Chunker::new(2, PROFILE, |_chunk, _part, _index| Ok(())).unwrap();
-                chunker.update(&decode_hex(parameters["sourceHex"].as_str().unwrap())).unwrap_err()
+                chunker
+                    .update(&decode_hex(parameters["sourceHex"].as_str().unwrap()))
+                    .unwrap_err()
             }
             "unknown-profile" | "wrong-profile-major" => Chunker::new(
-                0, parameters["profile"].as_str().unwrap(), |_chunk, _part, _index| Ok(())
-            ).err().unwrap(),
+                0,
+                parameters["profile"].as_str().unwrap(),
+                |_chunk, _part, _index| Ok(()),
+            )
+            .err()
+            .unwrap(),
             "boundary-shift" => {
                 let mut boundaries = fixture.boundaries.clone();
                 boundaries[0] += 1;
@@ -341,12 +611,18 @@ fn every_malformed_vector_is_dispatched_and_executed() {
                     offset = boundary as usize;
                 }
                 let manifest = manifest(fixture_bytes.len() as u64, sha256(&fixture_bytes), &parts);
-                verify_manifest(&manifest, &mut MapSource(chunks), &VerifyOptions::default()).unwrap_err()
+                verify_manifest(&manifest, &mut MapSource(chunks), &VerifyOptions::default())
+                    .unwrap_err()
             }
             "chunk-bit-flip" => {
                 let mut chunks = MapSource(fixture_source.0.clone());
                 chunks.0.get_mut(&fixture.parts[0].object_id).unwrap()[0] ^= 1;
-                verify_manifest(&fixture.manifest.bytes, &mut chunks, &VerifyOptions::default()).unwrap_err()
+                verify_manifest(
+                    &fixture.manifest.bytes,
+                    &mut chunks,
+                    &VerifyOptions::default(),
+                )
+                .unwrap_err()
             }
             "manifest-bit-flip" => {
                 let mut bytes = fixture.manifest.bytes.clone();
@@ -355,15 +631,21 @@ fn every_malformed_vector_is_dispatched_and_executed() {
                 verify_manifest(&bytes, &mut chunks, &VerifyOptions::default()).unwrap_err()
             }
             "fragment-over-limit" => {
-                let mut chunker = Chunker::new(67_108_865, PROFILE, |_chunk, _part, _index| Ok(())).unwrap();
+                let mut chunker =
+                    Chunker::new(67_108_865, PROFILE, |_chunk, _part, _index| Ok(())).unwrap();
                 let fragment = vec![0; 67_108_865];
                 chunker.update(&fragment).unwrap_err()
             }
             "resource-below-scalar-minimum" => Chunker::new_with_resources(
-                6_291_456, PROFILE, 1, 0,
+                6_291_456,
+                PROFILE,
+                1,
+                0,
                 parameters["maxWorkingMemoryBytes"].as_u64().unwrap(),
-                |_chunk, _part, _index| Ok(())
-            ).err().unwrap(),
+                |_chunk, _part, _index| Ok(()),
+            )
+            .err()
+            .unwrap(),
             other => panic!("unhandled malformed vector {other}"),
         };
         assert_eq!(error.code(), expected, "{case_id}");

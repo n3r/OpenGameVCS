@@ -45,6 +45,7 @@ jobs:
       - run: npm run test --workspace @opengamevcs/chunking-manifest-contract-v1
       - run: npm run check --workspace @opengamevcs/chunking-manifest
       - run: npm run test --workspace @opengamevcs/chunking-manifest
+      - run: npm run test:packed --workspace @opengamevcs/chunking-manifest
       - run: node core/chunking-manifest/js/scripts/bounded-report.mjs artifacts/javascript.json
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -68,10 +69,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@7d11e79e1714f6b6da93cac39ad8435666f5c337 # 1.82.0
         with:
-          components: clippy
-      - run: cargo test --manifest-path core/chunking-manifest/rust/Cargo.toml
-      - run: cargo clippy --manifest-path core/chunking-manifest/rust/Cargo.toml --all-targets -- -D warnings
-      - run: cargo run --manifest-path core/chunking-manifest/rust/Cargo.toml --example bounded_report -- artifacts/rust.json
+          components: clippy, rustfmt
+      - run: cargo fmt --manifest-path core/chunking-manifest/rust/Cargo.toml -- --check
+      - run: cargo test --manifest-path core/chunking-manifest/rust/Cargo.toml --locked
+      - run: cargo clippy --manifest-path core/chunking-manifest/rust/Cargo.toml --locked --all-targets -- -D warnings
+      - run: cargo package --manifest-path core/object-model/rust/Cargo.toml --locked --offline
+      - run: cargo package --manifest-path core/chunking-manifest/rust/Cargo.toml --locked --offline --config 'patch.crates-io.ogvcs-object-model.path="core/object-model/rust"'
+      - run: cargo run --manifest-path core/chunking-manifest/rust/Cargo.toml --locked --example bounded_report -- artifacts/rust.json
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: chunking-rust-${{ matrix.label }}

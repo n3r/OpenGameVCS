@@ -1,8 +1,7 @@
 use std::{
-    fs::{create_dir, remove_dir, remove_file, File, OpenOptions},
+    fs::{remove_dir, remove_file, File, OpenOptions},
     io::{Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
-    sync::atomic::{AtomicU64, Ordering},
 };
 
 use crate::ChunkError;
@@ -79,17 +78,21 @@ pub(crate) struct Ledger {
 }
 
 impl Ledger {
-    pub(crate) fn new(options: LedgerOptions) -> Result<Self, ChunkError> {
+    pub(crate) fn new(mut options: LedgerOptions) -> Result<Self, ChunkError> {
+        let supplied = std::fs::symlink_metadata(&options.scratch_directory)
+            .map_err(|_| ChunkError::ResourceInvalid)?;
         if options.max_memory_bytes > LEDGER_MAXIMUM_BYTES
             || options.max_scratch_bytes > LEDGER_MAXIMUM_BYTES
-            || !options.scratch_directory.is_dir()
+            || !supplied.is_dir()
+            || supplied.file_type().is_symlink()
         {
             return Err(ChunkError::ResourceInvalid);
         }
-        let capacity = usize::try_from(
-            (options.max_memory_bytes / LEDGER_RECORD_BYTES).min(1_048_576),
-        )
-        .map_err(|_| ChunkError::ResourceInvalid)?;
+        options.scratch_directory = std::fs::canonicalize(&options.scratch_directory)
+            .map_err(|_| ChunkError::ResourceInvalid)?;
+        let capacity =
+            usize::try_from((options.max_memory_bytes / LEDGER_RECORD_BYTES).min(1_048_576))
+                .map_err(|_| ChunkError::ResourceInvalid)?;
         let peak_memory_bytes = capacity as u64 * LEDGER_RECORD_BYTES;
         Ok(Self {
             options,
@@ -109,14 +112,19 @@ impl Ledger {
     }
 
     fn private_directory(root: &Path) -> Result<PathBuf, ChunkError> {
-        static NEXT: AtomicU64 = AtomicU64::new(0);
-        for _ in 0..1024 {
-            let nonce = NEXT.fetch_add(1, Ordering::Relaxed);
-            let path = root.join(format!(
-                "ogvcs-chunk-ledger-{}-{nonce}",
-                std::process::id()
-            ));
-            match create_dir(&path) {
+        for _ in 0..32 {
+            let mut nonce = [0u8; 16];
+            getrandom::getrandom(&mut nonce).map_err(|_| ChunkError::ScratchExhausted)?;
+            let token =
+                nonce
+                    .iter()
+                    .fold(String::with_capacity(nonce.len() * 2), |mut token, byte| {
+                        use std::fmt::Write;
+                        write!(&mut token, "{byte:02x}").expect("string write");
+                        token
+                    });
+            let path = root.join(format!(".ogvcs-chunk-ledger-{token}"));
+            match create_private_directory(&path) {
                 Ok(()) => return Ok(path),
                 Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
                 Err(_) => return Err(ChunkError::ScratchExhausted),
@@ -125,7 +133,10 @@ impl Ledger {
         Err(ChunkError::ScratchExhausted)
     }
 
-    fn write_record(&mut self, bytes: &[u8; LEDGER_RECORD_BYTES as usize]) -> Result<(), ChunkError> {
+    fn write_record(
+        &mut self,
+        bytes: &[u8; LEDGER_RECORD_BYTES as usize],
+    ) -> Result<(), ChunkError> {
         let next = self
             .scratch_bytes
             .checked_add(LEDGER_RECORD_BYTES)
@@ -155,7 +166,7 @@ impl Ledger {
         }
         let directory = Self::private_directory(&self.options.scratch_directory)?;
         let path = directory.join("records.bin");
-        let file = match OpenOptions::new().read(true).write(true).create_new(true).open(&path) {
+        let file = match create_private_file(&path) {
             Ok(file) => file,
             Err(_) => {
                 let _ = remove_dir(&directory);
@@ -234,6 +245,39 @@ impl Ledger {
         }
         self.resident = Vec::new();
     }
+}
+
+#[cfg(unix)]
+fn create_private_directory(path: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::DirBuilderExt;
+    let mut builder = std::fs::DirBuilder::new();
+    builder.mode(0o700).create(path)
+}
+
+#[cfg(not(unix))]
+fn create_private_directory(path: &Path) -> std::io::Result<()> {
+    std::fs::create_dir(path)
+}
+
+#[cfg(unix)]
+fn create_private_file(path: &Path) -> std::io::Result<File> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let mut options = OpenOptions::new();
+    options
+        .read(true)
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(path)
+}
+
+#[cfg(not(unix))]
+fn create_private_file(path: &Path) -> std::io::Result<File> {
+    OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create_new(true)
+        .open(path)
 }
 
 impl Drop for Ledger {

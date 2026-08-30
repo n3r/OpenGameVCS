@@ -337,3 +337,49 @@ The profile remains Proposed/candidate/conformance-only. Remaining ratification
 blockers are the authenticated seven-class OGVCS-005 selection report, a green
 compiled three-OS/packed proof, production trust-boundary integration and
 receipt/version binding, and the separately scheduled final resource campaign.
+
+## No-cherry follow-up to the first tranche (2026-08-30)
+
+Independent review correctly rejected the first tranche for integration. A
+Rust `ChunkSource` could ignore a failed consumer callback, return success, and
+allow reconstruction to continue toward commit. Reconstruction in both
+languages also aborted only after a successful write, leaving missing-first-
+chunk and empty commit failures outside the transaction cleanup rule.
+
+The follow-up makes consumer failure sticky in Rust and adds a provider that
+deliberately swallows a failed publication write. The regression proves one
+write attempt, zero commits, and exactly one abort. Both languages now open the
+publication transaction after manifest admission and abort exactly once on
+every subsequent pre-commit failure, including missing first chunk and empty
+commit failure. Abort failure cannot mask the primary generated result.
+
+JavaScript callback, provider, known-index, iterator-factory, iterator-next,
+hash/writer, and publication failures are normalized through the exact
+generated 22-code authority; objects that merely spoof a `CHUNK_*` property are
+not trusted. Public cancellation/deadline controls and the ADR-frozen shared
+chunk-cache key are implemented in both languages. The JavaScript
+`createChunker` result default is restored to retained boundary/part arrays for
+version compatibility; bounded callers opt out explicitly.
+
+Rust scratch now uses 128 bits of OS entropy, an owner-private directory and
+file mode on Unix, symlink-rejecting root admission, and cleanup assertions.
+The signed negative malformed row now enters the public `Chunker::new_checked`
+API rather than being synthesized in its test adapter. A package-local
+`Cargo.lock` is present.
+
+The bounded parity record now compares the Gear-table digest, profile and
+limits, all 22 error codes, every boundary, ChunkID/length/cache key, manifest
+bytes/ObjectID, whole digest, provider reads, exact repeated/unique accounting,
+and deterministic resource-admission outcomes. JavaScript proves an offline
+install from both packed tarballs. Rust's workflow runs `cargo fmt`, locked
+test/clippy, and offline `cargo package` verification for both packed crates;
+the unpublished local object-model dependency is supplied through an explicit
+package-only Cargo patch.
+
+Local bounded results after the follow-up are JavaScript 19/19 tests, Rust
+12/12 tests plus doc tests, matching nine-case reports, successful offline npm
+packed-consumer execution, and successful offline Cargo package verification.
+The Linux and Windows legs remain CI evidence, not a local claim. No 100 GiB,
+1 TiB, or exact-scale campaign was run. This closes the no-cherry code/package
+findings but does not change the original ratification verdict or any lifecycle
+state.

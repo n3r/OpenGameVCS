@@ -5,11 +5,25 @@ edition = "2021"
 rust-version = "1.82"
 license = "MIT"
 description = "Independent scalar OpenGameVCS Gear/FastCDC chunk profile implementation"
+readme = "README.md"
+repository = "https://github.com/n3r/OpenGameVCS"
+homepage = "https://github.com/n3r/OpenGameVCS"
+documentation = "https://docs.rs/ogvcs-chunking-manifest"
+keywords = ["version-control", "chunking", "content-addressed", "gamedev", "vcs"]
+categories = ["algorithms", "data-structures", "development-tools"]
+include = [
+    "src/**",
+    "Cargo.toml",
+    "Cargo.lock",
+    "LICENSE",
+    "README.md",
+]
 
 [lib]
 path = "src/lib.rs"
 
 [dependencies]
+getrandom = "=0.2.16"
 ogvcs-object-model = { path = "../../object-model/rust", version = "0.1.0" }
 
 [dev-dependencies]

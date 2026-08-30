@@ -2,7 +2,8 @@ import { createHash } from 'node:crypto';
 import {
   Digest, ObjectRef, ProfileRef, createObjectHashWriter, decodeMetadata, equalBytes,
 } from '@opengamevcs/object-model';
-import { fail, wrap } from './errors.mjs';
+import { createOperationControl } from './control.mjs';
+import { fail, normalizeError, wrap } from './errors.mjs';
 import { createBoundaryScanner, LIMITS } from './gear.mjs';
 import { createLedger } from './ledger.mjs';
 import { PROFILE } from './identity.mjs';
@@ -18,15 +19,23 @@ function configuredLimit(value, fallback) {
 }
 
 function asSafeInteger(value) {
-  const integer = typeof value === 'bigint' ? value : BigInt(value);
-  if (integer < 0n || integer > BigInt(Number.MAX_SAFE_INTEGER)) fail('CHUNK_MANIFEST_MISMATCH');
-  return Number(integer);
+  try {
+    const integer = typeof value === 'bigint' ? value : BigInt(value);
+    if (integer < 0n || integer > BigInt(Number.MAX_SAFE_INTEGER)) fail('CHUNK_MANIFEST_MISMATCH');
+    return Number(integer);
+  } catch (cause) {
+    throw normalizeError(cause, 'CHUNK_MANIFEST_MISMATCH');
+  }
 }
 
 function manifestBytes(input) {
-  const selected = input?.bytes ?? input;
-  if (!(selected instanceof Uint8Array)) fail('CHUNK_MANIFEST_MISMATCH');
-  return Buffer.from(selected.buffer, selected.byteOffset, selected.byteLength);
+  try {
+    const selected = input?.bytes ?? input;
+    if (!(selected instanceof Uint8Array)) fail('CHUNK_MANIFEST_MISMATCH');
+    return Buffer.from(selected.buffer, selected.byteOffset, selected.byteLength);
+  } catch (cause) {
+    throw normalizeError(cause, 'CHUNK_MANIFEST_MISMATCH');
+  }
 }
 
 function exactPart(raw) {
@@ -132,35 +141,67 @@ function loadManifest(input, options = {}) {
   }
 }
 
-async function sourceValue(source, part, index) {
-  try {
-    if (typeof source === 'function') return await source(part, index);
+async function sourceValue(source, part, index, control) {
+  return control.wait(async () => {
+    if (typeof source === 'function') return source(part, index, control.context);
     if (source instanceof Map) {
       if (!source.has(part.objectId)) fail('CHUNK_SOURCE_MISSING', { objectId: part.objectId });
       return source.get(part.objectId);
     }
-    if (source && typeof source.getChunk === 'function') return await source.getChunk(part, index);
+    if (source && typeof source.getChunk === 'function') {
+      return source.getChunk(part, index, control.context);
+    }
+    fail('CHUNK_SOURCE_MISSING', { objectId: part.objectId });
+  }, 'CHUNK_SOURCE_INVALID', { objectId: part.objectId });
+}
+
+async function consumeFragments(value, part, control, consume) {
+  if (value instanceof Uint8Array) {
+    await consume(value);
+    return;
+  }
+  let iterator;
+  try {
+    const asyncFactory = value?.[Symbol.asyncIterator];
+    const syncFactory = value?.[Symbol.iterator];
+    if (typeof asyncFactory === 'function') iterator = asyncFactory.call(value);
+    else if (typeof syncFactory === 'function' && typeof value !== 'string') iterator = syncFactory.call(value);
+    else fail('CHUNK_SOURCE_INVALID', { objectId: part.objectId });
+    if (!iterator || typeof iterator.next !== 'function') {
+      fail('CHUNK_SOURCE_INVALID', { objectId: part.objectId });
+    }
   } catch (cause) {
-    if (cause?.code?.startsWith?.('CHUNK_')) throw cause;
-    throw wrap('CHUNK_SOURCE_INVALID', cause, { objectId: part.objectId });
+    throw normalizeError(cause, 'CHUNK_SOURCE_INVALID', { objectId: part.objectId });
   }
-  fail('CHUNK_SOURCE_MISSING', { objectId: part.objectId });
+
+  let failure;
+  try {
+    while (true) {
+      const step = await control.wait(
+        () => iterator.next(),
+        'CHUNK_SOURCE_INVALID',
+        { objectId: part.objectId },
+      );
+      if (!step || typeof step !== 'object') fail('CHUNK_SOURCE_INVALID', { objectId: part.objectId });
+      if (step.done) break;
+      await consume(step.value);
+    }
+  } catch (cause) {
+    failure = normalizeError(cause, 'CHUNK_SOURCE_INVALID', { objectId: part.objectId });
+  }
+  if (failure !== undefined) {
+    try {
+      const returnIterator = iterator.return;
+      if (typeof returnIterator === 'function') {
+        await Promise.resolve(returnIterator.call(iterator));
+      }
+    } catch {}
+  }
+  if (failure !== undefined) throw failure;
 }
 
-async function *fragments(value) {
-  if (value instanceof Uint8Array) { yield value; return; }
-  if (value?.[Symbol.asyncIterator]) {
-    for await (const fragment of value) yield fragment;
-    return;
-  }
-  if (value?.[Symbol.iterator] && typeof value !== 'string') {
-    for (const fragment of value) yield fragment;
-    return;
-  }
-  fail('CHUNK_SOURCE_INVALID');
-}
-
-async function consumeContent(parsed, source, publication) {
+async function consumeContent(parsed, source, publication, control) {
+  control.check();
   if (source === undefined || source === null) fail('CHUNK_SOURCE_MISSING');
   const whole = createHash('sha256');
   const scanner = createBoundaryScanner(parsed.logicalLength);
@@ -172,11 +213,12 @@ async function consumeContent(parsed, source, publication) {
   let partIndex = 0;
 
   for (const part of parsed.ledger.records()) {
-    const value = await sourceValue(source, part, partIndex);
+    control.check();
+    const value = await sourceValue(source, part, partIndex, control);
     providerReads += 1;
     const chunkHash = createObjectHashWriter(1, { maxChunkBytes: LIMITS.maximum });
     let partBytes = 0;
-    for await (const fragment of fragments(value)) {
+    await consumeFragments(value, part, control, async (fragment) => {
       if (!(fragment instanceof Uint8Array) || fragment.byteLength > LIMITS.fragmentMaximum) {
         fail('CHUNK_SOURCE_INVALID', { objectId: part.objectId });
       }
@@ -186,17 +228,35 @@ async function consumeContent(parsed, source, publication) {
       const bytes = Buffer.from(fragment.buffer, fragment.byteOffset, fragment.byteLength);
       partBytes += bytes.length;
       contentBytes += bytes.length;
-      chunkHash.update(bytes);
-      whole.update(bytes);
-      scanner.update(bytes, (boundary) => {
-        if (boundary !== part.boundary) boundaryMismatch = true;
-      });
-      if (publication) {
-        try { await publication.write(Buffer.from(bytes), Object.freeze({ partIndex, objectId: part.objectId })); }
-        catch (cause) { throw wrap('CHUNK_PUBLICATION_FAILED', cause); }
+      try {
+        for (let offset = 0; offset < bytes.length; offset += 65_536) {
+          control.check();
+          const slice = bytes.subarray(offset, Math.min(offset + 65_536, bytes.length));
+          chunkHash.update(slice);
+          whole.update(slice);
+          scanner.update(slice, (boundary) => {
+            if (boundary !== part.boundary) boundaryMismatch = true;
+          });
+        }
+      } catch (cause) {
+        throw normalizeError(cause, 'CHUNK_DIGEST_MISMATCH', { objectId: part.objectId });
       }
-    }
-    if (partBytes !== part.length || chunkHash.finish().toString() !== part.objectId) {
+      if (publication) {
+        await control.wait(
+          () => publication.write(Buffer.from(bytes), Object.freeze({
+            ...control.context,
+            partIndex,
+            objectId: part.objectId,
+          })),
+          'CHUNK_PUBLICATION_FAILED',
+          { objectId: part.objectId },
+        );
+      }
+    });
+    let actual;
+    try { actual = chunkHash.finish().toString(); }
+    catch (cause) { throw normalizeError(cause, 'CHUNK_DIGEST_MISMATCH', { objectId: part.objectId }); }
+    if (partBytes !== part.length || actual !== part.objectId) {
       fail('CHUNK_DIGEST_MISMATCH', { objectId: part.objectId });
     }
     if (parsed.logicalLength > LIMITS.smallMaximum && partIndex + 1 < parsed.partCount &&
@@ -224,58 +284,69 @@ function summary(parsed, content, ledger) {
 }
 
 export async function verifyManifest(input = {}) {
-  const parsed = loadManifest(input.manifest, input);
+  let parsed;
+  let control;
   try {
-    const content = await consumeContent(parsed, input.source);
+    control = createOperationControl(input);
+    control.check();
+    parsed = loadManifest(input.manifest, input);
+    const content = await consumeContent(parsed, input.source, undefined, control);
     return summary(parsed, content, parsed.ledger.metrics());
+  } catch (cause) {
+    throw normalizeError(cause, 'CHUNK_SESSION_FAILED');
   } finally {
-    parsed.dispose();
+    parsed?.dispose();
+    control?.dispose();
   }
 }
 
 export async function reconstructManifest(input = {}) {
-  const publication = input.publication;
-  if (!publication || typeof publication.write !== 'function' ||
-      typeof publication.commit !== 'function' || typeof publication.abort !== 'function') {
-    fail('CHUNK_RESOURCE_INVALID');
-  }
-  const parsed = loadManifest(input.manifest, input);
-  let started = false;
+  let parsed;
+  let control;
+  let publication;
+  let transactionOpen = false;
   try {
-    const transactional = {
-      async write(bytes, context) {
-        started = true;
-        return publication.write(bytes, context);
-      },
-    };
-    const content = await consumeContent(parsed, input.source, transactional);
-    let publicationResult;
-    try { publicationResult = await publication.commit(); }
-    catch (cause) { throw wrap('CHUNK_PUBLICATION_FAILED', cause); }
+    publication = input.publication;
+    if (!publication || typeof publication.write !== 'function' ||
+        typeof publication.commit !== 'function' || typeof publication.abort !== 'function') {
+      fail('CHUNK_RESOURCE_INVALID');
+    }
+    control = createOperationControl(input);
+    control.check();
+    parsed = loadManifest(input.manifest, input);
+    transactionOpen = true;
+    const content = await consumeContent(parsed, input.source, publication, control);
+    const publicationResult = await control.wait(
+      () => publication.commit(control.context),
+      'CHUNK_PUBLICATION_FAILED',
+    );
+    transactionOpen = false;
     return Object.freeze({ ...summary(parsed, content, parsed.ledger.metrics()), publicationResult });
-  } catch (error) {
-    if (started) {
-      try { await publication.abort(error); } catch {}
+  } catch (cause) {
+    const error = normalizeError(cause, 'CHUNK_SESSION_FAILED');
+    if (transactionOpen) {
+      transactionOpen = false;
+      try { await Promise.resolve(publication.abort(error)); } catch {}
     }
     throw error;
   } finally {
-    parsed.dispose();
+    parsed?.dispose();
+    control?.dispose();
   }
 }
 
-async function knownLength(knownChunks, objectId, expectedLength) {
-  let value;
-  try {
-    if (typeof knownChunks === 'function') value = await knownChunks(objectId, expectedLength);
-    else if (knownChunks instanceof Map) value = knownChunks.get(objectId);
-    else if (knownChunks && typeof knownChunks.knownLength === 'function') {
-      value = await knownChunks.knownLength(objectId);
-    } else if (knownChunks === undefined || knownChunks === null) return undefined;
-    else fail('CHUNK_RESOURCE_INVALID');
-  } catch (cause) {
-    if (cause?.code?.startsWith?.('CHUNK_')) throw cause;
-    throw wrap('CHUNK_SOURCE_INVALID', cause, { objectId });
-  }
+async function knownLength(knownChunks, objectId, expectedLength, control) {
+  const value = await control.wait(async () => {
+    if (typeof knownChunks === 'function') {
+      return knownChunks(objectId, expectedLength, control.context);
+    }
+    if (knownChunks instanceof Map) return knownChunks.get(objectId);
+    if (knownChunks && typeof knownChunks.knownLength === 'function') {
+      return knownChunks.knownLength(objectId, expectedLength, control.context);
+    }
+    if (knownChunks === undefined || knownChunks === null) return undefined;
+    fail('CHUNK_RESOURCE_INVALID');
+  }, 'CHUNK_SOURCE_INVALID', { objectId });
   if (value === undefined || value === null || value === false) return undefined;
   if (value === true) return expectedLength;
   if (!Number.isSafeInteger(value) || value < 0) fail('CHUNK_METADATA_CONFLICT', { objectId });
@@ -283,11 +354,16 @@ async function knownLength(knownChunks, objectId, expectedLength) {
 }
 
 export async function compareManifest(input = {}) {
-  const parsed = loadManifest(input.manifest, input);
+  let parsed;
+  let control;
   try {
+    control = createOperationControl(input);
+    control.check();
+    parsed = loadManifest(input.manifest, input);
     let reusedBytes = 0;
     for (const [objectId, length] of parsed.metadata) {
-      const known = await knownLength(input.knownChunks, objectId, length);
+      control.check();
+      const known = await knownLength(input.knownChunks, objectId, length, control);
       if (known === undefined) continue;
       if (known !== length) {
         fail('CHUNK_METADATA_CONFLICT', { objectId, manifestLength: length, knownLength: known });
@@ -305,7 +381,10 @@ export async function compareManifest(input = {}) {
       uniqueChunks: parsed.metadata.size,
       ledger: parsed.ledger.metrics(),
     });
+  } catch (cause) {
+    throw normalizeError(cause, 'CHUNK_SESSION_FAILED');
   } finally {
-    parsed.dispose();
+    parsed?.dispose();
+    control?.dispose();
   }
 }

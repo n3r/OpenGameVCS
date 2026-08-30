@@ -136,6 +136,25 @@ The complete source file is never copied to scratch. Resource admission failure,
 scratch exhaustion, cancellation, or deadline expiry yields no trusted manifest
 or workspace publication.
 
+Cancellation is caller-owned and cooperative. A public operation accepts a
+cancellation token and an optional nonnegative maximum elapsed duration. It
+uses a monotonic clock beginning at operation admission, checks the token and
+deadline before the first source read, between delivered fragments, at bounded
+intervals within a fragment, around external callbacks, and before commit.
+Cancellation or expiry returns `CHUNK_RESOURCE_EXHAUSTED`; the detail may name
+`cancellation` or `deadline`, but it does not create another stable error code.
+An implementation may race interruptible asynchronous callbacks. A synchronous
+provider that blocks without observing its shared token remains cooperatively,
+not forcibly, interruptible.
+
+Once a structurally valid manifest opens a caller publication transaction,
+every failure before a successful commit invokes exactly one best-effort abort.
+This includes an empty-output commit failure, a missing first chunk, callback
+failure before the first successful write, cancellation, and deadline expiry.
+A provider cannot erase a consumer/write failure by ignoring its callback
+result and returning success: the first callback failure is sticky and wins.
+Abort failure never masks the primary generated error and no commit follows it.
+
 ### Verification rules
 
 There are two distinct claims:
@@ -151,6 +170,24 @@ remain valid occurrences. The same ChunkID paired with a conflicting length or
 different delivered bytes is rejected. Unknown profile/version, wrong declared
 length, arithmetic overflow, too many chunks, invalid boundary, corrupt/truncated
 chunk, or final digest mismatch fails closed without trusted partial output.
+
+### Shared chunk-cache key
+
+The stable shared-cache API accepts exactly one OGVCS-002 `Chunk` ObjectRef.
+Let `C` be the 31 bytes `ASCII("OpenGameVCS chunk cache key v1") || NUL`, let
+`P` be the ASCII profile text
+`chunking.opengamevcs/gear-fastcdc-1m@1`, and let `O` be the canonical ASCII
+ObjectRef text. The key is:
+
+```text
+"ogvcs:chunk-cache:v1:sha256:" || lowercase-hex(SHA-256(C || P || NUL || O))
+```
+
+The profile binding prevents a future chunk-policy namespace from accidentally
+sharing operational cache decisions even though Chunk ObjectIDs remain global
+content identities. A cache hit is only a lookup hint: reconstruction still
+verifies length, ChunkID, whole-file digest, and Gear boundaries. Non-Chunk
+ObjectRefs and malformed text are rejected through the generated error surface.
 
 ### Checkpoints and resume
 

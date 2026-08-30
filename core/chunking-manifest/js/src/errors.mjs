@@ -40,6 +40,14 @@ export function fail(code, details, options) {
 }
 
 export function wrap(code, cause, details = {}) {
-  if (cause instanceof ChunkingError && cause.code === code) return cause;
+  return normalizeError(cause, code, details);
+}
+
+// Public boundaries must never leak object-model, iterator, callback, or host
+// exceptions as an accidental second error vocabulary. Preserve only errors
+// created from the generated authority above; everything else receives the
+// operation's exact fallback code.
+export function normalizeError(cause, code = 'CHUNK_SESSION_FAILED', details = {}) {
+  if (cause instanceof ChunkingError) return cause;
   return new ChunkingError(code, details, { cause });
 }

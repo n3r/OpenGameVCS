@@ -25,9 +25,9 @@ explicitly bounded 48-byte-per-entry ledger. The ledger spills from
 `maxLedgerMemoryBytes` to owner-private `maxScratchBytes` storage and removes
 scratch on finish, failure, or explicit `abort()`.
 
-Generation does not retain returned part/boundary arrays unless
-`retainEntries: true`; `chunkBytes` opts in because its whole input is already
-resident.
+For version compatibility, generation returns part/boundary arrays by default.
+Long-running bounded callers set `retainEntries: false`; `chunkBytes` always
+opts in because its whole input is already resident.
 
 ```js
 import { compareManifest, reconstructManifest, verifyManifest } from '@opengamevcs/chunking-manifest';
@@ -38,6 +38,8 @@ await reconstructManifest({
   manifest,
   source: chunkLookup,
   publication: { write: stage, commit: publish, abort: discard },
+  signal: cancellation.signal,
+  maxElapsedMilliseconds: 30_000,
 });
 ```
 
@@ -47,6 +49,16 @@ occurrence, ChunkID, declared length, whole-file digest, and Gear end.
 Reconstruction commits only after every check succeeds. Repeated references are
 read per occurrence; comparison counts logical, unique, reused, repeated, and
 newly required bytes exactly and rejects conflicting length metadata.
+After manifest admission, every reconstruction failure aborts exactly once,
+including missing-first-chunk and empty commit failures. External callback and
+iterator exceptions are normalized to the generated 22-code authority.
+
+`chunkCacheKey(chunkRef)` implements ADR-0016's stable, profile-bound shared
+cache-key preimage. Cache hits remain untrusted until `verifyManifest` or
+`reconstructManifest` completes. Generation and manifest-reader operations
+accept cooperative `signal` and `maxElapsedMilliseconds` controls;
+cancellation/deadline expiry is `CHUNK_RESOURCE_EXHAUSTED` and never commits
+partial output.
 
 Manifest encoding and ObjectIDs delegate to the public
 `@opengamevcs/object-model` package. The bundled candidate registry view is

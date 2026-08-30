@@ -9,10 +9,18 @@ pub use verify::{
     KnownChunkIndex, ManifestPart, TransactionalPublication, VerifyOptions, VerifySummary,
 };
 
-use std::sync::OnceLock;
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, OnceLock,
+    },
+    time::{Duration, Instant},
+};
 
-use ogvcs_object_model::{encode_canonical, object_id, sha256, Cbor, ObjectKind, ObjectRef, ProfileRef, Sha256Writer};
 use ledger::{Ledger, LedgerRecord};
+use ogvcs_object_model::{
+    encode_canonical, object_id, sha256, Cbor, ObjectKind, ObjectRef, ProfileRef, Sha256Writer,
+};
 
 pub const PROFILE: &str = "chunking.opengamevcs/gear-fastcdc-1m@1";
 pub const SMALL_MAXIMUM: u64 = 262_144;
@@ -26,6 +34,8 @@ pub const WORKING_MAXIMUM: u64 = 1_073_741_824;
 const EARLY_MASK: u64 = 0x001f_ffff;
 const LATE_MASK: u64 = 0x0007_ffff;
 const TABLE_DOMAIN: &[u8] = b"OpenGameVCS Gear table v1\0";
+pub const CACHE_KEY_DOMAIN: &[u8] = b"OpenGameVCS chunk cache key v1\0";
+pub const CACHE_KEY_VERSION: &str = "ogvcs:chunk-cache:v1:sha256";
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum ChunkError {
@@ -55,13 +65,28 @@ pub enum ChunkError {
 
 impl ChunkError {
     pub const ALL: [Self; 22] = [
-        Self::BoundaryMismatch, Self::CountExceeded, Self::DeclaredLengthInvalid,
-        Self::DigestMismatch, Self::FingerprintInputInvalid, Self::FragmentInvalid,
-        Self::ManifestMismatch, Self::MetadataConflict, Self::ProfileUnsupported,
-        Self::PublicationFailed, Self::ResourceExhausted, Self::ResourceInvalid,
-        Self::ResourceUnsupported, Self::ScratchExhausted, Self::SessionFailed,
-        Self::SessionFinished, Self::SinkFailed, Self::SinkInvalid, Self::SourceInvalid,
-        Self::SourceMissing, Self::SourceTooLong, Self::SourceTooShort,
+        Self::BoundaryMismatch,
+        Self::CountExceeded,
+        Self::DeclaredLengthInvalid,
+        Self::DigestMismatch,
+        Self::FingerprintInputInvalid,
+        Self::FragmentInvalid,
+        Self::ManifestMismatch,
+        Self::MetadataConflict,
+        Self::ProfileUnsupported,
+        Self::PublicationFailed,
+        Self::ResourceExhausted,
+        Self::ResourceInvalid,
+        Self::ResourceUnsupported,
+        Self::ScratchExhausted,
+        Self::SessionFailed,
+        Self::SessionFinished,
+        Self::SinkFailed,
+        Self::SinkInvalid,
+        Self::SourceInvalid,
+        Self::SourceMissing,
+        Self::SourceTooLong,
+        Self::SourceTooShort,
     ];
 
     pub const fn code(self) -> &'static str {
@@ -99,6 +124,56 @@ impl std::fmt::Display for ChunkError {
 }
 
 impl std::error::Error for ChunkError {}
+
+#[derive(Clone, Debug)]
+pub struct OperationControl {
+    cancellation: Arc<AtomicBool>,
+    max_elapsed: Option<Duration>,
+}
+
+impl Default for OperationControl {
+    fn default() -> Self {
+        Self {
+            cancellation: Arc::new(AtomicBool::new(false)),
+            max_elapsed: None,
+        }
+    }
+}
+
+impl OperationControl {
+    pub fn new(max_elapsed: Option<Duration>) -> Self {
+        Self {
+            max_elapsed,
+            ..Self::default()
+        }
+    }
+
+    pub fn with_cancellation(cancellation: Arc<AtomicBool>, max_elapsed: Option<Duration>) -> Self {
+        Self {
+            cancellation,
+            max_elapsed,
+        }
+    }
+
+    pub fn cancellation_flag(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.cancellation)
+    }
+
+    pub fn cancel(&self) {
+        self.cancellation.store(true, Ordering::Release);
+    }
+
+    fn check(&self, started: Instant) -> Result<(), ChunkError> {
+        if self.cancellation.load(Ordering::Acquire)
+            || self
+                .max_elapsed
+                .is_some_and(|maximum| started.elapsed() >= maximum)
+        {
+            return Err(ChunkError::ResourceExhausted);
+        }
+        Ok(())
+    }
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ChunkPart {
@@ -164,6 +239,8 @@ where
     whole: Sha256Writer,
     sink: F,
     failed: bool,
+    control: OperationControl,
+    started: Instant,
 }
 
 impl<F> Chunker<F>
@@ -172,6 +249,31 @@ where
 {
     pub fn new(declared_length: u64, profile: &str, sink: F) -> Result<Self, ChunkError> {
         Self::new_with_resources(declared_length, profile, 1, 0, SCALAR_WORKING_MINIMUM, sink)
+    }
+
+    pub fn new_checked(declared_length: i128, profile: &str, sink: F) -> Result<Self, ChunkError> {
+        let declared_length =
+            u64::try_from(declared_length).map_err(|_| ChunkError::DeclaredLengthInvalid)?;
+        Self::new(declared_length, profile, sink)
+    }
+
+    pub fn new_controlled(
+        declared_length: u64,
+        profile: &str,
+        control: OperationControl,
+        sink: F,
+    ) -> Result<Self, ChunkError> {
+        Self::new_with_ledger_resources_controlled(
+            declared_length,
+            profile,
+            1,
+            0,
+            SCALAR_WORKING_MINIMUM,
+            LedgerOptions::default(),
+            true,
+            control,
+            sink,
+        )
     }
 
     pub fn new_bounded(
@@ -223,6 +325,31 @@ where
         retain_entries: bool,
         sink: F,
     ) -> Result<Self, ChunkError> {
+        Self::new_with_ledger_resources_controlled(
+            declared_length,
+            profile,
+            workers,
+            queued_chunks,
+            max_working_memory_bytes,
+            ledger_options,
+            retain_entries,
+            OperationControl::default(),
+            sink,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn new_with_ledger_resources_controlled(
+        declared_length: u64,
+        profile: &str,
+        workers: u32,
+        queued_chunks: u32,
+        max_working_memory_bytes: u64,
+        ledger_options: LedgerOptions,
+        retain_entries: bool,
+        control: OperationControl,
+        sink: F,
+    ) -> Result<Self, ChunkError> {
         if declared_length > LOGICAL_MAXIMUM {
             return Err(ChunkError::DeclaredLengthInvalid);
         }
@@ -238,6 +365,8 @@ where
         if max_working_memory_bytes > WORKING_MAXIMUM {
             return Err(ChunkError::ResourceInvalid);
         }
+        let started = Instant::now();
+        control.check(started)?;
         let ledger = Ledger::new(ledger_options)?;
         Ok(Self {
             declared_length,
@@ -250,14 +379,18 @@ where
             whole: Sha256Writer::new(),
             sink,
             failed: false,
+            control,
+            started,
         })
     }
 
     fn emit(&mut self) -> Result<(), ChunkError> {
+        self.control.check(self.started)?;
         if self.ledger.len() >= CHUNK_COUNT_MAXIMUM as u64 {
             return Err(ChunkError::CountExceeded);
         }
-        let digest = object_id(ObjectKind::Chunk, &self.current).map_err(|_| ChunkError::SessionFailed)?;
+        let digest =
+            object_id(ObjectKind::Chunk, &self.current).map_err(|_| ChunkError::SessionFailed)?;
         let part = ChunkPart {
             digest,
             length: self.current.len() as u64,
@@ -270,6 +403,7 @@ where
             boundary: self.consumed,
         })?;
         (self.sink)(&self.current, &part, index).map_err(|_| ChunkError::SinkFailed)?;
+        self.control.check(self.started)?;
         self.current.clear();
         self.fingerprint = 0;
         Ok(())
@@ -278,6 +412,11 @@ where
     pub fn update(&mut self, fragment: &[u8]) -> Result<u64, ChunkError> {
         if self.failed {
             return Err(ChunkError::SessionFailed);
+        }
+        if let Err(error) = self.control.check(self.started) {
+            self.failed = true;
+            self.ledger.cleanup();
+            return Err(error);
         }
         if fragment.len() > 64 * 1024 * 1024 {
             self.failed = true;
@@ -289,15 +428,30 @@ where
             self.ledger.cleanup();
             return Err(ChunkError::SourceTooLong);
         }
-        self.whole.update(fragment);
-        for &byte in fragment {
+        for (offset, &byte) in fragment.iter().enumerate() {
+            if offset & 0xffff == 0 {
+                if let Err(error) = self.control.check(self.started) {
+                    self.failed = true;
+                    self.ledger.cleanup();
+                    return Err(error);
+                }
+                self.whole
+                    .update(&fragment[offset..fragment.len().min(offset + 65_536)]);
+            }
             self.current.push(byte);
             self.consumed += 1;
             if self.declared_length > SMALL_MAXIMUM {
-                self.fingerprint = self.fingerprint.wrapping_shl(1).wrapping_add(self.table[byte as usize]);
+                self.fingerprint = self
+                    .fingerprint
+                    .wrapping_shl(1)
+                    .wrapping_add(self.table[byte as usize]);
                 let length = self.current.len();
                 if length >= MINIMUM {
-                    let mask = if length < TARGET { EARLY_MASK } else { LATE_MASK };
+                    let mask = if length < TARGET {
+                        EARLY_MASK
+                    } else {
+                        LATE_MASK
+                    };
                     if self.fingerprint & mask == 0 || length == MAXIMUM {
                         if let Err(error) = self.emit() {
                             self.failed = true;
@@ -315,6 +469,7 @@ where
         if self.failed {
             return Err(ChunkError::SessionFailed);
         }
+        self.control.check(self.started)?;
         if self.consumed != self.declared_length {
             return Err(ChunkError::SourceTooShort);
         }
@@ -322,13 +477,22 @@ where
             self.emit()?;
         }
         let whole_file_digest = self.whole.finish();
-        let manifest_bytes = encode_manifest(self.declared_length, whole_file_digest, &mut self.ledger)?;
-        let manifest_digest = object_id(ObjectKind::ContentManifest, &manifest_bytes).map_err(|_| ChunkError::SessionFailed)?;
+        let manifest_bytes = encode_manifest(
+            self.declared_length,
+            whole_file_digest,
+            &mut self.ledger,
+            &self.control,
+            self.started,
+        )?;
+        self.control.check(self.started)?;
+        let manifest_digest = object_id(ObjectKind::ContentManifest, &manifest_bytes)
+            .map_err(|_| ChunkError::SessionFailed)?;
         let ledger_metrics = self.ledger.metrics();
         let mut boundaries = Vec::new();
         let mut parts = Vec::new();
         if self.retain_entries {
             self.ledger.for_each(|record| {
+                self.control.check(self.started)?;
                 boundaries.push(record.boundary);
                 parts.push(ChunkPart {
                     digest: record.digest,
@@ -340,14 +504,47 @@ where
         }
         Ok(ChunkResult {
             boundaries,
-            class: if self.declared_length == 0 { "empty" } else if self.declared_length <= SMALL_MAXIMUM { "whole" } else { "cdc-1m" },
+            class: if self.declared_length == 0 {
+                "empty"
+            } else if self.declared_length <= SMALL_MAXIMUM {
+                "whole"
+            } else {
+                "cdc-1m"
+            },
             logical_length: self.declared_length,
             parts,
             whole_file_digest,
-            manifest: Manifest { bytes: manifest_bytes, object_id: object_text(ObjectKind::ContentManifest, manifest_digest) },
+            manifest: Manifest {
+                bytes: manifest_bytes,
+                object_id: object_text(ObjectKind::ContentManifest, manifest_digest),
+            },
             ledger: ledger_metrics,
         })
     }
+}
+
+pub fn chunk_cache_key(reference: &ObjectRef) -> Result<String, ChunkError> {
+    if reference.kind != ObjectKind::Chunk {
+        return Err(ChunkError::SourceInvalid);
+    }
+    let object_id = reference.to_string();
+    let mut preimage =
+        Vec::with_capacity(CACHE_KEY_DOMAIN.len() + PROFILE.len() + 1 + object_id.len());
+    preimage.extend_from_slice(CACHE_KEY_DOMAIN);
+    preimage.extend_from_slice(PROFILE.as_bytes());
+    preimage.push(0);
+    preimage.extend_from_slice(object_id.as_bytes());
+    let digest = sha256(&preimage);
+    Ok(format!("{CACHE_KEY_VERSION}:{}", hex_lower(&digest)))
+}
+
+fn hex_lower(bytes: &[u8]) -> String {
+    let mut text = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        use std::fmt::Write;
+        write!(&mut text, "{byte:02x}").expect("string write");
+    }
+    text
 }
 
 pub fn chunk_bytes<F>(bytes: &[u8], sink: F) -> Result<ChunkResult, ChunkError>
@@ -392,33 +589,55 @@ fn append_canonical(output: &mut Vec<u8>, value: &Cbor) -> Result<(), ChunkError
     Ok(())
 }
 
-fn encode_manifest(logical_length: u64, whole: [u8; 32], ledger: &mut Ledger) -> Result<Vec<u8>, ChunkError> {
+fn encode_manifest(
+    logical_length: u64,
+    whole: [u8; 32],
+    ledger: &mut Ledger,
+    control: &OperationControl,
+    started: Instant,
+) -> Result<Vec<u8>, ChunkError> {
+    control.check(started)?;
     let profile = ProfileRef::new("chunking.opengamevcs", "gear-fastcdc-1m", 1)
         .map_err(|_| ChunkError::SessionFailed)?;
     let mut output = Vec::new();
     output.push(0xa7);
     for value in [
-        Cbor::UInt(0), Cbor::UInt(1),
-        Cbor::UInt(1), Cbor::UInt(ObjectKind::ContentManifest.code().into()),
-        Cbor::UInt(2), Cbor::Array(Vec::new()),
-        Cbor::UInt(16), Cbor::UInt(logical_length),
-        Cbor::UInt(17), Cbor::Map(vec![
+        Cbor::UInt(0),
+        Cbor::UInt(1),
+        Cbor::UInt(1),
+        Cbor::UInt(ObjectKind::ContentManifest.code().into()),
+        Cbor::UInt(2),
+        Cbor::Array(Vec::new()),
+        Cbor::UInt(16),
+        Cbor::UInt(logical_length),
+        Cbor::UInt(17),
+        Cbor::Map(vec![
             (Cbor::UInt(0), Cbor::UInt(1)),
             (Cbor::UInt(1), Cbor::Bytes(whole.to_vec())),
         ]),
-        Cbor::UInt(18), profile.to_cbor(), Cbor::UInt(19),
+        Cbor::UInt(18),
+        profile.to_cbor(),
+        Cbor::UInt(19),
     ] {
         append_canonical(&mut output, &value)?;
     }
     output.extend_from_slice(&cbor_array_header(ledger.len())?);
     ledger.for_each(|record| {
-        append_canonical(&mut output, &Cbor::Map(vec![
-            (Cbor::UInt(0), ObjectRef {
-                kind: ObjectKind::Chunk,
-                digest: record.digest,
-            }.to_cbor()),
-            (Cbor::UInt(1), Cbor::UInt(record.length)),
-        ]))
+        control.check(started)?;
+        append_canonical(
+            &mut output,
+            &Cbor::Map(vec![
+                (
+                    Cbor::UInt(0),
+                    ObjectRef {
+                        kind: ObjectKind::Chunk,
+                        digest: record.digest,
+                    }
+                    .to_cbor(),
+                ),
+                (Cbor::UInt(1), Cbor::UInt(record.length)),
+            ]),
+        )
     })?;
     Ok(output)
 }

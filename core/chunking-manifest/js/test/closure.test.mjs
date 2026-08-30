@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
 import {
-  ERROR_CODES, PROFILE, chunkBytes, chunkIdentity, compareManifest, contentManifest,
-  createChunker, reconstructManifest, verifyManifest,
+  ChunkingError, ERROR_CODES, PROFILE, chunkBytes, chunkCacheKey, chunkIdentity,
+  compareManifest, contentManifest, createChunker, reconstructManifest, verifyManifest,
 } from '../src/index.mjs';
 
 const CONTRACT = resolve(import.meta.dirname, '../../../../spec/chunking-manifest/v1');
@@ -88,6 +88,10 @@ test('bounded workflow keeps languages parallel and excludes scale campaigns', a
   assert.match(workflow, /^  javascript:\n/m);
   assert.match(workflow, /^  rust:\n/m);
   assert.match(workflow, /node-version: 24/);
+  assert.match(workflow, /cargo fmt .* --check/);
+  assert.match(workflow, /cargo test .* --locked/);
+  assert.match(workflow, /cargo package .* --offline/);
+  assert.match(workflow, /npm run test:packed/);
   assert.doesNotMatch(workflow, /(?:100\s*GiB|1\s*TiB|exact-scale)/i);
 });
 
@@ -206,6 +210,119 @@ test('mutation failures abort staged reconstruction and never commit', async () 
     },
   }), { code: 'CHUNK_DIGEST_MISMATCH' });
   assert.equal(commits, 0); assert.equal(aborts, 1); assert.deepEqual(staged, []);
+});
+
+test('pre-write and empty commit failures abort exactly once without publication', async () => {
+  const fixture = await prepared('tiny-ascii');
+  let writes = 0; let commits = 0; let aborts = 0;
+  const publication = {
+    write() { writes += 1; },
+    commit() { commits += 1; },
+    abort() { aborts += 1; },
+  };
+  await assert.rejects(reconstructManifest({
+    manifest: fixture.result.manifest.bytes,
+    source: new Map(),
+    publication,
+  }), { code: 'CHUNK_SOURCE_MISSING' });
+  assert.deepEqual({ writes, commits, aborts }, { writes: 0, commits: 0, aborts: 1 });
+
+  const empty = await chunkBytes(Buffer.alloc(0));
+  writes = 0; commits = 0; aborts = 0;
+  await assert.rejects(reconstructManifest({
+    manifest: empty.manifest.bytes,
+    source: new Map(),
+    publication: {
+      write() { writes += 1; },
+      commit() { commits += 1; throw new Error('commit failed'); },
+      abort() { aborts += 1; throw new Error('abort failed after cleanup'); },
+    },
+  }), (error) => error instanceof ChunkingError && error.code === 'CHUNK_PUBLICATION_FAILED');
+  assert.deepEqual({ writes, commits, aborts }, { writes: 0, commits: 1, aborts: 1 });
+});
+
+test('external throws and iterator failures use only the generated error authority', async () => {
+  const fixture = await prepared('tiny-ascii');
+  const expectExact = async (operation, code) => assert.rejects(operation, (error) => {
+    assert.equal(error instanceof ChunkingError, true);
+    assert.equal(ERROR_CODES.includes(error.code), true);
+    return error.code === code;
+  });
+
+  await expectExact(() => verifyManifest({
+    manifest: fixture.result.manifest.bytes,
+    source() { throw Object.assign(new Error('provider'), { code: 'CHUNK_NOT_AUTHORIZED' }); },
+  }), 'CHUNK_SOURCE_INVALID');
+
+  let returned = 0; let aborts = 0; let commits = 0;
+  await expectExact(() => reconstructManifest({
+    manifest: fixture.result.manifest.bytes,
+    source() {
+      return {
+        [Symbol.asyncIterator]() {
+          return {
+            next() { throw new Error('iterator next'); },
+            return() { returned += 1; throw new Error('iterator return'); },
+          };
+        },
+      };
+    },
+    publication: {
+      write() { throw new Error('must not write'); },
+      commit() { commits += 1; },
+      abort() { aborts += 1; },
+    },
+  }), 'CHUNK_SOURCE_INVALID');
+  assert.deepEqual({ returned, commits, aborts }, { returned: 1, commits: 0, aborts: 1 });
+
+  await expectExact(() => compareManifest({
+    manifest: fixture.result.manifest.bytes,
+    knownChunks() { throw new RangeError('known index'); },
+  }), 'CHUNK_SOURCE_INVALID');
+});
+
+test('default result compatibility, cancellation/deadline, and cache keys are stable', async () => {
+  const bytes = Buffer.from('compatibility');
+  const chunks = [];
+  const session = createChunker({ declaredLength: bytes.length, onChunk: (chunk) => chunks.push(Buffer.from(chunk)) });
+  session.update(bytes);
+  const generated = await session.finish();
+  assert.deepEqual(generated.boundaries, [bytes.length]);
+  assert.equal(generated.chunks.length, 1);
+
+  const expected = createHash('sha256')
+    .update('OpenGameVCS chunk cache key v1\0', 'ascii')
+    .update('chunking.opengamevcs/gear-fastcdc-1m@1', 'ascii')
+    .update('\0', 'ascii')
+    .update(generated.chunks[0].objectId, 'ascii')
+    .digest('hex');
+  assert.equal(chunkCacheKey(generated.chunks[0]), `ogvcs:chunk-cache:v1:sha256:${expected}`);
+
+  const cancellation = new AbortController();
+  cancellation.abort();
+  assert.throws(() => createChunker({
+    declaredLength: 0,
+    signal: cancellation.signal,
+  }), { code: 'CHUNK_RESOURCE_EXHAUSTED' });
+  await assert.rejects(verifyManifest({
+    manifest: generated.manifest.bytes,
+    source: new Map([[generated.chunks[0].objectId, bytes]]),
+    maxElapsedMilliseconds: 0,
+  }), { code: 'CHUNK_RESOURCE_EXHAUSTED' });
+
+  const midFlight = new AbortController();
+  let commits = 0; let aborts = 0;
+  await assert.rejects(reconstructManifest({
+    manifest: generated.manifest.bytes,
+    signal: midFlight.signal,
+    source() { midFlight.abort(); return bytes; },
+    publication: {
+      write() { throw new Error('cancelled bytes must not publish'); },
+      commit() { commits += 1; },
+      abort() { aborts += 1; },
+    },
+  }), { code: 'CHUNK_RESOURCE_EXHAUSTED' });
+  assert.deepEqual({ commits, aborts }, { commits: 0, aborts: 1 });
 });
 
 test('OGVCS-002 structure and content errors precede deferred Gear mismatch', async () => {

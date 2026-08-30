@@ -9,6 +9,10 @@ expectations.
 
 `registries/errors.json` is generated from `scripts/model.mjs`; JavaScript and
 Rust statically prove that every public stable code matches this authority.
+ADR-0016 also freezes the additive shared chunk-cache key preimage and the
+cooperative cancellation/deadline and transactional-abort rules. The bounded
+cross-language report compares those cache keys, all identity fields, exact
+error codes, and deterministic resource-admission outcomes.
 
 The candidate is not yet a ratified OGVCS-002 registry assignment and must not
 be used for production writes. Its purpose is independent implementation and

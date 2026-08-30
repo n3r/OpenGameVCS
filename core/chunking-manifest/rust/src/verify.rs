@@ -1,12 +1,12 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, time::Instant};
 
 use ogvcs_object_model::{
-    object_id, scan_metadata, validate_metadata_schema, Cbor, Limits, ObjectHashWriter,
-    ObjectKind, ObjectRef, ProfileRef, Sha256Writer,
+    object_id, scan_metadata, validate_metadata_schema, Cbor, Limits, ObjectHashWriter, ObjectKind,
+    ObjectRef, ProfileRef, Sha256Writer,
 };
 
 use crate::{
-    gear_table, ChunkError, Ledger, LedgerMetrics, LedgerOptions, LedgerRecord,
+    gear_table, ChunkError, Ledger, LedgerMetrics, LedgerOptions, LedgerRecord, OperationControl,
     CHUNK_COUNT_MAXIMUM, LOGICAL_MAXIMUM, MAXIMUM, MINIMUM, PROFILE, SMALL_MAXIMUM, TARGET,
 };
 
@@ -21,6 +21,7 @@ pub struct VerifyOptions {
     pub max_index_memory_bytes: u64,
     pub expected_manifest_object_id: Option<String>,
     pub ledger: LedgerOptions,
+    pub control: OperationControl,
 }
 
 impl Default for VerifyOptions {
@@ -31,6 +32,7 @@ impl Default for VerifyOptions {
             max_index_memory_bytes: 256 * 1024 * 1024,
             expected_manifest_object_id: None,
             ledger: LedgerOptions::default(),
+            control: OperationControl::default(),
         }
     }
 }
@@ -136,7 +138,12 @@ fn whole_digest(value: &Cbor) -> Result<[u8; 32], ChunkError> {
     }
 }
 
-fn parse_manifest(manifest: &[u8], options: &VerifyOptions) -> Result<ParsedManifest, ChunkError> {
+fn parse_manifest(
+    manifest: &[u8],
+    options: &VerifyOptions,
+    started: Instant,
+) -> Result<ParsedManifest, ChunkError> {
+    options.control.check(started)?;
     if manifest.len() > options.max_manifest_bytes {
         return Err(ChunkError::ManifestMismatch);
     }
@@ -171,8 +178,8 @@ fn parse_manifest(manifest: &[u8], options: &VerifyOptions) -> Result<ParsedMani
     }
 
     let value = scanned.value();
-    let profile = ProfileRef::from_cbor(field(value, 18)?)
-        .map_err(|_| ChunkError::ManifestMismatch)?;
+    let profile =
+        ProfileRef::from_cbor(field(value, 18)?).map_err(|_| ChunkError::ManifestMismatch)?;
     if profile.to_string() != PROFILE {
         return Err(ChunkError::ProfileUnsupported);
     }
@@ -191,11 +198,12 @@ fn parse_manifest(manifest: &[u8], options: &VerifyOptions) -> Result<ParsedMani
     let mut logical = 0u64;
     let mut unique_bytes = 0u64;
     for raw in parts {
+        options.control.check(started)?;
         if map(raw)?.len() != 2 {
             return Err(ChunkError::ManifestMismatch);
         }
-        let reference = ObjectRef::from_cbor(field(raw, 0)?)
-            .map_err(|_| ChunkError::ManifestMismatch)?;
+        let reference =
+            ObjectRef::from_cbor(field(raw, 0)?).map_err(|_| ChunkError::ManifestMismatch)?;
         if reference.kind != ObjectKind::Chunk {
             return Err(ChunkError::ManifestMismatch);
         }
@@ -297,7 +305,10 @@ fn consume_content<S: ChunkSource>(
     parsed: &mut ParsedManifest,
     source: &mut S,
     mut publish: impl FnMut(&[u8], usize) -> Result<(), ChunkError>,
+    options: &VerifyOptions,
+    started: Instant,
 ) -> Result<VerifySummary, ChunkError> {
+    options.control.check(started)?;
     let mut whole = Sha256Writer::new();
     let mut scanner = GearScanner::new(parsed.logical_length);
     let mut boundary_mismatch = parsed.logical_length <= SMALL_MAXIMUM
@@ -309,6 +320,7 @@ fn consume_content<S: ChunkSource>(
     let part_count = parsed.part_count;
 
     parsed.ledger.for_each(|record| {
+        options.control.check(started)?;
         let part = ManifestPart {
             reference: ObjectRef {
                 kind: ObjectKind::Chunk,
@@ -316,36 +328,54 @@ fn consume_content<S: ChunkSource>(
             },
             length: record.length,
         };
-        let mut chunk_hash = ObjectHashWriter::new(
-            ObjectKind::Chunk,
-            MAXIMUM,
-            options_metadata_maximum(),
-        );
+        let mut chunk_hash =
+            ObjectHashWriter::new(ObjectKind::Chunk, MAXIMUM, options_metadata_maximum());
         let mut part_bytes = 0u64;
         provider_reads += 1;
-        source.stream_chunk(&part, occurrence, &mut |fragment| {
-            if fragment.len() > 64 * 1024 * 1024 {
-                return Err(ChunkError::SourceInvalid);
+        let mut callback_failure = None;
+        let source_result = source.stream_chunk(&part, occurrence, &mut |fragment| {
+            if let Some(error) = callback_failure {
+                return Err(error);
             }
-            part_bytes = part_bytes
-                .checked_add(fragment.len() as u64)
-                .filter(|bytes| *bytes <= record.length)
-                .ok_or(ChunkError::DigestMismatch)?;
-            content_bytes = content_bytes
-                .checked_add(fragment.len() as u64)
-                .ok_or(ChunkError::DigestMismatch)?;
-            chunk_hash
-                .update(fragment)
-                .map_err(|_| ChunkError::DigestMismatch)?;
-            whole.update(fragment);
-            scanner.update(fragment, |boundary| {
-                if boundary != record.boundary {
-                    boundary_mismatch = true;
+            let consumed = (|| {
+                options.control.check(started)?;
+                if fragment.len() > 64 * 1024 * 1024 {
+                    return Err(ChunkError::SourceInvalid);
                 }
-            });
-            publish(fragment, occurrence)
-        })?;
-        let actual = chunk_hash.finish().map_err(|_| ChunkError::DigestMismatch)?;
+                part_bytes = part_bytes
+                    .checked_add(fragment.len() as u64)
+                    .filter(|bytes| *bytes <= record.length)
+                    .ok_or(ChunkError::DigestMismatch)?;
+                content_bytes = content_bytes
+                    .checked_add(fragment.len() as u64)
+                    .ok_or(ChunkError::DigestMismatch)?;
+                for window in fragment.chunks(65_536) {
+                    options.control.check(started)?;
+                    chunk_hash
+                        .update(window)
+                        .map_err(|_| ChunkError::DigestMismatch)?;
+                    whole.update(window);
+                    scanner.update(window, |boundary| {
+                        if boundary != record.boundary {
+                            boundary_mismatch = true;
+                        }
+                    });
+                }
+                publish(fragment, occurrence)
+            })();
+            if let Err(error) = consumed {
+                callback_failure = Some(error);
+            }
+            consumed
+        });
+        if let Some(error) = callback_failure {
+            return Err(error);
+        }
+        source_result?;
+        options.control.check(started)?;
+        let actual = chunk_hash
+            .finish()
+            .map_err(|_| ChunkError::DigestMismatch)?;
         if part_bytes != record.length || actual != part.reference {
             return Err(ChunkError::DigestMismatch);
         }
@@ -385,8 +415,15 @@ pub fn verify_manifest<S: ChunkSource>(
     source: &mut S,
     options: &VerifyOptions,
 ) -> Result<VerifySummary, ChunkError> {
-    let mut parsed = parse_manifest(manifest, options)?;
-    consume_content(&mut parsed, source, |_bytes, _occurrence| Ok(()))
+    let started = Instant::now();
+    let mut parsed = parse_manifest(manifest, options, started)?;
+    consume_content(
+        &mut parsed,
+        source,
+        |_bytes, _occurrence| Ok(()),
+        options,
+        started,
+    )
 }
 
 pub fn reconstruct_manifest<S: ChunkSource, P: TransactionalPublication>(
@@ -395,29 +432,34 @@ pub fn reconstruct_manifest<S: ChunkSource, P: TransactionalPublication>(
     publication: &mut P,
     options: &VerifyOptions,
 ) -> Result<VerifySummary, ChunkError> {
-    let mut parsed = parse_manifest(manifest, options)?;
-    let mut started = false;
-    let verified = consume_content(&mut parsed, source, |bytes, occurrence| {
-        started = true;
-        publication
-            .write(bytes, occurrence)
-            .map_err(|_| ChunkError::PublicationFailed)
+    let started = Instant::now();
+    let mut parsed = parse_manifest(manifest, options, started)?;
+    let verified = consume_content(
+        &mut parsed,
+        source,
+        |bytes, occurrence| {
+            publication
+                .write(bytes, occurrence)
+                .map_err(|_| ChunkError::PublicationFailed)
+        },
+        options,
+        started,
+    )
+    .and_then(|summary| {
+        options.control.check(started)?;
+        Ok(summary)
     });
     match verified {
         Ok(summary) => match publication.commit() {
             Ok(()) => Ok(summary),
             Err(_) => {
                 let error = ChunkError::PublicationFailed;
-                if started {
-                    let _ = publication.abort(error);
-                }
+                let _ = publication.abort(error);
                 Err(error)
             }
         },
         Err(error) => {
-            if started {
-                let _ = publication.abort(error);
-            }
+            let _ = publication.abort(error);
             Err(error)
         }
     }
@@ -428,9 +470,11 @@ pub fn compare_manifest<K: KnownChunkIndex>(
     known: &mut K,
     options: &VerifyOptions,
 ) -> Result<CompareSummary, ChunkError> {
-    let parsed = parse_manifest(manifest, options)?;
+    let started = Instant::now();
+    let parsed = parse_manifest(manifest, options, started)?;
     let mut reused_bytes = 0u64;
     for (reference, length) in &parsed.metadata {
+        options.control.check(started)?;
         if let Some(known_length) = known.known_length(reference)? {
             if known_length != *length {
                 return Err(ChunkError::MetadataConflict);
