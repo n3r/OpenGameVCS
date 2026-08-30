@@ -47,21 +47,6 @@ CREATE TABLE ogvcs_metadata.repository_settings (
         DEFERRABLE INITIALLY DEFERRED
 );
 
-CREATE FUNCTION ogvcs_metadata.reject_repository_settings_mutation()
-RETURNS trigger
-LANGUAGE plpgsql
-AS $ogvcs$
-BEGIN
-    RAISE EXCEPTION USING
-        ERRCODE = '55000',
-        MESSAGE = 'repository settings are immutable outside a migration';
-END
-$ogvcs$;
-
-CREATE TRIGGER repository_settings_immutable
-BEFORE UPDATE OR DELETE ON ogvcs_metadata.repository_settings
-FOR EACH ROW EXECUTE FUNCTION ogvcs_metadata.reject_repository_settings_mutation();
-
 CREATE TABLE ogvcs_metadata.metadata_objects (
     repository_id uuid NOT NULL REFERENCES ogvcs_metadata.repositories(repository_id),
     object_kind smallint NOT NULL CHECK (object_kind IN (2, 3, 4, 5, 6, 7, 9, 10, 11)),
@@ -167,7 +152,7 @@ CREATE TABLE ogvcs_metadata.file_path_history (
 );
 
 CREATE INDEX file_path_history_by_file_id
-    ON ogvcs_metadata.file_path_history(repository_id, file_id, snapshot_digest, operation_ordinal);
+    ON ogvcs_metadata.file_path_history(repository_id, file_id, snapshot_digest);
 CREATE INDEX file_path_history_by_path
     ON ogvcs_metadata.file_path_history(repository_id, repository_path_utf8, snapshot_digest);
 

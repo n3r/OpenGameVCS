@@ -151,6 +151,21 @@ pub enum FileIdReservationOutcome {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FileIdExpectedState {
+    Reserved,
+    Active,
+}
+
+impl FileIdExpectedState {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Reserved => "reserved",
+            Self::Active => "active",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ObjectPutOutcome {
     Inserted,
     ExactReplay,
@@ -245,6 +260,129 @@ pub struct AuthorizationContext {
     pub authorization_epoch: u64,
 }
 
+/// Canonical OGVCS-009 permissions consumed by repository metadata.  Callers
+/// cannot invent adapter-specific permission strings at the database boundary.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MetadataPermission {
+    Discover,
+    MetadataRead,
+    Submit,
+}
+
+impl MetadataPermission {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Discover => "discover",
+            Self::MetadataRead => "metadata.read",
+            Self::Submit => "submit",
+        }
+    }
+}
+
+/// Exact resource projection that an authorization decision must cover.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum AuthorizationResource {
+    Repository {
+        repository_id: RepositoryId,
+    },
+    RepositoryTransaction {
+        repository_id: RepositoryId,
+        capability: TransactionCapability,
+    },
+    Reference {
+        repository_id: RepositoryId,
+        kind: ReferenceKind,
+        name: ReferenceName,
+    },
+    ReferenceCollection {
+        repository_id: RepositoryId,
+    },
+    TreePrefix {
+        repository_id: RepositoryId,
+        snapshot: ObjectRef,
+        tree: ObjectRef,
+        prefix: Vec<String>,
+    },
+    TreeEntry {
+        repository_id: RepositoryId,
+        snapshot: ObjectRef,
+        tree: ObjectRef,
+        repository_path: Vec<String>,
+        file_id: FileId,
+    },
+    FileHistory {
+        repository_id: RepositoryId,
+        file_id: FileId,
+    },
+    FileHistoryEntry {
+        repository_id: RepositoryId,
+        file_id: FileId,
+        snapshot: ObjectRef,
+        repository_path_utf8: Vec<u8>,
+    },
+}
+
+impl AuthorizationResource {
+    pub const fn repository_id(&self) -> RepositoryId {
+        match self {
+            Self::Repository { repository_id }
+            | Self::RepositoryTransaction { repository_id, .. }
+            | Self::Reference { repository_id, .. }
+            | Self::ReferenceCollection { repository_id }
+            | Self::TreePrefix { repository_id, .. }
+            | Self::TreeEntry { repository_id, .. }
+            | Self::FileHistory { repository_id, .. }
+            | Self::FileHistoryEntry { repository_id, .. } => *repository_id,
+        }
+    }
+}
+
+/// Operation-level capability fixed when the transaction is opened.  All
+/// mutation capabilities authorize through the canonical `submit` permission,
+/// then restrict the methods usable on the returned transaction.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TransactionCapability {
+    CreateRepository,
+    PutObject,
+    Publish,
+    ReserveFileId,
+    ImportFileId,
+    RestoreFileId,
+    TombstoneFileId,
+    CompareAndSwapReference,
+    IssueConsistencyToken,
+}
+
+impl TransactionCapability {
+    pub const fn permission(self) -> MetadataPermission {
+        match self {
+            Self::IssueConsistencyToken => MetadataPermission::MetadataRead,
+            Self::CreateRepository
+            | Self::PutObject
+            | Self::Publish
+            | Self::ReserveFileId
+            | Self::ImportFileId
+            | Self::RestoreFileId
+            | Self::TombstoneFileId
+            | Self::CompareAndSwapReference => MetadataPermission::Submit,
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::CreateRepository => "repository.create",
+            Self::PutObject => "object.put",
+            Self::Publish => "repository.publish",
+            Self::ReserveFileId => "file-id.register",
+            Self::ImportFileId => "file-id.register-import",
+            Self::RestoreFileId => "file-id.restore-proof",
+            Self::TombstoneFileId => "file-id.tombstone",
+            Self::CompareAndSwapReference => "reference.compare-and-swap",
+            Self::IssueConsistencyToken => "consistency.issue-token",
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TransactionOptions {
     RepeatableRead,
@@ -255,12 +393,7 @@ pub enum TransactionOptions {
 pub struct OutboxEvent {
     pub event_id: [u8; 16],
     pub repository_id: RepositoryId,
-    pub event_type: &'static str,
-    pub event_version: u16,
     pub correlation_id: [u8; 16],
-    pub resource_type: &'static str,
-    pub resource_opaque_id: String,
-    pub safe_payload: Value,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -287,17 +420,19 @@ impl IdempotencyReservation {
         if remaining.is_zero() {
             return false;
         }
-        let Ok(issued_ms) = self
+        let Some(issued_ms) = self
             .issued_at
             .duration_since(SystemTime::UNIX_EPOCH)
-            .map(|duration| duration.as_millis() as u64)
+            .ok()
+            .and_then(|duration| u64::try_from(duration.as_millis()).ok())
         else {
             return false;
         };
-        let Ok(expires_ms) = self
+        let Some(expires_ms) = self
             .expires_at
             .duration_since(SystemTime::UNIX_EPOCH)
-            .map(|duration| duration.as_millis() as u64)
+            .ok()
+            .and_then(|duration| u64::try_from(duration.as_millis()).ok())
         else {
             return false;
         };
@@ -329,7 +464,7 @@ impl IdempotencyReservation {
             })
             && (30..=256).contains(&self.key.len())
             && !self.operation.is_empty()
-            && self.operation.len() <= 256
+            && self.operation.len() <= 128
     }
 }
 

@@ -34,7 +34,7 @@ for (const file of rustFiles) {
 
 const manifest = JSON.parse(await readFile(resolve(migrations, 'manifest.json')));
 assert(manifest.schemaVersion === 'ogvcs.repository-metadata/migration-manifest/v1', 'migration manifest schema differs');
-assert(JSON.stringify(manifest.entries.map(({ phase }) => phase)) === '["expand","migrate","contract"]', 'migration phases are not ordered');
+assert(JSON.stringify(manifest.entries.map(({ version, phase }) => [version, phase])) === '[[1,"expand"],[1,"migrate"],[1,"contract"],[2,"expand"],[2,"migrate"],[2,"contract"]]', 'migration phases are not ordered');
 for (const entry of manifest.entries) {
   const bytes = await readFile(resolve(migrations, entry.path));
   const sql = bytes.toString('utf8');
@@ -49,39 +49,111 @@ for (const error of errors) {
   assert(errorSource.includes(`"${error.name}"`), `Rust domain error name missing: ${error.name}`);
 }
 
-const expand = await readFile(resolve(migrations, '000001_expand.sql'), 'utf8');
+const expandV1Bytes = await readFile(resolve(migrations, '000001_expand.sql'));
+const expand = expandV1Bytes.toString('utf8');
+assert(digest(expandV1Bytes) === '58b53c7cd61b5f8b0e6fca4184a36379c049947a34751bedb1bd77ded674d53c', 'version 1 migration identity was rewritten');
 assert(expand.includes('object_kind IN (2, 3, 4, 5, 6, 7, 9, 10, 11)'), 'metadata kind allowlist omits manifests or includes an unexpected kind');
 assert(!expand.includes('object_kind IN (1,'), 'chunk bytes entered metadata ownership');
 assert(expand.includes('FOREIGN KEY (repository_id, tree_kind, tree_algorithm, tree_digest)'), 'tree entry owner is not tied to kind-3 metadata');
 assert(expand.includes("resource_type IN ('repository', 'reference', 'snapshot', 'tree', 'path')"), 'outbox resource types differ from the domain registry');
-assert(expand.includes('CREATE TRIGGER repository_settings_immutable'), 'immutable repository settings trigger missing');
+const expandV2 = await readFile(resolve(migrations, '000002_expand.sql'), 'utf8');
+const migrateV2 = await readFile(resolve(migrations, '000002_migrate.sql'), 'utf8');
+assert(expandV2.includes('CREATE TRIGGER repository_settings_immutable'), 'immutable repository settings trigger missing from version 2');
+assert(expandV2.includes('file_path_history_by_file_id_v2'), 'version 2 history index missing operation ordinal');
+assert(
+  !expandV2.includes('published_commit_sequence')
+    && !migrateV2.includes('published_commit_sequence'),
+  'version 2 infers historical publication markers',
+);
 
 const adapter = await readFile(resolve(root, 'src/postgres.rs'), 'utf8');
 const ports = await readFile(resolve(root, 'src/ports.rs'), 'utf8');
+assert(
+  adapter.split('crate::verify_schema_compatibility(&mut self.client)?').length - 1 === 6,
+  'every mutation/read entry point is not schema-compatibility gated',
+);
 assert(ports.includes('ValidationMode::Production'), 'default object validator is not production lifecycle');
+assert(ports.includes('type AuthorizedView: AuthorizedView'), 'authorizer output is not an exact view contract');
+assert(ports.includes('resource: &AuthorizationResource'), 'authorizer is not bound to a typed resource projection');
 for (const evidence of [
   'pub fn begin_authorized(',
   'pub fn execute_serializable<T>(',
   'ON CONFLICT DO NOTHING RETURNING 1',
   'generation = generation + 1',
+  'published_commit_sequence IS NULL',
   'KeyReuseRejected',
   'authorized_repository_id: RepositoryId',
   'authorization_context: AuthorizationContext',
-  'authorized_view: AuthorizedView',
+  'authorized_view: View',
+  'capability: TransactionCapability',
+  'AuthorizationResource::RepositoryTransaction',
   'finish_committed_replay',
-  'self.required_events != self.written_events',
-  'self.event_references.contains(&identity)',
-  'self.event_file_ids.contains(&file_id)',
+  'outbox_events: Vec<RequiredOutboxEvent>',
+  'fact.resource_opaque_id(event.repository_id, event.event_id, &safe_payload)',
+  'valid_public_uuid(&event.event_id)',
+  'self.outbox_events.iter().any(|event| !event.emitted)',
+  'MAX_REQUIRED_OUTBOX_EVENTS',
+  'MAX_JSON_PREFLIGHT_DEPTH',
+  'MAX_JSON_PREFLIGHT_NODES',
   'self.mutation_started && !self.idempotency_committed',
   'reservation.is_valid_at(server_now)',
   'idempotency_scope_digest',
+  'self.capability.as_str().as_bytes()',
   'repository_object_matches_settings',
+  'descriptor_matches_repository_settings',
+  'validation_contract != VALIDATION_CONTRACT',
+  'validate_publication_candidate',
+  'validate_repository_candidate(candidate, &context)',
+  'metadata_closure(&entries, candidate)',
+  'candidate_tree_file_ids(&entries, candidate)',
+  'first_change_set_digest = $3',
+  'validate_snapshot_graph(candidate, &context)',
+  'enforce_configured_tree_limits',
+  'canonical_file_history_from_change',
+  'expected_state.as_str()',
+  'MAX_AUTHORIZATION_SCAN',
+  'AuthorizationResource::TreeEntry',
+  'AuthorizationResource::FileHistoryEntry',
+  'authorized_view.permits(context',
+  'require_repository_tenant',
+  'require_published_snapshot_tree',
+  'resolve_tree_prefix',
+  'valid_tree_prefix',
+  'traversed_edges > limits.max_edges',
+  'snapshot.published_commit_sequence',
+  'matches!(existing_state.as_str(), "reserved" | "active")',
+  'snapshot.published_commit_sequence > 0',
+  'is_database_concurrency()',
   '"40001" | "40P01"',
   'clock_timestamp() + interval \'5 minutes\'',
   'ORDER BY basename_utf8',
-  'ORDER BY reference_kind, reference_name',
-  'ORDER BY snapshot_digest, operation_ordinal',
+  'ORDER BY reference.reference_kind, reference.reference_name',
+  'ORDER BY history.snapshot_digest, history.operation_ordinal',
 ]) assert(adapter.includes(evidence), `PostgreSQL adapter evidence missing: ${evidence}`);
+
+const liveContract = await readFile(resolve(root, 'tests/postgres_integration.rs'), 'utf8');
+assert(liveContract.includes('CollectionOnlyAllow'), 'item-level AuthorizedView denial regression missing');
+assert(liveContract.includes('authorized-view-item-projections'), 'projection non-disclosure report missing');
+assert(liveContract.includes('CapabilityMisbindingAllow'), 'transaction capability-misbinding regression missing');
+assert(liveContract.includes('RevocableAllow'), 'authorized-view revocation regression missing');
+assert(liveContract.includes('SingleUseAllow'), 'read-view revalidation regression missing');
+assert(liveContract.includes('missing-publication-marker'), 'publication-marker fail-closed regression missing');
+assert(liveContract.includes('restore-capability-alias'), 'restore capability alias regression missing');
+assert(liveContract.includes('file-import-tampered-owner'), 'import replay binding regression missing');
+
+const types = await readFile(resolve(root, 'src/types.rs'), 'utf8');
+for (const permission of ['"discover"', '"metadata.read"', '"submit"']) {
+  assert(types.includes(permission), `canonical permission missing: ${permission}`);
+}
+for (const forbiddenCallerField of [
+  'pub event_type:',
+  'pub event_version:',
+  'pub resource_type:',
+  'pub resource_opaque_id:',
+  'pub safe_payload:',
+]) {
+  assert(!types.includes(forbiddenCallerField), `caller still controls outbox fact: ${forbiddenCallerField}`);
+}
 
 for (const method of [
   'create_repository',
@@ -112,6 +184,15 @@ assert(
     < adapter.indexOf('INSERT INTO ogvcs_metadata.file_id_registry'),
   'generic FileID restore is not rejected before SQL',
 );
+{
+  const start = adapter.indexOf('    fn reserve_file_id(');
+  const end = adapter.indexOf('\n    fn reserve_imported_file_id(', start);
+  assert(
+    start >= 0 && end > start
+      && !adapter.slice(start, end).includes('TransactionCapability::RestoreFileId'),
+    'restore capability can alias generic FileID reservation',
+  );
+}
 
 const migrationRunner = await readFile(resolve(root, 'src/migration_runner.rs'), 'utf8');
 assert(migrationRunner.includes('pub fn verify_schema_compatibility'), 'mutation schema compatibility gate missing');

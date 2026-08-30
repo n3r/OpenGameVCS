@@ -27,12 +27,12 @@ pub struct Migration {
     pub requires_compatibility_fence: bool,
 }
 
-pub const MIGRATIONS: [Migration; 3] = [
+pub const MIGRATIONS: [Migration; 6] = [
     Migration {
         version: 1,
         phase: MigrationPhase::Expand,
         sql: include_str!("../../../migrations/repository-metadata/000001_expand.sql"),
-        checksum_sha256: "4a19863f82952c67108886fbb206b5ef0de8f947e7537518ca8e51eb872a0c39",
+        checksum_sha256: "58b53c7cd61b5f8b0e6fca4184a36379c049947a34751bedb1bd77ded674d53c",
         restartable: true,
         minimum_application_version: "0.1.0",
         maximum_application_version: "0.1.x",
@@ -53,6 +53,36 @@ pub const MIGRATIONS: [Migration; 3] = [
         phase: MigrationPhase::Contract,
         sql: include_str!("../../../migrations/repository-metadata/000001_contract.sql"),
         checksum_sha256: "d48496191956898e9d2b6ded8a3baffe50a196a055c8afa59300d055673b5480",
+        restartable: true,
+        minimum_application_version: "0.1.0",
+        maximum_application_version: "0.1.x",
+        requires_compatibility_fence: true,
+    },
+    Migration {
+        version: 2,
+        phase: MigrationPhase::Expand,
+        sql: include_str!("../../../migrations/repository-metadata/000002_expand.sql"),
+        checksum_sha256: "f6e0d12e8611a63cc77280a98b6bb110ab64307376a4ee4194b5315b15e67b9d",
+        restartable: true,
+        minimum_application_version: "0.1.0",
+        maximum_application_version: "0.1.x",
+        requires_compatibility_fence: false,
+    },
+    Migration {
+        version: 2,
+        phase: MigrationPhase::Migrate,
+        sql: include_str!("../../../migrations/repository-metadata/000002_migrate.sql"),
+        checksum_sha256: "a06c5d640b86c7937b452a5d5735de9a1845ae67d40002e750e3100418727f3c",
+        restartable: true,
+        minimum_application_version: "0.1.0",
+        maximum_application_version: "0.1.x",
+        requires_compatibility_fence: false,
+    },
+    Migration {
+        version: 2,
+        phase: MigrationPhase::Contract,
+        sql: include_str!("../../../migrations/repository-metadata/000002_contract.sql"),
+        checksum_sha256: "20992b39834c38161a4560a7b4eeb997f6f0a30485d6479b6f1cb2b6d9a1ef84",
         restartable: true,
         minimum_application_version: "0.1.0",
         maximum_application_version: "0.1.x",

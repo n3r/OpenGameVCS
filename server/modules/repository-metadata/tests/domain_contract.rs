@@ -1,7 +1,7 @@
 use ogvcs_repository_metadata::{
-    AuthorizationContext, AuthorizationPort, CaseMode, ConsistencyToken, DenyAllAuthorization,
-    DomainErrorCode, IdempotencyReservation, ReferenceName, RepositoryId, RepositorySettings,
-    TenantId,
+    AuthorizationContext, AuthorizationPort, AuthorizationResource, CaseMode, ConsistencyToken,
+    DenyAllAuthorization, DomainErrorCode, IdempotencyReservation, MetadataPermission,
+    ReferenceName, RepositoryId, RepositorySettings, TenantId,
 };
 use std::time::{Duration, SystemTime};
 
@@ -36,9 +36,10 @@ fn production_default_authorizer_denies_without_disclosing_existence() {
     let error = DenyAllAuthorization
         .authorize(
             &context,
-            "repository.read",
-            "repository",
-            RepositoryId::from_bytes([3; 16]),
+            MetadataPermission::MetadataRead,
+            &AuthorizationResource::Repository {
+                repository_id: RepositoryId::from_bytes([3; 16]),
+            },
         )
         .unwrap_err();
     assert_eq!(error.code, DomainErrorCode::MetadataNotFoundOrDenied);

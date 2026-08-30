@@ -19,16 +19,17 @@ pub use migration_runner::{
 };
 pub use ogvcs_object_model::{FileId, ObjectRef};
 pub use ports::{
-    AuthorizationPort, DenyAllAuthorization, MetadataStore, MetadataTransaction,
-    ObjectValidationPort, ProductionObjectValidator,
+    AuthorizationPort, AuthorizedView, DeniedAuthorizedView, DenyAllAuthorization, MetadataStore,
+    MetadataTransaction, ObjectValidationPort, ProductionObjectValidator,
 };
 pub use postgres::{PostgresMetadataStore, PostgresMetadataTransaction};
 pub use types::{
-    AuthorizationContext, CaseMode, CommitSequence, ConsistencyToken, CursorToken,
-    FileHistoryRecord, FileHistoryWrite, FileIdImportReservation, FileIdOrigin, FileIdOwnerKind,
-    FileIdReservation, FileIdReservationOutcome, IdempotencyReservation,
-    IdempotencyReservationOutcome, ObjectPutOutcome, ObjectWrite, OutboxEvent, Page, PageRequest,
-    ProjectId, ReferenceCasRequest, ReferenceCasResult, ReferenceExpected, ReferenceKind,
-    ReferenceName, ReferenceRecord, RepositoryCreate, RepositoryId, RepositorySettings,
-    SnapshotWrite, TenantId, TransactionOptions, TreeEntryRecord, TreeEntryWrite,
+    AuthorizationContext, AuthorizationResource, CaseMode, CommitSequence, ConsistencyToken,
+    CursorToken, FileHistoryRecord, FileHistoryWrite, FileIdExpectedState, FileIdImportReservation,
+    FileIdOrigin, FileIdOwnerKind, FileIdReservation, FileIdReservationOutcome,
+    IdempotencyReservation, IdempotencyReservationOutcome, MetadataPermission, ObjectPutOutcome,
+    ObjectWrite, OutboxEvent, Page, PageRequest, ProjectId, ReferenceCasRequest,
+    ReferenceCasResult, ReferenceExpected, ReferenceKind, ReferenceName, ReferenceRecord,
+    RepositoryCreate, RepositoryId, RepositorySettings, SnapshotWrite, TenantId,
+    TransactionCapability, TransactionOptions, TreeEntryRecord, TreeEntryWrite,
 };

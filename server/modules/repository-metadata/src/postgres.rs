@@ -1,33 +1,43 @@
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use ogvcs_object_model::{
-    decode_canonical, object_id, scan_metadata, validate_metadata_schema, Cbor, Limits, ObjectKind,
-    ProfileRef,
+    decode_canonical, expand_tree_with_path_profile_validator, import_mapping_key, object_id,
+    scan_metadata, validate_metadata_schema, validate_repository_candidate,
+    validate_snapshot_graph, Cbor, ImportMapping, ImportState, LifetimeOrigin, LifetimeRecord,
+    Limits, ObjectKind, PathCaseMode, ProfileRef, RepositoryContext, RepositoryLimits,
+    RepositoryObjectLookup,
 };
 use postgres::{Client, IsolationLevel, NoTls, Row, Transaction};
 use postgres::types::Json;
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
-use std::time::SystemTime;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    time::SystemTime,
+};
 use subtle::ConstantTimeEq;
 use uuid::Uuid;
 
 use crate::{
-    AuthorizationContext, AuthorizationPort, CaseMode, CommitSequence, ConsistencyToken,
-    CursorToken, DenyAllAuthorization, DomainError, DomainErrorCode, FileHistoryRecord,
-    FileHistoryWrite, FileId, FileIdImportReservation, FileIdOrigin, FileIdOwnerKind,
+    AuthorizationContext, AuthorizationPort, AuthorizationResource, AuthorizedView, CaseMode,
+    CommitSequence, ConsistencyToken, CursorToken, DenyAllAuthorization, DomainError,
+    DomainErrorCode, FileHistoryRecord, FileHistoryWrite, FileId, FileIdExpectedState,
+    FileIdImportReservation, FileIdOrigin, FileIdOwnerKind,
     FileIdReservation, FileIdReservationOutcome, IdempotencyReservation,
-    IdempotencyReservationOutcome, MetadataStore, MetadataTransaction, ObjectPutOutcome, ObjectRef,
-    ObjectWrite, ObjectValidationPort, OutboxEvent, Page, PageRequest, ProductionObjectValidator,
+    IdempotencyReservationOutcome, MetadataPermission, MetadataStore, MetadataTransaction,
+    ObjectPutOutcome, ObjectRef, ObjectWrite, ObjectValidationPort, OutboxEvent, Page, PageRequest,
+    ProductionObjectValidator,
     ReferenceCasRequest, ReferenceCasResult, ReferenceExpected, ReferenceKind, ReferenceName,
     ReferenceRecord, RepositoryCreate, RepositoryId, Result, SnapshotWrite, TenantId,
-    TransactionOptions, TreeEntryRecord, TreeEntryWrite,
+    TransactionCapability, TransactionOptions, TreeEntryRecord, TreeEntryWrite,
 };
 
 const VALIDATION_CONTRACT: &str = "ogvcs.repository-format@1";
-const EVENT_REPOSITORY: usize = 0;
-const EVENT_OBJECT: usize = 1;
-const EVENT_REFERENCE: usize = 2;
-const EVENT_FILE_ID: usize = 3;
+const OUTBOX_PAYLOAD_SCHEMA: &str = "ogvcs.repository-metadata/outbox-safe-payload/v1";
+const MAX_REQUIRED_OUTBOX_EVENTS: usize = 10_000;
+const MAX_AUTHORIZATION_SCAN: usize = 100_000;
+const MAX_JSON_PREFLIGHT_BYTES: usize = 1_048_576;
+const MAX_JSON_PREFLIGHT_DEPTH: usize = 128;
+const MAX_JSON_PREFLIGHT_NODES: usize = 131_072;
 
 macro_rules! poison_transaction_on_error {
     ($transaction:ident, $body:block) => {{
@@ -82,18 +92,164 @@ impl<A, V> PostgresMetadataStore<A, V> {
 }
 
 impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> {
+    fn authorize_exact(
+        &self,
+        context: &AuthorizationContext,
+        permission: MetadataPermission,
+        resource: &AuthorizationResource,
+    ) -> Result<A::AuthorizedView> {
+        let view = self.authorization.authorize(context, permission, resource)?;
+        if !view.permits(context, permission, resource) {
+            return Err(DomainError::new(
+                DomainErrorCode::MetadataNotFoundOrDenied,
+            ));
+        }
+        Ok(view)
+    }
+
+    fn require_repository_tenant(
+        &mut self,
+        context: &AuthorizationContext,
+        repository_id: RepositoryId,
+    ) -> Result<()> {
+        let exists = self
+            .client
+            .query_opt(
+                "SELECT 1 FROM ogvcs_metadata.repositories
+                 WHERE repository_id = $1 AND tenant_id = $2",
+                &[&uuid(repository_id), &uuid(context.tenant_id)],
+            )
+            .map_err(database_error)?
+            .is_some();
+        if exists {
+            Ok(())
+        } else {
+            Err(DomainError::new(
+                DomainErrorCode::MetadataNotFoundOrDenied,
+            ))
+        }
+    }
+
+    fn require_published_snapshot_tree(
+        &mut self,
+        repository_id: RepositoryId,
+        snapshot: ObjectRef,
+        tree: ObjectRef,
+        prefix: &[String],
+    ) -> Result<()> {
+        let snapshot_row = self
+            .client
+            .query_opt(
+                "SELECT indexed.root_tree_digest, indexed.published_commit_sequence,
+                        object.canonical_bytes, object.validation_contract
+                 FROM ogvcs_metadata.snapshots AS indexed
+                 JOIN ogvcs_metadata.metadata_objects AS object
+                   ON object.repository_id = indexed.repository_id
+                  AND object.object_kind = 7
+                  AND object.digest_algorithm = 1
+                  AND object.object_digest = indexed.snapshot_digest
+                 WHERE indexed.repository_id = $1 AND indexed.snapshot_digest = $2
+                   AND indexed.published_commit_sequence IS NOT NULL",
+                &[&uuid(repository_id), &&snapshot.digest[..]],
+            )
+            .map_err(database_error)?
+            .ok_or_else(not_found)?;
+        let root = object_ref(ObjectKind::Tree, snapshot_row.get(0))?;
+        let published_sequence: i64 = snapshot_row.get(1);
+        let snapshot_bytes: Vec<u8> = snapshot_row.get(2);
+        let validation_contract: String = snapshot_row.get(3);
+        let snapshot_value = decode_canonical(&snapshot_bytes, Limits::METADATA)
+            .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        if positive_u64(published_sequence).is_err()
+            || validation_contract != VALIDATION_CONTRACT
+            || object_id(ObjectKind::Snapshot, &snapshot_bytes)
+                .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?
+                != snapshot.digest
+            || cbor_field(&snapshot_value, 18)
+                .and_then(|value| ObjectRef::from_cbor(value).ok())
+                != Some(root)
+        {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+
+        let limits = RepositoryLimits::default();
+        let preflight = self
+            .client
+            .query_one(
+                "SELECT count(*)::bigint, COALESCE(sum(byte_length), 0)::text
+                 FROM ogvcs_metadata.metadata_objects
+                 WHERE repository_id = $1 AND object_kind = 3",
+                &[&uuid(repository_id)],
+            )
+            .map_err(database_error)?;
+        let object_count = usize::try_from(preflight.get::<_, i64>(0))
+            .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        let byte_count = preflight
+            .get::<_, String>(1)
+            .parse::<usize>()
+            .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        if object_count > limits.max_objects || byte_count > limits.max_bytes {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        let fetch_limit = limits
+            .max_objects
+            .checked_add(1)
+            .and_then(|value| i64::try_from(value).ok())
+            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        let rows = self
+            .client
+            .query(
+                "SELECT object_digest, canonical_bytes, validation_contract
+                 FROM ogvcs_metadata.metadata_objects
+                 WHERE repository_id = $1 AND object_kind = 3
+                 ORDER BY object_digest
+                 LIMIT $2",
+                &[&uuid(repository_id), &fetch_limit],
+            )
+            .map_err(database_error)?;
+        if rows.len() > limits.max_objects {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        let mut trees = BTreeMap::new();
+        let mut loaded_bytes = 0_usize;
+        for row in rows {
+            let reference = object_ref(ObjectKind::Tree, row.get(0))?;
+            let canonical: Vec<u8> = row.get(1);
+            let validation_contract: String = row.get(2);
+            loaded_bytes = loaded_bytes
+                .checked_add(canonical.len())
+                .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            if validation_contract != VALIDATION_CONTRACT
+                || loaded_bytes > limits.max_bytes
+                || object_id(ObjectKind::Tree, &canonical)
+                    .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?
+                    != reference.digest
+                || trees.insert(reference, canonical).is_some()
+            {
+                return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+            }
+        }
+        if resolve_tree_prefix(&trees, root, prefix, limits.max_edges)? == tree {
+            Ok(())
+        } else {
+            Err(not_found())
+        }
+    }
+
     /// The only production transaction entry point. OGVCS-010 composes all of
     /// its publication writes through the returned database transaction.
     pub fn begin_authorized(
         &mut self,
         context: &AuthorizationContext,
-        permission: &'static str,
+        capability: TransactionCapability,
         repository_id: RepositoryId,
         options: TransactionOptions,
     ) -> Result<PostgresMetadataTransaction<'_, V, A::AuthorizedView>> {
-        let authorized_view = self
-            .authorization
-            .authorize(context, permission, "repository", repository_id)?;
+        let resource = AuthorizationResource::RepositoryTransaction {
+            repository_id,
+            capability,
+        };
+        let authorized_view = self.authorize_exact(context, capability.permission(), &resource)?;
         crate::verify_schema_compatibility(&mut self.client)?;
         if let Some(row) = self
             .client
@@ -128,11 +284,8 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
             idempotency_committed: false,
             committed_replay: None,
             mutation_started: false,
-            required_events: [0; 4],
-            written_events: [0; 4],
-            event_snapshots: Vec::new(),
-            event_references: Vec::new(),
-            event_file_ids: Vec::new(),
+            outbox_events: Vec::new(),
+            capability,
             authorized_repository_id: repository_id,
             authorization_context: context.clone(),
             authorized_view,
@@ -145,7 +298,7 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
     pub fn execute_serializable<T>(
         &mut self,
         context: &AuthorizationContext,
-        permission: &'static str,
+        capability: TransactionCapability,
         repository_id: RepositoryId,
         maximum_retries: u8,
         mut operation: impl FnMut(
@@ -155,7 +308,7 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
         for attempt in 0..=maximum_retries {
             let mut transaction = self.begin_authorized(
                 context,
-                permission,
+                capability,
                 repository_id,
                 TransactionOptions::Serializable { maximum_retries },
             )?;
@@ -163,13 +316,10 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
                 Ok(value) => match transaction.commit() {
                     Ok(sequence) => return Ok((value, sequence)),
                     Err(error)
-                        if error.code == DomainErrorCode::TransactionRetryExhausted
-                            && attempt < maximum_retries => {}
+                        if error.is_database_concurrency() && attempt < maximum_retries => {}
                     Err(error) => return Err(error),
                 },
-                Err(error)
-                    if error.code == DomainErrorCode::TransactionRetryExhausted
-                        && attempt < maximum_retries =>
+                Err(error) if error.is_database_concurrency() && attempt < maximum_retries =>
                 {
                     let _ = transaction.rollback();
                 }
@@ -192,25 +342,41 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
         name: &ReferenceName,
         minimum: Option<&ConsistencyToken>,
     ) -> Result<ReferenceRecord> {
-        self.authorization.authorize(
-            context,
-            "repository.reference.read",
-            "repository",
+        let resource = AuthorizationResource::Reference {
             repository_id,
-        )?;
+            kind,
+            name: name.clone(),
+        };
+        let authorized_view =
+            self.authorize_exact(context, MetadataPermission::MetadataRead, &resource)?;
+        crate::verify_schema_compatibility(&mut self.client)?;
+        self.require_repository_tenant(context, repository_id)?;
         if let Some(token) = minimum {
             self.require_consistency_authorized(context, repository_id, token)?;
         }
         let row = self
             .client
             .query_opt(
-                "SELECT target_snapshot_digest, generation, commit_sequence
-                 FROM ogvcs_metadata.references
-                 WHERE repository_id = $1 AND reference_kind = $2 AND reference_name = $3",
+                "SELECT reference.target_snapshot_digest, reference.generation,
+                        reference.commit_sequence, snapshot.published_commit_sequence
+                 FROM ogvcs_metadata.references AS reference
+                 JOIN ogvcs_metadata.snapshots AS snapshot
+                   ON snapshot.repository_id = reference.repository_id
+                  AND snapshot.snapshot_digest = reference.target_snapshot_digest
+                 WHERE reference.repository_id = $1 AND reference.reference_kind = $2
+                   AND reference.reference_name = $3",
                 &[&uuid(repository_id), &reference_kind(kind), &name.as_str()],
             )
             .map_err(database_error)?
             .ok_or_else(not_found)?;
+        let published: Option<i64> = row.get(3);
+        if published.and_then(|value| positive_u64(value).ok()).is_none()
+            || !authorized_view.permits(context, MetadataPermission::MetadataRead, &resource)
+        {
+            return Err(DomainError::new(
+                DomainErrorCode::MetadataNotFoundOrDenied,
+            ));
+        }
         Ok(ReferenceRecord {
             kind,
             name: name.clone(),
@@ -226,13 +392,18 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
         repository_id: RepositoryId,
         token: &ConsistencyToken,
     ) -> Result<CommitSequence> {
-        self.authorization.authorize(
-            context,
-            "repository.consistency.read",
-            "repository",
-            repository_id,
-        )?;
-        self.require_consistency_authorized(context, repository_id, token)
+        let resource = AuthorizationResource::Repository { repository_id };
+        let authorized_view =
+            self.authorize_exact(context, MetadataPermission::MetadataRead, &resource)?;
+        crate::verify_schema_compatibility(&mut self.client)?;
+        self.require_repository_tenant(context, repository_id)?;
+        let sequence = self.require_consistency_authorized(context, repository_id, token)?;
+        if !authorized_view.permits(context, MetadataPermission::MetadataRead, &resource) {
+            return Err(DomainError::new(
+                DomainErrorCode::MetadataNotFoundOrDenied,
+            ));
+        }
+        Ok(sequence)
     }
 
     fn require_consistency_authorized(
@@ -281,20 +452,34 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
         &mut self,
         context: &AuthorizationContext,
         repository_id: RepositoryId,
+        snapshot: ObjectRef,
         tree: ObjectRef,
-        prefix: &[u8],
+        prefix: &[String],
         request: PageRequest,
     ) -> Result<Page<TreeEntryRecord>> {
-        self.authorization.authorize(
-            context,
-            "repository.tree.read",
-            "repository",
+        if !valid_tree_prefix(prefix) {
+            return Err(DomainError::new(
+                DomainErrorCode::MetadataNotFoundOrDenied,
+            ));
+        }
+        let resource = AuthorizationResource::TreePrefix {
             repository_id,
-        )?;
-        if tree.kind != ObjectKind::Tree || !request.is_bounded() || prefix.len() > 4096 {
+            snapshot,
+            tree,
+            prefix: prefix.to_vec(),
+        };
+        let authorized_view =
+            self.authorize_exact(context, MetadataPermission::MetadataRead, &resource)?;
+        crate::verify_schema_compatibility(&mut self.client)?;
+        self.require_repository_tenant(context, repository_id)?;
+        if snapshot.kind != ObjectKind::Snapshot
+            || tree.kind != ObjectKind::Tree
+            || !request.is_bounded()
+        {
             return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
         }
-        let query_digest = query_digest(b"tree", repository_id, &tree.digest, prefix);
+        self.require_published_snapshot_tree(repository_id, snapshot, tree, prefix)?;
+        let query_digest = tree_query_digest(repository_id, snapshot, tree, prefix);
         let after = self.cursor_position(
             context,
             repository_id,
@@ -303,8 +488,6 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
             request.cursor.as_ref(),
             "key",
         )?;
-        let lower = (!prefix.is_empty()).then(|| prefix.to_vec());
-        let upper = prefix_upper_bound(prefix);
         let rows = self
             .client
             .query(
@@ -313,26 +496,50 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
                  FROM ogvcs_metadata.tree_entries
                  WHERE repository_id = $1 AND tree_digest = $2
                    AND ($3::bytea IS NULL OR basename_utf8 > $3)
-                   AND ($4::bytea IS NULL OR basename_utf8 >= $4)
-                   AND ($5::bytea IS NULL OR basename_utf8 < $5)
                  ORDER BY basename_utf8
-                 LIMIT $6",
+                 LIMIT $4",
                 &[
                     &uuid(repository_id),
                     &&tree.digest[..],
                     &after,
-                    &lower,
-                    &upper,
-                    &(i64::from(request.limit) + 1),
+                    &((MAX_AUTHORIZATION_SCAN + 1) as i64),
                 ],
             )
             .map_err(database_error)?;
-        let has_more = rows.len() > usize::from(request.limit);
-        let items = rows
-            .into_iter()
-            .take(usize::from(request.limit))
-            .map(tree_entry)
-            .collect::<Result<Vec<_>>>()?;
+        let truncated = rows.len() > MAX_AUTHORIZATION_SCAN;
+        let mut items = Vec::with_capacity(usize::from(request.limit) + 1);
+        for row in rows.into_iter().take(MAX_AUTHORIZATION_SCAN) {
+            let basename_utf8: Vec<u8> = row.get(1);
+            let basename = String::from_utf8(basename_utf8)
+                .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            let mut repository_path = prefix.to_vec();
+            repository_path.push(basename);
+            let exact = AuthorizationResource::TreeEntry {
+                repository_id,
+                snapshot,
+                tree,
+                repository_path,
+                file_id: file_id(row.get(2))?,
+            };
+            if authorized_view.permits(context, MetadataPermission::MetadataRead, &exact) {
+                items.push(tree_entry(row)?);
+                if items.len() > usize::from(request.limit) {
+                    break;
+                }
+            }
+        }
+        if truncated && items.len() <= usize::from(request.limit) {
+            return Err(DomainError::new(
+                DomainErrorCode::MetadataNotFoundOrDenied,
+            ));
+        }
+        let has_more = items.len() > usize::from(request.limit);
+        items.truncate(usize::from(request.limit));
+        if !authorized_view.permits(context, MetadataPermission::MetadataRead, &resource) {
+            return Err(DomainError::new(
+                DomainErrorCode::MetadataNotFoundOrDenied,
+            ));
+        }
         let next_cursor = if has_more {
             let key = items.last().map(|item| item.basename_utf8.clone()).ok_or_else(not_found)?;
             Some(self.issue_cursor(
@@ -359,12 +566,11 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
         repository_id: RepositoryId,
         request: PageRequest,
     ) -> Result<Page<ReferenceRecord>> {
-        self.authorization.authorize(
-            context,
-            "repository.reference.list",
-            "repository",
-            repository_id,
-        )?;
+        let resource = AuthorizationResource::ReferenceCollection { repository_id };
+        let authorized_view =
+            self.authorize_exact(context, MetadataPermission::Discover, &resource)?;
+        crate::verify_schema_compatibility(&mut self.client)?;
+        self.require_repository_tenant(context, repository_id)?;
         if !request.is_bounded() {
             return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
         }
@@ -381,29 +587,63 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
         let rows = self
             .client
             .query(
-                "SELECT reference_kind, reference_name, target_snapshot_digest, generation, commit_sequence
-                 FROM ogvcs_metadata.references
-                 WHERE repository_id = $1
-                   AND ($2::text IS NULL OR (reference_kind, reference_name) > ($2, $3))
-                 ORDER BY reference_kind, reference_name
+                "SELECT reference.reference_kind, reference.reference_name,
+                        reference.target_snapshot_digest, reference.generation,
+                        reference.commit_sequence, snapshot.published_commit_sequence
+                 FROM ogvcs_metadata.references AS reference
+                 JOIN ogvcs_metadata.snapshots AS snapshot
+                   ON snapshot.repository_id = reference.repository_id
+                  AND snapshot.snapshot_digest = reference.target_snapshot_digest
+                 WHERE reference.repository_id = $1
+                   AND ($2::text IS NULL OR
+                        (reference.reference_kind, reference.reference_name) > ($2, $3))
+                 ORDER BY reference.reference_kind, reference.reference_name
                  LIMIT $4",
                 &[
                     &uuid(repository_id),
                     &after_kind,
                     &after_name,
-                    &(i64::from(request.limit) + 1),
+                    &((MAX_AUTHORIZATION_SCAN + 1) as i64),
                 ],
             )
             .map_err(database_error)?;
-        let has_more = rows.len() > usize::from(request.limit);
-        let items = rows
-            .iter()
-            .take(usize::from(request.limit))
-            .map(reference_record)
-            .collect::<Result<Vec<_>>>()?;
+        let truncated = rows.len() > MAX_AUTHORIZATION_SCAN;
+        let mut items = Vec::with_capacity(usize::from(request.limit) + 1);
+        for row in rows.iter().take(MAX_AUTHORIZATION_SCAN) {
+            let kind = parsed_reference_kind(&row.get::<_, String>(0))?;
+            let name = ReferenceName::new(row.get(1))
+                .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            let exact = AuthorizationResource::Reference {
+                repository_id,
+                kind,
+                name,
+            };
+            if authorized_view.permits(context, MetadataPermission::Discover, &exact) {
+                let published: Option<i64> = row.get(5);
+                if published.and_then(|value| positive_u64(value).ok()).is_none() {
+                    return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+                }
+                items.push(reference_record(row)?);
+                if items.len() > usize::from(request.limit) {
+                    break;
+                }
+            }
+        }
+        if truncated && items.len() <= usize::from(request.limit) {
+            return Err(DomainError::new(
+                DomainErrorCode::MetadataNotFoundOrDenied,
+            ));
+        }
+        let has_more = items.len() > usize::from(request.limit);
+        items.truncate(usize::from(request.limit));
+        if !authorized_view.permits(context, MetadataPermission::Discover, &resource) {
+            return Err(DomainError::new(
+                DomainErrorCode::MetadataNotFoundOrDenied,
+            ));
+        }
         let next_cursor = if has_more {
-            let row = &rows[usize::from(request.limit) - 1];
-            let key = reference_key(&row.get::<_, String>(0), &row.get::<_, String>(1))?;
+            let item = items.last().ok_or_else(not_found)?;
+            let key = reference_key(reference_kind(item.kind), item.name.as_str())?;
             Some(self.issue_cursor(
                 context,
                 repository_id,
@@ -426,12 +666,14 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
         file_id: FileId,
         request: PageRequest,
     ) -> Result<Page<FileHistoryRecord>> {
-        self.authorization.authorize(
-            context,
-            "repository.history.read",
-            "repository",
+        let resource = AuthorizationResource::FileHistory {
             repository_id,
-        )?;
+            file_id,
+        };
+        let authorized_view =
+            self.authorize_exact(context, MetadataPermission::MetadataRead, &resource)?;
+        crate::verify_schema_compatibility(&mut self.client)?;
+        self.require_repository_tenant(context, repository_id)?;
         if !request.is_bounded() {
             return Err(DomainError::new(DomainErrorCode::HistoryLimitReached));
         }
@@ -448,36 +690,67 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
         let rows = self
             .client
             .query(
-                "SELECT snapshot_digest, operation_ordinal, repository_path_utf8, operation_kind
-                 FROM ogvcs_metadata.file_path_history
-                 WHERE repository_id = $1 AND file_id = $2
-                   AND ($3::bytea IS NULL OR (snapshot_digest, operation_ordinal) > ($3, $4))
-                 ORDER BY snapshot_digest, operation_ordinal
+                "SELECT history.snapshot_digest, history.operation_ordinal,
+                        history.repository_path_utf8, history.operation_kind
+                 FROM ogvcs_metadata.file_path_history AS history
+                 JOIN ogvcs_metadata.snapshots AS snapshot
+                   ON snapshot.repository_id = history.repository_id
+                  AND snapshot.snapshot_digest = history.snapshot_digest
+                  AND snapshot.published_commit_sequence > 0
+                 WHERE history.repository_id = $1 AND history.file_id = $2
+                   AND ($3::bytea IS NULL OR
+                        (history.snapshot_digest, history.operation_ordinal) > ($3, $4))
+                 ORDER BY history.snapshot_digest, history.operation_ordinal
                  LIMIT $5",
                 &[
                     &uuid(repository_id),
                     &&file_id.as_bytes()[..],
                     &after_digest,
                     &after_ordinal,
-                    &(i64::from(request.limit) + 1),
+                    &((MAX_AUTHORIZATION_SCAN + 1) as i64),
                 ],
             )
             .map_err(database_error)?;
-        let has_more = rows.len() > usize::from(request.limit);
-        let items = rows
-            .iter()
-            .take(usize::from(request.limit))
-            .map(|row| file_history_record(row, file_id))
-            .collect::<Result<Vec<_>>>()?;
+        let truncated = rows.len() > MAX_AUTHORIZATION_SCAN;
+        let mut items = Vec::with_capacity(usize::from(request.limit) + 1);
+        for row in rows.iter().take(MAX_AUTHORIZATION_SCAN) {
+            let record = file_history_record(row, file_id)?;
+            let exact = AuthorizationResource::FileHistoryEntry {
+                repository_id,
+                file_id,
+                snapshot: record.snapshot,
+                repository_path_utf8: record.repository_path_utf8.clone(),
+            };
+            if authorized_view.permits(context, MetadataPermission::MetadataRead, &exact) {
+                items.push(record);
+                if items.len() > usize::from(request.limit) {
+                    break;
+                }
+            }
+        }
+        if truncated && items.len() <= usize::from(request.limit) {
+            return Err(DomainError::new(
+                DomainErrorCode::MetadataNotFoundOrDenied,
+            ));
+        }
+        let has_more = items.len() > usize::from(request.limit);
+        items.truncate(usize::from(request.limit));
+        if !authorized_view.permits(context, MetadataPermission::MetadataRead, &resource) {
+            return Err(DomainError::new(
+                DomainErrorCode::MetadataNotFoundOrDenied,
+            ));
+        }
         let next_cursor = if has_more {
-            let row = &rows[usize::from(request.limit) - 1];
-            let key = history_key(&row.get::<_, Vec<u8>>(0), row.get(1))?;
+            let item = items.last().ok_or_else(not_found)?;
+            let ordinal = i32::try_from(item.operation_ordinal)
+                .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            let key = history_key(&item.snapshot.digest, ordinal)?;
             Some(self.issue_cursor(
                 context,
                 repository_id,
                 "file-id.history",
                 query_digest,
-                Some(object_ref(ObjectKind::Snapshot, row.get(0))?),
+                Some(item.snapshot),
                 "key",
                 &key,
             )?)
@@ -585,7 +858,144 @@ struct PendingIdempotency {
     semantic_fingerprint: [u8; 32],
 }
 
-pub struct PostgresMetadataTransaction<'a, V: ObjectValidationPort, AuthorizedView = ()> {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum FileIdEventState {
+    Reserved,
+    Active,
+    Tombstoned,
+}
+
+impl FileIdEventState {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Reserved => "reserved",
+            Self::Active => "active",
+            Self::Tombstoned => "tombstoned",
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum RequiredOutboxFact {
+    RepositoryCreated,
+    SnapshotAccepted {
+        digest: [u8; 32],
+    },
+    ReferenceChanged {
+        kind: ReferenceKind,
+        name: String,
+        current: Option<ObjectRef>,
+        generation: u64,
+    },
+    FileIdStateChanged {
+        file_id: FileId,
+        state: FileIdEventState,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct RequiredOutboxEvent {
+    fact: RequiredOutboxFact,
+    emitted: bool,
+}
+
+impl RequiredOutboxFact {
+    fn event_type(&self) -> &'static str {
+        match self {
+            Self::RepositoryCreated => "repository.created",
+            Self::SnapshotAccepted { .. } => "metadata.object-accepted",
+            Self::ReferenceChanged { .. } => "reference.changed",
+            Self::FileIdStateChanged { .. } => "file-id.state-changed",
+        }
+    }
+
+    fn resource_type(&self) -> &'static str {
+        match self {
+            Self::RepositoryCreated => "repository",
+            Self::SnapshotAccepted { .. } => "snapshot",
+            Self::ReferenceChanged { .. } => "reference",
+            Self::FileIdStateChanged { .. } => "path",
+        }
+    }
+
+    fn safe_payload(&self) -> Value {
+        match self {
+            Self::RepositoryCreated => json!({
+                "schemaVersion": OUTBOX_PAYLOAD_SCHEMA,
+                "state": "created"
+            }),
+            Self::SnapshotAccepted { .. } => json!({
+                "schemaVersion": OUTBOX_PAYLOAD_SCHEMA,
+                "kind": "snapshot",
+                "state": "accepted"
+            }),
+            Self::ReferenceChanged {
+                current,
+                generation,
+                ..
+            } => json!({
+                "schemaVersion": OUTBOX_PAYLOAD_SCHEMA,
+                "generation": generation,
+                "deleted": current.is_none()
+            }),
+            Self::FileIdStateChanged { state, .. } => json!({
+                "schemaVersion": OUTBOX_PAYLOAD_SCHEMA,
+                "state": state.as_str()
+            }),
+        }
+    }
+
+    fn resource_opaque_id(
+        &self,
+        repository_id: RepositoryId,
+        event_id: [u8; 16],
+        safe_payload: &Value,
+    ) -> Result<String> {
+        let mut nonce = [0_u8; 32];
+        getrandom::getrandom(&mut nonce)
+            .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        let mut hash = Sha256::new();
+        hash.update(b"OpenGameVCS metadata outbox resource binding\0");
+        hash.update(nonce);
+        hash.update(repository_id.as_bytes());
+        hash.update(event_id);
+        hash.update(self.event_type().as_bytes());
+        match self {
+            Self::RepositoryCreated => hash.update(b"repository"),
+            Self::SnapshotAccepted { digest } => hash.update(digest),
+            Self::ReferenceChanged {
+                kind,
+                name,
+                current,
+                generation,
+            } => {
+                hash.update(reference_kind(*kind).as_bytes());
+                hash.update((name.len() as u64).to_be_bytes());
+                hash.update(name.as_bytes());
+                if let Some(current) = current {
+                    hash.update(current.kind.code().to_be_bytes());
+                    hash.update(current.digest);
+                }
+                hash.update(generation.to_be_bytes());
+            }
+            Self::FileIdStateChanged { file_id, state } => {
+                hash.update(file_id.as_bytes());
+                hash.update(state.as_str().as_bytes());
+            }
+        }
+        let payload = serde_json::to_vec(safe_payload)
+            .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        hash.update((payload.len() as u64).to_be_bytes());
+        hash.update(payload);
+        Ok(format!("rr1.{}", URL_SAFE_NO_PAD.encode(hash.finalize())))
+    }
+}
+
+pub struct PostgresMetadataTransaction<
+    'a,
+    V: ObjectValidationPort,
+    View: AuthorizedView = crate::DeniedAuthorizedView,
+> {
     transaction: Option<Transaction<'a>>,
     failed: bool,
     commit_sequence: Option<(RepositoryId, CommitSequence)>,
@@ -593,19 +1003,16 @@ pub struct PostgresMetadataTransaction<'a, V: ObjectValidationPort, AuthorizedVi
     idempotency_committed: bool,
     committed_replay: Option<Value>,
     mutation_started: bool,
-    required_events: [usize; 4],
-    written_events: [usize; 4],
-    event_snapshots: Vec<[u8; 32]>,
-    event_references: Vec<(ReferenceKind, String)>,
-    event_file_ids: Vec<FileId>,
+    outbox_events: Vec<RequiredOutboxEvent>,
+    capability: TransactionCapability,
     authorized_repository_id: RepositoryId,
     authorization_context: AuthorizationContext,
-    authorized_view: AuthorizedView,
+    authorized_view: View,
     validation: &'a V,
 }
 
-impl<V: ObjectValidationPort, AuthorizedView>
-    PostgresMetadataTransaction<'_, V, AuthorizedView>
+impl<V: ObjectValidationPort, View: AuthorizedView>
+    PostgresMetadataTransaction<'_, V, View>
 {
     pub fn authorized_repository_id(&self) -> RepositoryId {
         self.authorized_repository_id
@@ -615,13 +1022,15 @@ impl<V: ObjectValidationPort, AuthorizedView>
         &self.authorization_context
     }
 
-    pub fn authorized_view(&self) -> &AuthorizedView {
+    pub fn authorized_view(&self) -> &View {
         &self.authorized_view
     }
 
     /// Ends the read-only replay probe without exposing an ambiguous commit
     /// result or sending it through the transaction retry loop.
     pub fn finish_committed_replay(mut self) -> Result<Value> {
+        let capability = self.capability;
+        self.require_capability(&[capability])?;
         let result = self
             .committed_replay
             .take()
@@ -681,6 +1090,39 @@ impl<V: ObjectValidationPort, AuthorizedView>
         }
     }
 
+    fn require_capability(&self, allowed: &[TransactionCapability]) -> Result<()> {
+        let resource = AuthorizationResource::RepositoryTransaction {
+            repository_id: self.authorized_repository_id,
+            capability: self.capability,
+        };
+        if allowed.contains(&self.capability)
+            && self.authorized_view.permits(
+                &self.authorization_context,
+                self.capability.permission(),
+                &resource,
+            )
+        {
+            Ok(())
+        } else {
+            Err(DomainError::new(
+                DomainErrorCode::MetadataNotFoundOrDenied,
+            ))
+        }
+    }
+
+    fn require_submit_capability(&self) -> Result<()> {
+        self.require_capability(&[
+            TransactionCapability::CreateRepository,
+            TransactionCapability::PutObject,
+            TransactionCapability::Publish,
+            TransactionCapability::ReserveFileId,
+            TransactionCapability::ImportFileId,
+            TransactionCapability::RestoreFileId,
+            TransactionCapability::TombstoneFileId,
+            TransactionCapability::CompareAndSwapReference,
+        ])
+    }
+
     fn require_pending_idempotency(&self) -> Result<()> {
         if self.pending_idempotency.is_some() && !self.idempotency_committed {
             Ok(())
@@ -691,35 +1133,112 @@ impl<V: ObjectValidationPort, AuthorizedView>
 
     fn begin_mutation(&mut self, repository_id: RepositoryId) -> Result<CommitSequence> {
         self.require_pending_idempotency()?;
+        if self.outbox_events.iter().any(|event| event.emitted) {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
         let sequence = self.ensure_sequence(repository_id)?;
         self.mutation_started = true;
         Ok(sequence)
     }
 
-    fn require_repository_event(&mut self) {
-        self.required_events[EVENT_REPOSITORY] = 1;
+    fn require_repository_event(&mut self) -> Result<()> {
+        if !self
+            .outbox_events
+            .iter()
+            .any(|event| event.fact == RequiredOutboxFact::RepositoryCreated)
+        {
+            if self.outbox_events.len() >= MAX_REQUIRED_OUTBOX_EVENTS {
+                return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+            }
+            self.outbox_events.push(RequiredOutboxEvent {
+                fact: RequiredOutboxFact::RepositoryCreated,
+                emitted: false,
+            });
+        }
+        Ok(())
     }
 
-    fn require_object_event(&mut self, snapshot_digest: [u8; 32]) {
-        if !self.event_snapshots.contains(&snapshot_digest) {
-            self.event_snapshots.push(snapshot_digest);
-            self.required_events[EVENT_OBJECT] = self.event_snapshots.len();
+    fn require_object_event(&mut self, snapshot_digest: [u8; 32]) -> Result<()> {
+        if !self.outbox_events.iter().any(|event| {
+            matches!(
+                &event.fact,
+                RequiredOutboxFact::SnapshotAccepted { digest } if *digest == snapshot_digest
+            )
+        }) {
+            if self.outbox_events.len() >= MAX_REQUIRED_OUTBOX_EVENTS {
+                return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+            }
+            self.outbox_events.push(RequiredOutboxEvent {
+                fact: RequiredOutboxFact::SnapshotAccepted {
+                    digest: snapshot_digest,
+                },
+                emitted: false,
+            });
         }
+        Ok(())
     }
 
-    fn require_reference_event(&mut self, kind: ReferenceKind, name: &ReferenceName) {
-        let identity = (kind, name.as_str().to_owned());
-        if !self.event_references.contains(&identity) {
-            self.event_references.push(identity);
-            self.required_events[EVENT_REFERENCE] = self.event_references.len();
+    fn require_reference_event(
+        &mut self,
+        kind: ReferenceKind,
+        name: &ReferenceName,
+        current: Option<ObjectRef>,
+        generation: u64,
+    ) -> Result<()> {
+        if let Some(event) = self.outbox_events.iter_mut().find(|event| {
+            matches!(
+                &event.fact,
+                RequiredOutboxFact::ReferenceChanged {
+                    kind: existing_kind,
+                    name: existing_name,
+                    ..
+                } if *existing_kind == kind && existing_name == name.as_str()
+            )
+        }) {
+            event.fact = RequiredOutboxFact::ReferenceChanged {
+                kind,
+                name: name.as_str().to_owned(),
+                current,
+                generation,
+            };
+        } else {
+            if self.outbox_events.len() >= MAX_REQUIRED_OUTBOX_EVENTS {
+                return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+            }
+            self.outbox_events.push(RequiredOutboxEvent {
+                fact: RequiredOutboxFact::ReferenceChanged {
+                    kind,
+                    name: name.as_str().to_owned(),
+                    current,
+                    generation,
+                },
+                emitted: false,
+            });
         }
+        Ok(())
     }
 
-    fn require_file_id_event(&mut self, file_id: FileId) {
-        if !self.event_file_ids.contains(&file_id) {
-            self.event_file_ids.push(file_id);
-            self.required_events[EVENT_FILE_ID] = self.event_file_ids.len();
+    fn require_file_id_event(&mut self, file_id: FileId, state: FileIdEventState) -> Result<()> {
+        if let Some(event) = self.outbox_events.iter_mut().find(|event| {
+            matches!(
+                &event.fact,
+                RequiredOutboxFact::FileIdStateChanged {
+                    file_id: existing,
+                    ..
+                } if *existing == file_id
+            )
+        }) {
+            event.fact = RequiredOutboxFact::FileIdStateChanged { file_id, state };
+        } else {
+            if self.outbox_events.len() >= MAX_REQUIRED_OUTBOX_EVENTS {
+                return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+            }
+            self.outbox_events.push(RequiredOutboxEvent {
+                fact: RequiredOutboxFact::FileIdStateChanged { file_id, state },
+                emitted: false,
+            });
         }
+        Ok(())
     }
 
     fn idempotency_scope_digest(&self) -> [u8; 32] {
@@ -729,6 +1248,7 @@ impl<V: ObjectValidationPort, AuthorizedView>
         hash.update(self.authorization_context.tenant_id.as_bytes());
         hash.update(self.authorization_context.authorization_epoch.to_be_bytes());
         hash.update(self.authorized_repository_id.as_bytes());
+        hash.update(self.capability.as_str().as_bytes());
         hash.finalize().into()
     }
 
@@ -764,6 +1284,501 @@ impl<V: ObjectValidationPort, AuthorizedView>
         } else {
             Err(DomainError::new(DomainErrorCode::ObjectInvalid))
         }
+    }
+
+    fn validate_publication_candidate(&mut self, candidate: ObjectRef) -> Result<()> {
+        if candidate.kind != ObjectKind::Snapshot {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        let repository_id = self.authorized_repository_id;
+        let settings = self
+            .transaction()?
+            .query_one(
+                "SELECT descriptor_digest, repository_format, required_features, case_mode,
+                        path_profile, platform_profile, content_policy_profile, structural_limits,
+                        tenant_boundary
+                 FROM ogvcs_metadata.repository_settings WHERE repository_id = $1",
+                &[&uuid(repository_id)],
+            )
+            .map_err(database_error)?;
+        let descriptor_digest: Vec<u8> = settings.get(0);
+        let repository_format: String = settings.get(1);
+        let Json(required_features_json): Json<Value> = settings.get(2);
+        let case_mode: String = settings.get(3);
+        let path_profile_name: String = settings.get(4);
+        let platform_profile_name: String = settings.get(5);
+        let content_policy_profile_name: String = settings.get(6);
+        let Json(structural_limits): Json<Value> = settings.get(7);
+        let tenant_boundary: Uuid = settings.get(8);
+        let required_features = json_features(&required_features_json)
+            .filter(|features| {
+                features.len() <= 128 && features.windows(2).all(|pair| pair[0] < pair[1])
+            })
+            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        if repository_format != VALIDATION_CONTRACT
+            || !valid_structural_limits(&structural_limits)
+            || tenant_boundary.as_bytes() != self.authorization_context.tenant_id.as_bytes()
+        {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        let path_profile = path_profile_name
+            .parse::<ProfileRef>()
+            .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        let platform_profile = platform_profile_name
+            .parse::<ProfileRef>()
+            .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        let content_policy_profile = content_policy_profile_name
+            .parse::<ProfileRef>()
+            .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        self.validation.validate_repository_profiles(
+            &path_profile,
+            &platform_profile,
+            &content_policy_profile,
+        )?;
+
+        let limits = RepositoryLimits::default();
+        let preflight = self
+            .transaction()?
+            .query_one(
+                "SELECT count(*)::bigint, COALESCE(sum(byte_length), 0)::text
+                 FROM ogvcs_metadata.metadata_objects WHERE repository_id = $1",
+                &[&uuid(repository_id)],
+            )
+            .map_err(database_error)?;
+        let object_count = usize::try_from(preflight.get::<_, i64>(0))
+            .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        let byte_count = preflight
+            .get::<_, String>(1)
+            .parse::<usize>()
+            .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        if object_count > limits.max_objects || byte_count > limits.max_bytes {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        let rows = self
+            .transaction()?
+            .query(
+                "SELECT object_kind, object_digest, canonical_bytes, validation_contract
+                 FROM ogvcs_metadata.metadata_objects
+                 WHERE repository_id = $1 ORDER BY object_kind, object_digest",
+                &[&uuid(repository_id)],
+            )
+            .map_err(database_error)?;
+        let mut entries = BTreeMap::new();
+        for row in rows {
+            let reference = object_ref(object_kind(row.get(0))?, row.get(1))?;
+            let canonical: Vec<u8> = row.get(2);
+            let validation_contract: String = row.get(3);
+            if validation_contract != VALIDATION_CONTRACT {
+                return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+            }
+            if entries.insert(reference, canonical).is_some() {
+                return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+            }
+        }
+        let closure = metadata_closure(&entries, candidate)?;
+        let designated_root = designated_snapshot_root(&entries, candidate)?;
+        self.verify_publication_indexes(&entries, &closure)?;
+
+        let descriptor = object_ref(ObjectKind::RepositoryDescriptor, descriptor_digest)?;
+        if !closure.contains(&descriptor)
+            || !descriptor_matches_repository_settings(
+                repository_id,
+                &required_features,
+                &path_profile_name,
+                &content_policy_profile_name,
+                entries
+                    .get(&descriptor)
+                    .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?,
+            )
+        {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        let (lifetime_records, working_lifetime_additions) =
+            derive_lifetime_evidence(&entries, &closure, candidate)?;
+        let candidate_change = snapshot_change_ref(&entries, candidate)?;
+        let required_active = lifetime_records
+            .iter()
+            .filter(|record| record.first_change_set == candidate_change)
+            .map(|record| record.file_id)
+            .chain(working_lifetime_additions.iter().map(|record| record.file_id))
+            .chain(candidate_tree_file_ids(&entries, candidate)?)
+            .collect::<BTreeSet<_>>();
+        let file_id_evidence = self.load_file_id_evidence(limits.max_edges)?;
+        verify_lifetime_evidence(
+            &file_id_evidence,
+            lifetime_records.iter().chain(&working_lifetime_additions),
+            candidate_change,
+        )?;
+        verify_active_file_ids(&file_id_evidence, &required_active)?;
+        let published_imports = lifetime_records
+            .iter()
+            .filter(|record| {
+                record.origin == LifetimeOrigin::Import
+                    && record.first_change_set != candidate_change
+            })
+            .map(|record| record.file_id)
+            .collect::<BTreeSet<_>>();
+        let required_imports = lifetime_records
+            .iter()
+            .filter(|record| record.origin == LifetimeOrigin::Import)
+            .map(|record| record.file_id)
+            .collect::<BTreeSet<_>>();
+        let import_mappings = self.load_import_mappings(
+            descriptor,
+            &required_imports,
+            &published_imports,
+            limits.max_edges,
+        )?;
+        let chunk_references = required_chunk_references(&entries, &closure)?;
+        let mut loaded_bytes = byte_count;
+        for reference in chunk_references {
+            let payload = self.validation.resolve_chunk(reference)?;
+            if object_id(ObjectKind::Chunk, &payload)
+                .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?
+                != reference.digest
+            {
+                return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+            }
+            loaded_bytes = loaded_bytes
+                .checked_add(payload.len())
+                .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            if loaded_bytes > limits.max_bytes || entries.insert(reference, payload).is_some() {
+                return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+            }
+            if entries.len() > limits.max_objects {
+                return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+            }
+        }
+        let registry = self.validation.registry();
+        let mode = self.validation.validation_mode();
+        let lookup = RepositoryObjectLookup::new(
+            entries.into_iter(),
+            registry,
+            mode,
+            limits,
+        )
+        .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        for reference in &closure {
+            lookup
+                .resolve(*reference)
+                .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        }
+        let path_case_mode = match case_mode.as_str() {
+            "case-sensitive" => PathCaseMode::CaseSensitive,
+            "case-folded" => PathCaseMode::CaseFolded,
+            _ => return Err(DomainError::new(DomainErrorCode::ObjectInvalid)),
+        };
+        let mut context = RepositoryContext::new(
+            &lookup,
+            descriptor,
+            designated_root,
+            path_case_mode,
+        );
+        context.lifetime_records = &lifetime_records;
+        context.working_lifetime_additions = &working_lifetime_additions;
+        context.import_mappings = &import_mappings;
+        context.verify_content = true;
+        context.path_profile_validator = self.validation.path_profile_validator();
+        validate_snapshot_graph(candidate, &context)
+            .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        validate_repository_candidate(candidate, &context)
+            .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        for snapshot in closure
+            .iter()
+            .filter(|reference| reference.kind == ObjectKind::Snapshot)
+        {
+            let snapshot_value = lookup
+                .resolve(*snapshot)
+                .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?
+                .value
+                .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            let root_tree = cbor_field(&snapshot_value, 18)
+                .and_then(|value| ObjectRef::from_cbor(value).ok())
+                .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            let expansion = expand_tree_with_path_profile_validator(
+                root_tree,
+                &lookup,
+                descriptor,
+                false,
+                path_case_mode,
+                self.validation.path_profile_validator(),
+            )
+            .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            enforce_configured_tree_limits(&expansion.entries, &structural_limits)?;
+        }
+        Ok(())
+    }
+
+    fn load_file_id_evidence(
+        &mut self,
+        maximum_records: usize,
+    ) -> Result<BTreeMap<FileId, StoredFileIdEvidence>> {
+        let repository_id = self.authorized_repository_id;
+        let fetch_limit = maximum_records
+            .checked_add(1)
+            .and_then(|value| i64::try_from(value).ok())
+            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        let rows = self
+            .transaction()?
+            .query(
+                "SELECT file_id, state::text, origin::text, first_change_set_digest,
+                        first_operation
+                 FROM ogvcs_metadata.file_id_registry
+                 WHERE repository_id = $1 ORDER BY file_id LIMIT $2",
+                &[&uuid(repository_id), &fetch_limit],
+            )
+            .map_err(database_error)?;
+        if rows.len() > maximum_records {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        let mut evidence = BTreeMap::new();
+        for row in rows {
+            let file_id = file_id(row.get(0))?;
+            let first_change_set = row
+                .get::<_, Option<Vec<u8>>>(3)
+                .map(|digest| {
+                    digest
+                        .try_into()
+                        .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))
+                })
+                .transpose()?;
+            let first_operation = row
+                .get::<_, Option<i32>>(4)
+                .map(|value| {
+                    u64::try_from(value)
+                        .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))
+                })
+                .transpose()?;
+            if evidence
+                .insert(
+                    file_id,
+                    StoredFileIdEvidence {
+                        state: row.get(1),
+                        origin: row.get(2),
+                        first_change_set,
+                        first_operation,
+                    },
+                )
+                .is_some()
+            {
+                return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+            }
+        }
+        Ok(evidence)
+    }
+
+    fn load_import_mappings(
+        &mut self,
+        descriptor: ObjectRef,
+        required: &BTreeSet<FileId>,
+        published: &BTreeSet<FileId>,
+        maximum_records: usize,
+    ) -> Result<Vec<ImportMapping>> {
+        let repository_id = self.authorized_repository_id;
+        let fetch_limit = maximum_records
+            .checked_add(1)
+            .and_then(|value| i64::try_from(value).ok())
+            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        let rows = self
+            .transaction()?
+            .query(
+                "SELECT mapping.importer_profile, mapping.source_namespace_digest,
+                        mapping.source_identity_digest, mapping.file_id, registry.state::text
+                 FROM ogvcs_metadata.file_id_import_mappings AS mapping
+                 JOIN ogvcs_metadata.file_id_registry AS registry
+                   ON registry.repository_id = mapping.repository_id
+                  AND registry.file_id = mapping.file_id
+                 WHERE mapping.repository_id = $1
+                 ORDER BY mapping.importer_profile, mapping.source_namespace_digest,
+                          mapping.source_identity_digest
+                 LIMIT $2",
+                &[&uuid(repository_id), &fetch_limit],
+            )
+            .map_err(database_error)?;
+        if rows.len() > maximum_records {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        let mut mappings = Vec::with_capacity(rows.len());
+        for row in rows {
+            let file_id = file_id(row.get(3))?;
+            if !required.contains(&file_id) {
+                continue;
+            }
+            let state: String = row.get(4);
+            let state = if published.contains(&file_id) {
+                ImportState::Published
+            } else {
+                match state.as_str() {
+                    "reserved" => ImportState::Reserved,
+                    "active" => ImportState::Materialized,
+                    _ => return Err(DomainError::new(DomainErrorCode::ObjectInvalid)),
+                }
+            };
+            let mut mapping = ImportMapping {
+                descriptor,
+                importer_profile: row
+                    .get::<_, String>(0)
+                    .parse()
+                    .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?,
+                source_namespace_digest: row
+                    .get::<_, Vec<u8>>(1)
+                    .try_into()
+                    .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?,
+                source_identity_digest: row
+                    .get::<_, Vec<u8>>(2)
+                    .try_into()
+                    .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?,
+                file_id,
+                state,
+                declared_mapping_key: [0; 32],
+            };
+            mapping.declared_mapping_key = import_mapping_key(descriptor, &mapping)
+                .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            mappings.push(mapping);
+        }
+        if mappings.len() != required.len() {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        Ok(mappings)
+    }
+
+    fn verify_publication_indexes(
+        &mut self,
+        entries: &BTreeMap<ObjectRef, Vec<u8>>,
+        closure: &BTreeSet<ObjectRef>,
+    ) -> Result<()> {
+        let repository_id = self.authorized_repository_id;
+        for reference in closure {
+            match reference.kind {
+                ObjectKind::Tree => {
+                    let canonical = entries
+                        .get(reference)
+                        .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+                    let value = decode_canonical(canonical, Limits::METADATA)
+                        .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+                    let expected = match cbor_field(&value, 17) {
+                        Some(Cbor::Array(entries)) => entries.len(),
+                        _ => return Err(DomainError::new(DomainErrorCode::ObjectInvalid)),
+                    };
+                    let rows = self
+                        .transaction()?
+                        .query(
+                            "SELECT ordinal, basename_utf8, file_id, entry_kind, target_kind,
+                                    target_digest, logical_size::text
+                             FROM ogvcs_metadata.tree_entries
+                             WHERE repository_id = $1 AND tree_digest = $2 ORDER BY ordinal",
+                            &[&uuid(repository_id), &&reference.digest[..]],
+                        )
+                        .map_err(database_error)?;
+                    if rows.len() != expected {
+                        return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+                    }
+                    for row in rows {
+                        let indexed = TreeEntryWrite {
+                            repository_id,
+                            tree: *reference,
+                            ordinal: u32::try_from(row.get::<_, i32>(0))
+                                .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?,
+                            basename_utf8: row.get(1),
+                            file_id: file_id(row.get(2))?,
+                            entry_kind: u16::try_from(row.get::<_, i16>(3))
+                                .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?,
+                            target: object_ref(object_kind(row.get(4))?, row.get(5))?,
+                            logical_size: row
+                                .get::<_, String>(6)
+                                .parse()
+                                .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?,
+                        };
+                        if !tree_entry_matches(canonical, &indexed) {
+                            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+                        }
+                    }
+                }
+                ObjectKind::Snapshot => {
+                    self.verify_snapshot_index(entries, *reference)?;
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    fn verify_snapshot_index(
+        &mut self,
+        entries: &BTreeMap<ObjectRef, Vec<u8>>,
+        snapshot: ObjectRef,
+    ) -> Result<()> {
+        let repository_id = self.authorized_repository_id;
+        let canonical = entries
+            .get(&snapshot)
+            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        let value = decode_canonical(canonical, Limits::METADATA)
+            .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        let root = cbor_field(&value, 18)
+            .and_then(|value| ObjectRef::from_cbor(value).ok())
+            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        let parents = match cbor_field(&value, 17) {
+            Some(Cbor::Array(parents)) => parents
+                .iter()
+                .map(|parent| ObjectRef::from_cbor(parent).ok())
+                .collect::<Option<Vec<_>>>()
+                .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?,
+            _ => return Err(DomainError::new(DomainErrorCode::ObjectInvalid)),
+        };
+        let indexed = self
+            .transaction()?
+            .query_opt(
+                "SELECT root_tree_digest FROM ogvcs_metadata.snapshots
+                 WHERE repository_id = $1 AND snapshot_digest = $2",
+                &[&uuid(repository_id), &&snapshot.digest[..]],
+            )
+            .map_err(database_error)?
+            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        let indexed_root: Vec<u8> = indexed.get(0);
+        if indexed_root.as_slice() != &root.digest[..] {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        let indexed_parents = self
+            .transaction()?
+            .query(
+                "SELECT ordinal, parent_snapshot_digest FROM ogvcs_metadata.snapshot_parents
+                 WHERE repository_id = $1 AND snapshot_digest = $2 ORDER BY ordinal",
+                &[&uuid(repository_id), &&snapshot.digest[..]],
+            )
+            .map_err(database_error)?;
+        if indexed_parents.len() != parents.len()
+            || indexed_parents
+                .iter()
+                .enumerate()
+                .zip(&parents)
+                .any(|((ordinal, row), expected)| {
+                    usize::try_from(row.get::<_, i16>(0)).ok() != Some(ordinal)
+                        || row.get::<_, Vec<u8>>(1).as_slice() != &expected.digest[..]
+                })
+        {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        let expected_history = canonical_file_history_facts(entries, snapshot)?;
+        let actual_history = self
+            .transaction()?
+            .query(
+                "SELECT operation_ordinal, file_id, repository_path_utf8, operation_kind
+                 FROM ogvcs_metadata.file_path_history
+                 WHERE repository_id = $1 AND snapshot_digest = $2 ORDER BY operation_ordinal",
+                &[&uuid(repository_id), &&snapshot.digest[..]],
+            )
+            .map_err(database_error)?;
+        if actual_history.len() != expected_history.len()
+            || actual_history.iter().zip(&expected_history).any(|(row, expected)| {
+                u32::try_from(row.get::<_, i32>(0)).ok() != Some(expected.operation_ordinal)
+                    || row.get::<_, Vec<u8>>(1).as_slice() != expected.file_id.as_bytes()
+                    || row.get::<_, Vec<u8>>(2) != expected.repository_path_utf8
+                    || row.get::<_, String>(3).as_str() != expected.operation_kind.as_str()
+            })
+        {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        Ok(())
     }
 
     fn put_object_inner(
@@ -809,16 +1824,13 @@ impl<V: ObjectValidationPort, AuthorizedView>
         if inserted.is_some() {
             if !repository_creation_descriptor {
                 self.begin_mutation(write.repository_id)?;
-                if write.object_ref.kind == ObjectKind::Snapshot {
-                    self.require_object_event(write.object_ref.digest);
-                }
             }
             return Ok(ObjectPutOutcome::Inserted);
         }
-        let stored: Vec<u8> = self
+        let stored = self
             .transaction()?
             .query_one(
-                "SELECT canonical_bytes FROM ogvcs_metadata.metadata_objects
+                "SELECT canonical_bytes, validation_contract FROM ogvcs_metadata.metadata_objects
                  WHERE repository_id = $1 AND object_kind = $2 AND digest_algorithm = 1
                    AND object_digest = $3",
                 &[
@@ -827,12 +1839,17 @@ impl<V: ObjectValidationPort, AuthorizedView>
                     &&write.object_ref.digest[..],
                 ],
             )
-            .map_err(database_error)?
-            .get(0);
-        if stored.len() == write.canonical_bytes.len()
-            && bool::from(stored.as_slice().ct_eq(write.canonical_bytes))
+            .map_err(database_error)?;
+        let stored_bytes: Vec<u8> = stored.get(0);
+        let validation_contract: String = stored.get(1);
+        if stored_bytes.len() == write.canonical_bytes.len()
+            && bool::from(stored_bytes.as_slice().ct_eq(write.canonical_bytes))
         {
-            Ok(ObjectPutOutcome::ExactReplay)
+            if validation_contract == VALIDATION_CONTRACT {
+                Ok(ObjectPutOutcome::ExactReplay)
+            } else {
+                Err(DomainError::new(DomainErrorCode::ObjectInvalid))
+            }
         } else {
             Err(DomainError::new(DomainErrorCode::ObjectIdCollision))
         }
@@ -848,6 +1865,9 @@ impl<V: ObjectValidationPort, AuthorizedView>
         if reservation.origin == FileIdOrigin::Restore
             || (reservation.origin == FileIdOrigin::Import && !imported_with_mapping)
             || (reservation.origin != FileIdOrigin::Import && imported_with_mapping)
+            || reservation.owner_id.is_empty()
+            || reservation.owner_id.len() > 256
+            || reservation.owner_id.contains('\0')
         {
             return Err(DomainError::new(DomainErrorCode::FileIdConflict));
         }
@@ -868,7 +1888,7 @@ impl<V: ObjectValidationPort, AuthorizedView>
             .map_err(file_id_database_error)?;
         if inserted == 1 {
             self.begin_mutation(reservation.repository_id)?;
-            self.require_file_id_event(reservation.file_id);
+            self.require_file_id_event(reservation.file_id, FileIdEventState::Reserved)?;
             Ok(())
         } else {
             Err(DomainError::new(DomainErrorCode::FileIdConflict))
@@ -876,13 +1896,34 @@ impl<V: ObjectValidationPort, AuthorizedView>
     }
 }
 
-impl<V: ObjectValidationPort, AuthorizedView> MetadataTransaction
-    for PostgresMetadataTransaction<'_, V, AuthorizedView>
+impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
+    for PostgresMetadataTransaction<'_, V, View>
 {
     fn create_repository(&mut self, request: RepositoryCreate<'_>) -> Result<()> {
         poison_transaction_on_error!(self, {
             self.require_repository(request.repository_id)?;
+            self.require_capability(&[TransactionCapability::CreateRepository])?;
             self.require_pending_idempotency()?;
+            let path_profile = request
+                .settings
+                .path_profile
+                .parse::<ProfileRef>()
+                .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            let platform_profile = request
+                .settings
+                .platform_profile
+                .parse::<ProfileRef>()
+                .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            let content_policy_profile = request
+                .settings
+                .content_policy_profile
+                .parse::<ProfileRef>()
+                .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            self.validation.validate_repository_profiles(
+                &path_profile,
+                &platform_profile,
+                &content_policy_profile,
+            )?;
             if request.tenant_id != self.authorization_context.tenant_id
                 || request.settings.tenant_boundary != request.tenant_id
                 || request.descriptor.repository_id != request.repository_id
@@ -943,18 +1984,25 @@ impl<V: ObjectValidationPort, AuthorizedView> MetadataTransaction
                 )
                 .map_err(database_error)?;
             self.begin_mutation(request.repository_id)?;
-            self.require_repository_event();
+            self.require_repository_event()?;
             Ok(())
         })
     }
 
     fn put_object(&mut self, write: ObjectWrite<'_>) -> Result<ObjectPutOutcome> {
-        poison_transaction_on_error!(self, { self.put_object_inner(write, false) })
+        poison_transaction_on_error!(self, {
+            self.require_capability(&[
+                TransactionCapability::PutObject,
+                TransactionCapability::Publish,
+            ])?;
+            self.put_object_inner(write, false)
+        })
     }
 
     fn index_tree_entry(&mut self, entry: TreeEntryWrite) -> Result<()> {
         poison_transaction_on_error!(self, {
             self.require_repository(entry.repository_id)?;
+            self.require_capability(&[TransactionCapability::Publish])?;
             self.require_pending_idempotency()?;
             if entry.tree.kind != ObjectKind::Tree {
                 return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
@@ -999,6 +2047,7 @@ impl<V: ObjectValidationPort, AuthorizedView> MetadataTransaction
     fn index_snapshot(&mut self, snapshot: SnapshotWrite) -> Result<()> {
         poison_transaction_on_error!(self, {
             self.require_repository(snapshot.repository_id)?;
+            self.require_capability(&[TransactionCapability::Publish])?;
             self.require_pending_idempotency()?;
             if snapshot.snapshot.kind != ObjectKind::Snapshot
                 || snapshot.root_tree.kind != ObjectKind::Tree
@@ -1055,12 +2104,74 @@ impl<V: ObjectValidationPort, AuthorizedView> MetadataTransaction
     fn append_file_history(&mut self, history: FileHistoryWrite) -> Result<()> {
         poison_transaction_on_error!(self, {
             self.require_repository(history.repository_id)?;
+            self.require_capability(&[TransactionCapability::Publish])?;
             self.require_pending_idempotency()?;
             if history.snapshot.kind != ObjectKind::Snapshot
                 || history.repository_path_utf8.is_empty()
                 || history.repository_path_utf8.len() > 4096
             {
                 return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+            }
+            let snapshot_bytes: Vec<u8> = self
+                .transaction()?
+                .query_one(
+                    "SELECT canonical_bytes FROM ogvcs_metadata.metadata_objects
+                     WHERE repository_id = $1 AND object_kind = 7 AND digest_algorithm = 1
+                       AND object_digest = $2",
+                    &[&uuid(history.repository_id), &&history.snapshot.digest[..]],
+                )
+                .map_err(database_error)?
+                .get(0);
+            let snapshot_value = decode_canonical(&snapshot_bytes, Limits::METADATA)
+                .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            let change = cbor_field(&snapshot_value, 19)
+                .and_then(|value| ObjectRef::from_cbor(value).ok())
+                .filter(|reference| reference.kind == ObjectKind::ChangeSet)
+                .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            let change_bytes: Vec<u8> = self
+                .transaction()?
+                .query_one(
+                    "SELECT canonical_bytes FROM ogvcs_metadata.metadata_objects
+                     WHERE repository_id = $1 AND object_kind = 4 AND digest_algorithm = 1
+                       AND object_digest = $2",
+                    &[&uuid(history.repository_id), &&change.digest[..]],
+                )
+                .map_err(database_error)?
+                .get(0);
+            let expected = canonical_file_history_from_change(&change_bytes)?
+                .into_iter()
+                .find(|fact| fact.operation_ordinal == history.operation_ordinal)
+                .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            if expected.file_id != history.file_id
+                || expected.repository_path_utf8 != history.repository_path_utf8
+                || expected.operation_kind != history.operation_kind
+            {
+                return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+            }
+            if let Some(origin) = allocation_history_origin(&expected.operation_kind) {
+                let first_operation = i32::try_from(expected.operation_ordinal)
+                    .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+                let updated = self
+                    .transaction()?
+                    .execute(
+                        "UPDATE ogvcs_metadata.file_id_registry
+                         SET first_change_set_digest = $3, first_operation = $4
+                         WHERE repository_id = $1 AND file_id = $2 AND state = 'active'
+                           AND origin::text = $5
+                           AND ((first_change_set_digest IS NULL AND first_operation IS NULL)
+                             OR (first_change_set_digest = $3 AND first_operation = $4))",
+                        &[
+                            &uuid(history.repository_id),
+                            &&history.file_id.as_bytes()[..],
+                            &&change.digest[..],
+                            &first_operation,
+                            &origin,
+                        ],
+                    )
+                    .map_err(database_error)?;
+                if updated != 1 {
+                    return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+                }
             }
             self.transaction()?
                 .execute(
@@ -1084,7 +2195,13 @@ impl<V: ObjectValidationPort, AuthorizedView> MetadataTransaction
     }
 
     fn reserve_file_id(&mut self, reservation: FileIdReservation) -> Result<()> {
-        poison_transaction_on_error!(self, { self.reserve_file_id_inner(reservation, false) })
+        poison_transaction_on_error!(self, {
+            self.require_capability(&[
+                TransactionCapability::ReserveFileId,
+                TransactionCapability::Publish,
+            ])?;
+            self.reserve_file_id_inner(reservation, false)
+        })
     }
 
     fn reserve_imported_file_id(
@@ -1093,10 +2210,23 @@ impl<V: ObjectValidationPort, AuthorizedView> MetadataTransaction
     ) -> Result<FileIdReservationOutcome> {
         poison_transaction_on_error!(self, {
             self.require_repository(request.reservation.repository_id)?;
+            self.require_capability(&[
+                TransactionCapability::ImportFileId,
+                TransactionCapability::Publish,
+            ])?;
             self.require_pending_idempotency()?;
             if request.reservation.origin != FileIdOrigin::Import {
                 return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
             }
+            if request.importer_profile.len() > 512 {
+                return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+            }
+            let importer_profile = request
+                .importer_profile
+                .parse::<ProfileRef>()
+                .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            self.validation
+                .validate_profile(&importer_profile, "importer")?;
             let inserted = self
                 .transaction()?
                 .query_opt(
@@ -1120,12 +2250,18 @@ impl<V: ObjectValidationPort, AuthorizedView> MetadataTransaction
                 self.reserve_file_id_inner(request.reservation, true)?;
                 return Ok(FileIdReservationOutcome::Reserved);
             }
-            let existing: Vec<u8> = self
+            let existing = self
                 .transaction()?
                 .query_one(
-                    "SELECT file_id FROM ogvcs_metadata.file_id_import_mappings
-                     WHERE repository_id = $1 AND importer_profile = $2
-                       AND source_namespace_digest = $3 AND source_identity_digest = $4",
+                    "SELECT mapping.file_id, registry.state::text, registry.origin::text,
+                            registry.owner_kind::text, registry.owner_id
+                     FROM ogvcs_metadata.file_id_import_mappings AS mapping
+                     JOIN ogvcs_metadata.file_id_registry AS registry
+                       ON registry.repository_id = mapping.repository_id
+                      AND registry.file_id = mapping.file_id
+                     WHERE mapping.repository_id = $1 AND mapping.importer_profile = $2
+                       AND mapping.source_namespace_digest = $3
+                       AND mapping.source_identity_digest = $4",
                     &[
                         &uuid(request.reservation.repository_id),
                         &request.importer_profile,
@@ -1133,9 +2269,18 @@ impl<V: ObjectValidationPort, AuthorizedView> MetadataTransaction
                         &&request.source_identity_digest[..],
                     ],
                 )
-                .map_err(database_error)?
-                .get(0);
-            if existing.as_slice() == request.reservation.file_id.as_bytes() {
+                .map_err(database_error)?;
+            let existing_file_id: Vec<u8> = existing.get(0);
+            let existing_state: String = existing.get(1);
+            let existing_origin: String = existing.get(2);
+            let existing_owner_kind: String = existing.get(3);
+            let existing_owner_id: String = existing.get(4);
+            if existing_file_id.as_slice() == request.reservation.file_id.as_bytes()
+                && matches!(existing_state.as_str(), "reserved" | "active")
+                && existing_origin == "import"
+                && existing_owner_kind == file_id_owner(request.reservation.owner_kind)
+                && existing_owner_id == request.reservation.owner_id
+            {
                 Ok(FileIdReservationOutcome::ExactImportReplay)
             } else {
                 Err(DomainError::new(DomainErrorCode::FileIdConflict))
@@ -1143,22 +2288,35 @@ impl<V: ObjectValidationPort, AuthorizedView> MetadataTransaction
         })
     }
 
-    fn tombstone_file_id(&mut self, repository_id: RepositoryId, file_id: FileId) -> Result<()> {
+    fn tombstone_file_id(
+        &mut self,
+        repository_id: RepositoryId,
+        file_id: FileId,
+        expected_state: FileIdExpectedState,
+    ) -> Result<()> {
         poison_transaction_on_error!(self, {
             self.require_repository(repository_id)?;
+            self.require_capability(&[
+                TransactionCapability::TombstoneFileId,
+                TransactionCapability::Publish,
+            ])?;
             self.require_pending_idempotency()?;
             let updated = self
                 .transaction()?
                 .execute(
                     "UPDATE ogvcs_metadata.file_id_registry
                      SET state = 'tombstoned', tombstoned_at = COALESCE(tombstoned_at, clock_timestamp())
-                     WHERE repository_id = $1 AND file_id = $2",
-                    &[&uuid(repository_id), &&file_id.as_bytes()[..]],
+                     WHERE repository_id = $1 AND file_id = $2 AND state::text = $3",
+                    &[
+                        &uuid(repository_id),
+                        &&file_id.as_bytes()[..],
+                        &expected_state.as_str(),
+                    ],
                 )
                 .map_err(database_error)?;
             if updated == 1 {
                 self.begin_mutation(repository_id)?;
-                self.require_file_id_event(file_id);
+                self.require_file_id_event(file_id, FileIdEventState::Tombstoned)?;
                 Ok(())
             } else {
                 Err(DomainError::new(DomainErrorCode::FileIdConflict))
@@ -1169,6 +2327,10 @@ impl<V: ObjectValidationPort, AuthorizedView> MetadataTransaction
     fn activate_file_id(&mut self, repository_id: RepositoryId, file_id: FileId) -> Result<()> {
         poison_transaction_on_error!(self, {
             self.require_repository(repository_id)?;
+            self.require_capability(&[
+                TransactionCapability::ReserveFileId,
+                TransactionCapability::Publish,
+            ])?;
             self.require_pending_idempotency()?;
             let updated = self
                 .transaction()?
@@ -1180,7 +2342,7 @@ impl<V: ObjectValidationPort, AuthorizedView> MetadataTransaction
                 .map_err(database_error)?;
             if updated == 1 {
                 self.begin_mutation(repository_id)?;
-                self.require_file_id_event(file_id);
+                self.require_file_id_event(file_id, FileIdEventState::Active)?;
                 Ok(())
             } else {
                 Err(DomainError::new(DomainErrorCode::FileIdConflict))
@@ -1193,6 +2355,7 @@ impl<V: ObjectValidationPort, AuthorizedView> MetadataTransaction
         reservation: IdempotencyReservation,
     ) -> Result<IdempotencyReservationOutcome> {
         poison_transaction_on_error!(self, {
+            self.require_submit_capability()?;
             if self.pending_idempotency.is_some()
                 || self.idempotency_committed
                 || !reservation.is_valid_at(SystemTime::now())
@@ -1266,6 +2429,7 @@ impl<V: ObjectValidationPort, AuthorizedView> MetadataTransaction
         safe_result: Value,
     ) -> Result<()> {
         poison_transaction_on_error!(self, {
+            self.require_submit_capability()?;
             let expected = PendingIdempotency {
                 operation: reservation.operation.clone(),
                 key: reservation.key.clone(),
@@ -1311,12 +2475,40 @@ impl<V: ObjectValidationPort, AuthorizedView> MetadataTransaction
     ) -> Result<ReferenceCasResult> {
         poison_transaction_on_error!(self, {
             self.require_repository(request.repository_id)?;
+            self.require_capability(&[
+                TransactionCapability::CompareAndSwapReference,
+                TransactionCapability::Publish,
+            ])?;
             self.require_pending_idempotency()?;
             if request
                 .desired
                 .is_some_and(|target| target.kind != ObjectKind::Snapshot)
             {
                 return self.fail(DomainError::new(DomainErrorCode::ObjectInvalid));
+            }
+            if let Some(desired) = request.desired {
+                self.validate_publication_candidate(desired)?;
+                let publication = self
+                    .transaction()?
+                    .query_one(
+                        "SELECT snapshot.published_commit_sequence,
+                                EXISTS (
+                                  SELECT 1 FROM ogvcs_metadata.references AS reference
+                                  WHERE reference.repository_id = snapshot.repository_id
+                                    AND reference.target_snapshot_digest = snapshot.snapshot_digest
+                                )
+                         FROM ogvcs_metadata.snapshots AS snapshot
+                         WHERE snapshot.repository_id = $1 AND snapshot.snapshot_digest = $2",
+                        &[&uuid(request.repository_id), &&desired.digest[..]],
+                    )
+                    .map_err(database_error)?;
+                let published: Option<i64> = publication.get(0);
+                let referenced: bool = publication.get(1);
+                if published.is_some_and(|sequence| positive_u64(sequence).is_err())
+                    || (published.is_none() && referenced)
+                {
+                    return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+                }
             }
             let sequence = self.begin_mutation(request.repository_id)?;
             let row = match request.expected {
@@ -1392,11 +2584,58 @@ impl<V: ObjectValidationPort, AuthorizedView> MetadataTransaction
             let Some((prior, current, row)) = row else {
                 return self.fail(DomainError::new(DomainErrorCode::ReferenceConflict));
             };
-            self.require_reference_event(request.kind, &request.name);
+            let generation = positive_u64(row.get(1))?;
+            let newly_accepted_snapshot = if let Some(snapshot) = current {
+                let accepted = self
+                    .transaction()?
+                    .query_opt(
+                        "UPDATE ogvcs_metadata.snapshots
+                         SET published_commit_sequence = $3
+                         WHERE repository_id = $1 AND snapshot_digest = $2
+                           AND published_commit_sequence IS NULL
+                         RETURNING 1",
+                        &[
+                            &uuid(request.repository_id),
+                            &&snapshot.digest[..],
+                            &(sequence.get() as i64),
+                        ],
+                    )
+                    .map_err(database_error)?
+                    .is_some();
+                if !accepted {
+                    let published: Option<i64> = self
+                        .transaction()?
+                        .query_one(
+                            "SELECT published_commit_sequence
+                             FROM ogvcs_metadata.snapshots
+                             WHERE repository_id = $1 AND snapshot_digest = $2",
+                            &[&uuid(request.repository_id), &&snapshot.digest[..]],
+                        )
+                        .map_err(database_error)?
+                        .get(0);
+                    if published.and_then(|value| nonnegative_u64(value).ok()).is_none() {
+                        return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+                    }
+                }
+                accepted
+            } else {
+                false
+            };
+            self.require_reference_event(
+                request.kind,
+                &request.name,
+                current,
+                generation,
+            )?;
+            if newly_accepted_snapshot {
+                let snapshot = current
+                    .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+                self.require_object_event(snapshot.digest)?;
+            }
             Ok(ReferenceCasResult {
                 prior,
                 current,
-                generation: positive_u64(row.get(1))?,
+                generation,
                 commit_sequence: CommitSequence::new(positive_u64(row.get(2))?),
             })
         })
@@ -1404,13 +2643,17 @@ impl<V: ObjectValidationPort, AuthorizedView> MetadataTransaction
 
     fn append_outbox(&mut self, event: OutboxEvent) -> Result<()> {
         poison_transaction_on_error!(self, {
+            self.require_submit_capability()?;
             self.require_repository(event.repository_id)?;
-            let Some(requirement) = outbox_requirement(&event) else {
-                return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
-            };
-            if self.written_events[requirement] >= self.required_events[requirement] {
+            if !valid_public_uuid(&event.event_id) || !valid_public_uuid(&event.correlation_id) {
                 return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
             }
+            let fact = self
+                .outbox_events
+                .iter()
+                .find(|required| !required.emitted)
+                .map(|required| required.fact.clone())
+                .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
             let sequence = self.ensure_sequence(event.repository_id)?;
             let tenant: Uuid = self
                 .transaction()?
@@ -1425,6 +2668,9 @@ impl<V: ObjectValidationPort, AuthorizedView> MetadataTransaction
                     DomainErrorCode::MetadataNotFoundOrDenied,
                 ));
             }
+            let safe_payload = fact.safe_payload();
+            let resource_opaque_id =
+                fact.resource_opaque_id(event.repository_id, event.event_id, &safe_payload)?;
             self.transaction()?
                 .execute(
                     "INSERT INTO ogvcs_metadata.outbox_events
@@ -1436,16 +2682,20 @@ impl<V: ObjectValidationPort, AuthorizedView> MetadataTransaction
                         &tenant,
                         &uuid(event.repository_id),
                         &(sequence.get() as i64),
-                        &event.event_type,
-                        &(event.event_version as i16),
+                        &fact.event_type(),
+                        &1_i16,
                         &Uuid::from_bytes(event.correlation_id),
-                        &event.resource_type,
-                        &event.resource_opaque_id,
-                        &Json(&event.safe_payload),
+                        &fact.resource_type(),
+                        &resource_opaque_id,
+                        &Json(&safe_payload),
                     ],
                 )
                 .map_err(database_error)?;
-            self.written_events[requirement] += 1;
+            self.outbox_events
+                .iter_mut()
+                .find(|required| !required.emitted)
+                .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?
+                .emitted = true;
             Ok(())
         })
     }
@@ -1455,6 +2705,10 @@ impl<V: ObjectValidationPort, AuthorizedView> MetadataTransaction
         minimum: CommitSequence,
     ) -> Result<ConsistencyToken> {
         poison_transaction_on_error!(self, {
+            self.require_capability(&[
+                TransactionCapability::IssueConsistencyToken,
+                TransactionCapability::Publish,
+            ])?;
             let repository_id = self.authorized_repository_id;
             let subject_digest = self.authorization_context.subject_digest;
             let tenant_id = self.authorization_context.tenant_id;
@@ -1499,10 +2753,13 @@ impl<V: ObjectValidationPort, AuthorizedView> MetadataTransaction
     }
 
     fn commit(mut self) -> Result<CommitSequence> {
-        if self.failed
+        let capability = self.capability;
+        let authorization_still_valid = self.require_capability(&[capability]).is_ok();
+        if !authorization_still_valid
+            || self.failed
             || self.pending_idempotency.is_some()
             || (self.mutation_started && !self.idempotency_committed)
-            || self.required_events != self.written_events
+            || self.outbox_events.iter().any(|event| !event.emitted)
         {
             if let Some(transaction) = self.transaction.take() {
                 let _ = transaction.rollback();
@@ -1539,14 +2796,14 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> MetadataStore for PostgresMe
     fn begin_authorized(
         &mut self,
         context: &AuthorizationContext,
-        permission: &'static str,
+        capability: TransactionCapability,
         repository_id: RepositoryId,
         options: TransactionOptions,
     ) -> Result<Self::Transaction<'_>> {
         PostgresMetadataStore::begin_authorized(
             self,
             context,
-            permission,
+            capability,
             repository_id,
             options,
         )
@@ -1573,11 +2830,7 @@ fn tree_entry(row: Row) -> Result<TreeEntryRecord> {
 
 fn reference_record(row: &Row) -> Result<ReferenceRecord> {
     let kind_text: String = row.get(0);
-    let kind = match kind_text.as_str() {
-        "branch" => ReferenceKind::Branch,
-        "tag" => ReferenceKind::Tag,
-        _ => return Err(DomainError::new(DomainErrorCode::ObjectInvalid)),
-    };
+    let kind = parsed_reference_kind(&kind_text)?;
     Ok(ReferenceRecord {
         kind,
         name: ReferenceName::new(row.get(1))
@@ -1585,6 +2838,14 @@ fn reference_record(row: &Row) -> Result<ReferenceRecord> {
         target: object_ref(ObjectKind::Snapshot, row.get(2))?,
         generation: positive_u64(row.get(3))?,
         commit_sequence: CommitSequence::new(positive_u64(row.get(4))?),
+    })
+}
+
+fn parsed_reference_kind(value: &str) -> Result<ReferenceKind> {
+    Ok(match value {
+        "branch" => ReferenceKind::Branch,
+        "tag" => ReferenceKind::Tag,
+        _ => return Err(DomainError::new(DomainErrorCode::ObjectInvalid)),
     })
 }
 
@@ -1660,16 +2921,47 @@ fn query_digest(domain: &[u8], repository_id: RepositoryId, first: &[u8], second
     hash.finalize().into()
 }
 
-fn prefix_upper_bound(prefix: &[u8]) -> Option<Vec<u8>> {
-    let mut upper = prefix.to_vec();
-    for index in (0..upper.len()).rev() {
-        if upper[index] != u8::MAX {
-            upper[index] += 1;
-            upper.truncate(index + 1);
-            return Some(upper);
-        }
+fn tree_query_digest(
+    repository_id: RepositoryId,
+    snapshot: ObjectRef,
+    tree: ObjectRef,
+    prefix: &[String],
+) -> [u8; 32] {
+    let mut hash = Sha256::new();
+    hash.update(b"OpenGameVCS metadata query\0tree\0");
+    hash.update(repository_id.as_bytes());
+    hash.update(snapshot.kind.code().to_be_bytes());
+    hash.update(snapshot.digest);
+    hash.update(tree.kind.code().to_be_bytes());
+    hash.update(tree.digest);
+    hash.update((prefix.len() as u64).to_be_bytes());
+    for segment in prefix {
+        hash.update((segment.len() as u64).to_be_bytes());
+        hash.update(segment.as_bytes());
     }
-    None
+    hash.finalize().into()
+}
+
+fn valid_tree_prefix(prefix: &[String]) -> bool {
+    if prefix.len() > 256 {
+        return false;
+    }
+    let mut bytes = prefix.len().saturating_sub(1);
+    for segment in prefix {
+        if segment.is_empty()
+            || segment.len() > 255
+            || matches!(segment.as_str(), "." | "..")
+            || segment.contains('/')
+            || segment.contains('\0')
+        {
+            return false;
+        }
+        let Some(total) = bytes.checked_add(segment.len()) else {
+            return false;
+        };
+        bytes = total;
+    }
+    bytes <= 4096
 }
 
 fn opaque_token(prefix: &str) -> Result<String> {
@@ -1898,8 +3190,23 @@ fn repository_settings_match_descriptor(request: &RepositoryCreate<'_>) -> bool 
     {
         return false;
     }
-    let Ok(Cbor::Map(fields)) = decode_canonical(request.descriptor.canonical_bytes, Limits::METADATA)
-    else {
+    descriptor_matches_repository_settings(
+        request.repository_id,
+        &request.settings.required_features,
+        &request.settings.path_profile,
+        &request.settings.content_policy_profile,
+        request.descriptor.canonical_bytes,
+    )
+}
+
+fn descriptor_matches_repository_settings(
+    repository_id: RepositoryId,
+    required_features: &[u16],
+    path_profile: &str,
+    content_policy_profile: &str,
+    descriptor_bytes: &[u8],
+) -> bool {
+    let Ok(Cbor::Map(fields)) = decode_canonical(descriptor_bytes, Limits::METADATA) else {
         return false;
     };
     let field = |code| {
@@ -1910,7 +3217,7 @@ fn repository_settings_match_descriptor(request: &RepositoryCreate<'_>) -> bool 
     };
     let repository_matches = matches!(
         field(16),
-        Some(Cbor::Bytes(bytes)) if bytes.as_slice() == request.repository_id.as_bytes()
+        Some(Cbor::Bytes(bytes)) if bytes.as_slice() == repository_id.as_bytes()
     );
     let features_match = match field(2) {
         Some(Cbor::Array(features)) => features
@@ -1920,17 +3227,17 @@ fn repository_settings_match_descriptor(request: &RepositoryCreate<'_>) -> bool 
                 _ => None,
             })
             .collect::<Option<Vec<_>>>()
-            .is_some_and(|features| features == request.settings.required_features),
+            .is_some_and(|features| features == required_features),
         _ => false,
     };
     let path_matches = field(17)
         .and_then(|value| ProfileRef::from_cbor(value).ok())
-        .is_some_and(|profile| profile.to_string() == request.settings.path_profile);
+        .is_some_and(|profile| profile.to_string() == path_profile);
     let content_policy_matches = match field(18) {
         Some(Cbor::Array(profiles)) => profiles.iter().any(|value| {
             ProfileRef::from_cbor(value)
                 .ok()
-                .is_some_and(|profile| profile.to_string() == request.settings.content_policy_profile)
+                .is_some_and(|profile| profile.to_string() == content_policy_profile)
         }),
         _ => false,
     };
@@ -1990,6 +3297,528 @@ fn snapshot_index_matches(canonical: &[u8], expected: &SnapshotWrite) -> bool {
     root_matches && parents_match
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct CanonicalFileHistoryFact {
+    operation_ordinal: u32,
+    file_id: FileId,
+    repository_path_utf8: Vec<u8>,
+    operation_kind: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct StoredFileIdEvidence {
+    state: String,
+    origin: String,
+    first_change_set: Option<[u8; 32]>,
+    first_operation: Option<u64>,
+}
+
+fn metadata_closure(
+    entries: &BTreeMap<ObjectRef, Vec<u8>>,
+    candidate: ObjectRef,
+) -> Result<BTreeSet<ObjectRef>> {
+    let limits = RepositoryLimits::default();
+    let mut closure = BTreeSet::new();
+    let mut stack = vec![candidate];
+    let mut traversed_edges = 0_usize;
+    while let Some(reference) = stack.pop() {
+        if reference.kind == ObjectKind::Chunk || closure.contains(&reference) {
+            continue;
+        }
+        if !metadata_kind(reference.kind) {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        let canonical = entries
+            .get(&reference)
+            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        let actual = object_id(reference.kind, canonical)
+            .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        if actual != reference.digest {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        let value = decode_canonical(canonical, Limits::METADATA)
+            .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        closure.insert(reference);
+        let mut outbound = Vec::new();
+        collect_object_references(&value, &mut outbound);
+        traversed_edges = traversed_edges
+            .checked_add(outbound.len())
+            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        if traversed_edges > limits.max_edges {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        for target in outbound.into_iter().rev() {
+            if target.kind != ObjectKind::Chunk && !closure.contains(&target) {
+                stack.push(target);
+            }
+        }
+        if closure.len() > limits.max_objects {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+    }
+    Ok(closure)
+}
+
+fn required_chunk_references(
+    entries: &BTreeMap<ObjectRef, Vec<u8>>,
+    closure: &BTreeSet<ObjectRef>,
+) -> Result<BTreeSet<ObjectRef>> {
+    let mut chunks = BTreeSet::new();
+    for reference in closure {
+        let value = entries
+            .get(reference)
+            .and_then(|canonical| decode_canonical(canonical, Limits::METADATA).ok())
+            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        let mut outbound = Vec::new();
+        collect_object_references(&value, &mut outbound);
+        chunks.extend(
+            outbound
+                .into_iter()
+                .filter(|target| target.kind == ObjectKind::Chunk),
+        );
+    }
+    Ok(chunks)
+}
+
+fn resolve_tree_prefix(
+    trees: &BTreeMap<ObjectRef, Vec<u8>>,
+    root: ObjectRef,
+    prefix: &[String],
+    maximum_edges: usize,
+) -> Result<ObjectRef> {
+    if root.kind != ObjectKind::Tree {
+        return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+    }
+    let mut current = root;
+    let mut traversed_edges = 0_usize;
+    for segment in prefix {
+        let value = trees
+            .get(&current)
+            .and_then(|canonical| decode_canonical(canonical, Limits::METADATA).ok())
+            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        let entries = match cbor_field(&value, 17) {
+            Some(Cbor::Array(entries)) => entries,
+            _ => return Err(DomainError::new(DomainErrorCode::ObjectInvalid)),
+        };
+        traversed_edges = traversed_edges
+            .checked_add(entries.len())
+            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        if traversed_edges > maximum_edges {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        current = entries
+            .iter()
+            .find(|entry| {
+                matches!(cbor_field(entry, 0), Some(Cbor::Text(name)) if name == segment)
+            })
+            .filter(|entry| matches!(cbor_field(entry, 1), Some(Cbor::UInt(1))))
+            .and_then(|entry| cbor_field(entry, 4))
+            .and_then(|value| ObjectRef::from_cbor(value).ok())
+            .filter(|reference| reference.kind == ObjectKind::Tree)
+            .ok_or_else(not_found)?;
+    }
+    Ok(current)
+}
+
+fn candidate_tree_file_ids(
+    entries: &BTreeMap<ObjectRef, Vec<u8>>,
+    candidate: ObjectRef,
+) -> Result<BTreeSet<FileId>> {
+    let snapshot = entries
+        .get(&candidate)
+        .and_then(|canonical| decode_canonical(canonical, Limits::METADATA).ok())
+        .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+    let root = cbor_field(&snapshot, 18)
+        .and_then(|value| ObjectRef::from_cbor(value).ok())
+        .filter(|reference| reference.kind == ObjectKind::Tree)
+        .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+    let mut file_ids = BTreeSet::new();
+    let mut visited = BTreeSet::new();
+    let mut stack = vec![root];
+    let mut traversed_edges = 0_usize;
+    while let Some(tree) = stack.pop() {
+        if !visited.insert(tree) {
+            continue;
+        }
+        let value = entries
+            .get(&tree)
+            .and_then(|canonical| decode_canonical(canonical, Limits::METADATA).ok())
+            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        let tree_entries = match cbor_field(&value, 17) {
+            Some(Cbor::Array(tree_entries)) => tree_entries,
+            _ => return Err(DomainError::new(DomainErrorCode::ObjectInvalid)),
+        };
+        traversed_edges = traversed_edges
+            .checked_add(tree_entries.len())
+            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        if traversed_edges > RepositoryLimits::default().max_edges {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        for entry in tree_entries {
+            let file_id = cbor_field(entry, 2)
+                .and_then(|value| FileId::from_cbor(value).ok())
+                .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            file_ids.insert(file_id);
+            let kind = match cbor_field(entry, 1) {
+                Some(Cbor::UInt(kind)) => *kind,
+                _ => return Err(DomainError::new(DomainErrorCode::ObjectInvalid)),
+            };
+            let target = cbor_field(entry, 4)
+                .and_then(|value| ObjectRef::from_cbor(value).ok())
+                .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            if kind == 1 {
+                if target.kind != ObjectKind::Tree {
+                    return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+                }
+                stack.push(target);
+            }
+        }
+    }
+    Ok(file_ids)
+}
+
+fn verify_lifetime_evidence<'a>(
+    stored: &BTreeMap<FileId, StoredFileIdEvidence>,
+    records: impl Iterator<Item = &'a LifetimeRecord>,
+    candidate_change: ObjectRef,
+) -> Result<()> {
+    for record in records {
+        let evidence = stored
+            .get(&record.file_id)
+            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        let expected_origin = match record.origin {
+            LifetimeOrigin::NativeCreate => "create",
+            LifetimeOrigin::NativeCopy => "copy",
+            LifetimeOrigin::Import => "import",
+        };
+        if evidence.origin != expected_origin
+            || evidence.first_change_set != Some(record.first_change_set.digest)
+            || evidence.first_operation != Some(record.first_operation)
+            || (record.first_change_set == candidate_change && evidence.state != "active")
+            || !matches!(evidence.state.as_str(), "active" | "tombstoned")
+        {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+    }
+    Ok(())
+}
+
+fn verify_active_file_ids(
+    stored: &BTreeMap<FileId, StoredFileIdEvidence>,
+    required: &BTreeSet<FileId>,
+) -> Result<()> {
+    if required.iter().all(|file_id| {
+        stored
+            .get(file_id)
+            .is_some_and(|evidence| evidence.state == "active")
+    }) {
+        Ok(())
+    } else {
+        Err(DomainError::new(DomainErrorCode::ObjectInvalid))
+    }
+}
+
+fn snapshot_change_ref(
+    entries: &BTreeMap<ObjectRef, Vec<u8>>,
+    snapshot: ObjectRef,
+) -> Result<ObjectRef> {
+    entries
+        .get(&snapshot)
+        .and_then(|canonical| decode_canonical(canonical, Limits::METADATA).ok())
+        .and_then(|value| {
+            cbor_field(&value, 19).and_then(|value| ObjectRef::from_cbor(value).ok())
+        })
+        .filter(|reference| reference.kind == ObjectKind::ChangeSet)
+        .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))
+}
+
+fn derive_lifetime_evidence(
+    entries: &BTreeMap<ObjectRef, Vec<u8>>,
+    closure: &BTreeSet<ObjectRef>,
+    candidate: ObjectRef,
+) -> Result<(Vec<LifetimeRecord>, Vec<LifetimeRecord>)> {
+    let mut prior = BTreeMap::<FileId, LifetimeRecord>::new();
+    let mut working = BTreeMap::<FileId, LifetimeRecord>::new();
+    for snapshot in closure
+        .iter()
+        .filter(|reference| reference.kind == ObjectKind::Snapshot)
+    {
+        let change = snapshot_change_ref(entries, *snapshot)?;
+        let value = entries
+            .get(&change)
+            .and_then(|canonical| decode_canonical(canonical, Limits::METADATA).ok())
+            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        let operations = match cbor_field(&value, 18) {
+            Some(Cbor::Array(operations)) => operations,
+            _ => return Err(DomainError::new(DomainErrorCode::ObjectInvalid)),
+        };
+        for operation in operations {
+            let operation_code = match cbor_field(operation, 1) {
+                Some(Cbor::UInt(code)) if matches!(*code, 1 | 3) => *code,
+                Some(Cbor::UInt(_)) => continue,
+                _ => return Err(DomainError::new(DomainErrorCode::ObjectInvalid)),
+            };
+            let sequence = match cbor_field(operation, 0) {
+                Some(Cbor::UInt(sequence)) => *sequence,
+                _ => return Err(DomainError::new(DomainErrorCode::ObjectInvalid)),
+            };
+            let after = cbor_field(operation, 3)
+                .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            let file_id = cbor_field(after, 2)
+                .and_then(|value| FileId::from_cbor(value).ok())
+                .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            let proof = cbor_field(operation, 5)
+                .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            let allocation_kind = match cbor_field(proof, 1) {
+                Some(Cbor::UInt(kind)) if matches!(*kind, 1 | 2) => *kind,
+                _ => return Err(DomainError::new(DomainErrorCode::ObjectInvalid)),
+            };
+            let import_mapping_key = if allocation_kind == 2 {
+                let key: [u8; 32] = cbor_field(proof, 2)
+                    .and_then(|value| match value {
+                        Cbor::Bytes(bytes) => bytes.as_slice().try_into().ok(),
+                        _ => None,
+                    })
+                    .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+                Some(key)
+            } else {
+                None
+            };
+            let origin = if allocation_kind == 2 {
+                LifetimeOrigin::Import
+            } else if operation_code == 1 {
+                LifetimeOrigin::NativeCreate
+            } else {
+                LifetimeOrigin::NativeCopy
+            };
+            let record = LifetimeRecord {
+                file_id,
+                origin,
+                first_change_set: change,
+                first_operation: sequence,
+                import_mapping_key,
+            };
+            if prior.contains_key(&file_id) || working.contains_key(&file_id) {
+                return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+            }
+            if *snapshot == candidate && origin != LifetimeOrigin::Import {
+                working.insert(file_id, record);
+            } else {
+                prior.insert(file_id, record);
+            }
+        }
+    }
+    Ok((prior.into_values().collect(), working.into_values().collect()))
+}
+
+fn collect_object_references(value: &Cbor, references: &mut Vec<ObjectRef>) {
+    if let Ok(reference) = ObjectRef::from_cbor(value) {
+        references.push(reference);
+        return;
+    }
+    match value {
+        Cbor::Array(values) => {
+            for value in values {
+                collect_object_references(value, references);
+            }
+        }
+        Cbor::Map(fields) => {
+            for (key, value) in fields {
+                collect_object_references(key, references);
+                collect_object_references(value, references);
+            }
+        }
+        Cbor::UInt(_) | Cbor::NInt(_) | Cbor::Bytes(_) | Cbor::Text(_) | Cbor::Bool(_) => {}
+    }
+}
+
+fn designated_snapshot_root(
+    entries: &BTreeMap<ObjectRef, Vec<u8>>,
+    candidate: ObjectRef,
+) -> Result<ObjectRef> {
+    let mut visited = BTreeSet::new();
+    let mut roots = BTreeSet::new();
+    let mut stack = vec![candidate];
+    while let Some(reference) = stack.pop() {
+        if reference.kind != ObjectKind::Snapshot || !visited.insert(reference) {
+            continue;
+        }
+        let value = entries
+            .get(&reference)
+            .and_then(|canonical| decode_canonical(canonical, Limits::METADATA).ok())
+            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        let parents = match cbor_field(&value, 17) {
+            Some(Cbor::Array(parents)) => parents,
+            _ => return Err(DomainError::new(DomainErrorCode::ObjectInvalid)),
+        };
+        if parents.is_empty() {
+            roots.insert(reference);
+        }
+        for parent in parents {
+            let parent = ObjectRef::from_cbor(parent)
+                .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            if parent.kind != ObjectKind::Snapshot {
+                return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+            }
+            stack.push(parent);
+        }
+    }
+    if roots.len() == 1 {
+        Ok(*roots.iter().next().unwrap())
+    } else {
+        Err(DomainError::new(DomainErrorCode::ObjectInvalid))
+    }
+}
+
+fn enforce_configured_tree_limits(
+    entries: &BTreeMap<Vec<String>, ogvcs_object_model::EntryState>,
+    configured: &Value,
+) -> Result<()> {
+    let limits = configured
+        .as_object()
+        .filter(|limits| valid_structural_limits(configured) && limits.len() == 4)
+        .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+    let max_entries = usize::try_from(json_limit(limits, "maxTreeEntries").unwrap())
+        .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+    let max_path_bytes = usize::try_from(json_limit(limits, "maxPathBytes").unwrap())
+        .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+    let max_path_segments = usize::try_from(json_limit(limits, "maxPathSegments").unwrap())
+        .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+    if entries.len() > max_entries {
+        return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+    }
+    for path in entries.keys() {
+        let path_bytes = path
+            .iter()
+            .try_fold(path.len().saturating_sub(1), |total, segment| {
+                total.checked_add(segment.len())
+            })
+            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        if path.len() > max_path_segments || path_bytes > max_path_bytes {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+    }
+    Ok(())
+}
+
+fn canonical_file_history_facts(
+    entries: &BTreeMap<ObjectRef, Vec<u8>>,
+    snapshot: ObjectRef,
+) -> Result<Vec<CanonicalFileHistoryFact>> {
+    let snapshot_value = entries
+        .get(&snapshot)
+        .and_then(|canonical| decode_canonical(canonical, Limits::METADATA).ok())
+        .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+    let change = cbor_field(&snapshot_value, 19)
+        .and_then(|value| ObjectRef::from_cbor(value).ok())
+        .filter(|reference| reference.kind == ObjectKind::ChangeSet)
+        .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+    let change_bytes = entries
+        .get(&change)
+        .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+    canonical_file_history_from_change(change_bytes)
+}
+
+fn canonical_file_history_from_change(
+    canonical: &[u8],
+) -> Result<Vec<CanonicalFileHistoryFact>> {
+    let value = decode_canonical(canonical, Limits::METADATA)
+        .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+    let operations = match cbor_field(&value, 18) {
+        Some(Cbor::Array(operations)) => operations,
+        _ => return Err(DomainError::new(DomainErrorCode::ObjectInvalid)),
+    };
+    let mut facts = Vec::new();
+    for operation in operations {
+        let ordinal = match cbor_field(operation, 0) {
+            Some(Cbor::UInt(value)) => u32::try_from(*value)
+                .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?,
+            _ => return Err(DomainError::new(DomainErrorCode::ObjectInvalid)),
+        };
+        let kind = match cbor_field(operation, 1) {
+            Some(Cbor::UInt(value)) => *value,
+            _ => return Err(DomainError::new(DomainErrorCode::ObjectInvalid)),
+        };
+        let (state_field, operation_kind) = match kind {
+            1 => (3, allocation_operation_kind(operation, "create")?),
+            2 => (3, "modify"),
+            3 => (3, allocation_operation_kind(operation, "copy")?),
+            4 => (3, "move"),
+            5 => (3, "rename"),
+            6 => (2, "delete"),
+            7 => (3, "restore"),
+            8..=11 => continue,
+            _ => return Err(DomainError::new(DomainErrorCode::ObjectInvalid)),
+        };
+        let state = cbor_field(operation, state_field)
+            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        let file_id = cbor_field(state, 2)
+            .and_then(|value| FileId::from_cbor(value).ok())
+            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        let path = match cbor_field(state, 0) {
+            Some(Cbor::Array(segments)) if !segments.is_empty() => {
+                let segments = segments
+                    .iter()
+                    .map(|segment| match segment {
+                        Cbor::Text(segment) if !segment.is_empty() => Some(segment.as_bytes()),
+                        _ => None,
+                    })
+                    .collect::<Option<Vec<_>>>()
+                    .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+                let length = segments
+                    .iter()
+                    .try_fold(segments.len() - 1, |total, segment| {
+                        total.checked_add(segment.len())
+                    })
+                    .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+                if length > 4096 {
+                    return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+                }
+                let mut path = Vec::with_capacity(length);
+                for (index, segment) in segments.into_iter().enumerate() {
+                    if index > 0 {
+                        path.push(b'/');
+                    }
+                    path.extend_from_slice(segment);
+                }
+                path
+            }
+            _ => return Err(DomainError::new(DomainErrorCode::ObjectInvalid)),
+        };
+        facts.push(CanonicalFileHistoryFact {
+            operation_ordinal: ordinal,
+            file_id,
+            repository_path_utf8: path,
+            operation_kind: operation_kind.to_owned(),
+        });
+    }
+    facts.sort_by_key(|fact| fact.operation_ordinal);
+    if facts
+        .windows(2)
+        .any(|pair| pair[0].operation_ordinal == pair[1].operation_ordinal)
+    {
+        return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+    }
+    Ok(facts)
+}
+
+fn allocation_operation_kind<'a>(operation: &Cbor, native: &'a str) -> Result<&'a str> {
+    match cbor_field(operation, 5).and_then(|proof| cbor_field(proof, 1)) {
+        Some(Cbor::UInt(1)) => Ok(native),
+        Some(Cbor::UInt(2)) => Ok("import"),
+        _ => Err(DomainError::new(DomainErrorCode::ObjectInvalid)),
+    }
+}
+
+fn allocation_history_origin(operation_kind: &str) -> Option<&'static str> {
+    match operation_kind {
+        "create" => Some("create"),
+        "copy" => Some("copy"),
+        "import" => Some("import"),
+        _ => None,
+    }
+}
+
 fn reference_kind(kind: ReferenceKind) -> &'static str {
     match kind {
         ReferenceKind::Branch => "branch",
@@ -1997,34 +3826,57 @@ fn reference_kind(kind: ReferenceKind) -> &'static str {
     }
 }
 
-fn outbox_requirement(event: &OutboxEvent) -> Option<usize> {
-    if event.event_version != 1
-        || event.resource_opaque_id.len() != 47
-        || !event
-            .resource_opaque_id
-            .strip_prefix("rr1.")
-            .is_some_and(|payload| {
-                payload.len() == 43
-                    && payload.bytes().all(|byte| {
-                        byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-'
-                    })
-            })
-        || !event.safe_payload.is_object()
-        || json_size(&event.safe_payload).is_none_or(|size| size > 1_048_576)
-    {
-        return None;
+fn json_size(value: &Value) -> Option<usize> {
+    let mut stack = vec![(value, 0_usize)];
+    let mut nodes = 0_usize;
+    let mut scheduled_nodes = 1_usize;
+    let mut conservative_bytes = 0_usize;
+    while let Some((value, depth)) = stack.pop() {
+        nodes = nodes.checked_add(1)?;
+        if nodes > MAX_JSON_PREFLIGHT_NODES || depth > MAX_JSON_PREFLIGHT_DEPTH {
+            return None;
+        }
+        let add = match value {
+            Value::Null => 4,
+            Value::Bool(true) => 4,
+            Value::Bool(false) => 5,
+            Value::Number(number) => number.to_string().len(),
+            Value::String(value) => value.len().checked_mul(6)?.checked_add(2)?,
+            Value::Array(values) => {
+                scheduled_nodes = scheduled_nodes.checked_add(values.len())?;
+                if scheduled_nodes > MAX_JSON_PREFLIGHT_NODES {
+                    return None;
+                }
+                for value in values {
+                    stack.push((value, depth.checked_add(1)?));
+                }
+                values.len().checked_add(2)?
+            }
+            Value::Object(values) => {
+                scheduled_nodes = scheduled_nodes.checked_add(values.len())?;
+                if scheduled_nodes > MAX_JSON_PREFLIGHT_NODES {
+                    return None;
+                }
+                let mut bytes = values.len().checked_add(2)?;
+                for (key, value) in values {
+                    bytes = bytes
+                        .checked_add(key.len().checked_mul(6)?)?
+                        .checked_add(3)?;
+                    stack.push((value, depth.checked_add(1)?));
+                }
+                bytes
+            }
+        };
+        conservative_bytes = conservative_bytes.checked_add(add)?;
+        if conservative_bytes > MAX_JSON_PREFLIGHT_BYTES {
+            return None;
+        }
     }
-    match (event.event_type, event.resource_type) {
-        ("repository.created", "repository") => Some(EVENT_REPOSITORY),
-        ("metadata.object-accepted", "snapshot") => Some(EVENT_OBJECT),
-        ("reference.changed", "reference") => Some(EVENT_REFERENCE),
-        ("file-id.state-changed", "path") => Some(EVENT_FILE_ID),
-        _ => None,
-    }
+    serde_json::to_vec(value).ok().map(|bytes| bytes.len())
 }
 
-fn json_size(value: &Value) -> Option<usize> {
-    serde_json::to_vec(value).ok().map(|bytes| bytes.len())
+fn valid_public_uuid(bytes: &[u8; 16]) -> bool {
+    matches!(bytes[6] >> 4, 1..=8) && bytes[8] & 0xc0 == 0x80
 }
 
 fn file_id_origin(origin: FileIdOrigin) -> &'static str {
@@ -2053,7 +3905,7 @@ fn database_error(error: postgres::Error) -> DomainError {
         .as_db_error()
         .is_some_and(|error| matches!(error.code().code(), "40001" | "40P01"))
     {
-        DomainError::new(DomainErrorCode::TransactionRetryExhausted)
+        DomainError::database_concurrency()
     } else if error
         .as_db_error()
         .is_some_and(|error| matches!(error.code().code(), "23505" | "23503" | "23514"))

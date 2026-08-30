@@ -14,10 +14,17 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
     assert_eq!(manifest["schemaVersion"], "ogvcs.repository-metadata/migration-manifest/v1");
     assert_eq!(manifest["database"], "postgresql-15-or-newer");
     let entries = manifest["entries"].as_array().unwrap();
-    assert_eq!(entries.len(), 3);
-    let expected = ["expand", "migrate", "contract"];
-    for (entry, phase) in entries.iter().zip(expected) {
-        assert_eq!(entry["version"], 1);
+    assert_eq!(entries.len(), 6);
+    let expected = [
+        (1, "expand"),
+        (1, "migrate"),
+        (1, "contract"),
+        (2, "expand"),
+        (2, "migrate"),
+        (2, "contract"),
+    ];
+    for (entry, (version, phase)) in entries.iter().zip(expected) {
+        assert_eq!(entry["version"], version);
         assert_eq!(entry["phase"], phase);
         assert_eq!(entry["restartable"], true);
         let path = root.join(entry["path"].as_str().unwrap());
@@ -29,6 +36,7 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
         assert!(sql.ends_with("COMMIT;\n"));
     }
     assert_eq!(entries[2]["requiresCompatibilityFence"], true);
+    assert_eq!(entries[5]["requiresCompatibilityFence"], true);
 }
 
 #[test]
@@ -68,11 +76,29 @@ fn expand_schema_contains_every_authoritative_boundary() {
     assert!(sql.contains("FOREIGN KEY (repository_id, tenant_boundary)"));
     assert!(sql.contains("(entry_kind = 1 AND target_kind = 3)"));
     assert!(sql.contains("(entry_kind IN (2, 3, 4) AND target_kind = 2)"));
-    assert!(sql.contains("CREATE TRIGGER repository_settings_immutable"));
-    assert!(sql.contains("file_id, snapshot_digest, operation_ordinal"));
     assert!(sql.contains("'path'"));
     assert!(!sql.contains("CREATE TABLE ogvcs_metadata.chunks"));
     assert!(!sql.contains("object_kind IN (1,"));
+}
+
+#[test]
+fn version_two_adds_enforcement_without_rewriting_version_one() {
+    let root = migration_root();
+    let version_one = fs::read(root.join("000001_expand.sql")).unwrap();
+    assert_eq!(
+        format!("{:x}", Sha256::digest(&version_one)),
+        "58b53c7cd61b5f8b0e6fca4184a36379c049947a34751bedb1bd77ded674d53c"
+    );
+    let expand = fs::read_to_string(root.join("000002_expand.sql")).unwrap();
+    let migrate = fs::read_to_string(root.join("000002_migrate.sql")).unwrap();
+    let contract = fs::read_to_string(root.join("000002_contract.sql")).unwrap();
+    assert!(expand.contains("CREATE TRIGGER repository_settings_immutable"));
+    assert!(expand.contains("file_path_history_by_file_id_v2"));
+    assert!(expand.contains("operation_ordinal"));
+    assert!(contract.contains("DROP INDEX ogvcs_metadata.file_path_history_by_file_id"));
+    assert!(contract.contains("RENAME TO file_path_history_by_file_id"));
+    assert!(!expand.contains("published_commit_sequence"));
+    assert!(!migrate.contains("published_commit_sequence"));
 }
 
 #[test]

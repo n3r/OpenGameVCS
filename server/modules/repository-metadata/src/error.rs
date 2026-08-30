@@ -49,6 +49,13 @@ pub struct DomainError {
     pub code: DomainErrorCode,
     pub retry_after_ms: Option<u64>,
     pub visible_current_generation: Option<u64>,
+    retry_origin: RetryOrigin,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RetryOrigin {
+    None,
+    DatabaseConcurrency,
 }
 
 impl DomainError {
@@ -57,7 +64,21 @@ impl DomainError {
             code,
             retry_after_ms: None,
             visible_current_generation: None,
+            retry_origin: RetryOrigin::None,
         }
+    }
+
+    pub(crate) const fn database_concurrency() -> Self {
+        Self {
+            code: DomainErrorCode::TransactionRetryExhausted,
+            retry_after_ms: None,
+            visible_current_generation: None,
+            retry_origin: RetryOrigin::DatabaseConcurrency,
+        }
+    }
+
+    pub(crate) const fn is_database_concurrency(&self) -> bool {
+        matches!(self.retry_origin, RetryOrigin::DatabaseConcurrency)
     }
 }
 

@@ -1,28 +1,80 @@
 use crate::{
-    AuthorizationContext, CommitSequence, ConsistencyToken, FileHistoryWrite,
-    FileIdImportReservation, FileIdReservation, FileIdReservationOutcome, IdempotencyReservation,
-    IdempotencyReservationOutcome, ObjectPutOutcome, ObjectWrite, OutboxEvent,
-    ReferenceCasRequest, ReferenceCasResult, RepositoryCreate, RepositoryId, Result, SnapshotWrite,
-    TransactionOptions, TreeEntryWrite,
+    AuthorizationContext, AuthorizationResource, CommitSequence, ConsistencyToken,
+    FileHistoryWrite, FileIdExpectedState, FileIdImportReservation, FileIdReservation,
+    FileIdReservationOutcome, IdempotencyReservation, IdempotencyReservationOutcome,
+    MetadataPermission, ObjectPutOutcome, ObjectRef, ObjectWrite, OutboxEvent, ReferenceCasRequest,
+    ReferenceCasResult, RepositoryCreate, RepositoryId, Result, SnapshotWrite,
+    TransactionCapability, TransactionOptions, TreeEntryWrite,
 };
 use ogvcs_object_model::{
-    scan_metadata, validate_semantic_object, Limits, Registry, ValidationMode,
+    scan_metadata, validate_semantic_object, Limits, Operation, PathProfileValidator, ProfileRef,
+    Registry, ValidationMode,
 };
 
+pub trait AuthorizedView {
+    /// Revalidates the signer/adapter output against the complete claims used
+    /// for this exact operation.  Returning a broader repository view is not
+    /// sufficient for a path- or identity-specific read.
+    fn permits(
+        &self,
+        context: &AuthorizationContext,
+        permission: MetadataPermission,
+        resource: &AuthorizationResource,
+    ) -> bool;
+}
+
 pub trait AuthorizationPort {
-    type AuthorizedView;
+    type AuthorizedView: AuthorizedView;
 
     fn authorize(
         &self,
         context: &AuthorizationContext,
-        permission: &'static str,
-        resource_type: &'static str,
-        repository_id: RepositoryId,
+        permission: MetadataPermission,
+        resource: &AuthorizationResource,
     ) -> Result<Self::AuthorizedView>;
 }
 
 pub trait ObjectValidationPort {
     fn validate(&self, write: &ObjectWrite<'_>) -> Result<()>;
+
+    fn registry(&self) -> Registry;
+
+    fn validation_mode(&self) -> ValidationMode;
+
+    fn path_profile_validator(&self) -> Option<&dyn PathProfileValidator> {
+        None
+    }
+
+    /// Supplies immutable chunk bytes owned by OGVCS-005/010 for complete
+    /// candidate validation.  The built-in production validator deliberately
+    /// has no persistence integration and therefore fails closed.
+    fn resolve_chunk(&self, _reference: ObjectRef) -> Result<Vec<u8>> {
+        Err(crate::DomainError::new(
+            crate::DomainErrorCode::ObjectInvalid,
+        ))
+    }
+
+    fn validate_profile(&self, profile: &ProfileRef, family: &str) -> Result<()> {
+        let operation = match self.validation_mode() {
+            ValidationMode::Read => Operation::Read,
+            ValidationMode::Conformance => Operation::ConformanceWrite,
+            ValidationMode::Production => Operation::ProductionWrite,
+        };
+        self.registry()
+            .check_profile(profile, family, operation)
+            .map_err(|_| crate::DomainError::new(crate::DomainErrorCode::ObjectInvalid))
+    }
+
+    fn validate_repository_profiles(
+        &self,
+        path_profile: &ProfileRef,
+        platform_profile: &ProfileRef,
+        content_policy_profile: &ProfileRef,
+    ) -> Result<()> {
+        self.validate_profile(path_profile, "path")?;
+        self.validate_profile(platform_profile, "path")?;
+        self.validate_profile(content_policy_profile, "content-policy")
+    }
 }
 
 /// Complete bundled OGVCS-002 authority in production-write lifecycle mode.
@@ -52,21 +104,42 @@ impl ObjectValidationPort for ProductionObjectValidator {
         }
         Ok(())
     }
+
+    fn registry(&self) -> Registry {
+        self.registry.clone()
+    }
+
+    fn validation_mode(&self) -> ValidationMode {
+        ValidationMode::Production
+    }
 }
 
 /// Safe production default until OGVCS-009 supplies an authorization adapter.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DenyAllAuthorization;
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DeniedAuthorizedView;
+
+impl AuthorizedView for DeniedAuthorizedView {
+    fn permits(
+        &self,
+        _context: &AuthorizationContext,
+        _permission: MetadataPermission,
+        _resource: &AuthorizationResource,
+    ) -> bool {
+        false
+    }
+}
+
 impl AuthorizationPort for DenyAllAuthorization {
-    type AuthorizedView = ();
+    type AuthorizedView = DeniedAuthorizedView;
 
     fn authorize(
         &self,
         _context: &AuthorizationContext,
-        _permission: &'static str,
-        _resource_type: &'static str,
-        _repository_id: RepositoryId,
+        _permission: MetadataPermission,
+        _resource: &AuthorizationResource,
     ) -> Result<Self::AuthorizedView> {
         Err(crate::DomainError::new(
             crate::DomainErrorCode::MetadataNotFoundOrDenied,
@@ -98,6 +171,7 @@ pub trait MetadataTransaction {
         &mut self,
         repository_id: RepositoryId,
         file_id: crate::FileId,
+        expected_state: FileIdExpectedState,
     ) -> Result<()>;
     fn reserve_idempotency(
         &mut self,
@@ -129,7 +203,7 @@ pub trait MetadataStore {
     fn begin_authorized(
         &mut self,
         context: &AuthorizationContext,
-        permission: &'static str,
+        capability: TransactionCapability,
         repository_id: RepositoryId,
         options: TransactionOptions,
     ) -> Result<Self::Transaction<'_>>;

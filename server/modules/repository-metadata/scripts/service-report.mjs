@@ -8,6 +8,8 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const cases = [
   'canonical-file-graph',
   'authorization-binding-and-poisoning',
+  'authorized-view-item-projections',
+  'publication-index-and-lifetime-binding',
   'cas-100-racers',
   'file-id-race-and-tombstone',
   'rollback-outbox-idempotency',
