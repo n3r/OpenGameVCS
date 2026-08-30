@@ -76,6 +76,17 @@ impl AuthorizedView for IsolatedAuthorizedView {
         }
         match (&self.resource, resource) {
             (
+                AuthorizationResource::ProjectRepositories {
+                    tenant_id: expected_tenant,
+                    project_id: expected_project,
+                },
+                AuthorizationResource::ProjectRepository {
+                    tenant_id,
+                    project_id,
+                    ..
+                },
+            ) => expected_tenant == tenant_id && expected_project == project_id,
+            (
                 AuthorizationResource::ReferenceCollection {
                     repository_id: expected,
                 },
@@ -391,8 +402,8 @@ fn production_reference_postgres_report() {
         return;
     };
     reset_disposable_schema(&database_url);
-    migration_v1_v4_upgrade_report(&database_url);
-    report("migration-v1-v4-upgrade-preserves-unpublished-history");
+    migration_v1_v5_upgrade_report(&database_url);
+    report("migration-v1-v5-upgrade-preserves-unpublished-history");
     reset_disposable_schema(&database_url);
     migration_report(&database_url);
     report("migration-repeat-checksum-downgrade");
@@ -408,6 +419,7 @@ fn production_reference_postgres_report() {
         "06-repository-descriptor.cbor",
     );
     let repository_id = descriptor_repository_id(&descriptor.1);
+    let project_id = ProjectId::from_bytes([5; 16]);
     let (required_features, path_profile, content_policy_profile) =
         descriptor_settings(&descriptor.1);
     let manifest = fixture(ObjectKind::ContentManifest, "02-content-manifest.cbor");
@@ -456,7 +468,7 @@ fn production_reference_postgres_report() {
         .create_repository(RepositoryCreate {
             repository_id,
             tenant_id,
-            project_id: ProjectId::from_bytes([5; 16]),
+            project_id,
             settings: RepositorySettings {
                 repository_format: "ogvcs.repository-format@1".to_owned(),
                 required_features,
@@ -709,6 +721,16 @@ fn production_reference_postgres_report() {
     report("immutable-settings-object-read");
     outbox_delivery_report(&database_url, &context, tenant_id);
     report("outbox-lease-ack-release");
+    repository_list_report(
+        &database_url,
+        &mut store,
+        &context,
+        tenant_id,
+        project_id,
+        repository_id,
+        &descriptor,
+    );
+    report("project-repository-list-cursors");
     let ancestry_chain =
         install_published_snapshot_chain(&database_url, repository_id, root_tree, &snapshot);
     ancestry_report(
@@ -966,6 +988,129 @@ fn immutable_read_report(
             .unwrap_err()
             .code,
         DomainErrorCode::MetadataNotFoundOrDenied
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn repository_list_report(
+    database_url: &str,
+    store: &mut PostgresMetadataStore<IsolatedAllow, IsolatedConformanceValidation>,
+    context: &AuthorizationContext,
+    tenant_id: TenantId,
+    project_id: ProjectId,
+    original_repository_id: RepositoryId,
+    descriptor_template: &(ObjectRef, Vec<u8>),
+) {
+    let mut second_bytes = *original_repository_id.as_bytes();
+    second_bytes[15] ^= 1;
+    let second_repository_id = RepositoryId::from_bytes(second_bytes);
+    assert_ne!(second_repository_id, original_repository_id);
+    let second_descriptor = descriptor_for_repository(descriptor_template, second_repository_id);
+    let settings = store
+        .get_repository_settings(context, original_repository_id, None)
+        .unwrap();
+    let reservation = idempotency("repository.create", "ik-create-second", [54; 32]);
+    let mut transaction = store
+        .begin_authorized(
+            context,
+            TransactionCapability::CreateRepository,
+            second_repository_id,
+            TransactionOptions::Serializable { maximum_retries: 2 },
+        )
+        .unwrap();
+    assert_eq!(
+        transaction
+            .reserve_idempotency(reservation.clone())
+            .unwrap(),
+        IdempotencyReservationOutcome::Reserved
+    );
+    transaction
+        .create_repository(RepositoryCreate {
+            repository_id: second_repository_id,
+            tenant_id,
+            project_id,
+            settings,
+            descriptor: write(second_repository_id, &second_descriptor),
+        })
+        .unwrap();
+    transaction
+        .commit_idempotency(&reservation, json!({"created": true}))
+        .unwrap();
+    transaction
+        .append_outbox(event(
+            second_repository_id,
+            500,
+            "repository.created",
+            "repository",
+        ))
+        .unwrap();
+    assert_eq!(transaction.commit().unwrap(), CommitSequence::new(1));
+
+    let first = store
+        .repository_page(
+            context,
+            project_id,
+            PageRequest {
+                limit: 1,
+                cursor: None,
+            },
+        )
+        .unwrap();
+    assert_eq!(first.items.len(), 1);
+    assert_eq!(first.items[0].project_id, project_id);
+    assert!(matches!(
+        first.items[0].repository_id,
+        id if id == original_repository_id || id == second_repository_id
+    ));
+    let cursor = first.next_cursor.unwrap();
+    let wrong_project = ProjectId::from_bytes([93; 16]);
+    assert_eq!(
+        store
+            .repository_page(
+                context,
+                wrong_project,
+                PageRequest {
+                    limit: 1,
+                    cursor: Some(cursor.clone()),
+                },
+            )
+            .unwrap_err()
+            .code,
+        DomainErrorCode::MetadataNotFoundOrDenied,
+        "project-list cursor must be bound to its exact project",
+    );
+    let second = store
+        .repository_page(
+            context,
+            project_id,
+            PageRequest {
+                limit: 1,
+                cursor: Some(cursor),
+            },
+        )
+        .unwrap();
+    assert_eq!(second.items.len(), 1);
+    assert_ne!(second.items[0].repository_id, first.items[0].repository_id);
+    assert!(second.next_cursor.is_none());
+
+    let mut single_use = PostgresMetadataStore::connect(database_url)
+        .unwrap()
+        .with_authorizer(SingleUseAllow)
+        .with_object_validator(IsolatedConformanceValidation);
+    assert_eq!(
+        single_use
+            .repository_page(
+                context,
+                project_id,
+                PageRequest {
+                    limit: 10,
+                    cursor: None,
+                },
+            )
+            .unwrap_err()
+            .code,
+        DomainErrorCode::MetadataNotFoundOrDenied,
+        "repository-list authorization must be revalidated before response",
     );
 }
 
@@ -1404,7 +1549,7 @@ fn install_published_snapshot_chain(
     [base.0, first.0, second.0]
 }
 
-fn migration_v1_v4_upgrade_report(database_url: &str) {
+fn migration_v1_v5_upgrade_report(database_url: &str) {
     let mut client = Client::connect(database_url, NoTls).unwrap();
     for migration in &ogvcs_repository_metadata::MIGRATIONS[..3] {
         client.batch_execute(migration.sql).unwrap();
@@ -1507,7 +1652,7 @@ fn migration_v1_v4_upgrade_report(database_url: &str) {
     };
     let mut store = PostgresMetadataStore::connect(database_url).unwrap();
     let upgrade = store.migrate(options).unwrap();
-    assert_eq!((upgrade.applied, upgrade.already_applied), (9, 3));
+    assert_eq!((upgrade.applied, upgrade.already_applied), (12, 3));
     drop(store);
 
     let mut client = Client::connect(database_url, NoTls).unwrap();
@@ -1560,8 +1705,8 @@ fn migration_report(database_url: &str) {
         application_version: "0.1.0",
         compatibility_fence_open: true,
     };
-    assert_eq!(store.migrate(options).unwrap().applied, 12);
-    assert_eq!(store.migrate(options).unwrap().already_applied, 12);
+    assert_eq!(store.migrate(options).unwrap().applied, 15);
+    assert_eq!(store.migrate(options).unwrap().already_applied, 15);
     drop(store);
 
     let mut client = Client::connect(database_url, NoTls).unwrap();
@@ -1690,7 +1835,7 @@ fn migration_report(database_url: &str) {
             "INSERT INTO ogvcs_metadata.schema_migrations
              (version, phase, checksum_sha256, state, minimum_application_version,
               maximum_application_version, completed_at)
-             VALUES (5, 'expand', repeat('a', 64), 'completed', '0.2.0', '0.2.x', clock_timestamp())",
+             VALUES (6, 'expand', repeat('a', 64), 'completed', '0.2.0', '0.2.x', clock_timestamp())",
             &[],
         )
         .unwrap();
@@ -1704,7 +1849,7 @@ fn migration_report(database_url: &str) {
     let mut client = Client::connect(database_url, NoTls).unwrap();
     client
         .execute(
-            "DELETE FROM ogvcs_metadata.schema_migrations WHERE version = 5",
+            "DELETE FROM ogvcs_metadata.schema_migrations WHERE version = 6",
             &[],
         )
         .unwrap();

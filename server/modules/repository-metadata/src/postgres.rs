@@ -28,9 +28,9 @@ use crate::{
     OutboxClaimRequest, OutboxEvent, OutboxEventRecord, OutboxLeaseAction, OutboxLeaseRecord,
     OutboxReleaseRequest, Page, PageRequest, PageState, ProductionObjectValidator,
     ReferenceCasRequest, ReferenceCasResult, ReferenceExpected, ReferenceFilter, ReferenceKind,
-    ReferenceName, ReferenceRecord, RepositoryCreate, RepositoryId, RepositorySettings, Result,
-    SnapshotWrite, TenantId, TransactionCapability, TransactionOptions, TreeEntryRecord,
-    TreeEntryWrite,
+    ReferenceName, ReferenceRecord, RepositoryCreate, RepositoryId, RepositoryRecord,
+    RepositorySettings, Result, SnapshotWrite, TenantId, TransactionCapability, TransactionOptions,
+    TreeEntryRecord, TreeEntryWrite,
 };
 
 const VALIDATION_CONTRACT: &str = "ogvcs.repository-format@1";
@@ -595,6 +595,79 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
             return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
         }
         Ok(settings)
+    }
+
+    pub fn repository_page(
+        &mut self,
+        context: &AuthorizationContext,
+        project_id: crate::ProjectId,
+        request: PageRequest,
+    ) -> Result<Page<RepositoryRecord>> {
+        let resource = AuthorizationResource::ProjectRepositories {
+            tenant_id: context.tenant_id,
+            project_id,
+        };
+        let authorized_view =
+            self.authorize_exact(context, MetadataPermission::Discover, &resource)?;
+        crate::verify_schema_compatibility(&mut self.client)?;
+        if !request.is_bounded() {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        let after =
+            self.repository_list_cursor_position(context, project_id, request.cursor.as_ref())?;
+        let after = after.map(uuid);
+        let rows = self
+            .client
+            .query(
+                "SELECT repository_id
+                 FROM ogvcs_metadata.repositories
+                 WHERE tenant_id = $1 AND project_id = $2
+                   AND ($3::uuid IS NULL OR repository_id > $3)
+                 ORDER BY repository_id
+                 LIMIT $4",
+                &[
+                    &uuid(context.tenant_id),
+                    &uuid(project_id),
+                    &after,
+                    &((MAX_AUTHORIZATION_SCAN + 1) as i64),
+                ],
+            )
+            .map_err(database_error)?;
+        let truncated = rows.len() > MAX_AUTHORIZATION_SCAN;
+        let mut items = Vec::with_capacity(usize::from(request.limit) + 1);
+        for row in rows.iter().take(MAX_AUTHORIZATION_SCAN) {
+            let repository_uuid: Uuid = row.get(0);
+            let repository_id = RepositoryId::from_bytes(*repository_uuid.as_bytes());
+            let exact = AuthorizationResource::ProjectRepository {
+                tenant_id: context.tenant_id,
+                project_id,
+                repository_id,
+            };
+            if authorized_view.permits(context, MetadataPermission::Discover, &exact) {
+                items.push(RepositoryRecord {
+                    repository_id,
+                    project_id,
+                });
+                if items.len() > usize::from(request.limit) {
+                    break;
+                }
+            }
+        }
+        if truncated && items.len() <= usize::from(request.limit) {
+            return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
+        }
+        if !authorized_view.permits(context, MetadataPermission::Discover, &resource) {
+            return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
+        }
+        let has_more = items.len() > usize::from(request.limit);
+        items.truncate(usize::from(request.limit));
+        let next_cursor = if has_more {
+            let last = items.last().ok_or_else(not_found)?;
+            Some(self.issue_repository_list_cursor(context, project_id, last.repository_id)?)
+        } else {
+            None
+        };
+        Ok(Page { items, next_cursor })
     }
 
     pub fn get_object(
@@ -1612,6 +1685,72 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
             None
         };
         Ok(Page { items, next_cursor })
+    }
+
+    fn repository_list_cursor_position(
+        &mut self,
+        context: &AuthorizationContext,
+        project_id: crate::ProjectId,
+        cursor: Option<&CursorToken>,
+    ) -> Result<Option<RepositoryId>> {
+        let Some(cursor) = cursor else {
+            return Ok(None);
+        };
+        let authorization_epoch = i64::try_from(context.authorization_epoch)
+            .map_err(|_| DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied))?;
+        let digest = Sha256::digest(cursor.as_str().as_bytes()).to_vec();
+        let row = self
+            .client
+            .query_opt(
+                "SELECT position_repository_id
+                 FROM ogvcs_metadata.repository_list_cursor_states
+                 WHERE token_digest = $1 AND subject_digest = $2 AND tenant_id = $3
+                   AND project_id = $4 AND authorization_epoch = $5
+                   AND expires_at > clock_timestamp()",
+                &[
+                    &digest,
+                    &&context.subject_digest[..],
+                    &uuid(context.tenant_id),
+                    &uuid(project_id),
+                    &authorization_epoch,
+                ],
+            )
+            .map_err(database_error)?
+            .ok_or_else(|| DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied))?;
+        let position: Uuid = row.get(0);
+        Ok(Some(RepositoryId::from_bytes(*position.as_bytes())))
+    }
+
+    fn issue_repository_list_cursor(
+        &mut self,
+        context: &AuthorizationContext,
+        project_id: crate::ProjectId,
+        position: RepositoryId,
+    ) -> Result<CursorToken> {
+        let token = opaque_token("cur1.")?;
+        let cursor = CursorToken::from_opaque(token.clone())
+            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        let digest = Sha256::digest(token.as_bytes()).to_vec();
+        let authorization_epoch = i64::try_from(context.authorization_epoch)
+            .map_err(|_| DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied))?;
+        self.client
+            .execute(
+                "INSERT INTO ogvcs_metadata.repository_list_cursor_states
+                 (token_digest, subject_digest, tenant_id, project_id,
+                  position_repository_id, authorization_epoch, issued_at, expires_at)
+                 VALUES ($1, $2, $3, $4, $5, $6,
+                         clock_timestamp(), clock_timestamp() + interval '1 day')",
+                &[
+                    &digest,
+                    &&context.subject_digest[..],
+                    &uuid(context.tenant_id),
+                    &uuid(project_id),
+                    &uuid(position),
+                    &authorization_epoch,
+                ],
+            )
+            .map_err(database_error)?;
+        Ok(cursor)
     }
 
     fn cursor_position(

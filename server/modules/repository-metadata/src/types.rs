@@ -54,6 +54,12 @@ pub struct RepositorySettings {
     pub tenant_boundary: TenantId,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RepositoryRecord {
+    pub repository_id: RepositoryId,
+    pub project_id: ProjectId,
+}
+
 impl RepositorySettings {
     pub fn has_sorted_unique_features(&self) -> bool {
         self.required_features
@@ -298,6 +304,15 @@ impl MetadataPermission {
 /// Exact resource projection that an authorization decision must cover.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AuthorizationResource {
+    ProjectRepositories {
+        tenant_id: TenantId,
+        project_id: ProjectId,
+    },
+    ProjectRepository {
+        tenant_id: TenantId,
+        project_id: ProjectId,
+        repository_id: RepositoryId,
+    },
     Repository {
         repository_id: RepositoryId,
     },
@@ -380,7 +395,8 @@ pub enum AuthorizationResource {
 impl AuthorizationResource {
     pub const fn repository_id(&self) -> Option<RepositoryId> {
         match self {
-            Self::Repository { repository_id }
+            Self::ProjectRepository { repository_id, .. }
+            | Self::Repository { repository_id }
             | Self::MetadataObject { repository_id, .. }
             | Self::RepositoryTransaction { repository_id, .. }
             | Self::Reference { repository_id, .. }
@@ -394,7 +410,9 @@ impl AuthorizationResource {
             | Self::SnapshotFileHistory { repository_id, .. }
             | Self::SnapshotPathHistory { repository_id, .. }
             | Self::SnapshotFileHistoryEntry { repository_id, .. } => Some(*repository_id),
-            Self::OutboxCollection { .. } | Self::OutboxDeliveryEvent { .. } => None,
+            Self::ProjectRepositories { .. }
+            | Self::OutboxCollection { .. }
+            | Self::OutboxDeliveryEvent { .. } => None,
         }
     }
 }
@@ -402,9 +420,10 @@ impl AuthorizationResource {
 impl AuthorizationResource {
     pub const fn tenant_id(&self) -> Option<TenantId> {
         match self {
-            Self::OutboxCollection { tenant_id } | Self::OutboxDeliveryEvent { tenant_id, .. } => {
-                Some(*tenant_id)
-            }
+            Self::ProjectRepositories { tenant_id, .. }
+            | Self::ProjectRepository { tenant_id, .. }
+            | Self::OutboxCollection { tenant_id }
+            | Self::OutboxDeliveryEvent { tenant_id, .. } => Some(*tenant_id),
             _ => None,
         }
     }

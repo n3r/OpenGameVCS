@@ -18,7 +18,7 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
     );
     assert_eq!(manifest["database"], "postgresql-15-or-newer");
     let entries = manifest["entries"].as_array().unwrap();
-    assert_eq!(entries.len(), 12);
+    assert_eq!(entries.len(), 15);
     let expected = [
         (1, "expand"),
         (1, "migrate"),
@@ -32,6 +32,9 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
         (4, "expand"),
         (4, "migrate"),
         (4, "contract"),
+        (5, "expand"),
+        (5, "migrate"),
+        (5, "contract"),
     ];
     for (entry, (version, phase)) in entries.iter().zip(expected) {
         assert_eq!(entry["version"], version);
@@ -49,6 +52,7 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
     assert_eq!(entries[5]["requiresCompatibilityFence"], true);
     assert_eq!(entries[8]["requiresCompatibilityFence"], true);
     assert_eq!(entries[11]["requiresCompatibilityFence"], true);
+    assert_eq!(entries[14]["requiresCompatibilityFence"], true);
 }
 
 #[test]
@@ -148,6 +152,21 @@ fn version_four_adds_deterministic_bounded_ancestry() {
         "requested_maximum_work > 100001",
         "ORDER BY parent.ordinal",
         "emitted < requested_maximum_work",
+    ] {
+        assert!(expand.contains(evidence), "missing {evidence}");
+    }
+}
+
+#[test]
+fn version_five_adds_project_scoped_repository_list_cursors() {
+    let expand = fs::read_to_string(migration_root().join("000005_expand.sql")).unwrap();
+    for evidence in [
+        "repository_list_cursor_states",
+        "subject_digest bytea",
+        "tenant_id uuid",
+        "project_id uuid",
+        "position_repository_id uuid",
+        "authorization_epoch bigint",
     ] {
         assert!(expand.contains(evidence), "missing {evidence}");
     }

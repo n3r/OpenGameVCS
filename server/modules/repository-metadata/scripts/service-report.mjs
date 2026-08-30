@@ -6,13 +6,14 @@ import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const cases = [
-  'migration-v1-v4-upgrade-preserves-unpublished-history',
+  'migration-v1-v5-upgrade-preserves-unpublished-history',
   'canonical-file-graph',
   'authorization-binding-and-poisoning',
   'authorized-view-item-projections',
   'publication-index-and-lifetime-binding',
   'immutable-settings-object-read',
   'outbox-lease-ack-release',
+  'project-repository-list-cursors',
   'cas-100-racers',
   'file-id-race-and-tombstone',
   'rollback-outbox-idempotency',

@@ -32,7 +32,7 @@ pub use types::{
     ObjectWrite, OutboxClaimRequest, OutboxEvent, OutboxEventRecord, OutboxLeaseAction,
     OutboxLeaseRecord, OutboxReleaseRequest, Page, PageRequest, PageState, ProjectId,
     ReferenceCasRequest, ReferenceCasResult, ReferenceExpected, ReferenceFilter, ReferenceKind,
-    ReferenceName, ReferenceRecord, RepositoryCreate, RepositoryId, RepositorySettings,
-    SnapshotWrite, TenantId, TransactionCapability, TransactionOptions, TreeEntryRecord,
-    TreeEntryWrite,
+    ReferenceName, ReferenceRecord, RepositoryCreate, RepositoryId, RepositoryRecord,
+    RepositorySettings, SnapshotWrite, TenantId, TransactionCapability, TransactionOptions,
+    TreeEntryRecord, TreeEntryWrite,
 };
