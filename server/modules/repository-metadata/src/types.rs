@@ -350,6 +350,24 @@ pub enum AuthorizationResource {
         snapshot: ObjectRef,
         depth: u32,
     },
+    SnapshotFileHistory {
+        repository_id: RepositoryId,
+        root_snapshot: ObjectRef,
+        file_id: FileId,
+    },
+    SnapshotPathHistory {
+        repository_id: RepositoryId,
+        root_snapshot: ObjectRef,
+        repository_path_utf8: Vec<u8>,
+    },
+    SnapshotFileHistoryEntry {
+        repository_id: RepositoryId,
+        root_snapshot: ObjectRef,
+        snapshot: ObjectRef,
+        depth: u32,
+        file_id: FileId,
+        repository_path_utf8: Vec<u8>,
+    },
     OutboxCollection {
         tenant_id: TenantId,
     },
@@ -372,7 +390,10 @@ impl AuthorizationResource {
             | Self::FileHistory { repository_id, .. }
             | Self::FileHistoryEntry { repository_id, .. }
             | Self::SnapshotHistory { repository_id, .. }
-            | Self::SnapshotHistoryEntry { repository_id, .. } => Some(*repository_id),
+            | Self::SnapshotHistoryEntry { repository_id, .. }
+            | Self::SnapshotFileHistory { repository_id, .. }
+            | Self::SnapshotPathHistory { repository_id, .. }
+            | Self::SnapshotFileHistoryEntry { repository_id, .. } => Some(*repository_id),
             Self::OutboxCollection { .. } | Self::OutboxDeliveryEvent { .. } => None,
         }
     }

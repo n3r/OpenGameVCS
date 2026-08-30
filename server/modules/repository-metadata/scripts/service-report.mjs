@@ -18,7 +18,7 @@ const cases = [
   'rollback-outbox-idempotency',
   'migration-repeat-checksum-downgrade',
   'consistency-token-primary-and-lag',
-  'bounded-ancestry-depth-pagination',
+  'bounded-ancestry-file-path-history',
 ];
 
 function report(status, rows, detail) {

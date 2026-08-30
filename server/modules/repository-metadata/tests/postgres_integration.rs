@@ -124,6 +124,40 @@ impl AuthorizedView for IsolatedAuthorizedView {
                     ..
                 },
             ) => expected_repository == repository_id && expected_root == root_snapshot,
+            (
+                AuthorizationResource::SnapshotFileHistory {
+                    repository_id: expected_repository,
+                    root_snapshot: expected_root,
+                    file_id: expected_file_id,
+                },
+                AuthorizationResource::SnapshotFileHistoryEntry {
+                    repository_id,
+                    root_snapshot,
+                    file_id,
+                    ..
+                },
+            ) => {
+                expected_repository == repository_id
+                    && expected_root == root_snapshot
+                    && expected_file_id == file_id
+            }
+            (
+                AuthorizationResource::SnapshotPathHistory {
+                    repository_id: expected_repository,
+                    root_snapshot: expected_root,
+                    repository_path_utf8: expected_path,
+                },
+                AuthorizationResource::SnapshotFileHistoryEntry {
+                    repository_id,
+                    root_snapshot,
+                    repository_path_utf8,
+                    ..
+                },
+            ) => {
+                expected_repository == repository_id
+                    && expected_root == root_snapshot
+                    && expected_path == repository_path_utf8
+            }
             _ => false,
         }
     }
@@ -384,7 +418,7 @@ fn production_reference_postgres_report() {
     let snapshot = fixture(ObjectKind::Snapshot, "07-snapshot.cbor");
     let provenance = fixture(ObjectKind::Provenance, "09-provenance.cbor");
     let tree_entries = tree_entries(&tree.1);
-    let (_, _, file_id, _, target, _) = regular_tree_entry(&tree.1);
+    let (_, history_path, file_id, _, target, _) = regular_tree_entry(&tree.1);
     let (root_tree, snapshot_parents) = snapshot_index(&snapshot.1);
     assert_eq!((root_tree, target), (tree.0, manifest.0));
 
@@ -683,8 +717,10 @@ fn production_reference_postgres_report() {
         &context,
         repository_id,
         ancestry_chain,
+        file_id,
+        history_path,
     );
-    report("bounded-ancestry-depth-pagination");
+    report("bounded-ancestry-file-path-history");
 
     assert_eq!(
         store
@@ -1078,6 +1114,8 @@ fn ancestry_report(
     context: &AuthorizationContext,
     repository_id: RepositoryId,
     chain: [ObjectRef; 3],
+    file_id: FileId,
+    history_path: Vec<u8>,
 ) {
     let first = store
         .ancestry_page(
@@ -1185,6 +1223,85 @@ fn ancestry_report(
     assert_eq!(
         depth_limited.incomplete_reason,
         Some(HistoryIncompleteReason::DepthLimit)
+    );
+
+    let file_history = store
+        .history_file_id_page(
+            context,
+            repository_id,
+            chain[2],
+            file_id,
+            10,
+            None,
+            PageRequest {
+                limit: 10,
+                cursor: None,
+            },
+        )
+        .unwrap();
+    assert_eq!(file_history.state, PageState::Complete);
+    assert_eq!(file_history.items.len(), 1);
+    assert_eq!(file_history.items[0].snapshot, chain[0]);
+    assert_eq!(file_history.items[0].file_id, file_id);
+    assert_eq!(file_history.items[0].repository_path_utf8, history_path);
+
+    let depth_limited_file_history = store
+        .history_file_id_page(
+            context,
+            repository_id,
+            chain[2],
+            file_id,
+            1,
+            None,
+            PageRequest {
+                limit: 10,
+                cursor: None,
+            },
+        )
+        .unwrap();
+    assert!(depth_limited_file_history.items.is_empty());
+    assert_eq!(depth_limited_file_history.state, PageState::Incomplete);
+    assert_eq!(
+        depth_limited_file_history.incomplete_reason,
+        Some(HistoryIncompleteReason::DepthLimit)
+    );
+
+    let path = vec![String::from_utf8(history_path.clone()).unwrap()];
+    let path_history = store
+        .history_path_page(
+            context,
+            repository_id,
+            chain[2],
+            &path,
+            10,
+            None,
+            PageRequest {
+                limit: 10,
+                cursor: None,
+            },
+        )
+        .unwrap();
+    assert_eq!(path_history.state, PageState::Complete);
+    assert_eq!(path_history.items.len(), 1);
+    assert_eq!(path_history.items[0].snapshot, chain[0]);
+    assert_eq!(path_history.items[0].file_id, file_id);
+    assert_eq!(
+        store
+            .history_path_page(
+                context,
+                repository_id,
+                chain[2],
+                &[],
+                10,
+                None,
+                PageRequest {
+                    limit: 10,
+                    cursor: None,
+                },
+            )
+            .unwrap_err()
+            .code,
+        DomainErrorCode::ObjectInvalid,
     );
     assert_eq!(
         store

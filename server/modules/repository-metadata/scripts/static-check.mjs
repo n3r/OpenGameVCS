@@ -77,7 +77,7 @@ assert(expandV4.includes('ORDER BY parent.ordinal'), 'version 4 parent order is 
 const adapter = await readFile(resolve(root, 'src/postgres.rs'), 'utf8');
 const ports = await readFile(resolve(root, 'src/ports.rs'), 'utf8');
 assert(
-  adapter.split('crate::verify_schema_compatibility(&mut self.client)?').length - 1 === 12,
+  adapter.split('crate::verify_schema_compatibility(&mut self.client)?').length - 1 === 14,
   'every mutation/read entry point is not schema-compatibility gated',
 );
 assert(ports.includes('ValidationMode::Production'), 'default object validator is not production lifecycle');
@@ -132,7 +132,10 @@ for (const evidence of [
   'pub fn reference_page_filtered(',
   'pub fn file_history_page_consistent(',
   'pub fn ancestry_page(',
+  'pub fn history_file_id_page(',
+  'pub fn history_path_page(',
   'AuthorizationResource::SnapshotHistoryEntry',
+  'AuthorizationResource::SnapshotFileHistoryEntry',
   'MAX_HISTORY_WORK',
   'HistoryIncompleteReason::DepthLimit',
   'HistoryIncompleteReason::WorkLimit',

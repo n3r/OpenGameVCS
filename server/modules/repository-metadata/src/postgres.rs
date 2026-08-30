@@ -351,6 +351,119 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
+    fn load_snapshot_history_rows(
+        &mut self,
+        repository_id: RepositoryId,
+        ancestry: &LoadedAncestry,
+        file_id_filter: Option<FileId>,
+        path_filter: Option<&[u8]>,
+        after_visit: u32,
+        after_ordinal: u32,
+    ) -> Result<(Vec<LoadedHistoryRecord>, bool)> {
+        if file_id_filter.is_some() == path_filter.is_some() {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        let digests = ancestry
+            .nodes
+            .iter()
+            .map(|node| node.snapshot.digest.to_vec())
+            .collect::<Vec<_>>();
+        let visits = ancestry
+            .nodes
+            .iter()
+            .map(|node| {
+                i32::try_from(node.visit)
+                    .map_err(|_| DomainError::new(DomainErrorCode::HistoryLimitReached))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let depths = ancestry
+            .nodes
+            .iter()
+            .map(|node| {
+                i32::try_from(node.depth)
+                    .map_err(|_| DomainError::new(DomainErrorCode::HistoryLimitReached))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let file_id_filter = file_id_filter.map(|file_id| file_id.as_bytes().to_vec());
+        let path_filter = path_filter.map(<[u8]>::to_vec);
+        let after_visit = i32::try_from(after_visit)
+            .map_err(|_| DomainError::new(DomainErrorCode::HistoryLimitReached))?;
+        let after_ordinal = i32::try_from(after_ordinal)
+            .map_err(|_| DomainError::new(DomainErrorCode::HistoryLimitReached))?;
+        let rows = self
+            .client
+            .query(
+                "SELECT history.snapshot_digest, history.operation_ordinal, history.file_id,
+                        history.repository_path_utf8, history.operation_kind,
+                        traversal.visit_ordinal, traversal.traversal_depth
+                 FROM unnest($2::bytea[], $3::integer[], $4::integer[])
+                      AS traversal(snapshot_digest, visit_ordinal, traversal_depth)
+                 JOIN ogvcs_metadata.file_path_history AS history
+                   ON history.repository_id = $1
+                  AND history.snapshot_digest = traversal.snapshot_digest
+                 WHERE ($5::bytea IS NULL OR history.file_id = $5)
+                   AND ($6::bytea IS NULL OR history.repository_path_utf8 = $6)
+                   AND (traversal.visit_ordinal, history.operation_ordinal) > ($7, $8)
+                 ORDER BY traversal.visit_ordinal, history.operation_ordinal
+                 LIMIT $9",
+                &[
+                    &uuid(repository_id),
+                    &digests,
+                    &visits,
+                    &depths,
+                    &file_id_filter,
+                    &path_filter,
+                    &after_visit,
+                    &after_ordinal,
+                    &((MAX_AUTHORIZATION_SCAN + 1) as i64),
+                ],
+            )
+            .map_err(database_error)?;
+        let truncated = rows.len() > MAX_AUTHORIZATION_SCAN;
+        let mut records = Vec::with_capacity(rows.len().min(MAX_AUTHORIZATION_SCAN));
+        for row in rows.into_iter().take(MAX_AUTHORIZATION_SCAN) {
+            let snapshot = object_ref(ObjectKind::Snapshot, row.get(0))?;
+            let operation_ordinal = u32::try_from(row.get::<_, i32>(1))
+                .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            let file_id = file_id(row.get(2))?;
+            let repository_path_utf8: Vec<u8> = row.get(3);
+            let operation_kind: String = row.get(4);
+            let visit = u32::try_from(row.get::<_, i32>(5))
+                .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            let depth = u32::try_from(row.get::<_, i32>(6))
+                .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            if repository_path_utf8.is_empty()
+                || repository_path_utf8.len() > 4096
+                || !matches!(
+                    operation_kind.as_str(),
+                    "create"
+                        | "modify"
+                        | "copy"
+                        | "move"
+                        | "rename"
+                        | "delete"
+                        | "restore"
+                        | "import"
+                )
+            {
+                return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+            }
+            records.push(LoadedHistoryRecord {
+                record: FileHistoryRecord {
+                    snapshot,
+                    operation_ordinal,
+                    file_id,
+                    repository_path_utf8,
+                    operation_kind,
+                },
+                visit,
+                depth,
+            });
+        }
+        Ok((records, truncated))
+    }
+
     /// The only production transaction entry point. OGVCS-010 composes all of
     /// its publication writes through the returned database transaction.
     pub fn begin_authorized(
@@ -1168,6 +1281,228 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
+    pub fn history_file_id_page(
+        &mut self,
+        context: &AuthorizationContext,
+        repository_id: RepositoryId,
+        snapshot: ObjectRef,
+        file_id: FileId,
+        maximum_depth: u32,
+        minimum: Option<&ConsistencyToken>,
+        request: PageRequest,
+    ) -> Result<HistoryPage<FileHistoryRecord>> {
+        let resource = AuthorizationResource::SnapshotFileHistory {
+            repository_id,
+            root_snapshot: snapshot,
+            file_id,
+        };
+        let authorized_view =
+            self.authorize_exact(context, MetadataPermission::MetadataRead, &resource)?;
+        crate::verify_schema_compatibility(&mut self.client)?;
+        self.require_repository_tenant(context, repository_id)?;
+        if let Some(token) = minimum {
+            self.require_consistency_authorized(context, repository_id, token)?;
+        }
+        if maximum_depth > MAX_HISTORY_DEPTH || !request.is_bounded() {
+            return Err(DomainError::new(DomainErrorCode::HistoryLimitReached));
+        }
+        self.require_published_snapshot(repository_id, snapshot)?;
+        let query_digest = snapshot_history_query_digest(
+            b"history.file-id-page",
+            repository_id,
+            snapshot,
+            maximum_depth,
+            file_id.as_bytes(),
+        );
+        let after = self.cursor_position(
+            context,
+            repository_id,
+            "history.file-id-page",
+            query_digest,
+            request.cursor.as_ref(),
+            "key",
+        )?;
+        let (after_visit, after_ordinal) = decode_snapshot_history_key(after.as_deref())?;
+        let ancestry = self.load_ancestry(repository_id, snapshot, maximum_depth)?;
+        let (rows, truncated) = self.load_snapshot_history_rows(
+            repository_id,
+            &ancestry,
+            Some(file_id),
+            None,
+            after_visit,
+            after_ordinal,
+        )?;
+        let mut items = Vec::with_capacity(usize::from(request.limit) + 1);
+        for row in rows {
+            let exact = AuthorizationResource::SnapshotFileHistoryEntry {
+                repository_id,
+                root_snapshot: snapshot,
+                snapshot: row.record.snapshot,
+                depth: row.depth,
+                file_id: row.record.file_id,
+                repository_path_utf8: row.record.repository_path_utf8.clone(),
+            };
+            if authorized_view.permits(context, MetadataPermission::MetadataRead, &exact) {
+                items.push(row);
+                if items.len() > usize::from(request.limit) {
+                    break;
+                }
+            }
+        }
+        self.finish_snapshot_history_page(
+            context,
+            repository_id,
+            snapshot,
+            "history.file-id-page",
+            query_digest,
+            request.limit,
+            ancestry.incomplete_reason,
+            truncated,
+            authorized_view.permits(context, MetadataPermission::MetadataRead, &resource),
+            items,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn history_path_page(
+        &mut self,
+        context: &AuthorizationContext,
+        repository_id: RepositoryId,
+        snapshot: ObjectRef,
+        path: &[String],
+        maximum_depth: u32,
+        minimum: Option<&ConsistencyToken>,
+        request: PageRequest,
+    ) -> Result<HistoryPage<FileHistoryRecord>> {
+        if path.is_empty() || !valid_tree_prefix(path) {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        let repository_path_utf8 = path.join("/").into_bytes();
+        let resource = AuthorizationResource::SnapshotPathHistory {
+            repository_id,
+            root_snapshot: snapshot,
+            repository_path_utf8: repository_path_utf8.clone(),
+        };
+        let authorized_view =
+            self.authorize_exact(context, MetadataPermission::MetadataRead, &resource)?;
+        crate::verify_schema_compatibility(&mut self.client)?;
+        self.require_repository_tenant(context, repository_id)?;
+        if let Some(token) = minimum {
+            self.require_consistency_authorized(context, repository_id, token)?;
+        }
+        if maximum_depth > MAX_HISTORY_DEPTH || !request.is_bounded() {
+            return Err(DomainError::new(DomainErrorCode::HistoryLimitReached));
+        }
+        self.require_published_snapshot(repository_id, snapshot)?;
+        let query_digest = snapshot_history_query_digest(
+            b"history.path-page",
+            repository_id,
+            snapshot,
+            maximum_depth,
+            &repository_path_utf8,
+        );
+        let after = self.cursor_position(
+            context,
+            repository_id,
+            "history.path-page",
+            query_digest,
+            request.cursor.as_ref(),
+            "key",
+        )?;
+        let (after_visit, after_ordinal) = decode_snapshot_history_key(after.as_deref())?;
+        let ancestry = self.load_ancestry(repository_id, snapshot, maximum_depth)?;
+        let (rows, truncated) = self.load_snapshot_history_rows(
+            repository_id,
+            &ancestry,
+            None,
+            Some(&repository_path_utf8),
+            after_visit,
+            after_ordinal,
+        )?;
+        let mut items = Vec::with_capacity(usize::from(request.limit) + 1);
+        for row in rows {
+            let exact = AuthorizationResource::SnapshotFileHistoryEntry {
+                repository_id,
+                root_snapshot: snapshot,
+                snapshot: row.record.snapshot,
+                depth: row.depth,
+                file_id: row.record.file_id,
+                repository_path_utf8: row.record.repository_path_utf8.clone(),
+            };
+            if authorized_view.permits(context, MetadataPermission::MetadataRead, &exact) {
+                items.push(row);
+                if items.len() > usize::from(request.limit) {
+                    break;
+                }
+            }
+        }
+        self.finish_snapshot_history_page(
+            context,
+            repository_id,
+            snapshot,
+            "history.path-page",
+            query_digest,
+            request.limit,
+            ancestry.incomplete_reason,
+            truncated,
+            authorized_view.permits(context, MetadataPermission::MetadataRead, &resource),
+            items,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn finish_snapshot_history_page(
+        &mut self,
+        context: &AuthorizationContext,
+        repository_id: RepositoryId,
+        snapshot: ObjectRef,
+        operation: &str,
+        query_digest: [u8; 32],
+        limit: u16,
+        incomplete_reason: Option<HistoryIncompleteReason>,
+        truncated: bool,
+        authorization_still_valid: bool,
+        mut rows: Vec<LoadedHistoryRecord>,
+    ) -> Result<HistoryPage<FileHistoryRecord>> {
+        if truncated && rows.len() <= usize::from(limit) {
+            return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
+        }
+        if !authorization_still_valid {
+            return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
+        }
+        let has_more = rows.len() > usize::from(limit);
+        rows.truncate(usize::from(limit));
+        let next_cursor = if has_more {
+            let row = rows.last().ok_or_else(not_found)?;
+            let key = snapshot_history_key(row.visit, row.record.operation_ordinal)?;
+            Some(self.issue_cursor(
+                context,
+                repository_id,
+                operation,
+                query_digest,
+                Some(snapshot),
+                "key",
+                &key,
+            )?)
+        } else {
+            None
+        };
+        let state = if has_more {
+            PageState::More
+        } else if incomplete_reason.is_some() {
+            PageState::Incomplete
+        } else {
+            PageState::Complete
+        };
+        Ok(HistoryPage {
+            state,
+            items: rows.into_iter().map(|row| row.record).collect(),
+            next_cursor,
+            incomplete_reason: (!has_more).then_some(incomplete_reason).flatten(),
+        })
+    }
+
     pub fn file_history_page(
         &mut self,
         context: &AuthorizationContext,
@@ -1396,6 +1731,13 @@ struct AncestryNode {
 struct LoadedAncestry {
     nodes: Vec<AncestryNode>,
     incomplete_reason: Option<HistoryIncompleteReason>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct LoadedHistoryRecord {
+    record: FileHistoryRecord,
+    visit: u32,
+    depth: u32,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -3570,6 +3912,29 @@ fn decode_visit(value: Option<&[u8]>) -> Result<u32> {
     }
 }
 
+fn snapshot_history_key(visit: u32, ordinal: u32) -> Result<[u8; 8]> {
+    if visit == 0 {
+        return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+    }
+    let mut key = [0_u8; 8];
+    key[..4].copy_from_slice(&visit.to_be_bytes());
+    key[4..].copy_from_slice(&ordinal.to_be_bytes());
+    Ok(key)
+}
+
+fn decode_snapshot_history_key(value: Option<&[u8]>) -> Result<(u32, u32)> {
+    let Some(value) = value else {
+        return Ok((0, 0));
+    };
+    if value.len() != 8 {
+        return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+    }
+    Ok((
+        u32::from_be_bytes(value[..4].try_into().unwrap()),
+        u32::from_be_bytes(value[4..].try_into().unwrap()),
+    ))
+}
+
 fn query_digest(
     domain: &[u8],
     repository_id: RepositoryId,
@@ -3582,6 +3947,25 @@ fn query_digest(
     hash.update(repository_id.as_bytes());
     hash.update(first);
     hash.update(second);
+    hash.finalize().into()
+}
+
+fn snapshot_history_query_digest(
+    domain: &[u8],
+    repository_id: RepositoryId,
+    snapshot: ObjectRef,
+    maximum_depth: u32,
+    selector: &[u8],
+) -> [u8; 32] {
+    let mut hash = Sha256::new();
+    hash.update(b"OpenGameVCS metadata query\0snapshot-history\0");
+    hash.update(domain);
+    hash.update(repository_id.as_bytes());
+    hash.update(snapshot.kind.code().to_be_bytes());
+    hash.update(snapshot.digest);
+    hash.update(maximum_depth.to_be_bytes());
+    hash.update((selector.len() as u64).to_be_bytes());
+    hash.update(selector);
     hash.finalize().into()
 }
 
