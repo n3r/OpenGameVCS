@@ -99,9 +99,7 @@ pub fn verify_schema_compatibility(client: &mut Client) -> Result<()> {
         let minimum_application_version: String = row.get(2);
         let maximum_application_version: String = row.get(3);
         if checksum != migration.checksum_sha256 {
-            return Err(DomainError::new(
-                DomainErrorCode::MigrationChecksumMismatch,
-            ));
+            return Err(DomainError::new(DomainErrorCode::MigrationChecksumMismatch));
         }
         if state != "completed" {
             return Err(DomainError::new(DomainErrorCode::MigrationIncompatible));
@@ -168,9 +166,7 @@ fn run_locked(client: &mut Client, options: MigrationRunOptions) -> Result<Migra
             let minimum_application_version: String = row.get(2);
             let maximum_application_version: String = row.get(3);
             if checksum != migration.checksum_sha256 {
-                return Err(DomainError::new(
-                    DomainErrorCode::MigrationChecksumMismatch,
-                ));
+                return Err(DomainError::new(DomainErrorCode::MigrationChecksumMismatch));
             }
             if minimum_application_version != migration.minimum_application_version
                 || maximum_application_version != migration.maximum_application_version
@@ -222,9 +218,7 @@ fn validate_source(migration: crate::Migration) -> Result<()> {
     if actual == migration.checksum_sha256 {
         Ok(())
     } else {
-        Err(DomainError::new(
-            DomainErrorCode::MigrationChecksumMismatch,
-        ))
+        Err(DomainError::new(DomainErrorCode::MigrationChecksumMismatch))
     }
 }
 
@@ -248,7 +242,9 @@ fn compatible(application: &str, minimum: &str, maximum: &str) -> bool {
         let mut parts = prefix.split('.');
         let major = parts.next().and_then(|value| value.parse::<u64>().ok());
         let minor = parts.next().and_then(|value| value.parse::<u64>().ok());
-        return parts.next().is_none() && major == Some(application.0) && minor == Some(application.1);
+        return parts.next().is_none()
+            && major == Some(application.0)
+            && minor == Some(application.1);
     }
     version_triplet(maximum).is_some_and(|maximum| application <= maximum)
 }

@@ -68,8 +68,8 @@ Run static checks and tests:
 ```sh
 node server/modules/repository-metadata/scripts/static-check.mjs
 cargo fmt --manifest-path server/modules/repository-metadata/Cargo.toml --check
-cargo test --manifest-path server/modules/repository-metadata/Cargo.toml
-cargo clippy --manifest-path server/modules/repository-metadata/Cargo.toml --all-targets -- -D warnings
+cargo test --manifest-path server/modules/repository-metadata/Cargo.toml --locked
+cargo clippy --manifest-path server/modules/repository-metadata/Cargo.toml --locked --all-targets -- -D warnings
 node server/modules/repository-metadata/scripts/service-report.mjs --check
 ```
 
@@ -82,7 +82,9 @@ phase to be present, compatible, completed, and checksummed.
 
 Production persistence deployment evidence, a production OGVCS-009/OIDC
 adapter, public API/HTTP bindings, external chunk-store composition, and hosted
-service evidence remain deferred. The built-in authorizer denies all access;
+production-service evidence remain deferred. The bounded workflow runs the live
+harness against a disposable PostgreSQL 15 service on Ubuntu and compiles the
+locked crate on macOS and Windows. The built-in authorizer denies all access;
 the built-in production object validator also has no external path-profile
 adapter or chunk resolver, so ratified external paths and content-bearing
 publication fail closed until those production adapters are injected. No live
@@ -96,7 +98,7 @@ Live integration and concurrency evidence is opt-in:
 ```sh
 OGVCS_METADATA_DATABASE_URL=postgresql://.../ogvcs_metadata_test_local \
   cargo test --manifest-path server/modules/repository-metadata/Cargo.toml \
-  --test postgres_integration -- --nocapture --test-threads=1
+  --locked --test postgres_integration -- --nocapture --test-threads=1
 ```
 
 The harness refuses to reset a database unless `current_database()` begins with

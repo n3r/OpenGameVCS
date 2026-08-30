@@ -8,17 +8,53 @@ use std::time::{Duration, SystemTime};
 #[test]
 fn rust_error_assignments_match_the_domain_contract() {
     let cases = [
-        (DomainErrorCode::RepositorySettingsImmutable, 1001, "REPOSITORY_SETTINGS_IMMUTABLE"),
+        (
+            DomainErrorCode::RepositorySettingsImmutable,
+            1001,
+            "REPOSITORY_SETTINGS_IMMUTABLE",
+        ),
         (DomainErrorCode::ObjectInvalid, 1002, "OBJECT_INVALID"),
-        (DomainErrorCode::ObjectIdCollision, 1003, "OBJECT_ID_COLLISION"),
-        (DomainErrorCode::ReferenceConflict, 1004, "REFERENCE_CONFLICT"),
+        (
+            DomainErrorCode::ObjectIdCollision,
+            1003,
+            "OBJECT_ID_COLLISION",
+        ),
+        (
+            DomainErrorCode::ReferenceConflict,
+            1004,
+            "REFERENCE_CONFLICT",
+        ),
         (DomainErrorCode::FileIdConflict, 1005, "FILEID_CONFLICT"),
-        (DomainErrorCode::HistoryLimitReached, 1006, "HISTORY_LIMIT_REACHED"),
-        (DomainErrorCode::ConsistencyTokenUnsatisfied, 1007, "CONSISTENCY_TOKEN_UNSATISFIED"),
-        (DomainErrorCode::MigrationIncompatible, 1008, "MIGRATION_INCOMPATIBLE"),
-        (DomainErrorCode::MigrationChecksumMismatch, 1009, "MIGRATION_CHECKSUM_MISMATCH"),
-        (DomainErrorCode::MetadataNotFoundOrDenied, 1010, "METADATA_NOT_FOUND_OR_DENIED"),
-        (DomainErrorCode::TransactionRetryExhausted, 1011, "TRANSACTION_RETRY_EXHAUSTED"),
+        (
+            DomainErrorCode::HistoryLimitReached,
+            1006,
+            "HISTORY_LIMIT_REACHED",
+        ),
+        (
+            DomainErrorCode::ConsistencyTokenUnsatisfied,
+            1007,
+            "CONSISTENCY_TOKEN_UNSATISFIED",
+        ),
+        (
+            DomainErrorCode::MigrationIncompatible,
+            1008,
+            "MIGRATION_INCOMPATIBLE",
+        ),
+        (
+            DomainErrorCode::MigrationChecksumMismatch,
+            1009,
+            "MIGRATION_CHECKSUM_MISMATCH",
+        ),
+        (
+            DomainErrorCode::MetadataNotFoundOrDenied,
+            1010,
+            "METADATA_NOT_FOUND_OR_DENIED",
+        ),
+        (
+            DomainErrorCode::TransactionRetryExhausted,
+            1011,
+            "TRANSACTION_RETRY_EXHAUSTED",
+        ),
     ];
     for (code, numeric, name) in cases {
         assert_eq!(code as u16, numeric);

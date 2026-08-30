@@ -14,12 +14,11 @@ use ogvcs_object_model::{
 };
 use ogvcs_repository_metadata::{
     AuthorizationContext, AuthorizationPort, AuthorizationResource, AuthorizedView, CaseMode,
-    CommitSequence, DomainError, DomainErrorCode,
-    FileHistoryWrite, FileId, FileIdExpectedState, FileIdImportReservation, FileIdOrigin,
-    FileIdOwnerKind, FileIdReservation, FileIdReservationOutcome, IdempotencyReservation,
-    IdempotencyReservationOutcome, MetadataPermission, MetadataTransaction, ObjectPutOutcome,
-    ObjectValidationPort, ObjectWrite, OutboxEvent, PageRequest, PostgresMetadataStore, ProjectId,
-    ReferenceCasRequest,
+    CommitSequence, DomainError, DomainErrorCode, FileHistoryWrite, FileId, FileIdExpectedState,
+    FileIdImportReservation, FileIdOrigin, FileIdOwnerKind, FileIdReservation,
+    FileIdReservationOutcome, IdempotencyReservation, IdempotencyReservationOutcome,
+    MetadataPermission, MetadataTransaction, ObjectPutOutcome, ObjectValidationPort, ObjectWrite,
+    OutboxEvent, PageRequest, PostgresMetadataStore, ProjectId, ReferenceCasRequest,
     ReferenceExpected, ReferenceKind, ReferenceName, RepositoryCreate, RepositoryId,
     RepositorySettings, SnapshotWrite, TenantId, TransactionCapability, TransactionOptions,
     TreeEntryWrite,
@@ -289,13 +288,15 @@ impl AuthorizationPort for SingleUseAllow {
 
 impl ObjectValidationPort for IsolatedConformanceValidation {
     fn validate(&self, write: &ObjectWrite<'_>) -> ogvcs_repository_metadata::Result<()> {
-        let object = scan_metadata(write.canonical_bytes, Limits::METADATA)
-            .map_err(|_| ogvcs_repository_metadata::DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        let object = scan_metadata(write.canonical_bytes, Limits::METADATA).map_err(|_| {
+            ogvcs_repository_metadata::DomainError::new(DomainErrorCode::ObjectInvalid)
+        })?;
         validate_semantic_object(&object, &Registry::bundled(), ValidationMode::Conformance)
-            .map_err(|_| ogvcs_repository_metadata::DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            .map_err(|_| {
+                ogvcs_repository_metadata::DomainError::new(DomainErrorCode::ObjectInvalid)
+            })?;
         Ok(())
     }
-
 
     fn registry(&self) -> Registry {
         Registry::bundled()
@@ -305,13 +306,9 @@ impl ObjectValidationPort for IsolatedConformanceValidation {
         ValidationMode::Conformance
     }
 
-    fn resolve_chunk(
-        &self,
-        reference: ObjectRef,
-    ) -> ogvcs_repository_metadata::Result<Vec<u8>> {
+    fn resolve_chunk(&self, reference: ObjectRef) -> ogvcs_repository_metadata::Result<Vec<u8>> {
         let path = format!("{}/{VECTOR_ROOT}/01-chunk.bin", env!("CARGO_MANIFEST_DIR"));
-        let bytes = fs::read(path)
-            .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        let bytes = fs::read(path).map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
         if reference.kind == ObjectKind::Chunk
             && object_id(ObjectKind::Chunk, &bytes)
                 .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?
@@ -331,6 +328,9 @@ fn production_reference_postgres_report() {
         return;
     };
     reset_disposable_schema(&database_url);
+    migration_v1_v2_upgrade_report(&database_url);
+    report("migration-v1-v2-upgrade-preserves-unpublished-history");
+    reset_disposable_schema(&database_url);
     migration_report(&database_url);
     report("migration-repeat-checksum-downgrade");
 
@@ -340,7 +340,10 @@ fn production_reference_postgres_report() {
         tenant_id,
         authorization_epoch: 1,
     };
-    let descriptor = fixture(ObjectKind::RepositoryDescriptor, "06-repository-descriptor.cbor");
+    let descriptor = fixture(
+        ObjectKind::RepositoryDescriptor,
+        "06-repository-descriptor.cbor",
+    );
     let repository_id = descriptor_repository_id(&descriptor.1);
     let (required_features, path_profile, content_policy_profile) =
         descriptor_settings(&descriptor.1);
@@ -352,8 +355,7 @@ fn production_reference_postgres_report() {
     let snapshot = fixture(ObjectKind::Snapshot, "07-snapshot.cbor");
     let provenance = fixture(ObjectKind::Provenance, "09-provenance.cbor");
     let tree_entries = tree_entries(&tree.1);
-    let (_, _, file_id, _, target, _) =
-        regular_tree_entry(&tree.1);
+    let (_, _, file_id, _, target, _) = regular_tree_entry(&tree.1);
     let (root_tree, snapshot_parents) = snapshot_index(&snapshot.1);
     assert_eq!((root_tree, target), (tree.0, manifest.0));
 
@@ -427,21 +429,31 @@ fn production_reference_postgres_report() {
             TransactionOptions::Serializable { maximum_retries: 8 },
         )
         .unwrap();
-    transaction.reserve_idempotency(publish_key.clone()).unwrap();
+    transaction
+        .reserve_idempotency(publish_key.clone())
+        .unwrap();
     assert_eq!(
-        transaction.put_object(write(repository_id, &manifest)).unwrap(),
+        transaction
+            .put_object(write(repository_id, &manifest))
+            .unwrap(),
         ObjectPutOutcome::Inserted
     );
     transaction
         .put_object(write(repository_id, &child_tree))
         .unwrap();
     transaction.put_object(write(repository_id, &tree)).unwrap();
-    transaction.put_object(write(repository_id, &change)).unwrap();
-    transaction.put_object(write(repository_id, &groups)).unwrap();
+    transaction
+        .put_object(write(repository_id, &change))
+        .unwrap();
+    transaction
+        .put_object(write(repository_id, &groups))
+        .unwrap();
     transaction
         .put_object(write(repository_id, &provenance))
         .unwrap();
-    transaction.put_object(write(repository_id, &snapshot)).unwrap();
+    transaction
+        .put_object(write(repository_id, &snapshot))
+        .unwrap();
     for (_, _, file_id, _, _, _) in &tree_entries {
         transaction
             .reserve_file_id(FileIdReservation {
@@ -505,7 +517,12 @@ fn production_reference_postgres_report() {
         .commit_idempotency(&publish_key, json!({"generation": reference.generation}))
         .unwrap();
     transaction
-        .append_outbox(event(repository_id, 2, "metadata.object-accepted", "snapshot"))
+        .append_outbox(event(
+            repository_id,
+            2,
+            "metadata.object-accepted",
+            "snapshot",
+        ))
         .unwrap();
     transaction
         .append_outbox(event(repository_id, 3, "file-id.state-changed", "path"))
@@ -653,7 +670,10 @@ fn production_reference_postgres_report() {
                 &context,
                 repository_id,
                 file_id,
-                PageRequest { limit: 1, cursor: None },
+                PageRequest {
+                    limit: 1,
+                    cursor: None
+                },
             )
             .unwrap()
             .items
@@ -665,7 +685,10 @@ fn production_reference_postgres_report() {
             .reference_page(
                 &context,
                 repository_id,
-                PageRequest { limit: 1, cursor: None },
+                PageRequest {
+                    limit: 1,
+                    cursor: None
+                },
             )
             .unwrap()
             .items
@@ -699,7 +722,13 @@ fn production_reference_postgres_report() {
         file_id,
     );
     report("publication-index-and-lifetime-binding");
-    object_replay_and_collision(&database_url, &mut store, &context, repository_id, &manifest);
+    object_replay_and_collision(
+        &database_url,
+        &mut store,
+        &context,
+        repository_id,
+        &manifest,
+    );
     immutable_settings(&database_url, repository_id);
     report("canonical-file-graph");
 
@@ -735,8 +764,12 @@ fn production_reference_postgres_report() {
 }
 
 fn reset_disposable_schema(database_url: &str) {
-    let mut client = Client::connect(database_url, NoTls).expect("connect PostgreSQL test database");
-    let database: String = client.query_one("SELECT current_database()", &[]).unwrap().get(0);
+    let mut client =
+        Client::connect(database_url, NoTls).expect("connect PostgreSQL test database");
+    let database: String = client
+        .query_one("SELECT current_database()", &[])
+        .unwrap()
+        .get(0);
     assert!(
         database.starts_with("ogvcs_metadata_test_")
             && database
@@ -747,6 +780,156 @@ fn reset_disposable_schema(database_url: &str) {
     client
         .batch_execute("DROP SCHEMA IF EXISTS ogvcs_metadata CASCADE")
         .unwrap();
+}
+
+fn migration_v1_v2_upgrade_report(database_url: &str) {
+    let mut client = Client::connect(database_url, NoTls).unwrap();
+    for migration in &ogvcs_repository_metadata::MIGRATIONS[..3] {
+        client.batch_execute(migration.sql).unwrap();
+        client
+            .execute(
+                "INSERT INTO ogvcs_metadata.schema_migrations
+                 (version, phase, checksum_sha256, state, minimum_application_version,
+                  maximum_application_version, completed_at)
+                 VALUES ($1, $2, $3, 'completed', $4, $5, clock_timestamp())",
+                &[
+                    &(migration.version as i64),
+                    &migration.phase.as_str(),
+                    &migration.checksum_sha256,
+                    &migration.minimum_application_version,
+                    &migration.maximum_application_version,
+                ],
+            )
+            .unwrap();
+    }
+
+    let tenant_id = TenantId::from_bytes([81; 16]);
+    let repository_id = RepositoryId::from_bytes([82; 16]);
+    let tenant = Uuid::from_bytes(*tenant_id.as_bytes());
+    let repository = Uuid::from_bytes(*repository_id.as_bytes());
+    let project = Uuid::from_bytes([83; 16]);
+    let tree_digest = vec![84; 32];
+    let snapshot_digest = vec![85; 32];
+    let file_id = vec![86; 16];
+    client
+        .execute(
+            "INSERT INTO ogvcs_metadata.repositories
+             (repository_id, tenant_id, project_id) VALUES ($1, $2, $3)",
+            &[&repository, &tenant, &project],
+        )
+        .unwrap();
+    for (kind, digest) in [(3_i16, &tree_digest), (7_i16, &snapshot_digest)] {
+        client
+            .execute(
+                "INSERT INTO ogvcs_metadata.metadata_objects
+                 (repository_id, object_kind, digest_algorithm, object_digest,
+                  canonical_bytes, validation_contract)
+                 VALUES ($1, $2, 1, $3, $4, 'ogvcs.repository-format@1')",
+                &[&repository, &kind, digest, &&[0xa0_u8][..]],
+            )
+            .unwrap();
+    }
+    client
+        .execute(
+            "INSERT INTO ogvcs_metadata.snapshots
+             (repository_id, snapshot_digest, root_tree_digest, published_commit_sequence)
+             VALUES ($1, $2, $3, NULL)",
+            &[&repository, &snapshot_digest, &tree_digest],
+        )
+        .unwrap();
+    client
+        .execute(
+            "INSERT INTO ogvcs_metadata.file_id_registry
+             (repository_id, file_id, state, origin, owner_kind, owner_id)
+             VALUES ($1, $2, 'active'::ogvcs_metadata.file_id_state,
+                     'create'::ogvcs_metadata.file_id_origin,
+                     'published'::ogvcs_metadata.file_id_owner_kind, 'legacy-main')",
+            &[&repository, &file_id],
+        )
+        .unwrap();
+    client
+        .execute(
+            "INSERT INTO ogvcs_metadata.file_path_history
+             (repository_id, snapshot_digest, operation_ordinal, file_id,
+              repository_path_utf8, operation_kind)
+             VALUES ($1, $2, 0, $3, $4, 'create')",
+            &[
+                &repository,
+                &snapshot_digest,
+                &file_id,
+                &&b"Content/legacy.bin"[..],
+            ],
+        )
+        .unwrap();
+    client
+        .execute(
+            "INSERT INTO ogvcs_metadata.repository_commit_sequences
+             (repository_id, applied_sequence) VALUES ($1, 1)",
+            &[&repository],
+        )
+        .unwrap();
+    client
+        .execute(
+            "INSERT INTO ogvcs_metadata.references
+             (repository_id, reference_kind, reference_name, target_snapshot_digest,
+              generation, commit_sequence)
+             VALUES ($1, 'branch', 'main', $2, 1, 1)",
+            &[&repository, &snapshot_digest],
+        )
+        .unwrap();
+    drop(client);
+
+    let options = ogvcs_repository_metadata::MigrationRunOptions {
+        application_version: "0.1.0",
+        compatibility_fence_open: true,
+    };
+    let mut store = PostgresMetadataStore::connect(database_url).unwrap();
+    let upgrade = store.migrate(options).unwrap();
+    assert_eq!((upgrade.applied, upgrade.already_applied), (3, 3));
+    drop(store);
+
+    let mut client = Client::connect(database_url, NoTls).unwrap();
+    let history_rows: i64 = client
+        .query_one(
+            "SELECT count(*) FROM ogvcs_metadata.file_path_history
+             WHERE repository_id = $1 AND snapshot_digest = $2",
+            &[&repository, &snapshot_digest],
+        )
+        .unwrap()
+        .get(0);
+    assert_eq!(history_rows, 1);
+    let published: Option<i64> = client
+        .query_one(
+            "SELECT published_commit_sequence FROM ogvcs_metadata.snapshots
+             WHERE repository_id = $1 AND snapshot_digest = $2",
+            &[&repository, &snapshot_digest],
+        )
+        .unwrap()
+        .get(0);
+    assert_eq!(published, None, "v2 must not infer historical publication");
+    drop(client);
+
+    let context = AuthorizationContext {
+        subject_digest: [87; 32],
+        tenant_id,
+        authorization_epoch: 1,
+    };
+    let mut store = PostgresMetadataStore::connect(database_url)
+        .unwrap()
+        .with_authorizer(IsolatedAllow);
+    assert_eq!(
+        store
+            .read_reference(
+                &context,
+                repository_id,
+                ReferenceKind::Branch,
+                &ReferenceName::new("main".to_owned()).unwrap(),
+                None,
+            )
+            .unwrap_err()
+            .code,
+        DomainErrorCode::MetadataNotFoundOrDenied
+    );
 }
 
 fn migration_report(database_url: &str) {
@@ -767,9 +950,7 @@ fn migration_report(database_url: &str) {
         )
         .unwrap()
         .get(0);
-    assert!(history_index.contains(
-        "repository_id, file_id, snapshot_digest, operation_ordinal"
-    ));
+    assert!(history_index.contains("repository_id, file_id, snapshot_digest, operation_ordinal"));
     let version_one_checksum: String = client
         .query_one(
             "SELECT checksum_sha256 FROM ogvcs_metadata.schema_migrations
@@ -850,7 +1031,10 @@ fn migration_report(database_url: &str) {
         Ok(_) => panic!("mutation started without a completed contract migration"),
         Err(error) => error,
     };
-    assert_eq!(compatibility_error.code, DomainErrorCode::MigrationIncompatible);
+    assert_eq!(
+        compatibility_error.code,
+        DomainErrorCode::MigrationIncompatible
+    );
     drop(store);
     let mut store = PostgresMetadataStore::connect(database_url).unwrap();
     assert_eq!(store.migrate(options).unwrap().applied, 1);
@@ -866,7 +1050,10 @@ fn migration_report(database_url: &str) {
         .unwrap();
     drop(client);
     let mut store = PostgresMetadataStore::connect(database_url).unwrap();
-    assert_eq!(store.migrate(options).unwrap_err().code, DomainErrorCode::MigrationChecksumMismatch);
+    assert_eq!(
+        store.migrate(options).unwrap_err().code,
+        DomainErrorCode::MigrationChecksumMismatch
+    );
     drop(store);
     let mut client = Client::connect(database_url, NoTls).unwrap();
     client
@@ -887,10 +1074,18 @@ fn migration_report(database_url: &str) {
         .unwrap();
     drop(client);
     let mut store = PostgresMetadataStore::connect(database_url).unwrap();
-    assert_eq!(store.migrate(options).unwrap_err().code, DomainErrorCode::MigrationIncompatible);
+    assert_eq!(
+        store.migrate(options).unwrap_err().code,
+        DomainErrorCode::MigrationIncompatible
+    );
     drop(store);
     let mut client = Client::connect(database_url, NoTls).unwrap();
-    client.execute("DELETE FROM ogvcs_metadata.schema_migrations WHERE version = 3", &[]).unwrap();
+    client
+        .execute(
+            "DELETE FROM ogvcs_metadata.schema_migrations WHERE version = 3",
+            &[],
+        )
+        .unwrap();
 }
 
 fn object_replay_and_collision(
@@ -934,7 +1129,9 @@ fn object_replay_and_collision(
         IdempotencyReservationOutcome::Reserved
     );
     assert_eq!(
-        transaction.put_object(write(repository_id, manifest)).unwrap(),
+        transaction
+            .put_object(write(repository_id, manifest))
+            .unwrap(),
         ObjectPutOutcome::ExactReplay
     );
     transaction
@@ -1261,11 +1458,7 @@ fn publication_binding_report(
         .query_one(
             "SELECT basename_utf8 FROM ogvcs_metadata.tree_entries
              WHERE repository_id = $1 AND tree_digest = $2 AND file_id = $3",
-            &[
-                &repository,
-                &&tree.digest[..],
-                &&file_id.as_bytes()[..],
-            ],
+            &[&repository, &&tree.digest[..], &&file_id.as_bytes()[..]],
         )
         .unwrap()
         .get(0);
@@ -1538,13 +1731,14 @@ fn authorization_and_poisoning_report(
             5,
             |_transaction| {
                 synthetic_attempts += 1;
-                Err::<(), _>(DomainError::new(
-                    DomainErrorCode::TransactionRetryExhausted,
-                ))
+                Err::<(), _>(DomainError::new(DomainErrorCode::TransactionRetryExhausted))
             },
         )
         .unwrap_err();
-    assert_eq!(synthetic_retry.code, DomainErrorCode::TransactionRetryExhausted);
+    assert_eq!(
+        synthetic_retry.code,
+        DomainErrorCode::TransactionRetryExhausted
+    );
     assert_eq!(synthetic_attempts, 1);
 
     let capability_key = idempotency("capability.probe", "put-only", [18; 32]);
@@ -1647,10 +1841,7 @@ fn authorization_and_poisoning_report(
         )
         .unwrap();
     assert_eq!(
-        future
-            .reserve_idempotency(future_key)
-            .unwrap_err()
-            .code,
+        future.reserve_idempotency(future_key).unwrap_err().code,
         DomainErrorCode::ObjectInvalid
     );
     assert_eq!(
@@ -1672,10 +1863,7 @@ fn authorization_and_poisoning_report(
         Ok(_) => panic!("cross-tenant transaction was opened"),
         Err(error) => error,
     };
-    assert_eq!(
-        tenant_error.code,
-        DomainErrorCode::MetadataNotFoundOrDenied
-    );
+    assert_eq!(tenant_error.code, DomainErrorCode::MetadataNotFoundOrDenied);
     assert_eq!(
         store
             .read_reference(
@@ -1784,7 +1972,14 @@ fn authorization_and_poisoning_report(
             ],
         )
         .unwrap();
-    assert_eq!((row.get::<_, i64>(0), row.get::<_, i64>(1), row.get::<_, i64>(2)), (0, 0, 0));
+    assert_eq!(
+        (
+            row.get::<_, i64>(0),
+            row.get::<_, i64>(1),
+            row.get::<_, i64>(2)
+        ),
+        (0, 0, 0)
+    );
 }
 
 fn rollback_report(
@@ -1877,7 +2072,9 @@ fn rollback_report(
                 TransactionOptions::Serializable { maximum_retries: 0 },
             )
             .unwrap();
-        transaction.reserve_idempotency(reservation.clone()).unwrap();
+        transaction
+            .reserve_idempotency(reservation.clone())
+            .unwrap();
         if index >= 1 {
             transaction
                 .reserve_file_id(FileIdReservation {
@@ -1895,7 +2092,10 @@ fn rollback_report(
                     repository_id,
                     kind: ReferenceKind::Branch,
                     name: ReferenceName::new("main".to_owned()).unwrap(),
-                    expected: ReferenceExpected::Present { target: snapshot, generation: 1 },
+                    expected: ReferenceExpected::Present {
+                        target: snapshot,
+                        generation: 1,
+                    },
                     desired: Some(snapshot),
                 })
                 .unwrap();
@@ -1916,7 +2116,11 @@ fn rollback_report(
                 .unwrap();
         }
         transaction.rollback().unwrap();
-        assert_eq!(counts(database_url, repository_id), baseline, "fault point {fault}");
+        assert_eq!(
+            counts(database_url, repository_id),
+            baseline,
+            "fault point {fault}"
+        );
     }
     let oversized_result_key = idempotency("object.put", "deep-safe-result", [35; 32]);
     let mut oversized_result = store
@@ -1974,7 +2178,10 @@ fn rollback_report(
     let mut invalid_event = event(repository_id, 27, "file-id.state-changed", "path");
     invalid_event.event_id = [0; 16];
     assert_eq!(
-        invalid_envelope.append_outbox(invalid_event).unwrap_err().code,
+        invalid_envelope
+            .append_outbox(invalid_event)
+            .unwrap_err()
+            .code,
         DomainErrorCode::ObjectInvalid
     );
     assert_eq!(
@@ -2008,12 +2215,7 @@ fn rollback_report(
         .commit_idempotency(&event_binding_key, json!({"reserved": true}))
         .unwrap();
     event_binding
-        .append_outbox(event(
-            repository_id,
-            29,
-            "file-id.state-changed",
-            "path",
-        ))
+        .append_outbox(event(repository_id, 29, "file-id.state-changed", "path"))
         .unwrap();
     assert_eq!(
         event_binding
@@ -2028,8 +2230,7 @@ fn rollback_report(
     );
     assert_eq!(counts(database_url, repository_id), baseline);
 
-    let event_cardinality_key =
-        idempotency("file-id.reserve", "event-cardinality", [38; 32]);
+    let event_cardinality_key = idempotency("file-id.reserve", "event-cardinality", [38; 32]);
     let mut event_cardinality = store
         .begin_authorized(
             context,
@@ -2056,12 +2257,7 @@ fn rollback_report(
         .commit_idempotency(&event_cardinality_key, json!({"reserved": 2}))
         .unwrap();
     event_cardinality
-        .append_outbox(event(
-            repository_id,
-            28,
-            "file-id.state-changed",
-            "path",
-        ))
+        .append_outbox(event(repository_id, 28, "file-id.state-changed", "path"))
         .unwrap();
     assert_eq!(
         event_cardinality.commit().unwrap_err().code,
@@ -2109,7 +2305,9 @@ fn consistency_report(
         .unwrap();
     transaction.commit().unwrap();
     assert_eq!(
-        store.require_consistency(context, repository_id, &token).unwrap(),
+        store
+            .require_consistency(context, repository_id, &token)
+            .unwrap(),
         CommitSequence::new(2)
     );
     for mismatched in [
@@ -2136,11 +2334,7 @@ fn consistency_report(
     }
     assert_eq!(
         store
-            .require_consistency(
-                context,
-                RepositoryId::from_bytes([46; 16]),
-                &token,
-            )
+            .require_consistency(context, RepositoryId::from_bytes([46; 16]), &token,)
             .unwrap_err()
             .code,
         DomainErrorCode::ConsistencyTokenUnsatisfied
@@ -2155,7 +2349,10 @@ fn consistency_report(
         .unwrap();
     drop(client);
     assert_eq!(
-        store.require_consistency(context, repository_id, &token).unwrap_err().code,
+        store
+            .require_consistency(context, repository_id, &token)
+            .unwrap_err()
+            .code,
         DomainErrorCode::ConsistencyTokenUnsatisfied
     );
     let mut client = Client::connect(database_url, NoTls).unwrap();
@@ -2281,7 +2478,11 @@ fn file_id_race(database_url: &str, context: AuthorizationContext, repository_id
                 .unwrap()
                 .with_authorizer(IsolatedAllow)
                 .with_object_validator(IsolatedConformanceValidation);
-            let key = idempotency("file-id.reserve", &format!("file-race-{index}"), [80 + index; 32]);
+            let key = idempotency(
+                "file-id.reserve",
+                &format!("file-race-{index}"),
+                [80 + index; 32],
+            );
             store.execute_serializable(
                 &context,
                 TransactionCapability::ReserveFileId,
@@ -2308,12 +2509,20 @@ fn file_id_race(database_url: &str, context: AuthorizationContext, repository_id
             )
         }));
     }
-    let results = workers.into_iter().map(|worker| worker.join().unwrap()).collect::<Vec<_>>();
+    let results = workers
+        .into_iter()
+        .map(|worker| worker.join().unwrap())
+        .collect::<Vec<_>>();
     assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
     assert_eq!(
-        results.iter().filter(|result| {
-            result.as_ref().is_err_and(|error| error.code == DomainErrorCode::FileIdConflict)
-        }).count(),
+        results
+            .iter()
+            .filter(|result| {
+                result
+                    .as_ref()
+                    .is_err_and(|error| error.code == DomainErrorCode::FileIdConflict)
+            })
+            .count(),
         1
     );
 
@@ -2355,7 +2564,9 @@ fn file_id_race(database_url: &str, context: AuthorizationContext, repository_id
         )
         .unwrap();
     let tombstone_key = idempotency("file-id.tombstone", "file-tombstone", [83; 32]);
-    transaction.reserve_idempotency(tombstone_key.clone()).unwrap();
+    transaction
+        .reserve_idempotency(tombstone_key.clone())
+        .unwrap();
     transaction
         .tombstone_file_id(repository_id, file_id, FileIdExpectedState::Reserved)
         .unwrap();
@@ -2408,8 +2619,7 @@ fn file_id_race(database_url: &str, context: AuthorizationContext, repository_id
     assert_eq!(state, "tombstoned");
     drop(client);
 
-    let recreate_create_key =
-        idempotency("file-id.reserve", "tombstoned-create", [87; 32]);
+    let recreate_create_key = idempotency("file-id.reserve", "tombstoned-create", [87; 32]);
     let mut recreate_create = store
         .begin_authorized(
             &context,
@@ -2463,7 +2673,9 @@ fn file_id_race(database_url: &str, context: AuthorizationContext, repository_id
     let import_key = idempotency("file-id.import", "file-import", [84; 32]);
     transaction.reserve_idempotency(import_key.clone()).unwrap();
     assert_eq!(
-        transaction.reserve_imported_file_id(import.clone()).unwrap(),
+        transaction
+            .reserve_imported_file_id(import.clone())
+            .unwrap(),
         FileIdReservationOutcome::Reserved
     );
     transaction
@@ -2576,7 +2788,10 @@ fn cas_race(
                         repository_id,
                         kind: ReferenceKind::Branch,
                         name: ReferenceName::new("main".to_owned()).unwrap(),
-                        expected: ReferenceExpected::Present { target: snapshot, generation: 1 },
+                        expected: ReferenceExpected::Present {
+                            target: snapshot,
+                            generation: 1,
+                        },
                         desired: Some(snapshot),
                     })?;
                     transaction
@@ -2592,12 +2807,20 @@ fn cas_race(
             )
         }));
     }
-    let results = workers.into_iter().map(|worker| worker.join().unwrap()).collect::<Vec<_>>();
+    let results = workers
+        .into_iter()
+        .map(|worker| worker.join().unwrap())
+        .collect::<Vec<_>>();
     assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
     assert_eq!(
-        results.iter().filter(|result| {
-            result.as_ref().is_err_and(|error| error.code == DomainErrorCode::ReferenceConflict)
-        }).count(),
+        results
+            .iter()
+            .filter(|result| {
+                result
+                    .as_ref()
+                    .is_err_and(|error| error.code == DomainErrorCode::ReferenceConflict)
+            })
+            .count(),
         99
     );
 }
@@ -2623,12 +2846,15 @@ fn fixture(kind: ObjectKind, name: &str) -> (ObjectRef, Vec<u8>) {
     let path = format!("{}/{VECTOR_ROOT}/{name}", env!("CARGO_MANIFEST_DIR"));
     let bytes = fs::read(path).unwrap();
     (
-        ObjectRef { kind, digest: object_id(kind, &bytes).unwrap() },
+        ObjectRef {
+            kind,
+            digest: object_id(kind, &bytes).unwrap(),
+        },
         bytes,
     )
 }
 
-fn write<'a>(repository_id: RepositoryId, fixture: &'a (ObjectRef, Vec<u8>)) -> ObjectWrite<'a> {
+fn write(repository_id: RepositoryId, fixture: &(ObjectRef, Vec<u8>)) -> ObjectWrite<'_> {
     ObjectWrite {
         repository_id,
         object_ref: &fixture.0,
@@ -2645,17 +2871,25 @@ fn regular_tree_entry(bytes: &[u8]) -> (u32, Vec<u8>, FileId, u16, ObjectRef, u6
 
 fn tree_entries(bytes: &[u8]) -> Vec<(u32, Vec<u8>, FileId, u16, ObjectRef, u64)> {
     let tree = decode_canonical(bytes, Limits::METADATA).unwrap();
-    let Cbor::Array(entries) = field(&tree, 17) else { panic!("tree entries") };
+    let Cbor::Array(entries) = field(&tree, 17) else {
+        panic!("tree entries")
+    };
     entries
         .iter()
         .enumerate()
         .map(|(ordinal, entry)| {
-        let Cbor::UInt(entry_kind) = field(entry, 1) else { panic!("entry kind") };
-        let Cbor::Text(basename) = field(entry, 0) else { panic!("basename") };
-        let file_id = FileId::from_cbor(field(entry, 2)).unwrap();
-        let target = ObjectRef::from_cbor(field(entry, 4)).unwrap();
-        let Cbor::UInt(logical_size) = field(entry, 5) else { panic!("logical size") };
-        (
+            let Cbor::UInt(entry_kind) = field(entry, 1) else {
+                panic!("entry kind")
+            };
+            let Cbor::Text(basename) = field(entry, 0) else {
+                panic!("basename")
+            };
+            let file_id = FileId::from_cbor(field(entry, 2)).unwrap();
+            let target = ObjectRef::from_cbor(field(entry, 4)).unwrap();
+            let Cbor::UInt(logical_size) = field(entry, 5) else {
+                panic!("logical size")
+            };
+            (
                 ordinal as u32,
                 basename.as_bytes().to_vec(),
                 file_id,
@@ -2670,7 +2904,9 @@ fn tree_entries(bytes: &[u8]) -> Vec<(u32, Vec<u8>, FileId, u16, ObjectRef, u64)
 fn snapshot_index(bytes: &[u8]) -> (ObjectRef, Vec<ObjectRef>) {
     let snapshot = decode_canonical(bytes, Limits::METADATA).unwrap();
     let root = ObjectRef::from_cbor(field(&snapshot, 18)).unwrap();
-    let Cbor::Array(parents) = field(&snapshot, 17) else { panic!("snapshot parents") };
+    let Cbor::Array(parents) = field(&snapshot, 17) else {
+        panic!("snapshot parents")
+    };
     let parents = parents
         .iter()
         .map(|parent| ObjectRef::from_cbor(parent).unwrap())
@@ -2680,13 +2916,17 @@ fn snapshot_index(bytes: &[u8]) -> (ObjectRef, Vec<ObjectRef>) {
 
 fn descriptor_repository_id(bytes: &[u8]) -> RepositoryId {
     let descriptor = decode_canonical(bytes, Limits::METADATA).unwrap();
-    let Cbor::Bytes(bytes) = field(&descriptor, 16) else { panic!("repository ID") };
+    let Cbor::Bytes(bytes) = field(&descriptor, 16) else {
+        panic!("repository ID")
+    };
     RepositoryId::from_bytes(bytes.as_slice().try_into().unwrap())
 }
 
 fn descriptor_settings(bytes: &[u8]) -> (Vec<u16>, String, String) {
     let descriptor = decode_canonical(bytes, Limits::METADATA).unwrap();
-    let Cbor::Array(features) = field(&descriptor, 2) else { panic!("required features") };
+    let Cbor::Array(features) = field(&descriptor, 2) else {
+        panic!("required features")
+    };
     let features = features
         .iter()
         .map(|value| match value {
@@ -2694,15 +2934,25 @@ fn descriptor_settings(bytes: &[u8]) -> (Vec<u16>, String, String) {
             _ => panic!("feature code"),
         })
         .collect();
-    let path = ProfileRef::from_cbor(field(&descriptor, 17)).unwrap().to_string();
-    let Cbor::Array(content) = field(&descriptor, 18) else { panic!("content policies") };
+    let path = ProfileRef::from_cbor(field(&descriptor, 17))
+        .unwrap()
+        .to_string();
+    let Cbor::Array(content) = field(&descriptor, 18) else {
+        panic!("content policies")
+    };
     let content = ProfileRef::from_cbor(&content[0]).unwrap().to_string();
     (features, path, content)
 }
 
 fn field(value: &Cbor, key: u64) -> &Cbor {
-    let Cbor::Map(fields) = value else { panic!("CBOR map") };
-    &fields.iter().find(|(field, _)| *field == Cbor::UInt(key)).unwrap().1
+    let Cbor::Map(fields) = value else {
+        panic!("CBOR map")
+    };
+    &fields
+        .iter()
+        .find(|(field, _)| *field == Cbor::UInt(key))
+        .unwrap()
+        .1
 }
 
 fn idempotency(operation: &str, key: &str, fingerprint: [u8; 32]) -> IdempotencyReservation {
@@ -2718,8 +2968,14 @@ fn idempotency_window(
     issued_at: SystemTime,
     expires_at: SystemTime,
 ) -> IdempotencyReservation {
-    let issued_ms = issued_at.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis();
-    let expires_ms = expires_at.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis();
+    let issued_ms = issued_at
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let expires_ms = expires_at
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
     IdempotencyReservation {
         operation: operation.to_owned(),
         key: format!("ik1.{issued_ms}.{expires_ms}.{key}{}", "A".repeat(22)),

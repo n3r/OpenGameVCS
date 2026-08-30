@@ -10,8 +10,12 @@ fn migration_root() -> PathBuf {
 #[test]
 fn migration_manifest_is_ordered_checksummed_and_transactional() {
     let root = migration_root();
-    let manifest: Value = serde_json::from_slice(&fs::read(root.join("manifest.json")).unwrap()).unwrap();
-    assert_eq!(manifest["schemaVersion"], "ogvcs.repository-metadata/migration-manifest/v1");
+    let manifest: Value =
+        serde_json::from_slice(&fs::read(root.join("manifest.json")).unwrap()).unwrap();
+    assert_eq!(
+        manifest["schemaVersion"],
+        "ogvcs.repository-metadata/migration-manifest/v1"
+    );
     assert_eq!(manifest["database"], "postgresql-15-or-newer");
     let entries = manifest["entries"].as_array().unwrap();
     assert_eq!(entries.len(), 6);
@@ -61,7 +65,10 @@ fn expand_schema_contains_every_authoritative_boundary() {
         "consistency_tokens",
         "outbox_events",
     ] {
-        assert!(sql.contains(&format!("CREATE TABLE ogvcs_metadata.{table}")), "missing {table}");
+        assert!(
+            sql.contains(&format!("CREATE TABLE ogvcs_metadata.{table}")),
+            "missing {table}"
+        );
     }
     assert!(sql.contains("PRIMARY KEY (repository_id, file_id)"));
     assert!(sql.contains("PRIMARY KEY (repository_id, reference_kind, reference_name)"));
@@ -69,7 +76,9 @@ fn expand_schema_contains_every_authoritative_boundary() {
     assert!(sql.contains("UNIQUE (repository_id, tree_digest, file_id)"));
     assert!(sql.contains("object_kind IN (2, 3, 4, 5, 6, 7, 9, 10, 11)"));
     assert!(sql.contains("FOREIGN KEY (repository_id, tree_kind, tree_algorithm, tree_digest)"));
-    assert!(sql.contains("FOREIGN KEY (repository_id, target_kind, target_algorithm, target_digest)"));
+    assert!(
+        sql.contains("FOREIGN KEY (repository_id, target_kind, target_algorithm, target_digest)")
+    );
     assert!(sql.contains("ADD CONSTRAINT repository_settings_descriptor_fk"));
     assert!(sql.contains("ADD CONSTRAINT file_path_history_file_id_fk"));
     assert!(sql.contains("UNIQUE (repository_id, tenant_id)"));
@@ -116,7 +125,10 @@ fn migration_runner_declares_lock_checksum_compatibility_and_fence_gates() {
         "pub fn verify_schema_compatibility",
         "state != \"completed\"",
     ] {
-        assert!(source.contains(evidence), "migration runner missing {evidence}");
+        assert!(
+            source.contains(evidence),
+            "migration runner missing {evidence}"
+        );
     }
     assert!(
         source.find("let existing =").unwrap()
@@ -136,7 +148,12 @@ fn rust_domain_errors_match_the_generated_language_neutral_registry() {
         .as_array()
         .unwrap()
         .iter()
-        .map(|entry| (entry["code"].as_u64().unwrap(), entry["name"].as_str().unwrap()))
+        .map(|entry| {
+            (
+                entry["code"].as_u64().unwrap(),
+                entry["name"].as_str().unwrap(),
+            )
+        })
         .collect();
     let expected = [
         (1001, "REPOSITORY_SETTINGS_IMMUTABLE"),

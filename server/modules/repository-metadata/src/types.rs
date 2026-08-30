@@ -56,7 +56,9 @@ pub struct RepositorySettings {
 
 impl RepositorySettings {
     pub fn has_sorted_unique_features(&self) -> bool {
-        self.required_features.windows(2).all(|pair| pair[0] < pair[1])
+        self.required_features
+            .windows(2)
+            .all(|pair| pair[0] < pair[1])
     }
 }
 

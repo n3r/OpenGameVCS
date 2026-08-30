@@ -6,8 +6,8 @@ use ogvcs_object_model::{
     Limits, ObjectKind, PathCaseMode, ProfileRef, RepositoryContext, RepositoryLimits,
     RepositoryObjectLookup,
 };
-use postgres::{Client, IsolationLevel, NoTls, Row, Transaction};
 use postgres::types::Json;
+use postgres::{Client, IsolationLevel, NoTls, Row, Transaction};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use std::{
@@ -21,11 +21,10 @@ use crate::{
     AuthorizationContext, AuthorizationPort, AuthorizationResource, AuthorizedView, CaseMode,
     CommitSequence, ConsistencyToken, CursorToken, DenyAllAuthorization, DomainError,
     DomainErrorCode, FileHistoryRecord, FileHistoryWrite, FileId, FileIdExpectedState,
-    FileIdImportReservation, FileIdOrigin, FileIdOwnerKind,
-    FileIdReservation, FileIdReservationOutcome, IdempotencyReservation,
-    IdempotencyReservationOutcome, MetadataPermission, MetadataStore, MetadataTransaction,
-    ObjectPutOutcome, ObjectRef, ObjectWrite, ObjectValidationPort, OutboxEvent, Page, PageRequest,
-    ProductionObjectValidator,
+    FileIdImportReservation, FileIdOrigin, FileIdOwnerKind, FileIdReservation,
+    FileIdReservationOutcome, IdempotencyReservation, IdempotencyReservationOutcome,
+    MetadataPermission, MetadataStore, MetadataTransaction, ObjectPutOutcome, ObjectRef,
+    ObjectValidationPort, ObjectWrite, OutboxEvent, Page, PageRequest, ProductionObjectValidator,
     ReferenceCasRequest, ReferenceCasResult, ReferenceExpected, ReferenceKind, ReferenceName,
     ReferenceRecord, RepositoryCreate, RepositoryId, Result, SnapshotWrite, TenantId,
     TransactionCapability, TransactionOptions, TreeEntryRecord, TreeEntryWrite,
@@ -98,11 +97,11 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
         permission: MetadataPermission,
         resource: &AuthorizationResource,
     ) -> Result<A::AuthorizedView> {
-        let view = self.authorization.authorize(context, permission, resource)?;
+        let view = self
+            .authorization
+            .authorize(context, permission, resource)?;
         if !view.permits(context, permission, resource) {
-            return Err(DomainError::new(
-                DomainErrorCode::MetadataNotFoundOrDenied,
-            ));
+            return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
         }
         Ok(view)
     }
@@ -124,9 +123,7 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
         if exists {
             Ok(())
         } else {
-            Err(DomainError::new(
-                DomainErrorCode::MetadataNotFoundOrDenied,
-            ))
+            Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied))
         }
     }
 
@@ -165,8 +162,7 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
             || object_id(ObjectKind::Snapshot, &snapshot_bytes)
                 .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?
                 != snapshot.digest
-            || cbor_field(&snapshot_value, 18)
-                .and_then(|value| ObjectRef::from_cbor(value).ok())
+            || cbor_field(&snapshot_value, 18).and_then(|value| ObjectRef::from_cbor(value).ok())
                 != Some(root)
         {
             return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
@@ -261,9 +257,7 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
         {
             let tenant_id: Uuid = row.get(0);
             if tenant_id.as_bytes() != context.tenant_id.as_bytes() {
-                return Err(DomainError::new(
-                    DomainErrorCode::MetadataNotFoundOrDenied,
-                ));
+                return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
             }
         }
         let isolation = match options {
@@ -315,12 +309,10 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
             match operation(&mut transaction) {
                 Ok(value) => match transaction.commit() {
                     Ok(sequence) => return Ok((value, sequence)),
-                    Err(error)
-                        if error.is_database_concurrency() && attempt < maximum_retries => {}
+                    Err(error) if error.is_database_concurrency() && attempt < maximum_retries => {}
                     Err(error) => return Err(error),
                 },
-                Err(error) if error.is_database_concurrency() && attempt < maximum_retries =>
-                {
+                Err(error) if error.is_database_concurrency() && attempt < maximum_retries => {
                     let _ = transaction.rollback();
                 }
                 Err(error) => {
@@ -329,9 +321,7 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
                 }
             }
         }
-        Err(DomainError::new(
-            DomainErrorCode::TransactionRetryExhausted,
-        ))
+        Err(DomainError::new(DomainErrorCode::TransactionRetryExhausted))
     }
 
     pub fn read_reference(
@@ -370,12 +360,12 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
             .map_err(database_error)?
             .ok_or_else(not_found)?;
         let published: Option<i64> = row.get(3);
-        if published.and_then(|value| positive_u64(value).ok()).is_none()
+        if published
+            .and_then(|value| positive_u64(value).ok())
+            .is_none()
             || !authorized_view.permits(context, MetadataPermission::MetadataRead, &resource)
         {
-            return Err(DomainError::new(
-                DomainErrorCode::MetadataNotFoundOrDenied,
-            ));
+            return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
         }
         Ok(ReferenceRecord {
             kind,
@@ -399,9 +389,7 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
         self.require_repository_tenant(context, repository_id)?;
         let sequence = self.require_consistency_authorized(context, repository_id, token)?;
         if !authorized_view.permits(context, MetadataPermission::MetadataRead, &resource) {
-            return Err(DomainError::new(
-                DomainErrorCode::MetadataNotFoundOrDenied,
-            ));
+            return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
         }
         Ok(sequence)
     }
@@ -458,9 +446,7 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
         request: PageRequest,
     ) -> Result<Page<TreeEntryRecord>> {
         if !valid_tree_prefix(prefix) {
-            return Err(DomainError::new(
-                DomainErrorCode::MetadataNotFoundOrDenied,
-            ));
+            return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
         }
         let resource = AuthorizationResource::TreePrefix {
             repository_id,
@@ -529,19 +515,18 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
             }
         }
         if truncated && items.len() <= usize::from(request.limit) {
-            return Err(DomainError::new(
-                DomainErrorCode::MetadataNotFoundOrDenied,
-            ));
+            return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
         }
         let has_more = items.len() > usize::from(request.limit);
         items.truncate(usize::from(request.limit));
         if !authorized_view.permits(context, MetadataPermission::MetadataRead, &resource) {
-            return Err(DomainError::new(
-                DomainErrorCode::MetadataNotFoundOrDenied,
-            ));
+            return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
         }
         let next_cursor = if has_more {
-            let key = items.last().map(|item| item.basename_utf8.clone()).ok_or_else(not_found)?;
+            let key = items
+                .last()
+                .map(|item| item.basename_utf8.clone())
+                .ok_or_else(not_found)?;
             Some(self.issue_cursor(
                 context,
                 repository_id,
@@ -554,10 +539,7 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
         } else {
             None
         };
-        Ok(Page {
-            items,
-            next_cursor,
-        })
+        Ok(Page { items, next_cursor })
     }
 
     pub fn reference_page(
@@ -620,7 +602,10 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
             };
             if authorized_view.permits(context, MetadataPermission::Discover, &exact) {
                 let published: Option<i64> = row.get(5);
-                if published.and_then(|value| positive_u64(value).ok()).is_none() {
+                if published
+                    .and_then(|value| positive_u64(value).ok())
+                    .is_none()
+                {
                     return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
                 }
                 items.push(reference_record(row)?);
@@ -630,16 +615,12 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
             }
         }
         if truncated && items.len() <= usize::from(request.limit) {
-            return Err(DomainError::new(
-                DomainErrorCode::MetadataNotFoundOrDenied,
-            ));
+            return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
         }
         let has_more = items.len() > usize::from(request.limit);
         items.truncate(usize::from(request.limit));
         if !authorized_view.permits(context, MetadataPermission::Discover, &resource) {
-            return Err(DomainError::new(
-                DomainErrorCode::MetadataNotFoundOrDenied,
-            ));
+            return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
         }
         let next_cursor = if has_more {
             let item = items.last().ok_or_else(not_found)?;
@@ -729,16 +710,12 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
             }
         }
         if truncated && items.len() <= usize::from(request.limit) {
-            return Err(DomainError::new(
-                DomainErrorCode::MetadataNotFoundOrDenied,
-            ));
+            return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
         }
         let has_more = items.len() > usize::from(request.limit);
         items.truncate(usize::from(request.limit));
         if !authorized_view.permits(context, MetadataPermission::MetadataRead, &resource) {
-            return Err(DomainError::new(
-                DomainErrorCode::MetadataNotFoundOrDenied,
-            ));
+            return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
         }
         let next_cursor = if has_more {
             let item = items.last().ok_or_else(not_found)?;
@@ -820,10 +797,18 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
             .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
         let digest = Sha256::digest(token.as_bytes()).to_vec();
         let mut position_map = Map::new();
-        position_map.insert(field.to_owned(), Value::String(URL_SAFE_NO_PAD.encode(position)));
+        position_map.insert(
+            field.to_owned(),
+            Value::String(URL_SAFE_NO_PAD.encode(position)),
+        );
         let position = Value::Object(position_map);
         let (kind, object_digest) = bound
-            .map(|object| (Some(i16::try_from(object.kind.code()).unwrap()), Some(object.digest.to_vec())))
+            .map(|object| {
+                (
+                    Some(i16::try_from(object.kind.code()).unwrap()),
+                    Some(object.digest.to_vec()),
+                )
+            })
             .unwrap_or((None, None));
         self.client
             .execute(
@@ -1011,9 +996,7 @@ pub struct PostgresMetadataTransaction<
     validation: &'a V,
 }
 
-impl<V: ObjectValidationPort, View: AuthorizedView>
-    PostgresMetadataTransaction<'_, V, View>
-{
+impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransaction<'a, V, View> {
     pub fn authorized_repository_id(&self) -> RepositoryId {
         self.authorized_repository_id
     }
@@ -1043,7 +1026,7 @@ impl<V: ObjectValidationPort, View: AuthorizedView>
         Ok(result)
     }
 
-    fn transaction(&mut self) -> Result<&mut Transaction<'_>> {
+    fn transaction(&mut self) -> Result<&mut Transaction<'a>> {
         if self.failed {
             return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
         }
@@ -1084,9 +1067,7 @@ impl<V: ObjectValidationPort, View: AuthorizedView>
         if repository_id == self.authorized_repository_id {
             Ok(())
         } else {
-            Err(DomainError::new(
-                DomainErrorCode::MetadataNotFoundOrDenied,
-            ))
+            Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied))
         }
     }
 
@@ -1104,9 +1085,7 @@ impl<V: ObjectValidationPort, View: AuthorizedView>
         {
             Ok(())
         } else {
-            Err(DomainError::new(
-                DomainErrorCode::MetadataNotFoundOrDenied,
-            ))
+            Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied))
         }
     }
 
@@ -1400,7 +1379,11 @@ impl<V: ObjectValidationPort, View: AuthorizedView>
             .iter()
             .filter(|record| record.first_change_set == candidate_change)
             .map(|record| record.file_id)
-            .chain(working_lifetime_additions.iter().map(|record| record.file_id))
+            .chain(
+                working_lifetime_additions
+                    .iter()
+                    .map(|record| record.file_id),
+            )
             .chain(candidate_tree_file_ids(&entries, candidate)?)
             .collect::<BTreeSet<_>>();
         let file_id_evidence = self.load_file_id_evidence(limits.max_edges)?;
@@ -1451,13 +1434,8 @@ impl<V: ObjectValidationPort, View: AuthorizedView>
         }
         let registry = self.validation.registry();
         let mode = self.validation.validation_mode();
-        let lookup = RepositoryObjectLookup::new(
-            entries.into_iter(),
-            registry,
-            mode,
-            limits,
-        )
-        .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        let lookup = RepositoryObjectLookup::new(entries.into_iter(), registry, mode, limits)
+            .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
         for reference in &closure {
             lookup
                 .resolve(*reference)
@@ -1468,12 +1446,8 @@ impl<V: ObjectValidationPort, View: AuthorizedView>
             "case-folded" => PathCaseMode::CaseFolded,
             _ => return Err(DomainError::new(DomainErrorCode::ObjectInvalid)),
         };
-        let mut context = RepositoryContext::new(
-            &lookup,
-            descriptor,
-            designated_root,
-            path_case_mode,
-        );
+        let mut context =
+            RepositoryContext::new(&lookup, descriptor, designated_root, path_case_mode);
         context.lifetime_records = &lifetime_records;
         context.working_lifetime_additions = &working_lifetime_additions;
         context.import_mappings = &import_mappings;
@@ -1769,12 +1743,15 @@ impl<V: ObjectValidationPort, View: AuthorizedView>
             )
             .map_err(database_error)?;
         if actual_history.len() != expected_history.len()
-            || actual_history.iter().zip(&expected_history).any(|(row, expected)| {
-                u32::try_from(row.get::<_, i32>(0)).ok() != Some(expected.operation_ordinal)
-                    || row.get::<_, Vec<u8>>(1).as_slice() != expected.file_id.as_bytes()
-                    || row.get::<_, Vec<u8>>(2) != expected.repository_path_utf8
-                    || row.get::<_, String>(3).as_str() != expected.operation_kind.as_str()
-            })
+            || actual_history
+                .iter()
+                .zip(&expected_history)
+                .any(|(row, expected)| {
+                    u32::try_from(row.get::<_, i32>(0)).ok() != Some(expected.operation_ordinal)
+                        || row.get::<_, Vec<u8>>(1).as_slice() != expected.file_id.as_bytes()
+                        || row.get::<_, Vec<u8>>(2) != expected.repository_path_utf8
+                        || row.get::<_, String>(3).as_str() != expected.operation_kind.as_str()
+                })
         {
             return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
         }
@@ -2060,7 +2037,10 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
                     "SELECT canonical_bytes FROM ogvcs_metadata.metadata_objects
                      WHERE repository_id = $1 AND object_kind = 7 AND digest_algorithm = 1
                        AND object_digest = $2",
-                    &[&uuid(snapshot.repository_id), &&snapshot.snapshot.digest[..]],
+                    &[
+                        &uuid(snapshot.repository_id),
+                        &&snapshot.snapshot.digest[..],
+                    ],
                 )
                 .map_err(database_error)?
                 .get(0);
@@ -2613,7 +2593,10 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
                         )
                         .map_err(database_error)?
                         .get(0);
-                    if published.and_then(|value| nonnegative_u64(value).ok()).is_none() {
+                    if published
+                        .and_then(|value| nonnegative_u64(value).ok())
+                        .is_none()
+                    {
                         return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
                     }
                 }
@@ -2621,15 +2604,10 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
             } else {
                 false
             };
-            self.require_reference_event(
-                request.kind,
-                &request.name,
-                current,
-                generation,
-            )?;
+            self.require_reference_event(request.kind, &request.name, current, generation)?;
             if newly_accepted_snapshot {
-                let snapshot = current
-                    .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+                let snapshot =
+                    current.ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
                 self.require_object_event(snapshot.digest)?;
             }
             Ok(ReferenceCasResult {
@@ -2664,9 +2642,7 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
                 .map_err(database_error)?
                 .get(0);
             if tenant.as_bytes() != self.authorization_context.tenant_id.as_bytes() {
-                return Err(DomainError::new(
-                    DomainErrorCode::MetadataNotFoundOrDenied,
-                ));
+                return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
             }
             let safe_payload = fact.safe_payload();
             let resource_opaque_id =
@@ -2700,10 +2676,7 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
         })
     }
 
-    fn issue_consistency_token(
-        &mut self,
-        minimum: CommitSequence,
-    ) -> Result<ConsistencyToken> {
+    fn issue_consistency_token(&mut self, minimum: CommitSequence) -> Result<ConsistencyToken> {
         poison_transaction_on_error!(self, {
             self.require_capability(&[
                 TransactionCapability::IssueConsistencyToken,
@@ -2800,13 +2773,7 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> MetadataStore for PostgresMe
         repository_id: RepositoryId,
         options: TransactionOptions,
     ) -> Result<Self::Transaction<'_>> {
-        PostgresMetadataStore::begin_authorized(
-            self,
-            context,
-            capability,
-            repository_id,
-            options,
-        )
+        PostgresMetadataStore::begin_authorized(self, context, capability, repository_id, options)
     }
 }
 
@@ -2893,8 +2860,8 @@ fn decode_reference_key(key: Option<&[u8]>) -> Result<(Option<String>, Option<St
         2 => "tag",
         _ => return Err(DomainError::new(DomainErrorCode::ObjectInvalid)),
     };
-    let name = std::str::from_utf8(name)
-        .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+    let name =
+        std::str::from_utf8(name).map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
     Ok((Some(kind.to_owned()), Some(name.to_owned())))
 }
 
@@ -2911,7 +2878,12 @@ fn decode_history_key(key: Option<&[u8]>) -> Result<(Option<Vec<u8>>, i32)> {
     ))
 }
 
-fn query_digest(domain: &[u8], repository_id: RepositoryId, first: &[u8], second: &[u8]) -> [u8; 32] {
+fn query_digest(
+    domain: &[u8],
+    repository_id: RepositoryId,
+    first: &[u8],
+    second: &[u8],
+) -> [u8; 32] {
     let mut hash = Sha256::new();
     hash.update(b"OpenGameVCS metadata query\0");
     hash.update(domain);
@@ -3120,8 +3092,7 @@ fn repository_object_matches_settings(
             | ObjectKind::ConflictSet
     );
     if descriptor_bound
-        && cbor_field(&object, 16)
-            .and_then(|value| ObjectRef::from_cbor(value).ok())
+        && cbor_field(&object, 16).and_then(|value| ObjectRef::from_cbor(value).ok())
             != Some(descriptor_ref)
     {
         return false;
@@ -3136,8 +3107,8 @@ fn repository_object_matches_settings(
                 )
         }
         ObjectKind::ContentManifest => {
-            let Some(profile) = cbor_field(&object, 18)
-                .and_then(|value| ProfileRef::from_cbor(value).ok())
+            let Some(profile) =
+                cbor_field(&object, 18).and_then(|value| ProfileRef::from_cbor(value).ok())
             else {
                 return false;
             };
@@ -3185,8 +3156,16 @@ fn repository_settings_match_descriptor(request: &RepositoryCreate<'_>) -> bool 
         || !valid_structural_limits(&request.settings.structural_limits)
         || json_size(&request.settings.structural_limits).is_none_or(|size| size > 65_536)
         || request.settings.path_profile.parse::<ProfileRef>().is_err()
-        || request.settings.platform_profile.parse::<ProfileRef>().is_err()
-        || request.settings.content_policy_profile.parse::<ProfileRef>().is_err()
+        || request
+            .settings
+            .platform_profile
+            .parse::<ProfileRef>()
+            .is_err()
+        || request
+            .settings
+            .content_policy_profile
+            .parse::<ProfileRef>()
+            .is_err()
     {
         return false;
     }
@@ -3408,9 +3387,7 @@ fn resolve_tree_prefix(
         }
         current = entries
             .iter()
-            .find(|entry| {
-                matches!(cbor_field(entry, 0), Some(Cbor::Text(name)) if name == segment)
-            })
+            .find(|entry| matches!(cbor_field(entry, 0), Some(Cbor::Text(name)) if name == segment))
             .filter(|entry| matches!(cbor_field(entry, 1), Some(Cbor::UInt(1))))
             .and_then(|entry| cbor_field(entry, 4))
             .and_then(|value| ObjectRef::from_cbor(value).ok())
@@ -3525,9 +3502,7 @@ fn snapshot_change_ref(
     entries
         .get(&snapshot)
         .and_then(|canonical| decode_canonical(canonical, Limits::METADATA).ok())
-        .and_then(|value| {
-            cbor_field(&value, 19).and_then(|value| ObjectRef::from_cbor(value).ok())
-        })
+        .and_then(|value| cbor_field(&value, 19).and_then(|value| ObjectRef::from_cbor(value).ok()))
         .filter(|reference| reference.kind == ObjectKind::ChangeSet)
         .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))
 }
@@ -3608,7 +3583,10 @@ fn derive_lifetime_evidence(
             }
         }
     }
-    Ok((prior.into_values().collect(), working.into_values().collect()))
+    Ok((
+        prior.into_values().collect(),
+        working.into_values().collect(),
+    ))
 }
 
 fn collect_object_references(value: &Cbor, references: &mut Vec<ObjectRef>) {
@@ -3719,9 +3697,7 @@ fn canonical_file_history_facts(
     canonical_file_history_from_change(change_bytes)
 }
 
-fn canonical_file_history_from_change(
-    canonical: &[u8],
-) -> Result<Vec<CanonicalFileHistoryFact>> {
+fn canonical_file_history_from_change(canonical: &[u8]) -> Result<Vec<CanonicalFileHistoryFact>> {
     let value = decode_canonical(canonical, Limits::METADATA)
         .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
     let operations = match cbor_field(&value, 18) {
@@ -3906,11 +3882,6 @@ fn database_error(error: postgres::Error) -> DomainError {
         .is_some_and(|error| matches!(error.code().code(), "40001" | "40P01"))
     {
         DomainError::database_concurrency()
-    } else if error
-        .as_db_error()
-        .is_some_and(|error| matches!(error.code().code(), "23505" | "23503" | "23514"))
-    {
-        DomainError::new(DomainErrorCode::ObjectInvalid)
     } else {
         DomainError::new(DomainErrorCode::ObjectInvalid)
     }

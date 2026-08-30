@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const cases = [
+  'migration-v1-v2-upgrade-preserves-unpublished-history',
   'canonical-file-graph',
   'authorization-binding-and-poisoning',
   'authorized-view-item-projections',
@@ -39,14 +40,14 @@ if (!process.env.OGVCS_METADATA_DATABASE_URL) {
 
 const execution = spawnSync(
   'cargo',
-  ['test', '--test', 'postgres_integration', '--', '--nocapture', '--test-threads=1'],
+  ['test', '--locked', '--test', 'postgres_integration', '--', '--nocapture', '--test-threads=1'],
   { cwd: root, encoding: 'utf8', env: process.env },
 );
 if (execution.error) {
   process.stderr.write(`${execution.error.message}\n`);
   process.exit(1);
 }
-process.stdout.write(execution.stdout);
+process.stderr.write(execution.stdout);
 process.stderr.write(execution.stderr);
 const passed = new Set(
   execution.stdout
@@ -55,10 +56,11 @@ const passed = new Set(
     .map((line) => line.slice('OGVCS_METADATA_REPORT '.length)),
 );
 const rows = cases.map((id) => ({ id, status: passed.has(id) ? 'passed' : 'failed' }));
+const succeeded = execution.status === 0 && rows.every((row) => row.status === 'passed');
 process.stdout.write(`${JSON.stringify({
   schemaVersion: 'ogvcs.repository-metadata/service-report/v1',
   exactScaleExecuted: false,
-  status: execution.status === 0 && rows.every((row) => row.status === 'passed') ? 'passed' : 'failed',
+  status: succeeded ? 'passed' : 'failed',
   rows,
 })}\n`);
-process.exit(execution.status ?? 1);
+process.exit(succeeded ? 0 : (execution.status || 1));

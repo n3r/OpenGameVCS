@@ -95,8 +95,9 @@ impl ObjectValidationPort for ProductionObjectValidator {
     fn validate(&self, write: &ObjectWrite<'_>) -> Result<()> {
         let object = scan_metadata(write.canonical_bytes, Limits::METADATA)
             .map_err(|_| crate::DomainError::new(crate::DomainErrorCode::ObjectInvalid))?;
-        let semantic = validate_semantic_object(&object, &self.registry, ValidationMode::Production)
-            .map_err(|_| crate::DomainError::new(crate::DomainErrorCode::ObjectInvalid))?;
+        let semantic =
+            validate_semantic_object(&object, &self.registry, ValidationMode::Production)
+                .map_err(|_| crate::DomainError::new(crate::DomainErrorCode::ObjectInvalid))?;
         if semantic.kind != write.object_ref.kind {
             return Err(crate::DomainError::new(
                 crate::DomainErrorCode::ObjectInvalid,
@@ -187,10 +188,7 @@ pub trait MetadataTransaction {
         request: ReferenceCasRequest,
     ) -> Result<ReferenceCasResult>;
     fn append_outbox(&mut self, event: OutboxEvent) -> Result<()>;
-    fn issue_consistency_token(
-        &mut self,
-        minimum: CommitSequence,
-    ) -> Result<ConsistencyToken>;
+    fn issue_consistency_token(&mut self, minimum: CommitSequence) -> Result<ConsistencyToken>;
     fn commit(self) -> Result<CommitSequence>;
     fn rollback(self) -> Result<()>;
 }
