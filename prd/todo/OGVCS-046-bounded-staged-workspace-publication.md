@@ -6,7 +6,7 @@
 **Owner:** Codex and OpenGameVCS maintainers
 **Depends on:** OGVCS-004
 **Blocks:** OGVCS-007
-**Source:** OGVCS-007 integration review
+**Source:** [OGVCS-007 integration requirement](OGVCS-007-chunking-content-manifest-engine.md)
 **Last updated:** 2026-08-30
 
 ## Outcome
@@ -33,6 +33,13 @@ OGVCS-004 provides safe atomic publication for caller-owned in-memory bytes, whi
 - Content-defined chunking algorithms, manifests, profiles, or OGVCS-007 identity decisions.
 - Root package/workspace changes, roadmap integration, or amendments to completed OGVCS-004 requirements.
 - A stronger native directory-handle adapter for continuously hostile same-authority namespace mutation.
+
+## Users and journeys
+
+- **Chunk reconstruction client:** streams a verified large file into its workspace without retaining a second complete in-memory copy.
+- **Workspace library consumer:** receives the same branded-plan, path-confinement, durability, and crash-recovery guarantees for bounded streams as for buffered writes.
+- **Administrator:** inspects and safely resolves an interrupted stream-publication transaction without guessing whether old or new bytes became durable.
+- **Security engineer:** proves source, capability, namespace-race, and filesystem faults cannot redirect publication outside the bound workspace target.
 
 ## Requirements
 

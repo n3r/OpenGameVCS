@@ -5,7 +5,7 @@
 **Priority:** P0  
 **Owner:** Codex and OpenGameVCS maintainers
 **Depends on:** OGVCS-001, OGVCS-002
-**Blocks:** OGVCS-005, OGVCS-006, OGVCS-007, OGVCS-011, OGVCS-012, OGVCS-033, OGVCS-037, OGVCS-041, OGVCS-042, OGVCS-045
+**Blocks:** OGVCS-005, OGVCS-006, OGVCS-007, OGVCS-011, OGVCS-012, OGVCS-033, OGVCS-037, OGVCS-041, OGVCS-042, OGVCS-045, OGVCS-046
 **Source:** [OpenGameVCS proposal](../../GAME_DEV_VCS_ANALYSIS.md)  
 **Last updated:** 2026-08-25
 

@@ -82,7 +82,7 @@ test('current roadmap is valid', (t) => {
   const root = makeFixture(t);
   const result = runValidator(root);
   assert.equal(result.status, 0, result.output);
-  assert.match(result.output, /Roadmap valid: 45 PRDs/);
+  assert.match(result.output, /Roadmap valid: 46 PRDs/);
 });
 
 test('rejects a dependency placed in a later release', (t) => {

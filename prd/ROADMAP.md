@@ -78,7 +78,8 @@ These activities are tracked by the program owner in gate evidence. They may val
 | ID | PRD | Priority | Depends on |
 |---|---|---|---|
 | OGVCS-006 | [Repository metadata and snapshot service](todo/OGVCS-006-repository-metadata-snapshot-service.md) | P0 | 002, 003, 004, 005, 041 |
-| OGVCS-007 | [Chunking and content-manifest engine](todo/OGVCS-007-chunking-content-manifest-engine.md) | P0 | 002, 004, 005 |
+| OGVCS-046 | [Bounded staged workspace publication](todo/OGVCS-046-bounded-staged-workspace-publication.md) | P0 | 004 |
+| OGVCS-007 | [Chunking and content-manifest engine](todo/OGVCS-007-chunking-content-manifest-engine.md) | P0 | 002, 004, 005, 046 |
 | OGVCS-008 | [Object storage and resumable transfer service](todo/OGVCS-008-object-storage-transfer-service.md) | P0 | 003, 007, 041 |
 | OGVCS-009 | [Identity, path authorization, and audit](todo/OGVCS-009-identity-path-authorization-audit.md) | P0 | 003, 006, 041 |
 | OGVCS-010 | [Atomic submit and branch-head transaction](todo/OGVCS-010-atomic-submit-transaction.md) | P0 | 006, 008, 009 |
