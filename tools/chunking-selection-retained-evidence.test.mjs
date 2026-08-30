@@ -118,7 +118,7 @@ test('chunking selection benchmark bundle emits an authenticated retained-eviden
   assert.equal(retained.verified, true);
   assert.equal(retained.sampleCount, 7);
   assert.equal(retained.summaryCount, 7);
-  assert.equal(selectionReport.implementation.publishedFileCount, 13);
+  assert.equal(selectionReport.implementation.publishedFileCount, 14);
   assert.deepEqual(
     publication.result.publicMetadata.chunkingSelection.retainedCaptures.map(({ workloadId, success }) => ({ workloadId, success })),
     ['source-like', 'structured', 'already-compressed', 'encrypted-random', 'insertion', 'replacement', 'append'].map((workloadId) => ({ workloadId, success: true })),
