@@ -158,6 +158,45 @@ export const SCHEMAS = {
     }),
     'x-ogvcs-license': 'MIT',
   },
+  'AuthorizedAuditEvent.schema.json': {
+    $schema: SCHEMA_DIALECT,
+    $id: 'https://schemas.opengamevcs.dev/identity-policy-audit/v1/AuthorizedAuditEvent.schema.json',
+    title: 'IdentityAuthorizedAuditEventV1',
+    ...closed({
+      schemaVersion: { const: 'ogvcs.identity-policy/authorized-audit-event/v1' },
+      eventClass: text(128, 1, ID),
+      occurredAt: uint(),
+      repository: text(128, 1, ID),
+      permission: text(128, 1, '^[a-z][a-z0-9.-]{0,127}$'),
+      outcomeCode: text(128, 1, '^[A-Z][A-Z0-9_]{0,127}$'),
+      disclosure: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          actorPseudonym: text(42, 42, '^pseudonym:[0-9a-f]{32}$'),
+          targetClass: text(128, 1, ID),
+          changeRef: text(256, 1, OPAQUE),
+        },
+      },
+    }),
+    'x-ogvcs-imported-assignments': {
+      eventClasses: 'ogvcs.authorization@1/audit-classes',
+      permissions: 'ogvcs.authorization@1/permissions',
+      outcomeCodes: 'ogvcs.authorization@1/decisions',
+    },
+    'x-ogvcs-privacy': 'contains no tenant-global chain position, hashes, hidden counts, or gap markers',
+    'x-ogvcs-license': 'MIT',
+  },
+  'AuthorizedAuditView.schema.json': {
+    $schema: SCHEMA_DIALECT,
+    $id: 'https://schemas.opengamevcs.dev/identity-policy-audit/v1/AuthorizedAuditView.schema.json',
+    title: 'IdentityAuthorizedAuditViewV1',
+    ...closed({
+      schemaVersion: { const: 'ogvcs.identity-policy/authorized-audit-view/v1' },
+      items: array({ $ref: 'AuthorizedAuditEvent.schema.json' }, LIMITS.maxAuditQueryRecords),
+    }),
+    'x-ogvcs-requires': 'complete chain verification against an externally retained checkpoint before projection',
+    'x-ogvcs-license': 'MIT',
+  },
 };
 
 export const REGISTRIES = {

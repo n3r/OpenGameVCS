@@ -1,4 +1,5 @@
 import {
+  canonicalBytes,
   validateAuthorizationRequest,
   validateTransferGrantClaims,
   validateTransferGrantEnvelope,
@@ -15,20 +16,20 @@ export class TransferGrantAuthority {
   #issuer;
   #keyId;
   #keyResolver;
-  #revocations;
+  #nonces;
   #revoking = new Set();
   #signer;
   #state;
   #policy;
 
-  constructor({ authorityState, credentialAuthority, policyEngine, revocationStore, issuer, keyId, signer, keyResolver, clock = () => Math.floor(Date.now() / 1000) }) {
+  constructor({ authorityState, credentialAuthority, policyEngine, nonceLedger, issuer, keyId, signer, keyResolver, clock = () => Math.floor(Date.now() / 1000) }) {
     if (!(authorityState instanceof AuthorityState) || typeof issuer !== 'string' || typeof keyId !== 'string'
         || !credentialAuthority || typeof credentialAuthority.authorizePrincipal !== 'function'
         || !policyEngine || typeof policyEngine.authorize !== 'function'
-        || !revocationStore || typeof revocationStore.has !== 'function' || typeof revocationStore.add !== 'function'
+        || !nonceLedger || typeof nonceLedger.accept !== 'function' || typeof nonceLedger.revoke !== 'function'
         || !signer || typeof signer.sign !== 'function' || typeof keyResolver !== 'function' || typeof clock !== 'function') identityFail('INPUT_INVALID', 'transfer grant authority is invalid');
     this.#state = authorityState; this.#credentials = credentialAuthority; this.#policy = policyEngine;
-    this.#revocations = revocationStore;
+    this.#nonces = nonceLedger;
     this.#issuer = issuer; this.#keyId = keyId; this.#signer = signer; this.#keyResolver = keyResolver; this.#clock = clock;
   }
 
@@ -73,7 +74,12 @@ export class TransferGrantAuthority {
       });
     } catch (error) { identityFail('INPUT_INVALID', 'transfer grant claims are invalid', { cause: error }); }
     let envelope;
-    try { envelope = validateTransferGrantEnvelope(this.#signer.sign(claims)); }
+    try {
+      envelope = validateTransferGrantEnvelope(this.#signer.sign(claims));
+      if (!canonicalBytes(envelope.claims).equals(canonicalBytes(claims))) {
+        throw new TypeError('transfer grant signer changed the authorized claims');
+      }
+    }
     catch (error) { identityFail('POLICY_UNAVAILABLE', 'transfer grant signer failed closed', { cause: error }); }
     return deepFreeze(envelope);
   }
@@ -82,26 +88,30 @@ export class TransferGrantAuthority {
     let envelope;
     try { envelope = validateTransferGrantEnvelope(envelopeInput); }
     catch { return Object.freeze({ result: 'deny', code: 'DENY_GRANT_INVALID' }); }
-    try {
-      if (this.#revocations.has(envelope.claims.nonce)) return Object.freeze({ result: 'deny', code: 'DENY_GRANT_INVALID' });
-    } catch { return Object.freeze({ result: 'deny', code: 'DENY_GRANT_INVALID' }); }
+    if (envelope.keyId !== this.#keyId) return Object.freeze({ result: 'deny', code: 'DENY_GRANT_INVALID' });
     let key;
-    try { key = this.#keyResolver(envelope.keyId); }
+    try { key = this.#keyResolver(this.#keyId); }
     catch { return Object.freeze({ result: 'deny', code: 'DENY_GRANT_INVALID' }); }
     try {
-      return verifyTransferGrant(envelope, {
-        ...structuredClone(contextInput),
+      const decision = verifyTransferGrant(envelope, {
+        ...cloneBounded(contextInput),
         issuer: this.#issuer,
         keyId: this.#keyId,
         authorityEpoch: this.#state.authorityEpoch,
         keyGeneration: this.#state.keyGeneration,
         now: this.#now(),
+        consumedNonces: [],
       }, key);
+      if (decision.result !== 'allow') return decision;
+      const nonceResult = this.#nonces.accept(envelope.claims.nonce, envelope.claims.replay);
+      if (nonceResult === 'accepted') return decision;
+      if (nonceResult === 'replayed') return Object.freeze({ result: 'deny', code: 'DENY_GRANT_REPLAY' });
+      return Object.freeze({ result: 'deny', code: 'DENY_GRANT_INVALID' });
     } catch { return Object.freeze({ result: 'deny', code: 'DENY_GRANT_INVALID' }); }
   }
 
   revokeNonce(nonce, { audit } = {}) {
-    if (typeof nonce !== 'string' || nonce.length < 1 || nonce.length > 256) identityFail('INPUT_INVALID', 'grant nonce is invalid');
+    if (typeof nonce !== 'string' || !/^[A-Za-z0-9._:-]{1,256}$/u.test(nonce)) identityFail('INPUT_INVALID', 'grant nonce is invalid');
     if (this.#revoking.has(nonce)) identityFail('STATE_CONFLICT', 'grant revocation is reentrant');
     if (typeof audit !== 'function') identityFail('POLICY_UNAVAILABLE', 'grant revocation requires an audit sink');
     this.#revoking.add(nonce);
@@ -111,7 +121,7 @@ export class TransferGrantAuthority {
     } catch (error) {
       identityFail('POLICY_UNAVAILABLE', 'grant revocation audit failed closed', { cause: error });
     } finally { this.#revoking.delete(nonce); }
-    try { this.#revocations.add(nonce); }
+    try { this.#nonces.revoke(nonce); }
     catch (error) { identityFail(error?.code === 'LIMIT_EXCEEDED' ? 'LIMIT_EXCEEDED' : 'POLICY_UNAVAILABLE', 'grant revocation store failed closed', { cause: error }); }
   }
 
@@ -124,18 +134,34 @@ export class TransferGrantAuthority {
   }
 }
 
-export class MemoryGrantRevocationStore {
+export class MemoryGrantNonceLedger {
+  #consumed = new Set();
+  #entries = new Set();
   #maximum;
-  #nonces = new Set();
+  #revoked = new Set();
 
   constructor({ maximum = 100_000 } = {}) {
-    if (!Number.isSafeInteger(maximum) || maximum < 1 || maximum > 100_000) identityFail('INPUT_INVALID', 'grant revocation bound is invalid');
+    if (!Number.isSafeInteger(maximum) || maximum < 1 || maximum > 100_000) identityFail('INPUT_INVALID', 'grant nonce bound is invalid');
     this.#maximum = maximum;
   }
 
-  has(nonce) { return this.#nonces.has(nonce); }
-  add(nonce) {
-    if (!this.#nonces.has(nonce) && this.#nonces.size >= this.#maximum) identityFail('LIMIT_EXCEEDED', 'grant revocation bound exceeded');
-    this.#nonces.add(nonce);
+  accept(nonce, replay) {
+    if (this.#revoked.has(nonce)) return 'revoked';
+    if (replay === 'idempotent') return 'accepted';
+    if (replay !== 'single-use') identityFail('INPUT_INVALID', 'grant replay class is invalid');
+    if (this.#consumed.has(nonce)) return 'replayed';
+    this.#reserve(nonce);
+    this.#consumed.add(nonce);
+    return 'accepted';
+  }
+
+  revoke(nonce) {
+    if (!this.#revoked.has(nonce)) this.#reserve(nonce);
+    this.#revoked.add(nonce);
+  }
+
+  #reserve(nonce) {
+    if (!this.#entries.has(nonce) && this.#entries.size >= this.#maximum) identityFail('LIMIT_EXCEEDED', 'grant nonce bound exceeded');
+    this.#entries.add(nonce);
   }
 }

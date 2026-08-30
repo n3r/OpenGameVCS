@@ -15,24 +15,30 @@ hashed session/service credentials, shared epoch fencing, audited revocation,
 post-policy transfer-grant issuance, authorized views, bounded rate limiting,
 and per-tenant append-only audit hash chains with externally retained tail
 checkpoints that detect complete-history rewrites. Malformed context and dependency
-failure deny; list filtering occurs before returned items and exposes no hidden
-count.
+failure deny; list filtering occurs before returned items and exposes no
+hidden count.
+
+Authorized audit reads require a trusted checkpoint, verify the complete tenant
+chain, and then return an event-class-redacted projection. The projection has no
+tenant-global sequence, previous/tail hash, total, hidden count, or gap marker.
 
 ## Adapter boundary
 
 Credential storage, secret generation, clocks, OIDC flows, grant signing/key
-resolution, audit persistence, and protocol problems are explicit injected
-interfaces. `./testing` exports deterministic secrets, a fake identity provider,
-and in-memory stores. They are not production persistence or secret-management
-implementations. No OIDC network call, production key, or retrievable stored
-secret is included.
+resolution, atomic grant-nonce state, audit persistence, and protocol problems
+are explicit, injected interfaces. The nonce adapter's synchronous `accept`
+operation must atomically reject revoked or consumed nonces and consume a new
+single-use nonce. `./testing` exports deterministic secrets, a fake identity
+provider, and in-memory stores. They are not production persistence or
+secret-management implementations. No OIDC network call, production key, or
+retrievable stored secret is included.
 
 Production stores must make credential/audit updates durable and serialize an
 audit append with the corresponding revocation or epoch transition. This cut
 orders the required audit callback before the in-memory state change and fails
 closed if it fails; a later persistent service cut owns crash-atomic storage.
 The runtime itself makes no process-restart durability claim: callers must
-restore authority state, credential and grant-revocation stores, audit records,
+restore authority state, credential and grant-nonce stores, audit records,
 and trusted audit checkpoints through production adapters before serving
 requests. The `./testing` stores retain state only while their JavaScript
 objects remain alive.

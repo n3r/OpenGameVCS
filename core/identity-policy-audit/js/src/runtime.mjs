@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { validateAuthorizationRequest } from '@opengamevcs/authorization-contract';
 
 import { identityFail } from './errors.mjs';
+import { RUNTIME_LIMITS } from './validate.mjs';
 import { buildAuthorizedView } from './views.mjs';
 
 const SAFE_REQUEST_ID = /^[A-Za-z0-9._:-]{1,256}$/u;
@@ -28,7 +29,8 @@ export class IdentityPolicyRuntime {
     let request;
     try { request = validateAuthorizationRequest(requestInput); }
     catch { return this.#outcome(this.#policy.authorize(requestInput, { credentialCheck: () => false })); }
-    const rateKey = typeof token === 'string'
+    const boundedToken = typeof token === 'string' && Buffer.byteLength(token, 'utf8') <= RUNTIME_LIMITS.maxTokenBytes;
+    const rateKey = boundedToken
       ? createHash('sha256').update('OGVCS-RATE-V1\0').update(token).digest('hex')
       : 'invalid';
     let rate;

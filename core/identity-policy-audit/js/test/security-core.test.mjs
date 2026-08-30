@@ -19,6 +19,7 @@ import {
   IdentityPolicyRuntime,
   IdentityProviderBroker,
   PolicyEngine,
+  RUNTIME_LIMITS,
   TransferGrantAuthority,
   identityPolicyContract,
   metadataOperationAuthority,
@@ -27,12 +28,13 @@ import {
 import {
   MemoryAuditStore,
   MemoryCredentialStore,
-  MemoryGrantRevocationStore,
+  MemoryGrantNonceLedger,
   deterministicSecretSource,
   fakeIdentityProviderAdapter,
 } from '../src/testing.mjs';
 
 const vectorDocument = JSON.parse(await readFile(new URL('../../../../spec/identity-policy-audit/v1/vectors/security-core.json', import.meta.url)));
+const limitDocument = JSON.parse(await readFile(new URL('../../../../spec/identity-policy-audit/v1/registries/limits.json', import.meta.url)));
 const protocolProblems = new ProtocolProblemCatalog(await loadProtocolContract());
 const NOW = 1_700_000_000;
 const OBJECT_ID = `ogvcs:v1:chunk:sha256:${'ab'.repeat(32)}`;
@@ -138,15 +140,15 @@ function issueService(context) {
   });
 }
 
-function grantAuthority(context) {
+function grantAuthority(context, { claimsTransform = (claims) => claims } = {}) {
   const { privateKey, publicKey } = generateKeyPairSync('ed25519');
   const privateJwk = privateKey.export({ format: 'jwk' });
   const publicJwk = publicKey.export({ format: 'jwk' });
   return new TransferGrantAuthority({
     authorityState: context.state, credentialAuthority: context.credentials, policyEngine: context.engine,
-    revocationStore: new MemoryGrantRevocationStore({ maximum: 100 }),
+    nonceLedger: new MemoryGrantNonceLedger({ maximum: 100 }),
     issuer: 'identity.service', keyId: 'grant.key', clock: () => context.clock.now,
-    signer: { sign: (claims) => signConformanceGrant(claims, privateJwk, { conformanceOnly: true }) },
+    signer: { sign: (claims) => signConformanceGrant(claimsTransform(claims), privateJwk, { conformanceOnly: true }) },
     keyResolver: () => publicJwk,
   });
 }
@@ -305,6 +307,13 @@ test('runtime imports exact metadata assignments and candidate contract pins', (
   assert.throws(() => metadataOperationAuthority('outbox.claim'), ({ code }) => code === 'INPUT_INVALID');
 });
 
+test('runtime resource limits exactly match the authenticated contract registry', () => {
+  assert.deepEqual(
+    RUNTIME_LIMITS,
+    Object.fromEntries(limitDocument.entries.map(({ name, value }) => [name, value])),
+  );
+});
+
 test('stored credential state contains a digest but never the returned secret', () => {
   const context = fixture(); const issued = issueService(context); const stored = context.credentialStore.get(issued.descriptor.id);
   assert.match(stored.secretDigest, /^[0-9a-f]{64}$/u);
@@ -316,11 +325,49 @@ test('direct principal checks reject expired and forged authenticated attributes
   const context = fixture(); const issued = issueArtist(context);
   const principal = context.credentials.authenticate(issued.token);
   assert.equal(context.credentials.authorizePrincipal(principal, request()), true);
+  assert.equal(context.credentials.authorizePrincipal(structuredClone(principal), request()), false);
   const forged = structuredClone(principal);
   forged.actor.groups = ['artists', 'administrators'];
   assert.equal(context.credentials.authorizePrincipal(forged, request()), false);
   context.clock.now = issued.descriptor.expiresAt;
   assert.equal(context.credentials.authorizePrincipal(principal, request()), false);
+});
+
+test('an exact structural principal forgery cannot issue a transfer grant', () => {
+  const context = fixture(); const issued = issueArtist(context);
+  const forged = structuredClone(context.credentials.authenticate(issued.token));
+  assert.throws(
+    () => issueGrant(context, grantAuthority(context), forged),
+    ({ code }) => code === 'AUTHENTICATION_DENIED',
+  );
+});
+
+test('single-use replay state is authority-owned and consumed atomically', () => {
+  const context = fixture(); const issued = issueArtist(context);
+  const principal = context.credentials.authenticate(issued.token);
+  const authority = grantAuthority(context); const envelope = issueGrant(context, authority, principal);
+  const hostileContext = { ...grantContext(), consumedNonces: ['nonce.one'] };
+  assert.equal(authority.verify(envelope, hostileContext).code, 'ALLOW_EXPLICIT');
+  assert.equal(authority.verify(envelope, grantContext()).code, 'DENY_GRANT_REPLAY');
+});
+
+test('oversized credential tokens share the bounded invalid rate class', () => {
+  const context = fixture({ rateLimit: 1 });
+  const oversized = 'x'.repeat(2_048);
+  assert.equal(context.runtime.authorizeToken(oversized, request()).decision.code, 'DENY_NOT_AUTHORIZED');
+  assert.equal(context.runtime.authorizeToken(`${oversized}y`, request()).decision.code, 'DENY_RATE_LIMITED');
+});
+
+test('grant signer output must bind the exact post-policy claims', () => {
+  const context = fixture(); const issued = issueArtist(context);
+  const principal = context.credentials.authenticate(issued.token);
+  const authority = grantAuthority(context, {
+    claimsTransform: (claims) => ({ ...claims, subject: 'substituted.subject' }),
+  });
+  assert.throws(
+    () => issueGrant(context, authority, principal),
+    ({ code }) => code === 'POLICY_UNAVAILABLE',
+  );
 });
 
 test('audit reads require a fresh audit.read decision, not a caller-supplied allow value', () => {
@@ -329,11 +376,18 @@ test('audit reads require a fresh audit.read decision, not a caller-supplied all
   const admin = context.credentials.issue({ credentialClass: 'session', subject: 'admin.user', actorClass: 'administrator', groups: [], ttlSeconds: 600, scope: adminScope });
   const artist = issueArtist(context);
   const store = new MemoryAuditStore(); const ledger = new AuditLedger({ store }); ledger.append(event('audit.readable'));
+  const checkpoint = ledger.checkpoint('studio');
   const auditRequest = request({ path: null, permission: 'audit.read', type: 'audit', reason: 'security review' });
   const adminPrincipal = context.credentials.authenticate(admin.token);
-  assert.equal(ledger.recordsForAuthorizedRequest('studio', { engine: context.engine, principal: adminPrincipal, credentialAuthority: context.credentials, request: auditRequest }).length, 1);
+  assert.equal(ledger.viewForAuthorizedRequest('studio', {
+    engine: context.engine, principal: adminPrincipal, credentialAuthority: context.credentials,
+    request: auditRequest, expectedCheckpoint: checkpoint,
+  }).items.length, 1);
   const artistPrincipal = context.credentials.authenticate(artist.token);
-  assert.throws(() => ledger.recordsForAuthorizedRequest('studio', { engine: context.engine, principal: artistPrincipal, credentialAuthority: context.credentials, request: auditRequest }), ({ code }) => code === 'AUTHENTICATION_DENIED');
+  assert.throws(() => ledger.viewForAuthorizedRequest('studio', {
+    engine: context.engine, principal: artistPrincipal, credentialAuthority: context.credentials,
+    request: auditRequest, expectedCheckpoint: checkpoint,
+  }), ({ code }) => code === 'AUTHENTICATION_DENIED');
 });
 
 test('OIDC surfaces remain behind an injected adapter and bounded fake', async () => {
@@ -429,15 +483,38 @@ test('storage, clock, and rate adapter failures are stable and fail closed', () 
   assert.deepEqual(limiter.consume('subject', 'auth'), { allowed: false, retryAfterSeconds: 60 });
 });
 
-test('audit queries filter repository scope while the tenant chain remains complete', () => {
+test('audit views verify the checkpoint and hide cross-repository chain gaps', () => {
   const context = fixture();
   const adminScope = { ...scope(['audit.read', 'policy.administer']), pathPrefixes: [] };
   const admin = context.credentials.issue({ credentialClass: 'session', subject: 'admin.user', actorClass: 'administrator', groups: [], ttlSeconds: 600, scope: adminScope });
   const principal = context.credentials.authenticate(admin.token);
   const store = new MemoryAuditStore(); const ledger = new AuditLedger({ store });
-  ledger.append(event('audit.game')); ledger.append(event('audit.other', { repository: 'other' }));
+  ledger.append(event('audit.other', { repository: 'other' })); ledger.append(event('audit.game'));
+  const checkpoint = ledger.checkpoint('studio');
   const auditRequest = request({ path: null, permission: 'audit.read', type: 'audit', reason: 'security review' });
-  const records = ledger.recordsForAuthorizedRequest('studio', { engine: context.engine, principal, credentialAuthority: context.credentials, request: auditRequest });
-  assert.equal(records.length, 1); assert.equal(records[0].event.repository, 'game');
+  const view = ledger.viewForAuthorizedRequest('studio', {
+    engine: context.engine, principal, credentialAuthority: context.credentials,
+    request: auditRequest, expectedCheckpoint: checkpoint,
+  });
+  assert.equal(view.items.length, 1); assert.equal(view.items[0].repository, 'game');
+  assert.doesNotMatch(JSON.stringify(view), /audit\.other|sequence|previousHash|recordHash|tailHash|hidden|count/iu);
+  assert.deepEqual(view.items[0].disclosure, { targetClass: 'credential' });
+  assert.doesNotMatch(JSON.stringify(view.items[0]), /actorPseudonym|reason|changeRef|eventId/iu);
   assert.equal(ledger.verify('studio').records, 2);
+});
+
+test('audit views fail closed on reordered linkage before returning a projection', () => {
+  const context = fixture();
+  const adminScope = { ...scope(['audit.read', 'policy.administer']), pathPrefixes: [] };
+  const admin = context.credentials.issue({ credentialClass: 'session', subject: 'admin.user', actorClass: 'administrator', groups: [], ttlSeconds: 600, scope: adminScope });
+  const principal = context.credentials.authenticate(admin.token);
+  const store = new MemoryAuditStore(); const ledger = new AuditLedger({ store });
+  ledger.append(event('audit.one')); ledger.append(event('audit.two'));
+  const checkpoint = ledger.checkpoint('studio');
+  store.unsafeReplaceForTest('studio', store.list('studio', 10).reverse());
+  const auditRequest = request({ path: null, permission: 'audit.read', type: 'audit', reason: 'security review' });
+  assert.throws(() => ledger.viewForAuthorizedRequest('studio', {
+    engine: context.engine, principal, credentialAuthority: context.credentials,
+    request: auditRequest, expectedCheckpoint: checkpoint,
+  }), ({ code }) => code === 'AUDIT_INTEGRITY');
 });

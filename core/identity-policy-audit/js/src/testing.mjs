@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 
 export { MemoryCredentialStore } from './credentials.mjs';
 export { MemoryAuditStore } from './audit.mjs';
-export { MemoryGrantRevocationStore } from './grants.mjs';
+export { MemoryGrantNonceLedger } from './grants.mjs';
 
 export function deterministicSecretSource(seed = 'ogvcs-identity-test') {
   let sequence = 0;

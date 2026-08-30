@@ -59,13 +59,16 @@ test('offline packed consumer imports the candidate contract, runtime, and isola
       policy: typeof runtime.PolicyEngine,
       audit: typeof runtime.AuditLedger,
       rootMemoryStore: typeof runtime.MemoryCredentialStore,
+      rootMemoryNonceLedger: typeof runtime.MemoryGrantNonceLedger,
       testingMemoryStore: typeof testing.MemoryCredentialStore,
+      testingMemoryNonceLedger: typeof testing.MemoryGrantNonceLedger,
     }));
   `], { cwd: consumer, env: { ...process.env, npm_config_cache: cache, npm_config_offline: 'true' } });
   assert.equal(probe.code, 0, probe.stderr);
   assert.deepEqual(JSON.parse(probe.stdout), {
     version: '0.1.0', manifest: '0.1.0', policy: 'function', audit: 'function',
-    rootMemoryStore: 'undefined', testingMemoryStore: 'function',
+    rootMemoryStore: 'undefined', rootMemoryNonceLedger: 'undefined',
+    testingMemoryStore: 'function', testingMemoryNonceLedger: 'function',
   });
   const runtimePackage = JSON.parse(await readFile(join(consumer, 'node_modules/@opengamevcs/identity-policy-audit/package.json')));
   assert.equal(runtimePackage.version, '0.1.0');

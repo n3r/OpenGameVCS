@@ -92,6 +92,7 @@ export class MemoryCredentialStore {
 export class CredentialAuthority {
   #clock;
   #pathOptions;
+  #principals = new WeakSet();
   #secretSource;
   #state;
   #store;
@@ -154,7 +155,7 @@ export class CredentialAuthority {
     if (record.state !== 'active') identityFail('CREDENTIAL_REVOKED');
     if (record.authorityEpoch !== this.#state.authorityEpoch) identityFail('EPOCH_STALE');
     if (this.#now() >= record.expiresAt) identityFail('AUTHENTICATION_DENIED');
-    return deepFreeze({
+    const principal = deepFreeze({
       credentialId: record.id,
       actor: {
         id: record.subject,
@@ -167,9 +168,12 @@ export class CredentialAuthority {
       },
       scope: structuredClone(record.scope),
     });
+    this.#principals.add(principal);
+    return principal;
   }
 
   authorizePrincipal(principal, request) {
+    if (!principal || typeof principal !== 'object' || !this.#principals.has(principal)) return false;
     const record = this.#record(principal?.credentialId);
     if (record === null || this.#now() >= record.expiresAt) return false;
     const actor = principal?.actor;

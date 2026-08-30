@@ -43,6 +43,13 @@ export async function validateIdentityPolicyContract(root = defaultRoot) {
   const checkpoint = JSON.parse(await readFile(resolve(root, 'schemas/AuditCheckpoint.schema.json')));
   assert(checkpoint.properties.tailHash.oneOf.some(({ type }) => type === 'null')
     && checkpoint['x-ogvcs-trust-boundary'].includes('outside'), 'audit checkpoint trust boundary is undefined');
+  const auditView = JSON.parse(await readFile(resolve(root, 'schemas/AuthorizedAuditView.schema.json')));
+  const auditEvent = JSON.parse(await readFile(resolve(root, 'schemas/AuthorizedAuditEvent.schema.json')));
+  assert(auditView.properties.items.maxItems === byName.maxAuditQueryRecords
+    && auditView['x-ogvcs-requires'].includes('externally retained checkpoint'), 'authorized audit view bound differs');
+  assert(auditEvent['x-ogvcs-privacy'].includes('no tenant-global chain position')
+    && !Object.hasOwn(auditEvent.properties, 'sequence')
+    && !Object.hasOwn(auditEvent.properties, 'recordHash'), 'authorized audit event exposes chain position');
 
   const vectors = JSON.parse(await readFile(resolve(root, 'vectors/security-core.json'))).cases;
   assert(vectors.length === manifest.counts.vectors && unique(vectors.map(({ id }) => id)), 'vector inventory differs');

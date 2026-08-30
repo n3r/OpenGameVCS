@@ -11,7 +11,7 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 
 test('generated identity-policy contract is authenticated and bounded', async () => {
   const result = await validateIdentityPolicyContract(root);
-  assert.equal(result.artifacts, 9);
+  assert.equal(result.artifacts, 11);
   assert.equal(result.vectors, 15);
 });
 
