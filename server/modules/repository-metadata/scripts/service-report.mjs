@@ -28,7 +28,16 @@ function report(status, rows, detail) {
   };
 }
 
+function reportedCases(output) {
+  return new Set(
+    [...output.matchAll(/OGVCS_METADATA_REPORT ([a-z0-9]+(?:-[a-z0-9]+)*)/gu)]
+      .map((match) => match[1]),
+  );
+}
+
 if (process.argv.includes('--check')) {
+  const harnessPrefixed = reportedCases(`test production_reference_postgres_report ... OGVCS_METADATA_REPORT ${cases[0]}\n`);
+  if (!harnessPrefixed.has(cases[0])) throw new Error('report marker parser does not accept the Rust test-harness prefix');
   process.stdout.write(`${JSON.stringify(report('declared', cases))}\n`);
   process.exit(0);
 }
@@ -49,12 +58,7 @@ if (execution.error) {
 }
 process.stderr.write(execution.stdout);
 process.stderr.write(execution.stderr);
-const passed = new Set(
-  execution.stdout
-    .split(/\r?\n/u)
-    .filter((line) => line.startsWith('OGVCS_METADATA_REPORT '))
-    .map((line) => line.slice('OGVCS_METADATA_REPORT '.length)),
-);
+const passed = reportedCases(execution.stdout);
 const rows = cases.map((id) => ({ id, status: passed.has(id) ? 'passed' : 'failed' }));
 const succeeded = execution.status === 0 && rows.every((row) => row.status === 'passed');
 process.stdout.write(`${JSON.stringify({
