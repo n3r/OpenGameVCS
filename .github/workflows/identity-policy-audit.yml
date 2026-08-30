@@ -1,0 +1,73 @@
+name: Identity, policy, and audit candidate
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/identity-policy-audit.yml"
+      - "core/identity-policy-audit/**"
+      - "docs/changelog/OGVCS-009.md"
+      - "package.json"
+      - "package-lock.json"
+      - "prd/README.md"
+      - "prd/ROADMAP.md"
+      - "prd/validate-roadmap.mjs"
+      - "prd/validate-roadmap.test.mjs"
+      - "prd/todo/OGVCS-009-*.md"
+      - "spec/authorization/v1/**"
+      - "spec/identity-policy-audit/v1/**"
+      - "spec/path-filesystem/v1/**"
+      - "spec/protocols/v1/**"
+      - "spec/repository-metadata/v1/**"
+  push:
+    branches:
+      - main
+      - "ogvcs-009/**"
+    paths:
+      - ".github/workflows/identity-policy-audit.yml"
+      - "core/identity-policy-audit/**"
+      - "docs/changelog/OGVCS-009.md"
+      - "package.json"
+      - "package-lock.json"
+      - "prd/README.md"
+      - "prd/ROADMAP.md"
+      - "prd/validate-roadmap.mjs"
+      - "prd/validate-roadmap.test.mjs"
+      - "prd/todo/OGVCS-009-*.md"
+      - "spec/authorization/v1/**"
+      - "spec/identity-policy-audit/v1/**"
+      - "spec/path-filesystem/v1/**"
+      - "spec/protocols/v1/**"
+      - "spec/repository-metadata/v1/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: identity-policy-audit-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bounded-conformance:
+    name: Bounded conformance (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install exact workspace dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Validate the language-neutral candidate contract
+        run: npm run test:identity:spec
+      - name: Test runtime security and the offline packed consumer
+        run: npm run test:identity
+      - name: Validate roadmap lifecycle
+        if: runner.os == 'Linux'
+        run: npm run test:roadmap

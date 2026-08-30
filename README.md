@@ -48,7 +48,7 @@ that external program prerequisite has occurred.
 | Workspace publication | Bounded, journaled staged-stream publication implemented and passing the three-OS bounded matrix; final lifecycle evidence remains open | [OGVCS-046](prd/todo/OGVCS-046-bounded-staged-workspace-publication.md) |
 | Chunking and manifests | Candidate language-neutral contract plus JavaScript/Rust implementations; production profile ratification and final scale evidence remain open | [OGVCS-007](prd/todo/OGVCS-007-chunking-content-manifest-engine.md) |
 | Object transfer | Resumable-transfer candidate is in correctness and security hardening; it is not integrated into the supported root workspace yet | [OGVCS-008](prd/todo/OGVCS-008-object-storage-transfer-service.md) |
-| Identity and policy | Deny-overrides policy/audit candidate is in independent security review; production stores and OIDC integration remain open | [OGVCS-009](prd/todo/OGVCS-009-identity-path-authorization-audit.md) |
+| Identity and policy | Security-reviewed deny-overrides policy/audit candidate is integrated; production stores, real OIDC, and endpoint/API binding remain open | [OGVCS-009](prd/todo/OGVCS-009-identity-path-authorization-audit.md) |
 
 The next integration milestone is a security-reviewed metadata, object-transfer,
 and authorization service boundary. That unlocks atomic submit (OGVCS-010) and
@@ -115,6 +115,7 @@ cargo test --manifest-path core/object-model/rust/Cargo.toml --locked
 | `npm run test:roadmap` | Validate PRD lifecycle, dependencies, evidence links, and documentation links |
 | `npm run test:object-model:js` | Test the JavaScript repository codec |
 | `npm run test:authz` | Test authorization bindings and threat-runner behavior |
+| `npm run test:identity` | Test the candidate identity, policy, grant, and audit runtime |
 | `npm run test:path` | Test path and workspace filesystem behavior |
 | `npm run test:protocol` | Test the protocol reference runtime |
 | `npm run test:benchmark` | Test the benchmark and fault harness |
