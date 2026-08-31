@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "type": "module",
   "license": "MIT",
-  "files": ["README.md", "schemas", "vectors", "validate-spec.mjs"],
-  "scripts": { "test": "node validate-spec.mjs && node --test test/*.test.mjs" },
+  "files": ["README.md", "manifest.json", "schemas", "scripts", "vectors", "validate-spec.mjs"],
+  "scripts": { "test": "node scripts/generate.mjs && node validate-spec.mjs && node --test test/*.test.mjs" },
   "engines": { "node": ">=22" }
 }

@@ -5,11 +5,14 @@ small test supervisor.  It carries an opaque, broker-owned input handle across
 the parser boundary; a test credential is never included in parser environment,
 arguments, standard input, or output.
 
-The supervisor requires a launcher to attest every OGVCS-003 sandbox control,
-including denied network, credential-free process state, read-only input,
-isolated scratch, CPU/memory/process limits.  It passes fixed input, output,
-memory, and deadline ceilings to that launcher and fails closed if an attestation
-or launcher operation is absent.
+The supervisor is deliberately branded as candidate-only and can be constructed
+only with the isolated test launcher capability. It requires the complete
+OGVCS-003 control inventory, snapshots untrusted records without invoking
+getters, bounds acquisition/launch/stream/shutdown/settlement, and performs a
+bounded TERM-to-process-group-KILL cleanup sequence. It accepts only zero-exit,
+stderr-free canonical output with closed fields and OGVCS-004 portable paths.
+The contract manifest pins the frozen OGVCS-003 profile plus OGVCS-004 and
+OGVCS-009 manifests, and authenticates its declared schemas and canaries.
 
 This does not implement a Git or Perforce importer, a production credential
 broker, a Linux kernel sandbox, CLI submission, or publication.  A production
