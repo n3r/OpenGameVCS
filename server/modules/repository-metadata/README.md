@@ -34,7 +34,11 @@ authorizer injection path; those entry points compile only with the
 repository's `legacy-test-adapter` feature. Development reads authorize and
 revalidate exact typed resource projections before returning data. Repository
 arguments retained for OGVCS-010 composition are checked against their binding
-before validation or SQL. A
+before validation or SQL. Publication authorization derives full root-relative
+source/before/after paths and their FileIDs from the canonical change set, then
+compares the expanded base and candidate trees so implicit directory moves also
+contribute every hidden descendant path effect. Tree-entry basenames are never
+treated as repository paths. A
 committed replay is completed with `finish_committed_replay`, which rolls back
 the probe transaction and returns the stored safe result without entering the
 serialization retry loop.

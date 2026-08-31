@@ -8,9 +8,9 @@ use ogvcs_identity_policy_audit_postgres::{
 use ogvcs_object_model::{
     decode_canonical, expand_tree_with_path_profile_validator, import_mapping_key, object_id,
     scan_metadata, validate_metadata_schema, validate_repository_candidate,
-    validate_snapshot_graph, Cbor, ImportMapping, ImportState, LifetimeOrigin, LifetimeRecord,
-    Limits, ObjectKind, PathCaseMode, ProfileRef, RepositoryContext, RepositoryLimits,
-    RepositoryObjectLookup,
+    validate_snapshot_graph, Cbor, EntryState, ImportMapping, ImportState, LifetimeOrigin,
+    LifetimeRecord, Limits, ObjectKind, PathCaseMode, ProfileRef, RepositoryContext,
+    RepositoryLimits, RepositoryObjectLookup,
 };
 use postgres::types::Json;
 use postgres::{Client, IsolationLevel, NoTls, Row, Transaction};
@@ -2724,7 +2724,10 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
     }
 
     fn record_identity_resource(&mut self, resource: IdentityAuthorizationResource) -> Result<()> {
-        if self.identity_binding.is_none() || self.identity_resources.contains(&resource) {
+        if self.identity_binding.is_none() {
+            return Ok(());
+        }
+        if !prepare_identity_resource(&mut self.identity_resources, &resource) {
             return Ok(());
         }
         if self.identity_resources.len() >= MAXIMUM_BATCH_RESOURCES {
@@ -3034,6 +3037,7 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
         let (lifetime_records, working_lifetime_additions) =
             derive_lifetime_evidence(&entries, &closure, candidate)?;
         let candidate_change = snapshot_change_ref(&entries, candidate)?;
+        let candidate_base = change_base_snapshot_ref(&entries, candidate_change)?;
         let required_active = lifetime_records
             .iter()
             .filter(|record| record.first_change_set == candidate_change)
@@ -3116,6 +3120,8 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
             .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
         validate_repository_candidate(candidate, &context)
             .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        let mut candidate_paths = None;
+        let mut base_paths = candidate_base.is_none().then(BTreeMap::new);
         for snapshot in closure
             .iter()
             .filter(|reference| reference.kind == ObjectKind::Snapshot)
@@ -3138,6 +3144,47 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
             )
             .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
             enforce_configured_tree_limits(&expansion.entries, &structural_limits)?;
+            if *snapshot == candidate {
+                candidate_paths = Some(expansion.entries);
+            } else if candidate_base == Some(*snapshot) {
+                base_paths = Some(expansion.entries);
+            }
+        }
+        self.record_exact_tree_delta_resources(
+            base_paths
+                .as_ref()
+                .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?,
+            candidate_paths
+                .as_ref()
+                .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?,
+            candidate,
+        )?;
+        Ok(())
+    }
+
+    fn record_exact_tree_delta_resources(
+        &mut self,
+        before: &BTreeMap<Vec<String>, EntryState>,
+        after: &BTreeMap<Vec<String>, EntryState>,
+        candidate: ObjectRef,
+    ) -> Result<()> {
+        for (path, state) in before {
+            if after.get(path) != Some(state) {
+                self.record_identity_resource(identity_file_resource(
+                    state.file_id,
+                    Some(root_relative_path(path, state)?),
+                    Some(candidate),
+                ))?;
+            }
+        }
+        for (path, state) in after {
+            if before.get(path) != Some(state) {
+                self.record_identity_resource(identity_file_resource(
+                    state.file_id,
+                    Some(root_relative_path(path, state)?),
+                    Some(candidate),
+                ))?;
+            }
         }
         Ok(())
     }
@@ -3682,11 +3729,9 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
                 )
                 .map_err(database_error)?;
             self.begin_mutation(entry.repository_id)?;
-            let path = String::from_utf8(entry.basename_utf8.clone())
-                .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
             self.record_identity_resource(identity_file_resource(
                 entry.file_id,
-                Some(path),
+                None,
                 Some(entry.target),
             ))?;
             Ok(())
@@ -3801,6 +3846,21 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
             {
                 return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
             }
+            let identity_resources = expected
+                .affected_paths
+                .iter()
+                .map(|affected| {
+                    String::from_utf8(affected.repository_path_utf8.clone())
+                        .map(|path| {
+                            identity_file_resource(
+                                affected.file_id,
+                                Some(path),
+                                Some(history.snapshot),
+                            )
+                        })
+                        .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))
+                })
+                .collect::<Result<Vec<_>>>()?;
             if let Some(origin) = allocation_history_origin(&expected.operation_kind) {
                 let first_operation = i32::try_from(expected.operation_ordinal)
                     .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
@@ -3843,13 +3903,9 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
                 )
                 .map_err(database_error)?;
             self.begin_mutation(history.repository_id)?;
-            let path = String::from_utf8(history.repository_path_utf8.clone())
-                .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
-            self.record_identity_resource(identity_file_resource(
-                history.file_id,
-                Some(path),
-                Some(history.snapshot),
-            ))?;
+            for resource in identity_resources {
+                self.record_identity_resource(resource)?;
+            }
             Ok(())
         })
     }
@@ -5282,6 +5338,13 @@ struct CanonicalFileHistoryFact {
     file_id: FileId,
     repository_path_utf8: Vec<u8>,
     operation_kind: String,
+    affected_paths: Vec<CanonicalAffectedPath>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct CanonicalAffectedPath {
+    file_id: FileId,
+    repository_path_utf8: Vec<u8>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -5507,6 +5570,24 @@ fn snapshot_change_ref(
         .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))
 }
 
+fn change_base_snapshot_ref(
+    entries: &BTreeMap<ObjectRef, Vec<u8>>,
+    change: ObjectRef,
+) -> Result<Option<ObjectRef>> {
+    let value = entries
+        .get(&change)
+        .and_then(|canonical| decode_canonical(canonical, Limits::METADATA).ok())
+        .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+    cbor_field(&value, 17)
+        .map(|value| {
+            ObjectRef::from_cbor(value)
+                .ok()
+                .filter(|reference| reference.kind == ObjectKind::Snapshot)
+                .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))
+        })
+        .transpose()
+}
+
 fn derive_lifetime_evidence(
     entries: &BTreeMap<ObjectRef, Vec<u8>>,
     closure: &BTreeSet<ObjectRef>,
@@ -5715,57 +5796,39 @@ fn canonical_file_history_from_change(canonical: &[u8]) -> Result<Vec<CanonicalF
             Some(Cbor::UInt(value)) => *value,
             _ => return Err(DomainError::new(DomainErrorCode::ObjectInvalid)),
         };
-        let (state_field, operation_kind) = match kind {
-            1 => (3, allocation_operation_kind(operation, "create")?),
-            2 => (3, "modify"),
-            3 => (3, allocation_operation_kind(operation, "copy")?),
-            4 => (3, "move"),
-            5 => (3, "rename"),
-            6 => (2, "delete"),
-            7 => (3, "restore"),
+        let (state_field, affected_state_fields, operation_kind): (u64, &[u64], &str) = match kind {
+            1 => (3, &[3], allocation_operation_kind(operation, "create")?),
+            2 => (3, &[2, 3], "modify"),
+            3 => (3, &[4, 3], allocation_operation_kind(operation, "copy")?),
+            4 => (3, &[2, 3], "move"),
+            5 => (3, &[2, 3], "rename"),
+            6 => (2, &[2], "delete"),
+            7 => (3, &[3], "restore"),
             8..=11 => continue,
             _ => return Err(DomainError::new(DomainErrorCode::ObjectInvalid)),
         };
         let state = cbor_field(operation, state_field)
             .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
-        let file_id = cbor_field(state, 2)
-            .and_then(|value| FileId::from_cbor(value).ok())
-            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
-        let path = match cbor_field(state, 0) {
-            Some(Cbor::Array(segments)) if !segments.is_empty() => {
-                let segments = segments
-                    .iter()
-                    .map(|segment| match segment {
-                        Cbor::Text(segment) if !segment.is_empty() => Some(segment.as_bytes()),
-                        _ => None,
-                    })
-                    .collect::<Option<Vec<_>>>()
-                    .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
-                let length = segments
-                    .iter()
-                    .try_fold(segments.len() - 1, |total, segment| {
-                        total.checked_add(segment.len())
-                    })
-                    .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
-                if length > 4096 {
-                    return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
-                }
-                let mut path = Vec::with_capacity(length);
-                for (index, segment) in segments.into_iter().enumerate() {
-                    if index > 0 {
-                        path.push(b'/');
-                    }
-                    path.extend_from_slice(segment);
-                }
-                path
+        let (file_id, path) = canonical_file_path(state)?;
+        let mut affected_paths = Vec::with_capacity(affected_state_fields.len());
+        for field in affected_state_fields {
+            let affected_state = cbor_field(operation, *field)
+                .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            let (file_id, repository_path_utf8) = canonical_file_path(affected_state)?;
+            let affected = CanonicalAffectedPath {
+                file_id,
+                repository_path_utf8,
+            };
+            if !affected_paths.contains(&affected) {
+                affected_paths.push(affected);
             }
-            _ => return Err(DomainError::new(DomainErrorCode::ObjectInvalid)),
-        };
+        }
         facts.push(CanonicalFileHistoryFact {
             operation_ordinal: ordinal,
             file_id,
             repository_path_utf8: path,
             operation_kind: operation_kind.to_owned(),
+            affected_paths,
         });
     }
     facts.sort_by_key(|fact| fact.operation_ordinal);
@@ -5776,6 +5839,40 @@ fn canonical_file_history_from_change(canonical: &[u8]) -> Result<Vec<CanonicalF
         return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
     }
     Ok(facts)
+}
+
+fn canonical_file_path(state: &Cbor) -> Result<(FileId, Vec<u8>)> {
+    let file_id = cbor_field(state, 2)
+        .and_then(|value| FileId::from_cbor(value).ok())
+        .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+    let segments = match cbor_field(state, 0) {
+        Some(Cbor::Array(segments)) if !segments.is_empty() => segments
+            .iter()
+            .map(|segment| match segment {
+                Cbor::Text(segment) if !segment.is_empty() => Some(segment.as_bytes()),
+                _ => None,
+            })
+            .collect::<Option<Vec<_>>>()
+            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?,
+        _ => return Err(DomainError::new(DomainErrorCode::ObjectInvalid)),
+    };
+    let length = segments
+        .iter()
+        .try_fold(segments.len() - 1, |total, segment| {
+            total.checked_add(segment.len())
+        })
+        .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+    if length > 4096 {
+        return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+    }
+    let mut path = Vec::with_capacity(length);
+    for (index, segment) in segments.into_iter().enumerate() {
+        if index > 0 {
+            path.push(b'/');
+        }
+        path.extend_from_slice(segment);
+    }
+    Ok((file_id, path))
 }
 
 fn allocation_operation_kind<'a>(operation: &Cbor, native: &'a str) -> Result<&'a str> {
@@ -5912,6 +6009,53 @@ fn identity_file_resource(
         object_id: object.map(|reference| reference.to_string()),
         name: None,
     }
+}
+
+fn root_relative_path(path: &[String], state: &EntryState) -> Result<String> {
+    if path.is_empty() || state.path != path {
+        return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+    }
+    let length = path
+        .iter()
+        .try_fold(path.len() - 1, |total, segment| {
+            total.checked_add(segment.len())
+        })
+        .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+    if length > 4096 {
+        return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+    }
+    Ok(path.join("/"))
+}
+
+fn prepare_identity_resource(
+    resources: &mut Vec<IdentityAuthorizationResource>,
+    resource: &IdentityAuthorizationResource,
+) -> bool {
+    if resource.resource_type == "path" {
+        if let Some(file_id) = resource.file_id.as_deref() {
+            if resource.path.is_some() {
+                resources.retain(|existing| {
+                    existing.resource_type != "path"
+                        || existing.file_id.as_deref() != Some(file_id)
+                        || existing.path.is_some()
+                });
+                if resources.iter().any(|existing| {
+                    existing.resource_type == "path"
+                        && existing.file_id.as_deref() == Some(file_id)
+                        && existing.path == resource.path
+                }) {
+                    return false;
+                }
+            } else if resources.iter().any(|existing| {
+                existing.resource_type == "path"
+                    && existing.file_id.as_deref() == Some(file_id)
+                    && existing.path.is_some()
+            }) {
+                return false;
+            }
+        }
+    }
+    !resources.contains(resource)
 }
 
 fn identity_reference_resource(
@@ -6140,8 +6284,11 @@ fn file_id_database_error(error: postgres::Error) -> DomainError {
 
 #[cfg(test)]
 mod tests {
-    use super::identity_metadata_scope_digest;
-    use crate::{RepositoryId, TenantId, TransactionCapability};
+    use super::{
+        canonical_file_history_from_change, identity_file_resource, identity_metadata_scope_digest,
+        prepare_identity_resource, ObjectKind,
+    };
+    use crate::{FileId, ObjectRef, RepositoryId, TenantId, TransactionCapability};
 
     #[test]
     fn authority_scope_is_domain_separated_by_tenant_repository_and_capability() {
@@ -6192,5 +6339,67 @@ mod tests {
                 TransactionCapability::TombstoneFileId,
             )
         );
+    }
+
+    #[test]
+    fn move_authorization_uses_both_full_root_relative_paths() {
+        let facts = canonical_file_history_from_change(include_bytes!(
+            "../../../../spec/repository-format/v1/vectors/scenarios/objects/transition-move/candidate-change.cbor"
+        ))
+        .unwrap();
+        assert_eq!(facts.len(), 1);
+        let affected = &facts[0].affected_paths;
+        assert_eq!(affected.len(), 2);
+        assert_eq!(affected[0].repository_path_utf8, b"left/asset");
+        assert_eq!(affected[1].repository_path_utf8, b"right/asset");
+        assert_eq!(affected[0].file_id.as_bytes(), &[0x21; 16]);
+        assert_eq!(affected[1].file_id.as_bytes(), &[0x21; 16]);
+        assert!(affected
+            .iter()
+            .all(|resource| resource.repository_path_utf8 != b"asset"));
+    }
+
+    #[test]
+    fn copy_authorization_uses_exact_source_and_destination_file_ids() {
+        let facts = canonical_file_history_from_change(include_bytes!(
+            "../../../../spec/repository-format/v1/vectors/scenarios/objects/transition-copy/candidate-change.cbor"
+        ))
+        .unwrap();
+        assert_eq!(facts.len(), 1);
+        let affected = &facts[0].affected_paths;
+        assert_eq!(affected.len(), 2);
+        assert_eq!(affected[0].repository_path_utf8, b"asset");
+        assert_eq!(affected[0].file_id.as_bytes(), &[0x21; 16]);
+        assert_eq!(affected[1].repository_path_utf8, b"asset-copy");
+        assert_eq!(affected[1].file_id.as_bytes(), &[0x22; 16]);
+    }
+
+    #[test]
+    fn complete_path_replaces_file_id_only_placeholder_without_losing_both_move_paths() {
+        let file_id = FileId::new([0x21; 16]).unwrap();
+        let target = ObjectRef {
+            kind: ObjectKind::ContentManifest,
+            digest: [0x31; 32],
+        };
+        let snapshot = ObjectRef {
+            kind: ObjectKind::Snapshot,
+            digest: [0x32; 32],
+        };
+        let mut resources = vec![identity_file_resource(file_id, None, Some(target))];
+        let before = identity_file_resource(file_id, Some("left/asset".to_owned()), Some(snapshot));
+        assert!(prepare_identity_resource(&mut resources, &before));
+        resources.push(before);
+        let after = identity_file_resource(file_id, Some("right/asset".to_owned()), Some(snapshot));
+        assert!(prepare_identity_resource(&mut resources, &after));
+        resources.push(after);
+        assert_eq!(resources.len(), 2);
+        assert_eq!(resources[0].path.as_deref(), Some("left/asset"));
+        assert_eq!(resources[1].path.as_deref(), Some("right/asset"));
+        let late_placeholder = identity_file_resource(file_id, None, None);
+        assert!(!prepare_identity_resource(
+            &mut resources,
+            &late_placeholder
+        ));
+        assert_eq!(resources.len(), 2);
     }
 }
