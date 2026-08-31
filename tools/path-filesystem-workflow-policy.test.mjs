@@ -601,7 +601,7 @@ test('completed OGVCS-046 evidence and lifecycle remain source-bound', async () 
   assert.equal(workflow.match(/^      - "README\.md"$/gmu)?.length, 2);
   assert.match(workflow, /- "ogvcs-046\/\*\*"/u);
   assert.match(workflow, /- "ogvcs046-\*"/u);
-  assert.equal(workflow.match(/node-version: 22/gu)?.length, 2);
+  assert.equal(workflow.match(/node-version: 24/gu)?.length, 2);
   assert.equal(
     workflow.match(/actions\/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1/gu)?.length,
     2

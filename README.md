@@ -77,9 +77,9 @@ replacement for the future OpenGameVCS client.
 
 ## Requirements
 
-- Node.js 22 or newer and npm. GitHub workflows pin official JavaScript actions
-  to reviewed Node 24-compatible action releases; this is independent of the
-  supported project-runtime minimum.
+- Node.js 22 or newer and npm. Hosted GitHub JavaScript jobs explicitly run
+  Node 24 and pin official JavaScript actions to reviewed Node 24-compatible
+  releases; this is independent of the supported project-runtime minimum.
 - Rust 1.82 when building or testing the Rust implementations and server
   participants.
 - Linux, macOS, or Windows. The ordinary conformance matrix covers all three.

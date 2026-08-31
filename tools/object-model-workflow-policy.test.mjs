@@ -20,35 +20,333 @@ const completedPrdPath = new URL(
 );
 const formatReadmePath = new URL('../spec/repository-format/v1/README.md', import.meta.url);
 const encodingPath = new URL('../spec/repository-format/v1/encoding.md', import.meta.url);
-const NODE_24_ACTION_PINS = new Map([
+const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
+const REVIEWED_NODE_24_ACTION_PINS = new Map([
   ['checkout', '3d3c42e5aac5ba805825da76410c181273ba90b1'], // v7.0.1
   ['setup-node', '820762786026740c76f36085b0efc47a31fe5020'], // v7.0.0
   ['upload-artifact', '043fb46d1a93c77aae656e7c1c64a875d1fc6a0a'], // v7.0.1
-  ['download-artifact', '3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c'] // v8.0.1
+  ['download-artifact', '3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c'], // v8.0.1
+  ['setup-dotnet', '26b0ec14cb23fa6904739307f278c14f94c95bf1'] // v5.4.0
 ]);
 
-test('official JavaScript actions use immutable Node 24-compatible releases', async () => {
-  const workflowFiles = (await readdir(workflowDirectory))
-    .filter((name) => name.endsWith('.yml') || name.endsWith('.yaml'))
-    .sort();
-  let checkedUses = 0;
+const SHELL_NODE_COMMAND =
+  /(?:^|[\s;&|()])(?:[^\s;&|()]*[\\/])?(?:node|npm|npx)(?:\.cmd|\.exe)?(?=$|[\s;&|()])/imu;
 
-  for (const workflowFile of workflowFiles) {
-    const source = await readFile(new URL(workflowFile, workflowDirectory), 'utf8');
-    for (const match of source.matchAll(
-      /uses:\s+actions\/(checkout|setup-node|upload-artifact|download-artifact)@([^\s#]+)/g
-    )) {
-      const [, action, reference] = match;
-      checkedUses += 1;
-      assert.equal(
-        reference,
-        NODE_24_ACTION_PINS.get(action),
-        `${workflowFile}: actions/${action} must use the reviewed Node 24-compatible commit`
-      );
+function indentation(line) {
+  return /^ */u.exec(line)[0].length;
+}
+
+function workflowJobs(workflowFile, source) {
+  const lines = source.split('\n');
+  const jobsIndex = lines.findIndex((line) => /^jobs:\s*(?:#.*)?$/u.test(line));
+  assert.notEqual(jobsIndex, -1, `${workflowFile}: missing jobs mapping`);
+
+  let jobsEnd = lines.length;
+  for (let index = jobsIndex + 1; index < lines.length; index += 1) {
+    if (lines[index].trim() !== '' && indentation(lines[index]) === 0) {
+      jobsEnd = index;
+      break;
     }
   }
 
-  assert.ok(checkedUses > 0, 'expected at least one reviewed official JavaScript action');
+  const starts = [];
+  for (let index = jobsIndex + 1; index < jobsEnd; index += 1) {
+    const match = /^  ([A-Za-z0-9_-]+):\s*(?:#.*)?$/u.exec(lines[index]);
+    if (match !== null) {
+      starts.push({ index, name: match[1] });
+    }
+  }
+  assert.ok(starts.length > 0, `${workflowFile}: jobs mapping must not be empty`);
+
+  return starts.map((start, index) => ({
+    name: start.name,
+    source: lines.slice(start.index, starts[index + 1]?.index ?? jobsEnd).join('\n')
+  }));
+}
+
+function jobSteps(jobSource) {
+  const lines = jobSource.split('\n');
+  const stepsIndex = lines.findIndex((line) => /^\s+steps:\s*(?:#.*)?$/u.test(line));
+  if (stepsIndex === -1) {
+    return [];
+  }
+
+  const stepsIndent = indentation(lines[stepsIndex]);
+  let stepsEnd = lines.length;
+  for (let index = stepsIndex + 1; index < lines.length; index += 1) {
+    if (lines[index].trim() !== '' && indentation(lines[index]) <= stepsIndent) {
+      stepsEnd = index;
+      break;
+    }
+  }
+
+  const starts = [];
+  for (let index = stepsIndex + 1; index < stepsEnd; index += 1) {
+    if (indentation(lines[index]) === stepsIndent + 2 && /^\s*-\s+/u.test(lines[index])) {
+      starts.push(index);
+    }
+  }
+
+  return starts.map((start, index) =>
+    lines.slice(start, starts[index + 1] ?? stepsEnd).join('\n')
+  );
+}
+
+function stepRunCommands(stepSource) {
+  const lines = stepSource.split('\n');
+  const commands = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const match = /^(\s*)(?:-\s+)?run:\s*(.*)$/u.exec(lines[index]);
+    if (match === null) {
+      continue;
+    }
+
+    if (!/^[>|][+-]?$/u.test(match[2].trim())) {
+      commands.push(match[2]);
+      continue;
+    }
+
+    const runIndent = match[1].length;
+    const block = [];
+    for (let blockIndex = index + 1; blockIndex < lines.length; blockIndex += 1) {
+      if (lines[blockIndex].trim() !== '' && indentation(lines[blockIndex]) <= runIndent) {
+        break;
+      }
+      block.push(lines[blockIndex]);
+    }
+    commands.push(block.join('\n'));
+  }
+
+  return commands;
+}
+
+function validateWorkflowPolicy(workflowFile, source, seenOfficialActions = new Set()) {
+  const officialUseLines = source.split('\n').filter((line) =>
+    /^\s*(?:-\s+)?uses:\s+actions\//u.test(line)
+  );
+
+  for (const line of officialUseLines) {
+    const match = /^\s*(?:-\s+)?uses:\s+actions\/([^@\s]+)@([^\s#]+)(?:\s+#.*)?\s*$/u.exec(line);
+    assert.notEqual(match, null, `${workflowFile}: malformed official action reference: ${line.trim()}`);
+    const [, action, reference] = match;
+    assert.match(
+      reference,
+      /^[0-9a-f]{40}$/u,
+      `${workflowFile}: actions/${action} must use a full immutable commit SHA`
+    );
+    assert.ok(
+      REVIEWED_NODE_24_ACTION_PINS.has(action),
+      `${workflowFile}: actions/${action} is absent from the reviewed Node 24 action map`
+    );
+    assert.equal(
+      reference,
+      REVIEWED_NODE_24_ACTION_PINS.get(action),
+      `${workflowFile}: actions/${action} must use the exact reviewed Node 24-compatible commit`
+    );
+    seenOfficialActions.add(action);
+  }
+
+  for (const job of workflowJobs(workflowFile, source)) {
+    const steps = jobSteps(job.source);
+    const setupNodeSteps = [];
+    const nodeCommandSteps = [];
+
+    for (const [index, step] of steps.entries()) {
+      if (/^\s*(?:-\s+)?uses:\s+actions\/setup-node@/mu.test(step)) {
+        setupNodeSteps.push(index);
+        const nodeVersions = [...step.matchAll(
+          /^\s+node-version:\s*['"]?([^'"\s#]+)['"]?\s*(?:#.*)?$/gmu
+        )].map((match) => match[1]);
+        assert.deepEqual(
+          nodeVersions,
+          ['24'],
+          `${workflowFile}:${job.name}: every setup-node step must select only Node 24`
+        );
+      }
+
+      if (stepRunCommands(step).some((command) => SHELL_NODE_COMMAND.test(command))) {
+        nodeCommandSteps.push(index);
+      }
+    }
+
+    if (nodeCommandSteps.length > 0) {
+      assert.ok(
+        setupNodeSteps.some((index) => index < nodeCommandSteps[0]),
+        `${workflowFile}:${job.name}: setup-node with Node 24 must run before invoking node, npm, or npx`
+      );
+    }
+  }
+}
+
+function assertSupportedNodeFloor(manifestPath, range) {
+  assert.equal(typeof range, 'string', `${manifestPath}: engines.node must be a string`);
+  const match = /^>=(\d+)(?:\.\d+){0,2}$/u.exec(range);
+  assert.notEqual(
+    match,
+    null,
+    `${manifestPath}: engines.node must use a canonical >=major[.minor[.patch]] floor`
+  );
+  assert.ok(
+    Number(match[1]) >= 22,
+    `${manifestPath}: engines.node must require at least Node 22`
+  );
+}
+
+async function firstPartyPackageManifests() {
+  const manifests = [];
+
+  async function visit(directory, relativeDirectory) {
+    const entries = await readdir(directory, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.name === '.git' || entry.name === 'node_modules') {
+        continue;
+      }
+
+      const absolutePath = join(directory, entry.name);
+      const relativePath = relativeDirectory === ''
+        ? entry.name
+        : `${relativeDirectory}/${entry.name}`;
+      if (entry.isDirectory()) {
+        await visit(absolutePath, relativePath);
+      } else if (entry.isFile() && entry.name === 'package.json') {
+        manifests.push({ absolutePath, relativePath });
+      }
+    }
+  }
+
+  await visit(repositoryRoot, '');
+  return manifests.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+}
+
+test('repository workflows pin official actions and explicit Node 24 payloads', async () => {
+  const workflowFiles = (await readdir(workflowDirectory))
+    .filter((name) => name.endsWith('.yml') || name.endsWith('.yaml'))
+    .sort();
+  const seenOfficialActions = new Set();
+
+  for (const workflowFile of workflowFiles) {
+    const source = await readFile(new URL(workflowFile, workflowDirectory), 'utf8');
+    validateWorkflowPolicy(workflowFile, source, seenOfficialActions);
+  }
+
+  assert.deepEqual(
+    [...seenOfficialActions].sort(),
+    [...REVIEWED_NODE_24_ACTION_PINS.keys()].sort(),
+    'repository workflows must exercise every reviewed official action pin'
+  );
+
+  const policyWorkflow = await readFile(ordinaryPath, 'utf8');
+  assert.equal(policyWorkflow.match(/      - "\.github\/workflows\/\*\*"/gu)?.length, 2);
+  assert.equal(
+    policyWorkflow.match(/      - "tools\/object-model-workflow-policy\.test\.mjs"/gu)?.length,
+    2
+  );
+  assert.equal(policyWorkflow.match(/      - "\*\*\/package\.json"/gu)?.length, 2);
+});
+
+test('repository workflow policy rejects action and runtime regressions', () => {
+  const checkoutPin = REVIEWED_NODE_24_ACTION_PINS.get('checkout');
+  const setupNodePin = REVIEWED_NODE_24_ACTION_PINS.get('setup-node');
+  const setupDotnetPin = REVIEWED_NODE_24_ACTION_PINS.get('setup-dotnet');
+  const setupNodeStep = [
+    `      - uses: actions/setup-node@${setupNodePin} # v7.0.0`,
+    '        with:',
+    '          node-version: 24'
+  ].join('\n');
+  const valid = [
+    'name: policy fixture',
+    'jobs:',
+    '  check:',
+    '    runs-on: ubuntu-latest',
+    '    steps:',
+    `      - uses: actions/checkout@${checkoutPin} # v7.0.1`,
+    setupNodeStep,
+    `      - uses: actions/setup-dotnet@${setupDotnetPin} # v5.4.0`,
+    '        with:',
+    '          dotnet-version: 8.0.423',
+    '      - run: npm test',
+    ''
+  ].join('\n');
+
+  assert.doesNotThrow(() => validateWorkflowPolicy('valid.yml', valid));
+
+  const regressions = [
+    {
+      name: 'mutable official action',
+      source: valid.replace(checkoutPin, 'v7'),
+      message: /full immutable commit SHA/u
+    },
+    {
+      name: 'unreviewed official action',
+      source: valid.replace(
+        '      - run: npm test',
+        `      - uses: actions/cache@${'a'.repeat(40)}\n      - run: npm test`
+      ),
+      message: /absent from the reviewed Node 24 action map/u
+    },
+    {
+      name: 'drifted reviewed action',
+      source: valid.replace(setupDotnetPin, 'a'.repeat(40)),
+      message: /exact reviewed Node 24-compatible commit/u
+    },
+    {
+      name: 'stale setup payload',
+      source: valid.replace('node-version: 24', 'node-version: 22'),
+      message: /must select only Node 24/u
+    },
+    {
+      name: 'implicit runner Node',
+      source: valid.replace(setupNodeStep, ''),
+      message: /must run before invoking node, npm, or npx/u
+    },
+    {
+      name: 'setup after Node use',
+      source: valid
+        .replace(setupNodeStep, '')
+        .replace('      - run: npm test', `      - run: npm test\n${setupNodeStep}`),
+      message: /must run before invoking node, npm, or npx/u
+    }
+  ];
+
+  for (const regression of regressions) {
+    assert.throws(
+      () => validateWorkflowPolicy(`${regression.name}.yml`, regression.source),
+      regression.message,
+      regression.name
+    );
+  }
+});
+
+test('first-party package manifests require a canonical Node 22-or-newer floor', async () => {
+  const manifests = await firstPartyPackageManifests();
+  const declaredFloors = new Map();
+
+  for (const manifest of manifests) {
+    const packageJson = JSON.parse(await readFile(manifest.absolutePath, 'utf8'));
+    if (packageJson.engines?.node === undefined) {
+      continue;
+    }
+    assertSupportedNodeFloor(manifest.relativePath, packageJson.engines.node);
+    declaredFloors.set(manifest.relativePath, packageJson.engines.node);
+  }
+
+  assert.ok(declaredFloors.size > 0, 'expected first-party engines.node declarations');
+  assert.equal(declaredFloors.get('core/object-model/js/package.json'), '>=22');
+  assert.equal(declaredFloors.get('spec/repository-format/v1/package.json'), '>=22');
+});
+
+test('first-party Node floor policy rejects Node 20 without reading dependency metadata', () => {
+  assert.doesNotThrow(() => assertSupportedNodeFloor('fixture/package.json', '>=22'));
+  assert.doesNotThrow(() => assertSupportedNodeFloor('fixture/package.json', '>=24'));
+  assert.throws(
+    () => assertSupportedNodeFloor('fixture/package.json', '>=20'),
+    /must require at least Node 22/u
+  );
+  assert.throws(
+    () => assertSupportedNodeFloor('fixture/package.json', '>=22 || >=20'),
+    /canonical/u
+  );
 });
 
 test('exact object-model scale is isolated from ordinary pull-request and branch CI', async () => {

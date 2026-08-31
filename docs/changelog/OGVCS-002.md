@@ -255,9 +255,9 @@ reports are checked into `docs/evidence/OGVCS-002/`; current packed archive
 hashes are bound there as well.
 
 GitHub workflow helper actions are pinned to immutable Node 24-compatible
-releases, eliminating the hosted Node 20 deprecation fallback. The conformance
-payload itself remains deliberately pinned to Node 22, so the action-runtime
-upgrade does not silently change the supported package runtime.
+releases, eliminating the hosted Node 20 deprecation fallback. Hosted JavaScript
+conformance payloads run on Node 24, while published package engines retain the
+Node 22 minimum.
 
 Exact scale remains isolated in the release-only
 `.github/workflows/object-model-scale.yml` workflow. It has no pull-request,

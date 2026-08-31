@@ -25,7 +25,7 @@
     "test:scale:smoke": "node scripts/run-scale.mjs --smoke"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "peerDependencies": {
     "@opengamevcs/fixture-generator": "1.0.0"

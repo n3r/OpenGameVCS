@@ -111,8 +111,8 @@ will be recorded after the current candidate completes hosted validation.
   still requires zero references to the disjoint outside root. Windows must
   execute the junction fixture rather than silently skip it.
 - The workflow uses current Node-24-based action releases (`checkout@v7`,
-  `setup-node@v7`, `upload-artifact@v7`, and `download-artifact@v8`) while
-  testing the package's supported Node 22 runtime.
+  `setup-node@v7`, `upload-artifact@v7`, and `download-artifact@v8`), runs hosted
+  JavaScript payloads on Node 24, and retains Node 22 as the package minimum.
 - Regeneration rebounded the final path manifest through the protocol baseline
   and benchmark/fault predecessor chain. Generated checks, independent path
   validation, runtime/package tests, protocol generation/runtime tests,
