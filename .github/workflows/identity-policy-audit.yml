@@ -5,6 +5,8 @@ on:
     paths:
       - ".github/workflows/identity-policy-audit.yml"
       - "core/identity-policy-audit/**"
+      - "server/migrations/identity-policy-audit/**"
+      - "server/modules/identity-policy-audit/**"
       - "docs/changelog/OGVCS-009.md"
       - "docs/runbooks/identity-policy-operations.md"
       - "package.json"
@@ -27,6 +29,8 @@ on:
     paths:
       - ".github/workflows/identity-policy-audit.yml"
       - "core/identity-policy-audit/**"
+      - "server/migrations/identity-policy-audit/**"
+      - "server/modules/identity-policy-audit/**"
       - "docs/changelog/OGVCS-009.md"
       - "docs/runbooks/identity-policy-operations.md"
       - "package.json"
@@ -75,3 +79,72 @@ jobs:
       - name: Validate roadmap lifecycle
         if: runner.os == 'Linux'
         run: npm run test:roadmap
+
+  rust-bounded:
+    name: Rust 1.82 bounded checks (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@7d11e79e1714f6b6da93cac39ad8435666f5c337 # 1.82.0
+        with:
+          components: clippy, rustfmt
+      - name: Fetch the locked Rust closure
+        run: cargo fetch --manifest-path server/modules/identity-policy-audit/Cargo.toml --locked
+      - name: Check formatting and unit tests without network access
+        run: |
+          cargo fmt --manifest-path server/modules/identity-policy-audit/Cargo.toml -- --check
+          cargo test --manifest-path server/modules/identity-policy-audit/Cargo.toml --locked --offline
+      - name: Reject Rust warnings
+        run: cargo clippy --manifest-path server/modules/identity-policy-audit/Cargo.toml --locked --offline --all-targets -- -D warnings
+
+  postgres-live:
+    name: Rust 1.82 and guarded PostgreSQL 15 participant
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        # Official postgres:15.19-bookworm OCI index, resolved 2026-08-30.
+        image: postgres@sha256:5d1d70e254e3c5d7d76847a9deebb18478cd518df37abf6b278d4bdb1fe5d96c
+        env:
+          POSTGRES_DB: ogvcs_identity_policy_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ogvcs_identity_policy_ci"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - uses: dtolnay/rust-toolchain@7d11e79e1714f6b6da93cac39ad8435666f5c337 # 1.82.0
+        with:
+          components: clippy, rustfmt
+      - name: Install exact workspace dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Validate the neutral contract before the adapter
+        run: npm run test:identity:spec
+      - name: Fetch the locked Rust closure
+        run: cargo fetch --manifest-path server/modules/identity-policy-audit/Cargo.toml --locked
+      - name: Run Rust checks without network access
+        run: |
+          cargo fmt --manifest-path server/modules/identity-policy-audit/Cargo.toml -- --check
+          cargo test --manifest-path server/modules/identity-policy-audit/Cargo.toml --locked --offline
+          cargo clippy --manifest-path server/modules/identity-policy-audit/Cargo.toml --locked --offline --all-targets -- -D warnings
+      - name: Exercise checked migrations and fail-closed PostgreSQL boundary
+        env:
+          CARGO_NET_OFFLINE: 'true'
+          OGVCS_IDENTITY_POLICY_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/ogvcs_identity_policy_ci
+        run: >-
+          cargo test --manifest-path server/modules/identity-policy-audit/Cargo.toml
+          --locked --offline --test postgres_live -- --nocapture

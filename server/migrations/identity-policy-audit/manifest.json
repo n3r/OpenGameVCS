@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "ogvcs.identity-policy/postgres-migration-manifest/v1",
+  "database": "postgresql-15-or-newer",
+  "migrationLock": "pg-advisory-lock:ogvcs-identity-policy-migrations-v1",
+  "entries": [
+    {
+      "version": 1,
+      "phase": "expand",
+      "path": "000001_expand.sql",
+      "sha256": "f84c690f2d173724af6bccfa248f656f97676e6236bc4aaa2f53f353cb19a378",
+      "restartable": true,
+      "minimumApplicationVersion": "0.2.0",
+      "maximumApplicationVersion": "0.2.x"
+    },
+    {
+      "version": 1,
+      "phase": "migrate",
+      "path": "000001_migrate.sql",
+      "sha256": "7d00d5be1a2c9ce349656b372e9990ee31e94f731541aeaa3d13f66474c02451",
+      "restartable": true,
+      "minimumApplicationVersion": "0.2.0",
+      "maximumApplicationVersion": "0.2.x"
+    },
+    {
+      "version": 1,
+      "phase": "contract",
+      "path": "000001_contract.sql",
+      "sha256": "7558ed51246621d58127d3a8525bb2b001327bfcafa9b2d5401be5b49e689512",
+      "restartable": true,
+      "minimumApplicationVersion": "0.2.0",
+      "maximumApplicationVersion": "0.2.x",
+      "requiresCompatibilityFence": true
+    }
+  ]
+}
+
