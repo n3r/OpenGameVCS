@@ -7,6 +7,7 @@
 //! transaction so a caller can only roll it back.
 #![forbid(unsafe_code)]
 
+mod aggregate;
 mod canonical;
 mod error;
 mod migration;
@@ -15,6 +16,17 @@ mod model;
 mod participant;
 mod policy;
 
+pub use aggregate::{
+    AggregateAuthorizationReceipt, AggregateHmacKeyProvider, AggregatePlanHandle,
+    AggregatePlanRequest, AggregateReceiptConsumption, AggregateReceiptConsumptionRequest,
+    AggregateResourceDigestProjection, AggregateSigningKeyRegistration, AggregateUploadProgress,
+    HmacSha256KeyRing, PostgresAggregateAuthorizationParticipant, RepositoryContractBinding,
+    RepositoryContractBindingRequest, AGGREGATE_AUTHORIZATION_RECEIPT_SCHEMA,
+    AGGREGATE_PLAN_HANDLE_SCHEMA, AGGREGATE_RESOURCE_DIGEST_PROJECTION_ALGORITHM,
+    AGGREGATE_SUBMIT_CONSUME_PUBLICATION_CAPABILITY, AGGREGATE_SUBMIT_PERMISSION,
+    MAXIMUM_AGGREGATE_CHUNK_BYTES, MAXIMUM_AGGREGATE_CHUNK_ITEMS,
+    MAXIMUM_AGGREGATE_PLAN_TTL_SECONDS, MAXIMUM_AGGREGATE_RESOURCES,
+};
 pub use error::{ParticipantError, ParticipantErrorCode, Result};
 pub use migration::{Migration, MigrationPhase, MIGRATIONS};
 pub use migration_runner::{

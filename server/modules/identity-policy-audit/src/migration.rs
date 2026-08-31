@@ -27,7 +27,7 @@ pub struct Migration {
     pub requires_compatibility_fence: bool,
 }
 
-pub const MIGRATIONS: [Migration; 6] = [
+pub const MIGRATIONS: [Migration; 9] = [
     Migration {
         version: 1,
         phase: MigrationPhase::Expand,
@@ -83,6 +83,36 @@ pub const MIGRATIONS: [Migration; 6] = [
         phase: MigrationPhase::Contract,
         sql: include_str!("../../../migrations/identity-policy-audit/000002_contract.sql"),
         checksum_sha256: "7705488d488bff2b6b8dd2355010c3b929bec2a8bd9f38bb071ec2cdf386555b",
+        restartable: true,
+        minimum_application_version: "0.2.0",
+        maximum_application_version: "0.2.x",
+        requires_compatibility_fence: true,
+    },
+    Migration {
+        version: 3,
+        phase: MigrationPhase::Expand,
+        sql: include_str!("../../../migrations/identity-policy-audit/000003_expand.sql"),
+        checksum_sha256: "fab0c8f8c3b4d605e3c73d3185d36653d901e5fae64dd659cb20b3b5df3117e7",
+        restartable: true,
+        minimum_application_version: "0.2.0",
+        maximum_application_version: "0.2.x",
+        requires_compatibility_fence: false,
+    },
+    Migration {
+        version: 3,
+        phase: MigrationPhase::Migrate,
+        sql: include_str!("../../../migrations/identity-policy-audit/000003_migrate.sql"),
+        checksum_sha256: "b70c422ab61275600de26160f6dc90ecf7cb374d61c7da4993a71c90f863dad6",
+        restartable: true,
+        minimum_application_version: "0.2.0",
+        maximum_application_version: "0.2.x",
+        requires_compatibility_fence: false,
+    },
+    Migration {
+        version: 3,
+        phase: MigrationPhase::Contract,
+        sql: include_str!("../../../migrations/identity-policy-audit/000003_contract.sql"),
+        checksum_sha256: "c94148ffc05b9e16adea704ef31ff06b6c336a8fdb163a641c96bd2fdd030774",
         restartable: true,
         minimum_application_version: "0.2.0",
         maximum_application_version: "0.2.x",

@@ -159,10 +159,10 @@ jobs:
           cargo fmt --manifest-path server/modules/identity-policy-audit/Cargo.toml -- --check
           cargo test --manifest-path server/modules/identity-policy-audit/Cargo.toml --locked --offline
           cargo clippy --manifest-path server/modules/identity-policy-audit/Cargo.toml --locked --offline --all-targets -- -D warnings
-      - name: Exercise checked migrations and fail-closed PostgreSQL boundary
+      - name: Exercise checked migrations and fail-closed PostgreSQL boundaries
         env:
           CARGO_NET_OFFLINE: 'true'
           OGVCS_IDENTITY_POLICY_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/ogvcs_identity_policy_ci
-        run: >-
-          cargo test --manifest-path server/modules/identity-policy-audit/Cargo.toml
-          --locked --offline --test postgres_live -- --nocapture
+        run: |
+          cargo test --manifest-path server/modules/identity-policy-audit/Cargo.toml --locked --offline --test postgres_live -- --nocapture
+          cargo test --manifest-path server/modules/identity-policy-audit/Cargo.toml --locked --offline --test aggregate_postgres_live -- --nocapture

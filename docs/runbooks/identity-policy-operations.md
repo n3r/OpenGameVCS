@@ -25,6 +25,45 @@ assign public HTTP routes.
    It owns transaction identity, rechecks credential/policy/resource state in
    that transaction, appends one exact decision commitment and poisons any
    ambiguous attempt. Never expose its raw transaction handle to callers.
+7. Bind each identity repository name to the authoritative metadata repository
+   UUID and its current immutable settings generation. A settings promotion
+   requires appending a new identity binding before new plans can begin; never
+   rewrite an old descriptor/profile/mode binding.
+8. Configure an `AggregateHmacKeyProvider` and register only its opaque key
+   reference and non-secret fingerprint. Keep HMAC bytes in the process secret
+   compartment, HSM, or KMS. The database must never receive them.
+
+## Aggregate authorization operations
+
+Use `begin_plan`, then feed canonical ordered resources to `append_chunk` in
+chunks of at most 1,000 items and 1 MiB of canonical bytes. The service rejects
+duplicates, reordered resources, a 100,001st item, and any cross-chunk ordering
+regression before inserting that chunk. Do not collect the whole resource set
+into a caller `Vec`.
+
+`authorize_plan` locks current credential, authority/security epoch, policy,
+metadata settings, and active signer facts; reconstructs every persisted chunk
+and resource through a bounded database row stream; and evaluates the complete
+set with deny-overrides SQL. It returns only after the whole set allows and
+persists one commitment. A denial does not return item positions or partial
+decisions.
+
+Keep the resulting opaque `AggregateAuthorizationReceipt` inside the protected
+server boundary. In the exact PostgreSQL transaction performing the metadata
+mutation, call `consume_receipt` with a unique consumption ID and the canonical
+operation digest. Continue only with the returned
+`AggregateReceiptConsumption` brand and its post-verification `authorization()`
+view. Compare both typed metadata tenant/repository IDs and reconstruct
+`resource_digest_projection_digest` before consumption by streaming the
+metadata rows' ordered 32-byte resource digests through
+`AggregateResourceDigestProjection`; compare its final count and digest without
+materializing the set. A publication submission must request the exact
+`submit` permission and `submit.consume-publication` capability. Its canonical
+operation digest must commit every lifecycle-specific publication, contract,
+size, idempotency, and plan fact required by that operation. A concurrent or
+replayed consumption, expired plan, revoked/replaced credential, epoch or
+policy promotion, metadata settings change, profile/mode change, or signer
+change fails closed.
 
 ## Bootstrap ceremony
 
@@ -60,6 +99,13 @@ generation, bind the verified recovery boundary, and atomically append exactly
 one `authority.epoch-changed` event. After promotion, reject every old-epoch
 credential, grant, cache entry and transaction view.
 
+For aggregate HMAC rotation, advance the authority key generation first as part
+of the protected promotion ceremony, make the prior active registry row
+verify-only, and register exactly one new active key/fingerprint. Old plans and
+receipts do not remain consumable after the current key generation changes.
+Retire a verify-only key only after its operational retention window; rows and
+consumption evidence are durable and cannot be deleted.
+
 ## Audit recovery and export
 
 Retain checkpoints outside the mutable audit store. Verify linkage and the
@@ -75,9 +121,20 @@ Run:
 ```sh
 npm run test:identity:spec
 npm run test:identity
+npm run test:identity:rust
 npm run test:roadmap
 ```
+
+Against a fresh disposable PostgreSQL database, also set
+`OGVCS_IDENTITY_POLICY_DATABASE_URL` and run
+`npm run test:identity:postgres`. The exact 100,000-resource SQL proof is an
+explicit opt-in Rust test and is intentionally excluded from normal hosted CI.
 
 The identity workflow runs those bounded gates on Node 24 across Linux, macOS
 and Windows. Large repository scale campaigns are not part of this workflow;
 they remain at the final scheduled release boundary.
+
+This runbook does not activate public routes and does not describe an
+OGVCS-010/disaster-recovery receipt. Production secret/KMS, nonce, external
+audit/checkpoint, and trusted OGVCS-018 root-proof adapters plus latency and
+revocation SLO evidence remain required before OGVCS-009 can be completed.

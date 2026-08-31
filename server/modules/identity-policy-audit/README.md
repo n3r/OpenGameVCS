@@ -9,9 +9,37 @@ The direct, at-most-1,000-resource evaluator consumes the generated
 approximation. The binding pins the exact OGVCS-004 v1 manifest and Unicode
 16.0.0 C/F case-fold table, rejects non-NFC input without repair, performs no
 post-fold normalization, accepts all four ratified profiles, and compares
-component-bound `ogvcs-path-key-v1` repository keys. This is a bounded path
-contract prerequisite; it does not add aggregate authorization or complete
-OGVCS-009.
+component-bound `ogvcs-path-key-v1` repository keys.
+
+Migration v3 adds a separate aggregate participant with an exact 100,000-item
+ceiling. `begin_plan` derives current credential, subject, scope, authority,
+policy, repository-settings, and signer facts on the server. Callers then use
+`append_chunk` with at most 1,000 canonical resources and at most 1 MiB of
+canonical resource bytes per call. No public operation accepts a
+100,000-element `Vec`; upload uses one bounded `UNNEST` insert per chunk and
+authorization reconstructs its seal through one server-side row stream before
+one set-based deny-overrides query. It emits one aggregate commitment, not one
+decision row per resource.
+
+Repository metadata is bound through an immutable root plus append-only exact
+settings-generation records. Every plan/receipt binds both the metadata tenant
+and repository identities, settings generation and descriptor digest, path
+profile and case mode. Policy JSON is normalized into sealed relational
+rule/subject/reference/path/type/
+permission/term projections. The application cannot add to or mutate a sealed
+projection or initialized plan facts, and PostgreSQL rechecks complete chunk,
+item, order, byte-count, canonical-key, path-key, and digest coverage before an
+allow can be returned.
+
+Aggregate handles and receipts are HMAC-authenticated by an injected
+`AggregateHmacKeyProvider`. PostgreSQL retains only an opaque key reference and
+provider fingerprint; it never stores secret material. The supplied
+`HmacSha256KeyRing` is suitable for a bounded in-process deployment and clears
+owned 32-byte keys on drop; HSM/KMS deployments implement the same provider
+trait. Currentness checks fence expiry, credential state/generation, authority
+and security epoch, policy generation/digest, metadata descriptor, exact path
+profile/mode, and active signer generation/fingerprint on append, authorize,
+and consume.
 
 The adapter accepts a caller-owned `postgres::Transaction` only while it is
 inside the protected server boundary. It mints a transaction identity itself,
@@ -25,12 +53,36 @@ Migration v1 remains byte-frozen at SHA-256
 `f31def32f2dc2a5da085187e345fa91ca0defe1035426c17fdeba719bd1df583`.
 Additive v2 installs and validates equivalent 1..256-byte opaque-ID checks,
 then removes only the v1 PostgreSQL regular expressions whose `{1,256}` bound
-cannot be evaluated by PostgreSQL 15. The live test applies v1 and v2 before
-the first decision insert and verifies both versions in the migration ledger.
+cannot be evaluated by PostgreSQL 15. Append-only v3 adds durable credential
+reconstruction/security-epoch fields, versioned repository settings bindings,
+sealed policy projections, HMAC key metadata, aggregate plans/chunks/resources,
+one aggregate decision commitment, and one-use consumption evidence. The live
+tests apply and verify all nine Expand/Migrate/Contract ledger entries on a
+fresh database without changing v1 or v2.
 
 `TransactionDecisionCommitment` is an OGVCS-009 decision record. It is not
 presented as an OGVCS-003 frozen `AuditEvent`; the latter remains limited to
 the explicitly supported privileged policy/security event classes.
+
+`AggregateAuthorizationReceipt` is likewise an opaque internal authorization
+carrier, not an OGVCS-010 distributed-receipt or disaster-recovery claim.
+Repository metadata should retain it inside the protected server boundary and
+call `PostgresAggregateAuthorizationParticipant::consume_receipt` on the same
+`postgres::Transaction` as the protected mutation. The returned
+`AggregateReceiptConsumption` is the one-use brand; its `authorization()`
+accessor returns the exact receipt only after verification/currentness/consume
+succeeded. Neither type exposes raw secret material or a database handle.
+
+The receipt carries both its canonical ordered `resource_set_digest` and the
+frozen `ogvcs.identity-policy/resource-digest-projection/v1` commitment. A
+metadata participant can reconstruct the latter in O(1) memory by feeding its
+ordered, persisted 32-byte per-resource digests to
+`AggregateResourceDigestProjection`; it must compare the one final digest and
+count before consuming the receipt. Publication submit uses the exact internal
+pair `permission = "submit"` and
+`capability = "submit.consume-publication"`; mixed pairs fail closed. The
+consumption evidence declares `(plan_id, consumption_id, operation_digest)` as
+an exact composite foreign-key target for lifecycle evidence.
 
 ## Checks
 
@@ -47,10 +99,25 @@ cargo test --manifest-path server/modules/identity-policy-audit/Cargo.toml --loc
 cargo clippy --manifest-path server/modules/identity-policy-audit/Cargo.toml --locked --all-targets -- -D warnings
 ```
 
-The `postgres_live` integration test self-skips unless
+The root aliases are `npm run test:identity:rust` and, with
+`OGVCS_IDENTITY_POLICY_DATABASE_URL` set to a disposable database,
+`npm run test:identity:postgres`.
+
+The PostgreSQL integration tests self-skip unless
 `OGVCS_IDENTITY_POLICY_DATABASE_URL` names a disposable PostgreSQL 15 database.
 The `identity-policy-audit.yml` Linux job supplies that value and proves the
 checksummed Expand/Migrate/Contract sequence, compatibility fence, and
-database-level transaction poison path. It additionally proves authorize →
-batch recheck → decision append, plus cross-transaction and duplicate-resource
-failure paths. It is bounded CI; it contains no exact-scale workload.
+database-level transaction poison path for direct and aggregate participants.
+The ordinary aggregate test covers hostile mutation, stale authority inputs,
+deny position, Unicode folding, restart, key mismatch, expiry, and concurrent
+one-use consumption. The ignored `exact_hundred_thousand_resources_stream_and_authorize`
+test is the explicit opt-in database-scale proof; it streams 100 bounded chunks,
+rejects item 100,001 before insertion, and authorizes the complete set. It is
+not part of ordinary hosted CI.
+
+This is still a developer-preview internal boundary. Public authentication,
+policy, audit, and authorization routes; deployment-specific secret, KMS,
+nonce, and external audit/checkpoint adapters; measured latency/revocation SLO
+evidence; and trusted OGVCS-018 root-proof authority remain completion gates.
+No OGVCS-010 or disaster-recovery receipt claim is made, and OGVCS-009 is not
+marked complete.

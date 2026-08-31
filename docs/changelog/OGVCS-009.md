@@ -4,6 +4,53 @@
 **Candidate packages:** `@opengamevcs/identity-policy-audit-contract-v1` 0.2.0 and `@opengamevcs/identity-policy-audit` 0.2.0
 **Date:** 2026-09-01
 
+## 2026-09-01 aggregate authorization and durable PostgreSQL v3
+
+- Added append-only identity migration v3 after byte-frozen v1/v2. It makes
+  durable credential reconstruction and the authority/security epoch explicit;
+  appends versioned repository-metadata settings bindings; and adds sealed
+  relational policy projections, external HMAC key metadata, bounded aggregate
+  plan/chunk/resource facts, one aggregate decision commitment, and immutable
+  one-use consumption evidence.
+- Added a server-derived HMAC-authenticated aggregate plan and opaque receipt.
+  Both bind the exact credential subject/scope and generation, tenant and
+  repository, authority/security epoch, policy generation and digest, metadata
+  tenant/repository/settings generation/descriptor, path profile and case mode,
+  permission/capability/reference/snapshot, privileged reason digest, ordered
+  resource count/set digest plus an ordered per-resource-digest projection,
+  issuance/expiry, and signer generation/reference.
+  Secrets remain behind an injected key-provider boundary and are never stored
+  in PostgreSQL.
+- Added streamed upload with exact limits of 100,000 total resources, 1,000
+  items and 1 MiB of canonical bytes per chunk. There is no public
+  100,000-element `Vec` API and no per-resource query loop: chunks use bounded
+  batched `UNNEST`, seal verification uses a server-side row stream, and the
+  complete set is evaluated by one deny-overrides relational query before a
+  single allow/commitment can be returned.
+- Sealed policy projections and initialized actor/scope/upload facts against
+  later inserts or mutation. Database guards prevent plan/key deletion,
+  nonmonotonic authority/policy transitions, commitment substitution, and
+  post-authorization evidence changes. Currentness is rechecked on every plan
+  operation and receipt consumption.
+- Added bounded hostile tests for exact Unicode/profile path semantics,
+  duplicate/order/shape/byte limits, subject/epoch/policy/settings/signer HMAC
+  tamper boundaries, privileged reasons, early/middle/late denial without
+  partial disclosure, stale authority races, restart reconstruction, sealed
+  projection mutation, expiry/replay, and concurrent one-use consumption. An
+  opt-in PostgreSQL test authorized exactly 100,000 resources in 100 streamed
+  chunks and rejected item 100,001 before insertion; ordinary hosted CI leaves
+  that exact-scale proof ignored.
+- Added the minimal repository-metadata handoff:
+  `AggregateAuthorizationReceipt` stays opaque, and
+  `consume_receipt` must run in the same protected PostgreSQL transaction as
+  the metadata mutation. The public O(1)-memory projection builder lets
+  lifecycle reconstruct the receipt commitment from ordered persisted 32-byte
+  resource digests. Publication submit is frozen to `submit` plus
+  `submit.consume-publication`, and durable consumption exposes the composite
+  `(plan_id, consumption_id, operation_digest)` key for cross-schema evidence.
+  This is an internal authorization brand, not a public OGVCS-010/disaster-
+  recovery receipt.
+
 ## 2026-09-01 Rust path-contract convergence prerequisite
 
 - Added a Rust OGVCS-004 pure path binding generated from and pinned to the
@@ -21,10 +68,9 @@
   separation regressions. The identity workflow checks the generator and both
   Rust crates on Linux, macOS, and Windows without adding a scale campaign.
 
-This prerequisite does not implement aggregate authorization, persist a sealed
-100,000-resource plan, or complete OGVCS-009. Immutable repository metadata
-settings must still be cross-checked against the selected policy profile/mode,
-and a durable credential/security-epoch migration remains separate work.
+The v3 cut above now implements those aggregate, repository-settings, and
+durable PostgreSQL prerequisites. The path-contract convergence work by itself
+did not complete OGVCS-009, and neither does v3.
 
 ## Production-boundary candidate cut
 
@@ -79,7 +125,12 @@ and a durable credential/security-epoch migration remains separate work.
 ## Deliberate remaining work
 
 The PRD remains In development. This cut does not provide or claim a configured
-studio OIDC deployment, production secret/key/audit/nonce/PostgreSQL adapters,
-process-restart reconstruction proof, request-root or multi-object grant
-issuance, latency/SLO evidence, complete public route integration, hosted
-cross-platform evidence, or final acceptance.
+studio OIDC deployment; deployment-specific secret/KMS, nonce, external audit
+checkpoint/root, and all public-route adapters; trusted OGVCS-018 root-proof
+authority; request-root grant issuance; production latency/revocation SLO and
+fault evidence; an end-to-end rollout; or final acceptance. The aggregate
+PostgreSQL participant has local restart reconstruction and exact-scale proof,
+but hosted exact-scale and cross-service lifecycle evidence remain open. Hosted
+bounded 0.2 conformance is green on Linux, macOS, and Windows at run
+`33444182014`. No OGVCS-010/disaster-recovery receipt is claimed, and OGVCS-009
+is not marked complete.
