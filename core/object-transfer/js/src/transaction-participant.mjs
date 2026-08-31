@@ -305,26 +305,30 @@ function validatePrivateContext(input, claims, production) {
   let totalManifestBytes = 0;
   const bindings = input.contentManifestPublications.map((binding, index) => {
     const object = required[index];
+    const manifest = binding?.manifest;
+    const objectId = binding?.objectId;
+    const opaqueKey = binding?.opaqueKey;
+    const verificationReceipt = binding?.verificationReceipt;
     if (!exactKeys(binding, CONTENT_MANIFEST_PUBLICATION_KEYS)
-        || !SHA.test(binding.opaqueKey ?? '')
-        || binding.opaqueKey !== object.opaqueKey
-        || typeof binding.objectId !== 'string'
-        || binding.objectId !== object.objectId
-        || !(binding.manifest instanceof Uint8Array)
-        || !binding.verificationReceipt
-        || typeof binding.verificationReceipt !== 'object') {
+        || !SHA.test(opaqueKey ?? '')
+        || opaqueKey !== object.opaqueKey
+        || typeof objectId !== 'string'
+        || objectId !== object.objectId
+        || !(manifest instanceof Uint8Array)
+        || !verificationReceipt
+        || typeof verificationReceipt !== 'object') {
       transferError('TRANSFER_AUTHORIZATION_DENIED', 'content-manifest production receipt was denied');
     }
-    totalManifestBytes += binding.manifest.byteLength;
+    totalManifestBytes += manifest.byteLength;
     if (!Number.isSafeInteger(totalManifestBytes) || totalManifestBytes > PRIVATE_CONTENT_MANIFEST_BYTES_MAX) {
       transferError('TRANSFER_LIMIT_EXCEEDED', 'content-manifest production manifests exceed the bounded aggregate limit');
     }
-    canonicalObjectId(binding.objectId, 'content-manifest production ObjectID');
+    canonicalObjectId(objectId, 'content-manifest production ObjectID');
     return Object.freeze({
-      manifest: binding.manifest,
-      objectId: binding.objectId,
-      opaqueKey: binding.opaqueKey,
-      verificationReceipt: binding.verificationReceipt,
+      manifest,
+      objectId,
+      opaqueKey,
+      verificationReceipt,
     });
   });
   return Object.freeze(bindings);

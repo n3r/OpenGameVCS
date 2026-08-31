@@ -1,9 +1,17 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import test from 'node:test';
-import { chunkBytes } from '@opengamevcs/chunking-manifest';
+import {
+  chunkBytes,
+  consumeVerificationReceipt,
+  PROFILE as CHUNKING_PROFILE,
+  PRODUCTION_BOUNDARY_VERSION,
+  VERIFICATION_RECEIPT_VERIFIER,
+} from '@opengamevcs/chunking-manifest';
 import { loadBundledRegistry, validateRegistrySet } from '@opengamevcs/object-model';
+import { canonicalBytes } from '@opengamevcs/protocol-baseline';
 import {
   LIFECYCLE_TRANSACTION_CONTRACT_VERSION,
   createLifecycleTransactionBoundary,
@@ -47,10 +55,23 @@ async function productionRegistry() {
 async function contentManifestFixture(text = 'OpenGameVCS object-transfer content-manifest fixture\n') {
   const bytes = Buffer.from(text, 'utf8');
   const generated = await chunkBytes(bytes);
+  const statement = {
+    boundary: PRODUCTION_BOUNDARY_VERSION,
+    logicalBytes: String(bytes.length),
+    manifestObjectId: generated.manifest.objectId,
+    manifestSha256: createHash('sha256').update(generated.manifest.bytes).digest('hex'),
+    profile: `${CHUNKING_PROFILE.namespace}/${CHUNKING_PROFILE.id}@${CHUNKING_PROFILE.major}`,
+    verifier: VERIFICATION_RECEIPT_VERIFIER,
+    wholeFileSha256: createHash('sha256').update(bytes).digest('hex'),
+  };
   return Object.freeze({
     manifest: generated.manifest.bytes,
     objectId: generated.manifest.objectId,
     verificationReceipt: generated.verificationReceipt,
+    verificationReceiptSha256: createHash('sha256')
+      .update('OGVCS-OBJECT-TRANSFER-CONTENT-MANIFEST-PRODUCTION-V1\0')
+      .update(canonicalBytes(statement))
+      .digest('hex'),
   });
 }
 
@@ -399,4 +420,125 @@ test('stale content-manifest availability burns the one-use receipt and cannot b
     code: 'TRANSFER_AUTHORIZATION_DENIED',
   });
   assert.equal(attempts, 1);
+});
+
+test('multiple content manifests reach one atomic apply only after every production commit', async () => {
+  const fixtures = [
+    await contentManifestFixture('first atomic content-manifest fixture\n'),
+    await contentManifestFixture('second atomic content-manifest fixture\n'),
+  ];
+  const objects = fixtures.map((fixture, index) => objectBinding({
+    opaqueKey: sha(index === 0 ? 'a' : 'b'),
+    objectId: fixture.objectId,
+    expectedState: 'staged',
+    expectedHealth: 'not-applicable',
+    expectedHealthGeneration: null,
+    verificationReceiptSha256: fixture.verificationReceiptSha256,
+  }));
+  let applications = 0;
+  const boundary = createLifecycleTransactionBoundary({
+    contentManifestProduction: { registry: await productionRegistry() },
+    resourceSecret: secret,
+    poison: async () => {},
+    apply: async (_transaction, command) => {
+      applications += 1;
+      for (const fixture of fixtures) {
+        assert.throws(() => consumeVerificationReceipt(fixture.verificationReceipt), {
+          code: 'CHUNK_RESOURCE_INVALID',
+        });
+      }
+      return adapterResult(command);
+    },
+  });
+  const context = boundary.owner.bind({}, claims('transfer.record-available', objects), {
+    contentManifestPublications: objects.map((object, index) => ({
+      manifest: fixtures[index].manifest,
+      objectId: object.objectId,
+      opaqueKey: object.opaqueKey,
+      verificationReceipt: fixtures[index].verificationReceipt,
+    })),
+  });
+  const result = await boundary.participant.recordAvailable(context);
+  assert.equal(applications, 1);
+  assert.equal(result.objects.length, 2);
+  assert.equal(result.objects.every(({ nextState }) => nextState === 'available'), true);
+});
+
+test('one wrong production statement releases all waiting commits without a partial apply', { timeout: 2_000 }, async () => {
+  const fixtures = [
+    await contentManifestFixture('first rejected atomic content-manifest fixture\n'),
+    await contentManifestFixture('second rejected atomic content-manifest fixture\n'),
+  ];
+  const objects = fixtures.map((fixture, index) => objectBinding({
+    opaqueKey: sha(index === 0 ? 'a' : 'b'),
+    objectId: fixture.objectId,
+    expectedState: 'staged',
+    expectedHealth: 'not-applicable',
+    expectedHealthGeneration: null,
+    verificationReceiptSha256: index === 0 ? fixture.verificationReceiptSha256 : sha('f'),
+  }));
+  let applications = 0;
+  let poisonings = 0;
+  const boundary = createLifecycleTransactionBoundary({
+    contentManifestProduction: { registry: await productionRegistry() },
+    resourceSecret: secret,
+    poison: async () => { poisonings += 1; },
+    apply: async (_transaction, command) => { applications += 1; return adapterResult(command); },
+  });
+  const context = boundary.owner.bind({}, claims('transfer.record-available', objects), {
+    contentManifestPublications: objects.map((object, index) => ({
+      manifest: fixtures[index].manifest,
+      objectId: object.objectId,
+      opaqueKey: object.opaqueKey,
+      verificationReceipt: fixtures[index].verificationReceipt,
+    })),
+  });
+  await assert.rejects(() => boundary.participant.recordAvailable(context), {
+    code: 'TRANSFER_AUTHORIZATION_DENIED',
+  });
+  assert.equal(applications, 0);
+  assert.equal(poisonings, 1);
+});
+
+test('private manifest bindings are snapshotted once and reject an over-budget aggregate before execution', async () => {
+  const fixture = await contentManifestFixture();
+  const object = objectBinding({
+    objectId: fixture.objectId,
+    expectedState: 'staged',
+    expectedHealth: 'not-applicable',
+    expectedHealthGeneration: null,
+    verificationReceiptSha256: fixture.verificationReceiptSha256,
+  });
+  let manifestReads = 0;
+  const exactBinding = {
+    get manifest() { manifestReads += 1; return fixture.manifest; },
+    objectId: object.objectId,
+    opaqueKey: object.opaqueKey,
+    verificationReceipt: fixture.verificationReceipt,
+  };
+  const boundary = createLifecycleTransactionBoundary({
+    contentManifestProduction: { registry: await productionRegistry() },
+    resourceSecret: secret,
+    poison: async () => {},
+    apply: async (_transaction, command) => adapterResult(command),
+  });
+  boundary.owner.bind({}, claims('transfer.record-available', [object]), {
+    contentManifestPublications: [exactBinding],
+  });
+  assert.equal(manifestReads, 1);
+
+  const oversized = new Proxy(new Uint8Array(0), {
+    get(target, property) {
+      if (property === 'byteLength') return 256 * 1024 * 1024 + 1;
+      return Reflect.get(target, property, target);
+    },
+  });
+  assert.throws(() => boundary.owner.bind({}, claims('transfer.record-available', [object]), {
+    contentManifestPublications: [{
+      manifest: oversized,
+      objectId: object.objectId,
+      opaqueKey: object.opaqueKey,
+      verificationReceipt: fixture.verificationReceipt,
+    }],
+  }), { code: 'TRANSFER_LIMIT_EXCEEDED' });
 });

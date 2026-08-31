@@ -999,6 +999,16 @@ export class ObjectTransferService {
             reopenReceipt: backend.reopenReceipt,
           });
         if (lifecycle?.state === 'staged') {
+          if (ObjectRef.parse(session.objectId).kindName === 'content-manifest') {
+            // Content manifests may be made durable here, but availability is
+            // owned by the receipt-gated lifecycle transaction participant.
+            // Leaving the record staged lets that same-transaction boundary
+            // perform the only admissible kind-2 availability CAS.
+            transferError(
+              'TRANSFER_AUTHORIZATION_DENIED',
+              'content-manifest availability requires the production receipt boundary',
+            );
+          }
           lifecycle = await this.lifecycle.compareAndSwap({
             opaqueKey: session.opaqueKey,
             expectedGeneration: lifecycle.generation,

@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
+import { chunkBytes } from '@opengamevcs/chunking-manifest';
 import { hashObject } from '@opengamevcs/object-model';
 import { requestRootForObjectIds, signConformanceGrant } from '@opengamevcs/authorization-contract';
 import { canonicalBytes, semanticIdempotencyFingerprint } from '@opengamevcs/protocol-baseline';
@@ -30,6 +31,65 @@ test('multipart upload resumes across a new service, finalizes once, and serves 
   const finalizeFingerprint = semanticIdempotencyFingerprint({ operation: 'finalize-upload', sessionId: started.sessionId }); const receipt = await value.finalizeUpload({ sessionId: started.sessionId, idempotencyKey: key('finalize', 1), idempotencyFingerprint: finalizeFingerprint, grant: refreshed, context }); assert.equal(receipt.state, 'available'); assert.equal(receipt.generation, 2);
   const replay = await value.finalizeUpload({ sessionId: started.sessionId, idempotencyKey: key('finalize', 1), idempotencyFingerprint: finalizeFingerprint, grant: refreshed, context }); assert.deepEqual(replay, receipt);
   const downloaded = await value.readRange({ objectId, start: 4, endExclusive: 17, grant: grant('download'), context }); assert.equal(downloaded.bytes.equals(bytes.subarray(4, 17)), true); assert.equal(downloaded.lifecycleReceipt.generation, 2);
+});
+
+test('direct finalize leaves a content manifest staged for the production receipt boundary', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ogvcs-transfer-content-manifest-stage-'));
+  const value = await service(root);
+  const content = Buffer.from('content-manifest direct-finalize boundary fixture\n');
+  const generated = await chunkBytes(content);
+  const manifest = generated.manifest.bytes;
+  const manifestObjectId = generated.manifest.objectId;
+  const uploadClaims = {
+    ...baseClaims,
+    nonce: 'grant-content-manifest-upload',
+    objectIds: [manifestObjectId],
+    operation: 'upload',
+    permission: 'content.upload',
+    requestRoot: null,
+  };
+  const uploadGrant = customGrant(uploadClaims);
+  const startFingerprint = semanticIdempotencyFingerprint({
+    declaredLength: manifest.length,
+    objectId: manifestObjectId,
+    operation: 'start-upload',
+    partSize: manifest.length,
+  });
+  const started = await value.startUpload({
+    objectId: manifestObjectId,
+    declaredLength: manifest.length,
+    partSize: manifest.length,
+    idempotencyKey: key('content-manifest-stage-start'),
+    idempotencyFingerprint: startFingerprint,
+    grant: uploadGrant,
+    context,
+  });
+  await value.uploadPart({
+    sessionId: started.sessionId,
+    index: 0,
+    bytes: manifest,
+    sha256: createHash('sha256').update(manifest).digest('hex'),
+    grant: uploadGrant,
+    context,
+  });
+  const finalizeFingerprint = semanticIdempotencyFingerprint({
+    operation: 'finalize-upload',
+    sessionId: started.sessionId,
+  });
+  await assert.rejects(() => value.finalizeUpload({
+    sessionId: started.sessionId,
+    idempotencyKey: key('content-manifest-stage-finalize'),
+    idempotencyFingerprint: finalizeFingerprint,
+    grant: uploadGrant,
+    context,
+  }), { code: 'TRANSFER_AUTHORIZATION_DENIED' });
+
+  const stored = await value.backend.listByInternalPrefix();
+  assert.equal(stored.length, 1);
+  assert.equal((await value.backend.verify(stored[0])).objectId, manifestObjectId);
+  const lifecycle = await value.lifecycle.get(stored[0]);
+  assert.equal(lifecycle.state, 'staged');
+  assert.equal(lifecycle.generation, 1);
 });
 
 test('a deleted generation can be reuploaded only through the lifecycle-controlled finalize path', async () => {

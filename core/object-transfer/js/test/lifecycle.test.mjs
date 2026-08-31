@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
+import { chunkBytes } from '@opengamevcs/chunking-manifest';
 import { hashObject } from '@opengamevcs/object-model';
 import { canonicalBytes } from '@opengamevcs/protocol-baseline';
 import { FilesystemObjectBackend, LifecycleStore } from '../src/index.mjs';
@@ -47,6 +48,41 @@ test('stale generations and transition shortcuts never mutate', async () => {
   const vector = hostileCase('stale-lifecycle-generation');
   const root = await mkdtemp(join(tmpdir(), 'ogvcs-lifecycle-stale-')); const store = await new LifecycleStore({ root, now: () => 1_800_000_000_000 }).initialize(); await store.createStaged({ opaqueKey: key, objectId, length: 4, authorityBindingSha256, tenantScopeSha256 });
   await assert.rejects(() => store.compareAndSwap({ opaqueKey: key, expectedGeneration: 2, expectedState: 'staged', nextState: 'available', backendReceipt, authorityBindingSha256 }), { code: vector.expected.code }); await assert.rejects(() => store.compareAndSwap({ opaqueKey: key, expectedGeneration: 1, expectedState: 'staged', nextState: 'deleted', authorityBindingSha256 }), { code: vector.expected.code }); assert.equal((await store.get(key)).generation, 1);
+});
+
+test('the generic lifecycle store cannot make a content manifest available', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ogvcs-lifecycle-content-manifest-boundary-'));
+  const generated = await chunkBytes(Buffer.from('content-manifest lifecycle bypass fixture\n'));
+  const contentManifestObjectId = generated.manifest.objectId;
+  const store = await new LifecycleStore({ root, now: () => 1_800_000_000_000 }).initialize();
+  const staged = await store.createStaged({
+    opaqueKey: key,
+    objectId: contentManifestObjectId,
+    length: generated.manifest.bytes.length,
+    authorityBindingSha256,
+    tenantScopeSha256,
+  });
+  const manifestBackendBase = {
+    schemaVersion: 'ogvcs.object-transfer/backend-receipt/v1',
+    opaqueKey: key,
+    objectId: contentManifestObjectId,
+    length: generated.manifest.bytes.length,
+    payloadSha256: 'd'.repeat(64),
+    durable: true,
+  };
+  const manifestBackendReceipt = {
+    ...manifestBackendBase,
+    receiptSha256: sha(manifestBackendBase),
+  };
+  await assert.rejects(() => store.compareAndSwap({
+    opaqueKey: key,
+    expectedGeneration: staged.generation,
+    expectedState: 'staged',
+    nextState: 'available',
+    backendReceipt: manifestBackendReceipt,
+    authorityBindingSha256,
+  }), { code: 'TRANSFER_AUTHORIZATION_DENIED' });
+  assert.equal((await store.get(key)).state, 'staged');
 });
 
 test('retention and authority are mandatory before a quarantined generation can delete', async () => {

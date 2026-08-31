@@ -304,6 +304,13 @@ export class LifecycleStore {
       if (authorityBindingSha256 !== current.authorityBindingSha256) {
         transferError('TRANSFER_AUTHORIZATION_DENIED', 'lifecycle authority binding differs');
       }
+      // Kind-2 availability is intentionally not a generic lifecycle-store
+      // operation.  It must go through the branded OGVCS-008 participant,
+      // which consumes the OGVCS-007 production receipt in the same metadata
+      // transaction before applying the CAS.
+      if (nextState === 'available' && ObjectRef.parse(current.objectId).kindName === 'content-manifest') {
+        transferError('TRANSFER_AUTHORIZATION_DENIED', 'content-manifest availability requires the production receipt boundary');
+      }
       const now = this.now();
       if (nextState === 'deleting' && now < current.retentionUntilUnixMs) {
         transferError('TRANSFER_LIFECYCLE_STALE', 'lifecycle retention window is still active');
