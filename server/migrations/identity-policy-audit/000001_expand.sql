@@ -82,9 +82,9 @@ CREATE TABLE ogvcs_identity.decision_chain_heads (
 );
 
 CREATE TABLE ogvcs_identity.transaction_decision_commitments (
-    commitment_id text PRIMARY KEY CHECK (octet_length(commitment_id) BETWEEN 1 AND 256 AND commitment_id ~ '^[A-Za-z0-9._:-]+$'),
-    transaction_id text NOT NULL CHECK (octet_length(transaction_id) BETWEEN 1 AND 256 AND transaction_id ~ '^[A-Za-z0-9._:-]+$'),
-    correlation_id text NOT NULL CHECK (octet_length(correlation_id) BETWEEN 1 AND 256 AND correlation_id ~ '^[A-Za-z0-9._:-]+$'),
+    commitment_id text PRIMARY KEY CHECK (commitment_id ~ '^[A-Za-z0-9._:-]{1,256}$'),
+    transaction_id text NOT NULL CHECK (transaction_id ~ '^[A-Za-z0-9._:-]{1,256}$'),
+    correlation_id text NOT NULL CHECK (correlation_id ~ '^[A-Za-z0-9._:-]{1,256}$'),
     tenant_id text NOT NULL REFERENCES ogvcs_identity.authority_states(tenant_id),
     repository_id text NOT NULL CHECK (repository_id ~ '^[a-z][a-z0-9.-]{0,127}$'),
     authority_epoch bigint NOT NULL CHECK (authority_epoch >= 1),
@@ -108,7 +108,7 @@ CREATE INDEX decision_commitments_by_tenant_sequence
 -- policy-authority classes it owns.
 CREATE TABLE ogvcs_identity.privileged_audit_events (
     schema_version text NOT NULL CHECK (schema_version = 'ogvcs.authorization/audit-event/v1'),
-    event_id text PRIMARY KEY CHECK (octet_length(event_id) BETWEEN 1 AND 256 AND event_id ~ '^[A-Za-z0-9._:-]+$'),
+    event_id text PRIMARY KEY CHECK (event_id ~ '^[A-Za-z0-9._:-]{1,256}$'),
     event_class text NOT NULL CHECK (event_class IN ('policy.changed', 'grant.revoked', 'authority.epoch-changed')),
     occurred_at bigint NOT NULL CHECK (occurred_at >= 0),
     tenant_id text NOT NULL REFERENCES ogvcs_identity.authority_states(tenant_id),
@@ -118,9 +118,9 @@ CREATE TABLE ogvcs_identity.privileged_audit_events (
     permission text NOT NULL CHECK (permission = 'policy.administer'),
     reason text NOT NULL CHECK (octet_length(reason) BETWEEN 1 AND 256),
     outcome_code text NOT NULL CHECK (outcome_code = 'ALLOW_EXPLICIT'),
-    correlation_id text NOT NULL CHECK (octet_length(correlation_id) BETWEEN 1 AND 256 AND correlation_id ~ '^[A-Za-z0-9._:-]+$'),
+    correlation_id text NOT NULL CHECK (correlation_id ~ '^[A-Za-z0-9._:-]{1,256}$'),
     details_target_class text NOT NULL CHECK (details_target_class ~ '^[a-z][a-z0-9.-]{0,127}$'),
-    details_change_ref text CHECK (details_change_ref IS NULL OR (octet_length(details_change_ref) BETWEEN 1 AND 256 AND details_change_ref ~ '^[A-Za-z0-9._:-]+$')),
+    details_change_ref text CHECK (details_change_ref IS NULL OR details_change_ref ~ '^[A-Za-z0-9._:-]{1,256}$'),
     created_at timestamptz NOT NULL DEFAULT clock_timestamp()
 );
 

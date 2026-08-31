@@ -7,7 +7,7 @@
       "version": 1,
       "phase": "expand",
       "path": "000001_expand.sql",
-      "sha256": "60a537b9c91a78772a2f83102ab3e7603276578db44a216225704ac94fdd8f79",
+      "sha256": "f31def32f2dc2a5da085187e345fa91ca0defe1035426c17fdeba719bd1df583",
       "restartable": true,
       "minimumApplicationVersion": "0.2.0",
       "maximumApplicationVersion": "0.2.x"
