@@ -180,7 +180,12 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
                 return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
             }
         };
-        let scope = decode_identity_digest(view.authenticated_scope_digest())?;
+        let scope = identity_metadata_scope_digest(
+            decode_identity_digest(view.authenticated_scope_digest())?,
+            tenant_id,
+            repository_id,
+            TransactionCapability::ReserveFileId,
+        );
         let server_now: SystemTime = transaction
             .query_one("SELECT clock_timestamp()", &[])
             .map_err(database_error)?
@@ -898,7 +903,19 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
             tenant_id,
             authorization_epoch: view.authority_epoch(),
         };
-        let authenticated_scope_digest = decode_identity_digest(view.authenticated_scope_digest())?;
+        let authority_scope_digest = decode_identity_digest(view.authenticated_scope_digest())?;
+        let authenticated_scope_digest = identity_metadata_scope_digest(
+            authority_scope_digest,
+            tenant_id,
+            repository_id,
+            capability,
+        );
+        let allocation_receipt_scope_digest = identity_metadata_scope_digest(
+            authority_scope_digest,
+            tenant_id,
+            repository_id,
+            TransactionCapability::ReserveFileId,
+        );
         Ok(PostgresMetadataTransaction {
             transaction: Some(transaction),
             failed: false,
@@ -918,6 +935,7 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
             },
             validation: &self.validation,
             authenticated_scope_digest,
+            allocation_receipt_scope_digest,
             allocation_receipt_required: true,
             identity_binding: Some(IdentityTransactionBinding {
                 participant,
@@ -986,6 +1004,11 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
             authorized_view,
             validation: &self.validation,
             authenticated_scope_digest: metadata_scope_digest(context, repository_id, capability),
+            allocation_receipt_scope_digest: metadata_scope_digest(
+                context,
+                repository_id,
+                capability,
+            ),
             allocation_receipt_required: false,
             identity_binding: None,
             identity_resources: Vec::new(),
@@ -2570,6 +2593,7 @@ pub struct PostgresMetadataTransaction<
     authorized_view: View,
     validation: &'a V,
     authenticated_scope_digest: [u8; 32],
+    allocation_receipt_scope_digest: [u8; 32],
     allocation_receipt_required: bool,
     identity_binding: Option<IdentityTransactionBinding<'a>>,
     identity_resources: Vec<IdentityAuthorizationResource>,
@@ -2839,7 +2863,7 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
         file_id: FileId,
     ) -> Result<()> {
         let digest = Sha256::digest(receipt.as_str().as_bytes());
-        let scope = self.idempotency_scope_digest();
+        let scope = self.allocation_receipt_scope_digest;
         let repository_id = uuid(self.authorized_repository_id);
         let consumed = self
             .transaction()?
@@ -6055,6 +6079,22 @@ fn metadata_scope_digest(
     hash.finalize().into()
 }
 
+fn identity_metadata_scope_digest(
+    authority_scope_digest: [u8; 32],
+    tenant_id: TenantId,
+    repository_id: RepositoryId,
+    capability: TransactionCapability,
+) -> [u8; 32] {
+    let mut hash = Sha256::new();
+    hash.update(b"OpenGameVCS identity-bound metadata scope v1\0");
+    hash.update(authority_scope_digest);
+    hash.update(tenant_id.as_bytes());
+    hash.update(repository_id.as_bytes());
+    hash.update((capability.as_str().len() as u64).to_be_bytes());
+    hash.update(capability.as_str().as_bytes());
+    hash.finalize().into()
+}
+
 fn file_id_origin(origin: FileIdOrigin) -> &'static str {
     match origin {
         FileIdOrigin::Create => "create",
@@ -6095,5 +6135,62 @@ fn file_id_database_error(error: postgres::Error) -> DomainError {
         DomainError::new(DomainErrorCode::FileIdConflict)
     } else {
         database_error(error)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::identity_metadata_scope_digest;
+    use crate::{RepositoryId, TenantId, TransactionCapability};
+
+    #[test]
+    fn authority_scope_is_domain_separated_by_tenant_repository_and_capability() {
+        let authority_scope = [0x11; 32];
+        let tenant = TenantId::from_bytes([0x22; 16]);
+        let other_tenant = TenantId::from_bytes([0x23; 16]);
+        let repository = RepositoryId::from_bytes([0x33; 16]);
+        let other_repository = RepositoryId::from_bytes([0x34; 16]);
+        let baseline = identity_metadata_scope_digest(
+            authority_scope,
+            tenant,
+            repository,
+            TransactionCapability::ReserveFileId,
+        );
+        assert_eq!(
+            baseline,
+            identity_metadata_scope_digest(
+                authority_scope,
+                tenant,
+                repository,
+                TransactionCapability::ReserveFileId,
+            )
+        );
+        assert_ne!(
+            baseline,
+            identity_metadata_scope_digest(
+                authority_scope,
+                other_tenant,
+                repository,
+                TransactionCapability::ReserveFileId,
+            )
+        );
+        assert_ne!(
+            baseline,
+            identity_metadata_scope_digest(
+                authority_scope,
+                tenant,
+                other_repository,
+                TransactionCapability::ReserveFileId,
+            )
+        );
+        assert_ne!(
+            baseline,
+            identity_metadata_scope_digest(
+                authority_scope,
+                tenant,
+                repository,
+                TransactionCapability::TombstoneFileId,
+            )
+        );
     }
 }

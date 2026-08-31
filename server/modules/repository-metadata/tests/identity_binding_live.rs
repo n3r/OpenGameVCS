@@ -13,7 +13,7 @@ use ogvcs_identity_policy_audit_postgres::{
 use ogvcs_repository_metadata::{
     run_migrations as run_metadata_migrations, CommitSequence, DomainErrorCode, FileId,
     FileIdOrigin, FileIdOwnerKind, FileIdReservation, IdempotencyReservation,
-    IdentityBoundPostgresMetadataStore, MetadataTransaction,
+    IdempotencyReservationOutcome, IdentityBoundPostgresMetadataStore, MetadataTransaction,
     MigrationRunOptions as MetadataMigrationRunOptions, NativeFileIdReservation, OutboxEvent,
     RepositoryId, TenantId, TransactionCapability, TransactionCredentialRequest,
     TransactionOptions,
@@ -69,6 +69,53 @@ fn identity_bound_metadata_is_scope_receipt_and_commitment_atomic() {
     let participant = PostgresTransactionAuthorizationParticipant::new().unwrap();
     let mut store =
         IdentityBoundPostgresMetadataStore::connect(&database_url, participant).unwrap();
+
+    let capability_scope_key = idempotency("scope.probe", "capability-scope", [0x2f; 32]);
+    let mut reserve_scope = store
+        .begin_identity_authorized(
+            credentials(
+                PRESENTATION_A,
+                "request.scope.reserve",
+                "correlation.scope.reserve",
+            ),
+            tenant_id,
+            TransactionCapability::ReserveFileId,
+            repository_id,
+            TransactionOptions::Serializable { maximum_retries: 0 },
+        )
+        .unwrap();
+    assert_eq!(
+        reserve_scope
+            .reserve_idempotency(capability_scope_key.clone())
+            .unwrap(),
+        IdempotencyReservationOutcome::Reserved
+    );
+    reserve_scope
+        .commit_idempotency(&capability_scope_key, json!({"capability": "reserve"}))
+        .unwrap();
+    assert_eq!(reserve_scope.commit().unwrap().get(), 0);
+
+    let mut tombstone_scope = store
+        .begin_identity_authorized(
+            credentials(
+                PRESENTATION_A,
+                "request.scope.tombstone",
+                "correlation.scope.tombstone",
+            ),
+            tenant_id,
+            TransactionCapability::TombstoneFileId,
+            repository_id,
+            TransactionOptions::Serializable { maximum_retries: 0 },
+        )
+        .unwrap();
+    assert_eq!(
+        tombstone_scope
+            .reserve_idempotency(capability_scope_key)
+            .unwrap(),
+        IdempotencyReservationOutcome::Reserved,
+        "the same authority scope, operation, and key must not cross capabilities"
+    );
+    tombstone_scope.rollback().unwrap();
 
     let allocate = idempotency("file-id.allocate", "allocation-a", [0x31; 32]);
     let first = store
@@ -238,6 +285,57 @@ fn identity_bound_metadata_is_scope_receipt_and_commitment_atomic() {
         .unwrap();
     assert_eq!(committed.commit().unwrap().get(), 1);
 
+    let publish_allocation = store
+        .allocate_file_id_identity_authorized(
+            credentials(
+                PRESENTATION_A,
+                "request.allocate.publish",
+                "correlation.allocate.publish",
+            ),
+            tenant_id,
+            repository_id,
+            idempotency("file-id.allocate", "publish", [0x38; 32]),
+        )
+        .unwrap();
+    let publish_key = idempotency("file-id.register", "publish", [0x39; 32]);
+    let mut publish_register = store
+        .begin_identity_authorized(
+            credentials(
+                PRESENTATION_A,
+                "request.publish-register",
+                "correlation.publish-register",
+            ),
+            tenant_id,
+            TransactionCapability::Publish,
+            repository_id,
+            TransactionOptions::Serializable { maximum_retries: 0 },
+        )
+        .unwrap();
+    publish_register
+        .reserve_idempotency(publish_key.clone())
+        .unwrap();
+    publish_register
+        .register_allocated_file_id(native(
+            repository_id,
+            &publish_allocation,
+            "publish-register",
+        ))
+        .unwrap();
+    publish_register
+        .append_outbox(OutboxEvent {
+            event_id: public_uuid_bytes(0x53),
+            repository_id,
+            correlation_id: public_uuid_bytes(0x54),
+        })
+        .unwrap();
+    publish_register
+        .commit_idempotency(
+            &publish_key,
+            json!({"registered": publish_allocation.file_id.to_string()}),
+        )
+        .unwrap();
+    assert_eq!(publish_register.commit().unwrap().get(), 2);
+
     let mut token_transaction = store
         .begin_identity_authorized(
             credentials(PRESENTATION_A, "request.token", "correlation.token"),
@@ -333,7 +431,7 @@ fn identity_bound_metadata_is_scope_receipt_and_commitment_atomic() {
         )
         .unwrap()
         .get(0);
-    assert_eq!(registered, 1, "only the atomic success may persist");
+    assert_eq!(registered, 2, "only the two atomic successes may persist");
     let rolled_back_receipt: Option<SystemTime> = client
         .query_one(
             "SELECT consumed_at FROM ogvcs_metadata.file_id_allocation_receipts
