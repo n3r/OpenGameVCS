@@ -4,6 +4,7 @@ import test from 'node:test';
 
 import { PolicyMutationAuthority } from '../src/index.mjs';
 import { MemoryPolicyAuthorityStore } from '../src/testing.mjs';
+import { assertVectorOutcome, assertVectorThrow } from './vector-outcome.mjs';
 
 function policy(generation, effect = 'allow') {
   return {
@@ -66,12 +67,13 @@ test('policy mutation previews the exact generation and commits policy plus poli
   assert.match(receipt.auditRecordHash, /^[0-9a-f]{64}$/u);
   assert.equal(store.read('studio').generation, 2);
   assert.deepEqual(store.auditLedger().verify('studio'), { valid: true, records: 1, tailHash: receipt.auditRecordHash });
+  assertVectorOutcome('policy-preview-cas-audit', 'committed', 'committed');
 });
 
 test('policy mutation loses a generation race without appending an audit record', () => {
   const { store, authority } = authorityFixture(); const input = mutation();
   authority.commit(input);
-  assert.throws(() => authority.commit(input), ({ code }) => code === 'STATE_CONFLICT');
+  assertVectorThrow('policy-change-lost-race', () => authority.commit(input), 'STATE_CONFLICT');
   assert.equal(store.auditLedger().verify('studio').records, 1);
 });
 

@@ -33,6 +33,7 @@ import {
   deterministicSecretSource,
   fakeIdentityProviderAdapter,
 } from '../src/testing.mjs';
+import { assertVectorOutcome, assertVectorThrow } from './vector-outcome.mjs';
 
 const vectorDocument = JSON.parse(await readFile(new URL('../../../../spec/identity-policy-audit/v1/vectors/security-core.json', import.meta.url)));
 const limitDocument = JSON.parse(await readFile(new URL('../../../../spec/identity-policy-audit/v1/registries/limits.json', import.meta.url)));
@@ -372,6 +373,7 @@ test('rotating invalid credentials cannot evade the trusted source rate bucket',
   const second = context.runtime.authorizeToken('invalid-token-b', request(), { rateContext });
   assert.equal(first.decision.code, 'DENY_NOT_AUTHORIZED');
   assert.equal(second.decision.code, 'DENY_RATE_LIMITED');
+  assertVectorOutcome('rotating-invalid-token-source-rate', second.decision.code, 'DENY_RATE_LIMITED');
   assert.throws(
     () => context.runtime.authorizeToken('invalid-token-c', request(), { trustedRateSource: 'caller-selected' }),
     ({ code }) => code === 'INPUT_INVALID',
@@ -570,8 +572,8 @@ test('authorized audit reads reject a request-selected checkpoint even when it i
   const ledger = new AuditLedger({ store, trustedCheckpointSource: checkpoints }); ledger.append(event('audit.one'));
   const trusted = ledger.checkpoint('studio'); checkpoints.retain(trusted);
   const requestValue = request({ path: null, permission: 'audit.read', type: 'audit', reason: 'security review' });
-  assert.throws(() => ledger.viewForAuthorizedRequest('studio', {
+  assertVectorThrow('trusted-checkpoint-request-substitution', () => ledger.viewForAuthorizedRequest('studio', {
     engine: context.engine, principal, credentialAuthority: context.credentials,
     request: requestValue, expectedCheckpoint: { ...trusted, tailHash: '00'.repeat(32) },
-  }), ({ code }) => code === 'INPUT_INVALID');
+  }), 'INPUT_INVALID');
 });

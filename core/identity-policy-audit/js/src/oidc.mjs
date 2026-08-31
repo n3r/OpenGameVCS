@@ -133,7 +133,11 @@ async function readBoundedBody(response, maximum, signal) {
     identityFail('POLICY_UNAVAILABLE', 'OIDC response exceeds its bound');
   }
   if (!response.body || typeof response.body.getReader !== 'function') {
-    const bytes = Buffer.from(await response.arrayBuffer());
+    const bytes = Buffer.from(await awaitWithAbort(
+      () => response.arrayBuffer(),
+      signal,
+      () => response.body?.cancel?.(signal?.reason),
+    ));
     if (bytes.length > maximum) identityFail('POLICY_UNAVAILABLE', 'OIDC response exceeds its bound');
     return bytes;
   }
@@ -157,20 +161,29 @@ async function readBoundedBody(response, maximum, signal) {
 }
 
 async function readStreamChunk(reader, signal) {
+  return awaitWithAbort(
+    () => reader.read(),
+    signal,
+    () => reader.cancel?.(signal?.reason),
+  );
+}
+
+async function awaitWithAbort(operation, signal, cancel) {
   if (signal === undefined) {
-    try { return await reader.read(); }
+    try { return await operation(); }
     catch (error) { throw asIdentityError(error, 'POLICY_UNAVAILABLE'); }
   }
   if (signal.aborted) identityFail('POLICY_UNAVAILABLE', 'OIDC request was cancelled');
   let abort;
   const aborted = new Promise((resolvePromise, reject) => {
     abort = () => {
-      Promise.resolve(reader.cancel?.(signal.reason)).catch(() => {});
-      reject(asIdentityError(signal.reason ?? new Error('OIDC request was cancelled'), 'POLICY_UNAVAILABLE'));
+      try { Promise.resolve(cancel?.()).catch(() => {}); }
+      catch { /* Cancellation is best-effort; the deadline must still settle. */ }
+      reject(asIdentityError(new Error('OIDC request was cancelled'), 'POLICY_UNAVAILABLE'));
     };
     signal.addEventListener('abort', abort, { once: true });
   });
-  try { return await Promise.race([Promise.resolve().then(() => reader.read()), aborted]); }
+  try { return await Promise.race([Promise.resolve().then(operation), aborted]); }
   catch (error) { throw asIdentityError(error, 'POLICY_UNAVAILABLE'); }
   finally { signal.removeEventListener('abort', abort); }
 }
@@ -233,6 +246,7 @@ function acceptedSigningJwk(jwk, algorithm) {
 }
 
 export function verifyOidcIdToken(token, { provider: providerInput, jwks, nonce, now }) {
+  if (!Number.isSafeInteger(now) || now < 0) identityFail('INPUT_INVALID', 'OIDC verification clock is invalid');
   const provider = validateOidcProvider(providerInput);
   if (typeof token !== 'string' || Buffer.byteLength(token, 'utf8') > 131_072) identityFail('AUTHENTICATION_DENIED');
   const segments = token.split('.');

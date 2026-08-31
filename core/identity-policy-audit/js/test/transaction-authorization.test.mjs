@@ -11,6 +11,7 @@ import {
   MemoryCredentialStore,
   deterministicSecretSource,
 } from '../src/testing.mjs';
+import { assertVectorOutcome, assertVectorThrow } from './vector-outcome.mjs';
 
 const NOW = 1_800_000_000;
 
@@ -78,15 +79,18 @@ test('transaction view derives epoch, policy, scope, and actor from current cred
 test('transaction credential evidence ignores caller epoch and rejects the authoritative mismatch', () => {
   const context = fixture(); const transaction = context.participant.open();
   context.participant.initializePolicy('studio', policy(1, 3));
-  assert.throws(() => context.authority.begin({
+  assertVectorThrow('transaction-credential-caller-epoch-ignored', () => context.authority.begin({
     transaction, credentialToken: context.issued.token, request: request(),
-  }), ({ code }) => code === 'EPOCH_STALE');
+  }), 'EPOCH_STALE');
 });
 
 test('transaction view rejects resource, transaction, policy-generation, and revocation substitution', () => {
   const context = fixture(); const transaction = context.participant.open(); const other = context.participant.open();
   const view = context.authority.begin({ transaction, credentialToken: context.issued.token, request: request() });
   assert.equal(context.authority.permits(view, { transaction, permission: 'metadata.read', resource: resource('Game/Secret/known.uasset') }), false);
+  assertVectorThrow('transaction-view-resource-substitution', () => context.authority.authorizeBatch(view, {
+    transaction, resources: [resource('Game/Secret/known.uasset')],
+  }), 'AUTHENTICATION_DENIED');
   assert.equal(context.authority.permits(view, { transaction: other, permission: 'metadata.read', resource: resource() }), false);
   context.participant.initializePolicy('studio', policy(2));
   assert.equal(context.authority.permits(view, { transaction, permission: 'metadata.read', resource: resource() }), false);
@@ -105,6 +109,7 @@ test('decision commitment is exact, same-transaction, resource-bound, and single
   assert.equal(commitment.transactionId, 'memory.tx.1'); assert.equal(commitment.sequence, 1);
   assert.match(commitment.resourceSetDigest, /^[0-9a-f]{64}$/u); assert.match(commitment.recordHash, /^[0-9a-f]{64}$/u);
   assert.equal(context.participant.commitments('studio').length, 1);
+  assertVectorOutcome('transaction-decision-commitment-same-tx', 'committed', 'committed');
   assert.throws(() => context.authority.appendDecisionCommitment(view, {
     transaction, correlationId: 'correlation.metadata.3', resources: [resource()], result: { commitSequence: 42 },
   }), ({ code }) => code === 'STATE_CONFLICT');

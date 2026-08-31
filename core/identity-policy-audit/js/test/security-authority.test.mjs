@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import { SecurityMutationAuthority } from '../src/index.mjs';
 import { MemorySecurityMutationStore } from '../src/testing.mjs';
+import { assertVectorOutcome } from './vector-outcome.mjs';
 
 function fixture() {
   const store = new MemorySecurityMutationStore();
@@ -34,6 +35,7 @@ test('credential revocation is bounded, audited, idempotent, and non-enumerating
   const unknown = authority.revokeCredential({ ...input, revocationId: 'revoke.unknown.1', credentialId: 'credential.unknown' });
   assert.deepEqual(Object.keys(unknown).sort(), Object.keys(receipt).sort());
   assert.equal(store.auditLedger().verify('studio').records, 2);
+  assertVectorOutcome('revocation-receipt-bounded', 'revoked', 'revoked');
 });
 
 test('authority promotion atomically advances epoch and key generation with one audit event', () => {
@@ -67,4 +69,3 @@ test('security mutation authorization cannot substitute tenant or permission', (
   }), ({ code }) => code === 'AUTHENTICATION_DENIED');
   assert.equal(store.auditLedger().verify('studio').records, 0);
 });
-

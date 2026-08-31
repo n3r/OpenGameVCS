@@ -13,6 +13,7 @@ import {
   MemoryBootstrapStore,
   deterministicSecretSource,
 } from '../src/testing.mjs';
+import { assertVectorOutcome, assertVectorRejection, assertVectorThrow } from './vector-outcome.mjs';
 
 const provider = Object.freeze({
   schemaVersion: 'ogvcs.identity-policy/oidc-provider/v1',
@@ -51,13 +52,18 @@ function response(body, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 }
 
-function adapterFixture({ fetch: fetchImplementation, clock = () => 1_800_000_000 } = {}) {
+function adapterFixture({
+  fetch: fetchImplementation,
+  clock = () => 1_800_000_000,
+  networkTimeoutMilliseconds = undefined,
+} = {}) {
   return new OidcAuthenticationAdapter({
     provider,
     transactionStore: new MemoryAuthenticationTransactionStore(),
     secretSource: deterministicSecretSource('oidc-test'),
     fetch: fetchImplementation,
     clock,
+    networkTimeoutMilliseconds,
   });
 }
 
@@ -95,6 +101,7 @@ test('authorization code flow uses PKCE S256 and one-use state before issuing an
     }),
     ({ code }) => code === 'AUTHENTICATION_DENIED',
   );
+  assertVectorOutcome('oidc-pkce-code-success', 'session-issued', 'session-issued');
 });
 
 test('authorization code state replay is independently denied after completion', async () => {
@@ -110,7 +117,11 @@ test('authorization code state replay is independently denied after completion',
   const authorization = new URL(begun.authorizationUrl); expectedNonce = authorization.searchParams.get('nonce');
   const input = { handle: begun.handle, state: authorization.searchParams.get('state'), code: 'code.once' };
   await adapter.complete('authorization-code-pkce', input);
-  await assert.rejects(() => adapter.complete('authorization-code-pkce', input), ({ code }) => code === 'AUTHENTICATION_DENIED');
+  await assertVectorRejection(
+    'oidc-state-replay-denied',
+    () => adapter.complete('authorization-code-pkce', input),
+    'AUTHENTICATION_DENIED',
+  );
 });
 
 test('signed ID-token validation rejects signature, audience, nonce, and clock substitution', () => {
@@ -144,6 +155,13 @@ test('signed ID-token validation rejects signature, audience, nonce, and clock s
     idToken({ nonce, now, privateKey: p256.privateKey, alg: 'ES256', kid: 'p256' }),
     { provider: { ...provider, signingAlgorithms: ['ES256'] }, jwks: { keys: [p256Jwk] }, nonce, now },
   ).subject, 'external-user-123');
+  assertVectorOutcome('oidc-id-token-signature-invalid', 'AUTHENTICATION_DENIED', 'AUTHENTICATION_DENIED');
+  for (const invalidNow of [NaN, '1800000000', -1]) {
+    assert.throws(
+      () => verifyOidcIdToken(valid, { provider, jwks: { keys: [jwk] }, nonce, now: invalidNow }),
+      ({ code }) => code === 'INPUT_INVALID',
+    );
+  }
 });
 
 test('device flow retains pending and slow-down state without consuming the transaction', async () => {
@@ -167,7 +185,9 @@ test('device flow retains pending and slow-down state without consuming the tran
   clockState.now += 5;
   assert.deepEqual(await adapter.complete('device-code', { handle: begun.handle }), { status: 'pending', retryAfterSeconds: 5 });
   clockState.now += 5;
-  assert.deepEqual(await adapter.complete('device-code', { handle: begun.handle }), { status: 'pending', retryAfterSeconds: 10 });
+  const slowed = await adapter.complete('device-code', { handle: begun.handle });
+  assert.deepEqual(slowed, { status: 'pending', retryAfterSeconds: 10 });
+  assertVectorOutcome('device-flow-slow-down', slowed.status, 'pending');
 });
 
 test('OIDC outage fails closed and never invokes a local bootstrap path', async () => {
@@ -176,11 +196,12 @@ test('OIDC outage fails closed and never invokes a local bootstrap path', async 
   const broker = new IdentityProviderBroker([adapter]);
   const begun = await broker.begin('studio-oidc', 'authorization-code-pkce', {});
   const authorization = new URL(begun.authorizationUrl);
-  await assert.rejects(
-    broker.complete('studio-oidc', 'authorization-code-pkce', {
+  await assertVectorRejection(
+    'oidc-outage-no-local-fallback',
+    () => broker.complete('studio-oidc', 'authorization-code-pkce', {
       handle: begun.handle, state: authorization.searchParams.get('state'), code: 'code.once',
     }),
-    ({ code }) => code === 'AUTHENTICATION_DENIED',
+    'AUTHENTICATION_DENIED',
   );
   assert.equal(providerCalls, 1);
 });
@@ -194,7 +215,7 @@ test('bootstrap recovery rotates one-use material and local login disables only 
   const initialized = authority.initialize({ administratorSubject: 'admin.bootstrap', authorityEpoch: 1 });
   assert.equal(Object.hasOwn(initialized.state, 'recoveryDigest'), false);
   let recovered = authority.recover(initialized.recoveryCode, { mode: 'login' });
-  assert.throws(() => authority.disableLocalLogin(recovered.principal), ({ code }) => code === 'STATE_CONFLICT');
+  assertVectorThrow('bootstrap-disable-requires-recovery', () => authority.disableLocalLogin(recovered.principal), 'STATE_CONFLICT');
   const configured = authority.configureExternalRecovery(recovered.principal);
   const disabled = authority.disableLocalLogin(configured.principal);
   assert.equal(disabled.state.localLoginEnabled, false);
@@ -228,20 +249,31 @@ test('device provider outages release the claimed transaction for a bounded retr
   assert.deepEqual(await adapter.complete('device-code', { handle: begun.handle }), { status: 'pending', retryAfterSeconds: 5 });
 });
 
-test('OIDC response-body deadlines interrupt a stalled stream after headers', async () => {
+test('OIDC response-body deadlines interrupt stalled streams and fallback bodies after headers', async () => {
   const stalled = new Promise(() => {});
-  const adapter = adapterFixture({
-    fetch: async () => ({
-      status: 200, ok: true, url: provider.deviceAuthorizationEndpoint,
-      headers: { get: () => null },
+  const responses = [
+    {
       body: { getReader: () => ({ read: () => stalled, cancel: async () => {}, releaseLock() {} }) },
-    }),
-  });
-  let guard;
-  try {
-    await assert.rejects(Promise.race([
-      adapter.begin('device-code', {}, { signal: AbortSignal.timeout(1) }),
-      new Promise((resolvePromise, reject) => { guard = setTimeout(() => reject(new Error('OIDC deadline did not settle')), 500); }),
-    ]), ({ code }) => code === 'POLICY_UNAVAILABLE');
-  } finally { clearTimeout(guard); }
+    },
+    {
+      body: { getReader: () => ({ read: () => stalled, cancel() { throw new Error('cancel failure'); }, releaseLock() {} }) },
+    },
+    { body: null, arrayBuffer: () => stalled },
+  ];
+  for (const partial of responses) {
+    const adapter = adapterFixture({
+      networkTimeoutMilliseconds: 1,
+      fetch: async () => ({
+        status: 200, ok: true, url: provider.deviceAuthorizationEndpoint,
+        headers: { get: () => null }, ...partial,
+      }),
+    });
+    let guard;
+    try {
+      await assert.rejects(Promise.race([
+        adapter.begin('device-code', {}),
+        new Promise((resolvePromise, reject) => { guard = setTimeout(() => reject(new Error('OIDC deadline did not settle')), 500); }),
+      ]), ({ code }) => code === 'POLICY_UNAVAILABLE');
+    } finally { clearTimeout(guard); }
+  }
 });

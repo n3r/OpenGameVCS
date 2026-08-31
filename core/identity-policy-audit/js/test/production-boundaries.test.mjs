@@ -42,11 +42,11 @@ const executions = Object.freeze({
     name: 'policy mutation loses a generation race without appending an audit record',
   }),
   'transaction-credential-caller-epoch-ignored': Object.freeze({
-    expected: 'DENY_EPOCH_STALE', file: 'transaction-authorization.test.mjs',
+    expected: 'EPOCH_STALE', file: 'transaction-authorization.test.mjs',
     name: 'transaction credential evidence ignores caller epoch and rejects the authoritative mismatch',
   }),
   'transaction-view-resource-substitution': Object.freeze({
-    expected: 'DENY_NOT_AUTHORIZED', file: 'transaction-authorization.test.mjs',
+    expected: 'AUTHENTICATION_DENIED', file: 'transaction-authorization.test.mjs',
     name: 'transaction view rejects resource, transaction, policy-generation, and revocation substitution',
   }),
   'transaction-decision-commitment-same-tx': Object.freeze({
@@ -54,7 +54,7 @@ const executions = Object.freeze({
     name: 'decision commitment is exact, same-transaction, resource-bound, and single append',
   }),
   'trusted-checkpoint-request-substitution': Object.freeze({
-    expected: 'AUDIT_INTEGRITY', file: 'security-core.test.mjs',
+    expected: 'INPUT_INVALID', file: 'security-core.test.mjs',
     name: 'authorized audit reads reject a request-selected checkpoint even when it is well formed',
   }),
   'revocation-receipt-bounded': Object.freeze({
@@ -75,17 +75,24 @@ test('all production-boundary vectors dispatch through executable public regress
   assert.deepEqual(Object.keys(executions).sort(), document.cases.map(({ id }) => id).sort());
   for (const vector of document.cases) assert.equal(executions[vector.id].expected, vector.expected, vector.id);
 
-  const targets = new Map();
-  for (const execution of Object.values(executions)) targets.set(`${execution.file}\u0000${execution.name}`, execution);
   const childEnvironment = { ...process.env };
   delete childEnvironment.NODE_TEST_CONTEXT;
-  for (const execution of targets.values()) {
+  for (const vector of document.cases) {
+    const execution = executions[vector.id];
     const result = spawnSync(process.execPath, [
       '--test', `--test-name-pattern=^${regexEscape(execution.name)}$`, resolve(here, execution.file),
-    ], { encoding: 'utf8', timeout: 30_000, maxBuffer: 4 * 1024 * 1024, env: childEnvironment });
+    ], {
+      encoding: 'utf8', timeout: 30_000, maxBuffer: 4 * 1024 * 1024,
+      env: { ...childEnvironment, OGVCS_VECTOR_CASE: vector.id },
+    });
     assert.equal(result.error, undefined, `${execution.file}: ${result.error?.message ?? ''}`);
     assert.equal(result.signal, null, `${execution.file} terminated by ${result.signal}`);
     assert.equal(result.status, 0, `${execution.file}:\n${result.stdout}\n${result.stderr}`);
     assert.match(result.stdout, new RegExp(`(?:✔|ok \\d+ -) ${regexEscape(execution.name)}`, 'u'));
+    assert.match(
+      result.stdout,
+      new RegExp(`OGVCS_VECTOR_RESULT ${regexEscape(vector.id)} ${regexEscape(JSON.stringify(vector.expected))}`, 'u'),
+      `${vector.id} did not report its asserted public outcome`,
+    );
   }
 });
