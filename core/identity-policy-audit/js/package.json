@@ -27,7 +27,7 @@
     "@opengamevcs/path-filesystem": "1.1.0",
     "@opengamevcs/protocol-baseline": "1.0.0-rc.1",
     "@opengamevcs/protocol-contract-v1": "1.0.0-rc.1",
-    "@opengamevcs/repository-metadata-contract-v1": "0.1.0"
+    "@opengamevcs/repository-metadata-contract-v1": "0.2.0"
   },
   "engines": {
     "node": ">=22"

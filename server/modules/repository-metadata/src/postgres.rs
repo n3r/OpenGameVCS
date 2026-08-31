@@ -19,11 +19,11 @@ use uuid::Uuid;
 
 use crate::{
     AncestryRecord, AuthorizationContext, AuthorizationPort, AuthorizationResource, AuthorizedView,
-    CaseMode, CommitSequence, ConsistencyToken, CursorToken, DenyAllAuthorization, DomainError,
+    AllocationReceipt, CaseMode, CommitSequence, ConsistencyToken, CursorToken, DenyAllAuthorization, DomainError,
     DomainErrorCode, FileHistoryRecord, FileHistoryWrite, FileId, FileIdExpectedState,
-    FileIdImportReservation, FileIdOrigin, FileIdOwnerKind, FileIdReservation,
+    FileIdAllocation, FileIdImportReservation, FileIdOrigin, FileIdOwnerKind, FileIdReservation, NativeFileIdReservation,
     FileIdReservationOutcome, HistoryIncompleteReason, HistoryPage, IdempotencyReservation,
-    IdempotencyReservationOutcome, MetadataObjectRecord, MetadataPermission, MetadataStore,
+    IdempotencyReservationOutcome, IdempotencyStatus, MetadataObjectRecord, MetadataPermission, MetadataStore,
     MetadataTransaction, ObjectPutOutcome, ObjectRef, ObjectValidationPort, ObjectWrite,
     OutboxClaimRequest, OutboxEvent, OutboxEventRecord, OutboxLeaseAction, OutboxLeaseRecord,
     OutboxReleaseRequest, Page, PageRequest, PageState, ProductionObjectValidator,
@@ -96,6 +96,85 @@ impl<A, V> PostgresMetadataStore<A, V> {
 }
 
 impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> {
+    /// Allocates a random FileID together with a one-use receipt. The receipt
+    /// is scope- and repository-bound in the database; it is not a bearer
+    /// authorization credential and cannot be replayed by a different actor.
+    pub fn allocate_file_id(
+        &mut self,
+        context: &AuthorizationContext,
+        repository_id: RepositoryId,
+    ) -> Result<FileIdAllocation> {
+        let capability = TransactionCapability::ReserveFileId;
+        let resource = AuthorizationResource::RepositoryTransaction { repository_id, capability };
+        let view = self.authorize_exact(context, MetadataPermission::Submit, &resource)?;
+        crate::verify_schema_compatibility(&mut self.client)?;
+        self.require_repository_tenant(context, repository_id)?;
+        let scope = metadata_scope_digest(context, repository_id, capability);
+        let mut transaction = self.client.transaction().map_err(database_error)?;
+        for _ in 0..32 {
+            let mut file_id_bytes = [0_u8; 16];
+            getrandom::getrandom(&mut file_id_bytes).map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            let file_id = match FileId::new(file_id_bytes) { Ok(value) => value, Err(_) => continue };
+            let mut receipt_bytes = [0_u8; 32];
+            getrandom::getrandom(&mut receipt_bytes).map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            let receipt = AllocationReceipt::from_opaque(format!("far1.{}", URL_SAFE_NO_PAD.encode(receipt_bytes)))
+                .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            let digest = Sha256::digest(receipt.as_str().as_bytes());
+            let row = transaction.query_opt(
+                "INSERT INTO ogvcs_metadata.file_id_allocation_receipts
+                 (receipt_digest, authenticated_scope_digest, repository_id, file_id, expires_at)
+                 VALUES ($1, $2, $3, $4, clock_timestamp() + interval '10 minutes')
+                 ON CONFLICT DO NOTHING RETURNING expires_at",
+                &[&&digest[..], &&scope[..], &uuid(repository_id), &&file_id.as_bytes()[..]],
+            ).map_err(database_error)?;
+            if let Some(row) = row {
+                if !view.permits(context, MetadataPermission::Submit, &resource) {
+                    transaction.rollback().map_err(database_error)?;
+                    return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
+                }
+                let expires_at: SystemTime = row.get(0);
+                transaction.commit().map_err(database_error)?;
+                return Ok(FileIdAllocation { repository_id, file_id, allocation_receipt: receipt, expires_at });
+            }
+        }
+        transaction.rollback().map_err(database_error)?;
+        Err(DomainError::new(DomainErrorCode::FileIdConflict))
+    }
+
+    /// Looks up idempotency state only in the exact authenticated scope that
+    /// would execute the named capability. This prevents cross-principal and
+    /// cross-epoch replay disclosure.
+    pub fn idempotency_status(
+        &mut self, context: &AuthorizationContext, repository_id: RepositoryId,
+        capability: TransactionCapability, operation: &str, key: &str,
+    ) -> Result<IdempotencyStatus> {
+        if operation.is_empty() || operation.len() > 128 || key.is_empty() || key.len() > 512 {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        let resource = AuthorizationResource::RepositoryTransaction { repository_id, capability };
+        let view = self.authorize_exact(context, MetadataPermission::Submit, &resource)?;
+        crate::verify_schema_compatibility(&mut self.client)?;
+        self.require_repository_tenant(context, repository_id)?;
+        let scope = metadata_scope_digest(context, repository_id, capability);
+        let row = self.client.query_opt(
+            "SELECT state, expires_at, safe_result FROM ogvcs_metadata.idempotency_records
+             WHERE authenticated_scope_digest = $1 AND operation = $2 AND idempotency_key = $3
+               AND expires_at > clock_timestamp()",
+            &[&&scope[..], &operation, &key],
+        ).map_err(database_error)?;
+        if !view.permits(context, MetadataPermission::Submit, &resource) {
+            return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
+        }
+        let Some(row) = row else { return Ok(IdempotencyStatus::Absent); };
+        let state: String = row.get(0);
+        let expires_at: SystemTime = row.get(1);
+        match state.as_str() {
+            "reserved" => Ok(IdempotencyStatus::Reserved { expires_at }),
+            "committed" => { let Json(safe_result): Json<Value> = row.get(2); Ok(IdempotencyStatus::Committed { expires_at, safe_result }) }
+            _ => Err(DomainError::new(DomainErrorCode::ObjectInvalid)),
+        }
+    }
+
     fn authorize_exact(
         &self,
         context: &AuthorizationContext,
@@ -2289,14 +2368,22 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
     }
 
     fn idempotency_scope_digest(&self) -> [u8; 32] {
-        let mut hash = Sha256::new();
-        hash.update(b"OpenGameVCS metadata idempotency scope\0");
-        hash.update(self.authorization_context.subject_digest);
-        hash.update(self.authorization_context.tenant_id.as_bytes());
-        hash.update(self.authorization_context.authorization_epoch.to_be_bytes());
-        hash.update(self.authorized_repository_id.as_bytes());
-        hash.update(self.capability.as_str().as_bytes());
-        hash.finalize().into()
+        metadata_scope_digest(&self.authorization_context, self.authorized_repository_id, self.capability)
+    }
+
+    fn consume_allocation_receipt(&mut self, receipt: &AllocationReceipt, file_id: FileId) -> Result<()> {
+        let digest = Sha256::digest(receipt.as_str().as_bytes());
+        let scope = self.idempotency_scope_digest();
+        let consumed = self.transaction()?.query_opt(
+            "UPDATE ogvcs_metadata.file_id_allocation_receipts
+             SET consumed_at = clock_timestamp()
+             WHERE receipt_digest = $1 AND authenticated_scope_digest = $2
+               AND repository_id = $3 AND file_id = $4
+               AND consumed_at IS NULL AND expires_at > clock_timestamp()
+             RETURNING 1",
+            &[&&digest[..], &&scope[..], &uuid(self.authorized_repository_id), &&file_id.as_bytes()[..]],
+        ).map_err(database_error)?.is_some();
+        if consumed { Ok(()) } else { Err(DomainError::new(DomainErrorCode::FileIdConflict)) }
     }
 
     fn validate_object_settings(&mut self, write: &ObjectWrite<'_>) -> Result<()> {
@@ -3253,6 +3340,22 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
                 TransactionCapability::Publish,
             ])?;
             self.reserve_file_id_inner(reservation, false)
+        })
+    }
+
+    fn register_allocated_file_id(&mut self, request: NativeFileIdReservation) -> Result<()> {
+        poison_transaction_on_error!(self, {
+            self.require_capability(&[
+                TransactionCapability::ReserveFileId,
+                TransactionCapability::Publish,
+            ])?;
+            if !request.is_valid() {
+                return Err(DomainError::new(DomainErrorCode::FileIdConflict));
+            }
+            self.require_repository(request.reservation.repository_id)?;
+            self.require_pending_idempotency()?;
+            self.consume_allocation_receipt(&request.allocation_receipt, request.reservation.file_id)?;
+            self.reserve_file_id_inner(request.reservation, false)
         })
     }
 
@@ -5109,6 +5212,21 @@ fn json_size(value: &Value) -> Option<usize> {
 
 fn valid_public_uuid(bytes: &[u8; 16]) -> bool {
     matches!(bytes[6] >> 4, 1..=8) && bytes[8] & 0xc0 == 0x80
+}
+
+fn metadata_scope_digest(
+    context: &AuthorizationContext,
+    repository_id: RepositoryId,
+    capability: TransactionCapability,
+) -> [u8; 32] {
+    let mut hash = Sha256::new();
+    hash.update(b"OpenGameVCS metadata idempotency scope\0");
+    hash.update(context.subject_digest);
+    hash.update(context.tenant_id.as_bytes());
+    hash.update(context.authorization_epoch.to_be_bytes());
+    hash.update(repository_id.as_bytes());
+    hash.update(capability.as_str().as_bytes());
+    hash.finalize().into()
 }
 
 fn file_id_origin(origin: FileIdOrigin) -> &'static str {

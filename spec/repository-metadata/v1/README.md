@@ -1,6 +1,6 @@
 # OpenGameVCS repository metadata contract v1
 
-This MIT-licensed candidate contract is the language-neutral OGVCS-006 domain
+This MIT-licensed `0.2.0` candidate contract is the language-neutral OGVCS-006 domain
 authority for repository settings, immutable metadata, reference CAS, bounded
 tree/history traversal, FileID lifetime state, idempotency status, consistency
 tokens, and transactional outbox consumption.
@@ -8,7 +8,9 @@ tokens, and transactional outbox consumption.
 It is intentionally separate from the frozen OGVCS-041 R0 protocol authority.
 The operation and error registries define module/domain behavior; they do not
 add `ProblemDetails` codes or public routes to R0. A later protocol release must
-bind this contract before public metadata routes are enabled.
+bind routes, status codes, and media types before public metadata routes are
+enabled. `MetadataHttpResponse` is only the framework-neutral JSON/stream result
+carrier for that future adapter; it does not make those assignments.
 
 Generated JSON is canonical and authenticated by `manifest.json`:
 
@@ -22,3 +24,15 @@ The object put/get operations describe a bounded canonical metadata byte stream.
 They do not base64-expand a possible 512 MiB format object into an R0 JSON control
 envelope. The eventual public carrier is a separately negotiated protocol
 decision.
+
+`file-id.allocate` returns a server-owned opaque `far1` receipt bound to the
+authorized repository and authenticated scope. Native `create` and `copy`
+registration must present that receipt; the FileID alone is never a bearer
+credential. Restore continues to carry `null` in that field and remains subject
+to its separate lifetime proof authority.
+
+Idempotency status and all outbox mutation keys are resolved only inside the
+authenticated-scope digest supplied by the authorization decision. That digest
+is intentionally absent from every request and response schema. A caller cannot
+choose a scope, move a key between scopes, or learn the digest through the
+metadata carrier.

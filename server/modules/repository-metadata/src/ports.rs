@@ -1,7 +1,7 @@
 use crate::{
     AuthorizationContext, AuthorizationResource, CommitSequence, ConsistencyToken,
     FileHistoryWrite, FileIdExpectedState, FileIdImportReservation, FileIdReservation,
-    FileIdReservationOutcome, IdempotencyReservation, IdempotencyReservationOutcome,
+    FileIdReservationOutcome, IdempotencyReservation, IdempotencyReservationOutcome, NativeFileIdReservation,
     MetadataPermission, ObjectPutOutcome, ObjectRef, ObjectWrite, OutboxEvent, ReferenceCasRequest,
     ReferenceCasResult, RepositoryCreate, RepositoryId, Result, SnapshotWrite,
     TransactionCapability, TransactionOptions, TreeEntryWrite,
@@ -159,6 +159,9 @@ pub trait MetadataTransaction {
     /// Reserves a native create/copy lifetime. Restore requires the future
     /// proof-bound OGVCS-002/010 API and import uses `reserve_imported_file_id`.
     fn reserve_file_id(&mut self, reservation: FileIdReservation) -> Result<()>;
+    /// Consumes an authenticated `file-id.allocate` receipt and registers its
+    /// exact FileID. Create/copy callers must use this method.
+    fn register_allocated_file_id(&mut self, reservation: NativeFileIdReservation) -> Result<()>;
     fn reserve_imported_file_id(
         &mut self,
         reservation: FileIdImportReservation,

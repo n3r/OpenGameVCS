@@ -1,6 +1,7 @@
 use ogvcs_object_model::{FileId, ObjectRef};
+use serde::Serialize;
 use serde_json::Value;
-use std::time::SystemTime;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 macro_rules! opaque_id {
     ($name:ident) => {
@@ -148,6 +149,51 @@ pub struct FileIdReservation {
     pub origin: FileIdOrigin,
     pub owner_kind: FileIdOwnerKind,
     pub owner_id: String,
+}
+
+/// Opaque, one-use evidence returned by `file-id.allocate`.  It is never a
+/// FileID-derived value and can only be consumed inside the metadata boundary.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AllocationReceipt(String);
+
+impl AllocationReceipt {
+    pub fn from_opaque(value: String) -> Option<Self> {
+        let payload = value.strip_prefix("far1.")?;
+        (payload.len() == 43
+            && payload.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-'))
+            .then_some(Self(value))
+    }
+
+    pub fn as_str(&self) -> &str { &self.0 }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NativeFileIdReservation {
+    pub reservation: FileIdReservation,
+    pub allocation_receipt: AllocationReceipt,
+}
+
+impl NativeFileIdReservation {
+    pub fn is_valid(&self) -> bool {
+        matches!(self.reservation.origin, FileIdOrigin::Create | FileIdOrigin::Copy)
+            && !self.reservation.owner_id.is_empty()
+            && self.reservation.owner_id.len() <= 256
+            && !self.reservation.owner_id.contains('\0')
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FileIdAllocation {
+    pub repository_id: RepositoryId,
+    pub file_id: FileId,
+    pub allocation_receipt: AllocationReceipt,
+    pub expires_at: SystemTime,
+}
+
+impl FileIdAllocation {
+    pub fn expires_at_unix_ms(&self) -> Option<u64> {
+        self.expires_at.duration_since(UNIX_EPOCH).ok().and_then(|value| u64::try_from(value.as_millis()).ok())
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -639,6 +685,38 @@ pub enum IdempotencyReservationOutcome {
     Reserved,
     CommittedReplay(Value),
     KeyReuseRejected,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum IdempotencyStatus {
+    Absent,
+    Reserved { expires_at: SystemTime },
+    Committed { expires_at: SystemTime, safe_result: Value },
+}
+
+/// Framework-neutral response envelope.  OGVCS-041 owns routes, media types,
+/// and transport status codes; this contract intentionally binds none of them.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MetadataHttpResponse {
+    pub schema_version: &'static str,
+    pub operation: &'static str,
+    pub outcome: &'static str,
+    pub carrier: &'static str,
+    pub body: Value,
+}
+
+impl MetadataHttpResponse {
+    pub fn page<T: Serialize>(operation: &'static str, page: Page<T>, consistency: &ConsistencyToken) -> crate::Result<Self> {
+        let items = serde_json::to_value(page.items)
+            .map_err(|_| crate::DomainError::new(crate::DomainErrorCode::ObjectInvalid))?;
+        Ok(Self { schema_version: "ogvcs.repository-metadata/http-response/v1", operation,
+            outcome: "success", carrier: "page-result", body: serde_json::json!({
+                "schemaVersion": "ogvcs.repository-metadata/page-result/v1",
+                "operation": operation, "state": if page.next_cursor.is_some() { "more" } else { "complete" },
+                "items": items, "nextCursor": page.next_cursor.map(|value| value.as_str().to_owned()),
+                "incompleteReason": Value::Null, "consistencyToken": consistency.as_str(),
+            }) })
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

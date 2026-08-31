@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 const defaultRoot = dirname(fileURLToPath(import.meta.url));
 const profileRefPattern = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+\/[a-z][a-z0-9]*(?:-[a-z0-9]+)*@[1-9][0-9]{0,9}$/u;
+const allocationReceiptPattern = /^far1\.[A-Za-z0-9_-]{43}$/u;
 
 function digest(bytes) { return createHash('sha256').update(bytes).digest('hex'); }
 function assert(condition, message) { if (!condition) throw new Error(message); }
@@ -50,6 +51,13 @@ export async function validateMetadataOperationSemantics(operation, body, root =
   }
   if (Object.hasOwn(body, 'path')) validatePath(body.path);
   if (Object.hasOwn(body, 'prefix')) validatePath(body.prefix);
+  if (operation === 'file-id.register') {
+    if (body.origin === 'create' || body.origin === 'copy') {
+      assert(typeof body.allocationReceipt === 'string' && allocationReceiptPattern.test(body.allocationReceipt), 'native FileID registration lacks an allocation receipt');
+    } else if (body.origin === 'restore') {
+      assert(body.allocationReceipt === null, 'restore cannot counterfeit a native allocation receipt');
+    }
+  }
   return true;
 }
 
@@ -57,6 +65,7 @@ export async function validateRepositoryMetadataContract(root = defaultRoot) {
   const manifestBytes = await readFile(resolve(root, 'manifest.json'));
   const manifest = JSON.parse(manifestBytes);
   assert(manifest.schemaVersion === 'ogvcs.repository-metadata/contract-manifest/v1', 'manifest schema is invalid');
+  assert(manifest.contractVersion === '0.2.0', 'candidate contract version is invalid');
   assert(manifest.protocolBinding === 'unassigned-future-release-required', 'contract must not claim an R0 protocol binding');
 
   for (const artifact of manifest.artifacts) {
@@ -115,6 +124,28 @@ export async function validateRepositoryMetadataContract(root = defaultRoot) {
   }
   assert(!Object.hasOwn(requestFor('consistency.issue-token').properties, 'minimumCommitSequence'), 'public token issue request exposes a commit sequence');
   assert(requestFor('tree.page').properties.cursor.anyOf[1].pattern.startsWith('^cur1'), 'tree cursor accepts a non-cursor token class');
+  const registerVariants = requestFor('file-id.register').oneOf;
+  assert(registerVariants?.length === 2, 'FileID registration is not split by native/restore proof class');
+  const nativeRegistration = registerVariants.find((variant) => variant.properties.origin.enum);
+  const restoreRegistration = registerVariants.find((variant) => variant.properties.origin.const === 'restore');
+  assert(nativeRegistration.properties.origin.enum.join(',') === 'create,copy', 'native FileID origins differ');
+  assert(nativeRegistration.required.includes('allocationReceipt') && nativeRegistration.properties.allocationReceipt.pattern.startsWith('^far1'), 'native FileID registration lacks the opaque allocation receipt');
+  assert(restoreRegistration.required.includes('allocationReceipt') && restoreRegistration.properties.allocationReceipt.type === 'null', 'restore can counterfeit the native allocation receipt');
+  for (const operation of ['idempotency.status', 'outbox.claim', 'outbox.acknowledge', 'outbox.release']) {
+    assert(!JSON.stringify(requestFor(operation)).includes('authenticatedScopeDigest'), `public request exposes authority scope: ${operation}`);
+  }
+
+  const allocationSchema = JSON.parse(await readFile(resolve(root, 'schemas/FileIdAllocation.schema.json')));
+  assert(allocationSchema.required.includes('allocationReceipt') && allocationSchema.properties.allocationReceipt.pattern.startsWith('^far1'), 'allocation result lacks an opaque receipt');
+  assert(!Object.hasOwn(allocationSchema.properties, 'authenticatedScopeDigest'), 'allocation result exposes authority scope');
+  const statusSchema = JSON.parse(await readFile(resolve(root, 'schemas/IdempotencyStatus.schema.json')));
+  assert(statusSchema.oneOf?.length === 3 && !JSON.stringify(statusSchema).includes('authenticatedScopeDigest'), 'idempotency status is not scope-opaque');
+  const pageSchema = JSON.parse(await readFile(resolve(root, 'schemas/PageResult.schema.json')));
+  assert(pageSchema.required.includes('operation') && pageSchema.required.includes('consistencyToken'), 'PageResult lacks its public operation/consistency carrier');
+  const responseSchema = JSON.parse(await readFile(resolve(root, 'schemas/MetadataHttpResponse.schema.json')));
+  assert(responseSchema.oneOf?.length === 6, 'public response carrier branches differ');
+  assert(responseSchema.oneOf.some((variant) => variant.properties.carrier?.const === 'page-result' && variant.properties.body?.$ref === 'PageResult.schema.json'), 'public response does not carry PageResult');
+  assert(!['path', 'method', 'status', 'mediaType'].some((field) => JSON.stringify(responseSchema).includes(`\"${field}\"`)), 'candidate response carrier claimed an unassigned protocol binding');
   const covered = new Set(vectors.flatMap(({ requirementIds }) => requirementIds));
   for (const [family, count] of [['FR', 9], ['NFR', 3], ['AC', 6]]) {
     for (let index = 1; index <= count; index += 1) {

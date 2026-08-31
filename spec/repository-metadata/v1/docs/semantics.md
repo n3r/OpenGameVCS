@@ -17,6 +17,13 @@ Consistency and cursor tokens are opaque handles. Server-owned state binds all
 scope, position, issue/expiry, repository generation, and authorization fields.
 The token text never carries those facts.
 
+The framework-neutral `MetadataHttpResponse` envelope discriminates JSON,
+`PageResult`, canonical metadata byte-stream, and domain-error bodies. It is the
+public service result carrier but assigns no route, HTTP status, or media type;
+those remain owned by a future OGVCS-041 release. Every `PageResult` identifies
+the operation and carries an opaque consistency token. Internal persistence
+pages are not wire results until the service layer has issued that token.
+
 Domain errors are stable module results. They are not OGVCS-041 R0
 `ProblemDetails` assignments. Transport parsing, authorization, cursor, and
 semantic-idempotency errors continue to use the frozen R0 authorities where
@@ -26,9 +33,23 @@ Object byte streams remain staged and untrusted until complete canonical/identit
 validation and transaction commit. Exact duplicate bytes are idempotent. A
 different byte sequence under the same ObjectID is a security/corruption result.
 
-`file-id.register` retains the `restore` origin assignment, but this version has
-no public proof carrier that can authorize reactivation of an existing lifetime.
-The PostgreSQL domain adapter therefore rejects generic restore reservation for
-both unused and tombstoned FileIDs. Legitimate restore remains unavailable until
-OGVCS-002/OGVCS-010 define and bind the allocation proof; import must use the
-mapping-bound import operation.
+`file-id.allocate` creates a fresh repository-lifetime identity and returns an
+opaque allocation receipt. Server state binds the receipt digest to the exact
+FileID, repository, authenticated-scope digest, issue/expiry time, and one-time
+claim state. Native `create`/`copy` registration requires and atomically consumes
+that receipt; neither a bare FileID nor a receipt from another authenticated
+scope can claim the allocation.
+
+`file-id.register` retains the `restore` origin assignment, but native allocation
+receipts cannot authorize restoration of an existing lifetime. Restore carries a
+null allocation receipt and remains unavailable until OGVCS-002/OGVCS-010 define
+its separate original-lifetime proof. Import must use the mapping-bound import
+operation.
+
+Idempotency lookup is keyed by the authorization authority's authenticated-scope
+digest plus repository scope (or tenant outbox scope), operation, and opaque key.
+The digest is never caller input. `idempotency.status` returns only the record in
+the current authorized scope; another scope observes `absent`. Outbox claim,
+acknowledgement, and release perform their mutation and idempotency record update
+in one PostgreSQL transaction, so a committed replay returns the original safe
+result without repeating the lease transition.

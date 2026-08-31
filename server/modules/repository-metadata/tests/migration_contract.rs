@@ -18,7 +18,7 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
     );
     assert_eq!(manifest["database"], "postgresql-15-or-newer");
     let entries = manifest["entries"].as_array().unwrap();
-    assert_eq!(entries.len(), 15);
+    assert_eq!(entries.len(), 18);
     let expected = [
         (1, "expand"),
         (1, "migrate"),
@@ -35,6 +35,9 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
         (5, "expand"),
         (5, "migrate"),
         (5, "contract"),
+        (6, "expand"),
+        (6, "migrate"),
+        (6, "contract"),
     ];
     for (entry, (version, phase)) in entries.iter().zip(expected) {
         assert_eq!(entry["version"], version);
@@ -53,6 +56,7 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
     assert_eq!(entries[8]["requiresCompatibilityFence"], true);
     assert_eq!(entries[11]["requiresCompatibilityFence"], true);
     assert_eq!(entries[14]["requiresCompatibilityFence"], true);
+    assert_eq!(entries[17]["requiresCompatibilityFence"], true);
 }
 
 #[test]
@@ -141,6 +145,15 @@ fn version_three_adds_complete_outbox_delivery_state() {
     }
     assert!(contract.contains("DROP INDEX ogvcs_metadata.outbox_events_available"));
     assert!(contract.contains("RENAME TO outbox_events_available"));
+}
+
+#[test]
+fn version_six_adds_one_use_scope_bound_file_id_receipts() {
+    let expand = fs::read_to_string(migration_root().join("000006_expand.sql")).unwrap();
+    assert!(expand.contains("CREATE TABLE ogvcs_metadata.file_id_allocation_receipts"));
+    assert!(expand.contains("authenticated_scope_digest bytea NOT NULL"));
+    assert!(expand.contains("consumed_at timestamptz NULL"));
+    assert!(expand.contains("UNIQUE (repository_id, file_id)"));
 }
 
 #[test]

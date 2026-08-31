@@ -14,6 +14,9 @@ test('generated metadata contract authenticates and covers every OGVCS-006 requi
   assert.equal(result.operations, 22);
   assert.equal(result.errors, 11);
   assert.equal(result.vectors, 10);
+  const manifest = JSON.parse(await readFile(join(root, 'manifest.json')));
+  assert.equal(manifest.contractVersion, '0.2.0');
+  assert.equal(manifest.counts.schemas, 8);
 });
 
 test('contract validation rejects a generated registry tamper', async (t) => {
@@ -47,5 +50,20 @@ test('semantic validation enforces profile family, sorted features, and UTF-8 pa
   await assert.rejects(
     () => validateMetadataOperationSemantics('history.path-page', { path: ['界'.repeat(86)] }, root),
     /segment UTF-8 bytes/u,
+  );
+  await validateMetadataOperationSemantics('file-id.register', {
+    origin: 'create',
+    allocationReceipt: `far1.${'A'.repeat(43)}`,
+  }, root);
+  await assert.rejects(
+    () => validateMetadataOperationSemantics('file-id.register', { origin: 'copy' }, root),
+    /lacks an allocation receipt/u,
+  );
+  await assert.rejects(
+    () => validateMetadataOperationSemantics('file-id.register', {
+      origin: 'restore',
+      allocationReceipt: `far1.${'A'.repeat(43)}`,
+    }, root),
+    /cannot counterfeit/u,
   );
 });
