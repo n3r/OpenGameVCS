@@ -18,13 +18,14 @@ use ogvcs_repository_metadata::{
     RepositoryId, TenantId, TransactionCapability, TransactionCredentialRequest,
     TransactionOptions, MIGRATIONS,
 };
-use postgres::{types::Json, Client, NoTls};
+use postgres::{types::Json, Client, GenericClient, NoTls};
 use serde::Serialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 const PRESENTATION_A: &str = "credential-presentation-a";
+const PRESENTATION_A_V2: &str = "credential-presentation-a-v2";
 const PRESENTATION_B: &str = "credential-presentation-b";
 
 #[test]
@@ -647,10 +648,26 @@ fn identity_bound_metadata_is_scope_receipt_and_commitment_atomic() {
     drop(client);
 
     promote_subject_a_authority(&database_url, &tenant, &repository);
+    assert_eq!(
+        store
+            .allocate_file_id_identity_authorized(
+                credentials(
+                    PRESENTATION_A,
+                    "request.allocate.stale-epoch-one",
+                    "correlation.allocate.stale-epoch-one",
+                ),
+                tenant_id,
+                repository_id,
+                epoch_scope_key.clone(),
+            )
+            .unwrap_err()
+            .code,
+        DomainErrorCode::MetadataNotFoundOrDenied,
+    );
     let post_epoch_scope = store
         .allocate_file_id_identity_authorized(
             credentials(
-                PRESENTATION_A,
+                PRESENTATION_A_V2,
                 "request.allocate.epoch-two",
                 "correlation.allocate.epoch-two",
             ),
@@ -668,7 +685,7 @@ fn identity_bound_metadata_is_scope_receipt_and_commitment_atomic() {
     let mut cross_epoch = store
         .begin_identity_authorized(
             credentials(
-                PRESENTATION_A,
+                PRESENTATION_A_V2,
                 "request.cross-epoch",
                 "correlation.cross-epoch",
             ),
@@ -697,7 +714,7 @@ fn identity_bound_metadata_is_scope_receipt_and_commitment_atomic() {
     let mut post_epoch_register = store
         .begin_identity_authorized(
             credentials(
-                PRESENTATION_A,
+                PRESENTATION_A_V2,
                 "request.register.epoch-two",
                 "correlation.register.epoch-two",
             ),
@@ -731,7 +748,7 @@ fn identity_bound_metadata_is_scope_receipt_and_commitment_atomic() {
     let mut exact_replay = store
         .begin_identity_authorized(
             credentials(
-                PRESENTATION_A,
+                PRESENTATION_A_V2,
                 "request.replay.epoch-two",
                 "correlation.replay.epoch-two",
             ),
@@ -778,7 +795,7 @@ fn identity_bound_metadata_is_scope_receipt_and_commitment_atomic() {
         store
             .allocate_file_id_identity_authorized(
                 credentials(
-                    PRESENTATION_A,
+                    PRESENTATION_A_V2,
                     "request.allocation.policy-narrowed",
                     "correlation.allocation.policy-narrowed",
                 ),
@@ -966,7 +983,7 @@ fn prove_replay_rollback_failure_hides_result(
     let mut replay = replay_store
         .begin_identity_authorized(
             credentials(
-                PRESENTATION_A,
+                PRESENTATION_A_V2,
                 "request.replay.rollback-failure",
                 "correlation.replay.rollback-failure",
             ),
@@ -1229,7 +1246,7 @@ fn assert_replay_denied(
     let correlation_id = format!("correlation.replay-denied.{label}");
     let mut replay = store
         .begin_identity_authorized(
-            credentials(PRESENTATION_A, &request_id, &correlation_id),
+            credentials(PRESENTATION_A_V2, &request_id, &correlation_id),
             tenant_id,
             TransactionCapability::ReserveFileId,
             repository_id,
@@ -1597,13 +1614,6 @@ fn promote_subject_a_authority(database_url: &str, tenant: &str, repository: &st
         .unwrap();
     transaction
         .execute(
-            "UPDATE ogvcs_identity.credentials SET authority_epoch = 2
-             WHERE tenant_id = $1 AND credential_id = 'credential.a'",
-            &[&tenant],
-        )
-        .unwrap();
-    transaction
-        .execute(
             "INSERT INTO ogvcs_identity.policy_versions
              (tenant_id, repository_id, policy_generation, authority_epoch, policy_id,
               policy_version, path_profile, case_mode, policy_json, policy_digest)
@@ -1628,6 +1638,23 @@ fn promote_subject_a_authority(database_url: &str, tenant: &str, repository: &st
             &[&tenant, &repository],
         )
         .unwrap();
+    seed_credential(
+        &mut transaction,
+        tenant,
+        repository,
+        CredentialFixture {
+            credential_id: "credential.a",
+            credential_generation: 2,
+            subject_id: "subject.a",
+            presentation: PRESENTATION_A_V2,
+            authority_epoch: 2,
+            permissions: vec![
+                "discover".to_owned(),
+                "metadata.read".to_owned(),
+                "submit".to_owned(),
+            ],
+        },
+    );
     transaction.commit().unwrap();
 }
 
@@ -1764,49 +1791,68 @@ fn prepare_database(database_url: &str, tenant_id: TenantId, repository_id: Repo
         &mut client,
         &tenant,
         &repository,
-        "credential.a",
-        "subject.a",
-        PRESENTATION_A,
-        vec![
-            "discover".to_owned(),
-            "metadata.read".to_owned(),
-            "submit".to_owned(),
-        ],
+        CredentialFixture {
+            credential_id: "credential.a",
+            credential_generation: 1,
+            subject_id: "subject.a",
+            presentation: PRESENTATION_A,
+            authority_epoch: 1,
+            permissions: vec![
+                "discover".to_owned(),
+                "metadata.read".to_owned(),
+                "submit".to_owned(),
+            ],
+        },
     );
     seed_credential(
         &mut client,
         &tenant,
         &repository,
-        "credential.b",
-        "subject.b",
-        PRESENTATION_B,
-        vec![
-            "discover".to_owned(),
-            "metadata.read".to_owned(),
-            "submit".to_owned(),
-        ],
+        CredentialFixture {
+            credential_id: "credential.b",
+            credential_generation: 1,
+            subject_id: "subject.b",
+            presentation: PRESENTATION_B,
+            authority_epoch: 1,
+            permissions: vec![
+                "discover".to_owned(),
+                "metadata.read".to_owned(),
+                "submit".to_owned(),
+            ],
+        },
     );
 }
 
+struct CredentialFixture<'a> {
+    credential_id: &'a str,
+    credential_generation: i64,
+    subject_id: &'a str,
+    presentation: &'a str,
+    authority_epoch: i64,
+    permissions: Vec<String>,
+}
+
 fn seed_credential(
-    client: &mut Client,
+    client: &mut impl GenericClient,
     tenant: &str,
     repository: &str,
-    credential_id: &str,
-    subject_id: &str,
-    presentation: &str,
-    permissions: Vec<String>,
+    fixture: CredentialFixture<'_>,
 ) {
     let scope = CredentialScope {
         tenants: vec![tenant.to_owned()],
         repositories: vec![repository.to_owned()],
         references: Vec::new(),
         path_prefixes: Vec::new(),
-        permissions,
+        permissions: fixture.permissions,
     };
-    let presentation_digest =
-        digest_parts(&[b"OGVCS-IDENTITY-CREDENTIAL-V1\0", presentation.as_bytes()]);
-    let subject_digest = digest_parts(&[b"OGVCS-IDENTITY-SUBJECT-V1\0", subject_id.as_bytes()]);
+    let presentation_digest = digest_parts(&[
+        b"OGVCS-IDENTITY-CREDENTIAL-V1\0",
+        fixture.presentation.as_bytes(),
+    ]);
+    let subject_digest = digest_parts(&[
+        b"OGVCS-IDENTITY-SUBJECT-V1\0",
+        fixture.subject_id.as_bytes(),
+    ]);
     let scope_digest = digest_json(&scope);
     client
         .execute(
@@ -1814,15 +1860,17 @@ fn seed_credential(
              (tenant_id, credential_id, credential_generation, presentation_digest, subject_id,
               subject_digest, actor_class, credential_class, groups_json, authority_epoch,
               issued_at, expires_at, state, scope_json, scope_digest)
-             VALUES ($1, $2, 1, $3, $4, $5, 'service', 'service-token', '[]'::jsonb, 1,
+             VALUES ($1, $2, $3, $4, $5, $6, 'service', 'service-token', '[]'::jsonb, $7,
                      clock_timestamp() - interval '1 minute',
-                     clock_timestamp() + interval '30 minutes', 'active', $6, $7)",
+                     clock_timestamp() + interval '30 minutes', 'active', $8, $9)",
             &[
                 &tenant,
-                &credential_id,
+                &fixture.credential_id,
+                &fixture.credential_generation,
                 &&presentation_digest[..],
-                &subject_id,
+                &fixture.subject_id,
                 &&subject_digest[..],
+                &fixture.authority_epoch,
                 &Json(&scope),
                 &&scope_digest[..],
             ],
