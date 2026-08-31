@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/chunking-manifest-bounded.yml'
+      - '.github/workflows/chunking-manifest-scale.yml'
       - 'package.json'
       - 'package-lock.json'
       - 'core/chunking-manifest/**'
@@ -13,11 +14,14 @@ on:
       - 'spec/benchmark-fault/v1/**'
       - 'spec/chunking-manifest/v1/**'
       - 'tools/chunking-selection-*'
+      - 'tools/chunking-scale-*'
+      - 'tools/compare-chunking-scale*'
       - 'docs/evidence/OGVCS-007/**'
   push:
     branches: [main]
     paths:
       - '.github/workflows/chunking-manifest-bounded.yml'
+      - '.github/workflows/chunking-manifest-scale.yml'
       - 'package.json'
       - 'package-lock.json'
       - 'core/chunking-manifest/**'
@@ -27,6 +31,8 @@ on:
       - 'spec/benchmark-fault/v1/**'
       - 'spec/chunking-manifest/v1/**'
       - 'tools/chunking-selection-*'
+      - 'tools/chunking-scale-*'
+      - 'tools/compare-chunking-scale*'
       - 'docs/evidence/OGVCS-007/**'
   workflow_dispatch:
 

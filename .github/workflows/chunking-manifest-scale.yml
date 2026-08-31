@@ -1,0 +1,114 @@
+name: Chunking manifest exact 100-GiB scale (release only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_exact_scale:
+        description: "Run the billed two-implementation exact 100-GiB campaign"
+        required: true
+        type: boolean
+        default: false
+  push:
+    tags:
+      - "ogvcs-007-scale-*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chunking-manifest-exact-scale-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  javascript-exact-scale:
+    if: ${{ github.event_name == 'push' || inputs.confirm_exact_scale == true }}
+    name: JavaScript exact 100-GiB evidence (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: mkdir -p artifacts
+      - name: Bind evidence to the checked-out commit
+        id: source
+        run: echo "revision=$(git rev-parse --verify HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Stream exactly 100 GiB through JavaScript
+        env:
+          OGVCS_SOURCE_REVISION: ${{ steps.source.outputs.revision }}
+          OGVCS_SCALE_REPORT_PATH: ${{ github.workspace }}/artifacts/javascript-scale.json
+        run: node core/chunking-manifest/js/scripts/run-scale.mjs
+      - name: Upload JavaScript exact-scale evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: chunking-scale-javascript-Linux
+          path: artifacts/javascript-scale.json
+          if-no-files-found: error
+          retention-days: 30
+
+  rust-exact-scale:
+    if: ${{ github.event_name == 'push' || inputs.confirm_exact_scale == true }}
+    name: Rust exact 100-GiB evidence (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@7d11e79e1714f6b6da93cac39ad8435666f5c337 # 1.82.0
+      - run: mkdir -p artifacts
+      - name: Bind evidence to the checked-out commit
+        id: source
+        run: echo "revision=$(git rev-parse --verify HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Stream exactly 100 GiB through Rust
+        env:
+          OGVCS_SOURCE_REVISION: ${{ steps.source.outputs.revision }}
+          OGVCS_SCALE_REPORT_PATH: ${{ github.workspace }}/artifacts/rust-scale.json
+          OGVCS_RUST_VERSION: 1.82.0
+        run: cargo run --manifest-path core/chunking-manifest/rust/Cargo.toml --locked --release --example run_scale
+      - name: Upload Rust exact-scale evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: chunking-scale-rust-Linux
+          path: artifacts/rust-scale.json
+          if-no-files-found: error
+          retention-days: 30
+
+  compare-exact-scale:
+    name: Compare JavaScript and Rust exact 100-GiB evidence
+    needs:
+      - javascript-exact-scale
+      - rust-exact-scale
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - run: mkdir -p artifacts
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: chunking-scale-javascript-Linux
+          path: artifacts
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: chunking-scale-rust-Linux
+          path: artifacts
+      - name: Require exact byte-boundary parity and declared bounds
+        run: >-
+          node tools/compare-chunking-scale.mjs
+          --javascript artifacts/javascript-scale.json
+          --rust artifacts/rust-scale.json
+          --output artifacts/scale-comparison.json
+      - name: Upload combined exact-scale evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: chunking-scale-comparison-Linux
+          path: artifacts/*.json
+          if-no-files-found: error
+          retention-days: 30

@@ -41,7 +41,7 @@
     "test:path:ci-report": "node --test tools/path-filesystem-conformance-report.test.mjs tools/compare-path-filesystem-reports.test.mjs tools/path-filesystem-trace-audit.test.mjs tools/path-filesystem-workflow-policy.test.mjs",
     "test:chunking:js": "npm run test --workspace @opengamevcs/chunking-manifest",
     "test:chunking:spec": "npm run test --workspace @opengamevcs/chunking-manifest-contract-v1",
-    "test:chunking:report": "node --test tools/chunking-selection-benchmark-report.test.mjs tools/chunking-selection-retained-evidence.test.mjs",
+    "test:chunking:report": "node --test tools/chunking-selection-benchmark-report.test.mjs tools/chunking-selection-retained-evidence.test.mjs tools/compare-chunking-scale.test.mjs tools/chunking-scale-workflow-policy.test.mjs",
     "test:metadata:spec": "npm run test --workspace @opengamevcs/repository-metadata-contract-v1",
     "test:metadata": "node server/modules/repository-metadata/scripts/static-check.mjs && node server/modules/repository-metadata/scripts/service-report.mjs --check && node --test tools/repository-metadata-workflow-policy.test.mjs",
     "test:cli-workspace:spec": "node spec/cli-workspace/v1/scripts/generate.mjs --check && node client/native-cli/rust/scripts/sync-contract.mjs --check && npm run test --workspace @opengamevcs/cli-workspace-contract-v1 && node --test spec/cli-workspace/v1/test/*.test.mjs",

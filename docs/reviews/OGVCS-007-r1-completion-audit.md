@@ -92,6 +92,24 @@ repository path.
   zero scale jobs.
 - No 100-GiB, 1-TiB, or other exact-scale campaign was run.
 
+## Exact-scale harness disposition
+
+A release-only harness is prepared in
+`.github/workflows/chunking-manifest-scale.yml`, but it has not been dispatched
+and is not acceptance evidence. It streams the same deterministic, exactly
+100-GiB repeated-LCG source independently through JavaScript and Rust on Linux.
+Each implementation must report exact byte accounting, manifest identity,
+chunk-boundary transcript, whole-file digest, observed whole-process peak RSS,
+wall time, bounded ledger use, and scratch cleanup. The comparison job rejects
+different source revisions, runtime architectures, result projections, or
+declared-bound violations and binds both input report hashes into its output.
+
+The workflow is reachable only by an explicit boolean-confirmed dispatch or an
+`ogvcs-007-scale-*` release tag. It has no pull-request, branch, or scheduled
+trigger, and neither the ordinary package scripts nor the bounded workflow
+execute either 100-GiB runner. Preparing and testing this harness does not close
+AC-03, ratify the profile, or authorize production writes.
+
 ## Open gates and lifecycle disposition
 
 Two acceptance facts keep the PRD and ADR open:

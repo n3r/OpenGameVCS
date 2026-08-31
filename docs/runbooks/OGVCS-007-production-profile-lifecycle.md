@@ -42,7 +42,12 @@ revision satisfies every gate below.
    bounds, with observed whole-process peak memory and no temporary whole-file
    duplication. The public OGVCS-005 verifier and the independent OGVCS-007
    verifier must both accept the retained result. This campaign is not a PR
-   check and is not replaced by the bounded packet.
+   check and is not replaced by the bounded packet. Dispatch
+   `.github/workflows/chunking-manifest-scale.yml` only with the explicit
+   confirmation or a reviewed `ogvcs-007-scale-*` release tag. Retain the two
+   source-revision-bound implementation reports and the comparator output that
+   binds their hashes and proves identical result projections. A prepared or
+   locally syntax-checked harness is not evidence that this gate passed.
 6. Maintainers explicitly accept the immutable ADR-0016 tuple and its measured
    poor-reuse results for compressed and encrypted/random content.
 
