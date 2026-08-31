@@ -25,7 +25,8 @@ if (identity.value.schemaVersion !== 'ogvcs.identity-policy/contract-manifest/v1
     || Object.entries(predecessorManifests).some(([name, bytes]) => identity.value.predecessorPins[name]?.manifestSha256 !== digest(bytes))) {
   identityFail('POLICY_UNAVAILABLE', 'identity-policy contract authority is invalid');
 }
-if (metadata.value.contractVersion !== '0.1.0' || metadataOperations.registry !== 'operations') {
+if (metadata.value.contractVersion !== identity.value.predecessorPins.metadata?.contractVersion
+    || metadataOperations.registry !== 'operations') {
   identityFail('POLICY_UNAVAILABLE', 'metadata contract authority is invalid');
 }
 
