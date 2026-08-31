@@ -344,6 +344,7 @@ pub struct TransactionBatchRecheck<'a> {
     pub tenant: &'a str,
     pub repository: &'a str,
     pub permission: &'a str,
+    pub reference: Option<&'a str>,
     pub resources: &'a [AuthorizationResource],
 }
 
@@ -352,6 +353,7 @@ pub struct DecisionCommitmentRequest<'a> {
     pub tenant: &'a str,
     pub repository: &'a str,
     pub permission: &'a str,
+    pub reference: Option<&'a str>,
     pub resources: &'a [AuthorizationResource],
     pub result: &'a Value,
 }

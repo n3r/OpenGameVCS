@@ -155,9 +155,7 @@ impl PostgresTransactionAuthorizationParticipant {
     ) -> Result<AuthorizedResourceBatch> {
         verify_schema_in_transaction(transaction)?;
         self.verify_view_binding(transaction, view)?;
-        if request.resources.is_empty() || request.resources.len() > MAXIMUM_BATCH_RESOURCES {
-            return Err(ParticipantError::new(ParticipantErrorCode::LimitExceeded));
-        }
+        validate_batch_size(request.resources)?;
         if request.tenant != view.tenant()
             || request.repository != view.repository()
             || request.permission != view.permission()
@@ -167,10 +165,14 @@ impl PostgresTransactionAuthorizationParticipant {
             ));
         }
         let resources = canonical_resource_set(request.resources)?;
+        let reference = batch_reference(
+            view.request.reference.as_deref(),
+            request.reference,
+            &resources,
+        )?;
         let current = self.revalidate_view(transaction, view)?;
-        let mut decision_digests = Vec::with_capacity(resources.len());
-        for resource in &resources {
-            let decision = evaluate_allow(
+        let decision_digests = evaluate_complete_set(&resources, |resource| {
+            evaluate_allow(
                 &current.policy.document,
                 &current.credential.actor,
                 &current.credential.scope,
@@ -181,12 +183,12 @@ impl PostgresTransactionAuthorizationParticipant {
                     permission: view.permission(),
                     reason: view.request.reason.as_deref(),
                     resource,
-                    reference: view.request.reference.as_deref(),
+                    reference: reference.as_deref(),
                     snapshot: view.request.snapshot.as_deref(),
                 },
-            )?;
-            decision_digests.push(decision.decision_digest);
-        }
+            )
+            .map(|decision| decision.decision_digest)
+        })?;
         let resource_set_digest = hex(&digest_json(&resources)?);
         Ok(AuthorizedResourceBatch::new(
             view.transaction_id().to_owned(),
@@ -211,6 +213,7 @@ impl PostgresTransactionAuthorizationParticipant {
                 tenant: request.tenant,
                 repository: request.repository,
                 permission: request.permission,
+                reference: request.reference,
                 resources: request.resources,
             },
         )?;
@@ -793,6 +796,74 @@ fn canonical_resource_set(
     Ok(entries.into_iter().map(|(_, resource)| resource).collect())
 }
 
+fn validate_batch_size(resources: &[AuthorizationResource]) -> Result<()> {
+    if resources.is_empty() || resources.len() > MAXIMUM_BATCH_RESOURCES {
+        Err(ParticipantError::new(ParticipantErrorCode::LimitExceeded))
+    } else {
+        Ok(())
+    }
+}
+
+fn batch_reference(
+    view_reference: Option<&str>,
+    requested_reference: Option<&str>,
+    resources: &[AuthorizationResource],
+) -> Result<Option<String>> {
+    if view_reference.is_some_and(|reference| Some(reference) != requested_reference) {
+        return Err(ParticipantError::new(
+            ParticipantErrorCode::AuthenticationDenied,
+        ));
+    }
+    let mut resource_references = resources
+        .iter()
+        .filter(|resource| resource.resource_type == "reference")
+        .map(|resource| {
+            resource
+                .name
+                .as_deref()
+                .ok_or_else(|| ParticipantError::new(ParticipantErrorCode::InputInvalid))
+        });
+    let first = resource_references.next().transpose()?;
+    if resource_references.any(|reference| reference.is_err() || reference.ok() != first) {
+        return Err(ParticipantError::new(
+            ParticipantErrorCode::AuthenticationDenied,
+        ));
+    }
+    if first.is_some() && requested_reference != first {
+        return Err(ParticipantError::new(
+            ParticipantErrorCode::AuthenticationDenied,
+        ));
+    }
+    if view_reference.is_none() && requested_reference != first {
+        return Err(ParticipantError::new(
+            ParticipantErrorCode::AuthenticationDenied,
+        ));
+    }
+    Ok(requested_reference.map(str::to_owned))
+}
+
+fn evaluate_complete_set<T, E>(
+    resources: &[AuthorizationResource],
+    mut evaluate: impl FnMut(&AuthorizationResource) -> std::result::Result<T, E>,
+) -> std::result::Result<Vec<T>, E> {
+    let mut values = Vec::with_capacity(resources.len());
+    let mut first_error = None;
+    for resource in resources {
+        match evaluate(resource) {
+            Ok(value) => values.push(value),
+            Err(error) => {
+                if first_error.is_none() {
+                    first_error = Some(error);
+                }
+            }
+        }
+    }
+    match first_error {
+        Some(error) => Err(error),
+        None => Ok(values),
+    }
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CommitmentCore<'a> {
@@ -936,7 +1007,10 @@ pub(crate) fn poison_on_error<T>(
 
 #[cfg(test)]
 mod tests {
-    use super::{canonical_resource_set, digest_json, hex};
+    use super::{
+        batch_reference, canonical_resource_set, digest_json, evaluate_complete_set, hex,
+        validate_batch_size,
+    };
     use crate::model::{BoundRequest, TransactionBinding, ViewParts};
     use crate::{
         AuthorizationResource, AuthorizedResourceBatch, TransactionAuthorizedView,
@@ -964,6 +1038,80 @@ mod tests {
         let ordered = canonical_resource_set(&[second.clone(), first.clone()]).unwrap();
         assert_eq!(ordered, vec![first.clone(), second]);
         assert!(canonical_resource_set(&[first.clone(), first]).is_err());
+    }
+
+    #[test]
+    fn batch_evaluation_visits_the_complete_canonical_set_before_denial() {
+        let resources = (0..4)
+            .map(|index| AuthorizationResource {
+                resource_type: "path".to_owned(),
+                path: Some(format!("Game/{index}.asset")),
+                file_id: None,
+                object_id: None,
+                name: None,
+            })
+            .collect::<Vec<_>>();
+        let mut visited = Vec::new();
+        let result: std::result::Result<Vec<_>, usize> =
+            evaluate_complete_set(&resources, |resource| {
+                let index = resource
+                    .path
+                    .as_deref()
+                    .unwrap()
+                    .strip_prefix("Game/")
+                    .unwrap()
+                    .strip_suffix(".asset")
+                    .unwrap()
+                    .parse::<usize>()
+                    .unwrap();
+                visited.push(index);
+                if index == 0 || index == 2 {
+                    Err(index)
+                } else {
+                    Ok(index)
+                }
+            });
+        assert_eq!(result, Err(0));
+        assert_eq!(visited, vec![0, 1, 2, 3]);
+    }
+
+    #[test]
+    fn transaction_batch_retains_the_exact_one_thousand_resource_cap() {
+        let resource = AuthorizationResource {
+            resource_type: "path".to_owned(),
+            path: Some("Game/Public.asset".to_owned()),
+            file_id: None,
+            object_id: None,
+            name: None,
+        };
+        assert!(validate_batch_size(&vec![resource.clone(); 1_000]).is_ok());
+        assert!(validate_batch_size(&vec![resource; 1_001]).is_err());
+        assert!(validate_batch_size(&[]).is_err());
+    }
+
+    #[test]
+    fn late_bound_reference_requires_the_exact_reference_resource() {
+        let reference = AuthorizationResource {
+            resource_type: "reference".to_owned(),
+            path: None,
+            file_id: None,
+            object_id: None,
+            name: Some("main".to_owned()),
+        };
+        let path = AuthorizationResource {
+            resource_type: "path".to_owned(),
+            path: Some("Game/Public.asset".to_owned()),
+            file_id: None,
+            object_id: None,
+            name: None,
+        };
+        assert_eq!(
+            batch_reference(None, Some("main"), &[reference.clone(), path.clone()]).unwrap(),
+            Some("main".to_owned())
+        );
+        assert!(batch_reference(None, Some("other"), &[reference.clone(), path.clone()]).is_err());
+        assert!(batch_reference(None, None, &[reference.clone(), path]).is_err());
+        assert!(batch_reference(Some("main"), Some("other"), &[reference]).is_err());
     }
 
     #[test]

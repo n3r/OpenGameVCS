@@ -252,6 +252,7 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
                 &tenant,
                 &repository,
                 permission,
+                None,
                 std::slice::from_ref(&resource),
                 &safe_result,
             )?;
@@ -332,6 +333,7 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
             &tenant,
             &repository,
             permission,
+            None,
             std::slice::from_ref(&resource),
             &safe_result,
         )?;
@@ -924,6 +926,7 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
                 repository,
                 permission,
                 correlation_id: credentials.correlation_id.to_owned(),
+                reference: None,
             }),
             identity_resources: vec![resource],
         })
@@ -2453,6 +2456,7 @@ struct IdentityTransactionBinding<'a> {
     repository: String,
     permission: String,
     correlation_id: String,
+    reference: Option<String>,
 }
 
 impl RequiredOutboxFact {
@@ -2704,6 +2708,25 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
         }
         self.identity_resources.push(resource);
         Ok(())
+    }
+
+    fn bind_identity_reference(&mut self, reference: &str) -> Result<()> {
+        let mismatch = if let Some(binding) = self.identity_binding.as_mut() {
+            match binding.reference.as_deref() {
+                Some(bound) => bound != reference,
+                None => {
+                    binding.reference = Some(reference.to_owned());
+                    false
+                }
+            }
+        } else {
+            false
+        };
+        if mismatch {
+            self.fail(DomainError::new(DomainErrorCode::ObjectInvalid))
+        } else {
+            Ok(())
+        }
     }
 
     fn require_repository_event(&mut self) -> Result<()> {
@@ -4272,6 +4295,7 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
                     current.ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
                 self.require_object_event(snapshot.digest)?;
             }
+            self.bind_identity_reference(request.name.as_str())?;
             self.record_identity_resource(identity_reference_resource(
                 request.name.as_str(),
                 current,
@@ -4434,6 +4458,7 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
                     &binding.tenant,
                     &binding.repository,
                     &binding.permission,
+                    binding.reference.as_deref(),
                     &resources,
                     &result,
                 )
@@ -5887,6 +5912,7 @@ fn finalize_identity_decision(
     tenant: &str,
     repository: &str,
     permission: &str,
+    reference: Option<&str>,
     resources: &[IdentityAuthorizationResource],
     result: &Value,
 ) -> Result<()> {
@@ -5898,6 +5924,7 @@ fn finalize_identity_decision(
                 tenant,
                 repository,
                 permission,
+                reference,
                 resources,
             },
         )
@@ -5911,6 +5938,7 @@ fn finalize_identity_decision(
                 tenant,
                 repository,
                 permission,
+                reference,
                 resources,
                 result,
             },

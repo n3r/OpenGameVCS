@@ -53,21 +53,53 @@ fn policy() -> PolicyDocument {
         case_mode: "case-sensitive".to_owned(),
         default_effect: "deny".to_owned(),
         composition: "deny-overrides-v1".to_owned(),
-        rules: vec![PolicyRule {
-            id: "allow.artist".to_owned(),
-            effect: "allow".to_owned(),
-            subjects: RuleSubjects {
-                identities: vec![],
-                groups: vec!["artists".to_owned()],
-                actor_classes: vec!["human".to_owned()],
+        rules: vec![
+            PolicyRule {
+                id: "allow.artist".to_owned(),
+                effect: "allow".to_owned(),
+                subjects: RuleSubjects {
+                    identities: vec![],
+                    groups: vec!["artists".to_owned()],
+                    actor_classes: vec!["human".to_owned()],
+                },
+                tenant: "studio".to_owned(),
+                repository: "game".to_owned(),
+                references: vec!["main".to_owned()],
+                path_prefixes: vec!["Game".to_owned()],
+                resource_types: vec!["path".to_owned()],
+                permissions: vec!["metadata.read".to_owned()],
             },
-            tenant: "studio".to_owned(),
-            repository: "game".to_owned(),
-            references: vec!["main".to_owned()],
-            path_prefixes: vec!["Game".to_owned()],
-            resource_types: vec!["path".to_owned()],
-            permissions: vec!["metadata.read".to_owned()],
-        }],
+            PolicyRule {
+                id: "allow.transaction".to_owned(),
+                effect: "allow".to_owned(),
+                subjects: RuleSubjects {
+                    identities: vec![],
+                    groups: vec!["artists".to_owned()],
+                    actor_classes: vec!["human".to_owned()],
+                },
+                tenant: "studio".to_owned(),
+                repository: "game".to_owned(),
+                references: vec![],
+                path_prefixes: vec![],
+                resource_types: vec!["repository".to_owned()],
+                permissions: vec!["metadata.read".to_owned()],
+            },
+            PolicyRule {
+                id: "allow.reference".to_owned(),
+                effect: "allow".to_owned(),
+                subjects: RuleSubjects {
+                    identities: vec![],
+                    groups: vec!["artists".to_owned()],
+                    actor_classes: vec!["human".to_owned()],
+                },
+                tenant: "studio".to_owned(),
+                repository: "game".to_owned(),
+                references: vec!["main".to_owned()],
+                path_prefixes: vec![],
+                resource_types: vec!["reference".to_owned()],
+                permissions: vec!["metadata.read".to_owned()],
+            },
+        ],
     }
 }
 
@@ -232,6 +264,7 @@ fn checked_migrations_and_same_transaction_participant_work_on_postgres_15() {
                     tenant: "studio",
                     repository: "game",
                     permission: "metadata.read",
+                    reference: Some("main"),
                     resources: &resources,
                 },
             )
@@ -251,6 +284,7 @@ fn checked_migrations_and_same_transaction_participant_work_on_postgres_15() {
                     tenant: "studio",
                     repository: "game",
                     permission: "metadata.read",
+                    reference: Some("main"),
                     resources: &resources,
                     result: &json!({ "outcome": "published" }),
                 },
@@ -287,6 +321,7 @@ fn checked_migrations_and_same_transaction_participant_work_on_postgres_15() {
                     tenant: "studio",
                     repository: "game",
                     permission: "metadata.read",
+                    reference: Some("main"),
                     resources: std::slice::from_ref(&alpha),
                 },
             )
@@ -295,6 +330,92 @@ fn checked_migrations_and_same_transaction_participant_work_on_postgres_15() {
         view
     };
     assert!(!source_view.transaction_id().is_empty());
+
+    {
+        let repository = AuthorizationResource {
+            resource_type: "repository".to_owned(),
+            path: None,
+            file_id: None,
+            object_id: None,
+            name: Some("repository.publish".to_owned()),
+        };
+        let exact_reference = AuthorizationResource {
+            resource_type: "reference".to_owned(),
+            path: None,
+            file_id: None,
+            object_id: None,
+            name: Some("main".to_owned()),
+        };
+        let mut transaction = client
+            .transaction()
+            .expect("begin late-reference transaction");
+        let view = participant
+            .authorize(
+                &mut transaction,
+                &TransactionAuthorizationRequest {
+                    request_id: "request.metadata.late-reference",
+                    credential_presentation: presentation,
+                    tenant: "studio",
+                    repository: "game",
+                    permission: "metadata.read",
+                    reason: None,
+                    resource: &repository,
+                    reference: None,
+                    snapshot: None,
+                },
+            )
+            .expect("authorize repository transaction before its reference is known");
+        participant
+            .recheck_batch(
+                &mut transaction,
+                &view,
+                &TransactionBatchRecheck {
+                    tenant: "studio",
+                    repository: "game",
+                    permission: "metadata.read",
+                    reference: Some("main"),
+                    resources: &[alpha.clone(), exact_reference.clone()],
+                },
+            )
+            .expect("bind the exact late reference to its resource");
+        transaction
+            .rollback()
+            .expect("rollback late-reference probe");
+
+        let mut transaction = client
+            .transaction()
+            .expect("begin substituted-reference probe");
+        let view = participant
+            .authorize(
+                &mut transaction,
+                &TransactionAuthorizationRequest {
+                    request_id: "request.metadata.substituted-reference",
+                    credential_presentation: presentation,
+                    tenant: "studio",
+                    repository: "game",
+                    permission: "metadata.read",
+                    reason: None,
+                    resource: &repository,
+                    reference: None,
+                    snapshot: None,
+                },
+            )
+            .expect("authorize substituted-reference fixture");
+        assert!(participant
+            .recheck_batch(
+                &mut transaction,
+                &view,
+                &TransactionBatchRecheck {
+                    tenant: "studio",
+                    repository: "game",
+                    permission: "metadata.read",
+                    reference: Some("other"),
+                    resources: &[alpha.clone(), exact_reference],
+                },
+            )
+            .is_err());
+        assert!(transaction.simple_query("SELECT 1").is_err());
+    }
 
     {
         let mut transaction = client.transaction().expect("begin poison transaction");
@@ -313,6 +434,7 @@ fn checked_migrations_and_same_transaction_participant_work_on_postgres_15() {
                     tenant: "studio",
                     repository: "game",
                     permission: "metadata.read",
+                    reference: Some("main"),
                     resources: &duplicate,
                 },
             )
