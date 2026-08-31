@@ -10,7 +10,7 @@ test('object transfer workflow pins the bounded three-host JavaScript contract/r
   assert.match(workflow, /runner: ubuntu-latest, label: Linux/u);
   assert.match(workflow, /runner: macos-latest, label: macOS/u);
   assert.match(workflow, /runner: windows-latest, label: Windows/u);
-  assert.equal(workflow.match(/node-version: 22/gu)?.length, 1);
+  assert.equal(workflow.match(/node-version: 24/gu)?.length, 1);
   assert.equal(
     workflow.match(/actions\/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1/gu)?.length,
     1,
