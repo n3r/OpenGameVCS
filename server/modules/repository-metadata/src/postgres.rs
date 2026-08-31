@@ -1,4 +1,10 @@
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use ogvcs_identity_policy_audit_postgres::{
+    AuthorizationResource as IdentityAuthorizationResource, DecisionCommitmentRequest,
+    PostgresTransactionAuthorizationParticipant, TransactionAuthorizationParticipant,
+    TransactionAuthorizationRequest, TransactionAuthorizedView, TransactionBatchRecheck,
+    MAXIMUM_BATCH_RESOURCES,
+};
 use ogvcs_object_model::{
     decode_canonical, expand_tree_with_path_profile_validator, import_mapping_key, object_id,
     scan_metadata, validate_metadata_schema, validate_repository_candidate,
@@ -12,7 +18,7 @@ use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet},
-    time::SystemTime,
+    time::{Duration, SystemTime},
 };
 use subtle::ConstantTimeEq;
 use uuid::Uuid;
@@ -30,8 +36,8 @@ use crate::{
     OutboxReleaseRequest, Page, PageRequest, PageState, ProductionObjectValidator,
     ReferenceCasRequest, ReferenceCasResult, ReferenceExpected, ReferenceFilter, ReferenceKind,
     ReferenceName, ReferenceRecord, RepositoryCreate, RepositoryId, RepositoryRecord,
-    RepositorySettings, Result, SnapshotWrite, TenantId, TransactionCapability, TransactionOptions,
-    TreeEntryRecord, TreeEntryWrite,
+    RepositorySettings, Result, SnapshotWrite, TenantId, TransactionCapability,
+    TransactionCredentialRequest, TransactionOptions, TreeEntryRecord, TreeEntryWrite,
 };
 
 const VALIDATION_CONTRACT: &str = "ogvcs.repository-format@1";
@@ -58,6 +64,17 @@ pub struct PostgresMetadataStore<A = DenyAllAuthorization, V = ProductionObjectV
     client: Client,
     authorization: A,
     validation: V,
+    transaction_authorization: Option<PostgresTransactionAuthorizationParticipant>,
+}
+
+/// Production typestate. It deliberately does not implement `MetadataStore`
+/// and does not dereference to the legacy adapter, so caller-context entry
+/// points and receiptless reservation are absent from its public surface.
+pub struct IdentityBoundPostgresMetadataStore<
+    A = DenyAllAuthorization,
+    V = ProductionObjectValidator,
+> {
+    store: PostgresMetadataStore<A, V>,
 }
 
 impl PostgresMetadataStore<DenyAllAuthorization, ProductionObjectValidator> {
@@ -67,6 +84,7 @@ impl PostgresMetadataStore<DenyAllAuthorization, ProductionObjectValidator> {
             client,
             authorization: DenyAllAuthorization,
             validation: ProductionObjectValidator::default(),
+            transaction_authorization: None,
         })
     }
 }
@@ -77,6 +95,7 @@ impl<A, V> PostgresMetadataStore<A, V> {
             client: self.client,
             authorization,
             validation: self.validation,
+            transaction_authorization: self.transaction_authorization,
         }
     }
 
@@ -85,7 +104,19 @@ impl<A, V> PostgresMetadataStore<A, V> {
             client: self.client,
             authorization: self.authorization,
             validation,
+            transaction_authorization: self.transaction_authorization,
         }
+    }
+
+    /// Installs the production OGVCS-009 participant. It is invoked only by
+    /// the identity-authorized entry points, which retain both the branded
+    /// view and the live PostgreSQL transaction internally.
+    pub fn with_transaction_authorization_participant(
+        mut self,
+        participant: PostgresTransactionAuthorizationParticipant,
+    ) -> IdentityBoundPostgresMetadataStore<A, V> {
+        self.transaction_authorization = Some(participant);
+        IdentityBoundPostgresMetadataStore { store: self }
     }
 
     pub fn migrate(
@@ -97,6 +128,209 @@ impl<A, V> PostgresMetadataStore<A, V> {
 }
 
 impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> {
+    /// Performs the complete `file-id.allocate` operation under one
+    /// OGVCS-009-authorized transaction. The idempotency result contains the
+    /// exact opaque receipt, so an exact retry returns the original allocation
+    /// rather than consuming fresh entropy.
+    fn allocate_file_id_identity_authorized_inner(
+        &mut self,
+        credentials: TransactionCredentialRequest<'_>,
+        tenant_id: TenantId,
+        repository_id: RepositoryId,
+        reservation: IdempotencyReservation,
+    ) -> Result<FileIdAllocation> {
+        if reservation.operation != "file-id.allocate" {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        crate::verify_schema_compatibility(&mut self.client)?;
+        let participant = self
+            .transaction_authorization
+            .as_ref()
+            .ok_or_else(|| DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied))?;
+        let tenant = identity_tenant_id(tenant_id);
+        let repository = identity_repository_id(repository_id);
+        let permission = MetadataPermission::Submit.as_str();
+        let resource = identity_allocation_resource();
+        let mut transaction = self.client.transaction().map_err(database_error)?;
+        let view = match participant.authorize(
+            &mut transaction,
+            &TransactionAuthorizationRequest {
+                request_id: credentials.request_id,
+                credential_presentation: credentials.credential_presentation,
+                tenant: &tenant,
+                repository: &repository,
+                permission,
+                reason: credentials.reason,
+                resource: &resource,
+                reference: None,
+                snapshot: None,
+            },
+        ) {
+            Ok(view) => view,
+            Err(_) => {
+                let _ = transaction.rollback();
+                return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
+            }
+        };
+        let scope = decode_identity_digest(view.authenticated_scope_digest())?;
+        let server_now: SystemTime = transaction
+            .query_one("SELECT clock_timestamp()", &[])
+            .map_err(database_error)?
+            .get(0);
+        let valid_window = reservation.is_valid_at(server_now)
+            && reservation
+                .expires_at
+                .duration_since(server_now)
+                .is_ok_and(|remaining| remaining.as_secs() <= 600);
+        let tenant_matches = transaction
+            .query_opt(
+                "SELECT 1 FROM ogvcs_metadata.repositories
+                 WHERE repository_id = $1 AND tenant_id = $2",
+                &[&uuid(repository_id), &uuid(tenant_id)],
+            )
+            .map_err(database_error)?
+            .is_some();
+        if !valid_window || !tenant_matches {
+            poison_identity_transaction(&mut transaction);
+            let _ = transaction.rollback();
+            return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
+        }
+        let allocation_expires_at = normalize_unix_milliseconds(reservation.expires_at)?;
+        let inserted = transaction
+            .execute(
+                "INSERT INTO ogvcs_metadata.idempotency_records
+                 (authenticated_scope_digest, operation, idempotency_key, semantic_fingerprint,
+                  state, issued_at, expires_at)
+                 VALUES ($1, $2, $3, $4, 'reserved', $5, $6) ON CONFLICT DO NOTHING",
+                &[
+                    &&scope[..],
+                    &reservation.operation,
+                    &reservation.key,
+                    &&reservation.semantic_fingerprint[..],
+                    &reservation.issued_at,
+                    &reservation.expires_at,
+                ],
+            )
+            .map_err(database_error)?;
+        if inserted == 0 {
+            let row = transaction
+                .query_one(
+                    "SELECT semantic_fingerprint, state, safe_result
+                     FROM ogvcs_metadata.idempotency_records
+                     WHERE authenticated_scope_digest = $1 AND operation = $2
+                       AND idempotency_key = $3 FOR UPDATE",
+                    &[&&scope[..], &reservation.operation, &reservation.key],
+                )
+                .map_err(database_error)?;
+            let fingerprint: Vec<u8> = row.get(0);
+            let state: String = row.get(1);
+            if !bool::from(
+                fingerprint
+                    .as_slice()
+                    .ct_eq(&reservation.semantic_fingerprint),
+            ) || state != "committed"
+            {
+                poison_identity_transaction(&mut transaction);
+                let _ = transaction.rollback();
+                return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+            }
+            let Json(safe_result): Json<Value> = row.get(2);
+            let allocation = decode_allocation_result(repository_id, &safe_result)?;
+            finalize_identity_decision(
+                participant,
+                &mut transaction,
+                &view,
+                credentials.correlation_id,
+                &tenant,
+                &repository,
+                permission,
+                std::slice::from_ref(&resource),
+                &safe_result,
+            )?;
+            transaction.commit().map_err(database_error)?;
+            return Ok(allocation);
+        }
+
+        let mut allocation = None;
+        for _ in 0..32 {
+            let mut file_id_bytes = [0_u8; 16];
+            getrandom::getrandom(&mut file_id_bytes)
+                .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            let Ok(file_id) = FileId::new(file_id_bytes) else {
+                continue;
+            };
+            let mut receipt_bytes = [0_u8; 32];
+            getrandom::getrandom(&mut receipt_bytes)
+                .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            let receipt = AllocationReceipt::from_opaque(format!(
+                "far1.{}",
+                URL_SAFE_NO_PAD.encode(receipt_bytes)
+            ))
+            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            let digest = Sha256::digest(receipt.as_str().as_bytes());
+            let created = transaction
+                .execute(
+                    "INSERT INTO ogvcs_metadata.file_id_allocation_receipts
+                     (receipt_digest, authenticated_scope_digest, repository_id, file_id, expires_at)
+                     VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING",
+                    &[
+                        &&digest[..],
+                        &&scope[..],
+                        &uuid(repository_id),
+                        &&file_id.as_bytes()[..],
+                        &allocation_expires_at,
+                    ],
+                )
+                .map_err(database_error)?;
+            if created == 1 {
+                allocation = Some(FileIdAllocation {
+                    repository_id,
+                    file_id,
+                    allocation_receipt: receipt,
+                    expires_at: allocation_expires_at,
+                });
+                break;
+            }
+        }
+        let allocation =
+            allocation.ok_or_else(|| DomainError::new(DomainErrorCode::FileIdConflict))?;
+        let safe_result = allocation_result(&allocation)?;
+        let updated = transaction
+            .execute(
+                "UPDATE ogvcs_metadata.idempotency_records
+                 SET state = 'committed', safe_result = $4, committed_at = clock_timestamp()
+                 WHERE authenticated_scope_digest = $1 AND operation = $2
+                   AND idempotency_key = $3 AND semantic_fingerprint = $5
+                   AND state = 'reserved' AND expires_at > clock_timestamp()",
+                &[
+                    &&scope[..],
+                    &reservation.operation,
+                    &reservation.key,
+                    &Json(&safe_result),
+                    &&reservation.semantic_fingerprint[..],
+                ],
+            )
+            .map_err(database_error)?;
+        if updated != 1 {
+            poison_identity_transaction(&mut transaction);
+            let _ = transaction.rollback();
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        finalize_identity_decision(
+            participant,
+            &mut transaction,
+            &view,
+            credentials.correlation_id,
+            &tenant,
+            &repository,
+            permission,
+            std::slice::from_ref(&resource),
+            &safe_result,
+        )?;
+        transaction.commit().map_err(database_error)?;
+        Ok(allocation)
+    }
+
     /// Allocates a random FileID together with a one-use receipt. The receipt
     /// is scope- and repository-bound in the database; it is not a bearer
     /// authorization credential and cannot be replayed by a different actor.
@@ -585,8 +819,111 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
         Ok((records, truncated))
     }
 
-    /// The only production transaction entry point. OGVCS-010 composes all of
-    /// its publication writes through the returned database transaction.
+    /// Opens the production metadata transaction and authorizes it through
+    /// OGVCS-009 on that exact live PostgreSQL transaction. The returned
+    /// adapter owns the transaction; callers cannot extract it or manufacture
+    /// the authenticated scope used by idempotency and allocation receipts.
+    fn begin_identity_authorized_inner(
+        &mut self,
+        credentials: TransactionCredentialRequest<'_>,
+        tenant_id: TenantId,
+        capability: TransactionCapability,
+        repository_id: RepositoryId,
+        options: TransactionOptions,
+    ) -> Result<PostgresMetadataTransaction<'_, V, IdentityMetadataAuthorizedView>> {
+        crate::verify_schema_compatibility(&mut self.client)?;
+        let participant = self
+            .transaction_authorization
+            .as_ref()
+            .ok_or_else(|| DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied))?;
+        let tenant = identity_tenant_id(tenant_id);
+        let repository = identity_repository_id(repository_id);
+        let permission = capability.permission().as_str().to_owned();
+        let resource = identity_repository_resource(capability);
+        let isolation = match options {
+            TransactionOptions::RepeatableRead => IsolationLevel::RepeatableRead,
+            TransactionOptions::Serializable { .. } => IsolationLevel::Serializable,
+        };
+        let mut transaction = self
+            .client
+            .build_transaction()
+            .isolation_level(isolation)
+            .start()
+            .map_err(database_error)?;
+        let view = match participant.authorize(
+            &mut transaction,
+            &TransactionAuthorizationRequest {
+                request_id: credentials.request_id,
+                credential_presentation: credentials.credential_presentation,
+                tenant: &tenant,
+                repository: &repository,
+                permission: &permission,
+                reason: credentials.reason,
+                resource: &resource,
+                reference: None,
+                snapshot: None,
+            },
+        ) {
+            Ok(view) => view,
+            Err(_) => {
+                let _ = transaction.rollback();
+                return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
+            }
+        };
+        let repository_tenant = transaction
+            .query_opt(
+                "SELECT tenant_id FROM ogvcs_metadata.repositories WHERE repository_id = $1",
+                &[&uuid(repository_id)],
+            )
+            .map_err(database_error)?;
+        if repository_tenant
+            .is_some_and(|row| row.get::<_, Uuid>(0).as_bytes() != tenant_id.as_bytes())
+        {
+            poison_identity_transaction(&mut transaction);
+            let _ = transaction.rollback();
+            return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
+        }
+        let context = AuthorizationContext {
+            subject_digest: decode_identity_digest(view.subject_digest())?,
+            tenant_id,
+            authorization_epoch: view.authority_epoch(),
+        };
+        let authenticated_scope_digest = decode_identity_digest(view.authenticated_scope_digest())?;
+        Ok(PostgresMetadataTransaction {
+            transaction: Some(transaction),
+            failed: false,
+            commit_sequence: None,
+            pending_idempotency: None,
+            idempotency_committed: false,
+            committed_replay: None,
+            mutation_started: false,
+            outbox_events: Vec::new(),
+            capability,
+            authorized_repository_id: repository_id,
+            authorization_context: context.clone(),
+            authorized_view: IdentityMetadataAuthorizedView {
+                context,
+                repository_id,
+                permission: capability.permission(),
+            },
+            validation: &self.validation,
+            authenticated_scope_digest,
+            allocation_receipt_required: true,
+            identity_binding: Some(IdentityTransactionBinding {
+                participant,
+                view,
+                tenant,
+                repository,
+                permission,
+                correlation_id: credentials.correlation_id.to_owned(),
+            }),
+            identity_resources: vec![resource],
+        })
+    }
+
+    /// Development/test adapter entry point. Production callers use
+    /// `begin_identity_authorized`; this compatibility path never acquires an
+    /// OGVCS-009 branded transaction view.
     pub fn begin_authorized(
         &mut self,
         context: &AuthorizationContext,
@@ -637,6 +974,10 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
             authorization_context: context.clone(),
             authorized_view,
             validation: &self.validation,
+            authenticated_scope_digest: metadata_scope_digest(context, repository_id, capability),
+            allocation_receipt_required: false,
+            identity_binding: None,
+            identity_resources: Vec::new(),
         })
     }
 
@@ -934,6 +1275,7 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
                  FROM ogvcs_metadata.consistency_tokens
                  WHERE token_digest = $1 AND subject_digest = $2 AND tenant_id = $3
                    AND repository_id = $4 AND authorization_epoch = $5
+                   AND authenticated_scope_digest IS NULL
                    AND expires_at > clock_timestamp()",
                 &[
                     &digest,
@@ -2073,6 +2415,38 @@ struct RequiredOutboxEvent {
     emitted: bool,
 }
 
+/// Metadata-side projection of an OGVCS-009 branded view. Its fields are
+/// private so only this adapter can construct it after same-transaction
+/// authorization.
+#[derive(Debug)]
+pub struct IdentityMetadataAuthorizedView {
+    context: AuthorizationContext,
+    repository_id: RepositoryId,
+    permission: MetadataPermission,
+}
+
+impl AuthorizedView for IdentityMetadataAuthorizedView {
+    fn permits(
+        &self,
+        context: &AuthorizationContext,
+        permission: MetadataPermission,
+        resource: &AuthorizationResource,
+    ) -> bool {
+        self.context == *context
+            && self.permission == permission
+            && resource.repository_id() == Some(self.repository_id)
+    }
+}
+
+struct IdentityTransactionBinding<'a> {
+    participant: &'a PostgresTransactionAuthorizationParticipant,
+    view: TransactionAuthorizedView,
+    tenant: String,
+    repository: String,
+    permission: String,
+    correlation_id: String,
+}
+
 impl RequiredOutboxFact {
     fn event_type(&self) -> &'static str {
         match self {
@@ -2183,6 +2557,10 @@ pub struct PostgresMetadataTransaction<
     authorization_context: AuthorizationContext,
     authorized_view: View,
     validation: &'a V,
+    authenticated_scope_digest: [u8; 32],
+    allocation_receipt_required: bool,
+    identity_binding: Option<IdentityTransactionBinding<'a>>,
+    identity_resources: Vec<IdentityAuthorizationResource>,
 }
 
 impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransaction<'a, V, View> {
@@ -2309,6 +2687,17 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
         Ok(sequence)
     }
 
+    fn record_identity_resource(&mut self, resource: IdentityAuthorizationResource) -> Result<()> {
+        if self.identity_binding.is_none() || self.identity_resources.contains(&resource) {
+            return Ok(());
+        }
+        if self.identity_resources.len() >= MAXIMUM_BATCH_RESOURCES {
+            return self.fail(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        self.identity_resources.push(resource);
+        Ok(())
+    }
+
     fn require_repository_event(&mut self) -> Result<()> {
         if !self
             .outbox_events
@@ -2410,11 +2799,7 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
     }
 
     fn idempotency_scope_digest(&self) -> [u8; 32] {
-        metadata_scope_digest(
-            &self.authorization_context,
-            self.authorized_repository_id,
-            self.capability,
-        )
+        self.authenticated_scope_digest
     }
 
     fn consume_allocation_receipt(
@@ -3021,6 +3406,7 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
             if !repository_creation_descriptor {
                 self.begin_mutation(write.repository_id)?;
             }
+            self.record_identity_resource(identity_object_resource(*write.object_ref))?;
             return Ok(ObjectPutOutcome::Inserted);
         }
         let stored = self
@@ -3089,6 +3475,7 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
         if inserted == 1 {
             self.begin_mutation(reservation.repository_id)?;
             self.require_file_id_event(reservation.file_id, FileIdEventState::Reserved)?;
+            self.record_identity_resource(identity_file_resource(reservation.file_id, None, None))?;
             Ok(())
         } else {
             Err(DomainError::new(DomainErrorCode::FileIdConflict))
@@ -3240,6 +3627,13 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
                 )
                 .map_err(database_error)?;
             self.begin_mutation(entry.repository_id)?;
+            let path = String::from_utf8(entry.basename_utf8.clone())
+                .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            self.record_identity_resource(identity_file_resource(
+                entry.file_id,
+                Some(path),
+                Some(entry.target),
+            ))?;
             Ok(())
         })
     }
@@ -3300,6 +3694,7 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
                     .map_err(database_error)?;
             }
             self.begin_mutation(snapshot.repository_id)?;
+            self.record_identity_resource(identity_object_resource(snapshot.snapshot))?;
             Ok(())
         })
     }
@@ -3393,6 +3788,13 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
                 )
                 .map_err(database_error)?;
             self.begin_mutation(history.repository_id)?;
+            let path = String::from_utf8(history.repository_path_utf8.clone())
+                .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            self.record_identity_resource(identity_file_resource(
+                history.file_id,
+                Some(path),
+                Some(history.snapshot),
+            ))?;
             Ok(())
         })
     }
@@ -3403,6 +3805,14 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
                 TransactionCapability::ReserveFileId,
                 TransactionCapability::Publish,
             ])?;
+            if self.allocation_receipt_required
+                && matches!(
+                    reservation.origin,
+                    FileIdOrigin::Create | FileIdOrigin::Copy
+                )
+            {
+                return Err(DomainError::new(DomainErrorCode::FileIdConflict));
+            }
             self.reserve_file_id_inner(reservation, false)
         })
     }
@@ -3539,6 +3949,7 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
             if updated == 1 {
                 self.begin_mutation(repository_id)?;
                 self.require_file_id_event(file_id, FileIdEventState::Tombstoned)?;
+                self.record_identity_resource(identity_file_resource(file_id, None, None))?;
                 Ok(())
             } else {
                 Err(DomainError::new(DomainErrorCode::FileIdConflict))
@@ -3565,6 +3976,7 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
             if updated == 1 {
                 self.begin_mutation(repository_id)?;
                 self.require_file_id_event(file_id, FileIdEventState::Active)?;
+                self.record_identity_resource(identity_file_resource(file_id, None, None))?;
                 Ok(())
             } else {
                 Err(DomainError::new(DomainErrorCode::FileIdConflict))
@@ -3852,6 +4264,10 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
                     current.ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
                 self.require_object_event(snapshot.digest)?;
             }
+            self.record_identity_resource(identity_reference_resource(
+                request.name.as_str(),
+                current,
+            ))?;
             Ok(ReferenceCasResult {
                 prior,
                 current,
@@ -3946,12 +4362,16 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
             let typed = ConsistencyToken::from_opaque(token.clone())
                 .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
             let digest = Sha256::digest(token.as_bytes()).to_vec();
+            let authenticated_scope_digest = self
+                .identity_binding
+                .as_ref()
+                .map(|_| self.authenticated_scope_digest.to_vec());
             self.transaction()?
                 .execute(
                     "INSERT INTO ogvcs_metadata.consistency_tokens
                      (token_digest, subject_digest, tenant_id, repository_id, minimum_commit_sequence,
-                      authorization_epoch, issued_at, expires_at)
-                     VALUES ($1, $2, $3, $4, $5, $6, clock_timestamp(),
+                      authorization_epoch, authenticated_scope_digest, issued_at, expires_at)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, clock_timestamp(),
                              clock_timestamp() + interval '5 minutes')",
                     &[
                         &digest,
@@ -3960,6 +4380,7 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
                         &uuid(repository_id),
                         &(minimum.get() as i64),
                         &(authorization_epoch as i64),
+                        &authenticated_scope_digest,
                     ],
                 )
                 .map_err(database_error)?;
@@ -3985,6 +4406,37 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
             .commit_sequence
             .map(|(_, sequence)| sequence)
             .unwrap_or_else(|| CommitSequence::new(0));
+        if let Some(binding) = self.identity_binding.take() {
+            let resources = std::mem::take(&mut self.identity_resources);
+            let result = json!({
+                "commitSequence": sequence.get().to_string(),
+                "outcome": "committed",
+                "repository": binding.repository,
+            });
+            let decision = {
+                let transaction = self
+                    .transaction
+                    .as_mut()
+                    .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+                finalize_identity_decision(
+                    binding.participant,
+                    transaction,
+                    &binding.view,
+                    &binding.correlation_id,
+                    &binding.tenant,
+                    &binding.repository,
+                    &binding.permission,
+                    &resources,
+                    &result,
+                )
+            };
+            if let Err(error) = decision {
+                if let Some(transaction) = self.transaction.take() {
+                    let _ = transaction.rollback();
+                }
+                return Err(error);
+            }
+        }
         self.transaction
             .take()
             .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?
@@ -4016,6 +4468,58 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> MetadataStore for PostgresMe
         options: TransactionOptions,
     ) -> Result<Self::Transaction<'_>> {
         PostgresMetadataStore::begin_authorized(self, context, capability, repository_id, options)
+    }
+}
+
+impl<A, V> IdentityBoundPostgresMetadataStore<A, V> {
+    pub fn with_object_validator<W>(
+        self,
+        validation: W,
+    ) -> IdentityBoundPostgresMetadataStore<A, W> {
+        IdentityBoundPostgresMetadataStore {
+            store: self.store.with_object_validator(validation),
+        }
+    }
+
+    pub fn migrate(
+        &mut self,
+        options: crate::MigrationRunOptions,
+    ) -> Result<crate::MigrationRunReport> {
+        self.store.migrate(options)
+    }
+}
+
+impl<A: AuthorizationPort, V: ObjectValidationPort> IdentityBoundPostgresMetadataStore<A, V> {
+    pub fn allocate_file_id_identity_authorized(
+        &mut self,
+        credentials: TransactionCredentialRequest<'_>,
+        tenant_id: TenantId,
+        repository_id: RepositoryId,
+        reservation: IdempotencyReservation,
+    ) -> Result<FileIdAllocation> {
+        self.store.allocate_file_id_identity_authorized_inner(
+            credentials,
+            tenant_id,
+            repository_id,
+            reservation,
+        )
+    }
+
+    pub fn begin_identity_authorized(
+        &mut self,
+        credentials: TransactionCredentialRequest<'_>,
+        tenant_id: TenantId,
+        capability: TransactionCapability,
+        repository_id: RepositoryId,
+        options: TransactionOptions,
+    ) -> Result<PostgresMetadataTransaction<'_, V, IdentityMetadataAuthorizedView>> {
+        self.store.begin_identity_authorized_inner(
+            credentials,
+            tenant_id,
+            capability,
+            repository_id,
+            options,
+        )
     }
 }
 
@@ -5279,6 +5783,212 @@ fn json_size(value: &Value) -> Option<usize> {
 
 fn valid_public_uuid(bytes: &[u8; 16]) -> bool {
     matches!(bytes[6] >> 4, 1..=8) && bytes[8] & 0xc0 == 0x80
+}
+
+fn identity_tenant_id(tenant_id: TenantId) -> String {
+    format!("tenant.{}", hex_bytes(tenant_id.as_bytes()))
+}
+
+fn identity_repository_id(repository_id: RepositoryId) -> String {
+    format!("repository.{}", hex_bytes(repository_id.as_bytes()))
+}
+
+fn identity_repository_resource(
+    capability: TransactionCapability,
+) -> IdentityAuthorizationResource {
+    IdentityAuthorizationResource {
+        resource_type: "repository".to_owned(),
+        path: None,
+        file_id: None,
+        object_id: None,
+        name: Some(capability.as_str().to_owned()),
+    }
+}
+
+fn identity_allocation_resource() -> IdentityAuthorizationResource {
+    IdentityAuthorizationResource {
+        resource_type: "repository".to_owned(),
+        path: None,
+        file_id: None,
+        object_id: None,
+        name: Some("file-id.allocate".to_owned()),
+    }
+}
+
+fn identity_object_resource(reference: ObjectRef) -> IdentityAuthorizationResource {
+    let resource_type = match reference.kind {
+        ObjectKind::Snapshot => "snapshot",
+        ObjectKind::Tree => "tree",
+        _ => "object",
+    };
+    IdentityAuthorizationResource {
+        resource_type: resource_type.to_owned(),
+        path: None,
+        file_id: None,
+        object_id: Some(reference.to_string()),
+        name: None,
+    }
+}
+
+fn identity_file_resource(
+    file_id: FileId,
+    path: Option<String>,
+    object: Option<ObjectRef>,
+) -> IdentityAuthorizationResource {
+    IdentityAuthorizationResource {
+        resource_type: "path".to_owned(),
+        path,
+        file_id: Some(hex_bytes(file_id.as_bytes())),
+        object_id: object.map(|reference| reference.to_string()),
+        name: None,
+    }
+}
+
+fn identity_reference_resource(
+    name: &str,
+    target: Option<ObjectRef>,
+) -> IdentityAuthorizationResource {
+    IdentityAuthorizationResource {
+        resource_type: "reference".to_owned(),
+        path: None,
+        file_id: None,
+        object_id: target.map(|reference| reference.to_string()),
+        name: Some(name.to_owned()),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn finalize_identity_decision(
+    participant: &PostgresTransactionAuthorizationParticipant,
+    transaction: &mut Transaction<'_>,
+    view: &TransactionAuthorizedView,
+    correlation_id: &str,
+    tenant: &str,
+    repository: &str,
+    permission: &str,
+    resources: &[IdentityAuthorizationResource],
+    result: &Value,
+) -> Result<()> {
+    participant
+        .recheck_batch(
+            transaction,
+            view,
+            &TransactionBatchRecheck {
+                tenant,
+                repository,
+                permission,
+                resources,
+            },
+        )
+        .map_err(|_| DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied))?;
+    participant
+        .append_decision_commitment(
+            transaction,
+            view,
+            &DecisionCommitmentRequest {
+                correlation_id,
+                tenant,
+                repository,
+                permission,
+                resources,
+                result,
+            },
+        )
+        .map_err(|_| DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied))?;
+    Ok(())
+}
+
+fn poison_identity_transaction(transaction: &mut Transaction<'_>) {
+    let _ = transaction.simple_query("SELECT ogvcs_identity.poison_transaction()");
+}
+
+fn allocation_result(allocation: &FileIdAllocation) -> Result<Value> {
+    let expires_at = allocation
+        .expires_at_unix_ms()
+        .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+    Ok(json!({
+        "schemaVersion": "ogvcs.repository-metadata/file-id-allocation/v1",
+        "repositoryId": hex_bytes(allocation.repository_id.as_bytes()),
+        "fileId": allocation.file_id.to_string(),
+        "allocationReceipt": allocation.allocation_receipt.as_str(),
+        "expiresAtUnixMs": expires_at.to_string(),
+    }))
+}
+
+fn normalize_unix_milliseconds(value: SystemTime) -> Result<SystemTime> {
+    let milliseconds = value
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .ok()
+        .and_then(|duration| u64::try_from(duration.as_millis()).ok())
+        .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+    SystemTime::UNIX_EPOCH
+        .checked_add(Duration::from_millis(milliseconds))
+        .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))
+}
+
+fn decode_allocation_result(
+    repository_id: RepositoryId,
+    value: &Value,
+) -> Result<FileIdAllocation> {
+    let object = value
+        .as_object()
+        .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+    if object.get("schemaVersion").and_then(Value::as_str)
+        != Some("ogvcs.repository-metadata/file-id-allocation/v1")
+        || object.get("repositoryId").and_then(Value::as_str)
+            != Some(hex_bytes(repository_id.as_bytes()).as_str())
+    {
+        return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+    }
+    let file_id = object
+        .get("fileId")
+        .and_then(Value::as_str)
+        .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?
+        .parse::<FileId>()
+        .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+    let allocation_receipt = object
+        .get("allocationReceipt")
+        .and_then(Value::as_str)
+        .and_then(|value| AllocationReceipt::from_opaque(value.to_owned()))
+        .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+    let expires_at_ms = object
+        .get("expiresAtUnixMs")
+        .and_then(Value::as_str)
+        .and_then(|value| value.parse::<u64>().ok())
+        .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+    let expires_at = SystemTime::UNIX_EPOCH
+        .checked_add(Duration::from_millis(expires_at_ms))
+        .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+    Ok(FileIdAllocation {
+        repository_id,
+        file_id,
+        allocation_receipt,
+        expires_at,
+    })
+}
+
+fn decode_identity_digest(value: &str) -> Result<[u8; 32]> {
+    if value.len() != 64 {
+        return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+    }
+    let mut bytes = [0_u8; 32];
+    for (index, chunk) in value.as_bytes().chunks_exact(2).enumerate() {
+        let text = std::str::from_utf8(chunk)
+            .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        bytes[index] = u8::from_str_radix(text, 16)
+            .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+    }
+    Ok(bytes)
+}
+
+fn hex_bytes(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut output = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        output.push(HEX[(byte >> 4) as usize] as char);
+        output.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    output
 }
 
 fn metadata_scope_digest(

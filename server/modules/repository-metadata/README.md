@@ -5,32 +5,33 @@ module. It exposes typed domain errors, authorization-gated reads, a
 transaction-composable OGVCS-010 write boundary, opaque consistency/cursor
 tokens, a checksummed migration runner, and deterministic keyset paging. HTTP
 remains disabled until a future protocol release assigns the public error
-carrier and OGVCS-009 supplies the production authorizer. The built-in
-authorizer denies every request.
+carrier. OGVCS-009 now supplies the same-transaction PostgreSQL authorization
+participant; the built-in legacy authorizer still denies every request.
 
 The Rust surface is an internal persistence/composition port, not an
 implementation claim for the contract's complete 22-operation public API. It
 now implements immutable settings/object reads, project-scoped repository
 listing, reference-kind filtering, minimum-consistency-aware repository pages,
 bounded ancestry plus snapshot-rooted FileID/path histories, and outbox
-lease/acknowledgement/release. Public request parsing and response encoding,
-`file-id.allocate`, `idempotency.status`, and the HTTP binding remain open. The
+lease/acknowledgement/release. The production persistence port also implements
+idempotency-keyed `file-id.allocate` with an exact replayable one-use receipt.
+Public request parsing, protocol routing, and the HTTP binding remain open. The
 internal page ports deliberately use a stricter 1,000-item cap and do not yet
 carry the public `PageResult` consistency-token field. They must not be
 presented as generated wire-contract implementations.
 
-The current development transaction boundary binds one repository, a caller
-supplied `AuthorizationContext`, one typed operation capability, and the
-`AuthorizedView` returned by the injected authorizer. The adapter derives the
-canonical OGVCS permission; callers cannot supply a permission string. This is
-not the production OGVCS-009 boundary: credential evidence, current authority
-epoch/policy generation, authorization, and the decision commitment still must
-be checked and appended inside the same PostgreSQL transaction before writes
-can be enabled. The default authorizer denies all requests. Reads authorize and
+The production typestate consumes the legacy store and exposes only
+credential-presentation entry points. It invokes OGVCS-009 authorization on
+the exact live PostgreSQL transaction, derives subject, epoch, and authenticated
+scope exclusively from the sealed view, accumulates exact staged resources,
+rechecks that closed set, and appends the ordinary decision commitment before
+commit. Any error poisons the transaction. The production wrapper neither
+implements nor dereferences to the legacy `MetadataStore`, so caller-owned
+`AuthorizationContext` entry points cannot be selected after binding. The
+default legacy authorizer denies all requests. Development reads authorize and
 revalidate exact typed resource projections before returning data. Repository
 arguments retained for OGVCS-010 composition are checked against their binding
-before validation or SQL. Idempotency scope is derived from that development
-binding; callers cannot supply a digest. A
+before validation or SQL. A
 committed replay is completed with `finish_committed_replay`, which rolls back
 the probe transaction and returns the stored safe result without entering the
 serialization retry loop.
@@ -62,17 +63,15 @@ and path limits, canonical tree/snapshot indexes, and every stored file-history
 fact against the snapshot's canonical change set. Chunk bytes remain owned by
 the object-storage/content boundary and are deliberately not persisted here.
 
-Generic FileID reservation accepts native create/copy only. Import requires the
-mapping-bound import method. Restore and tombstone reactivation are deliberately
+The production transaction rejects generic receiptless native create/copy and
+requires the exact one-use allocation receipt returned by idempotency-keyed
+`file-id.allocate`. Receipt scope comes only from the OGVCS-009 sealed view;
+cross-scope use, reuse, expiry, and a failed surrounding transaction all fail
+closed. The legacy reservation surface remains solely on the development
+adapter. Import requires the mapping-bound import method. Restore and tombstone reactivation are deliberately
 unavailable until OGVCS-002/OGVCS-010 provide a proof-bound API capable of
 demonstrating the original repository lifetime; an unused ID cannot manufacture
 a restore lifetime through this adapter.
-
-`file-id.allocate` is also deliberately not counterfeited. The candidate wire
-request has no allocation receipt or claim key that `file-id.register` can bind,
-so reserving an ID during allocation would either make it unclaimable or make
-the bare FileID a bearer secret. The candidate contract needs an additive,
-authenticated claim binding before this mutation can be implemented safely.
 
 Run static checks and tests:
 
@@ -91,10 +90,10 @@ compatibility fence. Existing ledger checksums are verified even while that
 fence is closed, and mutation transaction construction requires every bundled
 phase to be present, compatible, completed, and checksummed. Schema v4 adds the
 bounded deterministic ancestry primitive; v5 adds the project-list cursor
-ledger without rewriting historical migration bytes.
+ledger; v6 adds allocation receipts; and v7 additively binds token rows to an
+authority-derived authenticated scope without rewriting historical migrations.
 
-Production persistence deployment evidence, a production OGVCS-009/OIDC
-same-transaction participant, public API/HTTP bindings, external chunk-store
+Production persistence deployment evidence, public API/HTTP bindings, external chunk-store
 composition, and hosted production-service evidence remain deferred. The
 bounded workflow checks the contract package inventory, runs the live harness
 against a disposable PostgreSQL 15 service on Ubuntu, and compiles the locked

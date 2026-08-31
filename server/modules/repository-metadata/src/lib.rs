@@ -22,7 +22,10 @@ pub use ports::{
     AuthorizationPort, AuthorizedView, DeniedAuthorizedView, DenyAllAuthorization, MetadataStore,
     MetadataTransaction, ObjectValidationPort, ProductionObjectValidator,
 };
-pub use postgres::{PostgresMetadataStore, PostgresMetadataTransaction};
+pub use postgres::{
+    IdentityBoundPostgresMetadataStore, IdentityMetadataAuthorizedView, PostgresMetadataStore,
+    PostgresMetadataTransaction,
+};
 pub use types::{
     AllocationReceipt, AncestryRecord, AuthorizationContext, AuthorizationResource, CaseMode,
     CommitSequence, ConsistencyToken, CursorToken, FileHistoryRecord, FileHistoryWrite,
@@ -34,6 +37,6 @@ pub use types::{
     OutboxLeaseRecord, OutboxReleaseRequest, Page, PageRequest, PageState, ProjectId,
     ReferenceCasRequest, ReferenceCasResult, ReferenceExpected, ReferenceFilter, ReferenceKind,
     ReferenceName, ReferenceRecord, RepositoryCreate, RepositoryId, RepositoryRecord,
-    RepositorySettings, SnapshotWrite, TenantId, TransactionCapability, TransactionOptions,
-    TreeEntryRecord, TreeEntryWrite,
+    RepositorySettings, SnapshotWrite, TenantId, TransactionCapability,
+    TransactionCredentialRequest, TransactionOptions, TreeEntryRecord, TreeEntryWrite,
 };

@@ -335,6 +335,18 @@ pub struct AuthorizationContext {
     pub authorization_epoch: u64,
 }
 
+/// Caller-supplied credential material for the production OGVCS-009
+/// transaction participant. Authority epochs, subjects, transaction IDs, and
+/// authenticated-scope digests are deliberately absent: only the authority
+/// may derive those values.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TransactionCredentialRequest<'a> {
+    pub request_id: &'a str,
+    pub correlation_id: &'a str,
+    pub credential_presentation: &'a str,
+    pub reason: Option<&'a str>,
+}
+
 /// Canonical OGVCS-009 permissions consumed by repository metadata.  Callers
 /// cannot invent adapter-specific permission strings at the database boundary.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
