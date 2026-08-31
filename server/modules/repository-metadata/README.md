@@ -20,15 +20,18 @@ internal page ports deliberately use a stricter 1,000-item cap and do not yet
 carry the public `PageResult` consistency-token field. They must not be
 presented as generated wire-contract implementations.
 
-The production typestate consumes the legacy store and exposes only
-credential-presentation entry points. It invokes OGVCS-009 authorization on
+The production constructor is `IdentityBoundPostgresMetadataStore::connect`;
+it requires the OGVCS-009 PostgreSQL participant before returning a store and
+exposes only credential-presentation entry points. It invokes OGVCS-009 authorization on
 the exact live PostgreSQL transaction, derives subject, epoch, and authenticated
 scope exclusively from the sealed view, accumulates exact staged resources,
 rechecks that closed set, and appends the ordinary decision commitment before
 commit. Any error poisons the transaction. The production wrapper neither
 implements nor dereferences to the legacy `MetadataStore`, so caller-owned
 `AuthorizationContext` entry points cannot be selected after binding. The
-default legacy authorizer denies all requests. Development reads authorize and
+constructible compatibility adapter is compiled only with the repository's
+`legacy-test-adapter` feature and is never enabled in a default production
+build. Development reads authorize and
 revalidate exact typed resource projections before returning data. Repository
 arguments retained for OGVCS-010 composition are checked against their binding
 before validation or SQL. A

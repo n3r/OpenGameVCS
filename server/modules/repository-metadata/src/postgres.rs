@@ -78,7 +78,12 @@ pub struct IdentityBoundPostgresMetadataStore<
 }
 
 impl PostgresMetadataStore<DenyAllAuthorization, ProductionObjectValidator> {
+    #[cfg(feature = "legacy-test-adapter")]
     pub fn connect(database_url: &str) -> Result<Self> {
+        Self::connect_internal(database_url)
+    }
+
+    fn connect_internal(database_url: &str) -> Result<Self> {
         let client = Client::connect(database_url, NoTls).map_err(database_error)?;
         Ok(Self {
             client,
@@ -90,6 +95,7 @@ impl PostgresMetadataStore<DenyAllAuthorization, ProductionObjectValidator> {
 }
 
 impl<A, V> PostgresMetadataStore<A, V> {
+    #[cfg(feature = "legacy-test-adapter")]
     pub fn with_authorizer<B>(self, authorization: B) -> PostgresMetadataStore<B, V> {
         PostgresMetadataStore {
             client: self.client,
@@ -99,6 +105,7 @@ impl<A, V> PostgresMetadataStore<A, V> {
         }
     }
 
+    #[cfg(feature = "legacy-test-adapter")]
     pub fn with_object_validator<W>(self, validation: W) -> PostgresMetadataStore<A, W> {
         PostgresMetadataStore {
             client: self.client,
@@ -111,7 +118,7 @@ impl<A, V> PostgresMetadataStore<A, V> {
     /// Installs the production OGVCS-009 participant. It is invoked only by
     /// the identity-authorized entry points, which retain both the branded
     /// view and the live PostgreSQL transaction internally.
-    pub fn with_transaction_authorization_participant(
+    fn with_transaction_authorization_participant(
         mut self,
         participant: PostgresTransactionAuthorizationParticipant,
     ) -> IdentityBoundPostgresMetadataStore<A, V> {
@@ -119,6 +126,7 @@ impl<A, V> PostgresMetadataStore<A, V> {
         IdentityBoundPostgresMetadataStore { store: self }
     }
 
+    #[cfg(feature = "legacy-test-adapter")]
     pub fn migrate(
         &mut self,
         options: crate::MigrationRunOptions,
@@ -4472,6 +4480,7 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> MetadataStore for PostgresMe
 }
 
 impl<A, V> IdentityBoundPostgresMetadataStore<A, V> {
+    #[cfg(feature = "legacy-test-adapter")]
     pub fn with_object_validator<W>(
         self,
         validation: W,
@@ -4486,6 +4495,18 @@ impl<A, V> IdentityBoundPostgresMetadataStore<A, V> {
         options: crate::MigrationRunOptions,
     ) -> Result<crate::MigrationRunReport> {
         self.store.migrate(options)
+    }
+}
+
+impl IdentityBoundPostgresMetadataStore<DenyAllAuthorization, ProductionObjectValidator> {
+    /// Opens the production metadata adapter with the OGVCS-009 participant
+    /// installed before the store can be observed by its caller.
+    pub fn connect(
+        database_url: &str,
+        participant: PostgresTransactionAuthorizationParticipant,
+    ) -> Result<Self> {
+        Ok(PostgresMetadataStore::connect_internal(database_url)?
+            .with_transaction_authorization_participant(participant))
     }
 }
 

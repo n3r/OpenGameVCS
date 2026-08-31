@@ -53,7 +53,7 @@ if (!process.env.OGVCS_METADATA_DATABASE_URL) {
 
 const execution = spawnSync(
   'cargo',
-  ['test', '--locked', '--test', 'postgres_integration', '--', '--nocapture', '--test-threads=1'],
+  ['test', '--locked', '--features', 'legacy-test-adapter', '--test', 'postgres_integration', '--', '--nocapture', '--test-threads=1'],
   { cwd: root, encoding: 'utf8', env: process.env },
 );
 if (execution.error) {

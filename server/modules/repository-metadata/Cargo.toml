@@ -7,6 +7,13 @@ license = "MIT"
 description = "Transactional repository metadata domain and PostgreSQL migration contract"
 publish = false
 
+[features]
+default = []
+# Enables the caller-context compatibility adapter only for the repository's
+# bounded legacy PostgreSQL harness. Production builds must use the
+# OGVCS-009-bound `IdentityBoundPostgresMetadataStore` constructor.
+legacy-test-adapter = []
+
 [lib]
 path = "src/lib.rs"
 
@@ -21,3 +28,7 @@ serde = { version = "=1.0.229", features = ["derive"] }
 sha2 = "=0.10.9"
 subtle = "=2.6.1"
 uuid = "=1.18.1"
+
+[[test]]
+name = "postgres_integration"
+required-features = ["legacy-test-adapter"]

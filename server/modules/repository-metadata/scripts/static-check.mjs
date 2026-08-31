@@ -17,6 +17,8 @@ assert(cargo.includes('name = "ogvcs-repository-metadata"'), 'Cargo package name
 assert(cargo.includes('ogvcs-object-model = { path = "../../../core/object-model/rust" }'), 'object-model dependency is not public path dependency');
 assert(cargo.includes('postgres = { version = "=0.19.10"'), 'PostgreSQL dependency is not exactly pinned');
 assert(cargo.includes('rust-version = "1.82"'), 'Rust MSRV differs');
+assert(cargo.includes('legacy-test-adapter = []'), 'legacy adapter is not feature-gated');
+assert(cargo.includes('required-features = ["legacy-test-adapter"]'), 'legacy live test is not isolated behind its feature');
 
 const rustFiles = [
   'lib.rs',
@@ -88,6 +90,7 @@ assert(expandV7.includes('authenticated_scope_digest'), 'version 7 token state i
 
 const adapter = await readFile(resolve(root, 'src/postgres.rs'), 'utf8');
 const ports = await readFile(resolve(root, 'src/ports.rs'), 'utf8');
+const library = await readFile(resolve(root, 'src/lib.rs'), 'utf8');
 assert(
   adapter.split('crate::verify_schema_compatibility(&mut self.client)?').length - 1 === 19,
   'every mutation/read entry point is not schema-compatibility gated',
@@ -95,6 +98,10 @@ assert(
 assert(ports.includes('ValidationMode::Production'), 'default object validator is not production lifecycle');
 assert(ports.includes('type AuthorizedView: AuthorizedView'), 'authorizer output is not an exact view contract');
 assert(ports.includes('resource: &AuthorizationResource'), 'authorizer is not bound to a typed resource projection');
+assert(adapter.includes('#[cfg(feature = "legacy-test-adapter")]\n    pub fn connect(database_url: &str)'), 'caller-context store constructor is available in the default build');
+assert(adapter.includes('impl IdentityBoundPostgresMetadataStore<DenyAllAuthorization, ProductionObjectValidator>'), 'production identity-bound constructor is missing');
+assert(adapter.includes('pub fn connect(\n        database_url: &str,\n        participant: PostgresTransactionAuthorizationParticipant,'), 'production constructor does not require the OGVCS-009 participant');
+assert(library.includes('#[cfg(feature = "legacy-test-adapter")]\npub use postgres::PostgresMetadataStore;'), 'legacy store remains exported by the default build');
 for (const evidence of [
   'pub fn begin_authorized(',
   'pub fn execute_serializable<T>(',

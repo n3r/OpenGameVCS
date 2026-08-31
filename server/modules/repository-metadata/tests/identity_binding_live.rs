@@ -14,7 +14,7 @@ use ogvcs_repository_metadata::{
     run_migrations as run_metadata_migrations, CommitSequence, DomainErrorCode, FileId,
     FileIdOrigin, FileIdOwnerKind, FileIdReservation, IdempotencyReservation, MetadataTransaction,
     MigrationRunOptions as MetadataMigrationRunOptions, NativeFileIdReservation, OutboxEvent,
-    PostgresMetadataStore, RepositoryId, TenantId, TransactionCapability,
+    IdentityBoundPostgresMetadataStore, RepositoryId, TenantId, TransactionCapability,
     TransactionCredentialRequest, TransactionOptions,
 };
 use postgres::{types::Json, Client, NoTls};
@@ -66,9 +66,8 @@ fn identity_bound_metadata_is_scope_receipt_and_commitment_atomic() {
     probe_transaction.rollback().unwrap();
 
     let participant = PostgresTransactionAuthorizationParticipant::new().unwrap();
-    let mut store = PostgresMetadataStore::connect(&database_url)
-        .unwrap()
-        .with_transaction_authorization_participant(participant);
+    let mut store = IdentityBoundPostgresMetadataStore::connect(&database_url, participant)
+        .unwrap();
 
     let allocate = idempotency("file-id.allocate", "allocation-a", [0x31; 32]);
     let first = store

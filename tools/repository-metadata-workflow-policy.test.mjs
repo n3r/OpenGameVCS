@@ -17,7 +17,8 @@ test('repository metadata workflow pins the bounded three-host and PostgreSQL bo
   assert.match(workflow, /runner: windows-latest, label: Windows/u);
   assert.match(workflow, /^  linux-postgres:$/mu);
   assert.doesNotMatch(workflow, /^    needs:/mu);
-  assert.equal(workflow.match(/node-version: 22/gu)?.length, 2);
+  assert.equal(workflow.match(/node-version: 24/gu)?.length, 2);
+  assert.doesNotMatch(workflow, /node-version: (?:18|20|22)\b/u);
   assert.equal(
     workflow.match(/actions\/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1/gu)?.length,
     2,
@@ -37,7 +38,8 @@ test('repository metadata workflow pins the bounded three-host and PostgreSQL bo
   assert.match(workflow, /ALTER SYSTEM SET max_connections = 160/u);
   assert.match(workflow, /ogvcs_metadata_test_ci/u);
   assert.equal(workflow.match(/cargo fetch .* --locked/gu)?.length, 2);
-  assert.equal(workflow.match(/cargo test .* --locked --offline/gu)?.length, 3);
+  assert.equal(workflow.match(/cargo test .* --locked --offline/gu)?.length, 4);
+  assert.equal(workflow.match(/--features legacy-test-adapter/gu)?.length, 2);
   assert.equal(workflow.match(/npm run test:metadata$/gmu)?.length, 1);
   assert.equal(
     workflow.match(/npm run test:package --workspace @opengamevcs\/repository-metadata-contract-v1/gu)?.length,
@@ -47,6 +49,7 @@ test('repository metadata workflow pins the bounded three-host and PostgreSQL bo
   assert.equal(workflow.match(/server\/migrations\/identity-policy-audit\/\*\*/gu)?.length, 2);
   assert.equal(workflow.match(/server\/modules\/identity-policy-audit\/\*\*/gu)?.length, 2);
   assert.match(workflow, /cargo clippy .* --locked --offline --all-targets -- -D warnings/u);
+  assert.match(workflow, /cargo clippy .* --all-targets --features legacy-test-adapter -- -D warnings/u);
   assert.match(workflow, /CARGO_NET_OFFLINE: 'true'/u);
   assert.match(
     workflow,
