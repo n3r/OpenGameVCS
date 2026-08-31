@@ -325,25 +325,25 @@ test('a quarantine race cannot return a false current-available receipt', async 
 
 test('range verification and finalize replay both reject a newer quarantine generation', async () => {
   const rangeVector = hostileCase('range-quarantine-race'); const replayVector = hostileCase('stale-finalize-replay');
-  const root = await mkdtemp(join(tmpdir(), 'ogvcs-transfer-current-generation-')); const value = await service(root);
+  const root = await mkdtemp(join(tmpdir(), 'ogvcs-transfer-current-generation-'));
+  let value;
+  let receipt;
+  let quarantine = true;
+  const rangeRace = async (phase) => {
+    if (phase === 'after-backend-range-verified' && quarantine) {
+      quarantine = false;
+      const current = await value.lifecycle.get(receipt.opaqueKey);
+      await value.lifecycle.compareAndSwap({ opaqueKey: receipt.opaqueKey, expectedGeneration: current.generation, expectedState: 'available', nextState: 'quarantined', authorityBindingSha256: current.authorityBindingSha256 });
+    }
+  };
+  value = await service(root, rangeRace);
   const uploadGrant = grant('upload');
   const startFingerprint = semanticIdempotencyFingerprint({ declaredLength: bytes.length, objectId, operation: 'start-upload', partSize: bytes.length });
   const started = await value.startUpload({ objectId, declaredLength: bytes.length, partSize: bytes.length, idempotencyKey: key('current-start'), idempotencyFingerprint: startFingerprint, grant: uploadGrant, context });
   await value.uploadPart({ sessionId: started.sessionId, index: 0, bytes, sha256: createHash('sha256').update(bytes).digest('hex'), grant: uploadGrant, context });
   const finalFingerprint = semanticIdempotencyFingerprint({ operation: 'finalize-upload', sessionId: started.sessionId });
   const finalArguments = { sessionId: started.sessionId, idempotencyKey: key('current-final'), idempotencyFingerprint: finalFingerprint, grant: uploadGrant, context };
-  const receipt = await value.finalizeUpload(finalArguments);
-  const originalRead = value.backend.readVerifiedRange.bind(value.backend);
-  let quarantine = true;
-  value.backend.readVerifiedRange = async (...arguments_) => {
-    const range = await originalRead(...arguments_);
-    if (quarantine) {
-      quarantine = false;
-      const current = await value.lifecycle.get(receipt.opaqueKey);
-      await value.lifecycle.compareAndSwap({ opaqueKey: receipt.opaqueKey, expectedGeneration: current.generation, expectedState: 'available', nextState: 'quarantined', authorityBindingSha256: current.authorityBindingSha256 });
-    }
-    return range;
-  };
+  receipt = await value.finalizeUpload(finalArguments);
   await assert.rejects(() => value.readRange({ objectId, start: 0, endExclusive: bytes.length, grant: grant('download', 'current-download'), context }), { code: rangeVector.expected.code });
   await assert.rejects(() => value.finalizeUpload(finalArguments), { code: replayVector.expected.code });
 });

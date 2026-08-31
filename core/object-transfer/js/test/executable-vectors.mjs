@@ -431,13 +431,11 @@ async function staleFinalizeReplay() {
 
 async function rangeQuarantineRace() {
   const root = await mkdtemp(join(tmpdir(), 'ogvcs-vector-range-race-'));
-  const value = await service(root);
-  const finalized = await finalizeSinglePart(value, 'range-race');
-  const originalRead = value.backend.readVerifiedRange.bind(value.backend);
+  let value;
+  let finalized;
   let raced = false;
-  value.backend.readVerifiedRange = async (...arguments_) => {
-    const range = await originalRead(...arguments_);
-    if (!raced) {
+  const fault = async (phase) => {
+    if (phase === 'after-backend-range-verified' && !raced) {
       raced = true;
       const current = await value.lifecycle.get(finalized.receipt.opaqueKey);
       await value.lifecycle.compareAndSwap({
@@ -448,8 +446,9 @@ async function rangeQuarantineRace() {
         authorityBindingSha256: current.authorityBindingSha256,
       });
     }
-    return range;
   };
+  value = await service(root, fault);
+  finalized = await finalizeSinglePart(value, 'range-race');
   const code = await errorCode(() => value.readRange({
     objectId,
     start: 0,

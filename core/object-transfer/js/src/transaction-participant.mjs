@@ -9,7 +9,7 @@ import { ObjectRef } from '@opengamevcs/object-model';
 import { canonicalBytes, cloneJson } from '@opengamevcs/protocol-baseline';
 import { transferError } from './errors.mjs';
 
-export const LIFECYCLE_TRANSACTION_CONTRACT_VERSION = '0.1.0-rc.5';
+export const LIFECYCLE_TRANSACTION_CONTRACT_VERSION = '0.1.0-rc.6';
 export const LIFECYCLE_TRANSACTION_LIMITS = Object.freeze({ objectsMaximum: 1024 });
 const PRIVATE_CONTENT_MANIFEST_BYTES_MAX = 256 * 1024 * 1024;
 

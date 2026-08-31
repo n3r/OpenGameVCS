@@ -1,10 +1,14 @@
 # OGVCS-008 — Object storage and transfer service
 
-**Status:** In development
+**Candidate date:** 2026-09-01
+
+**Contract:** `0.1.0-rc.6`
+
+**Status:** In development; acceptance gates remain open
 
 **Internal prerequisite:** repository metadata schema v9
 
-**Date:** 2026-09-01
+**License:** MIT
 
 ## Repository-backed lifecycle persistence tranche
 
@@ -27,20 +31,45 @@
   inserted set-wise per chunk, payload and plan digests are recomputed, and
   global opaque-key order and object uniqueness are checked without loading a
   100,000-element Rust vector.
-- Pinned the existing OGVCS-008 object-transfer rc.5 manifest and artifact-set
+- Pinned the OGVCS-008 object-transfer rc.6 manifest and artifact-set
   digests without changing any ratified assignments.
 
-## Deliberate remaining work
+## Object storage and resumable transfer candidate
 
-OGVCS-008 and OGVCS-010 remain Todo. This tranche does not implement backend,
-KMS, filesystem, S3, network, transfer-session, or public protocol routes. The
-aggregate plan commitment is structural, not an authority MAC; aggregate
-application stays dormant until OGVCS-009 aggregate-v3 supplies and revalidates
-its actual key-ring-authenticated receipt. The internal lifecycle application
-receipt is not an authenticated or disaster-recovery OGVCS-010 commit receipt,
-and audit correlation identifiers are not audit appends. GC current-root proof,
-retention authority, transfer authority, hosted deployment, and exact-scale
-campaigns remain future work.
+This lane adds a narrow branded backend capability port and S3-compatible
+adapter while preserving the filesystem backend. The S3 path uses SigV4,
+HTTPS-by-default transport, conditional immutable creation, exact metadata and
+whole-body read-back, bounded retries/deadlines/listing, and generation-fenced
+deletion. A common suite exercises both adapters, with an offline deterministic
+fake and a pinned live-MinIO hosted job.
+
+Logical 100-GiB content is represented as many immutable objects without
+lifting the 64-MiB canonical object bound. Durable paged plans and verified
+ledgers support resume and bounded-memory reconstruction/whole hashing. Sealed
+batch plans bind grant/object set/request root/generation/receipt/pack offsets
+and authorize the complete set before existence checks. Durable unique-byte
+quota, internal availability/integrity events, and bounded privacy-safe
+telemetry are also included.
+
+The `0.1.0-rc.6` contract extends the filesystem anchor additively with S3 and
+content-transfer profiles, seven schemas, and five vector sets. Existing error
+codes, transition assignments, and public/wire route ownership are unchanged.
+
+## Deliberate remaining work and open gates
+
+OGVCS-008 and OGVCS-010 remain Todo. The pinned live-MinIO workflow has not yet
+produced retained hosted evidence, and the separately confirmed exact 100-GiB
+interrupted transfer/reconstruction workflow has not run. Reference throughput
+and memory acceptance therefore remain open. Public protocol routes,
+reachability/GC, authenticated publication, retention and transfer authority,
+KMS integration, and hosted production deployment remain owned by their
+separate lanes.
+
+The aggregate lifecycle plan commitment is structural, not an authority MAC;
+aggregate application stays dormant until the OGVCS-009 aggregate-v3 receipt
+is consumed and revalidated in the same transaction. The internal lifecycle
+application receipt is not an authenticated or disaster-recovery OGVCS-010
+commit receipt, and audit correlation identifiers are not audit appends.
 
 ## Bounded evidence
 
@@ -58,3 +87,8 @@ and Windows ([run 33450207801](https://github.com/n3r/OpenGameVCS/actions/runs/3
 The retained 15-row report and machine record are in the
 [OGVCS-006 bounded evidence packet](../evidence/OGVCS-006/README.md); they do
 not claim hosted production deployment or exact-scale completion.
+
+The object-transfer candidate passed its local contract, runtime, workflow
+policy, roadmap, hostile-case, syntax, and package dry-run gates. Its live-MinIO
+and exact 100-GiB jobs remain explicitly unexecuted until hosted evidence is
+retained.

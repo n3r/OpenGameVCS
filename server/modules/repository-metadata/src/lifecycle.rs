@@ -9,11 +9,11 @@ use crate::{
 use ogvcs_object_model::ObjectKind;
 use sha2::{Digest, Sha256};
 
-pub const LIFECYCLE_CONTRACT_VERSION: &str = "0.1.0-rc.5";
+pub const LIFECYCLE_CONTRACT_VERSION: &str = "0.1.0-rc.6";
 pub const OBJECT_TRANSFER_MANIFEST_SHA256: &str =
-    "a9b175b7e24568cc48b6c233238173a6527fcb2926e5e70852dc02f417debdb0";
+    "6748334b4cbc9b155941d8382b6a67c348f0612432a9555cfa215f62681af1d3";
 pub const OBJECT_TRANSFER_ARTIFACT_SET_SHA256: &str =
-    "8da6186ae30137fe2f0943568b82a0a1c43e4638e01085d63457f836785ee5d8";
+    "8e96a6fc57aeabb9c3bd8a363b4bbb70b2bfc4832206b20c1581e92e463bec38";
 pub const DIRECT_OBJECTS_MAXIMUM: usize = 1_024;
 pub const AGGREGATE_OBJECTS_MAXIMUM: u32 = 100_000;
 pub const PLAN_CHUNK_ITEMS_MAXIMUM: usize = 1_000;

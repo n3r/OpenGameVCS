@@ -12,6 +12,7 @@ import {
 } from '@opengamevcs/object-model';
 import { canonicalBytes, rfc9530Sha256 } from '@opengamevcs/protocol-baseline';
 import { consumeDeletePermit, consumeReuploadPermit } from './delete-permit.mjs';
+import { captureTrustedBackend } from './backend-port.mjs';
 import { mapIo, transferError } from './errors.mjs';
 import {
   assertPinnedDirectory,
@@ -60,6 +61,8 @@ export const FILESYSTEM_LIMITS = Object.freeze({
 });
 
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
+let FILESYSTEM_BACKEND_DEFINITION;
+const FILESYSTEM_BACKEND_RECORDS = new WeakMap();
 
 function opaqueKeyValue(value) {
   if (typeof value !== 'string' || !KEY.test(value)) transferError('TRANSFER_INPUT_INVALID', 'opaque backend key is invalid');
@@ -281,6 +284,9 @@ export class FilesystemObjectBackend {
     maxRangeBytes = FILESYSTEM_LIMITS.rangeBytesMaximum,
     fault = async () => {},
   } = {}) {
+    if (new.target !== FilesystemObjectBackend) {
+      transferError('TRANSFER_INPUT_INVALID', 'filesystem backend subclasses are not trusted adapters');
+    }
     if (typeof root !== 'string' || !isAbsolute(root) || root.includes('\0')) {
       transferError('TRANSFER_INPUT_INVALID', 'filesystem backend root must be absolute');
     }
@@ -293,6 +299,20 @@ export class FilesystemObjectBackend {
     this.maxObjectBytes = lengthValue(maxObjectBytes, FILESYSTEM_LIMITS.objectBytesMaximum, 'maxObjectBytes');
     this.maxRangeBytes = lengthValue(maxRangeBytes, FILESYSTEM_LIMITS.rangeBytesMaximum, 'maxRangeBytes');
     this.#fault = fault;
+    FILESYSTEM_BACKEND_RECORDS.set(this, captureTrustedBackend(this, {
+      schemaVersion: 'ogvcs.object-transfer/backend-capabilities/v1',
+      backendKind: 'filesystem',
+      profile: 'storage.opengamevcs/filesystem@1',
+      objectBytesMaximum: this.maxObjectBytes,
+      rangeBytesMaximum: this.maxRangeBytes,
+      createIfAbsent: true,
+      exactMetadata: true,
+      wholeObjectVerification: true,
+      verifiedRanges: true,
+      boundedPrefixList: true,
+      generationFencedDelete: true,
+      multipartEtagIsDigest: false,
+    }, FILESYSTEM_BACKEND_DEFINITION));
   }
 
   async initialize({ parentPin = null } = {}) {
@@ -802,3 +822,24 @@ export class FilesystemObjectBackend {
     return Object.freeze(result.sort());
   }
 }
+
+export function filesystemBackendRecord(instance) {
+  return FILESYSTEM_BACKEND_RECORDS.get(instance) ?? null;
+}
+
+// Freeze the exact adapter method table during module evaluation, before an
+// importer can replace a prototype method and have attacker code captured by
+// the trusted backend port.
+const FILESYSTEM_BACKEND_METHOD_NAMES = [
+  'createIfAbsent', 'head', 'initialize', 'listByInternalPrefix', 'readRange',
+  'readVerifiedRange', 'safeDelete', 'verify',
+];
+Object.freeze(FilesystemObjectBackend.prototype);
+FILESYSTEM_BACKEND_DEFINITION = Object.freeze({
+  constructor: FilesystemObjectBackend,
+  prototype: FilesystemObjectBackend.prototype,
+  methods: Object.freeze(Object.fromEntries(FILESYSTEM_BACKEND_METHOD_NAMES.map((method) => [
+    method,
+    Object.getOwnPropertyDescriptor(FilesystemObjectBackend.prototype, method).value,
+  ]))),
+});

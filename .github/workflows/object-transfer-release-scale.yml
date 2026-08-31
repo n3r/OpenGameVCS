@@ -1,0 +1,71 @@
+name: Object transfer exact release scale
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type RUN-EXACT-100-GIB to authorize the manual 100-GiB gate
+        required: true
+        type: string
+      minimum_mibps:
+        description: Minimum upload and reconstruction throughput in MiB/s
+        required: true
+        default: "25"
+        type: string
+      maximum_rss_mib:
+        description: Maximum resident memory in MiB
+        required: true
+        default: "512"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: object-transfer-exact-scale
+  cancel-in-progress: false
+
+jobs:
+  exact-100-gib:
+    if: inputs.confirmation == 'RUN-EXACT-100-GIB'
+    runs-on: [self-hosted, ogvcs-exact-scale]
+    timeout-minutes: 720
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run interrupted 100-GiB transfer and reconstruction
+        shell: bash
+        run: |
+          set -euo pipefail
+          scale_root="$RUNNER_TEMP/ogvcs-object-transfer-scale-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          result="$RUNNER_TEMP/object-transfer-release-scale.json"
+          test ! -e "$scale_root"
+          node tools/object-transfer-release-scale.mjs \
+            --confirm RUN-EXACT-100-GIB \
+            --root "$scale_root" \
+            --output "$result" \
+            --logical-bytes 107374182400 \
+            --chunk-bytes 8388608 \
+            --interrupt-every 257 \
+            --minimum-mibps "${{ inputs.minimum_mibps }}" \
+            --maximum-rss-mib "${{ inputs.maximum_rss_mib }}"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: object-transfer-exact-100-gib-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/object-transfer-release-scale.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Reclaim exact-scale scratch data
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          scale_root="$RUNNER_TEMP/ogvcs-object-transfer-scale-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          case "$scale_root" in
+            "$RUNNER_TEMP"/ogvcs-object-transfer-scale-*) rm -rf -- "$scale_root" ;;
+            *) echo "Refusing unsafe cleanup target" >&2; exit 1 ;;
+          esac

@@ -1,4 +1,4 @@
-export const CONTRACT_VERSION = '0.1.0-rc.5';
+export const CONTRACT_VERSION = '0.1.0-rc.6';
 export const PROFILE = 'storage.opengamevcs/filesystem@1';
 export const CONFORMANCE_SECRET_HEX = '000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f';
 export const FIXTURE_BYTES = Buffer.from('OpenGameVCS object transfer fixture\n', 'utf8');

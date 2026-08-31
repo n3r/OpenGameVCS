@@ -1,45 +1,84 @@
 # `@opengamevcs/object-transfer`
 
-Development-only OGVCS-008 filesystem backend and resumable transfer state
-machine. It consumes the public OGVCS-002 object model, OGVCS-003 transfer-grant
-verifier, and OGVCS-041 idempotency/range primitives.
+Development-only OGVCS-008 implementation for bounded immutable object
+transfer. It consumes OGVCS-002 object identity, OGVCS-003 transfer grants,
+OGVCS-007 content-manifest verification receipts, and OGVCS-041 idempotency and
+range primitives. It does not assign a public or wire route.
 
-The backend uses opaque HMAC-derived keys, pinned private directories, immutable
-framed files, no-replace publication, canonical OGVCS-002 metadata validation,
-same-open verified range reads, and generation-bound safe deletion. The service
-persists multipart/session metadata, single-use nonce claims, and
-generation-CAS lifecycle records; backend existence never means available.
-Recoverable locks renew while work is live and every persisted commit verifies
-the current fencing token. Physical deletion is reachable only through the
-configured lifecycle authority: it issues a private one-use permit for the
-exact `deleting` generation, and the backend durably records that intent before
-unlink so response-loss retry can finish the lifecycle receipt. A later upload
-for that same exact key can reopen only through a private reupload permit bound
-to the current `deleted` generation, deletion receipt, and next authority
-binding. When the shared lifecycle transaction participant would make a
-`content-manifest` generation become `available`, it also requires the exact
-same-process OGVCS-007 production verification receipt and manifest bytes at
-`bind(...)`; it admits that receipt through `commitProductionManifest()` and
-only then lets the single metadata `apply(...)` commit proceed.
+## Backends
 
-Every service operation re-verifies a grant using the service clock with the configured audience,
-authority epoch, key generation, tenant/repository/subject context, operation,
-and request-root/object set. Atomic nonce claims survive restart. Broad
-diagnostics do not return ObjectIDs or grant details.
+`FilesystemObjectBackend` and `S3ObjectBackend` implement one narrow capability
+profile: create-if-absent, exact head metadata, whole verification, verified
+half-open ranges, bounded internal-prefix listing, and generation/permit-fenced
+delete. `ObjectTransferService` accepts only an adapter explicitly constructed
+and branded by this package. It captures an immutable port, rejects subclasses,
+and never dispatches through caller-replaced methods or prototypes.
 
-This first cut supports objects through 64 MiB, parts through 4 MiB, ranges
-through 8 MiB, and 1,024 parts/sessions, with a 256-session per-tenant default.
-Expired locks and retained part/session copies are reclaimed within bounded
-scans. It does not claim S3 parity, direct public production routes, GC
-reachability, automatic staging cleanup, 100-GiB execution, or reference
-throughput.
+Both adapters receive only tenant-scoped opaque HMAC keys. The filesystem
+adapter retains its pinned-directory, no-replace publication, file and directory
+sync, same-open verification, recoverable lock, and durable delete-fence
+behavior. The S3-compatible adapter uses SigV4, HTTPS by default, bounded
+deadlines/responses/retries, `If-None-Match: *`, exact metadata, checksum and
+whole-body read-back, and conditional lifecycle-fence updates. Loopback HTTP and
+bucket creation require explicit test opt-in. An upload status, existence check,
+or ETag is never a durability receipt; multipart ETags are opaque conditional
+tokens, not content hashes.
 
-The portable Node adapter assumes the private storage root and its ancestors
-are not concurrently renamed by untrusted code with the same OS authority.
-Detected replacement fails closed; deployments that include that actor require
-a stronger native directory-handle-relative adapter.
+Ordinary offline tests run the shared behavior suite against the filesystem and
+a deterministic in-process S3 protocol fake. The hosted Linux job downloads one
+exact MinIO release from a machine-checked URL/SHA-256 record and runs the live
+bounded contract over loopback. That hosted result is still required before the
+lane can claim S3 acceptance.
 
-On Windows, Node exposes verified directory handles but reports `EPERM` for
-directory `fsync`. The filesystem profile suppresses only that exact unsupported
-operation after the directory was opened and identity-checked; ACL/open errors
-and every non-Windows sync failure remain fatal.
+## Logical content transfer and batches
+
+The canonical object ceiling remains 64 MiB. `ContentTransferPlanStore` models a
+logical file of at most 100 GiB as up to 100,000 immutable chunk descriptors in
+pages of at most 256. Plan pages and verified-part ledgers are durable; restart
+returns only pending descriptors, so already verified chunks need not be sent
+again. Reconstruction reads one bounded chunk at a time, verifies its checksum
+and ObjectID, streams it to the supplied writer, and verifies the whole-file
+SHA-256. No corpus-sized descriptor or payload array is required.
+
+Batch download plans authorize the complete object set before any lifecycle or
+backend existence lookup. The sealed plan binds the grant, tenant scope, exact
+ordered object set, request root, generations, receipts, lengths, and pack
+offsets. A tampered plan, duplicate/+1 request, or hidden object at an early,
+middle, or final position returns no partial layout.
+
+The manual `object-transfer-release-scale` workflow is the only exact 100-GiB
+gate. It requires an explicit confirmation on a dedicated self-hosted runner,
+injects restarts, reconstructs and whole-hash verifies the bytes, and records
+throughput and peak RSS. Ordinary CI policy rejects scale execution.
+
+## Lifecycle, quotas, and operations
+
+Backend existence never means lifecycle availability. The service still ships a
+filesystem-local lifecycle candidate, plus `createLifecycleAdapterPort()` as an
+explicit captured seam for the separately owned repository-metadata lifecycle
+lane. The seam advertises whether state is atomic with repository metadata; this
+package does not invent repository-metadata v9 tables or claim that integration
+has landed. `content-manifest` availability remains gated by the exact
+same-process OGVCS-007 production receipt boundary.
+
+Staging bytes, durable unique bytes, request rate, and transfer bytes are
+accounted separately. Durable reservations and commits survive response loss;
+release is an idempotent lifecycle/GC seam and is never inferred from object
+absence. Internal content-available and privacy-safe integrity-failure events
+are durable and bounded. Telemetry aggregates operation, bytes, duration,
+retry, resume, part, backend, quota, and integrity dimensions with fixed label
+sets; object IDs, backend keys, paths, grant details, and credentials are not
+broad labels or error text.
+
+## Limits and non-claims
+
+Objects are at most 64 MiB, ranges 8 MiB, upload parts 4 MiB, batch object sets
+4,096, logical plans 100 GiB, and all persisted scans/ledgers have explicit
+ceilings. The portable filesystem adapter still assumes same-authority hostile
+code cannot rename its private ancestors between pathname operations; such a
+deployment needs a native directory-handle-relative adapter. Windows suppresses
+only Node's exact verified-directory `EPERM` fsync limitation.
+
+This candidate does not claim public HTTP completion, OGVCS-010 publication,
+reachability/GC, hosted MinIO evidence, exact-scale throughput, or final
+OGVCS-008 acceptance until those separate gates land.

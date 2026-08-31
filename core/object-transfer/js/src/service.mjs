@@ -11,7 +11,9 @@ import {
   semanticIdempotencyFingerprint,
 } from '@opengamevcs/protocol-baseline';
 import { FilesystemObjectBackend } from './backend.mjs';
+import { backendCapabilities, trustedBackendPort } from './backend-access.mjs';
 import { ObjectTransferError, mapIo, transferError } from './errors.mjs';
+import { TransferEventStore } from './events.mjs';
 import {
   assertPinnedDirectory,
   atomicJsonCreate,
@@ -25,6 +27,13 @@ import {
   writeAll,
 } from './fs-util.mjs';
 import { LifecycleStore } from './lifecycle.mjs';
+import {
+  createLifecycleAdapterPort,
+  lifecycleAdapterCapabilities,
+  trustedLifecycleAdapterPort,
+} from './lifecycle-port.mjs';
+import { DurableQuotaLedger } from './quota-ledger.mjs';
+import { nullTransferTelemetry } from './telemetry.mjs';
 
 export const TRANSFER_LIMITS = Object.freeze({
   batchMaximum: 4096,
@@ -37,6 +46,8 @@ export const TRANSFER_LIMITS = Object.freeze({
   nonceRecordsMaximum: 4096,
   tenantStagingBytesMaximum: 268_435_456,
   transferBytesPerMinuteMaximum: 268_435_456,
+  durableUniqueBytesMaximum: 1_099_511_627_776,
+  batchLogicalBytesMaximum: 107_374_182_400,
 });
 
 const SHA = /^[0-9a-f]{64}$/u;
@@ -187,12 +198,54 @@ function validateSessionRecord(value) {
   return Object.freeze(value);
 }
 
+function validateBatchPlan(value) {
+  const keys = [
+    'grantBindingSha256', 'issuedAtUnixMs', 'items', 'objectSetSha256', 'planId',
+    'requestRoot', 'schemaVersion', 'tenantScopeSha256', 'totalBytes',
+  ].sort().join('\0');
+  if (!value || typeof value !== 'object' || Array.isArray(value)
+      || Object.keys(value).sort().join('\0') !== keys
+      || value.schemaVersion !== 'ogvcs.object-transfer/batch-download-plan/v1'
+      || !SHA.test(value.planId ?? '') || !SHA.test(value.grantBindingSha256 ?? '')
+      || !SHA.test(value.tenantScopeSha256 ?? '') || !SHA.test(value.objectSetSha256 ?? '')
+      || !(value.requestRoot === null || /^sha256:[0-9a-f]{64}$/u.test(value.requestRoot ?? ''))
+      || !Number.isSafeInteger(value.issuedAtUnixMs) || value.issuedAtUnixMs < 0
+      || !Number.isSafeInteger(value.totalBytes) || value.totalBytes < 0
+      || value.totalBytes > TRANSFER_LIMITS.batchLogicalBytesMaximum
+      || !Array.isArray(value.items) || value.items.length < 1
+      || value.items.length > TRANSFER_LIMITS.batchMaximum) {
+    transferError('TRANSFER_INPUT_INVALID', 'batch download plan is invalid');
+  }
+  let offset = 0;
+  const ids = new Set();
+  const items = value.items.map((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)
+        || Object.keys(item).sort().join('\0') !== 'backendReceiptSha256\0generation\0length\0objectId\0packOffset'
+        || !SHA.test(item.backendReceiptSha256 ?? '')
+        || !Number.isSafeInteger(item.length) || item.length < 0 || item.length > TRANSFER_LIMITS.objectMaximum
+        || !Number.isSafeInteger(item.generation) || item.generation < 1 || item.packOffset !== offset) {
+      transferError('TRANSFER_INPUT_INVALID', 'batch download plan item is invalid');
+    }
+    const objectId = objectIdValue(item.objectId);
+    if (ids.has(objectId)) transferError('TRANSFER_INPUT_INVALID', 'batch download plan contains duplicate objects');
+    ids.add(objectId);
+    offset += item.length;
+    if (!Number.isSafeInteger(offset) || offset > TRANSFER_LIMITS.batchLogicalBytesMaximum) {
+      transferError('TRANSFER_LIMIT_EXCEEDED', 'batch download plan exceeds its byte bound');
+    }
+    return Object.freeze({ ...item, objectId });
+  });
+  if (offset !== value.totalBytes) transferError('TRANSFER_INPUT_INVALID', 'batch download plan total differs');
+  return Object.freeze({ ...value, items: Object.freeze(items) });
+}
+
 export class ObjectTransferService {
   #fault;
   #idempotency;
   #publicJwk;
   #rate = new Map();
   #secret;
+  #telemetry;
   #verifyGrant;
   #rootPin;
   #sessionsPin;
@@ -215,9 +268,13 @@ export class ObjectTransferService {
     maxBatchRequestsPerMinute = 120,
     maxTransferBytesPerMinute = TRANSFER_LIMITS.transferBytesPerMinuteMaximum,
     maxTenantStagingBytes = TRANSFER_LIMITS.tenantStagingBytesMaximum,
+    maxTenantDurableUniqueBytes = TRANSFER_LIMITS.durableUniqueBytesMaximum,
     maxSessionsPerTenant = TRANSFER_LIMITS.sessionsPerTenantMaximum,
     safetyWindowMilliseconds = 3_600_000,
     lockLeaseMilliseconds = 300_000,
+    backend = null,
+    lifecycleAdapter = null,
+    telemetry = null,
   } = {}) {
     if (typeof root !== 'string' || !isAbsolute(root) || !(backendSecret instanceof Uint8Array)
         || backendSecret.byteLength < 32 || typeof audience !== 'string' || typeof issuer !== 'string'
@@ -230,6 +287,7 @@ export class ObjectTransferService {
     integer(maxBatchRequestsPerMinute, 1, 100_000, 'rate limit');
     integer(maxTransferBytesPerMinute, 1, 1_099_511_627_776, 'transfer-byte rate limit');
     integer(maxTenantStagingBytes, 1, 1_099_511_627_776, 'tenant staging limit');
+    integer(maxTenantDurableUniqueBytes, 1, TRANSFER_LIMITS.durableUniqueBytesMaximum, 'tenant durable unique-byte limit');
     integer(maxSessionsPerTenant, 1, TRANSFER_LIMITS.sessionsMaximum, 'tenant session limit');
     integer(safetyWindowMilliseconds, 3_600_000, 31_536_000_000, 'safety window');
     integer(lockLeaseMilliseconds, 1_000, 86_400_000, 'lock lease');
@@ -238,14 +296,36 @@ export class ObjectTransferService {
     this.sessionLocksRoot = join(this.root, 'session-locks');
     this.partsRoot = join(this.root, 'parts');
     this.noncesRoot = join(this.root, 'nonce-replay');
-    this.backend = new FilesystemObjectBackend({ root: join(this.root, 'backend'), fault });
-    this.lifecycle = new LifecycleStore({
-      root: join(this.root, 'lifecycle'),
-      now,
-      safetyWindowMilliseconds,
-      lockLeaseMilliseconds,
-      deleteObject: (permit) => this.backend.safeDelete({ permit }),
+    const backendAdapter = backend ?? new FilesystemObjectBackend({ root: join(this.root, 'backend'), fault });
+    this.backendCapabilities = backendCapabilities(backendAdapter);
+    this.backend = trustedBackendPort(backendAdapter);
+    const lifecyclePort = lifecycleAdapter ?? createLifecycleAdapterPort({
+      adapter: new LifecycleStore({
+        root: join(this.root, 'lifecycle'),
+        now,
+        safetyWindowMilliseconds,
+        lockLeaseMilliseconds,
+        deleteObject: (permit) => this.backend.safeDelete({ permit }),
+      }),
+      capabilities: {
+        schemaVersion: 'ogvcs.object-transfer/lifecycle-adapter-capabilities/v1',
+        storageAuthority: 'filesystem-local-candidate',
+        lifecycleContractVersion: 'ogvcs.object-transfer/lifecycle-record/v1',
+        atomicWithRepositoryMetadata: false,
+        generationFenced: true,
+        receiptGatedContentManifest: true,
+      },
     });
+    this.lifecycleCapabilities = lifecycleAdapterCapabilities(lifecyclePort);
+    this.lifecycle = trustedLifecycleAdapterPort(lifecyclePort);
+    this.durableQuota = new DurableQuotaLedger({
+      root: join(this.root, 'durable-quota'),
+      maximumBytes: maxTenantDurableUniqueBytes,
+      now,
+      lockLeaseMilliseconds,
+      fault,
+    });
+    this.events = new TransferEventStore({ root: join(this.root, 'internal-events'), now });
     this.#secret = Buffer.from(backendSecret);
     this.#publicJwk = cloneJson(authorizationPublicJwk, { maxBytes: 16 * 1024 });
     this.audience = audience;
@@ -257,11 +337,16 @@ export class ObjectTransferService {
     this.maxBatchRequestsPerMinute = maxBatchRequestsPerMinute;
     this.maxTransferBytesPerMinute = maxTransferBytesPerMinute;
     this.maxTenantStagingBytes = maxTenantStagingBytes;
+    this.maxTenantDurableUniqueBytes = maxTenantDurableUniqueBytes;
     this.maxSessionsPerTenant = maxSessionsPerTenant;
     this.safetyWindowMilliseconds = safetyWindowMilliseconds;
     this.lockLeaseMilliseconds = lockLeaseMilliseconds;
     this.#verifyGrant = verifyGrant;
     this.#fault = fault;
+    if (telemetry !== null && typeof telemetry?.observe !== 'function') {
+      transferError('TRANSFER_INPUT_INVALID', 'transfer telemetry sink is invalid');
+    }
+    this.#telemetry = telemetry ?? nullTransferTelemetry();
     this.#idempotency = new IdempotencyReplayStore({
       now,
       maxEntries: 4096,
@@ -278,6 +363,8 @@ export class ObjectTransferService {
     this.#noncesPin = await pinPlainDirectory(this.noncesRoot, { parentPin: this.#rootPin });
     await this.backend.initialize({ parentPin: this.#rootPin });
     await this.lifecycle.initialize({ parentPin: this.#rootPin });
+    await this.durableQuota.initialize();
+    await this.events.initialize();
     await this.#withSessionLock(NONCE_LOCK, (lockGuard) => this.#cleanupNonces(lockGuard));
     await this.#withSessionLock(QUOTA_LOCK, (lockGuard) => this.#cleanupSessions(null, lockGuard));
     return this;
@@ -299,6 +386,41 @@ export class ObjectTransferService {
       hash.update(parts[index]);
     }
     return hash.digest('hex');
+  }
+
+  #observe(operation, outcome, { bytes = 0, durationMs = 0, retries = 0, resume = 0,
+    parts = 0, quota = 'none', integrity = 'none' } = {}) {
+    try {
+      this.#telemetry.observe({
+        operation,
+        backend: 'service',
+        outcome,
+        bytes,
+        durationMs,
+        retries,
+        resume,
+        parts,
+        quota,
+        integrity,
+      });
+    } catch {
+      // Metrics are deliberately non-authoritative and cannot change transfer
+      // durability, authorization, or lifecycle outcomes.
+    }
+  }
+
+  async #recordIntegrityFailure(binding, operation) {
+    try {
+      await this.events.integrityFailure({
+        tenantScopeSha256: binding.tenantScopeSha256,
+        backendKind: this.backendCapabilities.backendKind,
+        operation,
+      });
+    } catch {
+      // Integrity still fails closed with its original error if the bounded
+      // diagnostic outbox is unavailable or full.
+    }
+    this.#observe(operation, 'integrity', { integrity: 'failed' });
   }
 
   #opaqueKey(tenant, objectId) { return this.#hmac('OGVCS-OBJECT-BACKEND-KEY-V1\0', tenant, objectId); }
@@ -917,6 +1039,12 @@ export class ObjectTransferService {
         || after.objectId !== current.objectId || after.length !== current.length) {
       transferError('TRANSFER_LIFECYCLE_STALE', 'finalized receipt changed during replay');
     }
+    await this.events.contentAvailable({
+      tenantScopeSha256: session.finalized.tenantScopeSha256,
+      objectId: session.finalized.objectId,
+      generation: session.finalized.generation,
+      backendReceiptSha256: session.finalized.backendReceiptSha256,
+    });
     return session.finalized;
   }
 
@@ -978,17 +1106,44 @@ export class ObjectTransferService {
             nextAuthorityBindingSha256: initialBinding.authorityBindingSha256,
           });
         }
-        const backend = await this.backend.createIfAbsent({
-          opaqueKey: session.opaqueKey,
-          objectId: session.objectId,
-          length: session.declaredLength,
-          source: source(),
-          reuploadPermit,
-        });
-        const verified = await this.backend.verify(session.opaqueKey);
-        if (verified.receiptSha256 !== backend.receiptSha256) {
-          transferError('TRANSFER_BACKEND_CORRUPT', 'backend durability receipt changed during finalize');
+        try {
+          await this.durableQuota.reserve({
+            tenantScopeSha256: session.tenantScopeSha256,
+            opaqueKey: session.opaqueKey,
+            length: session.declaredLength,
+          });
+        } catch (error) {
+          if (error?.code === 'TRANSFER_LIMIT_EXCEEDED') {
+            this.#observe('finalize-upload', 'limited', { quota: 'durable-unique' });
+          }
+          throw error;
         }
+        let backend;
+        let verified;
+        try {
+          backend = await this.backend.createIfAbsent({
+            opaqueKey: session.opaqueKey,
+            objectId: session.objectId,
+            length: session.declaredLength,
+            source: source(),
+            reuploadPermit,
+          });
+          verified = await this.backend.verify(session.opaqueKey);
+          if (verified.receiptSha256 !== backend.receiptSha256) {
+            transferError('TRANSFER_BACKEND_CORRUPT', 'backend durability receipt changed during finalize');
+          }
+        } catch (error) {
+          if (error?.code === 'TRANSFER_BACKEND_CORRUPT') {
+            await this.#recordIntegrityFailure(initialBinding, 'finalize-upload');
+          }
+          throw error;
+        }
+        await this.durableQuota.commit({
+          tenantScopeSha256: session.tenantScopeSha256,
+          opaqueKey: session.opaqueKey,
+          length: session.declaredLength,
+          backendReceiptSha256: verified.receiptSha256,
+        });
         this.#assertBindingFresh(initialBinding);
         lifecycle = deletedGeneration === null
           ? await this.lifecycle.get(session.opaqueKey)
@@ -1055,6 +1210,19 @@ export class ObjectTransferService {
             || finalCurrent.objectId !== receipt.objectId || finalCurrent.length !== receipt.length) {
           transferError('TRANSFER_LIFECYCLE_STALE', 'available lifecycle changed while finalization was recorded');
         }
+        await this.events.contentAvailable({
+          tenantScopeSha256: receipt.tenantScopeSha256,
+          objectId: receipt.objectId,
+          generation: receipt.generation,
+          backendReceiptSha256: receipt.backendReceiptSha256,
+        });
+        this.#observe('finalize-upload', 'success', {
+          bytes: session.declaredLength,
+          parts: session.parts.length,
+          resume: backend.created ? 0 : 1,
+          quota: 'durable-unique',
+          integrity: 'verified',
+        });
         return receipt;
       })
     ), async () => {
@@ -1089,6 +1257,148 @@ export class ObjectTransferService {
     });
   }
 
+  #batchPlanId(body) {
+    return this.#hmac('OGVCS-BATCH-DOWNLOAD-PLAN-ID-V1\0', canonicalBytes(body));
+  }
+
+  async planBatchDownload({ objectIds, grant, context } = {}) {
+    if (!Array.isArray(objectIds) || objectIds.length < 1 || objectIds.length > TRANSFER_LIMITS.batchMaximum) {
+      transferError('TRANSFER_INPUT_INVALID', 'batch download request is invalid');
+    }
+    const ids = objectIds.map(objectIdValue).sort();
+    if (new Set(ids).size !== ids.length) transferError('TRANSFER_INPUT_INVALID', 'batch download request contains duplicates');
+    // Authorization covers the complete requested object set before the first
+    // lifecycle/backend lookup, so denied positions and counts are never
+    // disclosed through a partial plan.
+    const binding = await this.#authorize({
+      grant,
+      context,
+      objectId: ids[0],
+      requestObjectIds: ids,
+      operation: 'download',
+    });
+    this.#checkRate(binding);
+    const items = [];
+    let totalBytes = 0;
+    let hidden = false;
+    let limited = false;
+    for (const objectId of ids) {
+      const opaqueKey = this.#opaqueKey(binding.claims.tenant, objectId);
+      const lifecycle = await this.lifecycle.get(opaqueKey);
+      if (lifecycle?.state !== 'available' || lifecycle.objectId !== objectId
+          || lifecycle.tenantScopeSha256 !== binding.tenantScopeSha256
+          || !SHA.test(lifecycle.backendReceiptSha256 ?? '')) {
+        hidden = true;
+        continue;
+      }
+      if (totalBytes > TRANSFER_LIMITS.batchLogicalBytesMaximum - lifecycle.length) {
+        limited = true;
+        continue;
+      }
+      items.push(Object.freeze({
+        objectId,
+        length: lifecycle.length,
+        generation: lifecycle.generation,
+        backendReceiptSha256: lifecycle.backendReceiptSha256,
+        packOffset: totalBytes,
+      }));
+      totalBytes += lifecycle.length;
+    }
+    this.#assertBindingFresh(binding);
+    if (hidden) transferError('TRANSFER_AUTHORIZATION_DENIED', 'transfer authorization was denied');
+    if (limited) transferError('TRANSFER_LIMIT_EXCEEDED', 'batch download plan exceeds its byte bound');
+    const body = Object.freeze({
+      schemaVersion: 'ogvcs.object-transfer/batch-download-plan/v1',
+      tenantScopeSha256: binding.tenantScopeSha256,
+      grantBindingSha256: binding.grantBindingSha256,
+      requestRoot: binding.claims.requestRoot,
+      objectSetSha256: sha256(Buffer.concat([
+        Buffer.from('OGVCS-BATCH-DOWNLOAD-OBJECT-SET-V1\0'),
+        Buffer.from(canonicalBytes(ids)),
+      ])),
+      totalBytes,
+      issuedAtUnixMs: this.now(),
+      items: Object.freeze(items),
+    });
+    const plan = validateBatchPlan(Object.freeze({ ...body, planId: this.#batchPlanId(body) }));
+    this.#observe('batch-download-plan', 'success', { bytes: totalBytes, parts: items.length });
+    return plan;
+  }
+
+  async readBatchRange({ plan: inputPlan, itemIndex, start, endExclusive, grant, context } = {}) {
+    const plan = validateBatchPlan(inputPlan);
+    const ids = plan.items.map(({ objectId }) => objectId);
+    const binding = await this.#authorize({
+      grant,
+      context,
+      objectId: ids[0],
+      requestObjectIds: ids,
+      operation: 'download',
+    });
+    const { planId: _planId, ...body } = plan;
+    const objectSetSha256 = sha256(Buffer.concat([
+      Buffer.from('OGVCS-BATCH-DOWNLOAD-OBJECT-SET-V1\0'),
+      Buffer.from(canonicalBytes(ids)),
+    ]));
+    if (this.#batchPlanId(body) !== plan.planId || plan.grantBindingSha256 !== binding.grantBindingSha256
+        || plan.tenantScopeSha256 !== binding.tenantScopeSha256
+        || plan.requestRoot !== binding.claims.requestRoot || plan.objectSetSha256 !== objectSetSha256) {
+      transferError('TRANSFER_AUTHORIZATION_DENIED', 'transfer authorization was denied');
+    }
+    integer(itemIndex, 0, plan.items.length - 1, 'batch item index');
+    const item = plan.items[itemIndex];
+    integer(start, 0, item.length, 'range start');
+    integer(endExclusive, start + 1, item.length, 'range end');
+    this.#checkRate(binding, { bytes: endExclusive - start });
+    let lifecycle = null;
+    let hidden = false;
+    for (let index = 0; index < plan.items.length; index += 1) {
+      const expected = plan.items[index];
+      const current = await this.lifecycle.get(this.#opaqueKey(binding.claims.tenant, expected.objectId));
+      if (current?.state !== 'available' || current.objectId !== expected.objectId
+          || current.tenantScopeSha256 !== binding.tenantScopeSha256
+          || current.generation !== expected.generation
+          || current.backendReceiptSha256 !== expected.backendReceiptSha256
+          || current.length !== expected.length) {
+        hidden = true;
+      }
+      if (index === itemIndex) lifecycle = current;
+    }
+    if (hidden) {
+      transferError('TRANSFER_AUTHORIZATION_DENIED', 'transfer authorization was denied');
+    }
+    const opaqueKey = this.#opaqueKey(binding.claims.tenant, item.objectId);
+    let range;
+    try { range = await this.backend.readVerifiedRange(opaqueKey, start, endExclusive); }
+    catch (error) {
+      if (error?.code === 'TRANSFER_BACKEND_CORRUPT') await this.#recordIntegrityFailure(binding, 'batch-download-range');
+      throw error;
+    }
+    if (range.receiptSha256 !== lifecycle.backendReceiptSha256 || range.objectId !== lifecycle.objectId
+        || range.totalLength !== lifecycle.length) {
+      await this.#recordIntegrityFailure(binding, 'batch-download-range');
+      transferError('TRANSFER_BACKEND_CORRUPT', 'batch range backend receipt differs');
+    }
+    const current = await this.lifecycle.get(opaqueKey);
+    if (current?.state !== 'available' || current.generation !== lifecycle.generation
+        || current.backendReceiptSha256 !== lifecycle.backendReceiptSha256
+        || current.tenantScopeSha256 !== lifecycle.tenantScopeSha256
+        || current.objectId !== lifecycle.objectId || current.length !== lifecycle.length) {
+      transferError('TRANSFER_LIFECYCLE_STALE', 'available lifecycle changed during batch range verification');
+    }
+    this.#assertBindingFresh(binding);
+    const lifecycleReceipt = this.lifecycle.receipt(current, binding.grantBindingSha256);
+    const { receiptSha256: _backendReceiptSha256, objectId: _backendObjectId, opaqueKey: _backendKey,
+      length: _backendLength, durable: _durable, schemaVersion: _backendSchema, ...publicRange } = range;
+    this.#observe('batch-download-range', 'success', {
+      bytes: endExclusive - start,
+      parts: 1,
+      quota: 'transfer-bytes',
+      integrity: 'verified',
+    });
+    return Object.freeze({ ...publicRange, planId: plan.planId, itemIndex, lifecycleReceipt });
+  }
+
   async readRange({ objectId: objectIdInput, start, endExclusive, grant, context }) {
     const objectId = objectIdValue(objectIdInput);
     integer(start, 0, TRANSFER_LIMITS.objectMaximum, 'range start');
@@ -1100,7 +1410,16 @@ export class ObjectTransferService {
         || lifecycle.objectId !== objectId) {
       transferError('TRANSFER_AUTHORIZATION_DENIED', 'transfer authorization was denied');
     }
-    const range = await this.backend.readVerifiedRange(binding.opaqueKey, start, endExclusive);
+    let range;
+    try {
+      range = await this.backend.readVerifiedRange(binding.opaqueKey, start, endExclusive);
+    } catch (error) {
+      if (error?.code === 'TRANSFER_BACKEND_CORRUPT') {
+        await this.#recordIntegrityFailure(binding, 'download-range');
+      }
+      throw error;
+    }
+    await this.#fault('after-backend-range-verified');
     if (range.receiptSha256 !== lifecycle.backendReceiptSha256 || range.objectId !== objectId
         || range.totalLength !== lifecycle.length) {
       transferError('TRANSFER_BACKEND_CORRUPT', 'available lifecycle and backend receipt differ');
@@ -1117,6 +1436,11 @@ export class ObjectTransferService {
     const receipt = this.lifecycle.receipt(current, binding.grantBindingSha256);
     const { receiptSha256: _backendReceiptSha256, objectId: _backendObjectId, opaqueKey: _backendKey,
       length: _backendLength, durable: _durable, schemaVersion: _backendSchema, ...publicRange } = range;
+    this.#observe('download-range', 'success', {
+      bytes: endExclusive - start,
+      quota: 'transfer-bytes',
+      integrity: 'verified',
+    });
     return Object.freeze({ ...publicRange, lifecycleReceipt: receipt });
   }
 }

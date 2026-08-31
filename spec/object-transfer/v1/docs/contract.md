@@ -1,4 +1,4 @@
-# Filesystem transfer candidate
+# Object transfer candidate
 
 ## Imported authorities
 
@@ -132,3 +132,75 @@ handle was opened and identity-checked. The filesystem candidate suppresses
 only that exact unsupported result on Windows. It never suppresses path-open,
 ACL, identity, or non-Windows sync failures; operators requiring a literal
 directory-fsync primitive must select a platform/filesystem that exposes it.
+
+## Trusted backend port and S3-compatible profile
+
+Filesystem and S3 adapters expose the same closed capability record. Service
+construction accepts only exact package-branded adapters and captures an
+immutable internal port. Structural objects, subclasses, proxies,
+pre-construction prototype replacement, later own/prototype replacement, and
+cross-instance/cross-adapter dispatch cannot enter the production path.
+
+The S3 profile uses SigV4 with deterministic percent-encoded code-unit query
+ordering, HTTPS by default, explicit loopback-only HTTP test opt-in, bounded
+deadlines/responses/retries, redirect refusal, and privacy-safe errors. Objects
+use only tenant-opaque HMAC keys in a two/two hexadecimal fanout. Create uses
+`If-None-Match: *` and does not treat success status, existence, or ETag as
+durability. It reads back and verifies exact metadata, length, payload SHA-256,
+optional S3 checksum, canonical ObjectID, and whole body before issuing a
+receipt. Multipart ETags remain opaque conditional tokens. Verified whole-body
+reads precede range disclosure because S3-compatible range checksums are not
+uniform. Prefix listing derives the narrow shard prefix, validates shard/full-
+SHA agreement, and bounds pages and results. Delete conditionally persists the
+exact permit/generation fence, verifies the prior receipt, deletes, and observes
+absence; same-fence response-loss replay repairs safely.
+
+## Logical content and batch plans
+
+The canonical object limit remains 67,108,864 bytes. A logical file can contain
+up to 107,374,182,400 bytes across at most 100,000 immutable chunks. Descriptors
+are stored in no more than 391 pages of at most 256 entries, each with a digest;
+separate durable ledger pages record verified object/length/checksum/receipt
+facts. Restart returns pending descriptors without retransmitting verified
+ones. Reconstruction loads one page and bounded chunk at a time, verifies the
+chunk checksum and ObjectID, streams to the writer, and finally verifies exact
+logical length and whole-file SHA-256.
+
+Batch requests contain 1..4,096 unique objects and at most 100 GiB. The complete
+signed object set/request root is authorized before any lifecycle or backend
+lookup. The sealed plan binds tenant scope, grant, request root, ordered object
+set, generations, receipts, lengths, and contiguous pack offsets. Reads
+reauthorize the same complete set and recheck lifecycle before and after backend
+verification. A hidden early/middle/last object, duplicate, count +1, or plan
+mutation yields no partial count, position, layout, or bytes.
+
+## Quota, events, telemetry, and integration boundary
+
+Staging bytes, durable unique bytes, request rate, and transfer bytes are
+separate quota dimensions. Durable reserve/commit/release records make response
+loss and recovery idempotent without inferring release from backend absence.
+Content-available events are durable/idempotent; integrity-failure events omit
+ObjectID, key, path, and credentials. Event storage and telemetry cardinality
+are bounded. Metrics use only fixed operation/backend/outcome/quota/integrity
+labels and numeric bytes/duration/retry/resume/part aggregates.
+
+The runtime exposes an explicitly constructed captured lifecycle adapter port
+whose capability says whether it is atomic with repository metadata. The
+bundled store remains filesystem-local. The separately owned metadata lane must
+supply its own adapter; this contract does not define lifecycle-v9 tables,
+reachability/GC, or OGVCS-010 publication. The OGVCS-007 receipt-gated
+`content-manifest` boundary remains unchanged.
+
+## Conformance and release scale
+
+The same bounded behavior suite runs against filesystem and a deterministic S3
+protocol fake for conditional create, verified read/range, prefix pagination,
+delete fencing, replay, response loss, corruption, and distinct opaque tenant
+keys. A Linux-only hosted job downloads one exact machine-checked MinIO artifact
+and runs live loopback conformance. Ordinary CI cannot execute exact scale.
+
+The manual release gate transfers and reconstructs exactly 100 GiB across
+8-MiB objects, injects restarts, records verified-part reuse, whole-file hash,
+throughput, and peak RSS, and enforces explicit thresholds. Until retained live
+MinIO and exact-scale evidence exist, this candidate does not claim OGVCS-008
+acceptance, public/wire routes, reachability/GC, or OGVCS-010 completion.

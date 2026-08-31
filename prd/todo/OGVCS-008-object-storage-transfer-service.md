@@ -7,7 +7,7 @@
 **Depends on:** OGVCS-003, OGVCS-007, OGVCS-041  
 **Blocks:** OGVCS-010, OGVCS-011, OGVCS-013, OGVCS-017, OGVCS-018, OGVCS-019, OGVCS-020, OGVCS-021, OGVCS-027, OGVCS-028, OGVCS-036, OGVCS-037  
 **Source:** [Architecture ADR-0003](../../adr/0003-object-lifecycle-and-gc-fencing.md)  
-**Last updated:** 2026-08-14
+**Last updated:** 2026-09-01
 
 ## Outcome
 
@@ -101,8 +101,22 @@ Start with filesystem development backend and one supported S3 profile. New back
 
 ## Completion evidence
 
-- Implementation changes:
-- Test and benchmark results:
-- Security/reliability review:
-- Documentation/runbooks:
-- Rollout result:
+- Implementation changes: the candidate now has exact branded filesystem/S3
+  backend ports, a SigV4 S3-compatible adapter, one shared backend suite, paged
+  logical content plans, sealed batch/range plans, durable unique-byte quota,
+  bounded internal events/telemetry, and an explicit repository-metadata
+  lifecycle adapter seam. The canonical object limit remains 64 MiB.
+- Test and benchmark results: local bounded runtime, generated/independently
+  validated contract, workflow policy, and roadmap gates are recorded in the
+  OGVCS-008 review. The offline 100-GiB logical-plan test proves 1,600
+  descriptors in seven pages without allocating payload bytes. It is not the
+  exact-byte acceptance run.
+- Security/reliability review: hostile review covers adapter forgery,
+  conditional-put races/response loss, acknowledgement-before-durability,
+  corrupt metadata/body/range, pagination, redaction/deadlines, stale fences,
+  quota replay, plan tampering, and hidden early/middle/last denial.
+- Documentation/runbooks: contract `0.1.0-rc.6`, runtime README, changelog,
+  review record, pinned MinIO provenance policy, and manual exact-scale workflow.
+- Rollout result: not performed. The PRD remains Todo until retained hosted
+  MinIO conformance, the exact 100-GiB interrupted throughput/memory result, and
+  separately owned repository-metadata lifecycle integration are complete.

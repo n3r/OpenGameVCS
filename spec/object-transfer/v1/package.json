@@ -1,7 +1,7 @@
 {
   "name": "@opengamevcs/object-transfer-contract-v1",
-  "version": "0.1.0-rc.5",
-  "description": "Candidate filesystem object-transfer, lifecycle, and resumable-session contract",
+  "version": "0.1.0-rc.6",
+  "description": "Candidate filesystem/S3 object-transfer and bounded logical content-plan contract",
   "type": "module",
   "files": ["docs", "LICENSE", "manifest.json", "profiles", "README.md", "registries", "schemas", "scripts", "test", "validate-spec.mjs", "vectors"],
   "scripts": {

@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - ".github/workflows/object-transfer.yml"
+      - ".github/workflows/object-transfer-release-scale.yml"
       - "core/authz-contract/**"
       - "core/chunking-manifest/**"
       - "core/object-model/js/**"
@@ -19,6 +20,8 @@ on:
       - "spec/object-transfer/v1/**"
       - "spec/repository-format/v1/vectors/**"
       - "tools/object-transfer-workflow-policy.test.mjs"
+      - "tools/object-transfer-minio-provenance.json"
+      - "tools/object-transfer-release-scale.mjs"
   push:
     branches:
       - main
@@ -26,6 +29,7 @@ on:
       - "ogvcs008-*"
     paths:
       - ".github/workflows/object-transfer.yml"
+      - ".github/workflows/object-transfer-release-scale.yml"
       - "core/authz-contract/**"
       - "core/chunking-manifest/**"
       - "core/object-model/js/**"
@@ -41,6 +45,8 @@ on:
       - "spec/object-transfer/v1/**"
       - "spec/repository-format/v1/vectors/**"
       - "tools/object-transfer-workflow-policy.test.mjs"
+      - "tools/object-transfer-minio-provenance.json"
+      - "tools/object-transfer-release-scale.mjs"
   workflow_dispatch:
 
 permissions:
@@ -74,3 +80,41 @@ jobs:
       - run: npm run test:packed --workspace @opengamevcs/chunking-manifest
       - run: npm run test:roadmap
         if: runner.os == 'Linux'
+
+  s3-compatible:
+    name: Pinned MinIO shared backend conformance (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify pinned MinIO and run loopback conformance
+        shell: bash
+        env:
+          MINIO_ROOT_USER: ogvcs-conformance
+          MINIO_ROOT_PASSWORD: ogvcs-conformance-secret
+          OGVCS_S3_CONFORMANCE_ENDPOINT: http://127.0.0.1:9000
+          OGVCS_S3_CONFORMANCE_BUCKET: ogvcs-conformance
+          OGVCS_S3_CONFORMANCE_ACCESS_KEY: ogvcs-conformance
+          OGVCS_S3_CONFORMANCE_SECRET_KEY: ogvcs-conformance-secret
+        run: |
+          set -euo pipefail
+          minio_bin="$RUNNER_TEMP/minio.RELEASE.2025-09-07T16-13-09Z"
+          curl --fail --location --silent --show-error \
+            --output "$minio_bin" \
+            "https://dl.min.io/server/minio/release/linux-amd64/archive/minio.RELEASE.2025-09-07T16-13-09Z"
+          echo "7c5bd8512c6e966455b1d198209358b2d191c77a83ab377c4073281065fb855f  $minio_bin" | sha256sum --check --strict
+          chmod 0700 "$minio_bin"
+          "$minio_bin" server "$RUNNER_TEMP/minio-data" --address 127.0.0.1:9000 >"$RUNNER_TEMP/minio.log" 2>&1 &
+          minio_pid=$!
+          trap 'kill "$minio_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..60}; do
+            if curl --fail --silent --show-error http://127.0.0.1:9000/minio/health/ready >/dev/null; then break; fi
+            if [[ "$attempt" == 60 ]]; then echo "MinIO readiness deadline exceeded" >&2; exit 1; fi
+            sleep 1
+          done
+          node --preserve-symlinks --test --test-concurrency=1 core/object-transfer/js/test/s3-live.test.mjs

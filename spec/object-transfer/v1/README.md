@@ -1,28 +1,28 @@
 # OpenGameVCS object-transfer contract v1 candidate
 
-This MIT-licensed candidate defines the first bounded OGVCS-008 filesystem
-backend, resumable multipart-session, and generation-fenced lifecycle behavior.
-It imports OGVCS-002 object identity, OGVCS-003 transfer grants, and OGVCS-041
-semantic idempotency and range-carrier rules without redefining their formats.
+This MIT-licensed `0.1.0-rc.6` candidate defines bounded OGVCS-008 filesystem
+and S3-compatible backend profiles, resumable object sessions, generation-
+fenced lifecycle behavior, paged logical content transfer, sealed batch
+download plans, durable unique-byte quota accounting, internal events, and
+privacy-safe telemetry. It imports OGVCS-002 identity, OGVCS-003 grants,
+OGVCS-007 production receipts, and OGVCS-041 idempotency/range rules without
+reassigning their formats.
 
-The cut is development-only. It does not claim S3 parity, direct public
-production routes, pack layout, 100-GiB execution, reference throughput, GC
-reachability, or final acceptance. It now does require the same-process
-OGVCS-007 production receipt boundary before a `content-manifest` generation can
-become `available` through the shared lifecycle transaction participant.
-Generate and validate offline with:
+The filesystem profile remains the manifest's compatibility anchor. The S3 and
+logical-content profiles are additive. Existing error and lifecycle transition
+assignments are unchanged. New schemas/vectors cover exact backend capability
+claims, SigV4 and S3 durability semantics, the 64-MiB canonical object versus
+100-GiB logical-file boundary, durable resume ledgers, batch bindings and hidden
+denial, quota replay/release, events, telemetry, and safe error classification.
+
+Generate and independently validate offline with:
 
 ```sh
 npm test
 ```
 
-The generated vectors cover opaque backend keys, create-if-absent, same-open
-verified range reads, exact lifecycle generations, resumable parts,
-receipt-loss replay, server-owned grant time, persistent nonce replay,
-canonical metadata rejection, pinned-ancestor symlink attempts, closed state,
-renewed/fenced locks, authoritative one-use deletion permits, deleted-
-generation reupload, exact `content-manifest` production-receipt admission,
-Windows' exact directory-sync capability boundary, and durability faults
-including EEXIST recovery. Runtime coverage dispatches every hostile/fault
-vector and compares the observed normalized result; source-text presence is not
-conformance.
+This cut remains development-only. It does not assign public/wire routes,
+declare repository-metadata v9 integration, claim reachability/GC or OGVCS-010
+completion, substitute bounded fake-S3 execution for the pinned hosted MinIO
+gate, or substitute the synthetic 100-GiB plan test for the manual exact-byte
+throughput/memory gate.
