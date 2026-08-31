@@ -7,11 +7,20 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const canonical = (value) => value === null || typeof value !== 'object' ? JSON.stringify(value) : Array.isArray(value) ? `[${value.map(canonical).join(',')}]` : `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`;
 const walk = async (directory) => (await Promise.all((await readdir(resolve(root, directory), { withFileTypes: true })).map(async (entry) => entry.isDirectory() ? walk(`${directory}/${entry.name}`) : [`${directory}/${entry.name}`]))).flat();
-const predecessors = Object.freeze(['../../authorization/v1/docs/sandbox-contract.md', '../../identity-policy-audit/v1/manifest.json', '../../path-filesystem/v1/manifest.json']);
+const predecessors = Object.freeze([
+  Object.freeze({ path: '../../authorization/v1/docs/sandbox-contract.md', sha256: '383ac42a7dbfdbe2e613a918e99df888184d2e1920cb6b589f309654e8117fc1' }),
+  Object.freeze({ path: '../../authorization/v1/manifest.json', sha256: '3fb4dd4a89eb914f93a589b013bda8afcf4744c0d27171ee5849ca3b7bf62447' }),
+  Object.freeze({ path: '../../identity-policy-audit/v1/manifest.json', sha256: 'f355ab34befc2fe2f3e70ada27ae974d51bc8211d9630b47fbc6f38f692db966' }),
+  Object.freeze({ path: '../../path-filesystem/v1/manifest.json', sha256: '2f343e1dac238da527fbd36160419ec6fb53b780ac7e33c01e11acabbdd4782b' }),
+]);
+export const verifySandboxPredecessors = async () => {
+  for (const pin of predecessors) if (sha256(await readFile(resolve(root, pin.path))) !== pin.sha256) throw new Error(`sandbox predecessor pin drifted: ${pin.path}`);
+  return Object.freeze(predecessors.map((pin) => Object.freeze({ ...pin })));
+};
 export const expectedSandboxManifest = async () => {
   const paths = ['README.md', 'package.json', 'validate-spec.mjs', ...(await walk('schemas')), ...(await walk('vectors'))].sort();
   const artifacts = await Promise.all(paths.map(async (path) => { const bytes = await readFile(resolve(root, path)); return Object.freeze({ path, bytes: bytes.length, sha256: sha256(bytes) }); }));
-  const predecessorPins = await Promise.all(predecessors.map(async (path) => Object.freeze({ path, sha256: sha256(await readFile(resolve(root, path))) })));
+  const predecessorPins = Object.freeze(predecessors.map((pin) => Object.freeze({ ...pin })));
   return Object.freeze({ schemaVersion: 'ogvcs.untrusted-sandbox/contract-manifest/v1', generatorSha256: sha256(await readFile(fileURLToPath(import.meta.url))), artifacts, predecessorPins });
 };
 export async function validateSandboxManifest({ manifestBytes } = {}) {
@@ -20,6 +29,7 @@ export async function validateSandboxManifest({ manifestBytes } = {}) {
   return Object.freeze({ manifestSha256: sha256(canonicalExpected), artifacts: expected.artifacts.length });
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  if (process.argv.includes('--verify-predecessors') || process.argv.includes('--write')) await verifySandboxPredecessors();
   const bytes = Buffer.from(`${canonical(await expectedSandboxManifest())}\n`, 'utf8');
   if (process.argv.includes('--write')) await writeFile(resolve(root, 'manifest.json'), bytes); else await validateSandboxManifest();
 }

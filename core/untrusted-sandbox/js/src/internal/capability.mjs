@@ -5,6 +5,8 @@ const capabilities = new WeakSet();
 const controls = (source) => {
   if (source === null || typeof source !== 'object' || Array.isArray(source) || types.isProxy(source)) return null;
   try {
+    const prototype = Object.getPrototypeOf(source);
+    if (prototype !== Object.prototype && prototype !== null) return null;
     const descriptors = Object.getOwnPropertyDescriptors(source);
     if (Object.keys(descriptors).sort().join(',') !== REQUIRED.join(',')) return null;
     if (REQUIRED.some((key) => !Object.hasOwn(descriptors[key], 'value') || typeof descriptors[key].value !== 'boolean' || Object.hasOwn(descriptors[key], 'get') || Object.hasOwn(descriptors[key], 'set'))) return null;
@@ -13,7 +15,7 @@ const controls = (source) => {
 };
 export const createTestingLauncherCapability = ({ assertedControls, launch }) => {
   const snapshot = controls(assertedControls);
-  if (!snapshot || typeof launch !== 'function') throw new TypeError('testing launcher capability is invalid');
+  if (!snapshot || typeof launch !== 'function' || types.isProxy(launch)) throw new TypeError('testing launcher capability is invalid');
   const capability = Object.freeze({ launch, assertedControls: snapshot }); capabilities.add(capability); return capability;
 };
 export const candidateLauncherParts = (capability) => capabilities.has(capability) ? capability : null;

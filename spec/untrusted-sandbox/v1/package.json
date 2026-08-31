@@ -1,9 +1,17 @@
 {
   "name": "@opengamevcs/untrusted-sandbox-contract-v1",
   "version": "0.1.0",
+  "description": "Candidate OpenGameVCS credential-free parser boundary contract",
   "type": "module",
   "license": "MIT",
+  "exports": {
+    "./manifest.json": "./manifest.json",
+    "./schemas/*": "./schemas/*",
+    "./vectors/*": "./vectors/*",
+    "./validate-spec": "./validate-spec.mjs",
+    "./package.json": "./package.json"
+  },
   "files": ["README.md", "manifest.json", "schemas", "scripts", "vectors", "validate-spec.mjs"],
-  "scripts": { "test": "node scripts/generate.mjs && node validate-spec.mjs && node --test test/*.test.mjs" },
+  "scripts": { "check": "node scripts/generate.mjs --verify-predecessors && node validate-spec.mjs", "test": "npm run check && node --test test/*.test.mjs", "test:package": "npm pack --dry-run --json" },
   "engines": { "node": ">=22" }
 }

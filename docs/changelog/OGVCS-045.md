@@ -8,11 +8,14 @@ arguments, standard input, or output.
 The supervisor is deliberately branded as candidate-only and can be constructed
 only with the isolated test launcher capability. It requires the complete
 OGVCS-003 control inventory, snapshots untrusted records without invoking
-getters, bounds acquisition/launch/stream/shutdown/settlement, and performs a
-bounded TERM-to-process-group-KILL cleanup sequence. It accepts only zero-exit,
-stderr-free canonical output with closed fields and OGVCS-004 portable paths.
-The contract manifest pins the frozen OGVCS-003 profile plus OGVCS-004 and
-OGVCS-009 manifests, and authenticates its declared schemas and canaries.
+getters or nested coercion, bounds acquisition/launch/process/read/shutdown, and
+performs a bounded TERM-to-process-group-KILL cleanup sequence. A result is
+returned only after exit settlement; unconfirmed post-KILL settlement poisons
+the supervisor and rejects. It accepts only zero-exit, stderr-free, duplicate-
+free sorted-key canonical output under a closed schema with OGVCS-004 portable
+paths. The contract manifest pins the frozen OGVCS-003 document and authorization
+manifest plus OGVCS-004 and OGVCS-009 manifests, and authenticates its declared
+schemas and executable canaries.
 
 This does not implement a Git or Perforce importer, a production credential
 broker, a Linux kernel sandbox, CLI submission, or publication.  A production

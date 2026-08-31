@@ -6,22 +6,30 @@ on:
       - ".github/workflows/untrusted-sandbox.yml"
       - "core/untrusted-sandbox/**"
       - "spec/untrusted-sandbox/**"
+      - "core/paths-filesystem/js/**"
       - "docs/changelog/OGVCS-045.md"
       - "package.json"
       - "package-lock.json"
       - "prd/todo/OGVCS-045-*.md"
       - "spec/authorization/v1/docs/sandbox-contract.md"
+      - "spec/authorization/v1/manifest.json"
+      - "spec/identity-policy-audit/v1/manifest.json"
+      - "spec/path-filesystem/v1/**"
   push:
-    branches: [main, "ogvcs-045/**", "ogvcs045-*"]
+    branches: [main, "ogvcs-045/**", "ogvcs045-*", "r1-ogvcs045"]
     paths:
       - ".github/workflows/untrusted-sandbox.yml"
       - "core/untrusted-sandbox/**"
       - "spec/untrusted-sandbox/**"
+      - "core/paths-filesystem/js/**"
       - "docs/changelog/OGVCS-045.md"
       - "package.json"
       - "package-lock.json"
       - "prd/todo/OGVCS-045-*.md"
       - "spec/authorization/v1/docs/sandbox-contract.md"
+      - "spec/authorization/v1/manifest.json"
+      - "spec/identity-policy-audit/v1/manifest.json"
+      - "spec/path-filesystem/v1/**"
   workflow_dispatch:
 
 permissions:
