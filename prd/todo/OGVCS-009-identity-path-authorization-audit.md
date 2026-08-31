@@ -7,7 +7,7 @@
 **Depends on:** OGVCS-003, OGVCS-006, OGVCS-041  
 **Blocks:** OGVCS-010, OGVCS-011, OGVCS-013, OGVCS-016, OGVCS-018, OGVCS-019, OGVCS-021, OGVCS-025, OGVCS-026, OGVCS-027, OGVCS-028, OGVCS-032, OGVCS-033, OGVCS-035, OGVCS-036, OGVCS-042, OGVCS-045  
 **Source:** [Architecture ADR-0004](../../adr/0004-dr-authority-security-epochs.md)  
-**Last updated:** 2026-08-30
+**Last updated:** 2026-08-31
 
 ## Outcome
 
@@ -103,8 +103,16 @@ Policies deploy in monitor/dry-run mode against captured authorized test request
 
 ## Completion evidence
 
-- Implementation changes:
-- Test and benchmark results:
-- Security/reliability review:
-- Documentation/runbooks:
-- Rollout result:
+- Implementation changes: candidate 0.2 OIDC/bootstrap, policy/security
+  mutation, trusted checkpoint/rate-source, and same-transaction authorization
+  boundaries are implemented in the current development branch.
+- Test and benchmark results: 29 bounded security/production vectors are
+  executable; the independent contract mutation gate and offline packed
+  consumer are present. Hosted three-OS and latency evidence remain open.
+- Security/reliability review: caller-selected checkpoints, rate identities,
+  transaction identities, policy preview, device-flow outage retry, and
+  ambiguous decision commits fail closed.
+- Documentation/runbooks: package/contract READMEs and the identity/policy
+  operations runbook describe adapter ownership and recovery procedures.
+- Rollout result: not yet rolled out; production adapters, public route binding,
+  hosted evidence and dependency integration remain completion gates.

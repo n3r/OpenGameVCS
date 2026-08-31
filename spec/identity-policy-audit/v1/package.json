@@ -1,6 +1,6 @@
 {
   "name": "@opengamevcs/identity-policy-audit-contract-v1",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Candidate OpenGameVCS identity, policy, epoch, revocation, and audit-chain contract",
   "type": "module",
   "license": "MIT",

@@ -18,23 +18,44 @@ export class IdentityPolicyRuntime {
   #policy;
   #problems;
   #rate;
+  #rateSource;
 
-  constructor({ policyEngine, credentialAuthority, rateLimiter, protocolProblems = null }) {
+  constructor({ policyEngine, credentialAuthority, rateLimiter, rateSource, protocolProblems = null }) {
     if (!policyEngine || typeof policyEngine.authorize !== 'function' || !credentialAuthority || typeof credentialAuthority.authenticate !== 'function'
-        || !rateLimiter || typeof rateLimiter.consume !== 'function') identityFail('INPUT_INVALID', 'identity runtime adapters are invalid');
-    this.#policy = policyEngine; this.#credentials = credentialAuthority; this.#rate = rateLimiter; this.#problems = protocolProblems;
+        || !rateLimiter || typeof rateLimiter.consume !== 'function' || typeof rateSource !== 'function') {
+      identityFail('INPUT_INVALID', 'identity runtime adapters are invalid');
+    }
+    this.#policy = policyEngine; this.#credentials = credentialAuthority; this.#rate = rateLimiter;
+    this.#rateSource = rateSource; this.#problems = protocolProblems;
   }
 
-  authorizeToken(token, requestInput, { requestClass = 'authorization' } = {}) {
+  authorizeToken(token, requestInput, options = {}) {
+    if (!options || typeof options !== 'object' || Array.isArray(options)
+        || Object.keys(options).some((key) => !['requestClass', 'rateContext'].includes(key))) {
+      identityFail('INPUT_INVALID', 'authorization runtime options are invalid');
+    }
+    const requestClass = options.requestClass ?? 'authorization';
+    if (!/^[a-z][a-z0-9.-]{0,127}$/u.test(requestClass)) identityFail('INPUT_INVALID', 'authorization request class is invalid');
     let request;
     try { request = validateAuthorizationRequest(requestInput); }
     catch { return this.#outcome(this.#policy.authorize(requestInput, { credentialCheck: () => false })); }
     const boundedToken = typeof token === 'string' && Buffer.byteLength(token, 'utf8') <= RUNTIME_LIMITS.maxTokenBytes;
-    const rateKey = boundedToken
+    const tokenRateKey = boundedToken
       ? createHash('sha256').update('OGVCS-RATE-V1\0').update(token).digest('hex')
       : 'invalid';
+    let trustedRateSource;
+    try { trustedRateSource = this.#rateSource(options.rateContext); }
+    catch { trustedRateSource = null; }
+    const boundedSource = typeof trustedRateSource === 'string'
+      && trustedRateSource.length >= 1 && Buffer.byteLength(trustedRateSource, 'utf8') <= 256;
+    const sourceRateKey = boundedSource
+      ? createHash('sha256').update('OGVCS-RATE-SOURCE-V1\0').update(trustedRateSource).digest('hex')
+      : 'invalid-source';
     let rate;
-    try { rate = this.#rate.consume(rateKey, requestClass); }
+    try {
+      const sourceRate = this.#rate.consume(sourceRateKey, `${requestClass}.source`);
+      rate = sourceRate?.allowed === true ? this.#rate.consume(tokenRateKey, `${requestClass}.credential`) : sourceRate;
+    }
     catch { return this.#outcome(authenticationDecision(this.#policy, request, 'DENY_POLICY_UNAVAILABLE')); }
     if (!rate || rate.allowed !== true) {
       const code = rate?.allowed === false ? 'DENY_RATE_LIMITED' : 'DENY_POLICY_UNAVAILABLE';
@@ -54,7 +75,9 @@ export class IdentityPolicyRuntime {
   }
 
   authorizedView(token, options) {
-    const authorization = this.authorizeToken(token, options.request, { requestClass: options.requestClass ?? 'enumeration' });
+    const authorization = this.authorizeToken(token, options.request, {
+      requestClass: options.requestClass ?? 'enumeration', rateContext: options.rateContext,
+    });
     if (!authorization.decision.allowed) return Object.freeze({ authorization, view: null });
     return Object.freeze({
       authorization,

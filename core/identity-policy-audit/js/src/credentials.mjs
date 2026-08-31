@@ -1,5 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 
+import { canonicalBytes, sha256 } from '@opengamevcs/authorization-contract';
+
 import { asIdentityError, identityFail } from './errors.mjs';
 import {
   RUNTIME_LIMITS,
@@ -91,6 +93,7 @@ export class MemoryCredentialStore {
 
 export class CredentialAuthority {
   #clock;
+  #evidences = new WeakMap();
   #pathOptions;
   #principals = new WeakSet();
   #secretSource;
@@ -184,6 +187,48 @@ export class CredentialAuthority {
       && Array.isArray(actor.groups) && actor.groups.length === record.groups.length
       && actor.groups.every((group, index) => group === record.groups[index])
       && scopeMatches(record.scope, request, this.#pathOptions);
+  }
+
+  transactionEvidence(token, { tenant, policyGeneration }) {
+    if (typeof tenant !== 'string' || !/^[a-z][a-z0-9.-]{0,127}$/u.test(tenant)
+        || !Number.isSafeInteger(policyGeneration) || policyGeneration < 1) identityFail('INPUT_INVALID', 'transaction evidence context is invalid');
+    const principal = this.authenticate(token); const record = this.#record(principal.credentialId);
+    if (record === null || !record.scope.tenants.includes(tenant)) identityFail('AUTHENTICATION_DENIED');
+    const evidence = deepFreeze({
+      schemaVersion: 'ogvcs.identity-policy/transaction-credential-evidence/v1',
+      presentationDigest: digestToken(token),
+      credentialId: record.id,
+      credentialGeneration: record.generation,
+      subjectDigest: createHash('sha256').update('OGVCS-IDENTITY-SUBJECT-V1\0').update(record.subject).digest('hex'),
+      tenant,
+      authorityEpoch: record.authorityEpoch,
+      policyGeneration,
+      issuedAt: record.issuedAt,
+      expiresAt: record.expiresAt,
+      authenticatedScopeDigest: sha256(canonicalBytes(record.scope)),
+    });
+    this.#evidences.set(evidence, principal);
+    return evidence;
+  }
+
+  actorForTransactionEvidence(evidence) {
+    const principal = this.#evidences.get(evidence);
+    if (!principal || evidence.authorityEpoch !== this.#state.authorityEpoch || this.#now() >= evidence.expiresAt) {
+      identityFail('AUTHENTICATION_DENIED');
+    }
+    const record = this.#record(evidence.credentialId);
+    if (record === null || record.state !== 'active' || record.generation !== evidence.credentialGeneration
+        || record.authorityEpoch !== evidence.authorityEpoch || !safeEqualHex(record.secretDigest, evidence.presentationDigest)
+        || sha256(canonicalBytes(record.scope)) !== evidence.authenticatedScopeDigest) identityFail('AUTHENTICATION_DENIED');
+    return deepFreeze(structuredClone(principal.actor));
+  }
+
+  authorizeTransactionEvidence(evidence, request) {
+    const principal = this.#evidences.get(evidence);
+    if (!principal) return false;
+    try { this.actorForTransactionEvidence(evidence); }
+    catch { return false; }
+    return this.authorizePrincipal(principal, request);
   }
 
   revoke(id, { audit } = {}) {

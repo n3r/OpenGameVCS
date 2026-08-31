@@ -117,11 +117,13 @@ export class MemoryAuditStore {
 export class AuditLedger {
   #maximum;
   #store;
+  #trustedCheckpointSource;
 
-  constructor({ store, maxRecordBytes = RUNTIME_LIMITS.maxAuditRecordBytes }) {
+  constructor({ store, trustedCheckpointSource = null, maxRecordBytes = RUNTIME_LIMITS.maxAuditRecordBytes }) {
     if (!store || typeof store.tail !== 'function' || typeof store.appendExpected !== 'function' || typeof store.list !== 'function') identityFail('INPUT_INVALID', 'audit store adapter is invalid');
     if (!Number.isSafeInteger(maxRecordBytes) || maxRecordBytes < 1 || maxRecordBytes > RUNTIME_LIMITS.maxAuditRecordBytes) identityFail('INPUT_INVALID', 'audit record bound is invalid');
-    this.#store = store; this.#maximum = maxRecordBytes;
+    if (trustedCheckpointSource !== null && typeof trustedCheckpointSource.get !== 'function') identityFail('INPUT_INVALID', 'trusted checkpoint source is invalid');
+    this.#store = store; this.#maximum = maxRecordBytes; this.#trustedCheckpointSource = trustedCheckpointSource;
   }
 
   append(eventInput) {
@@ -168,11 +170,17 @@ export class AuditLedger {
     return Object.freeze({ valid: true, records: records.length, tailHash: previousHash });
   }
 
-  viewForAuthorizedRequest(tenant, { engine, principal, credentialAuthority, request, expectedCheckpoint, maxRecords = RUNTIME_LIMITS.maxAuditQueryRecords }) {
+  viewForAuthorizedRequest(tenant, options) {
+    const { engine, principal, credentialAuthority, request, maxRecords = RUNTIME_LIMITS.maxAuditQueryRecords } = options;
     tenantName(tenant);
     if (!engine || !principal || !credentialAuthority) identityFail('AUTHENTICATION_DENIED');
     if (!Number.isSafeInteger(maxRecords) || maxRecords < 1 || maxRecords > RUNTIME_LIMITS.maxAuditQueryRecords) identityFail('INPUT_INVALID', 'audit query bound is invalid');
-    if (expectedCheckpoint === null || expectedCheckpoint === undefined) identityFail('POLICY_UNAVAILABLE', 'authorized audit views require a trusted checkpoint');
+    if (Object.hasOwn(options, 'expectedCheckpoint')) identityFail('INPUT_INVALID', 'request-selected audit checkpoints are forbidden');
+    if (this.#trustedCheckpointSource === null) identityFail('POLICY_UNAVAILABLE', 'authorized audit views require a trusted checkpoint source');
+    let expectedCheckpoint;
+    try { expectedCheckpoint = this.#trustedCheckpointSource.get(tenant); }
+    catch (error) { identityFail('POLICY_UNAVAILABLE', 'trusted audit checkpoint is unavailable', { cause: error }); }
+    if (expectedCheckpoint === null || expectedCheckpoint === undefined) identityFail('POLICY_UNAVAILABLE', 'trusted audit checkpoint is unavailable');
     let requestValue;
     let scoped;
     try {

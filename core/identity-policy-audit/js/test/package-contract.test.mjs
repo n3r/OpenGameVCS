@@ -68,18 +68,33 @@ test('offline packed consumer imports the candidate contract, runtime, and isola
       manifest: manifest.contractVersion,
       policy: typeof runtime.PolicyEngine,
       audit: typeof runtime.AuditLedger,
+      oidc: typeof runtime.OidcAuthenticationAdapter,
+      bootstrap: typeof runtime.BootstrapAuthority,
+      policyAuthority: typeof runtime.PolicyMutationAuthority,
+      securityAuthority: typeof runtime.SecurityMutationAuthority,
+      transactionAuthority: typeof runtime.TransactionAuthorizationAuthority,
       rootMemoryStore: typeof runtime.MemoryCredentialStore,
       rootMemoryNonceLedger: typeof runtime.MemoryGrantNonceLedger,
+      rootAuthenticationStore: typeof runtime.MemoryAuthenticationTransactionStore,
+      rootBootstrapStore: typeof runtime.MemoryBootstrapStore,
+      rootTransactionParticipant: typeof runtime.MemoryAuthorizationTransactionParticipant,
       testingMemoryStore: typeof testing.MemoryCredentialStore,
       testingMemoryNonceLedger: typeof testing.MemoryGrantNonceLedger,
+      testingAuthenticationStore: typeof testing.MemoryAuthenticationTransactionStore,
+      testingBootstrapStore: typeof testing.MemoryBootstrapStore,
+      testingTransactionParticipant: typeof testing.MemoryAuthorizationTransactionParticipant,
     }));
   `], { cwd: consumer, env: { ...process.env, npm_config_cache: cache, npm_config_offline: 'true' } });
   assert.equal(probe.code, 0, probe.stderr);
   assert.deepEqual(JSON.parse(probe.stdout), {
-    version: '0.1.0', manifest: '0.1.0', policy: 'function', audit: 'function',
+    version: '0.2.0', manifest: '0.2.0', policy: 'function', audit: 'function',
+    oidc: 'function', bootstrap: 'function', policyAuthority: 'function',
+    securityAuthority: 'function', transactionAuthority: 'function',
     rootMemoryStore: 'undefined', rootMemoryNonceLedger: 'undefined',
+    rootAuthenticationStore: 'undefined', rootBootstrapStore: 'undefined', rootTransactionParticipant: 'undefined',
     testingMemoryStore: 'function', testingMemoryNonceLedger: 'function',
+    testingAuthenticationStore: 'function', testingBootstrapStore: 'function', testingTransactionParticipant: 'function',
   });
   const runtimePackage = JSON.parse(await readFile(join(consumer, 'node_modules/@opengamevcs/identity-policy-audit/package.json')));
-  assert.equal(runtimePackage.version, '0.1.0');
+  assert.equal(runtimePackage.version, '0.2.0');
 });

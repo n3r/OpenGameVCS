@@ -1,6 +1,6 @@
 {
   "name": "@opengamevcs/identity-policy-audit",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Candidate OpenGameVCS identity, path-policy, epoch, revocation, and audit runtime",
   "type": "module",
   "license": "MIT",
@@ -15,14 +15,14 @@
     "LICENSE"
   ],
   "scripts": {
-    "check": "node --check src/index.mjs && node --check src/contract.mjs && node --check src/errors.mjs && node --check src/validate.mjs && node --check src/policy.mjs && node --check src/credentials.mjs && node --check src/grants.mjs && node --check src/audit.mjs && node --check src/views.mjs && node --check src/rate.mjs && node --check src/adapters.mjs && node --check src/runtime.mjs && node --check src/testing.mjs",
+    "check": "node --check src/index.mjs && node --check src/contract.mjs && node --check src/errors.mjs && node --check src/validate.mjs && node --check src/policy.mjs && node --check src/policy-authority.mjs && node --check src/policy-authority-testing.mjs && node --check src/security-authority.mjs && node --check src/security-authority-testing.mjs && node --check src/transaction-authorization.mjs && node --check src/transaction-authorization-testing.mjs && node --check src/credentials.mjs && node --check src/grants.mjs && node --check src/audit.mjs && node --check src/audit-testing.mjs && node --check src/views.mjs && node --check src/rate.mjs && node --check src/adapters.mjs && node --check src/oidc.mjs && node --check src/oidc-testing.mjs && node --check src/bootstrap.mjs && node --check src/bootstrap-testing.mjs && node --check src/runtime.mjs && node --check src/testing.mjs",
     "test": "npm run check && node --test --test-concurrency=1 test/*.test.mjs",
     "test:package": "npm pack --dry-run --json"
   },
   "dependencies": {
     "@opengamevcs/authorization-contract": "1.0.0",
     "@opengamevcs/authorization-contract-v1": "1.0.0",
-    "@opengamevcs/identity-policy-audit-contract-v1": "0.1.0",
+    "@opengamevcs/identity-policy-audit-contract-v1": "0.2.0",
     "@opengamevcs/path-contract-v1": "1.0.0",
     "@opengamevcs/path-filesystem": "1.1.0",
     "@opengamevcs/protocol-baseline": "1.0.0-rc.1",

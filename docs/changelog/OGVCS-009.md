@@ -1,8 +1,30 @@
 # OGVCS-009 — Identity, path authorization, and audit
 
 **Status:** In development
-**Candidate packages:** `@opengamevcs/identity-policy-audit-contract-v1` 0.1.0 and `@opengamevcs/identity-policy-audit` 0.1.0
-**Date:** 2026-08-30
+**Candidate packages:** `@opengamevcs/identity-policy-audit-contract-v1` 0.2.0 and `@opengamevcs/identity-policy-audit` 0.2.0
+**Date:** 2026-08-31
+
+## Production-boundary candidate cut
+
+- Added bounded OIDC Authorization Code with PKCE and device flows, exact HTTPS
+  provider configuration, signed RS256/ES256 ID-token verification, one-use
+  state/nonce/verifier records, dependency deadlines and resumable device-poll
+  failures. No unintended local-authentication fallback exists.
+- Added rotating bootstrap recovery, an independent-recovery prerequisite for
+  local-login disablement, trusted-source rate control and fail-closed storage.
+- Added authorized policy preview plus generation CAS and atomic
+  `policy.changed` append, bounded revocation receipts, and atomic authority
+  epoch/key promotion receipts.
+- Added authority-derived transaction credential evidence, participant-owned
+  transaction identities, exact batch resource checks, and a poison-on-ambiguous
+  ordinary decision commitment for OGVCS-006. It does not counterfeit an
+  OGVCS-003 privileged audit class or expose a raw database transaction.
+- Added a 14-row executable production-boundary corpus alongside the existing
+  15 security vectors. The independent validator freezes all 21 artifacts,
+  17 schemas, 25 limits and 29 vector outcomes, including coordinated-drift
+  mutation tests.
+- Updated bounded CI to pinned Node 24 on Linux, macOS and Windows. The workflow
+  contains no exact-scale or scheduled scale campaign.
 
 ## First security-core cut
 
@@ -34,8 +56,8 @@
 
 ## Deliberate remaining work
 
-The PRD remains In development. This cut does not provide or claim real OIDC,
-production secret/key/audit/nonce stores, crash-atomic revocation plus audit
-commits, process-restart state reconstruction, request-root or multi-object
-grant issuance, latency/SLO evidence, complete API route integration, hosted
+The PRD remains In development. This cut does not provide or claim a configured
+studio OIDC deployment, production secret/key/audit/nonce/PostgreSQL adapters,
+process-restart reconstruction proof, request-root or multi-object grant
+issuance, latency/SLO evidence, complete public route integration, hosted
 cross-platform evidence, or final acceptance.

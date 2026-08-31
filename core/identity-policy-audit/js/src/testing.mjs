@@ -3,6 +3,12 @@ import { createHash } from 'node:crypto';
 export { MemoryCredentialStore } from './credentials.mjs';
 export { MemoryAuditStore } from './audit.mjs';
 export { MemoryGrantNonceLedger } from './grants.mjs';
+export { MemoryAuthenticationTransactionStore } from './oidc-testing.mjs';
+export { MemoryBootstrapStore } from './bootstrap-testing.mjs';
+export { MemoryPolicyAuthorityStore } from './policy-authority-testing.mjs';
+export { MemoryTrustedAuditCheckpointStore } from './audit-testing.mjs';
+export { MemorySecurityMutationStore } from './security-authority-testing.mjs';
+export { MemoryAuthorizationTransactionParticipant } from './transaction-authorization-testing.mjs';
 
 export function deterministicSecretSource(seed = 'ogvcs-identity-test') {
   let sequence = 0;

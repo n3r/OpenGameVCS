@@ -29,6 +29,7 @@ import {
   MemoryAuditStore,
   MemoryCredentialStore,
   MemoryGrantNonceLedger,
+  MemoryTrustedAuditCheckpointStore,
   deterministicSecretSource,
   fakeIdentityProviderAdapter,
 } from '../src/testing.mjs';
@@ -122,8 +123,11 @@ function fixture({ authorityEpoch = 1, failureHook, rateLimit = 100 } = {}) {
   });
   const engine = new PolicyEngine(policy(authorityEpoch), { failureHook });
   const rate = new FixedWindowRateLimiter({ limit: rateLimit, windowSeconds: 60, maxBuckets: 100, clock: () => clock.now });
-  const runtime = new IdentityPolicyRuntime({ policyEngine: engine, credentialAuthority: credentials, rateLimiter: rate, protocolProblems });
-  return { clock, state, credentialStore, credentials, engine, rate, runtime };
+  const rateSources = new WeakMap();
+  const rateSource = (context) => context === undefined ? 'unattributed' : rateSources.get(context);
+  const bindRateSource = (source) => { const context = {}; rateSources.set(context, source); return context; };
+  const runtime = new IdentityPolicyRuntime({ policyEngine: engine, credentialAuthority: credentials, rateLimiter: rate, rateSource, protocolProblems });
+  return { clock, state, credentialStore, credentials, engine, rate, rateSource, bindRateSource, runtime };
 }
 
 function issueArtist(context) {
@@ -209,7 +213,10 @@ const scenarios = {
     const context = fixture(); const issued = issueArtist(context);
     context.state.promote({ authorityEpoch: 2, keyGeneration: 2, audit: () => {} });
     const engine = new PolicyEngine(policy(2));
-    const runtime = new IdentityPolicyRuntime({ policyEngine: engine, credentialAuthority: context.credentials, rateLimiter: context.rate, protocolProblems });
+    const runtime = new IdentityPolicyRuntime({
+      policyEngine: engine, credentialAuthority: context.credentials, rateLimiter: context.rate,
+      rateSource: context.rateSource, protocolProblems,
+    });
     assert.equal(runtime.authorizeToken(issued.token, request({ epoch: 2 })).authorizationCode, 'DENY_EPOCH_STALE');
   },
   'service-token-revoked': () => {
@@ -299,7 +306,7 @@ for (const vector of vectorDocument.cases) {
 }
 
 test('runtime imports exact metadata assignments and candidate contract pins', () => {
-  assert.equal(identityPolicyContract.contractVersion, '0.1.0');
+  assert.equal(identityPolicyContract.contractVersion, '0.2.0');
   assert.deepEqual(
     { permission: metadataOperationAuthority('tree.page').permission, resourceType: metadataOperationAuthority('tree.page').resourceType },
     { permission: 'metadata.read', resourceType: 'tree' },
@@ -358,6 +365,19 @@ test('oversized credential tokens share the bounded invalid rate class', () => {
   assert.equal(context.runtime.authorizeToken(`${oversized}y`, request()).decision.code, 'DENY_RATE_LIMITED');
 });
 
+test('rotating invalid credentials cannot evade the trusted source rate bucket', () => {
+  const context = fixture({ rateLimit: 1 });
+  const rateContext = context.bindRateSource('edge:192.0.2.1');
+  const first = context.runtime.authorizeToken('invalid-token-a', request(), { rateContext });
+  const second = context.runtime.authorizeToken('invalid-token-b', request(), { rateContext });
+  assert.equal(first.decision.code, 'DENY_NOT_AUTHORIZED');
+  assert.equal(second.decision.code, 'DENY_RATE_LIMITED');
+  assert.throws(
+    () => context.runtime.authorizeToken('invalid-token-c', request(), { trustedRateSource: 'caller-selected' }),
+    ({ code }) => code === 'INPUT_INVALID',
+  );
+});
+
 test('grant signer output must bind the exact post-policy claims', () => {
   const context = fixture(); const issued = issueArtist(context);
   const principal = context.credentials.authenticate(issued.token);
@@ -390,18 +410,20 @@ test('audit reads require a fresh audit.read decision, not a caller-supplied all
   const adminScope = { ...scope(['audit.read', 'policy.administer']), pathPrefixes: [] };
   const admin = context.credentials.issue({ credentialClass: 'session', subject: 'admin.user', actorClass: 'administrator', groups: [], ttlSeconds: 600, scope: adminScope });
   const artist = issueArtist(context);
-  const store = new MemoryAuditStore(); const ledger = new AuditLedger({ store }); ledger.append(event('audit.readable'));
+  const store = new MemoryAuditStore(); const checkpoints = new MemoryTrustedAuditCheckpointStore();
+  const ledger = new AuditLedger({ store, trustedCheckpointSource: checkpoints }); ledger.append(event('audit.readable'));
   const checkpoint = ledger.checkpoint('studio');
+  checkpoints.retain(checkpoint);
   const auditRequest = request({ path: null, permission: 'audit.read', type: 'audit', reason: 'security review' });
   const adminPrincipal = context.credentials.authenticate(admin.token);
   assert.equal(ledger.viewForAuthorizedRequest('studio', {
     engine: context.engine, principal: adminPrincipal, credentialAuthority: context.credentials,
-    request: auditRequest, expectedCheckpoint: checkpoint,
+    request: auditRequest,
   }).items.length, 1);
   const artistPrincipal = context.credentials.authenticate(artist.token);
   assert.throws(() => ledger.viewForAuthorizedRequest('studio', {
     engine: context.engine, principal: artistPrincipal, credentialAuthority: context.credentials,
-    request: auditRequest, expectedCheckpoint: checkpoint,
+    request: auditRequest,
   }), ({ code }) => code === 'AUTHENTICATION_DENIED');
 });
 
@@ -491,6 +513,7 @@ test('storage, clock, and rate adapter failures are stable and fail closed', () 
     policyEngine: context.engine,
     credentialAuthority: context.credentials,
     rateLimiter: { consume() { throw new Error('offline'); } },
+    rateSource: () => 'test-source',
     protocolProblems,
   });
   assert.equal(runtime.authorizeToken(issued.token, request()).decision.code, 'DENY_POLICY_UNAVAILABLE');
@@ -503,13 +526,15 @@ test('audit views verify the checkpoint and hide cross-repository chain gaps', (
   const adminScope = { ...scope(['audit.read', 'policy.administer']), pathPrefixes: [] };
   const admin = context.credentials.issue({ credentialClass: 'session', subject: 'admin.user', actorClass: 'administrator', groups: [], ttlSeconds: 600, scope: adminScope });
   const principal = context.credentials.authenticate(admin.token);
-  const store = new MemoryAuditStore(); const ledger = new AuditLedger({ store });
+  const store = new MemoryAuditStore(); const checkpoints = new MemoryTrustedAuditCheckpointStore();
+  const ledger = new AuditLedger({ store, trustedCheckpointSource: checkpoints });
   ledger.append(event('audit.other', { repository: 'other' })); ledger.append(event('audit.game'));
   const checkpoint = ledger.checkpoint('studio');
+  checkpoints.retain(checkpoint);
   const auditRequest = request({ path: null, permission: 'audit.read', type: 'audit', reason: 'security review' });
   const view = ledger.viewForAuthorizedRequest('studio', {
     engine: context.engine, principal, credentialAuthority: context.credentials,
-    request: auditRequest, expectedCheckpoint: checkpoint,
+    request: auditRequest,
   });
   assert.equal(view.items.length, 1); assert.equal(view.items[0].repository, 'game');
   assert.doesNotMatch(JSON.stringify(view), /audit\.other|sequence|previousHash|recordHash|tailHash|hidden|count/iu);
@@ -523,13 +548,30 @@ test('audit views fail closed on reordered linkage before returning a projection
   const adminScope = { ...scope(['audit.read', 'policy.administer']), pathPrefixes: [] };
   const admin = context.credentials.issue({ credentialClass: 'session', subject: 'admin.user', actorClass: 'administrator', groups: [], ttlSeconds: 600, scope: adminScope });
   const principal = context.credentials.authenticate(admin.token);
-  const store = new MemoryAuditStore(); const ledger = new AuditLedger({ store });
+  const store = new MemoryAuditStore(); const checkpoints = new MemoryTrustedAuditCheckpointStore();
+  const ledger = new AuditLedger({ store, trustedCheckpointSource: checkpoints });
   ledger.append(event('audit.one')); ledger.append(event('audit.two'));
   const checkpoint = ledger.checkpoint('studio');
+  checkpoints.retain(checkpoint);
   store.unsafeReplaceForTest('studio', store.list('studio', 10).reverse());
   const auditRequest = request({ path: null, permission: 'audit.read', type: 'audit', reason: 'security review' });
   assert.throws(() => ledger.viewForAuthorizedRequest('studio', {
     engine: context.engine, principal, credentialAuthority: context.credentials,
-    request: auditRequest, expectedCheckpoint: checkpoint,
+    request: auditRequest,
   }), ({ code }) => code === 'AUDIT_INTEGRITY');
+});
+
+test('authorized audit reads reject a request-selected checkpoint even when it is well formed', () => {
+  const context = fixture();
+  const adminScope = { ...scope(['audit.read', 'policy.administer']), pathPrefixes: [] };
+  const admin = context.credentials.issue({ credentialClass: 'session', subject: 'admin.user', actorClass: 'administrator', groups: [], ttlSeconds: 600, scope: adminScope });
+  const principal = context.credentials.authenticate(admin.token);
+  const store = new MemoryAuditStore(); const checkpoints = new MemoryTrustedAuditCheckpointStore();
+  const ledger = new AuditLedger({ store, trustedCheckpointSource: checkpoints }); ledger.append(event('audit.one'));
+  const trusted = ledger.checkpoint('studio'); checkpoints.retain(trusted);
+  const requestValue = request({ path: null, permission: 'audit.read', type: 'audit', reason: 'security review' });
+  assert.throws(() => ledger.viewForAuthorizedRequest('studio', {
+    engine: context.engine, principal, credentialAuthority: context.credentials,
+    request: requestValue, expectedCheckpoint: { ...trusted, tailHash: '00'.repeat(32) },
+  }), ({ code }) => code === 'INPUT_INVALID');
 });

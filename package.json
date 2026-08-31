@@ -43,7 +43,7 @@
     "test:metadata": "node server/modules/repository-metadata/scripts/static-check.mjs && node server/modules/repository-metadata/scripts/service-report.mjs --check && node --test tools/repository-metadata-workflow-policy.test.mjs",
     "test:transfer": "npm run test --workspace @opengamevcs/object-transfer && node --test tools/object-transfer-workflow-policy.test.mjs",
     "test:transfer:spec": "npm run test --workspace @opengamevcs/object-transfer-contract-v1",
-    "test:identity": "npm run test --workspace @opengamevcs/identity-policy-audit",
+    "test:identity": "npm run test --workspace @opengamevcs/identity-policy-audit && node --test tools/identity-policy-workflow-policy.test.mjs",
     "test:identity:spec": "npm run test --workspace @opengamevcs/identity-policy-audit-contract-v1",
     "test:protocol": "npm run test --workspace @opengamevcs/protocol-baseline",
     "test:protocol:adapter": "npm run check --workspace @opengamevcs/protocol-baseline-independent-adapter",

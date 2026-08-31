@@ -6,6 +6,7 @@ on:
       - ".github/workflows/identity-policy-audit.yml"
       - "core/identity-policy-audit/**"
       - "docs/changelog/OGVCS-009.md"
+      - "docs/runbooks/identity-policy-operations.md"
       - "package.json"
       - "package-lock.json"
       - "prd/README.md"
@@ -18,6 +19,7 @@ on:
       - "spec/path-filesystem/v1/**"
       - "spec/protocols/v1/**"
       - "spec/repository-metadata/v1/**"
+      - "tools/identity-policy-workflow-policy.test.mjs"
   push:
     branches:
       - main
@@ -26,6 +28,7 @@ on:
       - ".github/workflows/identity-policy-audit.yml"
       - "core/identity-policy-audit/**"
       - "docs/changelog/OGVCS-009.md"
+      - "docs/runbooks/identity-policy-operations.md"
       - "package.json"
       - "package-lock.json"
       - "prd/README.md"
@@ -38,6 +41,7 @@ on:
       - "spec/path-filesystem/v1/**"
       - "spec/protocols/v1/**"
       - "spec/repository-metadata/v1/**"
+      - "tools/identity-policy-workflow-policy.test.mjs"
   workflow_dispatch:
 
 permissions:
@@ -60,7 +64,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       - name: Install exact workspace dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund

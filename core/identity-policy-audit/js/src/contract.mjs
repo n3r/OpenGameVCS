@@ -21,7 +21,7 @@ const predecessorManifests = {
   metadata: metadata.bytes,
 };
 if (identity.value.schemaVersion !== 'ogvcs.identity-policy/contract-manifest/v1'
-    || identity.value.contractVersion !== '0.1.0' || identity.value.state !== 'candidate'
+    || identity.value.contractVersion !== '0.2.0' || identity.value.state !== 'candidate'
     || Object.entries(predecessorManifests).some(([name, bytes]) => identity.value.predecessorPins[name]?.manifestSha256 !== digest(bytes))) {
   identityFail('POLICY_UNAVAILABLE', 'identity-policy contract authority is invalid');
 }
