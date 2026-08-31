@@ -727,6 +727,8 @@ fn production_reference_postgres_report() {
     assert_eq!(published_sequence, 2);
     drop(audit);
 
+    legacy_oversized_status_report(&database_url, &mut store, &context, repository_id);
+    report("legacy-oversized-status-fails-bounded");
     immutable_read_report(
         &database_url,
         &mut store,
@@ -945,6 +947,68 @@ fn reset_disposable_schema(database_url: &str) {
     client
         .batch_execute("DROP SCHEMA IF EXISTS ogvcs_metadata CASCADE")
         .unwrap();
+}
+
+fn legacy_oversized_status_report(
+    database_url: &str,
+    store: &mut PostgresMetadataStore<IsolatedAllow, IsolatedConformanceValidation>,
+    context: &AuthorizationContext,
+    repository_id: RepositoryId,
+) {
+    let reservation = idempotency("legacy.status", "oversized", [0x5e; 32]);
+    let mut transaction = store
+        .begin_authorized(
+            context,
+            TransactionCapability::PutObject,
+            repository_id,
+            TransactionOptions::Serializable { maximum_retries: 0 },
+        )
+        .unwrap();
+    transaction
+        .reserve_idempotency(reservation.clone())
+        .unwrap();
+    transaction
+        .commit_idempotency(&reservation, json!({"seed": true}))
+        .unwrap();
+    transaction.commit().unwrap();
+
+    let mut client = Client::connect(database_url, NoTls).unwrap();
+    assert_eq!(
+        client
+            .execute(
+                "UPDATE ogvcs_metadata.idempotency_records
+                 SET safe_result = to_jsonb(array_fill(0, ARRAY[400000]))
+                 WHERE operation = $1 AND idempotency_key = $2
+                   AND authorization_resources IS NULL",
+                &[&reservation.operation, &reservation.key],
+            )
+            .unwrap(),
+        1
+    );
+    let sizes: (i64, i64) = client
+        .query_one(
+            "SELECT pg_column_size(safe_result)::bigint,
+                    octet_length(safe_result::text)::bigint
+             FROM ogvcs_metadata.idempotency_records
+             WHERE operation = $1 AND idempotency_key = $2",
+            &[&reservation.operation, &reservation.key],
+        )
+        .map(|row| (row.get(0), row.get(1)))
+        .unwrap();
+    assert!(sizes.0 > 1_048_576 || sizes.1 > 1_048_576);
+    assert_eq!(
+        store
+            .idempotency_status(
+                context,
+                repository_id,
+                TransactionCapability::PutObject,
+                &reservation.operation,
+                &reservation.key,
+            )
+            .unwrap_err()
+            .code,
+        DomainErrorCode::ObjectInvalid
+    );
 }
 
 fn immutable_read_report(
@@ -1707,7 +1771,7 @@ fn migration_v1_v5_upgrade_report(database_url: &str) {
     };
     let mut store = PostgresMetadataStore::connect(database_url).unwrap();
     let upgrade = store.migrate(options).unwrap();
-    assert_eq!((upgrade.applied, upgrade.already_applied), (18, 3));
+    assert_eq!((upgrade.applied, upgrade.already_applied), (21, 3));
     drop(store);
 
     let mut client = Client::connect(database_url, NoTls).unwrap();
@@ -1760,8 +1824,8 @@ fn migration_report(database_url: &str) {
         application_version: "0.1.0",
         compatibility_fence_open: true,
     };
-    assert_eq!(store.migrate(options).unwrap().applied, 21);
-    assert_eq!(store.migrate(options).unwrap().already_applied, 21);
+    assert_eq!(store.migrate(options).unwrap().applied, 24);
+    assert_eq!(store.migrate(options).unwrap().already_applied, 24);
     drop(store);
 
     let mut client = Client::connect(database_url, NoTls).unwrap();
@@ -1890,7 +1954,7 @@ fn migration_report(database_url: &str) {
             "INSERT INTO ogvcs_metadata.schema_migrations
              (version, phase, checksum_sha256, state, minimum_application_version,
               maximum_application_version, completed_at)
-             VALUES (8, 'expand', repeat('a', 64), 'completed', '0.2.0', '0.2.x', clock_timestamp())",
+             VALUES (9, 'expand', repeat('a', 64), 'completed', '0.2.0', '0.2.x', clock_timestamp())",
             &[],
         )
         .unwrap();
@@ -1904,7 +1968,7 @@ fn migration_report(database_url: &str) {
     let mut client = Client::connect(database_url, NoTls).unwrap();
     client
         .execute(
-            "DELETE FROM ogvcs_metadata.schema_migrations WHERE version = 8",
+            "DELETE FROM ogvcs_metadata.schema_migrations WHERE version = 9",
             &[],
         )
         .unwrap();
@@ -2603,7 +2667,7 @@ fn authorization_and_poisoning_report(
         .unwrap();
     assert_eq!(
         replay.reserve_idempotency(committed_key.clone()).unwrap(),
-        IdempotencyReservationOutcome::CommittedReplay(json!({"created": true}))
+        IdempotencyReservationOutcome::CommittedReplayPending
     );
     assert_eq!(
         replay.finish_committed_replay().unwrap(),

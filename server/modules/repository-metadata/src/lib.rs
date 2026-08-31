@@ -15,6 +15,31 @@ use ogvcs_repository_metadata::PostgresMetadataStore;
 
 let _ = PostgresMetadataStore::connect("postgresql://example.invalid/db");
 ```
+
+The legacy committed-status disclosure and transaction inspection projection
+are absent as well:
+
+```compile_fail
+use ogvcs_repository_metadata::PostgresMetadataStore;
+
+let _ = PostgresMetadataStore::idempotency_status;
+```
+
+```compile_fail
+use ogvcs_repository_metadata::{
+    DeniedAuthorizedView, PostgresMetadataTransaction, ProductionObjectValidator,
+};
+
+fn inspect(
+    transaction: &PostgresMetadataTransaction<
+        '_,
+        ProductionObjectValidator,
+        DeniedAuthorizedView,
+    >,
+) {
+    let _ = transaction.authorized_view();
+}
+```
 "#
 )]
 

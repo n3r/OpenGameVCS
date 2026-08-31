@@ -22,12 +22,22 @@ presented as generated wire-contract implementations.
 
 The production constructor is `IdentityBoundPostgresMetadataStore::connect`;
 it requires the OGVCS-009 PostgreSQL participant before returning a store and
-exposes only credential-presentation entry points. It invokes OGVCS-009 authorization on
-the exact live PostgreSQL transaction, derives subject, epoch, and authenticated
+exposes only credential-presentation entry points. The default identity-bound
+transaction admits immutable `PutObject`, `CreateRepository`, receipt-backed
+`ReserveFileId`, `ImportFileId` staging, and consistency-token issuance. It
+rejects `Publish`, generic reference CAS, tombstone, and restore before opening
+a transaction. Those operations reopen only through a future server-derived,
+sealed submit-plan/coordinator port; caller-driven incremental transactions
+must not become an `advanceBranch` or protected-state oracle. The low-level
+composition primitives remain available only with `legacy-test-adapter` for
+coordinator tests.
+
+For admitted operations, the adapter invokes OGVCS-009 authorization on the
+exact live PostgreSQL transaction, derives subject, epoch, and authenticated
 scope exclusively from the sealed view, and domain-separates metadata scope by
-subject, authority epoch, tenant, repository, and capability. It accumulates exact staged resources,
-rechecks that closed set, and appends the ordinary decision commitment before
-commit. Any error poisons the transaction. The production wrapper neither
+subject, authority epoch, tenant, repository, and capability. It accumulates
+exact staged resources, rechecks that closed set, and appends the ordinary
+decision commitment before commit. Any error poisons the transaction. The production wrapper neither
 implements nor dereferences to the legacy `MetadataStore`, so caller-owned
 `AuthorizationContext` entry points cannot be selected after binding. The
 opaque compatibility type has no default-build constructor or validator/
@@ -35,14 +45,18 @@ authorizer injection path; those entry points compile only with the
 repository's `legacy-test-adapter` feature. Development reads authorize and
 revalidate exact typed resource projections before returning data. Repository
 arguments retained for OGVCS-010 composition are checked against their binding
-before validation or SQL. Publication authorization derives full root-relative
-source/before/after paths and their FileIDs from the canonical change set, then
-compares the expanded base and candidate trees so implicit directory moves also
-contribute every hidden descendant path effect. Tree-entry basenames are never
-treated as repository paths. A
-committed replay is completed with `finish_committed_replay`, which rolls back
-the probe transaction and returns the stored safe result without entering the
-serialization retry loop.
+before validation or SQL. The sealed coordinator primitive derives full
+root-relative source/before/after paths and their FileIDs from the canonical
+change set, then compares expanded base and candidate trees so implicit
+directory moves contribute every hidden descendant path effect. Tree-entry
+basenames are never treated as repository paths. The default wrapper does not
+currently expose that primitive. A committed replay first returns only
+`CommittedReplayPending`; `finish_committed_replay` rolls back the probe and
+returns the privately held safe result only after rollback succeeds. Stored
+identity replays authenticate their canonical reference/resource/result tuple,
+then recheck the exact current policy before any semantic result is exposed.
+The caller-context `idempotency_status` and transaction inspection accessors
+exist only under `legacy-test-adapter`.
 
 Tree reads bind the authorized view to the published snapshot, exact tree, and
 root-relative path-segment prefix, then authorize each returned child by its
@@ -63,7 +77,8 @@ coalesce to its final state, duplicate emission fails closed, and mutation after
 emission poisons the transaction. `metadata.object-accepted` is emitted only
 when a snapshot first crosses the publication boundary, not when it is staged.
 
-Before a snapshot can become a reference target, the adapter validates the
+Within the sealed coordinator/legacy composition primitive, before a snapshot
+can become a reference target, the adapter validates the
 bounded repository metadata closure, registry lifecycle for configured path,
 platform, and content-policy profiles, the complete snapshot ancestry,
 descriptor binding, expanded tree/content-policy membership, configured tree
@@ -100,6 +115,11 @@ phase to be present, compatible, completed, and checksummed. Schema v4 adds the
 bounded deterministic ancestry primitive; v5 adds the project-list cursor
 ledger; v6 adds allocation receipts; and v7 additively binds token rows to an
 authority-derived authenticated scope without rewriting historical migrations.
+Schema v8 additively binds committed identity idempotency rows to the exact
+canonical reference/resource/result authority tuple. It preserves historical
+authority-null legacy rows (including old near-limit JSONB layouts), while new
+identity-bound rows enforce 1,000-resource, 8 MiB resource-batch, and 1 MiB
+safe-result storage/text ceilings.
 
 Production persistence deployment evidence, public API/HTTP bindings, external chunk-store
 composition, and hosted production-service evidence remain deferred. The

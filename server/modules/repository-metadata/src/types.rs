@@ -704,7 +704,7 @@ impl IdempotencyReservation {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum IdempotencyReservationOutcome {
     Reserved,
-    CommittedReplay(Value),
+    CommittedReplayPending,
     KeyReuseRejected,
 }
 

@@ -317,6 +317,7 @@ impl TransactionDecisionCommitment {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct AuthorizationResource {
     #[serde(rename = "type")]
     pub resource_type: String,

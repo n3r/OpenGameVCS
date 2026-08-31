@@ -181,6 +181,9 @@ pub trait MetadataTransaction {
         &mut self,
         reservation: IdempotencyReservation,
     ) -> Result<IdempotencyReservationOutcome>;
+    fn finish_committed_replay(self) -> Result<serde_json::Value>
+    where
+        Self: Sized;
     fn commit_idempotency(
         &mut self,
         reservation: &IdempotencyReservation,

@@ -18,7 +18,7 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
     );
     assert_eq!(manifest["database"], "postgresql-15-or-newer");
     let entries = manifest["entries"].as_array().unwrap();
-    assert_eq!(entries.len(), 21);
+    assert_eq!(entries.len(), 24);
     let expected = [
         (1, "expand"),
         (1, "migrate"),
@@ -41,6 +41,9 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
         (7, "expand"),
         (7, "migrate"),
         (7, "contract"),
+        (8, "expand"),
+        (8, "migrate"),
+        (8, "contract"),
     ];
     for (entry, (version, phase)) in entries.iter().zip(expected) {
         assert_eq!(entry["version"], version);
@@ -61,6 +64,7 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
     assert_eq!(entries[14]["requiresCompatibilityFence"], true);
     assert_eq!(entries[17]["requiresCompatibilityFence"], true);
     assert_eq!(entries[20]["requiresCompatibilityFence"], true);
+    assert_eq!(entries[23]["requiresCompatibilityFence"], true);
 }
 
 #[test]
@@ -176,6 +180,23 @@ fn version_seven_adds_authority_scope_to_all_metadata_tokens() {
             .count(),
         3
     );
+}
+
+#[test]
+fn version_eight_binds_and_bounds_idempotency_replay_authority() {
+    let expand = fs::read_to_string(migration_root().join("000008_expand.sql")).unwrap();
+    for evidence in [
+        "authorization_reference text",
+        "authorization_resources jsonb",
+        "authorization_binding_digest bytea",
+        "jsonb_array_length(authorization_resources) BETWEEN 1 AND 1000",
+        "octet_length(authorization_resources::text) <= 8388608",
+        "idempotency_identity_safe_result_bounded",
+        "authorization_resources IS NULL\n            OR safe_result IS NULL",
+        "octet_length(safe_result::text) <= 1048576",
+    ] {
+        assert!(expand.contains(evidence), "missing {evidence}");
+    }
 }
 
 #[test]

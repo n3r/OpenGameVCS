@@ -36,7 +36,7 @@ for (const file of rustFiles) {
 
 const manifest = JSON.parse(await readFile(resolve(migrations, 'manifest.json')));
 assert(manifest.schemaVersion === 'ogvcs.repository-metadata/migration-manifest/v1', 'migration manifest schema differs');
-assert(JSON.stringify(manifest.entries.map(({ version, phase }) => [version, phase])) === '[[1,"expand"],[1,"migrate"],[1,"contract"],[2,"expand"],[2,"migrate"],[2,"contract"],[3,"expand"],[3,"migrate"],[3,"contract"],[4,"expand"],[4,"migrate"],[4,"contract"],[5,"expand"],[5,"migrate"],[5,"contract"],[6,"expand"],[6,"migrate"],[6,"contract"],[7,"expand"],[7,"migrate"],[7,"contract"]]', 'migration phases are not ordered');
+assert(JSON.stringify(manifest.entries.map(({ version, phase }) => [version, phase])) === '[[1,"expand"],[1,"migrate"],[1,"contract"],[2,"expand"],[2,"migrate"],[2,"contract"],[3,"expand"],[3,"migrate"],[3,"contract"],[4,"expand"],[4,"migrate"],[4,"contract"],[5,"expand"],[5,"migrate"],[5,"contract"],[6,"expand"],[6,"migrate"],[6,"contract"],[7,"expand"],[7,"migrate"],[7,"contract"],[8,"expand"],[8,"migrate"],[8,"contract"]]', 'migration phases are not ordered');
 for (const entry of manifest.entries) {
   const bytes = await readFile(resolve(migrations, entry.path));
   const sql = bytes.toString('utf8');
@@ -87,6 +87,14 @@ assert(expandV7.includes('ogvcs_metadata.consistency_tokens'), 'version 7 consis
 assert(expandV7.includes('ogvcs_metadata.cursor_states'), 'version 7 repository cursor scope migration missing');
 assert(expandV7.includes('ogvcs_metadata.repository_list_cursor_states'), 'version 7 project cursor scope migration missing');
 assert(expandV7.includes('authenticated_scope_digest'), 'version 7 token state is not bound to authenticated scope');
+const expandV8 = await readFile(resolve(migrations, '000008_expand.sql'), 'utf8');
+assert(expandV8.includes('authorization_reference'), 'version 8 replay reference binding missing');
+assert(expandV8.includes('authorization_resources'), 'version 8 replay resource binding missing');
+assert(expandV8.includes('authorization_binding_digest'), 'version 8 replay integrity binding missing');
+assert(expandV8.includes('octet_length(authorization_resources::text) <= 8388608'), 'version 8 replay batch byte bound missing');
+assert(expandV8.includes('octet_length(safe_result::text) <= 1048576'), 'version 8 replay result byte bound missing');
+assert(expandV8.includes('idempotency_identity_safe_result_bounded'), 'version 8 identity result constraint missing');
+assert(expandV8.includes('authorization_resources IS NULL\n            OR safe_result IS NULL'), 'version 8 does not preserve oversized authority-null legacy results');
 
 const adapter = await readFile(resolve(root, 'src/postgres.rs'), 'utf8');
 const ports = await readFile(resolve(root, 'src/ports.rs'), 'utf8');
@@ -98,6 +106,14 @@ assert(ports.includes('ValidationMode::Production'), 'default object validator i
 assert(ports.includes('type AuthorizedView: AuthorizedView'), 'authorizer output is not an exact view contract');
 assert(ports.includes('resource: &AuthorizationResource'), 'authorizer is not bound to a typed resource projection');
 assert(adapter.includes('#[cfg(feature = "legacy-test-adapter")]\n    pub fn connect(database_url: &str)'), 'caller-context store constructor is available in the default build');
+for (const sealedAccessor of ['authorized_repository_id', 'authorization_context', 'authorized_view']) {
+  assert(
+    adapter.includes(`#[cfg(feature = "legacy-test-adapter")]\n    pub fn ${sealedAccessor}`),
+    `production transaction exposes ${sealedAccessor}`,
+  );
+}
+assert(adapter.includes('} if *repository_id == self.repository_id && *capability == self.capability'), 'identity authorized view is not restricted to its bootstrap capability');
+assert(adapter.includes('#[cfg(feature = "legacy-test-adapter")]\n    pub fn idempotency_status('), 'legacy committed-status API is exposed by default');
 assert(adapter.includes('impl IdentityBoundPostgresMetadataStore<DenyAllAuthorization, ProductionObjectValidator>'), 'production identity-bound constructor is missing');
 assert(adapter.includes('pub fn connect(\n        database_url: &str,\n        participant: PostgresTransactionAuthorizationParticipant,'), 'production constructor does not require the OGVCS-009 participant');
 for (const evidence of [

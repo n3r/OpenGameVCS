@@ -14,6 +14,7 @@ use ogvcs_object_model::{
 };
 use postgres::types::Json;
 use postgres::{Client, IsolationLevel, NoTls, Row, Transaction};
+use serde::Serialize;
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use std::{
@@ -23,21 +24,23 @@ use std::{
 use subtle::ConstantTimeEq;
 use uuid::Uuid;
 
+#[cfg(feature = "legacy-test-adapter")]
+use crate::IdempotencyStatus;
 use crate::{
     AllocationReceipt, AncestryRecord, AuthorizationContext, AuthorizationPort,
     AuthorizationResource, AuthorizedView, CaseMode, CommitSequence, ConsistencyToken, CursorToken,
     DenyAllAuthorization, DomainError, DomainErrorCode, FileHistoryRecord, FileHistoryWrite,
     FileId, FileIdAllocation, FileIdExpectedState, FileIdImportReservation, FileIdOrigin,
     FileIdOwnerKind, FileIdReservation, FileIdReservationOutcome, HistoryIncompleteReason,
-    HistoryPage, IdempotencyReservation, IdempotencyReservationOutcome, IdempotencyStatus,
-    MetadataObjectRecord, MetadataPermission, MetadataStore, MetadataTransaction,
-    NativeFileIdReservation, ObjectPutOutcome, ObjectRef, ObjectValidationPort, ObjectWrite,
-    OutboxClaimRequest, OutboxEvent, OutboxEventRecord, OutboxLeaseAction, OutboxLeaseRecord,
-    OutboxReleaseRequest, Page, PageRequest, PageState, ProductionObjectValidator,
-    ReferenceCasRequest, ReferenceCasResult, ReferenceExpected, ReferenceFilter, ReferenceKind,
-    ReferenceName, ReferenceRecord, RepositoryCreate, RepositoryId, RepositoryRecord,
-    RepositorySettings, Result, SnapshotWrite, TenantId, TransactionCapability,
-    TransactionCredentialRequest, TransactionOptions, TreeEntryRecord, TreeEntryWrite,
+    HistoryPage, IdempotencyReservation, IdempotencyReservationOutcome, MetadataObjectRecord,
+    MetadataPermission, MetadataStore, MetadataTransaction, NativeFileIdReservation,
+    ObjectPutOutcome, ObjectRef, ObjectValidationPort, ObjectWrite, OutboxClaimRequest,
+    OutboxEvent, OutboxEventRecord, OutboxLeaseAction, OutboxLeaseRecord, OutboxReleaseRequest,
+    Page, PageRequest, PageState, ProductionObjectValidator, ReferenceCasRequest,
+    ReferenceCasResult, ReferenceExpected, ReferenceFilter, ReferenceKind, ReferenceName,
+    ReferenceRecord, RepositoryCreate, RepositoryId, RepositoryRecord, RepositorySettings, Result,
+    SnapshotWrite, TenantId, TransactionCapability, TransactionCredentialRequest,
+    TransactionOptions, TreeEntryRecord, TreeEntryWrite,
 };
 
 const VALIDATION_CONTRACT: &str = "ogvcs.repository-format@1";
@@ -49,6 +52,7 @@ const MAX_HISTORY_DEPTH: u32 = 100_000;
 const MAX_JSON_PREFLIGHT_BYTES: usize = 1_048_576;
 const MAX_JSON_PREFLIGHT_DEPTH: usize = 128;
 const MAX_JSON_PREFLIGHT_NODES: usize = 131_072;
+const MAX_IDENTITY_AUTHORIZATION_BATCH_BYTES: usize = 8_388_608;
 
 macro_rules! poison_transaction_on_error {
     ($transaction:ident, $body:block) => {{
@@ -230,7 +234,14 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
         if inserted == 0 {
             let row = transaction
                 .query_one(
-                    "SELECT semantic_fingerprint, state, safe_result
+                    "SELECT semantic_fingerprint, state, authorization_reference,
+                            CASE
+                              WHEN authorization_resources IS NOT NULL
+                               AND pg_column_size(authorization_resources) <= 8388608
+                               AND octet_length(authorization_resources::text) <= 8388608
+                              THEN authorization_resources
+                            END,
+                            authorization_binding_digest
                      FROM ogvcs_metadata.idempotency_records
                      WHERE authenticated_scope_digest = $1 AND operation = $2
                        AND idempotency_key = $3 FOR UPDATE",
@@ -239,17 +250,92 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
                 .map_err(database_error)?;
             let fingerprint: Vec<u8> = row.get(0);
             let state: String = row.get(1);
-            if !bool::from(
-                fingerprint
-                    .as_slice()
-                    .ct_eq(&reservation.semantic_fingerprint),
-            ) || state != "committed"
+            let Ok(stored_fingerprint) = <[u8; 32]>::try_from(fingerprint.as_slice()) else {
+                poison_identity_transaction(&mut transaction);
+                let _ = transaction.rollback();
+                return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
+            };
+            let stored_reference: Option<String> = row.get(2);
+            let stored_resources = row
+                .get::<_, Option<Json<Value>>>(3)
+                .map(|Json(resources)| resources);
+            let stored_binding_digest: Option<Vec<u8>> = row.get(4);
+            let expected_resources =
+                canonical_identity_resource_batch(std::slice::from_ref(&resource))?;
+            let stored_resources_valid = stored_resources
+                .and_then(|resources| decode_canonical_identity_resource_batch(resources).ok())
+                .is_some_and(|resources| resources == expected_resources)
+                && stored_reference.is_none();
+            if state != "committed" || !stored_resources_valid || stored_binding_digest.is_none() {
+                poison_identity_transaction(&mut transaction);
+                let _ = transaction.rollback();
+                return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
+            }
+            let Some(safe_result) = transaction
+                .query_one(
+                    "SELECT CASE
+                              WHEN safe_result IS NOT NULL
+                               AND pg_column_size(safe_result) <= 1048576
+                               AND octet_length(safe_result::text) <= 1048576
+                              THEN safe_result::text
+                            END
+                     FROM ogvcs_metadata.idempotency_records
+                     WHERE authenticated_scope_digest = $1 AND operation = $2
+                       AND idempotency_key = $3",
+                    &[&&scope[..], &reservation.operation, &reservation.key],
+                )
+                .map_err(database_error)?
+                .get::<_, Option<String>>(0)
+                .filter(|result| result.len() <= 1_048_576)
+                .and_then(|result| serde_json::from_str::<Value>(&result).ok())
+            else {
+                poison_identity_transaction(&mut transaction);
+                let _ = transaction.rollback();
+                return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
+            };
+            let expected_binding_digest = identity_idempotency_authority_digest(
+                scope,
+                &reservation.operation,
+                &reservation.key,
+                stored_fingerprint,
+                None,
+                &expected_resources,
+                &safe_result,
+            )?;
+            let stored_binding_digest = stored_binding_digest.expect("checked above");
+            if stored_binding_digest.len() != expected_binding_digest.len()
+                || !bool::from(
+                    stored_binding_digest
+                        .as_slice()
+                        .ct_eq(&expected_binding_digest),
+                )
             {
+                poison_identity_transaction(&mut transaction);
+                let _ = transaction.rollback();
+                return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
+            }
+            if participant
+                .recheck_batch(
+                    &mut transaction,
+                    &view,
+                    &TransactionBatchRecheck {
+                        tenant: &tenant,
+                        repository: &repository,
+                        permission,
+                        reference: None,
+                        resources: &expected_resources,
+                    },
+                )
+                .is_err()
+            {
+                let _ = transaction.rollback();
+                return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
+            }
+            if !bool::from(stored_fingerprint.ct_eq(&reservation.semantic_fingerprint)) {
                 poison_identity_transaction(&mut transaction);
                 let _ = transaction.rollback();
                 return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
             }
-            let Json(safe_result): Json<Value> = row.get(2);
             let allocation = decode_allocation_result(repository_id, &safe_result)?;
             finalize_identity_decision(
                 participant,
@@ -311,10 +397,31 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
         let allocation =
             allocation.ok_or_else(|| DomainError::new(DomainErrorCode::FileIdConflict))?;
         let safe_result = allocation_result(&allocation)?;
+        let Json(safe_result): Json<Value> = transaction
+            .query_one("SELECT $1::jsonb", &[&Json(&safe_result)])
+            .map_err(database_error)?
+            .get(0);
+        if json_size(&safe_result).is_none_or(|size| size > 1_048_576) {
+            poison_identity_transaction(&mut transaction);
+            let _ = transaction.rollback();
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        let authorization_resources =
+            canonical_identity_resource_batch(std::slice::from_ref(&resource))?;
+        let authorization_binding_digest = identity_idempotency_authority_digest(
+            scope,
+            &reservation.operation,
+            &reservation.key,
+            reservation.semantic_fingerprint,
+            None,
+            &authorization_resources,
+            &safe_result,
+        )?;
         let updated = transaction
             .execute(
                 "UPDATE ogvcs_metadata.idempotency_records
-                 SET state = 'committed', safe_result = $4, committed_at = clock_timestamp()
+                 SET state = 'committed', safe_result = $4, committed_at = clock_timestamp(),
+                     authorization_resources = $6, authorization_binding_digest = $7
                  WHERE authenticated_scope_digest = $1 AND operation = $2
                    AND idempotency_key = $3 AND semantic_fingerprint = $5
                    AND state = 'reserved' AND expires_at > clock_timestamp()",
@@ -324,6 +431,8 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
                     &reservation.key,
                     &Json(&safe_result),
                     &&reservation.semantic_fingerprint[..],
+                    &Json(&authorization_resources),
+                    &&authorization_binding_digest[..],
                 ],
             )
             .map_err(database_error)?;
@@ -419,6 +528,7 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
     /// Looks up idempotency state only in the exact authenticated scope that
     /// would execute the named capability. This prevents cross-principal and
     /// cross-epoch replay disclosure.
+    #[cfg(feature = "legacy-test-adapter")]
     pub fn idempotency_status(
         &mut self,
         context: &AuthorizationContext,
@@ -441,7 +551,14 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
         let row = self
             .client
             .query_opt(
-                "SELECT state, expires_at, safe_result FROM ogvcs_metadata.idempotency_records
+                "SELECT state, expires_at,
+                        CASE
+                          WHEN safe_result IS NOT NULL
+                           AND pg_column_size(safe_result) <= 1048576
+                           AND octet_length(safe_result::text) <= 1048576
+                          THEN safe_result::text
+                        END
+                 FROM ogvcs_metadata.idempotency_records
              WHERE authenticated_scope_digest = $1 AND operation = $2 AND idempotency_key = $3
                AND expires_at > clock_timestamp()",
                 &[&&scope[..], &operation, &key],
@@ -458,7 +575,11 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
         match state.as_str() {
             "reserved" => Ok(IdempotencyStatus::Reserved { expires_at }),
             "committed" => {
-                let Json(safe_result): Json<Value> = row.get(2);
+                let safe_result = row
+                    .get::<_, Option<String>>(2)
+                    .filter(|result| result.len() <= 1_048_576)
+                    .and_then(|result| serde_json::from_str(&result).ok())
+                    .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
                 Ok(IdempotencyStatus::Committed {
                     expires_at,
                     safe_result,
@@ -848,6 +969,15 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
         repository_id: RepositoryId,
         options: TransactionOptions,
     ) -> Result<PostgresMetadataTransaction<'_, V, IdentityMetadataAuthorizedView>> {
+        if matches!(
+            capability,
+            TransactionCapability::Publish
+                | TransactionCapability::CompareAndSwapReference
+                | TransactionCapability::TombstoneFileId
+                | TransactionCapability::RestoreFileId
+        ) {
+            return Err(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied));
+        }
         crate::verify_schema_compatibility(&mut self.client)?;
         let participant = self
             .transaction_authorization
@@ -938,6 +1068,7 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
                 context,
                 repository_id,
                 permission: capability.permission(),
+                capability,
             },
             validation: &self.validation,
             authenticated_scope_digest,
@@ -953,6 +1084,7 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
                 reference: None,
             }),
             identity_resources: vec![resource],
+            identity_resources_sealed: false,
         })
     }
 
@@ -1018,6 +1150,7 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
             allocation_receipt_required: false,
             identity_binding: None,
             identity_resources: Vec::new(),
+            identity_resources_sealed: false,
         })
     }
 
@@ -2463,6 +2596,7 @@ pub struct IdentityMetadataAuthorizedView {
     context: AuthorizationContext,
     repository_id: RepositoryId,
     permission: MetadataPermission,
+    capability: TransactionCapability,
 }
 
 impl AuthorizedView for IdentityMetadataAuthorizedView {
@@ -2474,7 +2608,13 @@ impl AuthorizedView for IdentityMetadataAuthorizedView {
     ) -> bool {
         self.context == *context
             && self.permission == permission
-            && resource.repository_id() == Some(self.repository_id)
+            && matches!(
+                resource,
+                AuthorizationResource::RepositoryTransaction {
+                    repository_id,
+                    capability,
+                } if *repository_id == self.repository_id && *capability == self.capability
+            )
     }
 }
 
@@ -2603,17 +2743,21 @@ pub struct PostgresMetadataTransaction<
     allocation_receipt_required: bool,
     identity_binding: Option<IdentityTransactionBinding<'a>>,
     identity_resources: Vec<IdentityAuthorizationResource>,
+    identity_resources_sealed: bool,
 }
 
 impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransaction<'a, V, View> {
+    #[cfg(feature = "legacy-test-adapter")]
     pub fn authorized_repository_id(&self) -> RepositoryId {
         self.authorized_repository_id
     }
 
+    #[cfg(feature = "legacy-test-adapter")]
     pub fn authorization_context(&self) -> &AuthorizationContext {
         &self.authorization_context
     }
 
+    #[cfg(feature = "legacy-test-adapter")]
     pub fn authorized_view(&self) -> &View {
         &self.authorized_view
     }
@@ -2623,16 +2767,17 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
     pub fn finish_committed_replay(mut self) -> Result<Value> {
         let capability = self.capability;
         self.require_capability(&[capability])?;
-        let result = self
-            .committed_replay
-            .take()
-            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        if self.committed_replay.is_none() {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
         self.transaction
             .take()
             .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?
             .rollback()
             .map_err(database_error)?;
-        Ok(result)
+        self.committed_replay
+            .take()
+            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))
     }
 
     fn transaction(&mut self) -> Result<&mut Transaction<'a>> {
@@ -2733,10 +2878,163 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
         if self.identity_binding.is_none() {
             return Ok(());
         }
+        if self.identity_resources_sealed {
+            return self.fail(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
         record_identity_resource_in_batch(&mut self.identity_resources, resource, &mut self.failed)
     }
 
+    fn record_and_precheck_exact_identity_resources(
+        &mut self,
+        new_resources: impl IntoIterator<Item = IdentityAuthorizationResource>,
+    ) -> Result<()> {
+        let mut resources: Vec<IdentityAuthorizationResource> = Vec::new();
+        for resource in new_resources {
+            if !resources.contains(&resource) {
+                resources.push(resource);
+            }
+        }
+        if resources.is_empty() || resources.len() > MAXIMUM_BATCH_RESOURCES {
+            return self.fail(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        for resource in &resources {
+            self.record_identity_resource(resource.clone())?;
+        }
+        self.precheck_exact_identity_resources(&resources)
+    }
+
+    fn precheck_exact_identity_resources(
+        &mut self,
+        resources: &[IdentityAuthorizationResource],
+    ) -> Result<()> {
+        if resources.is_empty() || resources.len() > MAXIMUM_BATCH_RESOURCES {
+            return self.fail(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        let Some(binding) = self.identity_binding.as_ref() else {
+            return Ok(());
+        };
+        let transaction = self
+            .transaction
+            .as_mut()
+            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        binding
+            .participant
+            .recheck_batch(
+                transaction,
+                &binding.view,
+                &TransactionBatchRecheck {
+                    tenant: &binding.tenant,
+                    repository: &binding.repository,
+                    permission: &binding.permission,
+                    reference: binding.reference.as_deref(),
+                    resources,
+                },
+            )
+            .map(|_| ())
+            .map_err(|_| DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied))
+    }
+
+    fn recheck_identity_resources(&mut self) -> Result<()> {
+        let Some(binding) = self.identity_binding.as_ref() else {
+            return Ok(());
+        };
+        let transaction = self
+            .transaction
+            .as_mut()
+            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        binding
+            .participant
+            .recheck_batch(
+                transaction,
+                &binding.view,
+                &TransactionBatchRecheck {
+                    tenant: &binding.tenant,
+                    repository: &binding.repository,
+                    permission: &binding.permission,
+                    reference: binding.reference.as_deref(),
+                    resources: &self.identity_resources,
+                },
+            )
+            .map(|_| ())
+            .map_err(|_| DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied))
+    }
+
+    fn deny_identity_authority<T>(&mut self) -> Result<T> {
+        if let Some(transaction) = self.transaction.as_mut() {
+            poison_identity_transaction(transaction);
+        }
+        self.fail(DomainError::new(DomainErrorCode::MetadataNotFoundOrDenied))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn authenticate_and_recheck_replay_authority(
+        &mut self,
+        operation: &str,
+        key: &str,
+        stored_fingerprint: [u8; 32],
+        safe_result: Option<String>,
+        stored_reference: Option<String>,
+        stored_resources: Option<Value>,
+        stored_binding_digest: Option<Vec<u8>>,
+    ) -> Result<Value> {
+        if self.identity_binding.is_none() || self.identity_resources_sealed {
+            return self.deny_identity_authority();
+        }
+        let Some(stored_resources) = stored_resources else {
+            return self.deny_identity_authority();
+        };
+        let Ok(canonical_resources) = decode_canonical_identity_resource_batch(stored_resources)
+        else {
+            return self.deny_identity_authority();
+        };
+        let Some(safe_result) = safe_result.filter(|result| result.len() <= 1_048_576) else {
+            return self.deny_identity_authority();
+        };
+        let Ok(safe_result) = serde_json::from_str::<Value>(&safe_result) else {
+            return self.deny_identity_authority();
+        };
+        let Some(stored_binding_digest) = stored_binding_digest else {
+            return self.deny_identity_authority();
+        };
+        let Ok(expected_digest) = identity_idempotency_authority_digest(
+            self.authenticated_scope_digest,
+            operation,
+            key,
+            stored_fingerprint,
+            stored_reference.as_deref(),
+            &canonical_resources,
+            &safe_result,
+        ) else {
+            return self.deny_identity_authority();
+        };
+        if stored_binding_digest.len() != expected_digest.len()
+            || !bool::from(stored_binding_digest.as_slice().ct_eq(&expected_digest))
+        {
+            return self.deny_identity_authority();
+        }
+        let Some(initial_resource) = self.identity_resources.first() else {
+            return self.deny_identity_authority();
+        };
+        if !canonical_resources.contains(initial_resource) {
+            return self.deny_identity_authority();
+        }
+        if let Some(reference) = stored_reference.as_deref() {
+            if self.bind_identity_reference(reference).is_err() {
+                return self.deny_identity_authority();
+            }
+        }
+        self.identity_resources = canonical_resources;
+        if self.recheck_identity_resources().is_err() {
+            return self.deny_identity_authority();
+        }
+        self.identity_resources_sealed = true;
+        Ok(safe_result)
+    }
+
     fn bind_identity_reference(&mut self, reference: &str) -> Result<()> {
+        if self.identity_binding.is_some() && self.identity_resources_sealed {
+            return self.fail(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
         let mismatch = if let Some(binding) = self.identity_binding.as_mut() {
             match binding.reference.as_deref() {
                 Some(bound) => bound != reference,
@@ -3471,6 +3769,9 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
         if !metadata_kind(write.object_ref.kind) {
             return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
         }
+        self.record_and_precheck_exact_identity_resources([identity_object_resource(
+            *write.object_ref,
+        )])?;
         self.validation.validate(&write)?;
         let scanned = scan_metadata(write.canonical_bytes, Limits::METADATA)
             .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
@@ -3505,7 +3806,6 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
             if !repository_creation_descriptor {
                 self.begin_mutation(write.repository_id)?;
             }
-            self.record_identity_resource(identity_object_resource(*write.object_ref))?;
             return Ok(ObjectPutOutcome::Inserted);
         }
         let stored = self
@@ -3936,6 +4236,11 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
             }
             self.require_repository(request.reservation.repository_id)?;
             self.require_pending_idempotency()?;
+            self.record_and_precheck_exact_identity_resources([identity_file_resource(
+                request.reservation.file_id,
+                None,
+                None,
+            )])?;
             self.consume_allocation_receipt(
                 &request.allocation_receipt,
                 request.reservation.file_id,
@@ -3967,6 +4272,11 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
                 .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
             self.validation
                 .validate_profile(&importer_profile, "importer")?;
+            self.record_and_precheck_exact_identity_resources([identity_file_resource(
+                request.reservation.file_id,
+                None,
+                None,
+            )])?;
             let inserted = self
                 .transaction()?
                 .query_opt(
@@ -4041,6 +4351,9 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
                 TransactionCapability::Publish,
             ])?;
             self.require_pending_idempotency()?;
+            self.record_and_precheck_exact_identity_resources([identity_file_resource(
+                file_id, None, None,
+            )])?;
             let updated = self
                 .transaction()?
                 .execute(
@@ -4057,7 +4370,6 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
             if updated == 1 {
                 self.begin_mutation(repository_id)?;
                 self.require_file_id_event(file_id, FileIdEventState::Tombstoned)?;
-                self.record_identity_resource(identity_file_resource(file_id, None, None))?;
                 Ok(())
             } else {
                 Err(DomainError::new(DomainErrorCode::FileIdConflict))
@@ -4068,10 +4380,7 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
     fn activate_file_id(&mut self, repository_id: RepositoryId, file_id: FileId) -> Result<()> {
         poison_transaction_on_error!(self, {
             self.require_repository(repository_id)?;
-            self.require_capability(&[
-                TransactionCapability::ReserveFileId,
-                TransactionCapability::Publish,
-            ])?;
+            self.require_capability(&[TransactionCapability::Publish])?;
             self.require_pending_idempotency()?;
             let updated = self
                 .transaction()?
@@ -4141,7 +4450,14 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
             let row = self
                 .transaction()?
                 .query_one(
-                    "SELECT semantic_fingerprint, state, safe_result
+                    "SELECT semantic_fingerprint, state, authorization_reference,
+                            CASE
+                              WHEN authorization_resources IS NOT NULL
+                               AND pg_column_size(authorization_resources) <= 8388608
+                               AND octet_length(authorization_resources::text) <= 8388608
+                              THEN authorization_resources
+                            END,
+                            authorization_binding_digest
                      FROM ogvcs_metadata.idempotency_records
                      WHERE authenticated_scope_digest = $1 AND operation = $2 AND idempotency_key = $3
                      FOR UPDATE",
@@ -4149,20 +4465,91 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
                 )
                 .map_err(database_error)?;
             let fingerprint: Vec<u8> = row.get(0);
+            if self.identity_binding.is_some() {
+                let Ok(stored_fingerprint) = <[u8; 32]>::try_from(fingerprint.as_slice()) else {
+                    return self.deny_identity_authority();
+                };
+                let state: String = row.get(1);
+                if state != "committed" {
+                    return self.deny_identity_authority();
+                }
+                let stored_reference: Option<String> = row.get(2);
+                let stored_resources = row
+                    .get::<_, Option<Json<Value>>>(3)
+                    .map(|Json(resources)| resources);
+                let stored_binding_digest: Option<Vec<u8>> = row.get(4);
+                let safe_result: Option<String> = self
+                    .transaction()?
+                    .query_one(
+                        "SELECT CASE
+                                  WHEN safe_result IS NOT NULL
+                                   AND pg_column_size(safe_result) <= 1048576
+                                   AND octet_length(safe_result::text) <= 1048576
+                                  THEN safe_result::text
+                                END
+                         FROM ogvcs_metadata.idempotency_records
+                         WHERE authenticated_scope_digest = $1 AND operation = $2
+                           AND idempotency_key = $3",
+                        &[&&scope[..], &reservation.operation, &reservation.key],
+                    )
+                    .map_err(database_error)?
+                    .get(0);
+                let result = self.authenticate_and_recheck_replay_authority(
+                    &reservation.operation,
+                    &reservation.key,
+                    stored_fingerprint,
+                    safe_result,
+                    stored_reference,
+                    stored_resources,
+                    stored_binding_digest,
+                )?;
+                if !bool::from(
+                    stored_fingerprint
+                        .as_slice()
+                        .ct_eq(&reservation.semantic_fingerprint),
+                ) {
+                    self.failed = true;
+                    return Ok(IdempotencyReservationOutcome::KeyReuseRejected);
+                }
+                self.committed_replay = Some(result);
+                self.failed = true;
+                return Ok(IdempotencyReservationOutcome::CommittedReplayPending);
+            }
             if fingerprint.as_slice() != reservation.semantic_fingerprint {
                 self.failed = true;
                 return Ok(IdempotencyReservationOutcome::KeyReuseRejected);
             }
             let state: String = row.get(1);
             if state == "committed" {
-                let Json(result): Json<Value> = row.get(2);
-                self.committed_replay = Some(result.clone());
+                let result = self
+                    .transaction()?
+                    .query_one(
+                        "SELECT CASE
+                                  WHEN safe_result IS NOT NULL
+                                   AND pg_column_size(safe_result) <= 1048576
+                                   AND octet_length(safe_result::text) <= 1048576
+                                  THEN safe_result::text
+                                END
+                         FROM ogvcs_metadata.idempotency_records
+                         WHERE authenticated_scope_digest = $1 AND operation = $2
+                           AND idempotency_key = $3",
+                        &[&&scope[..], &reservation.operation, &reservation.key],
+                    )
+                    .map_err(database_error)?
+                    .get::<_, Option<String>>(0)
+                    .and_then(|result| serde_json::from_str::<Value>(&result).ok())
+                    .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+                self.committed_replay = Some(result);
                 self.failed = true;
-                Ok(IdempotencyReservationOutcome::CommittedReplay(result))
+                Ok(IdempotencyReservationOutcome::CommittedReplayPending)
             } else {
                 Err(DomainError::new(DomainErrorCode::ObjectInvalid))
             }
         })
+    }
+
+    fn finish_committed_replay(self) -> Result<Value> {
+        PostgresMetadataTransaction::finish_committed_replay(self)
     }
 
     fn commit_idempotency(
@@ -4183,12 +4570,44 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
             {
                 return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
             }
+            let Json(safe_result): Json<Value> = self
+                .transaction()?
+                .query_one("SELECT $1::jsonb", &[&Json(&safe_result)])
+                .map_err(database_error)?
+                .get(0);
+            if json_size(&safe_result).is_none_or(|size| size > 1_048_576) {
+                return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+            }
             let scope = self.idempotency_scope_digest();
+            let (authorization_reference, authorization_resources, authorization_binding_digest) =
+                if self.identity_binding.is_some() {
+                    self.recheck_identity_resources()?;
+                    let resources = canonical_identity_resource_batch(&self.identity_resources)?;
+                    let reference = self
+                        .identity_binding
+                        .as_ref()
+                        .and_then(|binding| binding.reference.clone());
+                    let digest = identity_idempotency_authority_digest(
+                        scope,
+                        &reservation.operation,
+                        &reservation.key,
+                        reservation.semantic_fingerprint,
+                        reference.as_deref(),
+                        &resources,
+                        &safe_result,
+                    )?;
+                    self.identity_resources = resources.clone();
+                    (reference, Some(Json(resources)), Some(digest.to_vec()))
+                } else {
+                    (None, None, None)
+                };
             let updated = self
                 .transaction()?
                 .execute(
                     "UPDATE ogvcs_metadata.idempotency_records
-                     SET state = 'committed', safe_result = $4, committed_at = clock_timestamp()
+                     SET state = 'committed', safe_result = $4, committed_at = clock_timestamp(),
+                         authorization_reference = $6, authorization_resources = $7,
+                         authorization_binding_digest = $8
                      WHERE authenticated_scope_digest = $1 AND operation = $2 AND idempotency_key = $3
                        AND semantic_fingerprint = $5 AND state = 'reserved'
                        AND issued_at <= clock_timestamp() AND expires_at > clock_timestamp()",
@@ -4198,12 +4617,16 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
                         &reservation.key,
                         &Json(&safe_result),
                         &&reservation.semantic_fingerprint[..],
+                        &authorization_reference,
+                        &authorization_resources,
+                        &authorization_binding_digest,
                     ],
                 )
                 .map_err(database_error)?;
             if updated == 1 {
                 self.pending_idempotency = None;
                 self.idempotency_committed = true;
+                self.identity_resources_sealed = self.identity_binding.is_some();
                 Ok(())
             } else {
                 Err(DomainError::new(DomainErrorCode::ObjectInvalid))
@@ -4228,6 +4651,17 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
             {
                 return self.fail(DomainError::new(DomainErrorCode::ObjectInvalid));
             }
+            if matches!(
+                &request.expected,
+                ReferenceExpected::Present { target, .. } if target.kind != ObjectKind::Snapshot
+            ) {
+                return self.fail(DomainError::new(DomainErrorCode::ObjectInvalid));
+            }
+            self.bind_identity_reference(request.name.as_str())?;
+            self.record_and_precheck_exact_identity_resources([identity_reference_resource(
+                request.name.as_str(),
+                request.desired,
+            )])?;
             if let Some(desired) = request.desired {
                 self.validate_publication_candidate(desired)?;
                 let publication = self
@@ -4251,6 +4685,7 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
                 {
                     return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
                 }
+                self.recheck_identity_resources()?;
             }
             let sequence = self.begin_mutation(request.repository_id)?;
             let row = match request.expected {
@@ -4278,9 +4713,6 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
                         .map(|row| (None, Some(desired), row))
                 }
                 ReferenceExpected::Present { target, generation } => {
-                    if target.kind != ObjectKind::Snapshot {
-                        return self.fail(DomainError::new(DomainErrorCode::ObjectInvalid));
-                    }
                     if let Some(desired) = request.desired {
                         self.transaction()?
                             .query_opt(
@@ -4372,11 +4804,6 @@ impl<V: ObjectValidationPort, View: AuthorizedView> MetadataTransaction
                     current.ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
                 self.require_object_event(snapshot.digest)?;
             }
-            self.bind_identity_reference(request.name.as_str())?;
-            self.record_identity_resource(identity_reference_resource(
-                request.name.as_str(),
-                current,
-            ))?;
             Ok(ReferenceCasResult {
                 prior,
                 current,
@@ -6109,6 +6536,154 @@ fn identity_reference_resource(
     }
 }
 
+fn canonical_json_value(value: Value) -> Value {
+    match value {
+        Value::Array(values) => {
+            Value::Array(values.into_iter().map(canonical_json_value).collect())
+        }
+        Value::Object(values) => {
+            let values = values
+                .into_iter()
+                .map(|(key, value)| (key, canonical_json_value(value)))
+                .collect::<BTreeMap<_, _>>();
+            Value::Object(values.into_iter().collect())
+        }
+        value => value,
+    }
+}
+
+fn canonical_json_bytes(value: &(impl Serialize + ?Sized)) -> Result<Vec<u8>> {
+    let value = serde_json::to_value(value)
+        .map(canonical_json_value)
+        .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+    serde_json::to_vec(&value).map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))
+}
+
+fn canonical_identity_resource_batch(
+    resources: &[IdentityAuthorizationResource],
+) -> Result<Vec<IdentityAuthorizationResource>> {
+    if resources.is_empty() || resources.len() > MAXIMUM_BATCH_RESOURCES {
+        return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+    }
+    let mut entries = resources
+        .iter()
+        .cloned()
+        .map(|resource| canonical_json_bytes(&resource).map(|bytes| (bytes, resource)))
+        .collect::<Result<Vec<_>>>()?;
+    entries.sort_by(|left, right| left.0.cmp(&right.0));
+    if entries.windows(2).any(|pair| pair[0].0 == pair[1].0) {
+        return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+    }
+    let resources = entries
+        .into_iter()
+        .map(|(_, resource)| resource)
+        .collect::<Vec<_>>();
+    if canonical_json_bytes(&resources)?.len() > MAX_IDENTITY_AUTHORIZATION_BATCH_BYTES {
+        return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+    }
+    Ok(resources)
+}
+
+fn decode_canonical_identity_resource_batch(
+    stored_resources: Value,
+) -> Result<Vec<IdentityAuthorizationResource>> {
+    if canonical_json_bytes(&stored_resources)?.len() > MAX_IDENTITY_AUTHORIZATION_BATCH_BYTES {
+        return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+    }
+    let resources =
+        serde_json::from_value::<Vec<IdentityAuthorizationResource>>(stored_resources.clone())
+            .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+    if resources.iter().any(|resource| {
+        !matches!(
+            resource,
+            IdentityAuthorizationResource {
+                resource_type,
+                path: None,
+                file_id: None,
+                object_id: None,
+                name: Some(_),
+            } if resource_type == "repository"
+        ) && !matches!(
+            resource,
+            IdentityAuthorizationResource {
+                resource_type,
+                path: None,
+                file_id: None,
+                object_id: Some(_),
+                name: None,
+            } if matches!(resource_type.as_str(), "object" | "snapshot" | "tree")
+        ) && !matches!(
+            resource,
+            IdentityAuthorizationResource {
+                resource_type,
+                file_id: Some(_),
+                name: None,
+                ..
+            } if resource_type == "path"
+        ) && !matches!(
+            resource,
+            IdentityAuthorizationResource {
+                resource_type,
+                path: None,
+                file_id: None,
+                name: Some(_),
+                ..
+            } if resource_type == "reference"
+        )
+    }) {
+        return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+    }
+    let canonical_resources = canonical_identity_resource_batch(&resources)?;
+    let canonical_stored = canonical_json_value(stored_resources);
+    let expected_stored = serde_json::to_value(&canonical_resources)
+        .map(canonical_json_value)
+        .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+    if canonical_resources != resources || canonical_stored != expected_stored {
+        return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+    }
+    Ok(canonical_resources)
+}
+
+fn identity_idempotency_authority_digest(
+    scope: [u8; 32],
+    operation: &str,
+    key: &str,
+    semantic_fingerprint: [u8; 32],
+    reference: Option<&str>,
+    resources: &[IdentityAuthorizationResource],
+    safe_result: &Value,
+) -> Result<[u8; 32]> {
+    let resource_bytes = canonical_json_bytes(resources)?;
+    if resource_bytes.len() > MAX_IDENTITY_AUTHORIZATION_BATCH_BYTES {
+        return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+    }
+    let result_bytes = canonical_json_bytes(safe_result)?;
+    let mut digest = Sha256::new();
+    digest.update(b"OpenGameVCS metadata idempotency authority v1\0");
+    digest.update(scope);
+    update_digest_field(&mut digest, operation.as_bytes())?;
+    update_digest_field(&mut digest, key.as_bytes())?;
+    digest.update(semantic_fingerprint);
+    match reference {
+        Some(reference) => {
+            digest.update([1]);
+            update_digest_field(&mut digest, reference.as_bytes())?;
+        }
+        None => digest.update([0]),
+    }
+    update_digest_field(&mut digest, &resource_bytes)?;
+    update_digest_field(&mut digest, &result_bytes)?;
+    Ok(digest.finalize().into())
+}
+
+fn update_digest_field(digest: &mut Sha256, value: &[u8]) -> Result<()> {
+    let length =
+        u64::try_from(value.len()).map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+    digest.update(length.to_be_bytes());
+    digest.update(value);
+    Ok(())
+}
+
 #[allow(clippy::too_many_arguments)]
 fn finalize_identity_decision(
     participant: &PostgresTransactionAuthorizationParticipant,
@@ -6327,9 +6902,11 @@ fn file_id_database_error(error: postgres::Error) -> DomainError {
 #[cfg(test)]
 mod tests {
     use super::{
-        canonical_file_history_from_change, exact_tree_delta_facts, identity_file_resource,
-        identity_metadata_scope_digest, prepare_identity_resource,
-        record_identity_resource_in_batch, ObjectKind,
+        canonical_file_history_from_change, canonical_identity_resource_batch,
+        canonical_json_bytes, decode_canonical_identity_resource_batch, exact_tree_delta_facts,
+        identity_file_resource, identity_metadata_scope_digest, prepare_identity_resource,
+        record_identity_resource_in_batch, IdentityAuthorizationResource, ObjectKind,
+        MAXIMUM_BATCH_RESOURCES, MAX_IDENTITY_AUTHORIZATION_BATCH_BYTES,
     };
     use crate::{FileId, ObjectRef, RepositoryId, TenantId, TransactionCapability};
     use std::collections::{BTreeMap, BTreeSet};
@@ -6338,6 +6915,112 @@ mod tests {
     struct TestEntry {
         file_id: FileId,
         version: u8,
+    }
+
+    fn replay_resource(name: String) -> IdentityAuthorizationResource {
+        IdentityAuthorizationResource {
+            resource_type: "repository".to_owned(),
+            path: None,
+            file_id: None,
+            object_id: None,
+            name: Some(name),
+        }
+    }
+
+    #[test]
+    fn replay_authority_batch_enforces_count_and_exact_byte_limits() {
+        let resources = (0..MAXIMUM_BATCH_RESOURCES)
+            .map(|index| replay_resource(format!("operation.{index}")))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            canonical_identity_resource_batch(&resources).unwrap().len(),
+            MAXIMUM_BATCH_RESOURCES
+        );
+        let mut too_many = resources;
+        too_many.push(replay_resource("operation.overflow".to_owned()));
+        assert_eq!(
+            canonical_identity_resource_batch(&too_many)
+                .unwrap_err()
+                .code,
+            crate::DomainErrorCode::ObjectInvalid
+        );
+
+        let empty = vec![replay_resource(String::new())];
+        let overhead = canonical_json_bytes(&empty).unwrap().len();
+        let maximum = vec![replay_resource(
+            "x".repeat(MAX_IDENTITY_AUTHORIZATION_BATCH_BYTES - overhead),
+        )];
+        assert_eq!(
+            canonical_json_bytes(&maximum).unwrap().len(),
+            MAX_IDENTITY_AUTHORIZATION_BATCH_BYTES
+        );
+        assert!(canonical_identity_resource_batch(&maximum).is_ok());
+        let over_limit = vec![replay_resource(
+            "x".repeat(MAX_IDENTITY_AUTHORIZATION_BATCH_BYTES - overhead + 1),
+        )];
+        assert_eq!(
+            canonical_identity_resource_batch(&over_limit)
+                .unwrap_err()
+                .code,
+            crate::DomainErrorCode::ObjectInvalid
+        );
+    }
+
+    #[test]
+    fn replay_authority_rejects_unknown_and_missing_object_members() {
+        let resources = canonical_identity_resource_batch(&[
+            replay_resource("file-id.register".to_owned()),
+            identity_file_resource(FileId::new([0x41; 16]).unwrap(), None, None),
+        ])
+        .unwrap();
+        let exact = serde_json::to_value(&resources).unwrap();
+        assert_eq!(
+            decode_canonical_identity_resource_batch(exact.clone()).unwrap(),
+            resources
+        );
+
+        let mut unknown = exact.clone();
+        unknown[0]
+            .as_object_mut()
+            .unwrap()
+            .insert("unexpected".to_owned(), serde_json::json!(true));
+        assert!(decode_canonical_identity_resource_batch(unknown).is_err());
+
+        for (resource_type, field) in [
+            ("path", "path"),
+            ("path", "fileId"),
+            ("path", "objectId"),
+            ("repository", "name"),
+        ] {
+            let mut missing = exact.clone();
+            missing
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|resource| resource["type"] == resource_type)
+                .unwrap()
+                .as_object_mut()
+                .unwrap()
+                .remove(field);
+            assert!(decode_canonical_identity_resource_batch(missing).is_err());
+        }
+
+        let mut unsorted = exact.clone();
+        unsorted.as_array_mut().unwrap().reverse();
+        assert!(decode_canonical_identity_resource_batch(unsorted).is_err());
+        let duplicate = serde_json::json!([exact[0].clone(), exact[0].clone()]);
+        assert!(decode_canonical_identity_resource_batch(duplicate).is_err());
+        let mut invalid = exact;
+        invalid
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|resource| resource["type"] == "path")
+            .unwrap()
+            .as_object_mut()
+            .unwrap()
+            .insert("name".to_owned(), serde_json::json!("not-valid-on-path"));
+        assert!(decode_canonical_identity_resource_batch(invalid).is_err());
     }
 
     #[test]
