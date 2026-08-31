@@ -10,8 +10,7 @@ use crate::{ParticipantError, ParticipantErrorCode, Result};
 
 pub(crate) const IDENTITY_CREDENTIAL_DOMAIN: &[u8] = b"OGVCS-IDENTITY-CREDENTIAL-V1\0";
 pub(crate) const IDENTITY_SUBJECT_DOMAIN: &[u8] = b"OGVCS-IDENTITY-SUBJECT-V1\0";
-pub(crate) const DECISION_COMMITMENT_DOMAIN: &[u8] =
-    b"OGVCS-IDENTITY-DECISION-COMMITMENT-V1\0";
+pub(crate) const DECISION_COMMITMENT_DOMAIN: &[u8] = b"OGVCS-IDENTITY-DECISION-COMMITMENT-V1\0";
 
 pub(crate) fn sha256(parts: &[&[u8]]) -> [u8; 32] {
     let mut hash = Sha256::new();
@@ -62,9 +61,7 @@ pub(crate) fn canonical_bytes<T: Serialize>(value: &T) -> Result<Vec<u8>> {
 
 fn canonical_value(value: Value) -> Value {
     match value {
-        Value::Array(values) => {
-            Value::Array(values.into_iter().map(canonical_value).collect())
-        }
+        Value::Array(values) => Value::Array(values.into_iter().map(canonical_value).collect()),
         Value::Object(values) => {
             let sorted: BTreeMap<_, _> = values
                 .into_iter()
@@ -84,16 +81,16 @@ pub(crate) fn valid_id(value: &str) -> bool {
     let bytes = value.as_bytes();
     (1..=128).contains(&bytes.len())
         && bytes[0].is_ascii_lowercase()
-        && bytes[1..]
-            .iter()
-            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || *byte == b'.' || *byte == b'-')
+        && bytes[1..].iter().all(|byte| {
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || *byte == b'.' || *byte == b'-'
+        })
 }
 
 pub(crate) fn valid_opaque(value: &str) -> bool {
     (1..=256).contains(&value.len())
-        && value.bytes().all(|byte| {
-            byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b':' | b'-')
-        })
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b':' | b'-'))
 }
 
 pub(crate) fn valid_safe_text(value: &str) -> bool {
@@ -102,14 +99,6 @@ pub(crate) fn valid_safe_text(value: &str) -> bool {
         && value
             .chars()
             .all(|character| !character.is_control() && character != '\u{7f}')
-}
-
-pub(crate) fn valid_actor_pseudonym(value: &str) -> bool {
-    value.len() == 42
-        && value.starts_with("pseudonym:")
-        && value[10..]
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 pub(crate) fn canonical_path(value: &str, case_mode: &str, allow_empty: bool) -> Result<String> {
@@ -122,7 +111,9 @@ pub(crate) fn canonical_path(value: &str, case_mode: &str, allow_empty: bool) ->
         || value.starts_with('/')
         || value.ends_with('/')
         || value.contains('\\')
-        || value.chars().any(|character| character.is_control() || character == '\u{7f}')
+        || value
+            .chars()
+            .any(|character| character.is_control() || character == '\u{7f}')
         || value.nfc().collect::<String>() != value
     {
         return Err(ParticipantError::new(ParticipantErrorCode::InputInvalid));
@@ -186,7 +177,14 @@ pub(crate) fn bounded_json(
     maximum_string_bytes: usize,
 ) -> Result<Vec<u8>> {
     let mut nodes = 0_usize;
-    inspect_json(value, 0, maximum_depth, maximum_nodes, maximum_string_bytes, &mut nodes)?;
+    inspect_json(
+        value,
+        0,
+        maximum_depth,
+        maximum_nodes,
+        maximum_string_bytes,
+        &mut nodes,
+    )?;
     let bytes = canonical_bytes(value)?;
     if bytes.len() > maximum_bytes {
         return Err(ParticipantError::new(ParticipantErrorCode::LimitExceeded));

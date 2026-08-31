@@ -6,8 +6,8 @@ use crate::canonical::{
     canonical_path, digest_json, hex, path_in_prefixes, valid_id, valid_opaque, valid_safe_text,
 };
 use crate::{
-    AuthorizationResource, CredentialScope, ParticipantError, ParticipantErrorCode,
-    PolicyDocument, PolicyRule, Result,
+    AuthorizationResource, CredentialScope, ParticipantError, ParticipantErrorCode, PolicyDocument,
+    PolicyRule, Result,
 };
 
 const PERMISSIONS: &[&str] = &[
@@ -229,9 +229,15 @@ pub(crate) fn validate_request_surface(request: RequestFacts<'_>, case_mode: &st
         || !valid_id(request.tenant)
         || !valid_id(request.repository)
         || !PERMISSIONS.contains(&request.permission)
-        || request.reason.is_some_and(|reason| !valid_safe_text(reason))
-        || request.reference.is_some_and(|reference| !valid_id(reference))
-        || request.snapshot.is_some_and(|snapshot| !valid_opaque(snapshot))
+        || request
+            .reason
+            .is_some_and(|reason| !valid_safe_text(reason))
+        || request
+            .reference
+            .is_some_and(|reference| !valid_id(reference))
+        || request
+            .snapshot
+            .is_some_and(|snapshot| !valid_opaque(snapshot))
     {
         return Err(ParticipantError::new(ParticipantErrorCode::InputInvalid));
     }
@@ -245,9 +251,8 @@ pub(crate) fn evaluate_allow(
     request: RequestFacts<'_>,
 ) -> Result<AllowDecision> {
     validate_request_surface(request, &policy.case_mode)?;
-    validate_scope(scope, &policy.case_mode).map_err(|_| {
-        ParticipantError::new(ParticipantErrorCode::PolicyUnavailable)
-    })?;
+    validate_scope(scope, &policy.case_mode)
+        .map_err(|_| ParticipantError::new(ParticipantErrorCode::PolicyUnavailable))?;
     if !scope.tenants.iter().any(|value| value == request.tenant)
         || !scope
             .repositories
@@ -350,7 +355,11 @@ fn rule_matches(
     request: RequestFacts<'_>,
 ) -> Result<bool> {
     if !rule.subjects.identities.is_empty()
-        && !rule.subjects.identities.iter().any(|value| value == &actor.id)
+        && !rule
+            .subjects
+            .identities
+            .iter()
+            .any(|value| value == &actor.id)
     {
         return Ok(false);
     }

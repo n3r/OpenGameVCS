@@ -160,11 +160,15 @@ impl AllocationReceipt {
     pub fn from_opaque(value: String) -> Option<Self> {
         let payload = value.strip_prefix("far1.")?;
         (payload.len() == 43
-            && payload.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-'))
-            .then_some(Self(value))
+            && payload
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-'))
+        .then_some(Self(value))
     }
 
-    pub fn as_str(&self) -> &str { &self.0 }
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -175,8 +179,10 @@ pub struct NativeFileIdReservation {
 
 impl NativeFileIdReservation {
     pub fn is_valid(&self) -> bool {
-        matches!(self.reservation.origin, FileIdOrigin::Create | FileIdOrigin::Copy)
-            && !self.reservation.owner_id.is_empty()
+        matches!(
+            self.reservation.origin,
+            FileIdOrigin::Create | FileIdOrigin::Copy
+        ) && !self.reservation.owner_id.is_empty()
             && self.reservation.owner_id.len() <= 256
             && !self.reservation.owner_id.contains('\0')
     }
@@ -192,7 +198,10 @@ pub struct FileIdAllocation {
 
 impl FileIdAllocation {
     pub fn expires_at_unix_ms(&self) -> Option<u64> {
-        self.expires_at.duration_since(UNIX_EPOCH).ok().and_then(|value| u64::try_from(value.as_millis()).ok())
+        self.expires_at
+            .duration_since(UNIX_EPOCH)
+            .ok()
+            .and_then(|value| u64::try_from(value.as_millis()).ok())
     }
 }
 
@@ -690,8 +699,13 @@ pub enum IdempotencyReservationOutcome {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum IdempotencyStatus {
     Absent,
-    Reserved { expires_at: SystemTime },
-    Committed { expires_at: SystemTime, safe_result: Value },
+    Reserved {
+        expires_at: SystemTime,
+    },
+    Committed {
+        expires_at: SystemTime,
+        safe_result: Value,
+    },
 }
 
 /// Framework-neutral response envelope.  OGVCS-041 owns routes, media types,
@@ -706,16 +720,25 @@ pub struct MetadataHttpResponse {
 }
 
 impl MetadataHttpResponse {
-    pub fn page<T: Serialize>(operation: &'static str, page: Page<T>, consistency: &ConsistencyToken) -> crate::Result<Self> {
+    pub fn page<T: Serialize>(
+        operation: &'static str,
+        page: Page<T>,
+        consistency: &ConsistencyToken,
+    ) -> crate::Result<Self> {
         let items = serde_json::to_value(page.items)
             .map_err(|_| crate::DomainError::new(crate::DomainErrorCode::ObjectInvalid))?;
-        Ok(Self { schema_version: "ogvcs.repository-metadata/http-response/v1", operation,
-            outcome: "success", carrier: "page-result", body: serde_json::json!({
+        Ok(Self {
+            schema_version: "ogvcs.repository-metadata/http-response/v1",
+            operation,
+            outcome: "success",
+            carrier: "page-result",
+            body: serde_json::json!({
                 "schemaVersion": "ogvcs.repository-metadata/page-result/v1",
                 "operation": operation, "state": if page.next_cursor.is_some() { "more" } else { "complete" },
                 "items": items, "nextCursor": page.next_cursor.map(|value| value.as_str().to_owned()),
                 "incompleteReason": Value::Null, "consistencyToken": consistency.as_str(),
-            }) })
+            }),
+        })
     }
 }
 

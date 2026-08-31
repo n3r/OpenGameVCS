@@ -24,11 +24,12 @@ pub use ports::{
 };
 pub use postgres::{PostgresMetadataStore, PostgresMetadataTransaction};
 pub use types::{
-    AllocationReceipt, AncestryRecord, AuthorizationContext, AuthorizationResource, CaseMode, CommitSequence,
-    ConsistencyToken, CursorToken, FileHistoryRecord, FileHistoryWrite, FileIdExpectedState,
-    FileIdAllocation, FileIdImportReservation, FileIdOrigin, FileIdOwnerKind, FileIdReservation, NativeFileIdReservation,
-    FileIdReservationOutcome, HistoryIncompleteReason, HistoryPage, IdempotencyReservation,
-    IdempotencyReservationOutcome, IdempotencyStatus, MetadataHttpResponse, MetadataObjectRecord, MetadataPermission, ObjectPutOutcome,
+    AllocationReceipt, AncestryRecord, AuthorizationContext, AuthorizationResource, CaseMode,
+    CommitSequence, ConsistencyToken, CursorToken, FileHistoryRecord, FileHistoryWrite,
+    FileIdAllocation, FileIdExpectedState, FileIdImportReservation, FileIdOrigin, FileIdOwnerKind,
+    FileIdReservation, FileIdReservationOutcome, HistoryIncompleteReason, HistoryPage,
+    IdempotencyReservation, IdempotencyReservationOutcome, IdempotencyStatus, MetadataHttpResponse,
+    MetadataObjectRecord, MetadataPermission, NativeFileIdReservation, ObjectPutOutcome,
     ObjectWrite, OutboxClaimRequest, OutboxEvent, OutboxEventRecord, OutboxLeaseAction,
     OutboxLeaseRecord, OutboxReleaseRequest, Page, PageRequest, PageState, ProjectId,
     ReferenceCasRequest, ReferenceCasResult, ReferenceExpected, ReferenceFilter, ReferenceKind,

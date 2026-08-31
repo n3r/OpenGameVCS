@@ -114,8 +114,6 @@ pub struct TransactionAuthorizedView {
     #[serde(skip)]
     pub(crate) request: BoundRequest,
     #[serde(skip)]
-    pub(crate) actor_class: String,
-    #[serde(skip)]
     pub(crate) binding: TransactionBinding,
     #[serde(skip)]
     pub(crate) seal: [u8; 32],
@@ -533,7 +531,6 @@ pub(crate) struct ViewParts {
     pub expires_at: u64,
     pub evidence: TransactionCredentialEvidence,
     pub request: BoundRequest,
-    pub actor_class: String,
     pub binding: TransactionBinding,
 }
 
@@ -556,7 +553,6 @@ impl TransactionAuthorizedView {
             expires_at: parts.expires_at,
             evidence: parts.evidence,
             request: parts.request,
-            actor_class: parts.actor_class,
             binding: parts.binding,
             seal: [0; 32],
         }

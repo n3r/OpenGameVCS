@@ -11,9 +11,7 @@ use crate::canonical::{
 };
 use crate::migration_runner::verify_schema_in_transaction;
 use crate::model::{BoundRequest, TransactionBinding, ViewParts};
-use crate::policy::{
-    evaluate_allow, validate_policy, ActorFacts, RequestFacts,
-};
+use crate::policy::{evaluate_allow, validate_policy, ActorFacts, RequestFacts};
 use crate::{
     AuthorizationResource, AuthorizedResourceBatch, CredentialScope, DecisionChainVerification,
     DecisionCommitmentRequest, ParticipantError, ParticipantErrorCode, PolicyDocument, Result,
@@ -143,7 +141,6 @@ impl PostgresTransactionAuthorizationParticipant {
                 snapshot: request.snapshot.map(str::to_owned),
                 resource: request.resource.clone(),
             },
-            actor_class: credential.actor.class.clone(),
             binding,
         });
         view.set_seal(self.view_seal(&view)?);
@@ -217,13 +214,8 @@ impl PostgresTransactionAuthorizationParticipant {
                 resources: request.resources,
             },
         )?;
-        let result_bytes = bounded_json(
-            request.result,
-            MAXIMUM_DECISION_RESULT_BYTES,
-            8,
-            256,
-            1_024,
-        )?;
+        let result_bytes =
+            bounded_json(request.result, MAXIMUM_DECISION_RESULT_BYTES, 8, 256, 1_024)?;
         let result_digest = hex(&sha256(&[&result_bytes]));
         let canonical_resources = canonical_resource_set(request.resources)?;
         let resource_set_digest = hex(&digest_json(&canonical_resources)?);
@@ -350,8 +342,7 @@ impl PostgresTransactionAuthorizationParticipant {
         if current_evidence != view.evidence
             || evidence_digest != view.evidence_digest()
             || current_evidence.subject_digest() != view.subject_digest()
-            || current_evidence.authenticated_scope_digest()
-                != view.authenticated_scope_digest()
+            || current_evidence.authenticated_scope_digest() != view.authenticated_scope_digest()
             || current_evidence.authority_epoch() != view.authority_epoch()
             || current_evidence.credential_generation() != view.credential_generation()
             || current_evidence.expires_at() != view.expires_at()
@@ -607,7 +598,12 @@ fn load_credential_by_identity(
              WHERE c.tenant_id = $1 AND c.credential_id = $2
                AND c.credential_generation = $3 AND c.presentation_digest = $4
              FOR SHARE OF c, a",
-            &[&tenant, &credential_id, &generation, &&presentation_digest[..]],
+            &[
+                &tenant,
+                &credential_id,
+                &generation,
+                &&presentation_digest[..],
+            ],
         )
         .map_err(database_error)?
         .ok_or_else(|| ParticipantError::new(ParticipantErrorCode::AuthenticationDenied))?;
@@ -774,10 +770,7 @@ fn evidence(
 
 fn transaction_binding(transaction: &mut Transaction<'_>) -> Result<TransactionBinding> {
     let row = transaction
-        .query_one(
-            "SELECT pg_backend_pid(), txid_current()::bigint",
-            &[],
-        )
+        .query_one("SELECT pg_backend_pid(), txid_current()::bigint", &[])
         .map_err(database_error)?;
     Ok(TransactionBinding {
         backend_pid: row.get(0),
@@ -785,7 +778,9 @@ fn transaction_binding(transaction: &mut Transaction<'_>) -> Result<TransactionB
     })
 }
 
-fn canonical_resource_set(resources: &[AuthorizationResource]) -> Result<Vec<AuthorizationResource>> {
+fn canonical_resource_set(
+    resources: &[AuthorizationResource],
+) -> Result<Vec<AuthorizationResource>> {
     let mut entries: Vec<_> = resources
         .iter()
         .cloned()
@@ -843,10 +838,7 @@ fn insert_commitment(
     let decision = decode_digest(commitment.decision_digest())?;
     let resources = decode_digest(commitment.resource_set_digest())?;
     let result = decode_digest(commitment.result_digest())?;
-    let previous = commitment
-        .previous_hash()
-        .map(decode_digest)
-        .transpose()?;
+    let previous = commitment.previous_hash().map(decode_digest).transpose()?;
     let record = decode_digest(commitment.record_hash())?;
     let inserted = transaction.execute(
         "INSERT INTO ogvcs_identity.transaction_decision_commitments
@@ -876,7 +868,9 @@ fn insert_commitment(
         Err(error) if error.code() == Some(&SqlState::UNIQUE_VIOLATION) => {
             Err(ParticipantError::new(ParticipantErrorCode::StateConflict))
         }
-        Err(_) => Err(ParticipantError::new(ParticipantErrorCode::PolicyUnavailable)),
+        Err(_) => Err(ParticipantError::new(
+            ParticipantErrorCode::PolicyUnavailable,
+        )),
     }
 }
 
@@ -920,15 +914,17 @@ fn positive(value: i64) -> Result<u64> {
 }
 
 fn nonnegative(value: i64) -> Result<u64> {
-    u64::try_from(value)
-        .map_err(|_| ParticipantError::new(ParticipantErrorCode::PolicyUnavailable))
+    u64::try_from(value).map_err(|_| ParticipantError::new(ParticipantErrorCode::PolicyUnavailable))
 }
 
 fn database_error(_error: postgres::Error) -> ParticipantError {
     ParticipantError::new(ParticipantErrorCode::PolicyUnavailable)
 }
 
-pub(crate) fn poison_on_error<T>(transaction: &mut Transaction<'_>, result: Result<T>) -> Result<T> {
+pub(crate) fn poison_on_error<T>(
+    transaction: &mut Transaction<'_>,
+    result: Result<T>,
+) -> Result<T> {
     if result.is_err() {
         // A PostgreSQL error aborts the transaction. This explicit raising
         // function also poisons pure validation/denial paths, so callers cannot
@@ -1013,7 +1009,6 @@ mod tests {
                 snapshot: None,
                 resource,
             },
-            actor_class: "human".to_owned(),
             binding: TransactionBinding {
                 backend_pid: 1,
                 transaction_xid: 1,

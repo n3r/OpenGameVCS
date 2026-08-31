@@ -12,7 +12,7 @@ fn checked_migrations_and_fail_closed_function_work_on_postgres_15() {
     let Ok(database_url) = std::env::var("OGVCS_IDENTITY_POLICY_DATABASE_URL") else {
         return;
     };
-    let mut client = Client::connect(database_url, NoTls).expect("connect disposable postgres");
+    let mut client = Client::connect(&database_url, NoTls).expect("connect disposable postgres");
     let options = MigrationRunOptions {
         application_version: env!("CARGO_PKG_VERSION"),
         compatibility_fence_open: true,

@@ -1,9 +1,7 @@
 use postgres::{Client, Transaction};
 use sha2::{Digest, Sha256};
 
-use crate::{
-    Migration, ParticipantError, ParticipantErrorCode, Result, MIGRATIONS,
-};
+use crate::{Migration, ParticipantError, ParticipantErrorCode, Result, MIGRATIONS};
 
 const MIGRATION_LOCK: &str = "ogvcs-identity-policy-migrations-v1";
 const MAXIMUM_SCHEMA_VERSION: i64 = 1;
@@ -79,9 +77,7 @@ pub(crate) fn verify_schema_in_transaction(transaction: &mut Transaction<'_>) ->
                 &[&(migration.version as i64), &migration.phase.as_str()],
             )
             .map_err(database_error)?
-            .ok_or_else(|| {
-                ParticipantError::new(ParticipantErrorCode::MigrationIncompatible)
-            })?;
+            .ok_or_else(|| ParticipantError::new(ParticipantErrorCode::MigrationIncompatible))?;
         validate_ledger_row(row, migration)?;
     }
     Ok(())
@@ -123,9 +119,7 @@ fn verify_ledger(client: &mut Client) -> Result<()> {
                 &[&(migration.version as i64), &migration.phase.as_str()],
             )
             .map_err(database_error)?
-            .ok_or_else(|| {
-                ParticipantError::new(ParticipantErrorCode::MigrationIncompatible)
-            })?;
+            .ok_or_else(|| ParticipantError::new(ParticipantErrorCode::MigrationIncompatible))?;
         validate_ledger_row(row, migration)?;
     }
     Ok(())
@@ -258,9 +252,7 @@ fn validate_source(migration: Migration) -> Result<()> {
 fn transaction_body(sql: &str) -> Result<&str> {
     sql.strip_prefix("BEGIN;\n")
         .and_then(|body| body.strip_suffix("COMMIT;\n"))
-        .ok_or_else(|| {
-            ParticipantError::new(ParticipantErrorCode::MigrationChecksumMismatch)
-        })
+        .ok_or_else(|| ParticipantError::new(ParticipantErrorCode::MigrationChecksumMismatch))
 }
 
 fn compatible(application: &str, minimum: &str, maximum: &str) -> bool {
