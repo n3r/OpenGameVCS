@@ -1,10 +1,12 @@
 use std::collections::BTreeMap;
 
+use ogvcs_path_contract::{
+    repository_path_key, repository_prefix, CaseMode, PathProfile, RepositoryPathKey,
+};
 use serde::Serialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
-use unicode_normalization::UnicodeNormalization;
 
 use crate::{ParticipantError, ParticipantErrorCode, Result};
 
@@ -101,52 +103,27 @@ pub(crate) fn valid_safe_text(value: &str) -> bool {
             .all(|character| !character.is_control() && character != '\u{7f}')
 }
 
-pub(crate) fn canonical_path(value: &str, case_mode: &str, allow_empty: bool) -> Result<String> {
+pub(crate) fn validate_path(
+    value: &str,
+    path_profile: PathProfile,
+    case_mode: CaseMode,
+    allow_empty: bool,
+) -> Result<()> {
     if value.is_empty() {
         return allow_empty
-            .then(String::new)
+            .then_some(())
             .ok_or_else(|| ParticipantError::new(ParticipantErrorCode::InputInvalid));
     }
-    if value.as_bytes().len() > 4096
-        || value.starts_with('/')
-        || value.ends_with('/')
-        || value.contains('\\')
-        || value
-            .chars()
-            .any(|character| character.is_control() || character == '\u{7f}')
-        || value.nfc().collect::<String>() != value
-    {
-        return Err(ParticipantError::new(ParticipantErrorCode::InputInvalid));
-    }
-    let segments: Vec<_> = value.split('/').collect();
-    if segments.len() > 256
-        || segments.iter().any(|segment| {
-            segment.is_empty()
-                || *segment == "."
-                || *segment == ".."
-                || segment.as_bytes().len() > 255
-        })
-    {
-        return Err(ParticipantError::new(ParticipantErrorCode::InputInvalid));
-    }
-    match case_mode {
-        "case-sensitive" => Ok(value.to_owned()),
-        "case-folded" => Ok(value
-            .chars()
-            .flat_map(char::to_lowercase)
-            .collect::<String>()
-            .nfc()
-            .collect()),
-        _ => Err(ParticipantError::new(
-            ParticipantErrorCode::PolicyUnavailable,
-        )),
-    }
+    repository_path_key(value, path_profile, case_mode)
+        .map(|_| ())
+        .map_err(|_| ParticipantError::new(ParticipantErrorCode::InputInvalid))
 }
 
 pub(crate) fn path_in_prefixes(
     path: Option<&str>,
     prefixes: &[String],
-    case_mode: &str,
+    path_profile: PathProfile,
+    case_mode: CaseMode,
 ) -> Result<bool> {
     if prefixes.is_empty() {
         return Ok(true);
@@ -154,15 +131,12 @@ pub(crate) fn path_in_prefixes(
     let Some(path) = path else {
         return Ok(false);
     };
-    let actual = canonical_path(path, case_mode, false)?;
+    let actual: RepositoryPathKey = repository_path_key(path, path_profile, case_mode)
+        .map_err(|_| ParticipantError::new(ParticipantErrorCode::InputInvalid))?;
     for prefix in prefixes {
-        let expected = canonical_path(prefix, case_mode, true)?;
-        if expected.is_empty()
-            || actual == expected
-            || actual
-                .strip_prefix(&expected)
-                .is_some_and(|suffix| suffix.starts_with('/'))
-        {
+        let expected = repository_prefix(prefix, path_profile, case_mode)
+            .map_err(|_| ParticipantError::new(ParticipantErrorCode::InputInvalid))?;
+        if expected.matches(&actual) {
             return Ok(true);
         }
     }

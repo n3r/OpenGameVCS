@@ -2,7 +2,29 @@
 
 **Status:** In development
 **Candidate packages:** `@opengamevcs/identity-policy-audit-contract-v1` 0.2.0 and `@opengamevcs/identity-policy-audit` 0.2.0
-**Date:** 2026-08-31
+**Date:** 2026-09-01
+
+## 2026-09-01 Rust path-contract convergence prerequisite
+
+- Added a Rust OGVCS-004 pure path binding generated from and pinned to the
+  exact v1 manifest (`2f343e1d…dd4782b`), Unicode 16.0.0 C/F table
+  (`6f1f9c58…59e09bb`), four-profile registry, and fold/path/collision vectors.
+  Generation and `--check` reject manifest, artifact, version, mapping-count,
+  profile, or derived-file drift.
+- Replaced the PostgreSQL participant's `char::to_lowercase` plus post-fold NFC
+  approximation with exact `ogvcs-path-key-v1` semantics. Policy, credential
+  scope, request validation, and rule matching now use the selected ratified
+  profile and case mode consistently, including component-bound prefixes.
+- Added bounded Rust 1.82 tests for every authoritative fold/path/collision
+  vector and explicit sharp-s, sigma, dotted-I, Cherokee, decomposed-input,
+  no-post-fold-normalization, reserved-namespace, all-profile/mode, and prefix
+  separation regressions. The identity workflow checks the generator and both
+  Rust crates on Linux, macOS, and Windows without adding a scale campaign.
+
+This prerequisite does not implement aggregate authorization, persist a sealed
+100,000-resource plan, or complete OGVCS-009. Immutable repository metadata
+settings must still be cross-checked against the selected policy profile/mode,
+and a durable credential/security-epoch migration remains separate work.
 
 ## Production-boundary candidate cut
 

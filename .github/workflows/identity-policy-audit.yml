@@ -5,6 +5,7 @@ on:
     paths:
       - ".github/workflows/identity-policy-audit.yml"
       - "core/identity-policy-audit/**"
+      - "core/paths-filesystem/rust/**"
       - "server/migrations/identity-policy-audit/**"
       - "server/modules/identity-policy-audit/**"
       - "docs/changelog/OGVCS-009.md"
@@ -29,6 +30,7 @@ on:
     paths:
       - ".github/workflows/identity-policy-audit.yml"
       - "core/identity-policy-audit/**"
+      - "core/paths-filesystem/rust/**"
       - "server/migrations/identity-policy-audit/**"
       - "server/modules/identity-policy-audit/**"
       - "docs/changelog/OGVCS-009.md"
@@ -90,17 +92,28 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
       - uses: dtolnay/rust-toolchain@7d11e79e1714f6b6da93cac39ad8435666f5c337 # 1.82.0
         with:
           components: clippy, rustfmt
-      - name: Fetch the locked Rust closure
-        run: cargo fetch --manifest-path server/modules/identity-policy-audit/Cargo.toml --locked
+      - name: Verify the generated OGVCS-004 Rust binding
+        run: node core/paths-filesystem/rust/scripts/sync-contract.mjs --check
+      - name: Fetch the locked Rust closures
+        run: |
+          cargo fetch --manifest-path core/paths-filesystem/rust/Cargo.toml --locked
+          cargo fetch --manifest-path server/modules/identity-policy-audit/Cargo.toml --locked
       - name: Check formatting and unit tests without network access
         run: |
+          cargo fmt --manifest-path core/paths-filesystem/rust/Cargo.toml -- --check
+          cargo test --manifest-path core/paths-filesystem/rust/Cargo.toml --locked --offline
           cargo fmt --manifest-path server/modules/identity-policy-audit/Cargo.toml -- --check
           cargo test --manifest-path server/modules/identity-policy-audit/Cargo.toml --locked --offline
       - name: Reject Rust warnings
-        run: cargo clippy --manifest-path server/modules/identity-policy-audit/Cargo.toml --locked --offline --all-targets -- -D warnings
+        run: |
+          cargo clippy --manifest-path core/paths-filesystem/rust/Cargo.toml --locked --offline --all-targets -- -D warnings
+          cargo clippy --manifest-path server/modules/identity-policy-audit/Cargo.toml --locked --offline --all-targets -- -D warnings
 
   postgres-live:
     name: Rust 1.82 and guarded PostgreSQL 15 participant
@@ -134,10 +147,15 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Validate the neutral contract before the adapter
         run: npm run test:identity:spec
-      - name: Fetch the locked Rust closure
-        run: cargo fetch --manifest-path server/modules/identity-policy-audit/Cargo.toml --locked
+      - name: Fetch the locked Rust closures
+        run: |
+          cargo fetch --manifest-path core/paths-filesystem/rust/Cargo.toml --locked
+          cargo fetch --manifest-path server/modules/identity-policy-audit/Cargo.toml --locked
       - name: Run Rust checks without network access
         run: |
+          cargo fmt --manifest-path core/paths-filesystem/rust/Cargo.toml -- --check
+          cargo test --manifest-path core/paths-filesystem/rust/Cargo.toml --locked --offline
+          cargo clippy --manifest-path core/paths-filesystem/rust/Cargo.toml --locked --offline --all-targets -- -D warnings
           cargo fmt --manifest-path server/modules/identity-policy-audit/Cargo.toml -- --check
           cargo test --manifest-path server/modules/identity-policy-audit/Cargo.toml --locked --offline
           cargo clippy --manifest-path server/modules/identity-policy-audit/Cargo.toml --locked --offline --all-targets -- -D warnings

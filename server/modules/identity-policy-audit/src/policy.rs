@@ -1,9 +1,10 @@
 use std::collections::HashSet;
 
+use ogvcs_path_contract::{CaseMode, PathProfile};
 use serde_json::json;
 
 use crate::canonical::{
-    canonical_path, digest_json, hex, path_in_prefixes, valid_id, valid_opaque, valid_safe_text,
+    digest_json, hex, path_in_prefixes, valid_id, valid_opaque, valid_safe_text, validate_path,
 };
 use crate::{
     AuthorizationResource, CredentialScope, ParticipantError, ParticipantErrorCode, PolicyDocument,
@@ -95,12 +96,16 @@ pub(crate) struct AllowDecision {
     pub decision_digest: String,
 }
 
-pub(crate) fn validate_scope(scope: &CredentialScope, case_mode: &str) -> Result<()> {
+pub(crate) fn validate_scope(
+    scope: &CredentialScope,
+    path_profile: PathProfile,
+    case_mode: CaseMode,
+) -> Result<()> {
     validate_id_list(&scope.tenants, 1, 16)?;
     validate_id_list(&scope.repositories, 1, 128)?;
     validate_id_list(&scope.references, 0, 128)?;
     validate_assignment_list(&scope.permissions, 1, 64, PERMISSIONS)?;
-    validate_paths(&scope.path_prefixes, case_mode, 128)?;
+    validate_paths(&scope.path_prefixes, path_profile, case_mode, 128)?;
     Ok(())
 }
 
@@ -111,8 +116,6 @@ pub(crate) fn validate_policy(policy: &PolicyDocument) -> Result<()> {
         || !valid_id(&policy.version)
         || policy.generation == 0
         || policy.authority_epoch == 0
-        || policy.path_profile != "path.opengamevcs/portable@1"
-        || !matches!(policy.case_mode.as_str(), "case-sensitive" | "case-folded")
         || policy.default_effect != "deny"
         || policy.composition != "deny-overrides-v1"
         || policy.rules.is_empty()
@@ -120,17 +123,19 @@ pub(crate) fn validate_policy(policy: &PolicyDocument) -> Result<()> {
     {
         return Err(invalid());
     }
+    let path_profile = PathProfile::parse(&policy.path_profile).map_err(|_| invalid())?;
+    let case_mode = CaseMode::parse(&policy.case_mode).map_err(|_| invalid())?;
     let mut rule_ids = HashSet::with_capacity(policy.rules.len());
     for rule in &policy.rules {
         if !valid_id(&rule.id) || !rule_ids.insert(&rule.id) {
             return Err(invalid());
         }
-        validate_rule(rule, &policy.case_mode).map_err(|_| invalid())?;
+        validate_rule(rule, path_profile, case_mode).map_err(|_| invalid())?;
     }
     Ok(())
 }
 
-fn validate_rule(rule: &PolicyRule, case_mode: &str) -> Result<()> {
+fn validate_rule(rule: &PolicyRule, path_profile: PathProfile, case_mode: CaseMode) -> Result<()> {
     if !matches!(rule.effect.as_str(), "allow" | "deny")
         || !valid_id(&rule.tenant)
         || !valid_id(&rule.repository)
@@ -143,17 +148,22 @@ fn validate_rule(rule: &PolicyRule, case_mode: &str) -> Result<()> {
     validate_id_list(&rule.subjects.groups, 0, 128)?;
     validate_assignment_list(&rule.subjects.actor_classes, 0, 32, ACTOR_CLASSES)?;
     validate_id_list(&rule.references, 0, 128)?;
-    validate_paths(&rule.path_prefixes, case_mode, 128)?;
+    validate_paths(&rule.path_prefixes, path_profile, case_mode, 128)?;
     validate_assignment_list(&rule.resource_types, 1, 64, RESOURCE_TYPES)?;
     validate_assignment_list(&rule.permissions, 1, 64, PERMISSIONS)
 }
 
-fn validate_paths(paths: &[String], case_mode: &str, maximum: usize) -> Result<()> {
+fn validate_paths(
+    paths: &[String],
+    path_profile: PathProfile,
+    case_mode: CaseMode,
+    maximum: usize,
+) -> Result<()> {
     if paths.len() > maximum || !unique(paths) {
         return Err(ParticipantError::new(ParticipantErrorCode::InputInvalid));
     }
     for path in paths {
-        canonical_path(path, case_mode, true)?;
+        validate_path(path, path_profile, case_mode, true)?;
     }
     Ok(())
 }
@@ -190,12 +200,16 @@ fn unique(values: &[String]) -> bool {
     values.iter().all(|value| seen.insert(value))
 }
 
-pub(crate) fn validate_resource(resource: &AuthorizationResource, case_mode: &str) -> Result<()> {
+pub(crate) fn validate_resource(
+    resource: &AuthorizationResource,
+    path_profile: PathProfile,
+    case_mode: CaseMode,
+) -> Result<()> {
     if !RESOURCE_TYPES.contains(&resource.resource_type.as_str()) {
         return Err(ParticipantError::new(ParticipantErrorCode::InputInvalid));
     }
     if let Some(path) = resource.path.as_deref() {
-        canonical_path(path, case_mode, false)?;
+        validate_path(path, path_profile, case_mode, false)?;
     }
     if resource.file_id.as_deref().is_some_and(|value| {
         value.len() != 32
@@ -224,7 +238,11 @@ pub(crate) fn validate_resource(resource: &AuthorizationResource, case_mode: &st
     Ok(())
 }
 
-pub(crate) fn validate_request_surface(request: RequestFacts<'_>, case_mode: &str) -> Result<()> {
+pub(crate) fn validate_request_surface(
+    request: RequestFacts<'_>,
+    path_profile: PathProfile,
+    case_mode: CaseMode,
+) -> Result<()> {
     if !valid_opaque(request.request_id)
         || !valid_id(request.tenant)
         || !valid_id(request.repository)
@@ -241,7 +259,7 @@ pub(crate) fn validate_request_surface(request: RequestFacts<'_>, case_mode: &st
     {
         return Err(ParticipantError::new(ParticipantErrorCode::InputInvalid));
     }
-    validate_resource(request.resource, case_mode)
+    validate_resource(request.resource, path_profile, case_mode)
 }
 
 pub(crate) fn evaluate_allow(
@@ -251,8 +269,12 @@ pub(crate) fn evaluate_allow(
     request: RequestFacts<'_>,
     allow_unbound_transaction_scope: bool,
 ) -> Result<AllowDecision> {
-    validate_request_surface(request, &policy.case_mode)?;
-    validate_scope(scope, &policy.case_mode)
+    let path_profile = PathProfile::parse(&policy.path_profile)
+        .map_err(|_| ParticipantError::new(ParticipantErrorCode::PolicyUnavailable))?;
+    let case_mode = CaseMode::parse(&policy.case_mode)
+        .map_err(|_| ParticipantError::new(ParticipantErrorCode::PolicyUnavailable))?;
+    validate_request_surface(request, path_profile, case_mode)?;
+    validate_scope(scope, path_profile, case_mode)
         .map_err(|_| ParticipantError::new(ParticipantErrorCode::PolicyUnavailable))?;
     if !scope.tenants.iter().any(|value| value == request.tenant)
         || !scope
@@ -274,7 +296,8 @@ pub(crate) fn evaluate_allow(
             && !path_in_prefixes(
                 request.resource.path.as_deref(),
                 &scope.path_prefixes,
-                &policy.case_mode,
+                path_profile,
+                case_mode,
             )?)
     {
         return Err(ParticipantError::new(
@@ -291,7 +314,7 @@ pub(crate) fn evaluate_allow(
 
     let mut allowed = false;
     for rule in &policy.rules {
-        if rule_matches(rule, policy, actor, request)? {
+        if rule_matches(rule, actor, request, path_profile, case_mode)? {
             if rule.effect == "deny" {
                 return Err(ParticipantError::new(
                     ParticipantErrorCode::AuthenticationDenied,
@@ -355,9 +378,10 @@ pub(crate) fn evaluate_allow(
 }
 fn rule_matches(
     rule: &PolicyRule,
-    policy: &PolicyDocument,
     actor: &ActorFacts,
     request: RequestFacts<'_>,
+    path_profile: PathProfile,
+    case_mode: CaseMode,
 ) -> Result<bool> {
     if !rule.subjects.identities.is_empty()
         && !rule
@@ -406,6 +430,196 @@ fn rule_matches(
     path_in_prefixes(
         request.resource.path.as_deref(),
         &rule.path_prefixes,
-        &policy.case_mode,
+        path_profile,
+        case_mode,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{evaluate_allow, validate_policy, ActorFacts, RequestFacts};
+    use crate::{
+        AuthorizationResource, CredentialScope, ParticipantErrorCode, PolicyDocument, PolicyRule,
+        RuleSubjects,
+    };
+
+    fn policy(profile: &str, case_mode: &str, prefix: &str) -> PolicyDocument {
+        PolicyDocument {
+            schema_version: "ogvcs.identity-policy/policy/v1".to_owned(),
+            id: "studio.policy".to_owned(),
+            version: "v1".to_owned(),
+            generation: 1,
+            authority_epoch: 1,
+            path_profile: profile.to_owned(),
+            case_mode: case_mode.to_owned(),
+            default_effect: "deny".to_owned(),
+            composition: "deny-overrides-v1".to_owned(),
+            rules: vec![PolicyRule {
+                id: "allow.path".to_owned(),
+                effect: "allow".to_owned(),
+                subjects: RuleSubjects {
+                    identities: vec!["artist.user".to_owned()],
+                    groups: vec![],
+                    actor_classes: vec!["human".to_owned()],
+                },
+                tenant: "studio".to_owned(),
+                repository: "game".to_owned(),
+                references: vec!["main".to_owned()],
+                path_prefixes: vec![prefix.to_owned()],
+                resource_types: vec!["path".to_owned()],
+                permissions: vec!["metadata.read".to_owned()],
+            }],
+        }
+    }
+
+    fn actor() -> ActorFacts {
+        ActorFacts {
+            id: "artist.user".to_owned(),
+            class: "human".to_owned(),
+            groups: vec![],
+            credential_class: "session".to_owned(),
+            credential_generation: 1,
+            authority_epoch: 1,
+        }
+    }
+
+    fn scope() -> CredentialScope {
+        CredentialScope {
+            tenants: vec!["studio".to_owned()],
+            repositories: vec!["game".to_owned()],
+            references: vec!["main".to_owned()],
+            path_prefixes: vec![String::new()],
+            permissions: vec!["metadata.read".to_owned()],
+        }
+    }
+
+    fn resource(path: &str) -> AuthorizationResource {
+        AuthorizationResource {
+            resource_type: "path".to_owned(),
+            path: Some(path.to_owned()),
+            file_id: None,
+            object_id: None,
+            name: None,
+        }
+    }
+
+    fn evaluate(policy: &PolicyDocument, path: &str) -> crate::Result<()> {
+        let actor = actor();
+        let scope = scope();
+        let resource = resource(path);
+        evaluate_allow(
+            policy,
+            &actor,
+            &scope,
+            RequestFacts {
+                request_id: "request.1",
+                tenant: "studio",
+                repository: "game",
+                permission: "metadata.read",
+                reason: None,
+                resource: &resource,
+                reference: Some("main"),
+                snapshot: None,
+            },
+            false,
+        )
+        .map(|_| ())
+    }
+
+    #[test]
+    fn all_ratified_profiles_and_case_modes_validate() {
+        for profile in [
+            "path.opengamevcs/portable@1",
+            "path.opengamevcs/windows@1",
+            "path.opengamevcs/macos@1",
+            "path.opengamevcs/linux@1",
+        ] {
+            for case_mode in ["case-sensitive", "case-folded"] {
+                validate_policy(&policy(profile, case_mode, "Game"))
+                    .expect("ratified OGVCS-004 policy options validate");
+            }
+        }
+        assert_eq!(
+            validate_policy(&policy(
+                "path.opengamevcs/unknown@1",
+                "case-sensitive",
+                "Game"
+            ))
+            .unwrap_err()
+            .code(),
+            ParticipantErrorCode::PolicyUnavailable
+        );
+    }
+
+    #[test]
+    fn direct_evaluator_applies_the_selected_profile_and_case_mode() {
+        let linux = policy(
+            "path.opengamevcs/linux@1",
+            "case-sensitive",
+            "Game:Assets/Hero",
+        );
+        validate_policy(&linux).expect("Linux permits a colon inside a path component");
+        evaluate(&linux, "Game:Assets/Hero/asset")
+            .expect("the evaluator uses the selected Linux profile");
+
+        assert_eq!(
+            validate_policy(&policy(
+                "path.opengamevcs/portable@1",
+                "case-sensitive",
+                "Game:Assets/Hero",
+            ))
+            .unwrap_err()
+            .code(),
+            ParticipantErrorCode::PolicyUnavailable
+        );
+
+        let sensitive = policy("path.opengamevcs/linux@1", "case-sensitive", "Game/Hero");
+        assert_eq!(
+            evaluate(&sensitive, "game/hero/asset").unwrap_err().code(),
+            ParticipantErrorCode::AuthenticationDenied
+        );
+    }
+
+    #[test]
+    fn direct_evaluator_uses_full_unicode_16_fold_and_component_prefixes() {
+        let folded = policy(
+            "path.opengamevcs/linux@1",
+            "case-folded",
+            "Game/Straße/Σ/İ/ꭰ",
+        );
+        evaluate(&folded, "game/STRASSE/ς/i\u{307}/Ꭰ/child")
+            .expect("sharp-s, sigma, dotted-I, and Cherokee use the pinned full fold");
+
+        let separated = policy("path.opengamevcs/linux@1", "case-folded", "Game/Hero");
+        assert_eq!(
+            evaluate(&separated, "game/Heroic/asset")
+                .unwrap_err()
+                .code(),
+            ParticipantErrorCode::AuthenticationDenied
+        );
+    }
+
+    #[test]
+    fn non_nfc_and_reserved_namespace_fail_closed_without_repair() {
+        let source = policy("path.opengamevcs/linux@1", "case-folded", "Game");
+        assert_eq!(
+            evaluate(&source, "Game/Cafe\u{301}/asset")
+                .unwrap_err()
+                .code(),
+            ParticipantErrorCode::InputInvalid
+        );
+        for profile in [
+            "path.opengamevcs/portable@1",
+            "path.opengamevcs/windows@1",
+            "path.opengamevcs/macos@1",
+            "path.opengamevcs/linux@1",
+        ] {
+            assert_eq!(
+                validate_policy(&policy(profile, "case-sensitive", ".OGVCS/state"))
+                    .unwrap_err()
+                    .code(),
+                ParticipantErrorCode::PolicyUnavailable
+            );
+        }
+    }
 }

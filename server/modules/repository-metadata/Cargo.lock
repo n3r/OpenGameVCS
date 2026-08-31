@@ -287,12 +287,12 @@ name = "ogvcs-identity-policy-audit-postgres"
 version = "0.2.0"
 dependencies = [
  "getrandom 0.2.16",
+ "ogvcs-path-contract",
  "postgres",
  "serde",
  "serde_json",
  "sha2",
  "subtle",
- "unicode-normalization",
 ]
 
 [[package]]
@@ -303,6 +303,13 @@ dependencies = [
  "same-file",
  "serde_json",
  "sha2",
+ "unicode-normalization",
+]
+
+[[package]]
+name = "ogvcs-path-contract"
+version = "1.0.0"
+dependencies = [
  "unicode-normalization",
 ]
 

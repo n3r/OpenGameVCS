@@ -4,6 +4,15 @@
 participant for the OGVCS-009 candidate. It is not an HTTP API and deliberately
 does not hand a database transaction back to its caller.
 
+The direct, at-most-1,000-resource evaluator consumes the generated
+`ogvcs-path-contract` Rust binding instead of a language-native lowercase
+approximation. The binding pins the exact OGVCS-004 v1 manifest and Unicode
+16.0.0 C/F case-fold table, rejects non-NFC input without repair, performs no
+post-fold normalization, accepts all four ratified profiles, and compares
+component-bound `ogvcs-path-key-v1` repository keys. This is a bounded path
+contract prerequisite; it does not add aggregate authorization or complete
+OGVCS-009.
+
 The adapter accepts a caller-owned `postgres::Transaction` only while it is
 inside the protected server boundary. It mints a transaction identity itself,
 loads current credential/policy/authority state with locks, produces a sealed
@@ -29,6 +38,10 @@ The crate pins Rust 1.82 and has a checked Cargo lockfile. Run the ordinary
 source gate with:
 
 ```text
+node core/paths-filesystem/rust/scripts/sync-contract.mjs --check
+cargo fmt --manifest-path core/paths-filesystem/rust/Cargo.toml -- --check
+cargo test --manifest-path core/paths-filesystem/rust/Cargo.toml --locked
+cargo clippy --manifest-path core/paths-filesystem/rust/Cargo.toml --locked --all-targets -- -D warnings
 cargo fmt --manifest-path server/modules/identity-policy-audit/Cargo.toml -- --check
 cargo test --manifest-path server/modules/identity-policy-audit/Cargo.toml --locked
 cargo clippy --manifest-path server/modules/identity-policy-audit/Cargo.toml --locked --all-targets -- -D warnings

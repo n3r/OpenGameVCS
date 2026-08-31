@@ -47,7 +47,7 @@
     "test:cli-workspace:spec": "node spec/cli-workspace/v1/scripts/generate.mjs --check && node client/native-cli/rust/scripts/sync-contract.mjs --check && npm run test --workspace @opengamevcs/cli-workspace-contract-v1 && node --test spec/cli-workspace/v1/test/*.test.mjs",
     "test:transfer": "npm run test --workspace @opengamevcs/object-transfer && node --test tools/object-transfer-workflow-policy.test.mjs",
     "test:transfer:spec": "npm run test --workspace @opengamevcs/object-transfer-contract-v1",
-    "test:identity": "npm run test --workspace @opengamevcs/identity-policy-audit && node --test tools/identity-policy-workflow-policy.test.mjs",
+    "test:identity": "node core/paths-filesystem/rust/scripts/sync-contract.mjs --check && npm run test --workspace @opengamevcs/identity-policy-audit && node --test tools/identity-policy-workflow-policy.test.mjs",
     "test:identity:spec": "npm run test --workspace @opengamevcs/identity-policy-audit-contract-v1",
     "test:sandbox": "npm run test:source --workspace @opengamevcs/untrusted-sandbox-contract-v1 && npm run test --workspace @opengamevcs/untrusted-sandbox",
     "test:protocol": "npm run test --workspace @opengamevcs/protocol-baseline",

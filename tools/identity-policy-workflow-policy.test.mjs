@@ -17,7 +17,12 @@ test('identity-policy workflow is pinned, three-host, Node 24, and bounded', asy
   assert.match(workflow, /actions\/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7\.0\.0/u);
   assert.match(workflow, /npm run test:identity:spec/u);
   assert.match(workflow, /npm run test:identity/u);
+  assert.match(workflow, /core\/paths-filesystem\/rust\/scripts\/sync-contract\.mjs --check/u);
+  assert.match(workflow, /cargo test --manifest-path core\/paths-filesystem\/rust\/Cargo\.toml --locked --offline/u);
+  assert.match(workflow, /cargo clippy --manifest-path core\/paths-filesystem\/rust\/Cargo\.toml --locked --offline --all-targets -- -D warnings/u);
+  assert.match(workflow, /- "core\/paths-filesystem\/rust\/\*\*"/u);
   assert.doesNotMatch(workflow, /(?:test:scale|exact[-_: ]scale|100\s*(?:GiB|GB)|1\s*TiB|1,?000,?000)/iu);
   assert.doesNotMatch(workflow, /^\s*schedule:/mu);
   assert.match(rootPackage.scripts['test:identity'], /identity-policy-workflow-policy\.test\.mjs/u);
+  assert.match(rootPackage.scripts['test:identity'], /core\/paths-filesystem\/rust\/scripts\/sync-contract\.mjs --check/u);
 });
