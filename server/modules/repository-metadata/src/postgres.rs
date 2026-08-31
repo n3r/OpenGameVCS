@@ -182,6 +182,8 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
         };
         let scope = identity_metadata_scope_digest(
             decode_identity_digest(view.authenticated_scope_digest())?,
+            decode_identity_digest(view.subject_digest())?,
+            view.authority_epoch(),
             tenant_id,
             repository_id,
             TransactionCapability::ReserveFileId,
@@ -906,12 +908,16 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
         let authority_scope_digest = decode_identity_digest(view.authenticated_scope_digest())?;
         let authenticated_scope_digest = identity_metadata_scope_digest(
             authority_scope_digest,
+            decode_identity_digest(view.subject_digest())?,
+            view.authority_epoch(),
             tenant_id,
             repository_id,
             capability,
         );
         let allocation_receipt_scope_digest = identity_metadata_scope_digest(
             authority_scope_digest,
+            decode_identity_digest(view.subject_digest())?,
+            view.authority_epoch(),
             tenant_id,
             repository_id,
             TransactionCapability::ReserveFileId,
@@ -6257,13 +6263,17 @@ fn metadata_scope_digest(
 
 fn identity_metadata_scope_digest(
     authority_scope_digest: [u8; 32],
+    subject_digest: [u8; 32],
+    authority_epoch: u64,
     tenant_id: TenantId,
     repository_id: RepositoryId,
     capability: TransactionCapability,
 ) -> [u8; 32] {
     let mut hash = Sha256::new();
-    hash.update(b"OpenGameVCS identity-bound metadata scope v1\0");
+    hash.update(b"OpenGameVCS identity-bound metadata scope v2\0");
     hash.update(authority_scope_digest);
+    hash.update(subject_digest);
+    hash.update(authority_epoch.to_be_bytes());
     hash.update(tenant_id.as_bytes());
     hash.update(repository_id.as_bytes());
     hash.update((capability.as_str().len() as u64).to_be_bytes());
@@ -6331,14 +6341,17 @@ mod tests {
     }
 
     #[test]
-    fn authority_scope_is_domain_separated_by_tenant_repository_and_capability() {
+    fn authority_scope_is_separated_by_subject_epoch_tenant_repository_and_capability() {
         let authority_scope = [0x11; 32];
+        let subject = [0x12; 32];
         let tenant = TenantId::from_bytes([0x22; 16]);
         let other_tenant = TenantId::from_bytes([0x23; 16]);
         let repository = RepositoryId::from_bytes([0x33; 16]);
         let other_repository = RepositoryId::from_bytes([0x34; 16]);
         let baseline = identity_metadata_scope_digest(
             authority_scope,
+            subject,
+            1,
             tenant,
             repository,
             TransactionCapability::ReserveFileId,
@@ -6347,6 +6360,8 @@ mod tests {
             baseline,
             identity_metadata_scope_digest(
                 authority_scope,
+                subject,
+                1,
                 tenant,
                 repository,
                 TransactionCapability::ReserveFileId,
@@ -6356,6 +6371,8 @@ mod tests {
             baseline,
             identity_metadata_scope_digest(
                 authority_scope,
+                subject,
+                1,
                 other_tenant,
                 repository,
                 TransactionCapability::ReserveFileId,
@@ -6365,6 +6382,8 @@ mod tests {
             baseline,
             identity_metadata_scope_digest(
                 authority_scope,
+                subject,
+                1,
                 tenant,
                 other_repository,
                 TransactionCapability::ReserveFileId,
@@ -6374,9 +6393,33 @@ mod tests {
             baseline,
             identity_metadata_scope_digest(
                 authority_scope,
+                subject,
+                1,
                 tenant,
                 repository,
                 TransactionCapability::TombstoneFileId,
+            )
+        );
+        assert_ne!(
+            baseline,
+            identity_metadata_scope_digest(
+                authority_scope,
+                [0x13; 32],
+                1,
+                tenant,
+                repository,
+                TransactionCapability::ReserveFileId,
+            )
+        );
+        assert_ne!(
+            baseline,
+            identity_metadata_scope_digest(
+                authority_scope,
+                subject,
+                2,
+                tenant,
+                repository,
+                TransactionCapability::ReserveFileId,
             )
         );
     }

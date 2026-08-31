@@ -24,7 +24,8 @@ The production constructor is `IdentityBoundPostgresMetadataStore::connect`;
 it requires the OGVCS-009 PostgreSQL participant before returning a store and
 exposes only credential-presentation entry points. It invokes OGVCS-009 authorization on
 the exact live PostgreSQL transaction, derives subject, epoch, and authenticated
-scope exclusively from the sealed view, accumulates exact staged resources,
+scope exclusively from the sealed view, and domain-separates metadata scope by
+subject, authority epoch, tenant, repository, and capability. It accumulates exact staged resources,
 rechecks that closed set, and appends the ordinary decision commitment before
 commit. Any error poisons the transaction. The production wrapper neither
 implements nor dereferences to the legacy `MetadataStore`, so caller-owned

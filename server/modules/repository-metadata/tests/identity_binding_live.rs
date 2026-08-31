@@ -38,6 +38,20 @@ fn identity_bound_metadata_is_scope_receipt_and_commitment_atomic() {
 
     let probe = PostgresTransactionAuthorizationParticipant::new().unwrap();
     let mut probe_client = Client::connect(&database_url, NoTls).unwrap();
+    let identical_subject_scopes: (i64, i64) = probe_client
+        .query_one(
+            "SELECT count(*), count(DISTINCT scope_digest)
+             FROM ogvcs_identity.credentials
+             WHERE credential_id IN ('credential.a', 'credential.b')",
+            &[],
+        )
+        .map(|row| (row.get(0), row.get(1)))
+        .unwrap();
+    assert_eq!(
+        identical_subject_scopes,
+        (2, 1),
+        "the cross-subject replay probe requires byte-identical credential scopes"
+    );
     let mut probe_transaction = probe_client.transaction().unwrap();
     let tenant = format!("tenant.{}", hex(tenant_id.as_bytes()));
     let repository = format!("repository.{}", hex(repository_id.as_bytes()));
@@ -161,6 +175,20 @@ fn identity_bound_metadata_is_scope_receipt_and_commitment_atomic() {
         .unwrap();
     assert_ne!(other_scope.file_id, first.file_id);
     assert_ne!(other_scope.allocation_receipt, first.allocation_receipt);
+
+    let epoch_scope_key = idempotency("file-id.allocate", "epoch-scope", [0x3a; 32]);
+    let pre_epoch_scope = store
+        .allocate_file_id_identity_authorized(
+            credentials(
+                PRESENTATION_A,
+                "request.allocate.epoch-one",
+                "correlation.allocate.epoch-one",
+            ),
+            tenant_id,
+            repository_id,
+            epoch_scope_key.clone(),
+        )
+        .unwrap();
 
     let denied_key = idempotency("file-id.register", "path-denied", [0x30; 32]);
     let mut path_denied = store
@@ -480,6 +508,153 @@ fn identity_bound_metadata_is_scope_receipt_and_commitment_atomic() {
     assert_eq!(scoped_tokens, 1);
     assert_eq!(rollback_decisions, 0);
     assert_eq!(denied_decisions, 0);
+    drop(client);
+
+    promote_subject_a_authority(&database_url, &tenant, &repository);
+    let post_epoch_scope = store
+        .allocate_file_id_identity_authorized(
+            credentials(
+                PRESENTATION_A,
+                "request.allocate.epoch-two",
+                "correlation.allocate.epoch-two",
+            ),
+            tenant_id,
+            repository_id,
+            epoch_scope_key,
+        )
+        .unwrap();
+    assert_ne!(post_epoch_scope.file_id, pre_epoch_scope.file_id);
+    assert_ne!(
+        post_epoch_scope.allocation_receipt,
+        pre_epoch_scope.allocation_receipt
+    );
+
+    let mut cross_epoch = store
+        .begin_identity_authorized(
+            credentials(
+                PRESENTATION_A,
+                "request.cross-epoch",
+                "correlation.cross-epoch",
+            ),
+            tenant_id,
+            TransactionCapability::Publish,
+            repository_id,
+            TransactionOptions::Serializable { maximum_retries: 0 },
+        )
+        .unwrap();
+    cross_epoch
+        .reserve_idempotency(idempotency("file-id.register", "cross-epoch", [0x3b; 32]))
+        .unwrap();
+    assert_eq!(
+        cross_epoch
+            .register_allocated_file_id(native(repository_id, &pre_epoch_scope, "cross-epoch",))
+            .unwrap_err()
+            .code,
+        DomainErrorCode::FileIdConflict
+    );
+    assert_eq!(
+        cross_epoch.commit().unwrap_err().code,
+        DomainErrorCode::ObjectInvalid
+    );
+
+    let post_epoch_key = idempotency("file-id.register", "epoch-two", [0x3c; 32]);
+    let mut post_epoch_publish = store
+        .begin_identity_authorized(
+            credentials(
+                PRESENTATION_A,
+                "request.publish.epoch-two",
+                "correlation.publish.epoch-two",
+            ),
+            tenant_id,
+            TransactionCapability::Publish,
+            repository_id,
+            TransactionOptions::Serializable { maximum_retries: 0 },
+        )
+        .unwrap();
+    post_epoch_publish
+        .reserve_idempotency(post_epoch_key.clone())
+        .unwrap();
+    post_epoch_publish
+        .register_allocated_file_id(native(repository_id, &post_epoch_scope, "epoch-two"))
+        .unwrap();
+    post_epoch_publish
+        .append_outbox(OutboxEvent {
+            event_id: public_uuid_bytes(0x71),
+            repository_id,
+            correlation_id: public_uuid_bytes(0x72),
+        })
+        .unwrap();
+    post_epoch_publish
+        .commit_idempotency(
+            &post_epoch_key,
+            json!({"registered": post_epoch_scope.file_id.to_string()}),
+        )
+        .unwrap();
+    assert!(post_epoch_publish.commit().unwrap().get() > 2);
+}
+
+fn promote_subject_a_authority(database_url: &str, tenant: &str, repository: &str) {
+    let mut client = Client::connect(database_url, NoTls).unwrap();
+    let mut transaction = client.transaction().unwrap();
+    let Json(mut policy): Json<PolicyDocument> = transaction
+        .query_one(
+            "SELECT version.policy_json
+             FROM ogvcs_identity.current_policies AS current
+             JOIN ogvcs_identity.policy_versions AS version
+               ON version.tenant_id = current.tenant_id
+              AND version.repository_id = current.repository_id
+              AND version.policy_generation = current.policy_generation
+             WHERE current.tenant_id = $1 AND current.repository_id = $2",
+            &[&tenant, &repository],
+        )
+        .unwrap()
+        .get(0);
+    policy.generation = 2;
+    policy.authority_epoch = 2;
+    policy.version = "version.two".to_owned();
+    let policy_digest = digest_json(&policy);
+    transaction
+        .execute(
+            "UPDATE ogvcs_identity.authority_states
+             SET authority_epoch = 2, key_generation = 2, updated_at = clock_timestamp()
+             WHERE tenant_id = $1",
+            &[&tenant],
+        )
+        .unwrap();
+    transaction
+        .execute(
+            "UPDATE ogvcs_identity.credentials SET authority_epoch = 2
+             WHERE tenant_id = $1 AND credential_id = 'credential.a'",
+            &[&tenant],
+        )
+        .unwrap();
+    transaction
+        .execute(
+            "INSERT INTO ogvcs_identity.policy_versions
+             (tenant_id, repository_id, policy_generation, authority_epoch, policy_id,
+              policy_version, path_profile, case_mode, policy_json, policy_digest)
+             VALUES ($1, $2, 2, 2, $3, $4, $5, $6, $7, $8)",
+            &[
+                &tenant,
+                &repository,
+                &policy.id,
+                &policy.version,
+                &policy.path_profile,
+                &policy.case_mode,
+                &Json(&policy),
+                &&policy_digest[..],
+            ],
+        )
+        .unwrap();
+    transaction
+        .execute(
+            "UPDATE ogvcs_identity.current_policies
+             SET policy_generation = 2, updated_at = clock_timestamp()
+             WHERE tenant_id = $1 AND repository_id = $2",
+            &[&tenant, &repository],
+        )
+        .unwrap();
+    transaction.commit().unwrap();
 }
 
 fn prepare_database(database_url: &str, tenant_id: TenantId, repository_id: RepositoryId) {
@@ -631,7 +806,11 @@ fn prepare_database(database_url: &str, tenant_id: TenantId, repository_id: Repo
         "credential.b",
         "subject.b",
         PRESENTATION_B,
-        vec!["metadata.read".to_owned(), "submit".to_owned()],
+        vec![
+            "discover".to_owned(),
+            "metadata.read".to_owned(),
+            "submit".to_owned(),
+        ],
     );
 }
 
