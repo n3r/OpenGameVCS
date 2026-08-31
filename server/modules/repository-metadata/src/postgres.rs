@@ -4494,7 +4494,7 @@ impl<A, V> IdentityBoundPostgresMetadataStore<A, V> {
         &mut self,
         options: crate::MigrationRunOptions,
     ) -> Result<crate::MigrationRunReport> {
-        self.store.migrate(options)
+        crate::run_migrations(&mut self.store.client, options)
     }
 }
 
