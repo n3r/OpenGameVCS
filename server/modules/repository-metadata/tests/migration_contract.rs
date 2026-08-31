@@ -18,7 +18,7 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
     );
     assert_eq!(manifest["database"], "postgresql-15-or-newer");
     let entries = manifest["entries"].as_array().unwrap();
-    assert_eq!(entries.len(), 24);
+    assert_eq!(entries.len(), 27);
     let expected = [
         (1, "expand"),
         (1, "migrate"),
@@ -44,6 +44,9 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
         (8, "expand"),
         (8, "migrate"),
         (8, "contract"),
+        (9, "expand"),
+        (9, "migrate"),
+        (9, "contract"),
     ];
     for (entry, (version, phase)) in entries.iter().zip(expected) {
         assert_eq!(entry["version"], version);
@@ -65,6 +68,41 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
     assert_eq!(entries[17]["requiresCompatibilityFence"], true);
     assert_eq!(entries[20]["requiresCompatibilityFence"], true);
     assert_eq!(entries[23]["requiresCompatibilityFence"], true);
+    assert_eq!(entries[26]["requiresCompatibilityFence"], true);
+}
+
+#[test]
+fn version_nine_reserves_repository_backed_lifecycle_evidence() {
+    let expand = fs::read_to_string(migration_root().join("000009_expand.sql")).unwrap();
+    for evidence in [
+        "CREATE TABLE ogvcs_metadata.object_lifecycle",
+        "CREATE TABLE ogvcs_metadata.lifecycle_receipts",
+        "CREATE TABLE ogvcs_metadata.lifecycle_receipt_consumptions",
+        "CREATE TABLE ogvcs_metadata.lifecycle_publication_plans",
+        "CREATE TABLE ogvcs_metadata.lifecycle_publication_plan_chunks",
+        "CREATE TABLE ogvcs_metadata.lifecycle_publication_plan_items",
+        "CREATE TABLE ogvcs_metadata.lifecycle_publication_plan_seals",
+        "CREATE TABLE ogvcs_metadata.lifecycle_applications",
+        "CREATE TABLE ogvcs_metadata.lifecycle_transaction_facts",
+        "CREATE TABLE ogvcs_metadata.lifecycle_publication_reachability",
+        "CREATE TABLE ogvcs_metadata.lifecycle_deletion_fences",
+        "CREATE TABLE ogvcs_metadata.lifecycle_internal_outbox",
+        "health_observation_digest",
+        "resource_opaque_digest",
+        "structural_commitment_digest",
+        "lock_and_validate_lifecycle_publication_plan",
+        "FOR UPDATE OF lifecycle",
+    ] {
+        assert!(expand.contains(evidence), "missing {evidence}");
+    }
+    assert!(expand.contains("(health = 'not-applicable')"));
+    assert!(expand.contains("= (health_generation IS NULL AND health_observation_digest IS NULL)"));
+    assert!(!expand.contains("FROM unnest"));
+    assert!(
+        !fs::read_to_string(migration_root().join("000009_migrate.sql"))
+            .unwrap()
+            .contains("INSERT INTO ogvcs_metadata.object_lifecycle")
+    );
 }
 
 #[test]

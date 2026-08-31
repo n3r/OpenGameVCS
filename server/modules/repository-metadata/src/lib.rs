@@ -44,6 +44,7 @@ fn inspect(
 )]
 
 mod error;
+mod lifecycle;
 mod migration;
 mod migration_runner;
 mod ports;
@@ -51,6 +52,16 @@ mod postgres;
 mod types;
 
 pub use error::{DomainError, DomainErrorCode, Result};
+#[cfg(feature = "legacy-test-adapter")]
+pub use lifecycle::{
+    aggregate_chunk_count, aggregate_plan_digest, AggregateChunkCommitment, AggregatePlanChunk,
+    AggregatePublicationPlan, LifecycleApplicationReceipt, LifecycleCapability,
+    LifecycleDirectCommand, LifecycleHealth, LifecycleHealthObservation, LifecycleObjectBinding,
+    LifecycleQuarantineRequest, LifecycleReceiptKind, LifecycleReceiptWrite, LifecycleState,
+    StagedLifecycleObject, AGGREGATE_OBJECTS_MAXIMUM, DIRECT_OBJECTS_MAXIMUM,
+    LIFECYCLE_CONTRACT_VERSION, OBJECT_TRANSFER_ARTIFACT_SET_SHA256,
+    OBJECT_TRANSFER_MANIFEST_SHA256, PLAN_CHUNK_BYTES_MAXIMUM, PLAN_CHUNK_ITEMS_MAXIMUM,
+};
 pub use migration::{Migration, MigrationPhase, MIGRATIONS};
 pub use migration_runner::{
     run_migrations, verify_schema_compatibility, MigrationRunOptions, MigrationRunReport,
@@ -60,6 +71,8 @@ pub use ports::{
     AuthorizationPort, AuthorizedView, DeniedAuthorizedView, DenyAllAuthorization, MetadataStore,
     MetadataTransaction, ObjectValidationPort, ProductionObjectValidator,
 };
+#[cfg(feature = "legacy-test-adapter")]
+pub use postgres::PostgresLifecyclePlanWriter;
 pub use postgres::{
     IdentityBoundPostgresMetadataStore, IdentityMetadataAuthorizedView, PostgresMetadataStore,
     PostgresMetadataTransaction,

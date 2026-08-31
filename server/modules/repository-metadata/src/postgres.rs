@@ -24,6 +24,10 @@ use std::{
 use subtle::ConstantTimeEq;
 use uuid::Uuid;
 
+mod lifecycle;
+#[cfg(feature = "legacy-test-adapter")]
+pub use lifecycle::PostgresLifecyclePlanWriter;
+
 #[cfg(feature = "legacy-test-adapter")]
 use crate::IdempotencyStatus;
 use crate::{

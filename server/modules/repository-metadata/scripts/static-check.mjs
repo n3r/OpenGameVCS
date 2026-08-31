@@ -25,6 +25,7 @@ const rustFiles = [
   'error.rs',
   'migration.rs',
   'migration_runner.rs',
+  'lifecycle.rs',
   'ports.rs',
   'postgres.rs',
   'types.rs',
@@ -36,7 +37,7 @@ for (const file of rustFiles) {
 
 const manifest = JSON.parse(await readFile(resolve(migrations, 'manifest.json')));
 assert(manifest.schemaVersion === 'ogvcs.repository-metadata/migration-manifest/v1', 'migration manifest schema differs');
-assert(JSON.stringify(manifest.entries.map(({ version, phase }) => [version, phase])) === '[[1,"expand"],[1,"migrate"],[1,"contract"],[2,"expand"],[2,"migrate"],[2,"contract"],[3,"expand"],[3,"migrate"],[3,"contract"],[4,"expand"],[4,"migrate"],[4,"contract"],[5,"expand"],[5,"migrate"],[5,"contract"],[6,"expand"],[6,"migrate"],[6,"contract"],[7,"expand"],[7,"migrate"],[7,"contract"],[8,"expand"],[8,"migrate"],[8,"contract"]]', 'migration phases are not ordered');
+assert(JSON.stringify(manifest.entries.map(({ version, phase }) => [version, phase])) === '[[1,"expand"],[1,"migrate"],[1,"contract"],[2,"expand"],[2,"migrate"],[2,"contract"],[3,"expand"],[3,"migrate"],[3,"contract"],[4,"expand"],[4,"migrate"],[4,"contract"],[5,"expand"],[5,"migrate"],[5,"contract"],[6,"expand"],[6,"migrate"],[6,"contract"],[7,"expand"],[7,"migrate"],[7,"contract"],[8,"expand"],[8,"migrate"],[8,"contract"],[9,"expand"],[9,"migrate"],[9,"contract"]]', 'migration phases are not ordered');
 for (const entry of manifest.entries) {
   const bytes = await readFile(resolve(migrations, entry.path));
   const sql = bytes.toString('utf8');
@@ -95,6 +96,39 @@ assert(expandV8.includes('octet_length(authorization_resources::text) <= 8388608
 assert(expandV8.includes('octet_length(safe_result::text) <= 1048576'), 'version 8 replay result byte bound missing');
 assert(expandV8.includes('idempotency_identity_safe_result_bounded'), 'version 8 identity result constraint missing');
 assert(expandV8.includes('authorization_resources IS NULL\n            OR safe_result IS NULL'), 'version 8 does not preserve oversized authority-null legacy results');
+const expandV9 = await readFile(resolve(migrations, '000009_expand.sql'), 'utf8');
+for (const evidence of [
+  'object_lifecycle',
+  'lifecycle_receipts',
+  'lifecycle_receipt_consumptions',
+  'lifecycle_publication_plan_chunks',
+  'lifecycle_publication_plan_items',
+  'lifecycle_publication_plan_seals',
+  'lifecycle_applications',
+  'lifecycle_publication_reachability',
+  'lifecycle_deletion_fences',
+  'lifecycle_internal_outbox',
+  'current_health_observation_digest',
+  'resource_opaque_digest',
+  'FOR UPDATE OF lifecycle',
+]) assert(expandV9.includes(evidence), `version 9 lifecycle evidence missing: ${evidence}`);
+assert(expandV9.includes("(health = 'not-applicable')\n           = (health_generation IS NULL AND health_observation_digest IS NULL)"), 'version 9 lifecycle health axis differs');
+assert(!expandV9.includes('FOR item_row IN'), 'version 9 aggregate validation contains a per-item SQL loop');
+
+const lifecycleAdapter = await readFile(resolve(root, 'src/postgres/lifecycle.rs'), 'utf8');
+assert(lifecycleAdapter.includes('FROM unnest('), 'version 9 chunk writer is not set based');
+assert(lifecycleAdapter.includes('command.capability != LifecycleCapability::SubmitConsumePublication'), 'publish transaction accepts a non-submit lifecycle capability');
+assert(!lifecycleAdapter.includes('hmac_sha256(&command.idempotency_scope_digest'), 'non-secret idempotency material is used as an authority MAC key');
+assert(
+  lifecycleAdapter.split('crate::verify_schema_compatibility(&mut self.client)?').length - 1 === 5,
+  'every lifecycle store entry point is not schema-compatibility gated',
+);
+for (const forbiddenBackendAccess of ['reqwest::', 'aws_sdk_', 'std::fs::', 'tokio::net::']) {
+  assert(
+    !lifecycleAdapter.includes(forbiddenBackendAccess),
+    `external backend access appears in the final metadata adapter: ${forbiddenBackendAccess}`,
+  );
+}
 
 const adapter = await readFile(resolve(root, 'src/postgres.rs'), 'utf8');
 const ports = await readFile(resolve(root, 'src/ports.rs'), 'utf8');

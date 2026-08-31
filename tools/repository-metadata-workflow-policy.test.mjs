@@ -46,6 +46,7 @@ test('repository metadata workflow pins the bounded three-host and PostgreSQL bo
     2,
   );
   assert.equal(workflow.match(/spec\/benchmark-fault\/v1\/\*\*/gu)?.length, 2);
+  assert.equal(workflow.match(/spec\/object-transfer\/v1\/\*\*/gu)?.length, 2);
   assert.equal(workflow.match(/server\/migrations\/identity-policy-audit\/\*\*/gu)?.length, 2);
   assert.equal(workflow.match(/server\/modules\/identity-policy-audit\/\*\*/gu)?.length, 2);
   assert.match(workflow, /cargo clippy .* --locked --offline --all-targets -- -D warnings/u);
@@ -76,7 +77,7 @@ test('repository metadata report declares every bounded live row without claimin
   assert.equal(report.schemaVersion, 'ogvcs.repository-metadata/service-report/v1');
   assert.equal(report.exactScaleExecuted, false);
   assert.equal(report.status, 'declared');
-  assert.equal(report.rows.length, 14);
+  assert.equal(report.rows.length, 15);
   assert.equal(new Set(report.rows.map(({ id }) => id)).size, report.rows.length);
   assert.ok(report.rows.every(({ status }) => status === 'declared'));
   for (const id of [
@@ -84,6 +85,7 @@ test('repository metadata report declares every bounded live row without claimin
     'project-repository-list-cursors',
     'bounded-ancestry-file-path-history',
     'outbox-lease-ack-release',
+    'lifecycle-v9-atomic-publication',
   ]) {
     assert.ok(report.rows.some((row) => row.id === id), `missing bounded report row ${id}`);
   }

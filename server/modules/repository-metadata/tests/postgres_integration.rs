@@ -13,16 +13,19 @@ use ogvcs_object_model::{
     Limits, ObjectKind, ObjectRef, ProfileRef, Registry, ValidationMode,
 };
 use ogvcs_repository_metadata::{
+    aggregate_plan_digest, AggregateChunkCommitment, AggregatePlanChunk, AggregatePublicationPlan,
     AncestryRecord, AuthorizationContext, AuthorizationPort, AuthorizationResource, AuthorizedView,
     CaseMode, CommitSequence, DomainError, DomainErrorCode, FileHistoryWrite, FileId,
     FileIdExpectedState, FileIdImportReservation, FileIdOrigin, FileIdOwnerKind, FileIdReservation,
     FileIdReservationOutcome, HistoryIncompleteReason, IdempotencyReservation,
-    IdempotencyReservationOutcome, MetadataPermission, MetadataTransaction, ObjectPutOutcome,
-    ObjectValidationPort, ObjectWrite, OutboxClaimRequest, OutboxEvent, OutboxLeaseAction,
-    OutboxReleaseRequest, PageRequest, PageState, PostgresMetadataStore, ProjectId,
-    ReferenceCasRequest, ReferenceExpected, ReferenceFilter, ReferenceKind, ReferenceName,
-    RepositoryCreate, RepositoryId, RepositorySettings, SnapshotWrite, TenantId,
-    TransactionCapability, TransactionOptions, TreeEntryWrite,
+    IdempotencyReservationOutcome, LifecycleCapability, LifecycleDirectCommand, LifecycleHealth,
+    LifecycleHealthObservation, LifecycleObjectBinding, LifecycleReceiptKind,
+    LifecycleReceiptWrite, LifecycleState, MetadataPermission, MetadataTransaction,
+    ObjectPutOutcome, ObjectValidationPort, ObjectWrite, OutboxClaimRequest, OutboxEvent,
+    OutboxLeaseAction, OutboxReleaseRequest, PageRequest, PageState, PostgresMetadataStore,
+    ProjectId, ReferenceCasRequest, ReferenceExpected, ReferenceFilter, ReferenceKind,
+    ReferenceName, RepositoryCreate, RepositoryId, RepositorySettings, SnapshotWrite,
+    StagedLifecycleObject, TenantId, TransactionCapability, TransactionOptions, TreeEntryWrite,
 };
 use postgres::{Client, NoTls};
 use serde_json::{json, Value};
@@ -921,6 +924,14 @@ fn production_reference_postgres_report() {
         file_id,
     );
     report("consistency-token-primary-and-lag");
+    lifecycle_v9_report(
+        &database_url,
+        &mut store,
+        &context,
+        repository_id,
+        snapshot.0,
+    );
+    report("lifecycle-v9-atomic-publication");
     drop(store);
 
     file_id_race(&database_url, context.clone(), repository_id);
@@ -947,6 +958,656 @@ fn reset_disposable_schema(database_url: &str) {
     client
         .batch_execute("DROP SCHEMA IF EXISTS ogvcs_metadata CASCADE")
         .unwrap();
+}
+
+fn lifecycle_v9_report(
+    database_url: &str,
+    store: &mut PostgresMetadataStore<IsolatedAllow, IsolatedConformanceValidation>,
+    context: &AuthorizationContext,
+    repository_id: RepositoryId,
+    publication: ObjectRef,
+) {
+    let opaque_key = [0x71; 32];
+    let object_ref = ObjectRef {
+        kind: ObjectKind::Chunk,
+        digest: [0x72; 32],
+    };
+    let authority_binding_digest = [0x73; 32];
+    store
+        .register_staged_lifecycle_for_test(&StagedLifecycleObject {
+            tenant_id: context.tenant_id,
+            repository_id,
+            opaque_key,
+            object_ref,
+            object_length: 4096,
+            tenant_scope_digest: [0x74; 32],
+            authority_binding_digest,
+            retention_until: SystemTime::now() + Duration::from_secs(3600),
+        })
+        .unwrap();
+
+    let backend_receipt = lifecycle_receipt(
+        [0x75; 32],
+        LifecycleReceiptKind::BackendDurable,
+        context.tenant_id,
+        repository_id,
+        opaque_key,
+        object_ref,
+        LifecycleState::Staged,
+        1,
+        LifecycleState::Available,
+        2,
+        authority_binding_digest,
+        None,
+        None,
+    );
+    store
+        .persist_lifecycle_receipt_for_test(&backend_receipt)
+        .unwrap();
+
+    let mut client = Client::connect(database_url, NoTls).unwrap();
+    assert_eq!(
+        client
+            .execute(
+                "UPDATE ogvcs_metadata.object_lifecycle
+                 SET state = 'available', generation = 2, backend_receipt_digest = $3
+                 WHERE repository_id = $1 AND opaque_key = $2",
+                &[
+                    &Uuid::from_bytes(*repository_id.as_bytes()),
+                    &&opaque_key[..],
+                    &&backend_receipt.receipt_digest[..],
+                ],
+            )
+            .unwrap(),
+        1
+    );
+    let available_without_observation: (String, Option<i64>, Option<Vec<u8>>) = client
+        .query_one(
+            "SELECT health, health_generation, health_observation_digest
+             FROM ogvcs_metadata.object_lifecycle
+             WHERE repository_id = $1 AND opaque_key = $2",
+            &[
+                &Uuid::from_bytes(*repository_id.as_bytes()),
+                &&opaque_key[..],
+            ],
+        )
+        .map(|row| (row.get(0), row.get(1), row.get(2)))
+        .unwrap();
+    assert_eq!(
+        available_without_observation,
+        ("not-applicable".to_owned(), None, None)
+    );
+    assert!(client
+        .execute(
+            "UPDATE ogvcs_metadata.object_lifecycle
+             SET health = 'healthy', health_generation = NULL
+             WHERE repository_id = $1 AND opaque_key = $2",
+            &[
+                &Uuid::from_bytes(*repository_id.as_bytes()),
+                &&opaque_key[..]
+            ],
+        )
+        .is_err());
+    drop(client);
+
+    let health_receipt = lifecycle_receipt(
+        [0x76; 32],
+        LifecycleReceiptKind::HealthObservation,
+        context.tenant_id,
+        repository_id,
+        opaque_key,
+        object_ref,
+        LifecycleState::Available,
+        2,
+        LifecycleState::Available,
+        2,
+        authority_binding_digest,
+        Some(LifecycleHealth::Healthy),
+        Some(1),
+    );
+    store
+        .persist_lifecycle_receipt_for_test(&health_receipt)
+        .unwrap();
+    store
+        .record_lifecycle_health_for_test(&LifecycleHealthObservation {
+            tenant_id: context.tenant_id,
+            repository_id,
+            opaque_key,
+            object_ref,
+            expected_state: LifecycleState::Available,
+            expected_generation: 2,
+            expected_health: LifecycleHealth::NotApplicable,
+            expected_health_generation: None,
+            expected_health_observation_digest: None,
+            next_health: LifecycleHealth::Healthy,
+            next_health_generation: 1,
+            authority_binding_digest,
+            observation_receipt_digest: health_receipt.receipt_digest,
+        })
+        .unwrap();
+
+    let reservation = idempotency("submit.finalize", "lifecycle-direct", [0x77; 32]);
+    let mut transaction = store
+        .begin_authorized(
+            context,
+            TransactionCapability::Publish,
+            repository_id,
+            TransactionOptions::Serializable { maximum_retries: 0 },
+        )
+        .unwrap();
+    assert_eq!(
+        transaction
+            .reserve_idempotency(reservation.clone())
+            .unwrap(),
+        IdempotencyReservationOutcome::Reserved
+    );
+    let command = LifecycleDirectCommand::seal(
+        format!("ltx1.{}", "L".repeat(43)),
+        context.tenant_id,
+        repository_id,
+        context.subject_digest,
+        context.authorization_epoch,
+        LifecycleCapability::SubmitConsumePublication,
+        [0x78; 32],
+        Some(publication),
+        None,
+        transaction.lifecycle_authenticated_scope_digest_for_test(),
+        reservation.clone(),
+        vec![LifecycleObjectBinding {
+            opaque_key,
+            object_ref,
+            expected_state: LifecycleState::Available,
+            expected_generation: 2,
+            expected_health: LifecycleHealth::Healthy,
+            expected_health_generation: Some(1),
+            current_health_observation_digest: Some(health_receipt.receipt_digest),
+            authority_binding_digest,
+            current_backend_receipt_digest: Some(backend_receipt.receipt_digest),
+            current_verification_receipt_digest: None,
+            current_deletion_receipt_digest: None,
+            transition_backend_receipt_digest: None,
+            transition_verification_receipt_digest: None,
+            transition_deletion_receipt_digest: None,
+            resource_opaque_digest: [0x79; 32],
+        }],
+    )
+    .unwrap();
+    let application = transaction
+        .apply_lifecycle_direct_for_test(&command)
+        .unwrap();
+    transaction
+        .commit_idempotency(
+            &reservation,
+            json!({
+                "lifecycleApplicationReceipt": {
+                    "objectCount": application.object_count,
+                    "protectedResultDigest": application.protected_result_digest,
+                }
+            }),
+        )
+        .unwrap();
+    let committed = transaction.commit().unwrap();
+    assert_eq!(application.commit_sequence, committed.get());
+
+    let mut client = Client::connect(database_url, NoTls).unwrap();
+    let exact_atomic_rows: (i64, i64, i64, i64) = client
+        .query_one(
+            "SELECT
+               (SELECT count(*) FROM ogvcs_metadata.lifecycle_applications
+                WHERE application_id = $1),
+               (SELECT count(*) FROM ogvcs_metadata.lifecycle_transaction_facts
+                WHERE application_id = $1),
+               (SELECT count(*) FROM ogvcs_metadata.lifecycle_publication_reachability
+                WHERE application_id = $1),
+               (SELECT count(*) FROM ogvcs_metadata.lifecycle_internal_outbox
+                WHERE application_id = $1)",
+            &[&Uuid::from_bytes(application.application_id)],
+        )
+        .map(|row| (row.get(0), row.get(1), row.get(2), row.get(3)))
+        .unwrap();
+    assert_eq!(exact_atomic_rows, (1, 1, 1, 1));
+    let persisted_receipt: Vec<u8> = client
+        .query_one(
+            "SELECT receipt_digest FROM ogvcs_metadata.lifecycle_applications
+             WHERE application_id = $1",
+            &[&Uuid::from_bytes(application.application_id)],
+        )
+        .unwrap()
+        .get(0);
+    assert_eq!(persisted_receipt, application.receipt_digest);
+    drop(client);
+
+    aggregate_lifecycle_plan_v9_report(database_url, store, context, repository_id, publication);
+
+    let gc_reservation = idempotency("gc.acquire-deleting", "lifecycle-gc-denied", [0x7a; 32]);
+    let mut transaction = store
+        .begin_authorized(
+            context,
+            TransactionCapability::Publish,
+            repository_id,
+            TransactionOptions::Serializable { maximum_retries: 0 },
+        )
+        .unwrap();
+    transaction
+        .reserve_idempotency(gc_reservation.clone())
+        .unwrap();
+    let denied_gc = LifecycleDirectCommand::seal(
+        format!("ltx1.{}", "G".repeat(43)),
+        context.tenant_id,
+        repository_id,
+        context.subject_digest,
+        context.authorization_epoch,
+        LifecycleCapability::GcAcquireDeleting,
+        [0x78; 32],
+        None,
+        Some([0x7b; 32]),
+        transaction.lifecycle_authenticated_scope_digest_for_test(),
+        gc_reservation,
+        vec![LifecycleObjectBinding {
+            opaque_key,
+            object_ref,
+            expected_state: LifecycleState::Quarantined,
+            expected_generation: 3,
+            expected_health: LifecycleHealth::Unhealthy,
+            expected_health_generation: Some(2),
+            current_health_observation_digest: Some([0x7c; 32]),
+            authority_binding_digest,
+            current_backend_receipt_digest: Some(backend_receipt.receipt_digest),
+            current_verification_receipt_digest: None,
+            current_deletion_receipt_digest: None,
+            transition_backend_receipt_digest: None,
+            transition_verification_receipt_digest: None,
+            transition_deletion_receipt_digest: None,
+            resource_opaque_digest: [0x7d; 32],
+        }],
+    )
+    .unwrap();
+    assert_eq!(
+        transaction
+            .apply_lifecycle_direct_for_test(&denied_gc)
+            .unwrap_err()
+            .code,
+        DomainErrorCode::MetadataNotFoundOrDenied
+    );
+    assert_eq!(
+        transaction.commit().unwrap_err().code,
+        DomainErrorCode::ObjectInvalid
+    );
+}
+
+fn aggregate_lifecycle_plan_v9_report(
+    database_url: &str,
+    store: &mut PostgresMetadataStore<IsolatedAllow, IsolatedConformanceValidation>,
+    context: &AuthorizationContext,
+    repository_id: RepositoryId,
+    publication: ObjectRef,
+) {
+    let plan_id = public_uuid_bytes(0x81);
+    let items: Vec<_> = (0_u32..1_001).map(aggregate_lifecycle_item).collect();
+    let first = AggregatePlanChunk::new(plan_id, 0, items[..1_000].to_vec()).unwrap();
+    let second = AggregatePlanChunk::new(plan_id, 1, items[1_000..].to_vec()).unwrap();
+    let encoded_bytes = u64::from(first.encoded_bytes) + u64::from(second.encoded_bytes);
+    let reservation = idempotency("submit.finalize", "lifecycle-aggregate", [0x82; 32]);
+    let mut conflicting_reservation = reservation.clone();
+    conflicting_reservation.semantic_fingerprint[0] ^= 1;
+    let provisional = AggregatePublicationPlan::new(
+        plan_id,
+        context.tenant_id,
+        repository_id,
+        publication,
+        context.subject_digest,
+        context.authorization_epoch,
+        [0x83; 32],
+        [0x84; 32],
+        [0; 32],
+        [0x85; 32],
+        reservation.clone(),
+        1_001,
+        encoded_bytes,
+    )
+    .unwrap();
+    let commitments = [
+        AggregateChunkCommitment {
+            chunk_ordinal: 0,
+            item_count: 1_000,
+            encoded_bytes: first.encoded_bytes,
+            chunk_digest: first.chunk_digest,
+        },
+        AggregateChunkCommitment {
+            chunk_ordinal: 1,
+            item_count: 1,
+            encoded_bytes: second.encoded_bytes,
+            chunk_digest: second.chunk_digest,
+        },
+    ];
+    let declared_plan_digest = aggregate_plan_digest(&provisional, &commitments).unwrap();
+    let plan = AggregatePublicationPlan::new(
+        plan_id,
+        context.tenant_id,
+        repository_id,
+        publication,
+        context.subject_digest,
+        context.authorization_epoch,
+        [0x83; 32],
+        [0x84; 32],
+        declared_plan_digest,
+        [0x85; 32],
+        reservation,
+        1_001,
+        encoded_bytes,
+    )
+    .unwrap();
+    let mut writer = store.begin_lifecycle_plan_for_test(plan).unwrap();
+    writer.append_chunk(first).unwrap();
+    writer.append_chunk(second).unwrap();
+    assert_eq!(writer.seal().unwrap(), declared_plan_digest);
+
+    let mut client = Client::connect(database_url, NoTls).unwrap();
+    let persisted: (i64, i64, i64, i64) = client
+        .query_one(
+            "SELECT
+               (SELECT count(*) FROM ogvcs_metadata.lifecycle_publication_plan_chunks
+                WHERE plan_id = $1),
+               (SELECT count(*) FROM ogvcs_metadata.lifecycle_publication_plan_items
+                WHERE plan_id = $1),
+               (SELECT count(*) FROM ogvcs_metadata.lifecycle_publication_plan_items
+                WHERE plan_id = $1 AND resource_opaque_digest IS NOT NULL),
+               (SELECT count(*) FROM ogvcs_metadata.lifecycle_publication_plan_seals
+                WHERE plan_id = $1)",
+            &[&Uuid::from_bytes(plan_id)],
+        )
+        .map(|row| (row.get(0), row.get(1), row.get(2), row.get(3)))
+        .unwrap();
+    assert_eq!(persisted, (2, 1_001, 1_001, 1));
+    drop(client);
+
+    let conflicting_plan = AggregatePublicationPlan::new(
+        public_uuid_bytes(0x89),
+        context.tenant_id,
+        repository_id,
+        publication,
+        context.subject_digest,
+        context.authorization_epoch,
+        [0x83; 32],
+        [0x84; 32],
+        [0x8a; 32],
+        [0x85; 32],
+        conflicting_reservation,
+        1,
+        1,
+    )
+    .unwrap();
+    assert_eq!(
+        store
+            .begin_lifecycle_plan_for_test(conflicting_plan)
+            .err()
+            .unwrap()
+            .code,
+        DomainErrorCode::MetadataNotFoundOrDenied
+    );
+
+    let wrong_tenant_plan = AggregatePublicationPlan::new(
+        public_uuid_bytes(0x8b),
+        TenantId::from_bytes([0xee; 16]),
+        repository_id,
+        publication,
+        context.subject_digest,
+        context.authorization_epoch,
+        [0x83; 32],
+        [0x84; 32],
+        [0x8c; 32],
+        [0x8d; 32],
+        idempotency("submit.finalize", "lifecycle-wrong-tenant", [0x8e; 32]),
+        1,
+        1,
+    )
+    .unwrap();
+    assert_eq!(
+        store
+            .begin_lifecycle_plan_for_test(wrong_tenant_plan)
+            .err()
+            .unwrap()
+            .code,
+        DomainErrorCode::MetadataNotFoundOrDenied
+    );
+    let wrong_repository_plan = AggregatePublicationPlan::new(
+        public_uuid_bytes(0x8f),
+        context.tenant_id,
+        RepositoryId::from_bytes([0xef; 16]),
+        publication,
+        context.subject_digest,
+        context.authorization_epoch,
+        [0x83; 32],
+        [0x84; 32],
+        [0x90; 32],
+        [0x91; 32],
+        idempotency("submit.finalize", "lifecycle-wrong-repository", [0x92; 32]),
+        1,
+        1,
+    )
+    .unwrap();
+    assert_eq!(
+        store
+            .begin_lifecycle_plan_for_test(wrong_repository_plan)
+            .err()
+            .unwrap()
+            .code,
+        DomainErrorCode::MetadataNotFoundOrDenied
+    );
+
+    let substituted_id = public_uuid_bytes(0x86);
+    let substituted_chunk =
+        AggregatePlanChunk::new(substituted_id, 0, vec![aggregate_lifecycle_item(0)]).unwrap();
+    let substituted_commitment = [AggregateChunkCommitment {
+        chunk_ordinal: 0,
+        item_count: 1,
+        encoded_bytes: substituted_chunk.encoded_bytes,
+        chunk_digest: substituted_chunk.chunk_digest,
+    }];
+    let substituted_reservation =
+        idempotency("submit.finalize", "lifecycle-substitution", [0x87; 32]);
+    let provisional = AggregatePublicationPlan::new(
+        substituted_id,
+        context.tenant_id,
+        repository_id,
+        publication,
+        context.subject_digest,
+        context.authorization_epoch,
+        [0x83; 32],
+        [0x84; 32],
+        [0; 32],
+        [0x88; 32],
+        substituted_reservation.clone(),
+        1,
+        u64::from(substituted_chunk.encoded_bytes),
+    )
+    .unwrap();
+    let exact_digest = aggregate_plan_digest(&provisional, &substituted_commitment).unwrap();
+    let bad_plan = AggregatePublicationPlan::new(
+        substituted_id,
+        context.tenant_id,
+        repository_id,
+        publication,
+        context.subject_digest,
+        context.authorization_epoch,
+        [0x83; 32],
+        [0x84; 32],
+        {
+            let mut tampered = exact_digest;
+            tampered[0] ^= 1;
+            tampered
+        },
+        [0x88; 32],
+        substituted_reservation,
+        1,
+        u64::from(substituted_chunk.encoded_bytes),
+    )
+    .unwrap();
+    let mut writer = store.begin_lifecycle_plan_for_test(bad_plan).unwrap();
+    writer.append_chunk(substituted_chunk).unwrap();
+    assert_eq!(
+        writer.seal().unwrap_err().code,
+        DomainErrorCode::ObjectInvalid
+    );
+
+    let boundary_plan_id = public_uuid_bytes(0x95);
+    let mut high_items: Vec<_> = (1_u32..=1_000).map(aggregate_lifecycle_item).collect();
+    let low_item = aggregate_lifecycle_item(0);
+    let boundary_first =
+        AggregatePlanChunk::new(boundary_plan_id, 0, std::mem::take(&mut high_items)).unwrap();
+    let boundary_second = AggregatePlanChunk::new(boundary_plan_id, 1, vec![low_item]).unwrap();
+    let boundary_bytes =
+        u64::from(boundary_first.encoded_bytes) + u64::from(boundary_second.encoded_bytes);
+    let boundary_plan = AggregatePublicationPlan::new(
+        boundary_plan_id,
+        context.tenant_id,
+        repository_id,
+        publication,
+        context.subject_digest,
+        context.authorization_epoch,
+        [0x83; 32],
+        [0x84; 32],
+        [0x96; 32],
+        [0x97; 32],
+        idempotency("submit.finalize", "lifecycle-boundary-order", [0x98; 32]),
+        1_001,
+        boundary_bytes,
+    )
+    .unwrap();
+    let mut writer = store.begin_lifecycle_plan_for_test(boundary_plan).unwrap();
+    writer.append_chunk(boundary_first).unwrap();
+    assert_eq!(
+        writer.append_chunk(boundary_second).unwrap_err().code,
+        DomainErrorCode::ObjectInvalid
+    );
+    drop(writer);
+
+    let duplicate_plan_id = public_uuid_bytes(0x99);
+    let duplicate_first = aggregate_lifecycle_item(0);
+    let mut duplicate_second = aggregate_lifecycle_item(1);
+    duplicate_second.object_ref = duplicate_first.object_ref;
+    let duplicate_chunk = AggregatePlanChunk::new(
+        duplicate_plan_id,
+        0,
+        vec![duplicate_first, duplicate_second],
+    )
+    .unwrap();
+    let duplicate_reservation = idempotency("submit.finalize", "lifecycle-duplicate", [0x9a; 32]);
+    let provisional = AggregatePublicationPlan::new(
+        duplicate_plan_id,
+        context.tenant_id,
+        repository_id,
+        publication,
+        context.subject_digest,
+        context.authorization_epoch,
+        [0x83; 32],
+        [0x84; 32],
+        [0; 32],
+        [0x9b; 32],
+        duplicate_reservation.clone(),
+        2,
+        u64::from(duplicate_chunk.encoded_bytes),
+    )
+    .unwrap();
+    let commitments = [AggregateChunkCommitment {
+        chunk_ordinal: 0,
+        item_count: 2,
+        encoded_bytes: duplicate_chunk.encoded_bytes,
+        chunk_digest: duplicate_chunk.chunk_digest,
+    }];
+    let exact_digest = aggregate_plan_digest(&provisional, &commitments).unwrap();
+    let duplicate_plan = AggregatePublicationPlan::new(
+        duplicate_plan_id,
+        context.tenant_id,
+        repository_id,
+        publication,
+        context.subject_digest,
+        context.authorization_epoch,
+        [0x83; 32],
+        [0x84; 32],
+        exact_digest,
+        [0x9b; 32],
+        duplicate_reservation,
+        2,
+        u64::from(duplicate_chunk.encoded_bytes),
+    )
+    .unwrap();
+    let mut writer = store.begin_lifecycle_plan_for_test(duplicate_plan).unwrap();
+    assert_eq!(
+        writer.append_chunk(duplicate_chunk).unwrap_err().code,
+        DomainErrorCode::ObjectInvalid
+    );
+}
+
+fn aggregate_lifecycle_item(index: u32) -> LifecycleObjectBinding {
+    let mut opaque_key = [0_u8; 32];
+    opaque_key[28..].copy_from_slice(&index.to_be_bytes());
+    let mut resource_opaque_digest = opaque_key;
+    resource_opaque_digest[0] = 0x91;
+    LifecycleObjectBinding {
+        opaque_key,
+        object_ref: ObjectRef {
+            kind: ObjectKind::Chunk,
+            digest: opaque_key,
+        },
+        expected_state: LifecycleState::Available,
+        expected_generation: 2,
+        expected_health: LifecycleHealth::Healthy,
+        expected_health_generation: Some(1),
+        current_health_observation_digest: Some([0x92; 32]),
+        authority_binding_digest: [0x93; 32],
+        current_backend_receipt_digest: Some([0x94; 32]),
+        current_verification_receipt_digest: None,
+        current_deletion_receipt_digest: None,
+        transition_backend_receipt_digest: None,
+        transition_verification_receipt_digest: None,
+        transition_deletion_receipt_digest: None,
+        resource_opaque_digest,
+    }
+}
+
+fn public_uuid_bytes(seed: u8) -> [u8; 16] {
+    let mut bytes = [seed; 16];
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    bytes
+}
+
+#[allow(clippy::too_many_arguments)]
+fn lifecycle_receipt(
+    receipt_digest: [u8; 32],
+    kind: LifecycleReceiptKind,
+    tenant_id: TenantId,
+    repository_id: RepositoryId,
+    opaque_key: [u8; 32],
+    object_ref: ObjectRef,
+    expected_state: LifecycleState,
+    expected_generation: u64,
+    target_state: LifecycleState,
+    target_generation: u64,
+    authority_binding_digest: [u8; 32],
+    health_result: Option<LifecycleHealth>,
+    health_generation: Option<u64>,
+) -> LifecycleReceiptWrite {
+    let mut receipt = LifecycleReceiptWrite {
+        receipt_digest,
+        kind,
+        tenant_id,
+        repository_id,
+        opaque_key,
+        object_ref,
+        expected_state,
+        expected_generation,
+        target_state,
+        target_generation,
+        authority_binding_digest,
+        health_result,
+        health_generation,
+        evidence_digest: [0; 32],
+    };
+    receipt.evidence_digest = receipt.binding_digest();
+    assert!(receipt.is_valid());
+    receipt
 }
 
 fn legacy_oversized_status_report(
@@ -1771,7 +2432,7 @@ fn migration_v1_v5_upgrade_report(database_url: &str) {
     };
     let mut store = PostgresMetadataStore::connect(database_url).unwrap();
     let upgrade = store.migrate(options).unwrap();
-    assert_eq!((upgrade.applied, upgrade.already_applied), (21, 3));
+    assert_eq!((upgrade.applied, upgrade.already_applied), (24, 3));
     drop(store);
 
     let mut client = Client::connect(database_url, NoTls).unwrap();
@@ -1824,8 +2485,8 @@ fn migration_report(database_url: &str) {
         application_version: "0.1.0",
         compatibility_fence_open: true,
     };
-    assert_eq!(store.migrate(options).unwrap().applied, 24);
-    assert_eq!(store.migrate(options).unwrap().already_applied, 24);
+    assert_eq!(store.migrate(options).unwrap().applied, 27);
+    assert_eq!(store.migrate(options).unwrap().already_applied, 27);
     drop(store);
 
     let mut client = Client::connect(database_url, NoTls).unwrap();
@@ -1954,7 +2615,7 @@ fn migration_report(database_url: &str) {
             "INSERT INTO ogvcs_metadata.schema_migrations
              (version, phase, checksum_sha256, state, minimum_application_version,
               maximum_application_version, completed_at)
-             VALUES (9, 'expand', repeat('a', 64), 'completed', '0.2.0', '0.2.x', clock_timestamp())",
+             VALUES (10, 'expand', repeat('a', 64), 'completed', '0.2.0', '0.2.x', clock_timestamp())",
             &[],
         )
         .unwrap();
@@ -1968,7 +2629,7 @@ fn migration_report(database_url: &str) {
     let mut client = Client::connect(database_url, NoTls).unwrap();
     client
         .execute(
-            "DELETE FROM ogvcs_metadata.schema_migrations WHERE version = 9",
+            "DELETE FROM ogvcs_metadata.schema_migrations WHERE version = 10",
             &[],
         )
         .unwrap();

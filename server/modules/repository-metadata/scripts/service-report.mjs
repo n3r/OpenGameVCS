@@ -20,6 +20,7 @@ const cases = [
   'migration-repeat-checksum-downgrade',
   'consistency-token-primary-and-lag',
   'bounded-ancestry-file-path-history',
+  'lifecycle-v9-atomic-publication',
 ];
 
 function report(status, rows, detail) {

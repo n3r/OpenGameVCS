@@ -32,6 +32,32 @@ must not become an `advanceBranch` or protected-state oracle. The low-level
 composition primitives remain available only with `legacy-test-adapter` for
 coordinator tests.
 
+Schema v9 additively reserves the repository-backed object lifecycle ledger for
+the OGVCS-008/010 composition boundary. It stores exact repository/tenant,
+opaque object key and `ObjectRef`, generation/state/health, immutable backend,
+verification, deletion, reopen, and health-observation receipt facts, one-use
+receipt consumptions, publication reachability, deletion fences, direct
+application facts, and an internal protected outbox. `not-applicable` is valid
+exactly when no health generation/observation exists; `available` and
+`quarantined` may therefore be initially unobserved, while submit consumes only
+an exact healthy available/quarantined binding. Content manifests retain their
+exact production-verification receipt independently of quarantine-revival
+evidence.
+
+This is a dormant internal prerequisite, not completion evidence for OGVCS-008
+or OGVCS-010. The default identity-bound API exposes no generic lifecycle or
+publication bypass. Its current private metadata-transaction hook is
+submit-only and rechecks the exact `Publish` authorized view; GC and transfer
+variants remain closed until their own OGVCS-009 authority participants exist.
+Likewise, aggregate plans can be streamed and sealed structurally in bounded
+1,000-item/1 MiB chunks for storage testing, but cannot be applied until the
+ratified aggregate-v3 key-ring-authenticated receipt is consumed and
+revalidated in the same transaction. A structural commitment is not an HMAC
+authority seal, and the internal lifecycle application receipt is not the
+authenticated/durable OGVCS-010 commit receipt. The stored audit UUID is only a
+future audit-correlation placeholder; it does not claim an OGVCS-009 audit
+append.
+
 For admitted operations, the adapter invokes OGVCS-009 authorization on the
 exact live PostgreSQL transaction, derives subject, epoch, and authenticated
 scope exclusively from the sealed view, and domain-separates metadata scope by
@@ -119,7 +145,13 @@ Schema v8 additively binds committed identity idempotency rows to the exact
 canonical reference/resource/result authority tuple. It preserves historical
 authority-null legacy rows (including old near-limit JSONB layouts), while new
 identity-bound rows enforce 1,000-resource, 8 MiB resource-batch, and 1 MiB
-safe-result storage/text ceilings.
+safe-result storage/text ceilings. Schema v9 is additive and deliberately does
+not infer lifecycle durability, health, or reachability from legacy metadata
+objects or references. Direct commands are sorted/unique and bounded to 1,024
+objects; aggregate declarations are bounded to 100,000 objects and are inserted
+with one set-based `UNNEST` statement per bounded chunk. Sealing recomputes
+exact payload/chunk/plan digests and global key order without a 100,000-element
+Rust vector or per-item database query loop.
 
 Production persistence deployment evidence, public API/HTTP bindings, external chunk-store
 composition, and hosted production-service evidence remain deferred. The
@@ -149,7 +181,9 @@ project-list cursor isolation, bounded ancestry/FileID/path history,
 authorization non-disclosure and revalidation, outbox delivery leases, FileID
 races/import replay/tombstones, transaction poisoning and fault rollbacks,
 migration repeat/checksum/downgrade behavior, and representable replica-lag
-token behavior.
+token behavior. The lifecycle-v9 row adds corrected health-axis constraints,
+exact receipt binding, atomic direct application facts, and reduced 1,000+1
+aggregate chunk/order/tamper coverage; it is not an exact-scale campaign.
 The current bounded three-platform result and retained PostgreSQL report are in
 the [OGVCS-006 candidate evidence packet](../../../docs/evidence/OGVCS-006/README.md).
 The exact million-entry campaign remains excluded from ordinary presubmit.
