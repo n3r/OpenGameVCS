@@ -14,8 +14,8 @@ can honestly certify a remote repository, capability, authentication session,
 or lifecycle state at this baseline.
 
 The candidate consequently owns only local values whose authority it can prove:
-source resolution, a versioned result envelope, private metadata layout,
-interruption recovery, a credential **availability** seam, and redaction. Its
+source resolution, a manifest-bound versioned result envelope, private metadata layout,
+post-publication interruption recovery, a credential **availability** seam, and redaction. Its
 declaration values are retained as one-way digests labelled
 `unverified-local-declaration`; no server or raw credential is touched.
 
@@ -23,8 +23,12 @@ declaration values are retained as one-way digests labelled
 
 The candidate does not preflight OGVCS-004 working-tree semantics because it
 does not mutate a repository path. It fails closed where its own filesystem
-ownership/permission check is not supportable; a Windows ACL adapter remains a
-required predecessor before claiming cross-platform workspace safety.
+ownership/permission check is not supportable. macOS owner, mode, and extended
+ACL checks are enforced; a Windows ACL adapter remains a required predecessor
+before claiming cross-platform workspace safety. Continuously hostile
+same-authority namespace replacement remains outside this local candidate's
+documented boundary, and the binary does not yet expose user-facing progress or
+signal cancellation.
 
 The following must wait for predecessor contracts:
 

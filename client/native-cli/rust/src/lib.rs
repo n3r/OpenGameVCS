@@ -15,12 +15,22 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 #[cfg(not(windows))]
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
+#[cfg(windows)]
+use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
+#[cfg(target_os = "macos")]
+use std::{ffi::c_void, os::fd::AsRawFd};
 
-pub const CONTRACT_VERSION: &str = "0.1.0-rc.1";
-pub const RESULT_SCHEMA: &str = "ogvcs.cli-workspace/result/v1";
-pub const CONFIG_SCHEMA: &str = "ogvcs.cli-workspace/config-resolution/v1";
-pub const WORKSPACE_SCHEMA: &str = "ogvcs.cli-workspace/workspace/v1";
-pub const DIAGNOSTIC_SCHEMA: &str = "ogvcs.cli-workspace/diagnostic-preview/v1";
+mod generated_contract;
+
+pub use generated_contract::{
+    CONFIG_SCHEMA, CONTRACT_ARTIFACT_SET_SHA256, CONTRACT_MANIFEST_SHA256, CONTRACT_VECTOR_SHA256,
+    CONTRACT_VERSION, DIAGNOSTIC_SCHEMA, EXIT_CLASS_CODES, INITIALIZATION_SCHEMA, RESULT_SCHEMA,
+    WORKSPACE_METADATA_SCHEMA, WORKSPACE_REPORT_SCHEMA,
+};
+use generated_contract::{
+    EXIT_CODE_CANCELLED, EXIT_CODE_INPUT, EXIT_CODE_INTERACTION_REQUIRED, EXIT_CODE_INTERNAL,
+    EXIT_CODE_SUCCESS, EXIT_CODE_UNAVAILABLE, EXIT_CODE_UNSUPPORTED, EXIT_CODE_WORKSPACE,
+};
 
 const WORKSPACE_FORMAT_VERSION: u32 = 1;
 const MAX_CONFIG_BYTES: u64 = 32 * 1024;
@@ -42,14 +52,14 @@ pub enum ExitClass {
 impl ExitClass {
     pub const fn exit_code(self) -> i32 {
         match self {
-            Self::Success => 0,
-            Self::Input => 2,
-            Self::Workspace => 3,
-            Self::Unsupported => 4,
-            Self::Cancelled => 5,
-            Self::InteractionRequired => 6,
-            Self::Unavailable => 7,
-            Self::Internal => 70,
+            Self::Success => EXIT_CODE_SUCCESS,
+            Self::Input => EXIT_CODE_INPUT,
+            Self::Workspace => EXIT_CODE_WORKSPACE,
+            Self::Unsupported => EXIT_CODE_UNSUPPORTED,
+            Self::Cancelled => EXIT_CODE_CANCELLED,
+            Self::InteractionRequired => EXIT_CODE_INTERACTION_REQUIRED,
+            Self::Unavailable => EXIT_CODE_UNAVAILABLE,
+            Self::Internal => EXIT_CODE_INTERNAL,
         }
     }
 }
@@ -61,6 +71,7 @@ pub struct CliError {
     pub message: &'static str,
     pub next_step: &'static str,
     pub data: Value,
+    machine_output: Option<bool>,
 }
 
 impl CliError {
@@ -76,11 +87,17 @@ impl CliError {
             message,
             next_step,
             data: json!({}),
+            machine_output: None,
         }
     }
 
     fn with_data(mut self, data: Value) -> Self {
         self.data = data;
+        self
+    }
+
+    fn with_machine_output(mut self, machine: bool) -> Self {
+        self.machine_output = Some(machine);
         self
     }
 }
@@ -170,6 +187,7 @@ impl ProcessOutcome {
         let envelope = json!({
             "schema": RESULT_SCHEMA,
             "contractVersion": CONTRACT_VERSION,
+            "contractManifestSha256": CONTRACT_MANIFEST_SHA256,
             "ok": self.ok,
             "exitClass": self.exit_class,
             "code": self.code,
@@ -178,7 +196,10 @@ impl ProcessOutcome {
             "data": self.data,
         });
         serde_json::to_string(&envelope).unwrap_or_else(|_| {
-            "{\"schema\":\"ogvcs.cli-workspace/result/v1\",\"contractVersion\":\"0.1.0-rc.1\",\"ok\":false,\"exitClass\":\"internal\",\"code\":\"INTERNAL_SERIALIZATION\",\"message\":\"The candidate could not serialize a result.\",\"nextStep\":\"Retry with a supported local command.\",\"data\":{}}".to_owned()
+            format!(
+                "{{\"schema\":\"{}\",\"contractVersion\":\"{}\",\"contractManifestSha256\":\"{}\",\"ok\":false,\"exitClass\":\"internal\",\"code\":\"INTERNAL_SERIALIZATION\",\"message\":\"The candidate could not serialize a result.\",\"nextStep\":\"Retry with a supported local command.\",\"data\":{{}}}}",
+                RESULT_SCHEMA, CONTRACT_VERSION, CONTRACT_MANIFEST_SHA256
+            )
         })
     }
 }
@@ -349,14 +370,23 @@ fn load_config(path: Option<&Path>) -> Result<ConfigLayer, CliError> {
 fn read_config_bounded(path: &Path) -> Result<Vec<u8>, CliError> {
     #[cfg(windows)]
     {
-        let metadata = fs::symlink_metadata(path).map_err(|_| config_error())?;
-        if metadata.file_type().is_symlink()
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0000_0400;
+        const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+        let mut options = OpenOptions::new();
+        options
+            .read(true)
+            .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+        let mut file = options.open(path).map_err(|_| config_error())?;
+        let metadata = file.metadata().map_err(|_| config_error())?;
+        if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
             || !metadata.is_file()
             || metadata.len() > MAX_CONFIG_BYTES
         {
             return Err(config_error());
         }
-        let bytes = fs::read(path).map_err(|_| config_error())?;
+        let mut bytes = Vec::with_capacity(metadata.len() as usize);
+        let mut limited = Read::take(&mut file, MAX_CONFIG_BYTES + 1);
+        Read::read_to_end(&mut limited, &mut bytes).map_err(|_| config_error())?;
         if bytes.len() as u64 > MAX_CONFIG_BYTES {
             return Err(config_error());
         }
@@ -634,7 +664,7 @@ pub fn create_workspace(
     let stage = root.join(format!(".ogvcs-init-v1-{}", random_hex(16)?));
     create_private_directory(&stage)?;
     let metadata = WorkspaceMetadata {
-        schema: WORKSPACE_SCHEMA.to_owned(),
+        schema: WORKSPACE_METADATA_SCHEMA.to_owned(),
         format_version: WORKSPACE_FORMAT_VERSION,
         state: WorkspaceState::Staging,
         workspace_id: workspace_id.clone(),
@@ -649,7 +679,7 @@ pub fn create_workspace(
         created_at_unix_ms: now_unix_ms()?,
     };
     let marker = InitializationMarker {
-        schema: "ogvcs.cli-workspace/initialization/v1".to_owned(),
+        schema: INITIALIZATION_SCHEMA.to_owned(),
         format_version: WORKSPACE_FORMAT_VERSION,
         state: "initializing".to_owned(),
         workspace_id: workspace_id.clone(),
@@ -820,12 +850,13 @@ pub fn create_diagnostics(
     fields.insert("preview".to_owned(), Value::Bool(false));
     fields.insert("written".to_owned(), Value::Bool(true));
     fields.insert("artifactName".to_owned(), Value::String(name.to_owned()));
-    write_json_new(&destination, &artifact)?;
+    let mut persisted_bytes = serde_json::to_vec(&artifact).map_err(|_| internal_error())?;
+    persisted_bytes.push(b'\n');
+    write_bytes_new(&destination, &persisted_bytes)?;
     sync_directory(&diagnostics)?;
-    let bytes = serde_json::to_vec(&artifact).map_err(|_| internal_error())?;
     artifact.as_object_mut().ok_or_else(internal_error)?.insert(
         "artifactDigest".to_owned(),
-        Value::String(digest_bytes(&bytes)),
+        Value::String(digest_bytes(&persisted_bytes)),
     );
     Ok(artifact)
 }
@@ -860,13 +891,17 @@ fn validate_binding(binding: &WorkspaceBindingInput) -> Result<(), CliError> {
 }
 
 fn report_from_metadata(metadata: &WorkspaceMetadata) -> Result<WorkspaceReport, CliError> {
+    if metadata.state != WorkspaceState::Ready {
+        return Err(workspace_error(
+            "WORKSPACE_RECOVERY_REQUIRED",
+            "Workspace initialization has not reached a reportable ready state.",
+            "Run workspace recover before using this workspace.",
+        ));
+    }
     Ok(WorkspaceReport {
-        schema: WORKSPACE_SCHEMA,
+        schema: WORKSPACE_REPORT_SCHEMA,
         contract_version: CONTRACT_VERSION,
-        state: match metadata.state {
-            WorkspaceState::Ready => "ready",
-            WorkspaceState::Staging => "staging",
-        },
+        state: "ready",
         root_digest: metadata.root_digest.clone(),
         workspace_id_digest: digest_text(&metadata.workspace_id),
         binding_verification: "unverified-local-declaration",
@@ -877,7 +912,7 @@ fn validated_root(requested_root: &Path) -> Result<PathBuf, CliError> {
     #[cfg(windows)]
     {
         let _ = requested_root;
-        return Err(unsupported_workspace_error());
+        Err(unsupported_workspace_error())
     }
     #[cfg(not(windows))]
     {
@@ -973,7 +1008,7 @@ fn validate_workspace_metadata(
     metadata: &WorkspaceMetadata,
     root_digest: &str,
 ) -> Result<(), CliError> {
-    let valid = metadata.schema == WORKSPACE_SCHEMA
+    let valid = metadata.schema == WORKSPACE_METADATA_SCHEMA
         && metadata.format_version == WORKSPACE_FORMAT_VERSION
         && valid_workspace_id(&metadata.workspace_id)
         && valid_digest(&metadata.root_digest)
@@ -999,7 +1034,7 @@ fn validate_marker(
     marker: &InitializationMarker,
     metadata: &WorkspaceMetadata,
 ) -> Result<(), CliError> {
-    if marker.schema == "ogvcs.cli-workspace/initialization/v1"
+    if marker.schema == INITIALIZATION_SCHEMA
         && marker.format_version == WORKSPACE_FORMAT_VERSION
         && matches!(marker.state.as_str(), "initializing" | "complete")
         && marker.workspace_id == metadata.workspace_id
@@ -1053,7 +1088,7 @@ fn ensure_private_directory(path: &Path) -> Result<(), CliError> {
     #[cfg(windows)]
     {
         let _ = path;
-        return Err(unsupported_workspace_error());
+        Err(unsupported_workspace_error())
     }
     #[cfg(not(windows))]
     {
@@ -1123,6 +1158,7 @@ fn open_private_directory(path: &Path) -> Result<File, CliError> {
             "Use an owned directory with no group or other access.",
         ));
     }
+    ensure_no_extended_acl(&file)?;
     Ok(file)
 }
 
@@ -1152,7 +1188,46 @@ fn open_private_regular_file(path: &Path) -> Result<File, CliError> {
             "Use an owned workspace with no group or other access.",
         ));
     }
+    ensure_no_extended_acl(&file)?;
     Ok(file)
+}
+
+#[cfg(all(not(windows), not(target_os = "macos")))]
+fn ensure_no_extended_acl(_: &File) -> Result<(), CliError> {
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn ensure_no_extended_acl(file: &File) -> Result<(), CliError> {
+    const ACL_TYPE_EXTENDED: libc::c_int = 0x0000_0100;
+
+    extern "C" {
+        fn acl_get_fd_np(fd: libc::c_int, acl_type: libc::c_int) -> *mut c_void;
+        fn acl_free(object: *mut c_void) -> libc::c_int;
+    }
+
+    let acl = unsafe { acl_get_fd_np(file.as_raw_fd(), ACL_TYPE_EXTENDED) };
+    if acl.is_null() {
+        return if io::Error::last_os_error().raw_os_error() == Some(libc::ENOENT) {
+            Ok(())
+        } else {
+            Err(unsafe_workspace_acl_error())
+        };
+    }
+    let free_status = unsafe { acl_free(acl) };
+    if free_status != 0 {
+        return Err(unsafe_workspace_acl_error());
+    }
+    Err(unsafe_workspace_acl_error())
+}
+
+#[cfg(target_os = "macos")]
+fn unsafe_workspace_acl_error() -> CliError {
+    workspace_error(
+        "UNSAFE_WORKSPACE",
+        "Workspace ownership, permissions, or extended ACLs are unsafe.",
+        "Use an owned directory with no group, other, or extended ACL access.",
+    )
 }
 
 #[cfg(windows)]
@@ -1161,11 +1236,14 @@ fn open_private_regular_file(_: &Path) -> Result<File, CliError> {
 }
 
 fn write_json_new<T: Serialize>(path: &Path, value: &T) -> Result<(), CliError> {
-    let bytes = serde_json::to_vec(value).map_err(|_| internal_error())?;
+    let mut bytes = serde_json::to_vec(value).map_err(|_| internal_error())?;
+    bytes.push(b'\n');
+    write_bytes_new(path, &bytes)
+}
+
+fn write_bytes_new(path: &Path, bytes: &[u8]) -> Result<(), CliError> {
     let mut file = create_private_file(path, true)?;
-    file.write_all(&bytes)
-        .map_err(|_| write_workspace_error())?;
-    file.write_all(b"\n").map_err(|_| write_workspace_error())?;
+    file.write_all(bytes).map_err(|_| write_workspace_error())?;
     file.sync_all().map_err(|_| write_workspace_error())?;
     Ok(())
 }
@@ -1210,7 +1288,7 @@ fn sync_directory(path: &Path) -> Result<(), CliError> {
     #[cfg(windows)]
     {
         let _ = path;
-        return Err(unsupported_workspace_error());
+        Err(unsupported_workspace_error())
     }
     #[cfg(not(windows))]
     {
@@ -1252,7 +1330,20 @@ fn now_unix_ms() -> Result<u64, CliError> {
 }
 
 fn digest_path(path: &Path) -> String {
-    digest_bytes(path.as_os_str().to_string_lossy().as_bytes())
+    #[cfg(not(windows))]
+    {
+        use std::os::unix::ffi::OsStrExt;
+        digest_bytes(path.as_os_str().as_bytes())
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        let mut bytes = Vec::new();
+        for unit in path.as_os_str().encode_wide() {
+            bytes.extend_from_slice(&unit.to_le_bytes());
+        }
+        digest_bytes(&bytes)
+    }
 }
 
 fn digest_text(value: &str) -> String {
@@ -1384,8 +1475,10 @@ where
     let args: Vec<String> = args.into_iter().map(Into::into).collect();
     let machine_hint = requested_machine_output(&args);
     let provider = UnavailableCredentialProvider;
-    run_with_provider(&args, &provider)
-        .unwrap_or_else(|error| ProcessOutcome::failure(machine_hint, error))
+    run_with_provider(&args, &provider).unwrap_or_else(|error| {
+        let machine = error.machine_output.unwrap_or(machine_hint);
+        ProcessOutcome::failure(machine, error)
+    })
 }
 
 pub fn run_with_provider(
@@ -1394,6 +1487,15 @@ pub fn run_with_provider(
 ) -> Result<ProcessOutcome, CliError> {
     let parsed = parse_global(args)?;
     let config = resolve_config(&parsed.config)?;
+    let machine = config.machine_output();
+    run_resolved(parsed, config, provider).map_err(|error| error.with_machine_output(machine))
+}
+
+fn run_resolved(
+    parsed: GlobalOptions,
+    config: ResolvedConfig,
+    provider: &dyn CredentialProvider,
+) -> Result<ProcessOutcome, CliError> {
     let machine = config.machine_output();
     let command = parsed.command.as_slice();
     let (code, message, data) = match command {
@@ -1512,9 +1614,12 @@ pub fn run_with_provider(
 }
 
 fn requested_machine_output(args: &[String]) -> bool {
-    args.windows(2)
-        .any(|pair| pair[0] == "--format" && pair[1] == "json")
-        || env::var("OGVCS_OUTPUT").ok().as_deref() == Some("json")
+    for pair in args.windows(2) {
+        if pair[0] == "--format" {
+            return pair[1] == "json";
+        }
+    }
+    env::var("OGVCS_OUTPUT").ok().as_deref() == Some("json")
 }
 
 fn named_values(
@@ -1752,6 +1857,26 @@ mod tests {
         );
     }
 
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn inherited_macos_acl_is_rejected_before_metadata_publication() {
+        use std::process::Command;
+
+        let directory = TestDirectory::new("macos-acl");
+        let status = Command::new("chmod")
+            .args([
+                "+a",
+                "everyone allow list,search,readattr,readextattr,readsecurity,file_inherit,directory_inherit",
+            ])
+            .arg(&directory.path)
+            .status()
+            .unwrap();
+        assert!(status.success());
+        let error = create_workspace(&directory.path, binding(), &NeverCancel).unwrap_err();
+        assert_eq!(error.code, "UNSAFE_WORKSPACE");
+        assert!(!directory.path.join(".ogvcs").exists());
+    }
+
     #[cfg(not(windows))]
     #[test]
     fn explicit_diagnostic_creation_is_private_and_preview_does_not_write() {
@@ -1782,14 +1907,14 @@ mod tests {
         )
         .unwrap();
         assert_eq!(created["written"], true);
-        let artifact = fs::read_to_string(
-            directory
-                .path
-                .join(".ogvcs")
-                .join("diagnostics")
-                .join("support.json"),
-        )
-        .unwrap();
+        let artifact_path = directory
+            .path
+            .join(".ogvcs")
+            .join("diagnostics")
+            .join("support.json");
+        let artifact_bytes = fs::read(&artifact_path).unwrap();
+        assert_eq!(created["artifactDigest"], digest_bytes(&artifact_bytes));
+        let artifact = String::from_utf8(artifact_bytes).unwrap();
         assert!(!artifact.contains("diagnostic-write"));
         assert!(!artifact.contains(&"a".repeat(64)));
     }

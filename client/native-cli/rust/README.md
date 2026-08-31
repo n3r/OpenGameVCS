@@ -10,14 +10,18 @@ operations without asserting that the larger OGVCS-011 journey is complete.
   workspace > user profile > system default`, including a source report for
   nonsecret values;
 - versioned result envelopes and stable exit classes;
-- atomic private `.ogvcs` metadata creation, inspection, and recovery after a
-  local cancellation;
+- atomic private `.ogvcs` metadata creation, inspection, and journal recovery
+  after an interrupted publication;
+- a cooperative cancellation/fault-injection seam for bounded library tests;
 - a noninteractive credential-provider seam that never obtains a credential;
 - explicit, redacted diagnostic preview and creation.
 
 The machine result envelope is `ogvcs.cli-workspace/result/v1`, and this crate
-implements contract version `0.1.0-rc.1`. The companion review and schemas are
-under [`spec/cli-workspace/v1`](../../../spec/cli-workspace/v1).
+implements contract version `0.1.0-rc.1`. Every envelope carries the SHA-256 of
+the generated companion manifest. Contract constants, exit codes, schema IDs,
+and executable vectors are generated from
+[`spec/cli-workspace/v1`](../../../spec/cli-workspace/v1); the sync check fails
+if the crate and that authenticated artifact set drift.
 
 ## Deliberate boundaries
 
@@ -31,14 +35,25 @@ or OGVCS-041 negotiated protocol. A future owner must replace that seam only
 after those public bindings exist.
 
 Metadata commands fail closed when private ownership/permission checks cannot
-be made. The first candidate therefore reports `WORKSPACE_SAFETY_UNSUPPORTED`
-on Windows instead of making an unsupported ACL-security claim.
+be made. On macOS, any extended ACL entry is rejected in addition to the owner
+and mode checks. The first candidate reports `WORKSPACE_SAFETY_UNSUPPORTED` on
+Windows instead of making an unsupported ACL-security claim.
+
+The binary does not yet expose signal handling, progress, or a user-facing
+cancellation control; the cancellation probe is a library/test seam only.
+Crash recovery covers a control directory that reached atomic publication.
+The root and its namespace ancestors must not be concurrently replaced by code
+running with the same operating-system authority; this candidate rejects
+observed final symlinks and reparse points but does not claim a handle-relative
+defense against a continuously hostile same-authority process.
 
 ## Local validation
 
 Rust 1.82 is required. The normal bounded checks are:
 
 ```sh
+node ../../../spec/cli-workspace/v1/scripts/generate.mjs --check
+node scripts/sync-contract.mjs --check
 cargo fmt --all -- --check
 cargo test --locked --offline
 cargo clippy --locked --offline --all-targets -- -D warnings

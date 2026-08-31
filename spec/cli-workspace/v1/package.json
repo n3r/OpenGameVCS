@@ -8,13 +8,17 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "node validate-spec.mjs"
+    "check": "node scripts/generate.mjs --check && node validate-spec.mjs",
+    "generate": "node scripts/generate.mjs",
+    "test": "node scripts/generate.mjs --check && node validate-spec.mjs"
   },
   "files": [
     "README.md",
     "LICENSE",
+    "manifest.json",
     "registries",
     "schemas",
+    "scripts",
     "vectors",
     "validate-spec.mjs"
   ]

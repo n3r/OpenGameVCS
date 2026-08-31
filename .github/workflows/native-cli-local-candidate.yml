@@ -7,6 +7,8 @@ on:
       - 'client/native-cli/rust/**'
       - 'spec/cli-workspace/v1/**'
       - 'docs/reviews/OGVCS-011-local-foundation-boundary-review.md'
+      - 'package.json'
+      - 'package-lock.json'
   push:
     branches: [main]
     paths:
@@ -14,6 +16,8 @@ on:
       - 'client/native-cli/rust/**'
       - 'spec/cli-workspace/v1/**'
       - 'docs/reviews/OGVCS-011-local-foundation-boundary-review.md'
+      - 'package.json'
+      - 'package-lock.json'
   workflow_dispatch:
 
 permissions:
@@ -43,7 +47,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@7d11e79e1714f6b6da93cac39ad8435666f5c337 # 1.82.0
         with:
           components: clippy, rustfmt
+      - run: node spec/cli-workspace/v1/scripts/generate.mjs --check
+      - run: node client/native-cli/rust/scripts/sync-contract.mjs --check
       - run: node spec/cli-workspace/v1/validate-spec.mjs
+      - run: node --test spec/cli-workspace/v1/test/*.test.mjs
       - run: cargo fmt --manifest-path client/native-cli/rust/Cargo.toml -- --check
       - run: cargo test --manifest-path client/native-cli/rust/Cargo.toml --locked
       - run: cargo clippy --manifest-path client/native-cli/rust/Cargo.toml --locked --all-targets -- -D warnings

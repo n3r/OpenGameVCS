@@ -16,7 +16,7 @@ discovery, sync, submit, status, lock, or working-tree-mutation contract.
 ## Stable result shape
 
 Every JSON result uses schema `ogvcs.cli-workspace/result/v1`, includes this
-contract version, a boolean `ok`, one of the exit classes in
+contract version and the exact companion-manifest SHA-256, a boolean `ok`, one of the exit classes in
 [`registries/exit-classes.json`](registries/exit-classes.json), a stable code,
 and an object-valued `data` member. Failures also carry a safe human message
 and one actionable `nextStep`. Implementations must not expose underlying path,
@@ -42,9 +42,17 @@ an interruption after publish leaves an initializing journal record, and
 `workspace open` returns `WORKSPACE_RECOVERY_REQUIRED` until `workspace
 recover` checks the matching record and marks it complete. The completed record
 is retained as part of the local atomicity proof. No operation makes a network
-request. The corresponding schemas are
+request. The binary does not yet install a signal handler or expose progress;
+the cancellation points exercised by the vectors are a cooperative library
+seam. The on-disk and redacted command-report schemas are
 [`WorkspaceMetadata.schema.json`](schemas/WorkspaceMetadata.schema.json) and
+[`WorkspaceReport.schema.json`](schemas/WorkspaceReport.schema.json); the
+journal schema is
 [`InitializationRecord.schema.json`](schemas/InitializationRecord.schema.json).
+The root and namespace ancestors must not be concurrently replaced by a
+process with the same operating-system authority. Final links/reparse points
+are rejected, but this candidate does not claim directory-handle-relative
+protection against a continuously hostile same-authority process.
 
 Repository/branch/baseline/spec inputs must already be opaque lower-case
 32-byte digests; the candidate does not accept raw declarations. They are
@@ -62,7 +70,11 @@ classes—not paths, identities, endpoints, declaration inputs, or secrets.
 
 ## Contract validation
 
-Run `node validate-spec.mjs` (or `npm test`) from this directory. Runtime
-execution and hostile recovery coverage live in the Rust crate's bounded test
-suite; this spec validator deliberately does not contact a server or run a
-scale workload.
+`manifest.json` authenticates every shipped contract artifact. The Rust binding
+and its copied executable vectors are generated from that manifest and checked
+for drift. Run `npm test` from this directory, then run
+`node --test test/*.test.mjs` for semantic-mutation and packed-package proofs.
+The validator independently checks manifest bytes, validates example instances
+against each schema, and executes the six concrete reference vectors. Runtime
+execution and hostile recovery coverage also live in the Rust crate's bounded
+test suite; none of these checks contacts a server or runs a scale workload.

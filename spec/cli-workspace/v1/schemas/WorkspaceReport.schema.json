@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opengamevcs.dev/schemas/cli-workspace/workspace-report/v1",
+  "title": "OGVCS redacted local workspace report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "contractVersion", "state", "rootDigest", "workspaceIdDigest", "bindingVerification"],
+  "properties": {
+    "schema": { "const": "ogvcs.cli-workspace/workspace-report/v1" },
+    "contractVersion": { "const": "0.1.0-rc.1" },
+    "state": { "const": "ready" },
+    "rootDigest": { "$ref": "#/$defs/digest" },
+    "workspaceIdDigest": { "$ref": "#/$defs/digest" },
+    "bindingVerification": { "const": "unverified-local-declaration" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}

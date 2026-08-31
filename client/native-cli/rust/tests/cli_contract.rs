@@ -56,6 +56,7 @@ fn binary_emits_versioned_machine_results_and_never_prompts_noninteractive_auth(
     let result = machine(&config);
     assert_eq!(result["schema"], "ogvcs.cli-workspace/result/v1");
     assert_eq!(result["contractVersion"], "0.1.0-rc.1");
+    assert_eq!(result["contractManifestSha256"].as_str().unwrap().len(), 64);
     assert_eq!(result["exitClass"], "success");
     assert_eq!(result["data"]["endpoint"]["source"], "system-default");
 
@@ -67,6 +68,19 @@ fn binary_emits_versioned_machine_results_and_never_prompts_noninteractive_auth(
     assert_eq!(failure["code"], "AUTHENTICATION_REQUIRED");
     assert_eq!(failure["data"]["prompted"], false);
     assert!(auth.stderr.is_empty());
+
+    let human_override = Command::new(env!("CARGO_BIN_EXE_ogvcs"))
+        .args(["--format", "human", "--non-interactive", "auth", "check"])
+        .env("OGVCS_OUTPUT", "json")
+        .env_remove("OGVCS_ENDPOINT")
+        .env_remove("OGVCS_PROFILE")
+        .output()
+        .unwrap();
+    assert_eq!(human_override.status.code(), Some(6));
+    assert!(human_override.stdout.is_empty());
+    assert!(String::from_utf8(human_override.stderr)
+        .unwrap()
+        .contains("error[AUTHENTICATION_REQUIRED]"));
 }
 
 #[cfg(not(windows))]
@@ -94,6 +108,10 @@ fn binary_workspace_and_diagnostic_results_do_not_emit_raw_root_or_declarations(
     let created = machine(&create);
     let rendered = serde_json::to_string(&created).unwrap();
     assert_eq!(created["code"], "WORKSPACE_CREATED");
+    assert_eq!(
+        created["data"]["schema"],
+        "ogvcs.cli-workspace/workspace-report/v1"
+    );
     assert_eq!(
         created["data"]["bindingVerification"],
         "unverified-local-declaration"
@@ -140,4 +158,30 @@ fn binary_workspace_and_diagnostic_results_do_not_emit_raw_root_or_declarations(
         written["data"]["artifactDigest"].as_str().unwrap().len(),
         64
     );
+}
+
+#[cfg(windows)]
+#[test]
+fn binary_workspace_commands_fail_closed_without_an_acl_adapter() {
+    let root = env::temp_dir().to_string_lossy().into_owned();
+    let output = invoke(&[
+        "--format",
+        "json",
+        "workspace",
+        "create",
+        "--root",
+        &root,
+        "--repository-declaration-digest",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "--branch-declaration-digest",
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "--baseline-declaration-digest",
+        "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "--spec-declaration-digest",
+        "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    ]);
+    assert_eq!(output.status.code(), Some(4));
+    let result = machine(&output);
+    assert_eq!(result["code"], "WORKSPACE_SAFETY_UNSUPPORTED");
+    assert_eq!(result["exitClass"], "unsupported");
 }

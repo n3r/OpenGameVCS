@@ -15,13 +15,23 @@
     "workspaceIdDigest": { "$ref": "#/$defs/digest" },
     "endpointDigest": { "$ref": "#/$defs/digest" },
     "endpointScheme": { "enum": ["http", "https"] },
-    "configSources": { "type": "object" },
+    "configSources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["endpoint", "profile", "output"],
+      "properties": {
+        "endpoint": { "$ref": "#/$defs/source" },
+        "profile": { "$ref": "#/$defs/source" },
+        "output": { "$ref": "#/$defs/source" }
+      }
+    },
     "credentialStatus": { "enum": ["available", "unavailable", "headless-required"] },
     "redactionPolicy": { "const": "v1-no-paths-identities-or-secrets" },
     "artifactName": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
     "artifactDigest": { "$ref": "#/$defs/digest" }
   },
   "$defs": {
-    "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+    "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "source": { "enum": ["flag", "environment", "workspace", "user-profile", "system-default"] }
   }
 }

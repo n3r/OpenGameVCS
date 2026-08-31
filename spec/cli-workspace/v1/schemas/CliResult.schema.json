@@ -4,10 +4,11 @@
   "title": "OGVCS local CLI result v1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema", "contractVersion", "ok", "exitClass", "code", "message", "nextStep", "data"],
+  "required": ["schema", "contractVersion", "contractManifestSha256", "ok", "exitClass", "code", "message", "nextStep", "data"],
   "properties": {
     "schema": { "const": "ogvcs.cli-workspace/result/v1" },
     "contractVersion": { "const": "0.1.0-rc.1" },
+    "contractManifestSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "ok": { "type": "boolean" },
     "exitClass": {
       "enum": ["success", "input", "workspace", "unsupported", "cancelled", "interaction-required", "unavailable", "internal"]

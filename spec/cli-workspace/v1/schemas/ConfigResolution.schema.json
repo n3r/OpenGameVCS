@@ -8,18 +8,37 @@
   "properties": {
     "schema": { "const": "ogvcs.cli-workspace/config-resolution/v1" },
     "contractVersion": { "const": "0.1.0-rc.1" },
-    "endpoint": { "$ref": "#/$defs/sourcedString" },
-    "profile": { "$ref": "#/$defs/sourcedString" },
-    "output": { "$ref": "#/$defs/sourcedString" }
+    "endpoint": { "$ref": "#/$defs/sourcedEndpoint" },
+    "profile": { "$ref": "#/$defs/sourcedProfile" },
+    "output": { "$ref": "#/$defs/sourcedOutput" }
   },
   "$defs": {
-    "sourcedString": {
+    "source": { "enum": ["flag", "environment", "workspace", "user-profile", "system-default"] },
+    "sourcedEndpoint": {
       "type": "object",
       "additionalProperties": false,
       "required": ["value", "source"],
       "properties": {
-        "value": { "type": "string", "minLength": 1, "maxLength": 512 },
-        "source": { "enum": ["flag", "environment", "workspace", "user-profile", "system-default"] }
+        "value": { "type": "string", "minLength": 8, "maxLength": 512, "pattern": "^https?://[^\\s@?#\\\\]+(?:/[^\\s@?#\\\\]*)?$" },
+        "source": { "$ref": "#/$defs/source" }
+      }
+    },
+    "sourcedProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "source"],
+      "properties": {
+        "value": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9._-]+$" },
+        "source": { "$ref": "#/$defs/source" }
+      }
+    },
+    "sourcedOutput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "source"],
+      "properties": {
+        "value": { "enum": ["human", "json"] },
+        "source": { "$ref": "#/$defs/source" }
       }
     }
   }

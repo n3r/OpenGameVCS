@@ -49,6 +49,7 @@ that external program prerequisite has occurred.
 | Workspace publication | Bounded, journaled staged-stream publication is complete with exact offline package identities and retained Linux/macOS/Windows evidence | [OGVCS-046](prd/done/OGVCS-046-bounded-staged-workspace-publication.md) |
 | Chunking and manifests | Candidate language-neutral contract plus JavaScript/Rust implementations; production profile ratification and final scale evidence remain open | [OGVCS-007](prd/todo/OGVCS-007-chunking-content-manifest-engine.md) |
 | Object transfer | Resumable-transfer candidate is integrated; content-manifest availability fails closed outside the OGVCS-007 receipt-gated transaction participant | [OGVCS-008](prd/todo/OGVCS-008-object-storage-transfer-service.md) |
+| Native CLI foundation | Manifest-bound local-only Rust candidate with config, private Unix workspace metadata, recovery, stable JSON, and redacted diagnostics; Windows workspace ACL support and all remote journeys remain deferred | [OGVCS-011](prd/todo/OGVCS-011-native-cli-workspace-lifecycle.md) |
 | Identity and policy | Deny-overrides policy/audit plus JS/Rust same-transaction participant candidates are integrated; production stores, real OIDC, and endpoint/API binding remain open | [OGVCS-009](prd/todo/OGVCS-009-identity-path-authorization-audit.md) |
 
 The next integration milestone is one security-reviewed metadata, lifecycle,
