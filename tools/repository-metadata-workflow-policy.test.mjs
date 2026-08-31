@@ -37,15 +37,25 @@ test('repository metadata workflow pins the bounded three-host and PostgreSQL bo
   assert.match(workflow, /ALTER SYSTEM SET max_connections = 160/u);
   assert.match(workflow, /ogvcs_metadata_test_ci/u);
   assert.equal(workflow.match(/cargo fetch .* --locked/gu)?.length, 2);
-  assert.equal(workflow.match(/cargo test .* --locked --offline/gu)?.length, 2);
+  assert.equal(workflow.match(/cargo test .* --locked --offline/gu)?.length, 3);
   assert.equal(workflow.match(/npm run test:metadata$/gmu)?.length, 1);
   assert.equal(
     workflow.match(/npm run test:package --workspace @opengamevcs\/repository-metadata-contract-v1/gu)?.length,
     2,
   );
   assert.equal(workflow.match(/spec\/benchmark-fault\/v1\/\*\*/gu)?.length, 2);
+  assert.equal(workflow.match(/server\/migrations\/identity-policy-audit\/\*\*/gu)?.length, 2);
+  assert.equal(workflow.match(/server\/modules\/identity-policy-audit\/\*\*/gu)?.length, 2);
   assert.match(workflow, /cargo clippy .* --locked --offline --all-targets -- -D warnings/u);
   assert.match(workflow, /CARGO_NET_OFFLINE: 'true'/u);
+  assert.match(
+    workflow,
+    /OGVCS_METADATA_IDENTITY_DATABASE_URL: postgresql:\/\/postgres:postgres@127\.0\.0\.1:5432\/ogvcs_metadata_test_ci/u,
+  );
+  assert.match(
+    workflow,
+    /cargo test .* --locked --offline --test identity_binding_live -- --test-threads=1/u,
+  );
   assert.match(
     workflow,
     /- name: Run the bounded live PostgreSQL report\n        shell: bash\n/u,
