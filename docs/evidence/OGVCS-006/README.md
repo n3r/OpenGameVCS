@@ -4,6 +4,27 @@ This packet preserves bounded hosted evidence for the internal PostgreSQL
 metadata adapter. It is not completion evidence for OGVCS-006 and does not
 change the PRD's **In development** status.
 
+## Lifecycle-v9 update
+
+- Source: [`a96f410a26e30a02116c2ecdf410ab040168b912`](https://github.com/n3r/OpenGameVCS/commit/a96f410a26e30a02116c2ecdf410ab040168b912)
+- Workflow: [run 33450207801](https://github.com/n3r/OpenGameVCS/actions/runs/33450207801), completed successfully on 2026-09-01
+- Machine record: [`github-actions-run-33450207801.json`](github-actions-run-33450207801.json)
+- Retained live report: [`repository-metadata-service-report-2026-09-01.jsonl`](repository-metadata-service-report-2026-09-01.jsonl), 1,001 bytes, SHA-256 `e8dae7794e0c71205c94f610fb7a99a8c6a1c8caea2ae57cf0f8a787f9747f40`
+
+Rust 1.82 locked tests passed on Ubuntu, macOS, and Windows. Ubuntu also ran
+formatting, both default and feature-gated Clippy with warnings denied, the
+identity-bound regressions, and the live harness against a disposable
+PostgreSQL 15 service. All 15 bounded report rows passed, including immutable
+settings, outbox leasing, project cursors, bounded history, and the new
+`lifecycle-v9-atomic-publication` row. The Linux artifact is
+`repository-metadata-postgres-Linux` (artifact `9779510931`) and expires on
+2026-09-14; the report is retained here independently of that expiry.
+
+This update remains bounded: `exactScaleExecuted` is `false`, aggregate
+lifecycle application remains closed until the one-use OGVCS-009 receipt is
+consumed in the same PostgreSQL transaction, and the public service and
+million-entry gates remain open.
+
 ## Tested boundary
 
 - Source: [`dd5a5f07a04913d15f8a52060bec6ca6f49099fc`](https://github.com/n3r/OpenGameVCS/commit/dd5a5f07a04913d15f8a52060bec6ca6f49099fc)

@@ -51,3 +51,10 @@ receipt binding, direct 0/1/1,024/1,025 limits, declared aggregate
 order, duplicate/substitution/tamper rejection, submit-only poisoning, and
 atomic application/fact/reachability/outbox persistence. These reduced fixtures
 are intentionally not an exact 100,000-object performance campaign.
+
+The integrated revision `a96f410a26e30a02116c2ecdf410ab040168b912`
+also passed the bounded hosted workflow on Ubuntu with PostgreSQL 15, macOS,
+and Windows ([run 33450207801](https://github.com/n3r/OpenGameVCS/actions/runs/33450207801)).
+The retained 15-row report and machine record are in the
+[OGVCS-006 bounded evidence packet](../evidence/OGVCS-006/README.md); they do
+not claim hosted production deployment or exact-scale completion.
