@@ -5,6 +5,8 @@ pub const TRANSACTION_CREDENTIAL_EVIDENCE_SCHEMA: &str =
     "ogvcs.identity-policy/transaction-credential-evidence/v1";
 pub const TRANSACTION_AUTHORIZED_VIEW_SCHEMA: &str =
     "ogvcs.identity-policy/transaction-authorized-view/v1";
+pub const AUTHORIZED_RESOURCE_BATCH_SCHEMA: &str =
+    "ogvcs.identity-policy/authorized-resource-batch/v1";
 pub const TRANSACTION_DECISION_COMMITMENT_SCHEMA: &str =
     "ogvcs.identity-policy/transaction-decision-commitment/v1";
 pub const PRIVILEGED_AUDIT_EVENT_SCHEMA: &str = "ogvcs.authorization/audit-event/v1";
@@ -314,7 +316,7 @@ impl TransactionDecisionCommitment {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AuthorizationResource {
     #[serde(rename = "type")]
     pub resource_type: String,
@@ -357,12 +359,24 @@ pub struct DecisionCommitmentRequest<'a> {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AuthorizedResourceBatch {
+    #[serde(rename = "schemaVersion")]
+    schema_version: &'static str,
     transaction_id: String,
     resource_set_digest: String,
-    decision_digests: Vec<String>,
+    items: Vec<AuthorizedResourceBatchItem>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuthorizedResourceBatchItem {
+    decision_digest: String,
 }
 
 impl AuthorizedResourceBatch {
+    pub const fn schema_version() -> &'static str {
+        AUTHORIZED_RESOURCE_BATCH_SCHEMA
+    }
+
     pub fn transaction_id(&self) -> &str {
         &self.transaction_id
     }
@@ -371,8 +385,14 @@ impl AuthorizedResourceBatch {
         &self.resource_set_digest
     }
 
-    pub fn decision_digests(&self) -> &[String] {
-        &self.decision_digests
+    pub fn items(&self) -> &[AuthorizedResourceBatchItem] {
+        &self.items
+    }
+}
+
+impl AuthorizedResourceBatchItem {
+    pub fn decision_digest(&self) -> &str {
+        &self.decision_digest
     }
 }
 
@@ -570,9 +590,13 @@ impl AuthorizedResourceBatch {
         decision_digests: Vec<String>,
     ) -> Self {
         Self {
+            schema_version: AUTHORIZED_RESOURCE_BATCH_SCHEMA,
             transaction_id,
             resource_set_digest,
-            decision_digests,
+            items: decision_digests
+                .into_iter()
+                .map(|decision_digest| AuthorizedResourceBatchItem { decision_digest })
+                .collect(),
         }
     }
 }

@@ -32,7 +32,7 @@ pub const MIGRATIONS: [Migration; 3] = [
         version: 1,
         phase: MigrationPhase::Expand,
         sql: include_str!("../../../migrations/identity-policy-audit/000001_expand.sql"),
-        checksum_sha256: "f31def32f2dc2a5da085187e345fa91ca0defe1035426c17fdeba719bd1df583",
+        checksum_sha256: "60a537b9c91a78772a2f83102ab3e7603276578db44a216225704ac94fdd8f79",
         restartable: true,
         minimum_application_version: "0.2.0",
         maximum_application_version: "0.2.x",

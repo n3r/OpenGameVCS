@@ -51,8 +51,8 @@ async function reauthenticate(directory, relative, mutate) {
 
 test('generated identity-policy contract is authenticated and bounded', async () => {
   const result = await validateIdentityPolicyContract(root);
-  assert.equal(result.artifacts, 21);
-  assert.equal(result.vectors, 29);
+  assert.equal(result.artifacts, 23);
+  assert.equal(result.vectors, 30);
 });
 
 test('contract validation rejects schema tampering', async (t) => {
@@ -94,4 +94,14 @@ test('independent validation rejects a reauthenticated production-vector substit
     value.cases.find(({ id }) => id === 'transaction-decision-commitment-same-tx').expected = 'best-effort';
   });
   await assert.rejects(() => validateIdentityPolicyContract(directory), /vector inventory differs/u);
+});
+
+test('independent validation rejects a reauthenticated neutral-batch ordering substitution', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'ogvcs-identity-batch-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  await cp(root, directory, { recursive: true });
+  await reauthenticate(directory, 'vectors/authorized-resource-batch-golden.json', (value) => {
+    value.canonicalResourcePaths.reverse();
+  });
+  await assert.rejects(() => validateIdentityPolicyContract(directory), /batch resource ordering differs/u);
 });

@@ -98,7 +98,7 @@ export class TransactionAuthorizationAuthority {
     if (!Array.isArray(resources) || resources.length < 1) identityFail('INPUT_INVALID', 'authorization resource batch is invalid');
     if (resources.length > RUNTIME_LIMITS.maxBatchAuthorizationResources) identityFail('LIMIT_EXCEEDED', 'authorization resource batch exceeds its bound');
     const canonicalResources = canonicalResourceSet(resources);
-    const authorized = this.#authorizeAll(view, transaction, permission, resources);
+    const authorized = this.#authorizeAll(view, transaction, permission, canonicalResources);
     return deepFreeze({
       schemaVersion: 'ogvcs.identity-policy/authorized-resource-batch/v1',
       transactionId: view.transactionId,

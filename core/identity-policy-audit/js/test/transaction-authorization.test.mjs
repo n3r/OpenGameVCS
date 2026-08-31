@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+
+import { canonicalBytes, sha256 } from '@opengamevcs/authorization-contract';
 
 import {
   AuthorityState,
@@ -132,6 +136,23 @@ test('batch authorization rejects duplicate, hidden, and over-limit resources be
   assert.throws(() => context.authority.appendDecisionCommitment(view, {
     transaction, correlationId: 'correlation.duplicate', resources: [resource(), resource()], result: {},
   }), ({ code }) => code === 'INPUT_INVALID');
+});
+
+test('authorized resource batches use the neutral schema and canonical resource order', async () => {
+  const context = fixture(); const transaction = context.participant.open();
+  const view = context.authority.begin({ transaction, credentialToken: context.issued.token, request: request() });
+  const alpha = resource('Game/Alpha.asset'); const zeta = resource('Game/Zeta.asset');
+  const alphaDecision = context.authority.authorizeBatch(view, { transaction, resources: [alpha] }).items[0];
+  const zetaDecision = context.authority.authorizeBatch(view, { transaction, resources: [zeta] }).items[0];
+  const batch = context.authority.authorizeBatch(view, { transaction, resources: [zeta, alpha] });
+  assert.deepEqual(Object.keys(batch).sort(), ['items', 'resourceSetDigest', 'schemaVersion', 'transactionId']);
+  assert.equal(batch.schemaVersion, 'ogvcs.identity-policy/authorized-resource-batch/v1');
+  assert.deepEqual(batch.items, [alphaDecision, zetaDecision]);
+  assert.equal(batch.resourceSetDigest, sha256(canonicalBytes([alpha, zeta])));
+
+  const golden = JSON.parse(await readFile(fileURLToPath(new URL('../../../../spec/identity-policy-audit/v1/vectors/authorized-resource-batch-golden.json', import.meta.url))));
+  assert.deepEqual(golden.canonicalResourcePaths, ['Game/Alpha.asset', 'Game/Zeta.asset']);
+  assert.equal(canonicalBytes(golden.batch).toString('utf8'), golden.canonicalJson);
 });
 
 test('ambiguous or malformed decision commits poison the exact transaction', () => {

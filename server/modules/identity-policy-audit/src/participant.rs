@@ -936,11 +936,12 @@ pub(crate) fn poison_on_error<T>(
 
 #[cfg(test)]
 mod tests {
-    use super::canonical_resource_set;
+    use super::{canonical_resource_set, digest_json, hex};
     use crate::model::{BoundRequest, TransactionBinding, ViewParts};
     use crate::{
-        AuthorizationResource, TransactionAuthorizedView, TransactionCredentialEvidence,
-        TransactionDecisionCommitment, TRANSACTION_CREDENTIAL_EVIDENCE_SCHEMA,
+        AuthorizationResource, AuthorizedResourceBatch, TransactionAuthorizedView,
+        TransactionCredentialEvidence, TransactionDecisionCommitment,
+        AUTHORIZED_RESOURCE_BATCH_SCHEMA, TRANSACTION_CREDENTIAL_EVIDENCE_SCHEMA,
         TRANSACTION_DECISION_COMMITMENT_SCHEMA,
     };
 
@@ -1044,5 +1045,32 @@ mod tests {
             commitment_json["schemaVersion"],
             TRANSACTION_DECISION_COMMITMENT_SCHEMA
         );
+    }
+
+    #[test]
+    fn authorized_batch_matches_the_neutral_golden_bytes_and_order() {
+        let golden: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../spec/identity-policy-audit/v1/vectors/authorized-resource-batch-golden.json"
+        ))
+        .unwrap();
+        let inputs: Vec<AuthorizationResource> = serde_json::from_value(golden["inputResources"].clone()).unwrap();
+        let resources = canonical_resource_set(&inputs).unwrap();
+        let paths: Vec<_> = resources.iter().map(|resource| resource.path.as_deref()).collect();
+        assert_eq!(paths, vec![Some("Game/Alpha.asset"), Some("Game/Zeta.asset")]);
+        let items = golden["batch"]["items"].as_array().unwrap();
+        let batch = AuthorizedResourceBatch::new(
+            golden["batch"]["transactionId"].as_str().unwrap().to_owned(),
+            hex(&digest_json(&resources).unwrap()),
+            items
+                .iter()
+                .map(|item| item["decisionDigest"].as_str().unwrap().to_owned())
+                .collect(),
+        );
+        let actual = String::from_utf8(crate::canonical::canonical_bytes(&batch).unwrap()).unwrap();
+        assert_eq!(
+            AuthorizedResourceBatch::schema_version(),
+            AUTHORIZED_RESOURCE_BATCH_SCHEMA
+        );
+        assert_eq!(actual, golden["canonicalJson"].as_str().unwrap());
     }
 }

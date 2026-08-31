@@ -331,6 +331,19 @@ export const SCHEMAS = {
     'x-ogvcs-invariant': 'the same database transaction rechecks credential, epoch, policy, permission, and exact resources before mutation or response',
     'x-ogvcs-license': 'MIT',
   },
+  'AuthorizedResourceBatch.schema.json': {
+    $schema: SCHEMA_DIALECT,
+    $id: 'https://schemas.opengamevcs.dev/identity-policy-audit/v1/AuthorizedResourceBatch.schema.json',
+    title: 'IdentityAuthorizedResourceBatchV1',
+    ...closed({
+      schemaVersion: { const: 'ogvcs.identity-policy/authorized-resource-batch/v1' },
+      transactionId: text(256, 1, OPAQUE),
+      resourceSetDigest: text(64, 64, SHA256),
+      items: array(closed({ decisionDigest: text(64, 64, SHA256) }), LIMITS.maxBatchAuthorizationResources, 1),
+    }),
+    'x-ogvcs-invariant': 'items correspond in ascending canonical-resource byte order to one exact, same-transaction recheck; duplicate resources fail closed',
+    'x-ogvcs-license': 'MIT',
+  },
   'TransactionDecisionCommitment.schema.json': {
     $schema: SCHEMA_DIALECT,
     $id: 'https://schemas.opengamevcs.dev/identity-policy-audit/v1/TransactionDecisionCommitment.schema.json',
@@ -437,5 +450,26 @@ export const VECTORS = {
       ['revocation-receipt-bounded', 'revoked', ['OGVCS-009-FR-02', 'OGVCS-009-NFR-02']],
       ['rotating-invalid-token-source-rate', 'DENY_RATE_LIMITED', ['OGVCS-009-FR-09']],
     ].map(([id, expected, requirementIds]) => ({ id, expected, requirementIds })),
+  },
+  'authorized-resource-batch-golden.json': {
+    schemaVersion: 'ogvcs.identity-policy/vectors/v1',
+    cases: [
+      ['canonical-sorted-resources', 'exact-canonical-bytes', ['OGVCS-009-FR-04', 'OGVCS-009-FR-05']],
+    ].map(([id, expected, requirementIds]) => ({ id, expected, requirementIds })),
+    inputResources: [
+      { type: 'path', path: 'Game/Zeta.asset', fileId: null, objectId: null, name: null },
+      { type: 'path', path: 'Game/Alpha.asset', fileId: null, objectId: null, name: null },
+    ],
+    canonicalResourcePaths: ['Game/Alpha.asset', 'Game/Zeta.asset'],
+    batch: {
+      schemaVersion: 'ogvcs.identity-policy/authorized-resource-batch/v1',
+      transactionId: 'tx.golden.1',
+      resourceSetDigest: 'f766b70a50ec71f7ce8ca8a3633f3ede6e7a6786f9d834738dd3e83fa085f9bf',
+      items: [
+        { decisionDigest: '1111111111111111111111111111111111111111111111111111111111111111' },
+        { decisionDigest: '2222222222222222222222222222222222222222222222222222222222222222' },
+      ],
+    },
+    canonicalJson: '{"items":[{"decisionDigest":"1111111111111111111111111111111111111111111111111111111111111111"},{"decisionDigest":"2222222222222222222222222222222222222222222222222222222222222222"}],"resourceSetDigest":"f766b70a50ec71f7ce8ca8a3633f3ede6e7a6786f9d834738dd3e83fa085f9bf","schemaVersion":"ogvcs.identity-policy/authorized-resource-batch/v1","transactionId":"tx.golden.1"}',
   },
 };

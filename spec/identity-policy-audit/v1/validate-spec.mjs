@@ -53,6 +53,7 @@ const EXPECTED_SCHEMAS = Object.freeze([
   'AuditCheckpoint.schema.json',
   'AuthenticationTransaction.schema.json',
   'AuthorityState.schema.json',
+  'AuthorizedResourceBatch.schema.json',
   'AuthorizationInvocation.schema.json',
   'AuthorizedAuditEvent.schema.json',
   'AuthorizedAuditView.schema.json',
@@ -102,6 +103,9 @@ const EXPECTED_VECTORS = Object.freeze({
     'revocation-receipt-bounded': 'revoked',
     'rotating-invalid-token-source-rate': 'DENY_RATE_LIMITED',
   }),
+  'authorized-resource-batch-golden.json': Object.freeze({
+    'canonical-sorted-resources': 'exact-canonical-bytes',
+  }),
 });
 
 const schema = async (root, name) => JSON.parse(await readFile(resolve(root, 'schemas', name)));
@@ -119,8 +123,8 @@ export async function validateIdentityPolicyContract(root = defaultRoot) {
   assert(manifest.packageName === '@opengamevcs/identity-policy-audit-contract-v1'
     && manifest.license === 'MIT', 'contract identity differs');
   assert(manifest.protocolBinding === 'unassigned-future-release-required', 'candidate claimed a frozen protocol assignment');
-  assert(manifest.counts.artifacts === 21 && manifest.counts.registries === 2
-    && manifest.counts.schemas === 17 && manifest.counts.vectors === 29
+  assert(manifest.counts.artifacts === 23 && manifest.counts.registries === 2
+    && manifest.counts.schemas === 18 && manifest.counts.vectors === 30
     && manifest.counts.limits === 25, 'manifest counts differ');
   assert(unique(manifest.artifacts.map(({ path }) => path)), 'artifact paths repeat');
 
@@ -229,6 +233,13 @@ export async function validateIdentityPolicyContract(root = defaultRoot) {
     assert(Object.hasOwn(transactionView.properties, field), `transaction view field missing: ${field}`);
   }
   assert(transactionView['x-ogvcs-invariant'].includes('same database transaction'), 'transaction view is not transaction-bound');
+  const batch = await schema(root, 'AuthorizedResourceBatch.schema.json');
+  assert(batch.properties.schemaVersion.const === 'ogvcs.identity-policy/authorized-resource-batch/v1'
+    && batch.properties.items.minItems === 1
+    && batch.properties.items.maxItems === byName.maxBatchAuthorizationResources
+    && batch.properties.items.items.properties.decisionDigest.pattern === '^[0-9a-f]{64}$'
+    && batch['x-ogvcs-invariant'].includes('ascending canonical-resource byte order')
+    && batch['x-ogvcs-invariant'].includes('duplicate resources fail closed'), 'authorized batch boundary differs');
   const commitment = await schema(root, 'TransactionDecisionCommitment.schema.json');
   assert(commitment.properties.resourceSetDigest.pattern === '^[0-9a-f]{64}$'
     && commitment.properties.resultDigest.pattern === '^[0-9a-f]{64}$'
@@ -252,6 +263,21 @@ export async function validateIdentityPolicyContract(root = defaultRoot) {
     allVectors.push(...document.cases);
   }
   assert(allVectors.length === manifest.counts.vectors && unique(allVectors.map(({ id }) => id)), 'combined vector inventory differs');
+  const golden = JSON.parse(await readFile(resolve(root, 'vectors', 'authorized-resource-batch-golden.json')));
+  exactKeys(golden, ['schemaVersion', 'cases', 'inputResources', 'canonicalResourcePaths', 'batch', 'canonicalJson'], 'batch golden shape differs');
+  const sortedResources = [...golden.inputResources].sort((left, right) => {
+    const leftBytes = JSON.stringify(ordered(left));
+    const rightBytes = JSON.stringify(ordered(right));
+    return leftBytes < rightBytes ? -1 : leftBytes > rightBytes ? 1 : 0;
+  });
+  assert(JSON.stringify(sortedResources.map(({ path }) => path)) === JSON.stringify(golden.canonicalResourcePaths), 'batch resource ordering differs');
+  assert(golden.batch.schemaVersion === 'ogvcs.identity-policy/authorized-resource-batch/v1'
+    && golden.batch.transactionId === 'tx.golden.1'
+    && golden.batch.items.length === 2
+    && golden.batch.items[0].decisionDigest === '1'.repeat(64)
+    && golden.batch.items[1].decisionDigest === '2'.repeat(64), 'batch golden fields differ');
+  assert(digest(JSON.stringify(ordered(sortedResources))) === golden.batch.resourceSetDigest, 'batch resource-set digest differs');
+  assert(JSON.stringify(ordered(golden.batch)) === golden.canonicalJson, 'batch canonical bytes differ');
 
   const workspace = resolve(root, '../../..');
   const expectedPins = {
