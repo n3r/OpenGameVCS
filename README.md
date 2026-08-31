@@ -30,10 +30,11 @@ retained under [`docs/evidence/`](docs/evidence/).
 
 R1 implementation is proceeding in parallel behind versioned contracts.
 Bounded staged workspace publication is complete with retained three-OS
-evidence; chunking/content manifests and repository metadata remain candidate
-work. Object transfer and identity/policy are being security-reviewed before
-integration. Incomplete R1 PRDs remain in [`prd/todo/`](prd/todo/) until their
-implementation and retained evidence satisfy the PRD's completion criteria.
+evidence. Chunking/content manifests, object transfer, repository metadata, and
+identity/policy are integrated as candidate foundations while their shared
+transaction and production-lifecycle boundaries remain under review.
+Incomplete R1 PRDs remain in [`prd/todo/`](prd/todo/) until their implementation
+and retained evidence satisfy the PRD's completion criteria.
 
 The broader R0 release gate also calls for external design-partner confirmation
 that the synthetic Unreal- and Unity-like profiles cover material production
@@ -44,17 +45,18 @@ that external program prerequisite has occurred.
 
 | Area | Current boundary | PRD |
 |---|---|---|
-| Repository metadata | Versioned metadata contract and PostgreSQL schema candidate; transactional adapter and live database evidence remain under review | [OGVCS-006](prd/todo/OGVCS-006-repository-metadata-snapshot-service.md) |
+| Repository metadata | Versioned metadata contract and PostgreSQL adapter candidate; same-transaction identity binding and final hosted evidence remain under review | [OGVCS-006](prd/todo/OGVCS-006-repository-metadata-snapshot-service.md) |
 | Workspace publication | Bounded, journaled staged-stream publication is complete with exact offline package identities and retained Linux/macOS/Windows evidence | [OGVCS-046](prd/done/OGVCS-046-bounded-staged-workspace-publication.md) |
 | Chunking and manifests | Candidate language-neutral contract plus JavaScript/Rust implementations; production profile ratification and final scale evidence remain open | [OGVCS-007](prd/todo/OGVCS-007-chunking-content-manifest-engine.md) |
-| Object transfer | Resumable-transfer candidate is in correctness and security hardening; it is not integrated into the supported root workspace yet | [OGVCS-008](prd/todo/OGVCS-008-object-storage-transfer-service.md) |
-| Identity and policy | Security-reviewed deny-overrides policy/audit candidate is integrated; production stores, real OIDC, and endpoint/API binding remain open | [OGVCS-009](prd/todo/OGVCS-009-identity-path-authorization-audit.md) |
+| Object transfer | Resumable-transfer candidate is integrated; content-manifest availability fails closed outside the OGVCS-007 receipt-gated transaction participant | [OGVCS-008](prd/todo/OGVCS-008-object-storage-transfer-service.md) |
+| Identity and policy | Deny-overrides policy/audit plus JS/Rust same-transaction participant candidates are integrated; production stores, real OIDC, and endpoint/API binding remain open | [OGVCS-009](prd/todo/OGVCS-009-identity-path-authorization-audit.md) |
 
-The next integration milestone is a security-reviewed metadata, object-transfer,
-and authorization service boundary. That unlocks atomic submit (OGVCS-010) and
-the native workspace client (OGVCS-011). The large 1 TiB/100 GiB campaigns are
-kept out of pull-request CI and run only at the scheduled final/major-release
-gate.
+The next integration milestone is one security-reviewed metadata, lifecycle,
+and authorization transaction boundary. That unlocks the public atomic-submit
+contract (OGVCS-010); the local-only native workspace foundation (OGVCS-011)
+can develop in parallel without claiming sync or submit behavior. The large
+1 TiB/100 GiB campaigns are kept out of pull-request CI and run only at the
+scheduled final/major-release gate.
 
 ## What is included
 
@@ -74,8 +76,11 @@ replacement for the future OpenGameVCS client.
 
 ## Requirements
 
-- Node.js 22 or newer and npm.
-- Rust 1.82 when building or testing the Rust object-model implementation.
+- Node.js 22 or newer and npm. GitHub workflows pin official JavaScript actions
+  to reviewed Node 24-compatible action releases; this is independent of the
+  supported project-runtime minimum.
+- Rust 1.82 when building or testing the Rust implementations and server
+  participants.
 - Linux, macOS, or Windows. The ordinary conformance matrix covers all three.
 
 No package requires network access at runtime. The retained release evidence
