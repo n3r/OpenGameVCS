@@ -1,0 +1,21 @@
+{
+  "name": "@opengamevcs/cli-workspace-contract-v1",
+  "version": "0.1.0-rc.1",
+  "private": true,
+  "description": "Local-only candidate OGVCS CLI/workspace contract",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node validate-spec.mjs"
+  },
+  "files": [
+    "README.md",
+    "LICENSE",
+    "registries",
+    "schemas",
+    "vectors",
+    "validate-spec.mjs"
+  ]
+}

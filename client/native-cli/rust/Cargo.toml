@@ -1,0 +1,40 @@
+[package]
+name = "ogvcs-local-cli"
+version = "0.1.0-rc.1"
+edition = "2021"
+rust-version = "1.82"
+license = "MIT"
+description = "Local-only candidate OpenGameVCS CLI and workspace foundation"
+readme = "README.md"
+repository = "https://github.com/n3r/OpenGameVCS"
+homepage = "https://github.com/n3r/OpenGameVCS"
+keywords = ["version-control", "workspace", "cli", "gamedev"]
+categories = ["command-line-utilities", "development-tools"]
+include = [
+    "src/**",
+    "scripts/**",
+    "tests/**",
+    "Cargo.toml",
+    "Cargo.lock",
+    "LICENSE",
+    "README.md",
+]
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "ogvcs"
+path = "src/main.rs"
+
+[dependencies]
+getrandom = "=0.2.16"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+
+[target.'cfg(windows)'.dependencies]
+sha2 = "=0.10.9"
+
+[target.'cfg(not(windows))'.dependencies]
+sha2 = { version = "=0.10.9", features = ["asm"] }
+libc = "=0.2.189"

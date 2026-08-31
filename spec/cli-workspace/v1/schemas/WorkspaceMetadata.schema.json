@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opengamevcs.dev/schemas/cli-workspace/workspace/v1",
+  "title": "OGVCS local workspace metadata v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "formatVersion", "state", "workspaceId", "rootDigest", "binding", "createdAtUnixMs"],
+  "properties": {
+    "schema": { "const": "ogvcs.cli-workspace/workspace/v1" },
+    "formatVersion": { "const": 1 },
+    "state": { "enum": ["staging", "ready"] },
+    "workspaceId": { "type": "string", "pattern": "^wsl1\\.[0-9a-f]{64}$" },
+    "rootDigest": { "$ref": "#/$defs/digest" },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repositoryDeclarationDigest", "branchDeclarationDigest", "baselineDeclarationDigest", "specDeclarationDigest", "verification"],
+      "properties": {
+        "repositoryDeclarationDigest": { "$ref": "#/$defs/digest" },
+        "branchDeclarationDigest": { "$ref": "#/$defs/digest" },
+        "baselineDeclarationDigest": { "$ref": "#/$defs/digest" },
+        "specDeclarationDigest": { "$ref": "#/$defs/digest" },
+        "verification": { "const": "unverified-local-declaration" }
+      }
+    },
+    "createdAtUnixMs": { "type": "integer", "minimum": 1 }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}

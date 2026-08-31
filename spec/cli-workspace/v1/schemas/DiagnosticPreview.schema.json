@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opengamevcs.dev/schemas/cli-workspace/diagnostic-preview/v1",
+  "title": "OGVCS redacted diagnostic preview v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "contractVersion", "preview", "written", "workspaceState", "workspaceRootDigest", "workspaceIdDigest", "endpointDigest", "endpointScheme", "configSources", "credentialStatus", "redactionPolicy"],
+  "properties": {
+    "schema": { "const": "ogvcs.cli-workspace/diagnostic-preview/v1" },
+    "contractVersion": { "const": "0.1.0-rc.1" },
+    "preview": { "type": "boolean" },
+    "written": { "type": "boolean" },
+    "workspaceState": { "const": "ready" },
+    "workspaceRootDigest": { "$ref": "#/$defs/digest" },
+    "workspaceIdDigest": { "$ref": "#/$defs/digest" },
+    "endpointDigest": { "$ref": "#/$defs/digest" },
+    "endpointScheme": { "enum": ["http", "https"] },
+    "configSources": { "type": "object" },
+    "credentialStatus": { "enum": ["available", "unavailable", "headless-required"] },
+    "redactionPolicy": { "const": "v1-no-paths-identities-or-secrets" },
+    "artifactName": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+    "artifactDigest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}

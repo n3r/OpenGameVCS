@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opengamevcs.dev/schemas/cli-workspace/result/v1",
+  "title": "OGVCS local CLI result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "contractVersion", "ok", "exitClass", "code", "message", "nextStep", "data"],
+  "properties": {
+    "schema": { "const": "ogvcs.cli-workspace/result/v1" },
+    "contractVersion": { "const": "0.1.0-rc.1" },
+    "ok": { "type": "boolean" },
+    "exitClass": {
+      "enum": ["success", "input", "workspace", "unsupported", "cancelled", "interaction-required", "unavailable", "internal"]
+    },
+    "code": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]+$", "maxLength": 96 },
+    "message": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "nextStep": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "data": { "type": "object" }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opengamevcs.dev/schemas/cli-workspace/initialization/v1",
+  "title": "OGVCS local workspace initialization record v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "formatVersion", "state", "workspaceId", "rootDigest"],
+  "properties": {
+    "schema": { "const": "ogvcs.cli-workspace/initialization/v1" },
+    "formatVersion": { "const": 1 },
+    "state": { "enum": ["initializing", "complete"] },
+    "workspaceId": { "type": "string", "pattern": "^wsl1\\.[0-9a-f]{64}$" },
+    "rootDigest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}

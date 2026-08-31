@@ -1,0 +1,14 @@
+{
+  "schema": "ogvcs.cli-workspace/exit-classes/v1",
+  "contractVersion": "0.1.0-rc.1",
+  "classes": [
+    { "name": "success", "exitCode": 0 },
+    { "name": "input", "exitCode": 2 },
+    { "name": "workspace", "exitCode": 3 },
+    { "name": "unsupported", "exitCode": 4 },
+    { "name": "cancelled", "exitCode": 5 },
+    { "name": "interaction-required", "exitCode": 6 },
+    { "name": "unavailable", "exitCode": 7 },
+    { "name": "internal", "exitCode": 70 }
+  ]
+}

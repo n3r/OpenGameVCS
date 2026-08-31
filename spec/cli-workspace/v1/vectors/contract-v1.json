@@ -1,0 +1,51 @@
+{
+  "schema": "ogvcs.cli-workspace/vectors/v1",
+  "contractVersion": "0.1.0-rc.1",
+  "cases": [
+    {
+      "id": "config-precedence-source-report",
+      "kind": "configuration",
+      "expected": {
+        "precedence": ["flag", "environment", "workspace", "user-profile", "system-default"],
+        "code": "CONFIG_RESOLVED"
+      }
+    },
+    {
+      "id": "secret-like-config-rejected",
+      "kind": "configuration",
+      "expected": { "exitClass": "input", "code": "CONFIG_INVALID" }
+    },
+    {
+      "id": "raw-declaration-rejected",
+      "kind": "workspace",
+      "expected": { "exitClass": "input", "code": "INPUT_INVALID", "workspacePublished": false }
+    },
+    {
+      "id": "cancel-after-control-publish",
+      "kind": "workspace",
+      "expected": {
+        "exitClass": "cancelled",
+        "code": "OPERATION_CANCELLED",
+        "remoteDurableState": "unchanged",
+        "nextOperation": "workspace recover"
+      }
+    },
+    {
+      "id": "noninteractive-provider-unavailable",
+      "kind": "credential",
+      "expected": {
+        "exitClass": "interaction-required",
+        "code": "AUTHENTICATION_REQUIRED",
+        "prompted": false
+      }
+    },
+    {
+      "id": "diagnostic-redaction",
+      "kind": "diagnostics",
+      "expected": {
+        "code": "DIAGNOSTICS_PREVIEW",
+        "forbidden": ["path", "identity", "endpoint", "credential", "declaration"]
+      }
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opengamevcs.dev/schemas/cli-workspace/config-resolution/v1",
+  "title": "OGVCS local configuration resolution v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "contractVersion", "endpoint", "profile", "output"],
+  "properties": {
+    "schema": { "const": "ogvcs.cli-workspace/config-resolution/v1" },
+    "contractVersion": { "const": "0.1.0-rc.1" },
+    "endpoint": { "$ref": "#/$defs/sourcedString" },
+    "profile": { "$ref": "#/$defs/sourcedString" },
+    "output": { "$ref": "#/$defs/sourcedString" }
+  },
+  "$defs": {
+    "sourcedString": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "source"],
+      "properties": {
+        "value": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "source": { "enum": ["flag", "environment", "workspace", "user-profile", "system-default"] }
+      }
+    }
+  }
+}
