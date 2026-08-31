@@ -12,10 +12,11 @@ use ogvcs_identity_policy_audit_postgres::{
 };
 use ogvcs_repository_metadata::{
     run_migrations as run_metadata_migrations, CommitSequence, DomainErrorCode, FileId,
-    FileIdOrigin, FileIdOwnerKind, FileIdReservation, IdempotencyReservation, MetadataTransaction,
+    FileIdOrigin, FileIdOwnerKind, FileIdReservation, IdempotencyReservation,
+    IdentityBoundPostgresMetadataStore, MetadataTransaction,
     MigrationRunOptions as MetadataMigrationRunOptions, NativeFileIdReservation, OutboxEvent,
-    IdentityBoundPostgresMetadataStore, RepositoryId, TenantId, TransactionCapability,
-    TransactionCredentialRequest, TransactionOptions,
+    RepositoryId, TenantId, TransactionCapability, TransactionCredentialRequest,
+    TransactionOptions,
 };
 use postgres::{types::Json, Client, NoTls};
 use serde::Serialize;
@@ -66,8 +67,8 @@ fn identity_bound_metadata_is_scope_receipt_and_commitment_atomic() {
     probe_transaction.rollback().unwrap();
 
     let participant = PostgresTransactionAuthorizationParticipant::new().unwrap();
-    let mut store = IdentityBoundPostgresMetadataStore::connect(&database_url, participant)
-        .unwrap();
+    let mut store =
+        IdentityBoundPostgresMetadataStore::connect(&database_url, participant).unwrap();
 
     let allocate = idempotency("file-id.allocate", "allocation-a", [0x31; 32]);
     let first = store

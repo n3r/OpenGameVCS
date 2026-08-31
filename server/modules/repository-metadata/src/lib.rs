@@ -35,11 +35,11 @@ pub use ports::{
     AuthorizationPort, AuthorizedView, DeniedAuthorizedView, DenyAllAuthorization, MetadataStore,
     MetadataTransaction, ObjectValidationPort, ProductionObjectValidator,
 };
+#[cfg(feature = "legacy-test-adapter")]
+pub use postgres::PostgresMetadataStore;
 pub use postgres::{
     IdentityBoundPostgresMetadataStore, IdentityMetadataAuthorizedView, PostgresMetadataTransaction,
 };
-#[cfg(feature = "legacy-test-adapter")]
-pub use postgres::PostgresMetadataStore;
 pub use types::{
     AllocationReceipt, AncestryRecord, AuthorizationContext, AuthorizationResource, CaseMode,
     CommitSequence, ConsistencyToken, CursorToken, FileHistoryRecord, FileHistoryWrite,
