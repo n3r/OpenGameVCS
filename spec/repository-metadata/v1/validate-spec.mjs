@@ -84,7 +84,8 @@ export async function validateRepositoryMetadataContract(root = defaultRoot) {
   assert(operations.length === manifest.counts.operations, 'operation count differs');
   assert(unique(operations.map(({ code }) => code)) && unique(operations.map(({ name }) => name)), 'operation assignments are not unique');
   assert(operations.every(({ state, requestSchema }) => state === 'candidate' && requestSchema === 'MetadataOperationRequest.schema.json'), 'operation state/schema differs');
-  assert(operations.filter(({ class: kind }) => kind.includes('mutation')).every(({ idempotencyRequired }) => idempotencyRequired), 'mutation lacks idempotency requirement');
+  assert(operations.filter(({ class: kind }) => kind === 'mutation').every(({ idempotencyRequired }) => idempotencyRequired), 'public mutation lacks idempotency requirement');
+  assert(operations.filter(({ name }) => name.startsWith('outbox.')).every(({ class: kind, idempotencyRequired }) => kind === 'internal-mutation' && !idempotencyRequired), 'outbox delivery incorrectly became a replay-cache surface');
   assert(operations.filter(({ name }) => name.startsWith('outbox.')).every(({ permission }) => permission === 'service-internal'), 'outbox operation became public permission surface');
 
   const errors = registries['domain-errors'];

@@ -47,9 +47,9 @@ its separate original-lifetime proof. Import must use the mapping-bound import
 operation.
 
 Idempotency lookup is keyed by the authorization authority's authenticated-scope
-digest plus repository scope (or tenant outbox scope), operation, and opaque key.
-The digest is never caller input. `idempotency.status` returns only the record in
-the current authorized scope; another scope observes `absent`. Outbox claim,
-acknowledgement, and release perform their mutation and idempotency record update
-in one PostgreSQL transaction, so a committed replay returns the original safe
-result without repeating the lease transition.
+digest plus repository scope, operation, and opaque key. The digest is never
+caller input. `idempotency.status` returns only the record in the current
+authorized scope; another scope observes `absent`. Outbox claim,
+acknowledgement, and release are internal exact-lease CAS operations, not public
+idempotency-key operations: they require the caller's still-live authenticated
+lease and reject an ambiguous retry without repeating the transition.

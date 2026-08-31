@@ -31,8 +31,8 @@ registration must present that receipt; the FileID alone is never a bearer
 credential. Restore continues to carry `null` in that field and remains subject
 to its separate lifetime proof authority.
 
-Idempotency status and all outbox mutation keys are resolved only inside the
-authenticated-scope digest supplied by the authorization decision. That digest
-is intentionally absent from every request and response schema. A caller cannot
-choose a scope, move a key between scopes, or learn the digest through the
-metadata carrier.
+Idempotency status is resolved only inside the authenticated-scope digest
+supplied by the authorization decision. That digest is intentionally absent from
+every request and response schema. Outbox delivery is an internal exact-lease
+CAS boundary, not an idempotency-key surface: a retry must retain the exact live
+lease or be rejected without disclosing delivery state.

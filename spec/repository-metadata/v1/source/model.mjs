@@ -125,9 +125,11 @@ const operationRows = [
   ['file-id.history', 'query', 'metadata.read', 'path', false, 'json'],
   ['idempotency.status', 'query', 'submit', 'repository', false, 'json'],
   ['consistency.issue-token', 'query', 'metadata.read', 'repository', false, 'json'],
-  ['outbox.claim', 'internal-mutation', 'service-internal', 'event', true, 'json'],
-  ['outbox.acknowledge', 'internal-mutation', 'service-internal', 'event', true, 'json'],
-  ['outbox.release', 'internal-mutation', 'service-internal', 'event', true, 'json'],
+  // Delivery actions are lease-CAS operations: an exact retry after the lease
+  // has changed is deliberately rejected rather than replayed from a cache.
+  ['outbox.claim', 'internal-mutation', 'service-internal', 'event', false, 'json'],
+  ['outbox.acknowledge', 'internal-mutation', 'service-internal', 'event', false, 'json'],
+  ['outbox.release', 'internal-mutation', 'service-internal', 'event', false, 'json'],
 ];
 
 export const OPERATIONS = operationRows.map(([name, className, permission, resourceType, idempotencyRequired, payloadCarrier], index) => ({
