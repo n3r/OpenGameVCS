@@ -21,14 +21,15 @@ pub use migration_runner::{
     run_migrations, verify_schema_compatibility, MigrationRunOptions, MigrationRunReport,
 };
 pub use model::{
-    AuthorizationResource, AuthorizedResourceBatch, AuthorizedResourceBatchItem, CredentialRevocation, CredentialScope,
-    DecisionChainVerification, DecisionCommitmentRequest, EpochPromotion, PolicyDocument,
-    PolicyReplacement, PolicyRule, PrivilegedAuditContext, PrivilegedAuditDetails,
-    PrivilegedAuditEvent, RuleSubjects, TransactionAuthorizationRequest, TransactionAuthorizedView,
-    TransactionBatchRecheck, TransactionCredentialEvidence, TransactionDecisionCommitment,
-    MAXIMUM_BATCH_RESOURCES, MAXIMUM_DECISION_CHAIN_SCAN, MAXIMUM_DECISION_RESULT_BYTES,
-    AUTHORIZED_RESOURCE_BATCH_SCHEMA, PRIVILEGED_AUDIT_EVENT_SCHEMA, TRANSACTION_AUTHORIZED_VIEW_SCHEMA,
-    TRANSACTION_CREDENTIAL_EVIDENCE_SCHEMA, TRANSACTION_DECISION_COMMITMENT_SCHEMA,
+    AuthorizationResource, AuthorizedResourceBatch, AuthorizedResourceBatchItem,
+    CredentialRevocation, CredentialScope, DecisionChainVerification, DecisionCommitmentRequest,
+    EpochPromotion, PolicyDocument, PolicyReplacement, PolicyRule, PrivilegedAuditContext,
+    PrivilegedAuditDetails, PrivilegedAuditEvent, RuleSubjects, TransactionAuthorizationRequest,
+    TransactionAuthorizedView, TransactionBatchRecheck, TransactionCredentialEvidence,
+    TransactionDecisionCommitment, AUTHORIZED_RESOURCE_BATCH_SCHEMA, MAXIMUM_BATCH_RESOURCES,
+    MAXIMUM_DECISION_CHAIN_SCAN, MAXIMUM_DECISION_RESULT_BYTES, PRIVILEGED_AUDIT_EVENT_SCHEMA,
+    TRANSACTION_AUTHORIZED_VIEW_SCHEMA, TRANSACTION_CREDENTIAL_EVIDENCE_SCHEMA,
+    TRANSACTION_DECISION_COMMITMENT_SCHEMA,
 };
 pub use participant::{
     PostgresTransactionAuthorizationParticipant, TransactionAuthorizationParticipant,

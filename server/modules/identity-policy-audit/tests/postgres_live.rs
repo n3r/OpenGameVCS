@@ -190,7 +190,8 @@ fn checked_migrations_and_same_transaction_participant_work_on_postgres_15() {
 
     let presentation = "live.credential.presentation";
     seed_current_authority(&mut client, presentation);
-    let participant = PostgresTransactionAuthorizationParticipant::new().expect("participant entropy");
+    let participant =
+        PostgresTransactionAuthorizationParticipant::new().expect("participant entropy");
     let alpha = resource("Game/Alpha.asset");
     let zeta = resource("Game/Zeta.asset");
     let resources = vec![zeta.clone(), alpha.clone()];
@@ -198,7 +199,10 @@ fn checked_migrations_and_same_transaction_participant_work_on_postgres_15() {
     {
         let mut transaction = client.transaction().expect("begin current transaction");
         let view = participant
-            .authorize(&mut transaction, &authorization_request(presentation, &alpha))
+            .authorize(
+                &mut transaction,
+                &authorization_request(presentation, &alpha),
+            )
             .expect("authorize current credential and policy");
         let batch = participant
             .recheck_batch(
@@ -247,7 +251,8 @@ fn checked_migrations_and_same_transaction_participant_work_on_postgres_15() {
         transaction.commit().expect("commit verification read");
     }
 
-    let mut other_client = Client::connect(&database_url, NoTls).expect("connect second transaction");
+    let mut other_client =
+        Client::connect(&database_url, NoTls).expect("connect second transaction");
     let source_view = {
         let mut source = client.transaction().expect("begin source transaction");
         let view = participant
@@ -274,7 +279,10 @@ fn checked_migrations_and_same_transaction_participant_work_on_postgres_15() {
     {
         let mut transaction = client.transaction().expect("begin poison transaction");
         let view = participant
-            .authorize(&mut transaction, &authorization_request(presentation, &alpha))
+            .authorize(
+                &mut transaction,
+                &authorization_request(presentation, &alpha),
+            )
             .expect("authorize poison fixture");
         let duplicate = vec![alpha.clone(), alpha.clone()];
         assert!(participant

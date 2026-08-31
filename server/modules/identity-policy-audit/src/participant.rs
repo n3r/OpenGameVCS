@@ -1053,13 +1053,23 @@ mod tests {
             "../../../../spec/identity-policy-audit/v1/vectors/authorized-resource-batch-golden.json"
         ))
         .unwrap();
-        let inputs: Vec<AuthorizationResource> = serde_json::from_value(golden["inputResources"].clone()).unwrap();
+        let inputs: Vec<AuthorizationResource> =
+            serde_json::from_value(golden["inputResources"].clone()).unwrap();
         let resources = canonical_resource_set(&inputs).unwrap();
-        let paths: Vec<_> = resources.iter().map(|resource| resource.path.as_deref()).collect();
-        assert_eq!(paths, vec![Some("Game/Alpha.asset"), Some("Game/Zeta.asset")]);
+        let paths: Vec<_> = resources
+            .iter()
+            .map(|resource| resource.path.as_deref())
+            .collect();
+        assert_eq!(
+            paths,
+            vec![Some("Game/Alpha.asset"), Some("Game/Zeta.asset")]
+        );
         let items = golden["batch"]["items"].as_array().unwrap();
         let batch = AuthorizedResourceBatch::new(
-            golden["batch"]["transactionId"].as_str().unwrap().to_owned(),
+            golden["batch"]["transactionId"]
+                .as_str()
+                .unwrap()
+                .to_owned(),
             hex(&digest_json(&resources).unwrap()),
             items
                 .iter()
