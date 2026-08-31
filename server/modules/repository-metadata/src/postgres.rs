@@ -2727,14 +2727,7 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
         if self.identity_binding.is_none() {
             return Ok(());
         }
-        if !prepare_identity_resource(&mut self.identity_resources, &resource) {
-            return Ok(());
-        }
-        if self.identity_resources.len() >= MAXIMUM_BATCH_RESOURCES {
-            return self.fail(DomainError::new(DomainErrorCode::ObjectInvalid));
-        }
-        self.identity_resources.push(resource);
-        Ok(())
+        record_identity_resource_in_batch(&mut self.identity_resources, resource, &mut self.failed)
     }
 
     fn bind_identity_reference(&mut self, reference: &str) -> Result<()> {
@@ -3168,23 +3161,21 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
         after: &BTreeMap<Vec<String>, EntryState>,
         candidate: ObjectRef,
     ) -> Result<()> {
-        for (path, state) in before {
-            if after.get(path) != Some(state) {
-                self.record_identity_resource(identity_file_resource(
-                    state.file_id,
-                    Some(root_relative_path(path, state)?),
-                    Some(candidate),
-                ))?;
-            }
+        if before
+            .iter()
+            .chain(after)
+            .any(|(path, state)| state.path.as_slice() != path.as_slice())
+        {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
         }
-        for (path, state) in after {
-            if before.get(path) != Some(state) {
-                self.record_identity_resource(identity_file_resource(
-                    state.file_id,
-                    Some(root_relative_path(path, state)?),
-                    Some(candidate),
-                ))?;
-            }
+        for affected in exact_tree_delta_facts(before, after, |state| state.file_id)? {
+            let path = String::from_utf8(affected.repository_path_utf8)
+                .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+            self.record_identity_resource(identity_file_resource(
+                affected.file_id,
+                Some(path),
+                Some(candidate),
+            ))?;
         }
         Ok(())
     }
@@ -6011,8 +6002,8 @@ fn identity_file_resource(
     }
 }
 
-fn root_relative_path(path: &[String], state: &EntryState) -> Result<String> {
-    if path.is_empty() || state.path != path {
+fn root_relative_path(path: &[String]) -> Result<String> {
+    if path.is_empty() {
         return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
     }
     let length = path
@@ -6025,6 +6016,31 @@ fn root_relative_path(path: &[String], state: &EntryState) -> Result<String> {
         return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
     }
     Ok(path.join("/"))
+}
+
+fn exact_tree_delta_facts<T: Eq>(
+    before: &BTreeMap<Vec<String>, T>,
+    after: &BTreeMap<Vec<String>, T>,
+    file_id: impl Fn(&T) -> FileId,
+) -> Result<Vec<CanonicalAffectedPath>> {
+    let mut affected = Vec::new();
+    for (path, state) in before {
+        if after.get(path) != Some(state) {
+            affected.push(CanonicalAffectedPath {
+                file_id: file_id(state),
+                repository_path_utf8: root_relative_path(path)?.into_bytes(),
+            });
+        }
+    }
+    for (path, state) in after {
+        if before.get(path) != Some(state) {
+            affected.push(CanonicalAffectedPath {
+                file_id: file_id(state),
+                repository_path_utf8: root_relative_path(path)?.into_bytes(),
+            });
+        }
+    }
+    Ok(affected)
 }
 
 fn prepare_identity_resource(
@@ -6056,6 +6072,22 @@ fn prepare_identity_resource(
         }
     }
     !resources.contains(resource)
+}
+
+fn record_identity_resource_in_batch(
+    resources: &mut Vec<IdentityAuthorizationResource>,
+    resource: IdentityAuthorizationResource,
+    failed: &mut bool,
+) -> Result<()> {
+    if !prepare_identity_resource(resources, &resource) {
+        return Ok(());
+    }
+    if resources.len() >= MAXIMUM_BATCH_RESOURCES {
+        *failed = true;
+        return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+    }
+    resources.push(resource);
+    Ok(())
 }
 
 fn identity_reference_resource(
@@ -6285,10 +6317,18 @@ fn file_id_database_error(error: postgres::Error) -> DomainError {
 #[cfg(test)]
 mod tests {
     use super::{
-        canonical_file_history_from_change, identity_file_resource, identity_metadata_scope_digest,
-        prepare_identity_resource, ObjectKind,
+        canonical_file_history_from_change, exact_tree_delta_facts, identity_file_resource,
+        identity_metadata_scope_digest, prepare_identity_resource,
+        record_identity_resource_in_batch, ObjectKind,
     };
     use crate::{FileId, ObjectRef, RepositoryId, TenantId, TransactionCapability};
+    use std::collections::{BTreeMap, BTreeSet};
+
+    #[derive(Clone, Debug, Eq, PartialEq)]
+    struct TestEntry {
+        file_id: FileId,
+        version: u8,
+    }
 
     #[test]
     fn authority_scope_is_domain_separated_by_tenant_repository_and_capability() {
@@ -6401,5 +6441,192 @@ mod tests {
             &late_placeholder
         ));
         assert_eq!(resources.len(), 2);
+    }
+
+    #[test]
+    fn expanded_directory_move_authorizes_every_descendant_before_and_after() {
+        let before = BTreeMap::from([
+            (
+                vec!["left".to_owned()],
+                TestEntry {
+                    file_id: FileId::new([0x10; 16]).unwrap(),
+                    version: 1,
+                },
+            ),
+            (
+                vec!["left".to_owned(), "asset".to_owned()],
+                TestEntry {
+                    file_id: FileId::new([0x11; 16]).unwrap(),
+                    version: 1,
+                },
+            ),
+            (
+                vec!["left".to_owned(), "nested".to_owned(), "sidecar".to_owned()],
+                TestEntry {
+                    file_id: FileId::new([0x12; 16]).unwrap(),
+                    version: 1,
+                },
+            ),
+        ]);
+        let after = BTreeMap::from([
+            (
+                vec!["right".to_owned()],
+                TestEntry {
+                    file_id: FileId::new([0x10; 16]).unwrap(),
+                    version: 1,
+                },
+            ),
+            (
+                vec!["right".to_owned(), "asset".to_owned()],
+                TestEntry {
+                    file_id: FileId::new([0x11; 16]).unwrap(),
+                    version: 1,
+                },
+            ),
+            (
+                vec![
+                    "right".to_owned(),
+                    "nested".to_owned(),
+                    "sidecar".to_owned(),
+                ],
+                TestEntry {
+                    file_id: FileId::new([0x12; 16]).unwrap(),
+                    version: 1,
+                },
+            ),
+        ]);
+        let affected = exact_tree_delta_facts(&before, &after, |entry| entry.file_id).unwrap();
+        let mut resources = Vec::new();
+        let mut failed = false;
+        for fact in affected {
+            record_identity_resource_in_batch(
+                &mut resources,
+                identity_file_resource(
+                    fact.file_id,
+                    Some(String::from_utf8(fact.repository_path_utf8).unwrap()),
+                    None,
+                ),
+                &mut failed,
+            )
+            .unwrap();
+        }
+        assert!(!failed);
+        let actual = resources
+            .into_iter()
+            .map(|resource| (resource.path.unwrap(), resource.file_id.unwrap()))
+            .collect::<BTreeSet<_>>();
+        let expected = BTreeSet::from([
+            (
+                "left".to_owned(),
+                "10101010101010101010101010101010".to_owned(),
+            ),
+            (
+                "left/asset".to_owned(),
+                "11111111111111111111111111111111".to_owned(),
+            ),
+            (
+                "left/nested/sidecar".to_owned(),
+                "12121212121212121212121212121212".to_owned(),
+            ),
+            (
+                "right".to_owned(),
+                "10101010101010101010101010101010".to_owned(),
+            ),
+            (
+                "right/asset".to_owned(),
+                "11111111111111111111111111111111".to_owned(),
+            ),
+            (
+                "right/nested/sidecar".to_owned(),
+                "12121212121212121212121212121212".to_owned(),
+            ),
+        ]);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn modified_same_path_retains_the_exact_file_id_path_fact() {
+        let file_id = FileId::new([0x41; 16]).unwrap();
+        let path = vec!["Game".to_owned(), "asset.bin".to_owned()];
+        let before = BTreeMap::from([(
+            path.clone(),
+            TestEntry {
+                file_id,
+                version: 1,
+            },
+        )]);
+        let after = BTreeMap::from([(
+            path,
+            TestEntry {
+                file_id,
+                version: 2,
+            },
+        )]);
+        let affected = exact_tree_delta_facts(&before, &after, |entry| entry.file_id).unwrap();
+        assert_eq!(affected.len(), 2, "both changed states must be observed");
+        let mut resources = Vec::new();
+        let mut failed = false;
+        for fact in affected {
+            record_identity_resource_in_batch(
+                &mut resources,
+                identity_file_resource(
+                    fact.file_id,
+                    Some(String::from_utf8(fact.repository_path_utf8).unwrap()),
+                    None,
+                ),
+                &mut failed,
+            )
+            .unwrap();
+        }
+        assert!(!failed);
+        assert_eq!(resources.len(), 1, "the canonical batch must deduplicate");
+        assert_eq!(resources[0].path.as_deref(), Some("Game/asset.bin"));
+        assert_eq!(
+            resources[0].file_id.as_deref(),
+            Some("41414141414141414141414141414141")
+        );
+    }
+
+    #[test]
+    fn expanded_effects_over_one_thousand_fail_and_poison_without_truncating() {
+        let mut after = BTreeMap::new();
+        for index in 1_u16..=1_001 {
+            let mut bytes = [0_u8; 16];
+            bytes[..2].copy_from_slice(&index.to_be_bytes());
+            after.insert(
+                vec![format!("asset-{index:04}")],
+                TestEntry {
+                    file_id: FileId::new(bytes).unwrap(),
+                    version: 1,
+                },
+            );
+        }
+        let affected =
+            exact_tree_delta_facts(&BTreeMap::new(), &after, |entry| entry.file_id).unwrap();
+        assert_eq!(affected.len(), 1_001);
+        let mut resources = Vec::new();
+        let mut failed = false;
+        let mut terminal_error = None;
+        for fact in affected {
+            let result = record_identity_resource_in_batch(
+                &mut resources,
+                identity_file_resource(
+                    fact.file_id,
+                    Some(String::from_utf8(fact.repository_path_utf8).unwrap()),
+                    None,
+                ),
+                &mut failed,
+            );
+            if let Err(error) = result {
+                terminal_error = Some(error);
+                break;
+            }
+        }
+        assert_eq!(
+            terminal_error.unwrap().code,
+            crate::DomainErrorCode::ObjectInvalid
+        );
+        assert!(failed, "the same flag used by commit must be poisoned");
+        assert_eq!(resources.len(), 1_000);
     }
 }
