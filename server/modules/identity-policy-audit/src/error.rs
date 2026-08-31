@@ -40,4 +40,3 @@ impl fmt::Display for ParticipantError {
 impl std::error::Error for ParticipantError {}
 
 pub type Result<T> = std::result::Result<T, ParticipantError>;
-

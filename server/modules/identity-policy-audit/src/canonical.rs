@@ -20,7 +20,6 @@ pub(crate) fn sha256(parts: &[&[u8]]) -> [u8; 32] {
     }
     hash.finalize().into()
 }
-
 pub(crate) fn hex(bytes: &[u8]) -> String {
     const DIGITS: &[u8; 16] = b"0123456789abcdef";
     let mut output = String::with_capacity(bytes.len() * 2);
@@ -243,4 +242,3 @@ fn inspect_json(
         _ => Ok(()),
     }
 }
-

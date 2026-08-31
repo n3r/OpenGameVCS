@@ -343,7 +343,6 @@ pub(crate) fn evaluate_allow(
         decision_digest,
     })
 }
-
 fn rule_matches(
     rule: &PolicyRule,
     policy: &PolicyDocument,
@@ -396,4 +395,3 @@ fn rule_matches(
         &policy.case_mode,
     )
 }
-

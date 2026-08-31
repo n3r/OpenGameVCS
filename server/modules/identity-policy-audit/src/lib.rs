@@ -34,4 +34,3 @@ pub use model::{
 pub use participant::{
     PostgresTransactionAuthorizationParticipant, TransactionAuthorizationParticipant,
 };
-

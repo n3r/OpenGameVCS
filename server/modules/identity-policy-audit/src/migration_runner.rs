@@ -298,4 +298,3 @@ fn version_triplet(value: &str) -> Option<(u64, u64, u64)> {
 fn database_error(_error: postgres::Error) -> ParticipantError {
     ParticipantError::new(ParticipantErrorCode::MigrationIncompatible)
 }
-
