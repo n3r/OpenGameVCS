@@ -411,7 +411,17 @@ export async function withRecoverableDirectoryLock({
         if (error?.code?.startsWith?.('TRANSFER_')) throw error;
         mapIo(error, 'state lock acquisition failed');
       }
-      await recoverExpiredLock(rootPin, lockPath, lockTime(now()), leaseMilliseconds);
+      try {
+        await recoverExpiredLock(rootPin, lockPath, lockTime(now()), leaseMilliseconds);
+      } catch (recoveryError) {
+        // A current owner can remove owner.json and its lock directory between
+        // our EEXIST result and the pinned recovery inspection. Windows makes
+        // that cleanup window especially observable. Only the exact wrapped
+        // ENOENT means the contender should retry; identity, ACL, symlink, and
+        // every other storage failure still fail closed.
+        if (recoveryError?.code !== 'TRANSFER_BACKEND_IO'
+            || recoveryError.cause?.code !== 'ENOENT') throw recoveryError;
+      }
       if (attempt + 1 < attempts) await delay(delayMilliseconds);
     }
   }
