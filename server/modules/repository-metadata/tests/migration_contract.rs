@@ -18,7 +18,7 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
     );
     assert_eq!(manifest["database"], "postgresql-15-or-newer");
     let entries = manifest["entries"].as_array().unwrap();
-    assert_eq!(entries.len(), 18);
+    assert_eq!(entries.len(), 21);
     let expected = [
         (1, "expand"),
         (1, "migrate"),
@@ -38,6 +38,9 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
         (6, "expand"),
         (6, "migrate"),
         (6, "contract"),
+        (7, "expand"),
+        (7, "migrate"),
+        (7, "contract"),
     ];
     for (entry, (version, phase)) in entries.iter().zip(expected) {
         assert_eq!(entry["version"], version);
@@ -57,6 +60,7 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
     assert_eq!(entries[11]["requiresCompatibilityFence"], true);
     assert_eq!(entries[14]["requiresCompatibilityFence"], true);
     assert_eq!(entries[17]["requiresCompatibilityFence"], true);
+    assert_eq!(entries[20]["requiresCompatibilityFence"], true);
 }
 
 #[test]
@@ -154,6 +158,24 @@ fn version_six_adds_one_use_scope_bound_file_id_receipts() {
     assert!(expand.contains("authenticated_scope_digest bytea NOT NULL"));
     assert!(expand.contains("consumed_at timestamptz NULL"));
     assert!(expand.contains("UNIQUE (repository_id, file_id)"));
+}
+
+#[test]
+fn version_seven_adds_authority_scope_to_all_metadata_tokens() {
+    let expand = fs::read_to_string(migration_root().join("000007_expand.sql")).unwrap();
+    for table in [
+        "ogvcs_metadata.consistency_tokens",
+        "ogvcs_metadata.cursor_states",
+        "ogvcs_metadata.repository_list_cursor_states",
+    ] {
+        assert!(expand.contains(&format!("ALTER TABLE {table}")));
+    }
+    assert_eq!(
+        expand
+            .matches("ADD COLUMN authenticated_scope_digest")
+            .count(),
+        3
+    );
 }
 
 #[test]

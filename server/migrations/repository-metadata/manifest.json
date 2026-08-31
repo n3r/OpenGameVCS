@@ -170,6 +170,34 @@
       "minimumApplicationVersion": "0.1.0",
       "maximumApplicationVersion": "0.1.x",
       "requiresCompatibilityFence": true
+    },
+    {
+      "version": 7,
+      "phase": "expand",
+      "path": "000007_expand.sql",
+      "sha256": "f77460d9714d80d7ae20206e16cd34d3de5df505324778326f0571b0bb45e14b",
+      "restartable": true,
+      "minimumApplicationVersion": "0.1.0",
+      "maximumApplicationVersion": "0.1.x"
+    },
+    {
+      "version": 7,
+      "phase": "migrate",
+      "path": "000007_migrate.sql",
+      "sha256": "965f82a745c23be1aa939322b167d24529b0c8464e822dcdeb43210471a34bce",
+      "restartable": true,
+      "minimumApplicationVersion": "0.1.0",
+      "maximumApplicationVersion": "0.1.x"
+    },
+    {
+      "version": 7,
+      "phase": "contract",
+      "path": "000007_contract.sql",
+      "sha256": "6641819cde247ece7d4c8904dba4e270e3640fbab14f46c128ade2939a38db77",
+      "restartable": true,
+      "minimumApplicationVersion": "0.1.0",
+      "maximumApplicationVersion": "0.1.x",
+      "requiresCompatibilityFence": true
     }
   ]
 }

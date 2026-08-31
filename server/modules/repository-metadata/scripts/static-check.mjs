@@ -34,7 +34,7 @@ for (const file of rustFiles) {
 
 const manifest = JSON.parse(await readFile(resolve(migrations, 'manifest.json')));
 assert(manifest.schemaVersion === 'ogvcs.repository-metadata/migration-manifest/v1', 'migration manifest schema differs');
-assert(JSON.stringify(manifest.entries.map(({ version, phase }) => [version, phase])) === '[[1,"expand"],[1,"migrate"],[1,"contract"],[2,"expand"],[2,"migrate"],[2,"contract"],[3,"expand"],[3,"migrate"],[3,"contract"],[4,"expand"],[4,"migrate"],[4,"contract"],[5,"expand"],[5,"migrate"],[5,"contract"],[6,"expand"],[6,"migrate"],[6,"contract"]]', 'migration phases are not ordered');
+assert(JSON.stringify(manifest.entries.map(({ version, phase }) => [version, phase])) === '[[1,"expand"],[1,"migrate"],[1,"contract"],[2,"expand"],[2,"migrate"],[2,"contract"],[3,"expand"],[3,"migrate"],[3,"contract"],[4,"expand"],[4,"migrate"],[4,"contract"],[5,"expand"],[5,"migrate"],[5,"contract"],[6,"expand"],[6,"migrate"],[6,"contract"],[7,"expand"],[7,"migrate"],[7,"contract"]]', 'migration phases are not ordered');
 for (const entry of manifest.entries) {
   const bytes = await readFile(resolve(migrations, entry.path));
   const sql = bytes.toString('utf8');
@@ -80,11 +80,16 @@ const expandV6 = await readFile(resolve(migrations, '000006_expand.sql'), 'utf8'
 assert(expandV6.includes('file_id_allocation_receipts'), 'version 6 allocation receipt ledger missing');
 assert(expandV6.includes('authenticated_scope_digest'), 'allocation receipt is not bound to authenticated scope');
 assert(expandV6.includes('consumed_at'), 'allocation receipt is not one-use');
+const expandV7 = await readFile(resolve(migrations, '000007_expand.sql'), 'utf8');
+assert(expandV7.includes('ogvcs_metadata.consistency_tokens'), 'version 7 consistency-token scope migration missing');
+assert(expandV7.includes('ogvcs_metadata.cursor_states'), 'version 7 repository cursor scope migration missing');
+assert(expandV7.includes('ogvcs_metadata.repository_list_cursor_states'), 'version 7 project cursor scope migration missing');
+assert(expandV7.includes('authenticated_scope_digest'), 'version 7 token state is not bound to authenticated scope');
 
 const adapter = await readFile(resolve(root, 'src/postgres.rs'), 'utf8');
 const ports = await readFile(resolve(root, 'src/ports.rs'), 'utf8');
 assert(
-  adapter.split('crate::verify_schema_compatibility(&mut self.client)?').length - 1 === 17,
+  adapter.split('crate::verify_schema_compatibility(&mut self.client)?').length - 1 === 19,
   'every mutation/read entry point is not schema-compatibility gated',
 );
 assert(ports.includes('ValidationMode::Production'), 'default object validator is not production lifecycle');

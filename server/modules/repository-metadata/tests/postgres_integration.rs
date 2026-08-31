@@ -1707,7 +1707,7 @@ fn migration_v1_v5_upgrade_report(database_url: &str) {
     };
     let mut store = PostgresMetadataStore::connect(database_url).unwrap();
     let upgrade = store.migrate(options).unwrap();
-    assert_eq!((upgrade.applied, upgrade.already_applied), (12, 3));
+    assert_eq!((upgrade.applied, upgrade.already_applied), (18, 3));
     drop(store);
 
     let mut client = Client::connect(database_url, NoTls).unwrap();
@@ -1760,8 +1760,8 @@ fn migration_report(database_url: &str) {
         application_version: "0.1.0",
         compatibility_fence_open: true,
     };
-    assert_eq!(store.migrate(options).unwrap().applied, 15);
-    assert_eq!(store.migrate(options).unwrap().already_applied, 15);
+    assert_eq!(store.migrate(options).unwrap().applied, 21);
+    assert_eq!(store.migrate(options).unwrap().already_applied, 21);
     drop(store);
 
     let mut client = Client::connect(database_url, NoTls).unwrap();
@@ -1890,7 +1890,7 @@ fn migration_report(database_url: &str) {
             "INSERT INTO ogvcs_metadata.schema_migrations
              (version, phase, checksum_sha256, state, minimum_application_version,
               maximum_application_version, completed_at)
-             VALUES (6, 'expand', repeat('a', 64), 'completed', '0.2.0', '0.2.x', clock_timestamp())",
+             VALUES (8, 'expand', repeat('a', 64), 'completed', '0.2.0', '0.2.x', clock_timestamp())",
             &[],
         )
         .unwrap();
@@ -1904,7 +1904,7 @@ fn migration_report(database_url: &str) {
     let mut client = Client::connect(database_url, NoTls).unwrap();
     client
         .execute(
-            "DELETE FROM ogvcs_metadata.schema_migrations WHERE version = 6",
+            "DELETE FROM ogvcs_metadata.schema_migrations WHERE version = 8",
             &[],
         )
         .unwrap();

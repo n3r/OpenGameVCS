@@ -4,7 +4,7 @@ use sha2::{Digest, Sha256};
 use crate::{DomainError, DomainErrorCode, Result, MIGRATIONS};
 
 const MIGRATION_LOCK: &str = "ogvcs-metadata-migrations-v1";
-const MAXIMUM_SCHEMA_VERSION: i64 = 6;
+const MAXIMUM_SCHEMA_VERSION: i64 = 7;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct MigrationRunOptions {

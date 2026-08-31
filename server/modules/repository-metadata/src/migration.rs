@@ -27,7 +27,7 @@ pub struct Migration {
     pub requires_compatibility_fence: bool,
 }
 
-pub const MIGRATIONS: [Migration; 18] = [
+pub const MIGRATIONS: [Migration; 21] = [
     Migration {
         version: 1,
         phase: MigrationPhase::Expand,
@@ -203,6 +203,36 @@ pub const MIGRATIONS: [Migration; 18] = [
         phase: MigrationPhase::Contract,
         sql: include_str!("../../../migrations/repository-metadata/000006_contract.sql"),
         checksum_sha256: "c52abfbc0d20e95881cad36fab06395a694bdafba55ee8d09a5674c6434cf574",
+        restartable: true,
+        minimum_application_version: "0.1.0",
+        maximum_application_version: "0.1.x",
+        requires_compatibility_fence: true,
+    },
+    Migration {
+        version: 7,
+        phase: MigrationPhase::Expand,
+        sql: include_str!("../../../migrations/repository-metadata/000007_expand.sql"),
+        checksum_sha256: "f77460d9714d80d7ae20206e16cd34d3de5df505324778326f0571b0bb45e14b",
+        restartable: true,
+        minimum_application_version: "0.1.0",
+        maximum_application_version: "0.1.x",
+        requires_compatibility_fence: false,
+    },
+    Migration {
+        version: 7,
+        phase: MigrationPhase::Migrate,
+        sql: include_str!("../../../migrations/repository-metadata/000007_migrate.sql"),
+        checksum_sha256: "965f82a745c23be1aa939322b167d24529b0c8464e822dcdeb43210471a34bce",
+        restartable: true,
+        minimum_application_version: "0.1.0",
+        maximum_application_version: "0.1.x",
+        requires_compatibility_fence: false,
+    },
+    Migration {
+        version: 7,
+        phase: MigrationPhase::Contract,
+        sql: include_str!("../../../migrations/repository-metadata/000007_contract.sql"),
+        checksum_sha256: "6641819cde247ece7d4c8904dba4e270e3640fbab14f46c128ade2939a38db77",
         restartable: true,
         minimum_application_version: "0.1.0",
         maximum_application_version: "0.1.x",
