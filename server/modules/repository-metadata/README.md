@@ -29,9 +29,9 @@ rechecks that closed set, and appends the ordinary decision commitment before
 commit. Any error poisons the transaction. The production wrapper neither
 implements nor dereferences to the legacy `MetadataStore`, so caller-owned
 `AuthorizationContext` entry points cannot be selected after binding. The
-constructible compatibility adapter is compiled only with the repository's
-`legacy-test-adapter` feature and is never enabled in a default production
-build. Development reads authorize and
+opaque compatibility type has no default-build constructor or validator/
+authorizer injection path; those entry points compile only with the
+repository's `legacy-test-adapter` feature. Development reads authorize and
 revalidate exact typed resource projections before returning data. Repository
 arguments retained for OGVCS-010 composition are checked against their binding
 before validation or SQL. A

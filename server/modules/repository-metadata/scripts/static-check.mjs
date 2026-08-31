@@ -90,7 +90,6 @@ assert(expandV7.includes('authenticated_scope_digest'), 'version 7 token state i
 
 const adapter = await readFile(resolve(root, 'src/postgres.rs'), 'utf8');
 const ports = await readFile(resolve(root, 'src/ports.rs'), 'utf8');
-const library = await readFile(resolve(root, 'src/lib.rs'), 'utf8');
 assert(
   adapter.split('crate::verify_schema_compatibility(&mut self.client)?').length - 1 === 19,
   'every mutation/read entry point is not schema-compatibility gated',
@@ -101,7 +100,6 @@ assert(ports.includes('resource: &AuthorizationResource'), 'authorizer is not bo
 assert(adapter.includes('#[cfg(feature = "legacy-test-adapter")]\n    pub fn connect(database_url: &str)'), 'caller-context store constructor is available in the default build');
 assert(adapter.includes('impl IdentityBoundPostgresMetadataStore<DenyAllAuthorization, ProductionObjectValidator>'), 'production identity-bound constructor is missing');
 assert(adapter.includes('pub fn connect(\n        database_url: &str,\n        participant: PostgresTransactionAuthorizationParticipant,'), 'production constructor does not require the OGVCS-009 participant');
-assert(library.includes('#[cfg(feature = "legacy-test-adapter")]\npub use postgres::PostgresMetadataStore;'), 'legacy store remains exported by the default build');
 for (const evidence of [
   'pub fn begin_authorized(',
   'pub fn execute_serializable<T>(',
