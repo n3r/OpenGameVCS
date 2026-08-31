@@ -12,6 +12,13 @@ authorized view, rechecks a bounded canonical resource set, emits the neutral
 an ordinary decision commitment in that same database transaction. Any error
 poisons the transaction using the database fail-closed function.
 
+Migration v1 remains byte-frozen at SHA-256
+`f31def32f2dc2a5da085187e345fa91ca0defe1035426c17fdeba719bd1df583`.
+Additive v2 installs and validates equivalent 1..256-byte opaque-ID checks,
+then removes only the v1 PostgreSQL regular expressions whose `{1,256}` bound
+cannot be evaluated by PostgreSQL 15. The live test applies v1 and v2 before
+the first decision insert and verifies both versions in the migration ledger.
+
 `TransactionDecisionCommitment` is an OGVCS-009 decision record. It is not
 presented as an OGVCS-003 frozen `AuditEvent`; the latter remains limited to
 the explicitly supported privileged policy/security event classes.

@@ -182,10 +182,30 @@ fn checked_migrations_and_same_transaction_participant_work_on_postgres_15() {
         compatibility_fence_open: true,
     };
     let first = run_migrations(&mut client, options).expect("apply checksummed migrations");
-    assert_eq!(first.applied, 3);
+    assert_eq!(first.applied, 6);
     let second = run_migrations(&mut client, options).expect("restartable migration replay");
     assert_eq!(second.applied, 0);
-    assert_eq!(second.already_applied, 3);
+    assert_eq!(second.already_applied, 6);
+    let migration_rows: Vec<(i64, String, String)> = client
+        .query(
+            "SELECT version, phase, checksum_sha256
+             FROM ogvcs_identity.schema_migrations
+             ORDER BY version,
+               CASE phase WHEN 'expand' THEN 1 WHEN 'migrate' THEN 2 ELSE 3 END",
+            &[],
+        )
+        .expect("read v1 then v2 migration ledger")
+        .into_iter()
+        .map(|row| (row.get(0), row.get(1), row.get(2)))
+        .collect();
+    assert_eq!(migration_rows.len(), 6);
+    assert_eq!(migration_rows[0].0, 1);
+    assert_eq!(migration_rows[0].1, "expand");
+    assert_eq!(
+        migration_rows[0].2,
+        "f31def32f2dc2a5da085187e345fa91ca0defe1035426c17fdeba719bd1df583"
+    );
+    assert_eq!(migration_rows[3].0, 2);
     verify_schema_compatibility(&mut client).expect("schema compatibility fence");
 
     let presentation = "live.credential.presentation";

@@ -4,7 +4,7 @@ use sha2::{Digest, Sha256};
 use crate::{Migration, ParticipantError, ParticipantErrorCode, Result, MIGRATIONS};
 
 const MIGRATION_LOCK: &str = "ogvcs-identity-policy-migrations-v1";
-const MAXIMUM_SCHEMA_VERSION: i64 = 1;
+const MAXIMUM_SCHEMA_VERSION: i64 = 2;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct MigrationRunOptions {
