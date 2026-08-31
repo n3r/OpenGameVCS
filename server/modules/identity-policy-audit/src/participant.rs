@@ -116,6 +116,9 @@ impl PostgresTransactionAuthorizationParticipant {
             &credential.actor,
             &credential.scope,
             request_facts,
+            request.reference.is_none()
+                && request.resource.resource_type == "repository"
+                && request.resource.path.is_none(),
         )?;
         let evidence = evidence(&credential, &policy, &presentation_digest)?;
         let evidence_digest = hex(&digest_json(&evidence)?);
@@ -186,6 +189,7 @@ impl PostgresTransactionAuthorizationParticipant {
                     reference: reference.as_deref(),
                     snapshot: view.request.snapshot.as_deref(),
                 },
+                false,
             )
             .map(|decision| decision.decision_digest)
         })?;
@@ -368,6 +372,9 @@ impl PostgresTransactionAuthorizationParticipant {
                 reference: view.request.reference.as_deref(),
                 snapshot: view.request.snapshot.as_deref(),
             },
+            view.request.reference.is_none()
+                && view.request.resource.resource_type == "repository"
+                && view.request.resource.path.is_none(),
         )?;
         if original.request_fingerprint != view.request_fingerprint()
             || original.decision_digest != view.decision_digest()

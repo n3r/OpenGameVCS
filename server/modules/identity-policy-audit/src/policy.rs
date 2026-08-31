@@ -249,6 +249,7 @@ pub(crate) fn evaluate_allow(
     actor: &ActorFacts,
     scope: &CredentialScope,
     request: RequestFacts<'_>,
+    allow_unbound_transaction_scope: bool,
 ) -> Result<AllowDecision> {
     validate_request_surface(request, &policy.case_mode)?;
     validate_scope(scope, &policy.case_mode)
@@ -265,12 +266,16 @@ pub(crate) fn evaluate_allow(
         || (!scope.references.is_empty()
             && request
                 .reference
-                .is_none_or(|reference| !scope.references.iter().any(|value| value == reference)))
-        || !path_in_prefixes(
-            request.resource.path.as_deref(),
-            &scope.path_prefixes,
-            &policy.case_mode,
-        )?
+                .map_or(!allow_unbound_transaction_scope, |reference| {
+                    !scope.references.iter().any(|value| value == reference)
+                }))
+        || (!allow_unbound_transaction_scope
+            && request.resource.resource_type == "path"
+            && !path_in_prefixes(
+                request.resource.path.as_deref(),
+                &scope.path_prefixes,
+                &policy.case_mode,
+            )?)
     {
         return Err(ParticipantError::new(
             ParticipantErrorCode::AuthenticationDenied,

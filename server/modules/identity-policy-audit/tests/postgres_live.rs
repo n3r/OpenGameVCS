@@ -384,6 +384,41 @@ fn checked_migrations_and_same_transaction_participant_work_on_postgres_15() {
 
         let mut transaction = client
             .transaction()
+            .expect("begin missing-final-reference probe");
+        let view = participant
+            .authorize(
+                &mut transaction,
+                &TransactionAuthorizationRequest {
+                    request_id: "request.metadata.missing-final-reference",
+                    credential_presentation: presentation,
+                    tenant: "studio",
+                    repository: "game",
+                    permission: "metadata.read",
+                    reason: None,
+                    resource: &repository,
+                    reference: None,
+                    snapshot: None,
+                },
+            )
+            .expect("defer the reference only at repository transaction start");
+        assert!(participant
+            .recheck_batch(
+                &mut transaction,
+                &view,
+                &TransactionBatchRecheck {
+                    tenant: "studio",
+                    repository: "game",
+                    permission: "metadata.read",
+                    reference: None,
+                    resources: std::slice::from_ref(&repository),
+                },
+            )
+            .is_err());
+        assert!(transaction.simple_query("SELECT 1").is_err());
+        drop(transaction);
+
+        let mut transaction = client
+            .transaction()
             .expect("begin substituted-reference probe");
         let view = participant
             .authorize(
