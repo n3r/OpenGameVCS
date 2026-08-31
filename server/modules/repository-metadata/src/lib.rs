@@ -4,6 +4,19 @@
 //! errors. This crate does include the reference PostgreSQL adapter and the
 //! transaction-composable API used by the OGVCS-010 submit coordinator.
 #![forbid(unsafe_code)]
+#![cfg_attr(
+    not(feature = "legacy-test-adapter"),
+    doc = r#"
+The caller-context compatibility store is intentionally absent from default
+production builds:
+
+```compile_fail
+use ogvcs_repository_metadata::PostgresMetadataStore;
+
+let _ = PostgresMetadataStore::connect("postgresql://example.invalid/db");
+```
+"#
+)]
 
 mod error;
 mod migration;
