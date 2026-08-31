@@ -142,15 +142,37 @@ async function readBoundedBody(response, maximum, signal) {
   try {
     while (true) {
       if (signal?.aborted) identityFail('POLICY_UNAVAILABLE', 'OIDC request was cancelled');
-      const { done, value } = await reader.read();
+      const { done, value } = await readStreamChunk(reader, signal);
       if (done) break;
       if (!(value instanceof Uint8Array)) identityFail('POLICY_UNAVAILABLE', 'OIDC response stream is invalid');
       total += value.byteLength;
       if (total > maximum) identityFail('POLICY_UNAVAILABLE', 'OIDC response exceeds its bound');
       chunks.push(Buffer.from(value));
     }
-  } finally { reader.releaseLock?.(); }
+  } finally {
+    try { reader.releaseLock?.(); }
+    catch { /* An aborted implementation may retain its pending read lock. */ }
+  }
   return Buffer.concat(chunks, total);
+}
+
+async function readStreamChunk(reader, signal) {
+  if (signal === undefined) {
+    try { return await reader.read(); }
+    catch (error) { throw asIdentityError(error, 'POLICY_UNAVAILABLE'); }
+  }
+  if (signal.aborted) identityFail('POLICY_UNAVAILABLE', 'OIDC request was cancelled');
+  let abort;
+  const aborted = new Promise((resolvePromise, reject) => {
+    abort = () => {
+      Promise.resolve(reader.cancel?.(signal.reason)).catch(() => {});
+      reject(asIdentityError(signal.reason ?? new Error('OIDC request was cancelled'), 'POLICY_UNAVAILABLE'));
+    };
+    signal.addEventListener('abort', abort, { once: true });
+  });
+  try { return await Promise.race([Promise.resolve().then(() => reader.read()), aborted]); }
+  catch (error) { throw asIdentityError(error, 'POLICY_UNAVAILABLE'); }
+  finally { signal.removeEventListener('abort', abort); }
 }
 
 async function fetchJson(fetchImplementation, endpoint, init, options) {
@@ -188,6 +210,28 @@ function stringAudience(aud, clientId) {
     && aud.includes(clientId);
 }
 
+function canonicalJwkBytes(value, expectedBytes) {
+  if (typeof value !== 'string' || !BASE64URL.test(value)) return null;
+  const bytes = Buffer.from(value, 'base64url');
+  return bytes.byteLength === expectedBytes && bytes.toString('base64url') === value ? bytes : null;
+}
+
+function acceptedSigningJwk(jwk, algorithm) {
+  if (!jwk || typeof jwk !== 'object' || Array.isArray(jwk)) return false;
+  if (algorithm === 'ES256') {
+    return jwk.kty === 'EC' && jwk.crv === 'P-256'
+      && canonicalJwkBytes(jwk.x, 32) !== null && canonicalJwkBytes(jwk.y, 32) !== null;
+  }
+  if (algorithm === 'RS256') {
+    if (jwk.kty !== 'RSA' || typeof jwk.n !== 'string' || typeof jwk.e !== 'string'
+        || !BASE64URL.test(jwk.n) || !BASE64URL.test(jwk.e)) return false;
+    const modulus = Buffer.from(jwk.n, 'base64url'); const exponent = Buffer.from(jwk.e, 'base64url');
+    return modulus.byteLength >= 256 && modulus.toString('base64url') === jwk.n
+      && exponent.byteLength >= 1 && exponent.byteLength <= 8 && exponent.toString('base64url') === jwk.e;
+  }
+  return false;
+}
+
 export function verifyOidcIdToken(token, { provider: providerInput, jwks, nonce, now }) {
   const provider = validateOidcProvider(providerInput);
   if (typeof token !== 'string' || Buffer.byteLength(token, 'utf8') > 131_072) identityFail('AUTHENTICATION_DENIED');
@@ -206,13 +250,14 @@ export function verifyOidcIdToken(token, { provider: providerInput, jwks, nonce,
   }
   const matches = jwks.keys.filter((key) => key && typeof key === 'object'
     && key.kid === header.kid && (key.alg === undefined || key.alg === header.alg)
-    && (key.use === undefined || key.use === 'sig'));
+    && (key.use === undefined || key.use === 'sig') && acceptedSigningJwk(key, header.alg));
   if (matches.length !== 1) identityFail('AUTHENTICATION_DENIED', 'OIDC signing key is unavailable or ambiguous');
   let key;
   try { key = createPublicKey({ key: matches[0], format: 'jwk' }); }
   catch (error) { identityFail('POLICY_UNAVAILABLE', 'OIDC signing key is invalid', { cause: error }); }
   const signature = Buffer.from(segments[2], 'base64url');
   if (signature.toString('base64url') !== segments[2]) identityFail('AUTHENTICATION_DENIED');
+  if (header.alg === 'ES256' && signature.byteLength !== 64) identityFail('AUTHENTICATION_DENIED');
   const signingInput = Buffer.from(`${segments[0]}.${segments[1]}`, 'ascii');
   const algorithm = header.alg === 'RS256' ? 'RSA-SHA256' : 'sha256';
   const keyOptions = header.alg === 'ES256' ? { key, dsaEncoding: 'ieee-p1363' } : key;
@@ -227,6 +272,7 @@ export function verifyOidcIdToken(token, { provider: providerInput, jwks, nonce,
       || typeof claims.sub !== 'string' || claims.sub.length < 1 || Buffer.byteLength(claims.sub, 'utf8') > 256
       || !Number.isSafeInteger(claims.exp) || claims.exp < now - skew
       || !Number.isSafeInteger(claims.iat) || claims.iat > now + skew
+      || (claims.nbf !== undefined && (!Number.isSafeInteger(claims.nbf) || claims.nbf > now + skew))
       || claims.iat > claims.exp
       || claims.nonce !== nonce) {
     identityFail('AUTHENTICATION_DENIED', 'OIDC claims are invalid');

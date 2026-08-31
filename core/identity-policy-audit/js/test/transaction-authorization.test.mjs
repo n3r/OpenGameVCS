@@ -75,6 +75,14 @@ test('transaction view derives epoch, policy, scope, and actor from current cred
   assert.equal(context.authority.permits(structuredClone(view), { transaction, permission: 'metadata.read', resource: resource() }), false);
 });
 
+test('transaction credential evidence ignores caller epoch and rejects the authoritative mismatch', () => {
+  const context = fixture(); const transaction = context.participant.open();
+  context.participant.initializePolicy('studio', policy(1, 3));
+  assert.throws(() => context.authority.begin({
+    transaction, credentialToken: context.issued.token, request: request(),
+  }), ({ code }) => code === 'EPOCH_STALE');
+});
+
 test('transaction view rejects resource, transaction, policy-generation, and revocation substitution', () => {
   const context = fixture(); const transaction = context.participant.open(); const other = context.participant.open();
   const view = context.authority.begin({ transaction, credentialToken: context.issued.token, request: request() });

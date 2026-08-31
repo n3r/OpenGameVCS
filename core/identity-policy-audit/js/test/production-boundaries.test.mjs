@@ -15,7 +15,7 @@ const executions = Object.freeze({
   }),
   'oidc-state-replay-denied': Object.freeze({
     expected: 'AUTHENTICATION_DENIED', file: 'oidc-bootstrap.test.mjs',
-    name: 'authorization code flow uses PKCE S256 and one-use state before issuing an identity',
+    name: 'authorization code state replay is independently denied after completion',
   }),
   'oidc-id-token-signature-invalid': Object.freeze({
     expected: 'AUTHENTICATION_DENIED', file: 'oidc-bootstrap.test.mjs',
@@ -43,7 +43,7 @@ const executions = Object.freeze({
   }),
   'transaction-credential-caller-epoch-ignored': Object.freeze({
     expected: 'DENY_EPOCH_STALE', file: 'transaction-authorization.test.mjs',
-    name: 'transaction view rejects resource, transaction, policy-generation, and revocation substitution',
+    name: 'transaction credential evidence ignores caller epoch and rejects the authoritative mismatch',
   }),
   'transaction-view-resource-substitution': Object.freeze({
     expected: 'DENY_NOT_AUTHORIZED', file: 'transaction-authorization.test.mjs',
