@@ -49,7 +49,7 @@
     "test:transfer:spec": "npm run test --workspace @opengamevcs/object-transfer-contract-v1",
     "test:identity": "npm run test --workspace @opengamevcs/identity-policy-audit && node --test tools/identity-policy-workflow-policy.test.mjs",
     "test:identity:spec": "npm run test --workspace @opengamevcs/identity-policy-audit-contract-v1",
-    "test:sandbox": "npm run test --workspace @opengamevcs/untrusted-sandbox-contract-v1 && npm run test --workspace @opengamevcs/untrusted-sandbox",
+    "test:sandbox": "npm run test:source --workspace @opengamevcs/untrusted-sandbox-contract-v1 && npm run test --workspace @opengamevcs/untrusted-sandbox",
     "test:protocol": "npm run test --workspace @opengamevcs/protocol-baseline",
     "test:protocol:adapter": "npm run check --workspace @opengamevcs/protocol-baseline-independent-adapter",
     "test:protocol:spec": "node foundation/protocol-baseline/codegen/generate.mjs --check && npm run check --workspace @opengamevcs/protocol-contract-v1 && node --test spec/protocols/v1/test/package-contract.test.mjs spec/protocols/v1/test/validate-spec.test.mjs",

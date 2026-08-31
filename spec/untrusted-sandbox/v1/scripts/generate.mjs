@@ -18,7 +18,7 @@ export const verifySandboxPredecessors = async () => {
   return Object.freeze(predecessors.map((pin) => Object.freeze({ ...pin })));
 };
 export const expectedSandboxManifest = async () => {
-  const paths = ['README.md', 'package.json', 'validate-spec.mjs', ...(await walk('schemas')), ...(await walk('vectors'))].sort();
+  const paths = ['README.md', 'package.json', 'test/validate-spec.test.mjs', 'validate-spec.mjs', ...(await walk('schemas')), ...(await walk('vectors'))].sort();
   const artifacts = await Promise.all(paths.map(async (path) => { const bytes = await readFile(resolve(root, path)); return Object.freeze({ path, bytes: bytes.length, sha256: sha256(bytes) }); }));
   const predecessorPins = Object.freeze(predecessors.map((pin) => Object.freeze({ ...pin })));
   return Object.freeze({ schemaVersion: 'ogvcs.untrusted-sandbox/contract-manifest/v1', generatorSha256: sha256(await readFile(fileURLToPath(import.meta.url))), artifacts, predecessorPins });

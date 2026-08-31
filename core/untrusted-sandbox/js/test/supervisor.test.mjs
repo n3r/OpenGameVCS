@@ -18,13 +18,38 @@ test('broker credential never enters canonical parser environment, argv, stdin, 
   assert.equal(value.code, 'VALIDATED'); assert.deepEqual(request.environment, {}); assert.deepEqual(request.arguments, []); assert.equal(request.stdin.toString(), `{"inputDigest":"${job.inputDigest}","inputHandle":"opaque.handle.1","schemaVersion":"ogvcs.untrusted-sandbox/parser-input/v1"}`); assert.equal(JSON.stringify(request).includes(canary), false);
 });
 
-test('stalled broker acquisition and launcher start are deadline-bounded', async () => {
+test('stalled broker acquisition and settled launcher failure are deadline-bounded', async () => {
   const broker = new CandidateCredentialBroker({ credential: 'test-only', deadlineMilliseconds: 5, acquire: async () => new Promise(() => {}) });
   assert.equal(await broker.stage(job), null);
-  const launcher = new FakeCandidateLauncher({ start: async () => new Promise(() => {}) });
-  assert.equal((await supervisor(launcher, { deadlineMilliseconds: 5 }).run(job, staged())).code, 'SANDBOX_UNAVAILABLE');
+  let live = true;
+  const launcher = new FakeCandidateLauncher({ start: async (_request, signal) => new Promise((_resolve, reject) => {
+    signal.addEventListener('abort', () => setTimeout(() => { live = false; reject(new Error('safe test settlement')); }, 2), { once: true });
+  }) });
+  assert.equal((await supervisor(launcher, { deadlineMilliseconds: 5, terminationGraceMilliseconds: 50 }).run(job, staged())).code, 'SANDBOX_UNAVAILABLE');
+  assert.equal(live, false);
   assert.throws(() => new CandidateCredentialBroker({ credential: 'test-only', acquire: async () => null, deadlineMilliseconds: 60_001 }), TypeError);
   assert.throws(() => supervisor(new FakeCandidateLauncher(), { terminationGraceMilliseconds: 60_001 }), TypeError);
+});
+
+test('unsettled launcher start rejects boundedly and poisons the supervisor', async () => {
+  const launcher = new FakeCandidateLauncher({ start: async () => new Promise(() => {}) });
+  const subject = supervisor(launcher, { deadlineMilliseconds: 5, terminationGraceMilliseconds: 2 });
+  await assert.rejects(subject.run(job, staged()), containmentFailure);
+  await assert.rejects(subject.run(job, staged()), containmentFailure);
+  assert.equal(launcher.requests.length, 1);
+});
+
+test('process returned after launch timeout is stopped and settled before a result returns', async () => {
+  let settleExit; let live = true; let terminated = 0;
+  const exit = new Promise((resolve) => { settleExit = resolve; });
+  const process = Object.freeze({
+    stdout: (async function* () {})(), stderr: (async function* () {})(), exit,
+    terminate: async () => { terminated += 1; live = false; settleExit({ code: null, signal: 'SIGTERM' }); },
+    kill: async () => {},
+  });
+  const launcher = new FakeCandidateLauncher({ start: async (_request, signal) => new Promise((resolve) => signal.addEventListener('abort', () => setTimeout(() => resolve(process), 2), { once: true })) });
+  const value = await supervisor(launcher, { deadlineMilliseconds: 5, terminationGraceMilliseconds: 50 }).run(job, staged());
+  assert.equal(value.code, 'SANDBOX_UNAVAILABLE'); assert.equal(live, false); assert.equal(terminated, 1);
 });
 
 test('missing controls, unbranded launchers, and public field replacement fail closed', async () => {
@@ -90,6 +115,12 @@ test('process, stream, thenable, and exit records reject accessors and proxies w
 
   let exitGetter = false; const exitRecord = { code: 0, signal: null }; Object.defineProperty(exitRecord, 'signal', { enumerable: true, get() { exitGetter = true; return null; } });
   assert.equal((await supervisor(new FakeCandidateLauncher({ stdout: [output()], exit: Promise.resolve(exitRecord) })).run(job, staged())).code, 'SANDBOX_VALIDATION_FAILED'); assert.equal(exitGetter, false);
+
+  let promiseGetter = false; const accessorPromise = Promise.resolve({ code: 0, signal: null });
+  Object.defineProperty(accessorPromise, 'then', { get() { promiseGetter = true; throw new Error('promise-secret /private/parser'); } });
+  const accessorLauncher = new FakeCandidateLauncher({ exit: accessorPromise }); const subject = supervisor(accessorLauncher);
+  await assert.rejects(subject.run(job, staged()), containmentFailure); assert.equal(promiseGetter, false);
+  await assert.rejects(subject.run(job, staged()), containmentFailure); assert.equal(accessorLauncher.requests.length, 1);
 });
 
 test('nonzero or signalled exit and any stderr are never accepted or disclosed', async () => {

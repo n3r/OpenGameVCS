@@ -11,7 +11,13 @@
     "./validate-spec": "./validate-spec.mjs",
     "./package.json": "./package.json"
   },
-  "files": ["README.md", "manifest.json", "schemas", "scripts", "vectors", "validate-spec.mjs"],
-  "scripts": { "check": "node scripts/generate.mjs --verify-predecessors && node validate-spec.mjs", "test": "npm run check && node --test test/*.test.mjs", "test:package": "npm pack --dry-run --json" },
+  "files": ["README.md", "manifest.json", "schemas", "scripts", "test/validate-spec.test.mjs", "vectors", "validate-spec.mjs"],
+  "scripts": {
+    "check": "node scripts/generate.mjs && node validate-spec.mjs",
+    "check:predecessors": "node scripts/generate.mjs --verify-predecessors",
+    "test": "npm run check && node --test test/validate-spec.test.mjs",
+    "test:source": "npm run check:predecessors && npm test && node --test test/package-contract.test.mjs",
+    "test:package": "npm pack --dry-run --json"
+  },
   "engines": { "node": ">=22" }
 }

@@ -11,6 +11,9 @@ const OUTPUT_KEYS = Object.freeze(['outputs', 'schemaVersion']);
 const OUTPUT_ITEM_KEYS = Object.freeze(['digest', 'path', 'type']);
 const PROCESS_KEYS = Object.freeze(['exit', 'kill', 'stderr', 'stdout', 'terminate']);
 const EXIT_KEYS = Object.freeze(['code', 'signal']);
+const PROMISE_PROTOTYPE = Promise.prototype;
+const PROMISE_THEN = Object.getOwnPropertyDescriptor(PROMISE_PROTOTYPE, 'then')?.value;
+if (typeof PROMISE_THEN !== 'function' || types.isProxy(PROMISE_THEN)) throw new TypeError('native Promise.then is unavailable');
 
 const canonicalJson = (value) => value === null || typeof value !== 'object'
   ? JSON.stringify(value)
@@ -29,6 +32,14 @@ const exact = (source, keys) => {
     return descriptors;
   } catch { return null; }
 };
+const snapshotPromise = (source) => {
+  if (source === null || typeof source !== 'object' || types.isProxy(source) || !types.isPromise(source)) return null;
+  try {
+    if (Object.getPrototypeOf(source) !== PROMISE_PROTOTYPE || Object.getOwnPropertyNames(source).length !== 0) return null;
+    return Object.freeze({ promise: source, then: PROMISE_THEN });
+  } catch { return null; }
+};
+const thenPromise = (snapshot, fulfilled, rejected) => Reflect.apply(snapshot.then, snapshot.promise, [fulfilled, rejected]);
 const snapshotJob = (source) => {
   const data = exact(source, JOB_KEYS); if (!data) return null;
   const job = Object.freeze(Object.fromEntries(JOB_KEYS.map((key) => [key, data[key].value])));
@@ -44,21 +55,22 @@ const snapshotStaged = (source, inputDigest) => {
   const staged = Object.freeze({ handle: data.handle.value, inputDigest: data.inputDigest.value });
   return typeof staged.handle === 'string' && ID.test(staged.handle) && staged.inputDigest === inputDigest ? staged : null;
 };
-const within = async (operation, milliseconds) => {
+const beginWithin = (operation, milliseconds) => {
   const controller = new AbortController(); let timer;
+  const completion = Promise.resolve().then(() => operation(controller.signal)).then(
+    (value) => Object.freeze({ value }),
+    () => Object.freeze({ failed: true }),
+  );
   const deadline = new Promise((resolve) => {
     timer = setTimeout(() => {
+      try { controller.abort(); } catch {}
       resolve(Object.freeze({ timedOut: true }));
-      setImmediate(() => { try { controller.abort(); } catch {} });
     }, milliseconds);
   });
-  try {
-    return await Promise.race([
-      Promise.resolve().then(() => operation(controller.signal)).then((value) => Object.freeze({ value }), () => Object.freeze({ failed: true })),
-      deadline,
-    ]);
-  } finally { clearTimeout(timer); }
+  const outcome = Promise.race([completion, deadline]).finally(() => clearTimeout(timer));
+  return Object.freeze({ completion, outcome });
 };
+const within = async (operation, milliseconds) => beginWithin(operation, milliseconds).outcome;
 const never = () => new Promise(() => {});
 const portablePath = (path) => {
   if (typeof path !== 'string') return false;
@@ -112,8 +124,10 @@ const drain = async (iterator, maximum, discardNonempty = false) => {
   try {
     const chunks = []; let length = 0;
     while (true) {
-      const pending = Reflect.apply(iterator.next, iterator.receiver, []); if (!types.isPromise(pending) || types.isProxy(pending)) return Object.freeze({ kind: 'invalid' });
-      const step = exact(await pending, Object.freeze(['done', 'value'])); if (!step || typeof step.done.value !== 'boolean') return Object.freeze({ kind: 'invalid' });
+      const pending = snapshotPromise(Reflect.apply(iterator.next, iterator.receiver, [])); if (!pending) return Object.freeze({ kind: 'invalid' });
+      const resolved = await thenPromise(pending, (value) => Object.freeze({ value }), () => Object.freeze({ failed: true }));
+      if (resolved.failed) return Object.freeze({ kind: 'invalid' });
+      const step = exact(resolved.value, Object.freeze(['done', 'value'])); if (!step || typeof step.done.value !== 'boolean') return Object.freeze({ kind: 'invalid' });
       if (step.done.value) return Object.freeze({ kind: 'bytes', bytes: discardNonempty ? Buffer.alloc(0) : Buffer.concat(chunks) });
       const bytes = copyChunk(step.value.value); if (!bytes) return Object.freeze({ kind: 'invalid' });
       if (bytes.length > maximum - length) return Object.freeze({ kind: 'overflow' });
@@ -129,14 +143,14 @@ const snapshotExit = (source) => {
 };
 const snapshotProcess = (source) => {
   const data = exact(source, PROCESS_KEYS); if (!data) return null;
-  const terminate = data.terminate.value; const kill = data.kill.value; const exit = data.exit.value;
-  if (typeof terminate !== 'function' || types.isProxy(terminate) || typeof kill !== 'function' || types.isProxy(kill) || !types.isPromise(exit) || types.isProxy(exit)) return null;
+  const terminate = data.terminate.value; const kill = data.kill.value; const exit = snapshotPromise(data.exit.value);
+  if (typeof terminate !== 'function' || types.isProxy(terminate) || typeof kill !== 'function' || types.isProxy(kill) || !exit) return null;
   const stdout = snapshotIterator(data.stdout.value); const stderr = snapshotIterator(data.stderr.value);
   return stdout && stderr ? Object.freeze({ exit, kill, stderr, stdout, terminate }) : null;
 };
 const observe = async (process, maximum) => {
   const stdout = drain(process.stdout, maximum); const stderr = drain(process.stderr, maximum, true);
-  const exit = process.exit.then((value) => Object.freeze({ kind: snapshotExit(value) ? 'success' : 'failed' }), () => Object.freeze({ kind: 'failed' }));
+  const exit = thenPromise(process.exit, (value) => Object.freeze({ kind: snapshotExit(value) ? 'success' : 'failed' }), () => Object.freeze({ kind: 'failed' }));
   const completed = Promise.all([stdout, stderr, exit]).then(([out, err, ended]) => Object.freeze({ out, err, exit: ended }));
   return Promise.race([
     completed,
@@ -146,7 +160,7 @@ const observe = async (process, maximum) => {
   ]);
 };
 const stop = async (process, graceMilliseconds) => {
-  const settled = process.exit.then(() => true, () => false);
+  const settled = thenPromise(process.exit, () => true, () => false);
   await within((signal) => Reflect.apply(process.terminate, undefined, [signal]), graceMilliseconds);
   if ((await within(() => settled, graceMilliseconds)).value === true) return true;
   await within((signal) => Reflect.apply(process.kill, undefined, [signal]), graceMilliseconds);
@@ -180,9 +194,22 @@ export class CandidateSandboxSupervisor {
     if (!parts || ![maxInputBytes, maxOutputBytes, maxOutputRecords, maxMemoryBytes, deadlineMilliseconds, terminationGraceMilliseconds].every((value) => Number.isSafeInteger(value) && value > 0) || maxInputBytes > 256 * 1024 * 1024 || maxOutputRecords > 10_000 || maxOutputBytes > 256 * 1024 * 1024 || maxMemoryBytes > 512 * 1024 * 1024 || deadlineMilliseconds > 60_000 || terminationGraceMilliseconds > 60_000) throw new TypeError('candidate supervisor configuration is invalid');
     this.#parts = parts; this.#maxInputBytes = maxInputBytes; this.#maxOutputBytes = maxOutputBytes; this.#maxOutputRecords = maxOutputRecords; this.#maxMemoryBytes = maxMemoryBytes; this.#deadlineMilliseconds = deadlineMilliseconds; this.#terminationGraceMilliseconds = terminationGraceMilliseconds; Object.freeze(this);
   }
+  #fatalContainment() { this.#poisoned = true; throw new CandidateContainmentError(); }
+  async #settleProcess(process) {
+    try { return await stop(process, this.#terminationGraceMilliseconds); } catch { return false; }
+  }
   async #denyAfterStop(process, jobId, code) {
-    if (await stop(process, this.#terminationGraceMilliseconds)) return result(jobId, code);
-    this.#poisoned = true; throw new CandidateContainmentError();
+    if (await this.#settleProcess(process)) return result(jobId, code);
+    return this.#fatalContainment();
+  }
+  async #settleTimedOutLaunch(attempt, jobId) {
+    const settlement = await within(() => attempt.completion, this.#terminationGraceMilliseconds);
+    if (settlement.timedOut || settlement.failed) return this.#fatalContainment();
+    const completed = settlement.value;
+    if (completed.failed) return result(jobId, 'SANDBOX_UNAVAILABLE');
+    const process = snapshotProcess(completed.value);
+    if (!process || !await this.#settleProcess(process)) return this.#fatalContainment();
+    return result(jobId, 'SANDBOX_UNAVAILABLE');
   }
   async run(jobSource, stagedSource) {
     if (this.#poisoned) throw new CandidateContainmentError();
@@ -192,11 +219,13 @@ export class CandidateSandboxSupervisor {
     const stdin = Buffer.from(canonicalJson({ inputDigest: staged.inputDigest, inputHandle: staged.handle, schemaVersion: 'ogvcs.untrusted-sandbox/parser-input/v1' }), 'utf8');
     if (stdin.length > this.#maxInputBytes) return result(job.jobId, 'SANDBOX_PROTOCOL_INVALID');
     const request = Object.freeze({ job, stdin, environment: Object.freeze({}), arguments: Object.freeze([]), limits: Object.freeze({ deadlineMilliseconds: this.#deadlineMilliseconds, maxMemoryBytes: this.#maxMemoryBytes, maxOutputBytes: this.#maxOutputBytes, maxOutputRecords: this.#maxOutputRecords }) });
-    const launch = await within((signal) => this.#parts.launch(request, signal), this.#deadlineMilliseconds);
-    if (launch.timedOut || launch.failed) return result(job.jobId, 'SANDBOX_UNAVAILABLE');
+    const launchAttempt = beginWithin((signal) => this.#parts.launch(request, signal), this.#deadlineMilliseconds);
+    const launch = await launchAttempt.outcome;
+    if (launch.timedOut) return this.#settleTimedOutLaunch(launchAttempt, job.jobId);
+    if (launch.failed) return result(job.jobId, 'SANDBOX_UNAVAILABLE');
     const processOutcome = await within(() => snapshotProcess(launch.value), this.#deadlineMilliseconds);
     const process = processOutcome.value;
-    if (processOutcome.timedOut || processOutcome.failed || !process) { this.#poisoned = true; throw new CandidateContainmentError(); }
+    if (processOutcome.timedOut || processOutcome.failed || !process) return this.#fatalContainment();
     const outcome = await within(() => observe(process, this.#maxOutputBytes), this.#deadlineMilliseconds);
     if (outcome.timedOut) return this.#denyAfterStop(process, job.jobId, 'SANDBOX_TIMEOUT');
     const observed = outcome.value;
