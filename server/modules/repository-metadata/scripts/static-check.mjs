@@ -864,8 +864,20 @@ assert(!expandV11.includes('NEW.operation_count = 0 OR'), 'version 11 admits an 
 
 const atomicSubmitAdapter = await readFile(resolve(root, 'src/postgres/atomic_submit.rs'), 'utf8');
 assert(atomicSubmitAdapter.includes('finalize_preallocated_creation_submit'), 'private preallocated creation-submit finalize boundary missing');
-assert(atomicSubmitAdapter.includes('FOR UPDATE OF registry'), 'FileID rows are not locked for first consumption');
-assert(atomicSubmitAdapter.includes('ORDER BY operation.operation_ordinal'), 'FileID lock order is not deterministic');
+const fileIdLockStart = atomicSubmitAdapter.indexOf('fn lock_and_validate_file_ids(');
+const fileIdLockEnd = atomicSubmitAdapter.indexOf('\nfn apply_file_id_first_consumptions(', fileIdLockStart);
+assert(fileIdLockStart >= 0 && fileIdLockEnd > fileIdLockStart, 'FileID lock function boundary missing');
+const fileIdLockBody = atomicSubmitAdapter.slice(fileIdLockStart, fileIdLockEnd);
+assert(fileIdLockBody.includes('WITH locked AS MATERIALIZED'), 'FileID canonical lock set is not materialized');
+assert(fileIdLockBody.includes('FOR UPDATE OF registry'), 'FileID rows are not locked for first consumption');
+assert(
+  fileIdLockBody.includes('ORDER BY operation.repository_id, operation.file_id'),
+  'FileID rows are not acquired in canonical repository/FileID order',
+);
+assert(
+  fileIdLockBody.includes('FROM locked\n             ORDER BY operation_ordinal'),
+  'canonical FileID locking does not restore operation order for sealed evidence',
+);
 assert(atomicSubmitAdapter.includes('apply_aggregate_lifecycle_publication_in_transaction'), 'atomic submit does not use the caller-owned bridge');
 assert(atomicSubmitAdapter.includes('submit_file_id_consumptions'), 'atomic submit omits permanent FileID evidence');
 assert(!atomicSubmitAdapter.includes('spec/atomic-submit'), 'private candidate invents a public submit contract');

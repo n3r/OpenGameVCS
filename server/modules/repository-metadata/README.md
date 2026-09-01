@@ -129,6 +129,30 @@ the same receipt, plan, consumption ID, and operation digest before returning
 the stored outcome. A missing outcome returns only `unknown-recovering`; it
 does not invent a not-present or disaster-recovery acknowledgement.
 
+The v11 lock path acquires FileID registry rows in canonical
+`(repository_id, file_id)` order and then restores operation ordinal before
+checking or deriving the sealed operation evidence. This ordering is
+defense-in-depth: the immutable registry `first_change_set_digest` and
+`first_operation` bindings make two valid intents that reverse the same
+FileIDs unreachable. A hostile reversed candidate is therefore rejected at
+intent creation with no leaked intent or operation rows. The reachable
+cross-branch collision keeps identical immutable ordinals and proves one
+non-replay winner; the losing receipt, lifecycle plan, candidate marker,
+FileID evidence, audit/outbox/token, reconciliation, and outcome remain
+unconsumed or absent. A separate eight-intent race from one branch head proves
+one exact publication, while replay after a new database connection returns
+the same durable outcome without another publication.
+
+The private fault harness now separates bridge, FileID, snapshot marker,
+branch CAS, audit, metadata outbox, consistency-token, final-outcome, and
+reconciliation boundaries and compares the complete durable submit projection
+before and after every rollback. `BeforeCommit` is only the test boundary after
+the reconciliation write and immediately before control returns to the commit
+path; it is not a simulation of PostgreSQL commit-I/O failure. Actual
+post-preflight credential revocation, authority-epoch promotion, and policy
+promotion are each rechecked and leave the preflight and all publication state
+unchanged on denial.
+
 This v11 slice does not close OGVCS-010. There is no `spec/atomic-submit`
 package, route, public error carrier, authenticated submit audit class,
 production snapshot `PolicyResult`, lock/review/check proof registry, public

@@ -250,8 +250,14 @@ pub enum AtomicSubmitFaultForTest {
     AfterSnapshotMarker,
     AfterBranchCas,
     AfterAudit,
-    AfterOutbox,
-    AfterOutcome,
+    AfterOutboxEvent,
+    AfterConsistencyToken,
+    AfterFinalOutcome,
+    AfterReconciliation,
+    /// Test boundary after reconciliation is written but before the
+    /// transaction returns to the caller-owned commit path. This does not
+    /// simulate a PostgreSQL commit-I/O failure.
+    BeforeCommit,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -263,8 +269,11 @@ enum AtomicSubmitFault {
     AfterSnapshotMarker,
     AfterBranchCas,
     AfterAudit,
-    AfterOutbox,
-    AfterOutcome,
+    AfterOutboxEvent,
+    AfterConsistencyToken,
+    AfterFinalOutcome,
+    AfterReconciliation,
+    BeforeCommit,
 }
 
 #[derive(Clone, Debug)]
@@ -456,8 +465,13 @@ impl<A, V> IdentityBoundPostgresMetadataStore<A, V> {
             AtomicSubmitFaultForTest::AfterSnapshotMarker => AtomicSubmitFault::AfterSnapshotMarker,
             AtomicSubmitFaultForTest::AfterBranchCas => AtomicSubmitFault::AfterBranchCas,
             AtomicSubmitFaultForTest::AfterAudit => AtomicSubmitFault::AfterAudit,
-            AtomicSubmitFaultForTest::AfterOutbox => AtomicSubmitFault::AfterOutbox,
-            AtomicSubmitFaultForTest::AfterOutcome => AtomicSubmitFault::AfterOutcome,
+            AtomicSubmitFaultForTest::AfterOutboxEvent => AtomicSubmitFault::AfterOutboxEvent,
+            AtomicSubmitFaultForTest::AfterConsistencyToken => {
+                AtomicSubmitFault::AfterConsistencyToken
+            }
+            AtomicSubmitFaultForTest::AfterFinalOutcome => AtomicSubmitFault::AfterFinalOutcome,
+            AtomicSubmitFaultForTest::AfterReconciliation => AtomicSubmitFault::AfterReconciliation,
+            AtomicSubmitFaultForTest::BeforeCommit => AtomicSubmitFault::BeforeCommit,
         };
         self.finalize_preallocated_creation_submit_inner(request, fault, false)
     }
@@ -767,7 +781,9 @@ fn finalize_transaction(
     }
 
     // Deterministic shared lock order: submit intent -> exact branch -> FileIDs
-    // in operation ordinal -> identity plan -> lifecycle plan/object rows.
+    // in canonical (repository, FileID) order -> identity plan -> lifecycle
+    // plan/object rows. The query restores operation ordinal before deriving or
+    // persisting ordered submit evidence.
     lock_and_validate_branch(transaction, &intent)?;
     let operations = lock_and_validate_file_ids(transaction, &intent)?;
     if fault == AtomicSubmitFault::BeforeBridge {
@@ -903,6 +919,9 @@ fn finalize_transaction(
             ],
         )
         .map_err(database_error)?;
+    if fault == AtomicSubmitFault::AfterOutboxEvent {
+        return Err(denied());
+    }
     let consistency_token = opaque_token("ct1.")?;
     let consistency_token_digest: [u8; 32] = Sha256::digest(consistency_token.as_bytes()).into();
     transaction
@@ -925,7 +944,7 @@ fn finalize_transaction(
             ],
         )
         .map_err(database_error)?;
-    if fault == AtomicSubmitFault::AfterOutbox {
+    if fault == AtomicSubmitFault::AfterConsistencyToken {
         return Err(denied());
     }
 
@@ -978,13 +997,19 @@ fn finalize_transaction(
             ],
         )
         .map_err(database_error)?;
+    if fault == AtomicSubmitFault::AfterFinalOutcome {
+        return Err(denied());
+    }
     insert_reconciliation_record(
         transaction,
         request.intent_id,
         Some(result_digest),
         Some(request.authorization.authority_epoch()),
     )?;
-    if fault == AtomicSubmitFault::AfterOutcome {
+    if fault == AtomicSubmitFault::AfterReconciliation {
+        return Err(denied());
+    }
+    if fault == AtomicSubmitFault::BeforeCommit {
         return Err(denied());
     }
     Ok(PreallocatedCreationSubmitOutcome {
@@ -1486,24 +1511,38 @@ fn lock_and_validate_file_ids(
 ) -> Result<Vec<IntentOperation>> {
     let rows = transaction
         .query(
-            "SELECT operation.operation_ordinal, operation.operation_kind,
-                    operation.file_id, operation.repository_path_utf8,
-                    operation.prior_owner_kind, operation.prior_owner_id,
-                    operation.operation_digest,
-                    registry.state::text, registry.origin::text,
-                    registry.owner_kind::text, registry.owner_id,
-                    registry.first_change_set_digest, registry.first_operation,
-                    NOT EXISTS (
-                        SELECT 1 FROM ogvcs_metadata.submit_file_id_consumptions AS prior
-                        WHERE prior.repository_id = operation.repository_id
-                          AND prior.file_id = operation.file_id)
-             FROM ogvcs_metadata.submit_intent_operations AS operation
-             JOIN ogvcs_metadata.file_id_registry AS registry
-               ON registry.repository_id = operation.repository_id
-              AND registry.file_id = operation.file_id
-             WHERE operation.intent_id = $1
-             ORDER BY operation.operation_ordinal
-             FOR UPDATE OF registry",
+            "WITH locked AS MATERIALIZED (
+                 SELECT operation.operation_ordinal, operation.operation_kind,
+                        operation.file_id, operation.repository_path_utf8,
+                        operation.prior_owner_kind, operation.prior_owner_id,
+                        operation.operation_digest,
+                        registry.state::text AS state,
+                        registry.origin::text AS origin,
+                        registry.owner_kind::text AS current_owner_kind,
+                        registry.owner_id AS current_owner_id,
+                        registry.first_change_set_digest,
+                        registry.first_operation,
+                        NOT EXISTS (
+                            SELECT 1
+                            FROM ogvcs_metadata.submit_file_id_consumptions AS prior
+                            WHERE prior.repository_id = operation.repository_id
+                              AND prior.file_id = operation.file_id
+                        ) AS unconsumed
+                 FROM ogvcs_metadata.submit_intent_operations AS operation
+                 JOIN ogvcs_metadata.file_id_registry AS registry
+                   ON registry.repository_id = operation.repository_id
+                  AND registry.file_id = operation.file_id
+                 WHERE operation.intent_id = $1
+                 ORDER BY operation.repository_id, operation.file_id
+                 FOR UPDATE OF registry
+             )
+             SELECT operation_ordinal, operation_kind, file_id,
+                    repository_path_utf8, prior_owner_kind, prior_owner_id,
+                    operation_digest, state, origin, current_owner_kind,
+                    current_owner_id, first_change_set_digest, first_operation,
+                    unconsumed
+             FROM locked
+             ORDER BY operation_ordinal",
             &[&Uuid::from_bytes(intent.intent.intent_id)],
         )
         .map_err(database_error)?;
