@@ -59,9 +59,12 @@ or revocation wins and publication is denied.
 
 ## Evidence and nonclaims
 
-The Ubuntu hosted lane builds a one-layer `scratch` image containing only the
-pinned trusted shim, then exercises real Docker create/start/cleanup, uid 65532
-mount readability, network/credential/host/sibling/undeclared-input isolation,
+The Ubuntu hosted lane deterministically archives only the pinned trusted shim
+and imports that one-file rootfs as a one-layer Linux/amd64 image with an empty
+image-authored environment and the exact runtime labels. It does not use the
+Dockerfile frontend because that frontend injects a default `PATH` even for a
+`scratch` stage. The lane then exercises real Docker create/start/cleanup, uid
+65532 mount readability, network/credential/host/sibling/undeclared-input isolation,
 namespace/device/traversal denial, symlink/recursion validation, bomb/hang/fork/
 clone/clone3 namespace/memory/disk/stdout/crash/CPU bounds, cancellation,
 restart, expired-deadline terminal replay, idempotency, revocation, and next-job
