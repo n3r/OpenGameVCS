@@ -1449,7 +1449,7 @@ fn prove_v7_to_v8_upgrade_and_bounds(database_url: &str) {
     )
     .unwrap();
     assert_eq!(report.already_applied, 21);
-    assert_eq!(report.applied, 6);
+    assert_eq!(report.applied, 9);
     let upgraded: (bool, bool, i64) = client
         .query_one(
             "SELECT authorization_resources IS NULL,
@@ -1633,18 +1633,18 @@ fn promote_subject_a_authority(database_url: &str, tenant: &str, repository: &st
 
 fn prepare_database(database_url: &str, tenant_id: TenantId, repository_id: RepositoryId) {
     let mut client = Client::connect(database_url, NoTls).unwrap();
-    run_metadata_migrations(
-        &mut client,
-        MetadataMigrationRunOptions {
-            application_version: "0.1.0",
-            compatibility_fence_open: true,
-        },
-    )
-    .unwrap();
     run_identity_migrations(
         &mut client,
         IdentityMigrationRunOptions {
             application_version: "0.2.0",
+            compatibility_fence_open: true,
+        },
+    )
+    .unwrap();
+    run_metadata_migrations(
+        &mut client,
+        MetadataMigrationRunOptions {
+            application_version: "0.1.0",
             compatibility_fence_open: true,
         },
     )

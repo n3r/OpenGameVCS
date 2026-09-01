@@ -38,8 +38,8 @@ test('repository metadata workflow pins the bounded three-host and PostgreSQL bo
   assert.match(workflow, /ALTER SYSTEM SET max_connections = 160/u);
   assert.match(workflow, /ogvcs_metadata_test_ci/u);
   assert.equal(workflow.match(/cargo fetch .* --locked/gu)?.length, 2);
-  assert.equal(workflow.match(/cargo test .* --locked --offline/gu)?.length, 4);
-  assert.equal(workflow.match(/--features legacy-test-adapter/gu)?.length, 2);
+  assert.equal(workflow.match(/cargo test .* --locked --offline/gu)?.length, 5);
+  assert.equal(workflow.match(/--features legacy-test-adapter/gu)?.length, 3);
   assert.equal(workflow.match(/npm run test:metadata$/gmu)?.length, 1);
   assert.equal(
     workflow.match(/npm run test:package --workspace @opengamevcs\/repository-metadata-contract-v1/gu)?.length,
@@ -59,6 +59,14 @@ test('repository metadata workflow pins the bounded three-host and PostgreSQL bo
   assert.match(
     workflow,
     /cargo test .* --locked --offline --test identity_binding_live -- --test-threads=1/u,
+  );
+  assert.match(
+    workflow,
+    /OGVCS_METADATA_AGGREGATE_DATABASE_URL: postgresql:\/\/postgres:postgres@127\.0\.0\.1:5432\/ogvcs_metadata_test_ci/u,
+  );
+  assert.match(
+    workflow,
+    /cargo test .* --locked --offline --features legacy-test-adapter --test aggregate_bridge_postgres_live -- --test-threads=1/u,
   );
   assert.match(
     workflow,

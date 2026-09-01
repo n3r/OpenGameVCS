@@ -357,13 +357,14 @@ impl<A, V> PostgresMetadataStore<A, V> {
             .execute(
                 "INSERT INTO ogvcs_metadata.lifecycle_publication_plans
                  (plan_id, tenant_id, repository_id, publication_kind, publication_digest,
+                  authorization_reference, authorization_snapshot,
                   subject_digest, authorization_epoch, authority_contract_digest,
                   structural_commitment_digest, lifecycle_contract_digest, candidate_digest,
                   declared_plan_digest, idempotency_scope_digest, idempotency_operation,
                   idempotency_key, semantic_fingerprint, declared_object_count,
                   declared_chunk_count, declared_encoded_bytes, expires_at)
                  SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-                        $13, $14, $15, $16, $17, $18, $19,
+                        $13, $14, $15, $16, $17, $18, $19, $20, $21,
                         clock_timestamp() + interval '1 day'
                  WHERE EXISTS (
                     SELECT 1 FROM ogvcs_metadata.repositories
@@ -375,6 +376,8 @@ impl<A, V> PostgresMetadataStore<A, V> {
                     &uuid(plan.repository_id),
                     &(plan.publication_ref.kind.code() as i16),
                     &&plan.publication_ref.digest[..],
+                    &plan.authorization_reference,
+                    &plan.authorization_snapshot,
                     &&plan.subject_digest[..],
                     &(plan.authorization_epoch as i64),
                     &&plan.authority_contract_digest[..],

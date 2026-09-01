@@ -20,9 +20,11 @@ internal page ports deliberately use a stricter 1,000-item cap and do not yet
 carry the public `PageResult` consistency-token field. They must not be
 presented as generated wire-contract implementations.
 
-The production constructor is `IdentityBoundPostgresMetadataStore::connect`;
-it requires the OGVCS-009 PostgreSQL participant before returning a store and
-exposes only credential-presentation entry points. The default identity-bound
+The direct production constructor is `IdentityBoundPostgresMetadataStore::connect`;
+it requires the OGVCS-009 PostgreSQL participant before returning a store.
+`connect_with_aggregate_authorization` additionally requires the aggregate-v3
+participant and exposes the opaque-receipt lifecycle bridge without exposing
+PostgreSQL handles or signing secrets. The default identity-bound
 transaction admits immutable `PutObject`, `CreateRepository`, receipt-backed
 `ReserveFileId`, `ImportFileId` staging, and consistency-token issuance. It
 rejects `Publish`, generic reference CAS, tombstone, and restore before opening
@@ -49,14 +51,25 @@ or OGVCS-010. The default identity-bound API exposes no generic lifecycle or
 publication bypass. Its current private metadata-transaction hook is
 submit-only and rechecks the exact `Publish` authorized view; GC and transfer
 variants remain closed until their own OGVCS-009 authority participants exist.
-Likewise, aggregate plans can be streamed and sealed structurally in bounded
-1,000-item/1 MiB chunks for storage testing, but cannot be applied until the
-ratified aggregate-v3 key-ring-authenticated receipt is consumed and
-revalidated in the same transaction. A structural commitment is not an HMAC
-authority seal, and the internal lifecycle application receipt is not the
-authenticated/durable OGVCS-010 commit receipt. The stored audit UUID is only a
-future audit-correlation placeholder; it does not claim an OGVCS-009 audit
-append.
+Schema v10 and `apply_aggregate_lifecycle_publication` now implement that
+submit-only bridge. They reconstruct the ordered resource-digest projection in
+keyset pages of at most 1,000 rows, compare it with the sealed aggregate-v3
+receipt, consume that receipt, lock/revalidate the lifecycle plan, and apply
+facts, reachability, item outbox rows, one aggregate outbox row, and immutable
+cross-schema evidence in one caller-owned SERIALIZABLE transaction. Later
+failure, including a deferred evidence failure, rolls back both consumption and
+metadata. The API returns one aggregate result and never returns resource
+identities or failure positions. GC and transfer effects remain dormant.
+
+The language-neutral bridge contract is
+`contracts/lifecycle-bridge/v1/manifest.json`; the Rust
+`LIFECYCLE_CONTRACT_SHA256` is the SHA-256 of those exact manifest bytes, and
+the manifest authenticates the artifact set. Static and Rust tests reject any
+manifest, artifact, generated-pin, dependency-pin, or migration drift. This is
+not a public OGVCS-010 disaster-recovery receipt, does not complete every
+OGVCS-009 criterion, and does not supply the external trusted root-proof
+authority. Per-item audit UUIDs remain correlation identifiers rather than a
+claim that a distinct OGVCS-009 audit append occurred.
 
 For admitted operations, the adapter invokes OGVCS-009 authorization on the
 exact live PostgreSQL transaction, derives subject, epoch, and authenticated
@@ -151,7 +164,11 @@ objects or references. Direct commands are sorted/unique and bounded to 1,024
 objects; aggregate declarations are bounded to 100,000 objects and are inserted
 with one set-based `UNNEST` statement per bounded chunk. Sealing recomputes
 exact payload/chunk/plan digests and global key order without a 100,000-element
-Rust vector or per-item database query loop.
+Rust vector or per-item database query loop. Schema v10 additively binds one
+aggregate application to the exact identity plan, decision, one-use
+consumption, operation digest, current repository settings, signer facts,
+resource digests/count, lifecycle expiry/totals, and pinned lifecycle/transfer
+contracts. Existing v9 rows are not rewritten or inferred to be authorized.
 
 Production persistence deployment evidence, public API/HTTP bindings, external chunk-store
 composition, and hosted production-service evidence remain deferred. The
@@ -172,6 +189,28 @@ Live integration and concurrency evidence is opt-in:
 OGVCS_METADATA_DATABASE_URL=postgresql://.../ogvcs_metadata_test_local \
   cargo test --manifest-path server/modules/repository-metadata/Cargo.toml \
   --locked --test postgres_integration -- --nocapture --test-threads=1
+```
+
+The bounded aggregate bridge suite uses a separately named disposable database:
+
+```sh
+OGVCS_METADATA_AGGREGATE_DATABASE_URL=postgresql://.../ogvcs_metadata_test_bridge \
+  cargo test --manifest-path server/modules/repository-metadata/Cargo.toml \
+  --locked --offline --features legacy-test-adapter \
+  --test aggregate_bridge_postgres_live -- --nocapture --test-threads=1
+```
+
+The real 100,000-item proof is intentionally excluded from ordinary presubmit.
+It probes item 100,001 with a one-item chunk, asserts that the persisted count
+remains 100,000, then reports the measured projection/protected/write page
+counts and maximum materialized batch:
+
+```sh
+OGVCS_METADATA_AGGREGATE_EXACT_DATABASE_URL=postgresql://.../ogvcs_metadata_test_bridge_exact \
+  cargo test --manifest-path server/modules/repository-metadata/Cargo.toml \
+  --locked --offline --features legacy-test-adapter \
+  --test aggregate_bridge_postgres_live \
+  exact_100000_bridge_is_streamed_in_measured_bounded_pages -- --exact --nocapture
 ```
 
 The harness refuses to reset a database unless `current_database()` begins with

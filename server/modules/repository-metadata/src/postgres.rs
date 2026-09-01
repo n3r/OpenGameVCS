@@ -1,9 +1,9 @@
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use ogvcs_identity_policy_audit_postgres::{
     AuthorizationResource as IdentityAuthorizationResource, DecisionCommitmentRequest,
-    PostgresTransactionAuthorizationParticipant, TransactionAuthorizationParticipant,
-    TransactionAuthorizationRequest, TransactionAuthorizedView, TransactionBatchRecheck,
-    MAXIMUM_BATCH_RESOURCES,
+    PostgresAggregateAuthorizationParticipant, PostgresTransactionAuthorizationParticipant,
+    TransactionAuthorizationParticipant, TransactionAuthorizationRequest,
+    TransactionAuthorizedView, TransactionBatchRecheck, MAXIMUM_BATCH_RESOURCES,
 };
 use ogvcs_object_model::{
     decode_canonical, expand_tree_with_path_profile_validator, import_mapping_key, object_id,
@@ -24,7 +24,9 @@ use std::{
 use subtle::ConstantTimeEq;
 use uuid::Uuid;
 
+mod aggregate_bridge;
 mod lifecycle;
+pub use aggregate_bridge::{AggregateLifecycleApplicationReceipt, AggregateLifecycleApplyRequest};
 #[cfg(feature = "legacy-test-adapter")]
 pub use lifecycle::PostgresLifecyclePlanWriter;
 
@@ -73,6 +75,7 @@ pub struct PostgresMetadataStore<A = DenyAllAuthorization, V = ProductionObjectV
     authorization: A,
     validation: V,
     transaction_authorization: Option<PostgresTransactionAuthorizationParticipant>,
+    aggregate_authorization: Option<PostgresAggregateAuthorizationParticipant>,
 }
 
 /// Production typestate. It deliberately does not implement `MetadataStore`
@@ -98,6 +101,7 @@ impl PostgresMetadataStore<DenyAllAuthorization, ProductionObjectValidator> {
             authorization: DenyAllAuthorization,
             validation: ProductionObjectValidator::default(),
             transaction_authorization: None,
+            aggregate_authorization: None,
         })
     }
 }
@@ -110,6 +114,7 @@ impl<A, V> PostgresMetadataStore<A, V> {
             authorization,
             validation: self.validation,
             transaction_authorization: self.transaction_authorization,
+            aggregate_authorization: self.aggregate_authorization,
         }
     }
 
@@ -120,6 +125,7 @@ impl<A, V> PostgresMetadataStore<A, V> {
             authorization: self.authorization,
             validation,
             transaction_authorization: self.transaction_authorization,
+            aggregate_authorization: self.aggregate_authorization,
         }
     }
 
@@ -132,6 +138,14 @@ impl<A, V> PostgresMetadataStore<A, V> {
     ) -> IdentityBoundPostgresMetadataStore<A, V> {
         self.transaction_authorization = Some(participant);
         IdentityBoundPostgresMetadataStore { store: self }
+    }
+
+    fn with_aggregate_authorization_participant(
+        mut self,
+        participant: PostgresAggregateAuthorizationParticipant,
+    ) -> Self {
+        self.aggregate_authorization = Some(participant);
+        self
     }
 
     #[cfg(feature = "legacy-test-adapter")]
@@ -5029,6 +5043,18 @@ impl<A, V> IdentityBoundPostgresMetadataStore<A, V> {
     ) -> Result<crate::MigrationRunReport> {
         crate::run_migrations(&mut self.store.client, options)
     }
+
+    /// Installs the aggregate receipt participant without exposing its key
+    /// provider or the raw PostgreSQL transaction to lifecycle callers.
+    pub fn with_aggregate_authorization_participant(
+        mut self,
+        participant: PostgresAggregateAuthorizationParticipant,
+    ) -> Self {
+        self.store = self
+            .store
+            .with_aggregate_authorization_participant(participant);
+        self
+    }
 }
 
 impl IdentityBoundPostgresMetadataStore<DenyAllAuthorization, ProductionObjectValidator> {
@@ -5040,6 +5066,18 @@ impl IdentityBoundPostgresMetadataStore<DenyAllAuthorization, ProductionObjectVa
     ) -> Result<Self> {
         Ok(PostgresMetadataStore::connect_internal(database_url)?
             .with_transaction_authorization_participant(participant))
+    }
+
+    /// Opens the production adapter with both direct and aggregate OGVCS-009
+    /// participants installed before the store is observable.
+    pub fn connect_with_aggregate_authorization(
+        database_url: &str,
+        transaction_participant: PostgresTransactionAuthorizationParticipant,
+        aggregate_participant: PostgresAggregateAuthorizationParticipant,
+    ) -> Result<Self> {
+        Ok(PostgresMetadataStore::connect_internal(database_url)?
+            .with_aggregate_authorization_participant(aggregate_participant)
+            .with_transaction_authorization_participant(transaction_participant))
     }
 }
 

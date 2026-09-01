@@ -52,15 +52,17 @@ mod postgres;
 mod types;
 
 pub use error::{DomainError, DomainErrorCode, Result};
+pub use lifecycle::LifecycleApplicationReceipt;
 #[cfg(feature = "legacy-test-adapter")]
 pub use lifecycle::{
     aggregate_chunk_count, aggregate_plan_digest, AggregateChunkCommitment, AggregatePlanChunk,
-    AggregatePublicationPlan, LifecycleApplicationReceipt, LifecycleCapability,
-    LifecycleDirectCommand, LifecycleHealth, LifecycleHealthObservation, LifecycleObjectBinding,
-    LifecycleQuarantineRequest, LifecycleReceiptKind, LifecycleReceiptWrite, LifecycleState,
-    StagedLifecycleObject, AGGREGATE_OBJECTS_MAXIMUM, DIRECT_OBJECTS_MAXIMUM,
-    LIFECYCLE_CONTRACT_VERSION, OBJECT_TRANSFER_ARTIFACT_SET_SHA256,
-    OBJECT_TRANSFER_MANIFEST_SHA256, PLAN_CHUNK_BYTES_MAXIMUM, PLAN_CHUNK_ITEMS_MAXIMUM,
+    AggregatePublicationPlan, LifecycleCapability, LifecycleDirectCommand, LifecycleHealth,
+    LifecycleHealthObservation, LifecycleObjectBinding, LifecycleQuarantineRequest,
+    LifecycleReceiptKind, LifecycleReceiptWrite, LifecycleState, StagedLifecycleObject,
+    AGGREGATE_OBJECTS_MAXIMUM, AUTHORIZATION_MANIFEST_SHA256, DIRECT_OBJECTS_MAXIMUM,
+    LIFECYCLE_CONTRACT_ARTIFACT_SET_SHA256, LIFECYCLE_CONTRACT_SHA256, LIFECYCLE_CONTRACT_VERSION,
+    OBJECT_TRANSFER_ARTIFACT_SET_SHA256, OBJECT_TRANSFER_MANIFEST_SHA256, PLAN_CHUNK_BYTES_MAXIMUM,
+    PLAN_CHUNK_ITEMS_MAXIMUM,
 };
 pub use migration::{Migration, MigrationPhase, MIGRATIONS};
 pub use migration_runner::{
@@ -74,6 +76,7 @@ pub use ports::{
 #[cfg(feature = "legacy-test-adapter")]
 pub use postgres::PostgresLifecyclePlanWriter;
 pub use postgres::{
+    AggregateLifecycleApplicationReceipt, AggregateLifecycleApplyRequest,
     IdentityBoundPostgresMetadataStore, IdentityMetadataAuthorizedView, PostgresMetadataStore,
     PostgresMetadataTransaction,
 };

@@ -9,11 +9,17 @@ use crate::{
 use ogvcs_object_model::ObjectKind;
 use sha2::{Digest, Sha256};
 
-pub const LIFECYCLE_CONTRACT_VERSION: &str = "0.1.0-rc.5";
+pub const LIFECYCLE_CONTRACT_VERSION: &str = "0.1.0-rc.6";
+pub const LIFECYCLE_CONTRACT_SHA256: &str =
+    "1b6fac7f90f03b3470786e5e3ed810f7dbcc9a041d735a621c79feefecd15efa";
+pub const LIFECYCLE_CONTRACT_ARTIFACT_SET_SHA256: &str =
+    "556f289fe90c91c85fdcd812e1576276b206287bd18333beb7caea0457c1bbae";
 pub const OBJECT_TRANSFER_MANIFEST_SHA256: &str =
-    "a9b175b7e24568cc48b6c233238173a6527fcb2926e5e70852dc02f417debdb0";
+    "6748334b4cbc9b155941d8382b6a67c348f0612432a9555cfa215f62681af1d3";
 pub const OBJECT_TRANSFER_ARTIFACT_SET_SHA256: &str =
-    "8da6186ae30137fe2f0943568b82a0a1c43e4638e01085d63457f836785ee5d8";
+    "8e96a6fc57aeabb9c3bd8a363b4bbb70b2bfc4832206b20c1581e92e463bec38";
+pub const AUTHORIZATION_MANIFEST_SHA256: &str =
+    "3fb4dd4a89eb914f93a589b013bda8afcf4744c0d27171ee5849ca3b7bf62447";
 pub const DIRECT_OBJECTS_MAXIMUM: usize = 1_024;
 pub const AGGREGATE_OBJECTS_MAXIMUM: u32 = 100_000;
 pub const PLAN_CHUNK_ITEMS_MAXIMUM: usize = 1_000;
@@ -568,6 +574,8 @@ pub struct AggregatePublicationPlan {
     pub tenant_id: TenantId,
     pub repository_id: RepositoryId,
     pub publication_ref: ObjectRef,
+    pub authorization_reference: String,
+    pub authorization_snapshot: String,
     pub subject_digest: [u8; 32],
     pub authorization_epoch: u64,
     pub authority_contract_digest: [u8; 32],
@@ -598,9 +606,50 @@ impl AggregatePublicationPlan {
         declared_object_count: u32,
         declared_encoded_bytes: u64,
     ) -> Result<Self> {
+        Self::new_authorized(
+            plan_id,
+            tenant_id,
+            repository_id,
+            publication_ref,
+            "refs/heads/main".to_owned(),
+            publication_ref.to_string(),
+            subject_digest,
+            authorization_epoch,
+            authority_contract_digest,
+            candidate_digest,
+            declared_plan_digest,
+            idempotency_scope_digest,
+            idempotency,
+            declared_object_count,
+            declared_encoded_bytes,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_authorized(
+        plan_id: [u8; 16],
+        tenant_id: TenantId,
+        repository_id: RepositoryId,
+        publication_ref: ObjectRef,
+        authorization_reference: String,
+        authorization_snapshot: String,
+        subject_digest: [u8; 32],
+        authorization_epoch: u64,
+        authority_contract_digest: [u8; 32],
+        candidate_digest: [u8; 32],
+        declared_plan_digest: [u8; 32],
+        idempotency_scope_digest: [u8; 32],
+        idempotency: IdempotencyReservation,
+        declared_object_count: u32,
+        declared_encoded_bytes: u64,
+    ) -> Result<Self> {
         let chunk_count = aggregate_chunk_count(declared_object_count)
             .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
         if !valid_public_uuid(&plan_id)
+            || authorization_reference.is_empty()
+            || authorization_reference.len() > 512
+            || authorization_reference.chars().any(char::is_control)
+            || authorization_snapshot != publication_ref.to_string()
             || authorization_epoch == 0
             || authorization_epoch > MAXIMUM_SAFE_GENERATION
             || declared_encoded_bytes == 0
@@ -615,6 +664,8 @@ impl AggregatePublicationPlan {
             tenant_id,
             repository_id,
             publication_ref,
+            authorization_reference,
+            authorization_snapshot,
             subject_digest,
             authorization_epoch,
             authority_contract_digest,
@@ -641,6 +692,8 @@ impl AggregatePublicationPlan {
         field(&mut bytes, self.tenant_id.as_bytes());
         field(&mut bytes, self.repository_id.as_bytes());
         object_field(&mut bytes, self.publication_ref);
+        field(&mut bytes, self.authorization_reference.as_bytes());
+        field(&mut bytes, self.authorization_snapshot.as_bytes());
         field(&mut bytes, &self.subject_digest);
         field(&mut bytes, &self.authorization_epoch.to_be_bytes());
         field(&mut bytes, &self.authority_contract_digest);
@@ -796,7 +849,7 @@ pub struct LifecycleApplicationReceipt {
 }
 
 pub(crate) fn lifecycle_contract_digest() -> [u8; 32] {
-    hex32(OBJECT_TRANSFER_MANIFEST_SHA256).expect("pinned manifest digest is valid")
+    hex32(LIFECYCLE_CONTRACT_SHA256).expect("pinned lifecycle contract digest is valid")
 }
 
 pub(crate) fn protected_fact_digest(
@@ -1231,8 +1284,34 @@ mod tests {
     }
 
     #[test]
-    fn pinned_transfer_manifest_digest_is_exact() {
+    fn pinned_transfer_and_lifecycle_contract_digests_are_exact_and_distinct() {
+        let manifest_digest: [u8; 32] = Sha256::digest(include_bytes!(
+            "../contracts/lifecycle-bridge/v1/manifest.json"
+        ))
+        .into();
+        let contract_digest: [u8; 32] = Sha256::digest(include_bytes!(
+            "../contracts/lifecycle-bridge/v1/contract.json"
+        ))
+        .into();
+        let operation_vector_digest: [u8; 32] = Sha256::digest(include_bytes!(
+            "../contracts/lifecycle-bridge/v1/vectors/operation-digest.json"
+        ))
+        .into();
         assert_eq!(
+            hex32(LIFECYCLE_CONTRACT_SHA256).unwrap(),
+            lifecycle_contract_digest()
+        );
+        assert_eq!(manifest_digest, lifecycle_contract_digest());
+        assert_eq!(
+            contract_digest,
+            hex32("d89d1a5a7cbf6eb8ebb453d66952470c9e764eabfbc12d4760ccb517f651fd6a").unwrap()
+        );
+        assert_eq!(
+            operation_vector_digest,
+            hex32("4fe1d0da79fbb594b4b0e106343f00c607531691148b6a2a6e92a5dd80cf7412").unwrap()
+        );
+        assert_eq!(LIFECYCLE_CONTRACT_ARTIFACT_SET_SHA256.len(), 64);
+        assert_ne!(
             hex32(OBJECT_TRANSFER_MANIFEST_SHA256).unwrap(),
             lifecycle_contract_digest()
         );

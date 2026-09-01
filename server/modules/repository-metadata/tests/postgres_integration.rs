@@ -8,6 +8,9 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+use ogvcs_identity_policy_audit_postgres::{
+    run_migrations as run_identity_migrations, MigrationRunOptions as IdentityMigrationRunOptions,
+};
 use ogvcs_object_model::{
     decode_canonical, encode_canonical, object_id, scan_metadata, validate_semantic_object, Cbor,
     Limits, ObjectKind, ObjectRef, ProfileRef, Registry, ValidationMode,
@@ -422,6 +425,7 @@ fn production_reference_postgres_report() {
         return;
     };
     reset_disposable_schema(&database_url);
+    ensure_identity_schema(&database_url);
     migration_v1_v5_upgrade_report(&database_url);
     report("migration-v1-v5-upgrade-preserves-unpublished-history");
     reset_disposable_schema(&database_url);
@@ -958,6 +962,18 @@ fn reset_disposable_schema(database_url: &str) {
     client
         .batch_execute("DROP SCHEMA IF EXISTS ogvcs_metadata CASCADE")
         .unwrap();
+}
+
+fn ensure_identity_schema(database_url: &str) {
+    let mut client = Client::connect(database_url, NoTls).unwrap();
+    run_identity_migrations(
+        &mut client,
+        IdentityMigrationRunOptions {
+            application_version: "0.2.0",
+            compatibility_fence_open: true,
+        },
+    )
+    .unwrap();
 }
 
 fn lifecycle_v9_report(
@@ -2432,7 +2448,7 @@ fn migration_v1_v5_upgrade_report(database_url: &str) {
     };
     let mut store = PostgresMetadataStore::connect(database_url).unwrap();
     let upgrade = store.migrate(options).unwrap();
-    assert_eq!((upgrade.applied, upgrade.already_applied), (24, 3));
+    assert_eq!((upgrade.applied, upgrade.already_applied), (27, 3));
     drop(store);
 
     let mut client = Client::connect(database_url, NoTls).unwrap();
@@ -2485,8 +2501,8 @@ fn migration_report(database_url: &str) {
         application_version: "0.1.0",
         compatibility_fence_open: true,
     };
-    assert_eq!(store.migrate(options).unwrap().applied, 27);
-    assert_eq!(store.migrate(options).unwrap().already_applied, 27);
+    assert_eq!(store.migrate(options).unwrap().applied, 30);
+    assert_eq!(store.migrate(options).unwrap().already_applied, 30);
     drop(store);
 
     let mut client = Client::connect(database_url, NoTls).unwrap();
@@ -2615,7 +2631,7 @@ fn migration_report(database_url: &str) {
             "INSERT INTO ogvcs_metadata.schema_migrations
              (version, phase, checksum_sha256, state, minimum_application_version,
               maximum_application_version, completed_at)
-             VALUES (10, 'expand', repeat('a', 64), 'completed', '0.2.0', '0.2.x', clock_timestamp())",
+             VALUES (11, 'expand', repeat('a', 64), 'completed', '0.2.0', '0.2.x', clock_timestamp())",
             &[],
         )
         .unwrap();
@@ -2629,7 +2645,7 @@ fn migration_report(database_url: &str) {
     let mut client = Client::connect(database_url, NoTls).unwrap();
     client
         .execute(
-            "DELETE FROM ogvcs_metadata.schema_migrations WHERE version = 10",
+            "DELETE FROM ogvcs_metadata.schema_migrations WHERE version = 11",
             &[],
         )
         .unwrap();
