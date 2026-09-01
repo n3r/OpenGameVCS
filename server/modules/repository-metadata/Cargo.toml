@@ -35,3 +35,7 @@ uuid = "=1.18.1"
 [[test]]
 name = "postgres_integration"
 required-features = ["legacy-test-adapter"]
+
+[[test]]
+name = "aggregate_bridge_postgres_live"
+required-features = ["legacy-test-adapter"]

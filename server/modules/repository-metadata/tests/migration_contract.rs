@@ -18,7 +18,7 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
     );
     assert_eq!(manifest["database"], "postgresql-15-or-newer");
     let entries = manifest["entries"].as_array().unwrap();
-    assert_eq!(entries.len(), 27);
+    assert_eq!(entries.len(), 30);
     let expected = [
         (1, "expand"),
         (1, "migrate"),
@@ -47,6 +47,9 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
         (9, "expand"),
         (9, "migrate"),
         (9, "contract"),
+        (10, "expand"),
+        (10, "migrate"),
+        (10, "contract"),
     ];
     for (entry, (version, phase)) in entries.iter().zip(expected) {
         assert_eq!(entry["version"], version);
@@ -69,7 +72,56 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
     assert_eq!(entries[20]["requiresCompatibilityFence"], true);
     assert_eq!(entries[23]["requiresCompatibilityFence"], true);
     assert_eq!(entries[26]["requiresCompatibilityFence"], true);
+    assert_eq!(entries[29]["requiresCompatibilityFence"], true);
 }
+
+#[test]
+fn version_ten_adds_the_same_transaction_aggregate_authorization_bridge() {
+    let expand = fs::read_to_string(migration_root().join("000010_expand.sql")).unwrap();
+    for evidence in [
+        "lifecycle_aggregate_authorization_evidence",
+        "identity_plan_id, consumption_id, operation_digest",
+        "REFERENCES ogvcs_identity.aggregate_plan_consumptions",
+        "authorization_reference",
+        "authorization_snapshot",
+        "resource_digest_projection_digest",
+        "NEW.context_digest = evidence.operation_digest",
+        "identity_plan.signer_key_reference = evidence.signer_key_reference",
+        "EXTRACT(EPOCH FROM identity_plan.issued_at)",
+        "EXTRACT(EPOCH FROM identity_plan.expires_at)",
+        "lifecycle_expires_at",
+        "aggregate_event) = 1",
+        LIFECYCLE_MANIFEST_DIGEST,
+        LIFECYCLE_ARTIFACT_SET_DIGEST,
+        OBJECT_TRANSFER_MANIFEST_DIGEST,
+        OBJECT_TRANSFER_ARTIFACT_SET_DIGEST,
+        "lifecycle_aggregate_evidence_complete_v10",
+        "DEFERRABLE INITIALLY DEFERRED",
+        "fact_ordinal BETWEEN 0 AND 99999",
+        "reject_lifecycle_immutable_mutation",
+    ] {
+        assert!(expand.contains(evidence), "missing {evidence}");
+    }
+    assert!(
+        fs::read_to_string(migration_root().join("000009_expand.sql"))
+            .unwrap()
+            .contains("fact_ordinal BETWEEN 0 AND 1023")
+    );
+    assert!(
+        !fs::read_to_string(migration_root().join("000010_migrate.sql"))
+            .unwrap()
+            .contains("UPDATE ogvcs_metadata.lifecycle_publication_plans")
+    );
+}
+
+const LIFECYCLE_MANIFEST_DIGEST: &str =
+    "db379ccdd81cfe94fec08ddda2ae5031c9ab5b7750007cf1e096cf1e4299a3bc";
+const LIFECYCLE_ARTIFACT_SET_DIGEST: &str =
+    "e2cf52e055a4e85e54ea502a38fee17536a743ff288d4bfb85b246cc43170863";
+const OBJECT_TRANSFER_MANIFEST_DIGEST: &str =
+    "6748334b4cbc9b155941d8382b6a67c348f0612432a9555cfa215f62681af1d3";
+const OBJECT_TRANSFER_ARTIFACT_SET_DIGEST: &str =
+    "8e96a6fc57aeabb9c3bd8a363b4bbb70b2bfc4832206b20c1581e92e463bec38";
 
 #[test]
 fn version_nine_reserves_repository_backed_lifecycle_evidence() {

@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "ogvcs.repository-metadata/lifecycle-authorization-bridge-manifest/v1",
+  "contractVersion": "0.1.0-rc.6",
+  "artifactSetSha256": "e2cf52e055a4e85e54ea502a38fee17536a743ff288d4bfb85b246cc43170863",
+  "artifacts": [
+    {
+      "bytes": 9549,
+      "path": "contract.json",
+      "sha256": "b0b0f806406efebee2a427fd61e7fc055ebb558cecdb32862380d86316f26401"
+    },
+    {
+      "bytes": 3784,
+      "path": "vectors/operation-digest.json",
+      "sha256": "4fe1d0da79fbb594b4b0e106343f00c607531691148b6a2a6e92a5dd80cf7412"
+    }
+  ],
+  "license": "MIT"
+}

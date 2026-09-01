@@ -402,6 +402,7 @@ pub struct AggregateAuthorizationReceipt {
     resource_set_digest: String,
     resource_digest_projection_digest: String,
     decision_digest: String,
+    plan_nonce: String,
     issued_at: u64,
     expires_at: u64,
     signer_key_generation: u64,
@@ -470,6 +471,12 @@ impl AggregateAuthorizationReceipt {
         &self.decision_digest
     }
 
+    /// Server-derived nonce that makes the aggregate plan identity unique.
+    /// It is authenticated by the receipt MAC and is not signing-key material.
+    pub fn plan_nonce(&self) -> &str {
+        &self.plan_nonce
+    }
+
     pub const fn authority_epoch(&self) -> u64 {
         self.authority_epoch
     }
@@ -530,12 +537,20 @@ impl AggregateAuthorizationReceipt {
         &self.reason_digest
     }
 
+    pub const fn issued_at(&self) -> u64 {
+        self.issued_at
+    }
+
     pub const fn expires_at(&self) -> u64 {
         self.expires_at
     }
 
     pub const fn signer_key_generation(&self) -> u64 {
         self.signer_key_generation
+    }
+
+    pub fn signer_key_reference(&self) -> &str {
+        &self.signer_key_reference
     }
 
     pub fn signer_key_fingerprint(&self) -> &str {
@@ -1267,6 +1282,7 @@ impl PostgresAggregateAuthorizationParticipant {
             resource_set_digest: hex(&uploaded.resource_set_digest),
             resource_digest_projection_digest: hex(&uploaded.resource_digest_projection_digest),
             decision_digest: hex(&decision_digest),
+            plan_nonce: hex(&plan.upload_nonce),
             issued_at: plan.issued_at,
             expires_at: plan.expires_at,
             signer_key_generation: plan.signer_key_generation,
@@ -1510,6 +1526,7 @@ impl PostgresAggregateAuthorizationParticipant {
                 .decision_digest
                 .as_ref()
                 .is_none_or(|digest| receipt.decision_digest != hex(digest))
+            || receipt.plan_nonce != hex(&plan.upload_nonce)
             || plan.commitment_digest.is_none()
             || receipt.issued_at != plan.issued_at
             || receipt.expires_at != plan.expires_at
@@ -3258,6 +3275,7 @@ mod tests {
             resource_set_digest: "09".repeat(32),
             resource_digest_projection_digest: "0b".repeat(32),
             decision_digest: "0a".repeat(32),
+            plan_nonce: "08".repeat(32),
             issued_at: 10,
             expires_at: 20,
             signer_key_generation: 7,
@@ -3446,6 +3464,11 @@ mod tests {
             {
                 let mut value = receipt.clone();
                 value.expires_at += 1;
+                value
+            },
+            {
+                let mut value = receipt.clone();
+                value.plan_nonce = "ff".repeat(32);
                 value
             },
             {
