@@ -100,8 +100,31 @@ Enable only the dummy conformance tool, then one importer parser profile. Consum
 
 ## Completion evidence
 
-- Implementation changes:
-- Test and benchmark results:
-- Security/reliability review:
-- Documentation/runbooks:
-- Rollout result:
+- Implementation changes: exact source
+  [`8e863b503bf2c0ebc66d1f80cf7935e1575575d0`](https://github.com/n3r/OpenGameVCS/commit/8e863b503bf2c0ebc66d1f80cf7935e1575575d0)
+  provides a private candidate-named Linux reference worker and portable
+  credential-free protocol boundary; it is not a production or public
+  constructor.
+- Test and benchmark results: [hosted run
+  33484044441](../../docs/evidence/OGVCS-045/github-actions-run-33484044441.json)
+  passed the private Linux Docker/cgroup/seccomp lane and portable Node 24
+  lanes on Ubuntu, macOS, and Windows. Its retained 43-case [Linux
+  report](../../docs/evidence/OGVCS-045/linux-reference-conformance-2026-09-01.json)
+  is 3,620 bytes with SHA-256
+  `27ff15154b4a6cfadd6626fed323a359b9907b3dc2b3c3eb9ac43a3fbce0b0fb`.
+  It records bounded private candidate behavior relevant to AC-01 and AC-02;
+  the same hosted candidate lane exercised signed-manifest and required-control
+  admission plus prior/new-job revocation checks relevant to AC-04.
+- Security/reliability review: the retained
+  [evidence packet](../../docs/evidence/OGVCS-045/README.md) is explicitly
+  non-completion evidence. AC-03 and AC-05 remain open, as do exact deployed
+  runtime attestation, authenticated daemon-orphan handling, the complete
+  broker/runner/output-validator kill matrix, independent isolation review,
+  public conformance admission, and production broker/runner integration.
+- Documentation/runbooks: the evidence packet and
+  [`docs/changelog/OGVCS-045.md`](../../docs/changelog/OGVCS-045.md) document
+  the private boundary and its fail-closed nonclaims; no production operations
+  or cleanup runbook is claimed.
+- Rollout result: none. OGVCS-045 remains Todo. Consumer rollout and all
+  production, restart-orphan, and authoritative sandbox cleanup behavior remain
+  open; the retained run does not close any acceptance criterion.

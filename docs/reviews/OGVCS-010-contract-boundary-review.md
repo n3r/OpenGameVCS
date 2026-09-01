@@ -21,6 +21,41 @@ schemas, registries, package manifest, public route, protocol assignment, or PRD
 status/ownership claim. It defines the proposed boundary and the exact gaps that
 must close before scaffolding is honest.
 
+## 2026-09-01 private candidate evidence reconciliation
+
+Later OGVCS-006 work implements a restricted, route-less subset of this design;
+it does not change the review verdict or authorize a language-neutral/public
+atomic-submit scaffold. The private `PreallocatedCreationSubmit` path accepts
+only one to 1,000 preallocated create/copy/import first-consumption operations.
+Intent and advisory preflight are separate durable operations. Finalize then
+composes identity receipt consumption, immutable identity-to-lifecycle mapping,
+lifecycle application, FileID consumption, branch CAS, internal audit/outbox
+evidence, consistency state, final outcome, and reconciliation commitment in
+one SERIALIZABLE PostgreSQL transaction. Equal retries replay the stored
+outcome; a separate response-loss reconciliation transaction returns either
+that committed outcome or an explicit `UnknownRecovering` observation.
+
+The current bounded bridge/mapping source is recorded by [hosted run
+33506824950](../evidence/OGVCS-006/github-actions-run-33506824950.json). The
+earlier hard-restart source is recorded by [hosted run
+33479805287](../evidence/OGVCS-006/github-actions-run-33479805287.json): its
+13-case PostgreSQL 15 job killed the postmaster with `SIGKILL` before/after the
+private transaction stages and at commit I/O, and recovered only a complete old
+or complete new restricted result. The retained [restart
+report](../evidence/OGVCS-006/atomic-submit-hard-restart-report-2026-09-01.jsonl)
+is 10,094 bytes with SHA-256
+`85b36ec4c7f30c9864d5b3ffc7d25594a891ad038a3850cc339b872703df32ca`.
+
+This evidence narrows implementation uncertainty around B1, B2, and the
+restricted lost-response portion of B5. It does not supply their required
+public/versioned contracts, a general server-derived submit planner, the
+production subject/scope mapper, request-root authority, production
+authorization or policy/lock/review evaluation, an OGVCS-032 recovery-boundary
+receipt, or a public transport. B3, B4, B6, and B7 also remain open. The 13
+private restart points are not every OGVCS-005 fault point, and the existing
+generic 100-CAS and smaller private contention tests are not 100 OGVCS-010
+finalizers. No OGVCS-010 acceptance criterion is closed; the PRD remains Todo.
+
 ## Authorities read
 
 This review uses prose and published language-neutral artifacts as authority.

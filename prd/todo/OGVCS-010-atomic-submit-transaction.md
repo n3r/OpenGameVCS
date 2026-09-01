@@ -102,8 +102,32 @@ Developer preview allows writes only to test repositories until invariant scans 
 
 ## Completion evidence
 
-- Implementation changes:
-- Test and benchmark results:
-- Security/reliability review:
-- Documentation/runbooks:
-- Rollout result:
+- Implementation changes: a restricted private OGVCS-006 PostgreSQL candidate
+  now composes preallocated create/copy/import intent, preflight, finalize, and
+  result-reconciliation operations. Finalize binds FileID first consumption,
+  identity receipt consumption, lifecycle application, branch CAS,
+  audit/outbox evidence, consistency state, and one final outcome in a single
+  SERIALIZABLE transaction; reconciliation separately binds the durable
+  outcome observation. The current v13 identity-to-lifecycle mapping is
+  recorded by
+  [hosted run 33506824950](../../docs/evidence/OGVCS-006/github-actions-run-33506824950.json).
+- Test and benchmark results: [hosted run
+  33479805287](../../docs/evidence/OGVCS-006/github-actions-run-33479805287.json)
+  passed 13 private PostgreSQL 15 `SIGKILL` boundaries. The retained
+  [restart report](../../docs/evidence/OGVCS-006/atomic-submit-hard-restart-report-2026-09-01.jsonl)
+  is 10,094 bytes with SHA-256
+  `85b36ec4c7f30c9864d5b3ffc7d25594a891ad038a3850cc339b872703df32ca`.
+  This is bounded subset evidence, not the complete OGVCS-005 fault matrix,
+  the 100-finalizer race, or a scale result.
+- Security/reliability review: the
+  [candidate-evidence reconciliation](../../docs/reviews/OGVCS-010-contract-boundary-review.md#2026-09-01-private-candidate-evidence-reconciliation)
+  records which original transaction and recovery gaps have private
+  implementations. The public contract scaffold, production authorization and
+  policy/lock revalidation, server-derived closure, complete lifecycle/GC
+  fencing, and DR receipt semantics remain blocked.
+- Documentation/runbooks: the bounded
+  [OGVCS-006 evidence packet](../../docs/evidence/OGVCS-006/README.md) and the
+  contract-boundary review record exact sources, runs, retained artifacts, and
+  nonclaims.
+- Rollout result: none. OGVCS-010 remains Todo; no acceptance criterion is
+  closed, and no public or production submit/finalize route is registered.
