@@ -32,8 +32,12 @@ cross-compiled source-handle plus pinned destination-parent
 Unix owner/mode/link checks, macOS extended ACL rejection, and Windows
 owner/DACL/reparse/multi-link checks protect metadata. Windows DACLs must be
 protected from inheritance and may grant access only to the owner, LocalSystem,
-or Administrators. A persistent private root-level lock serializes cooperating
-create/configure/stage/remove/recover operations and survives `.ogvcs` detach.
+or Administrators. Creation-time Windows security descriptors prevent a broad
+inherited-DACL publication interval; files and active lock handles deny delete
+sharing. `CreateDirectoryW` still requires a subsequent no-follow validation
+open, leaving a documented same-authority namespace interval. A persistent
+private root-level lock serializes cooperating create/configure/stage/remove/
+recover operations and survives `.ogvcs` detach.
 
 ## Evidence at this branch
 
@@ -70,7 +74,7 @@ workflow may be used; no PR is part of this review.
 | OGVCS-041 receipt proof | Exact selected facts/registry pins and receipt digest are checked; client does not MAC-verify full claims | Branded verified receipt from an exact MAC-first verifier, or client-visible claims/session-key verification |
 | Remote E2E | No first-party network adapter exists | Exercise real authentication/discovery/binding without invented routes |
 | Hosted Windows runtime | Adapter cross-compiles; runtime result pending | Green Windows lifecycle/mutation/ACL/reparse/race workflow evidence |
-| Same-authority lock attack | Root lock serializes cooperating processes | Stronger OS namespace exclusion if same-authority malicious replacement is in threat scope |
+| Same-authority namespace attack | Root lock serializes cooperating processes; Windows denies delete sharing while held, but Unix detach and Windows between-command replacement plus `CreateDirectoryW`→validation races remain | Stronger root/dirfd or native directory-handle namespace exclusion if same-authority malicious replacement is in threat scope |
 | Later CLI journeys | No sync/status/materialize/submit/locks | Integrate owning PRDs through OGVCS-043 |
 
 The `public-service-verified` metadata label therefore means “validated through
