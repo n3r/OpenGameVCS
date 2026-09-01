@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
+import { fstatSync } from 'node:fs';
 import { lstat, open, readFile, realpath } from 'node:fs/promises';
 import { isAbsolute } from 'node:path';
 import { types } from 'node:util';
@@ -31,7 +32,18 @@ const adapters = new WeakSet();
 
 const containerName = () => `ogvcs-sandbox-${randomBytes(12).toString('hex')}`;
 const volumeName = () => `ogvcs-sandbox-${randomBytes(12).toString('hex')}`;
-const procDescriptorPath = (handle) => `/proc/${process.pid}/fd/${handle.fd}`;
+
+const regularPinnedFileSource = (handle) => {
+  try {
+    if (handle === null || typeof handle !== 'object' || types.isProxy(handle)) throw new TypeError('invalid handle');
+    const descriptor = handle.fd;
+    if (!Number.isSafeInteger(descriptor) || descriptor < 0 || !fstatSync(descriptor).isFile()) throw new TypeError('invalid descriptor');
+    // A regular file cannot contain descendant mounts. This makes
+    // bind-recursive=writable equivalent to a non-recursive bind here while
+    // avoiding Moby's recursive-readonly mount_setattr path.
+    return `/proc/${process.pid}/fd/${descriptor}`;
+  } catch { throw new Error('held mount source is not a regular pinned file'); }
+};
 
 const appendBounded = (chunks, chunk, state, maximum) => {
   const copy = Buffer.from(chunk);
@@ -130,7 +142,7 @@ const hardeningArguments = ({ jobId, name, policy, role, seccompPath }) => [
   `--tmpfs=/scratch:rw,nosuid,nodev,noexec,size=${policy.scratchBytes},uid=65532,gid=65532,mode=0700`,
 ];
 
-const mountFile = (handle, target) => `type=bind,src=${procDescriptorPath(handle)},dst=${target},readonly,bind-propagation=rprivate,bind-recursive=disabled`;
+const mountFile = (source, target) => `type=bind,src=${source},dst=${target},readonly,bind-propagation=rprivate,bind-recursive=writable`;
 
 const WORKER_EXECUTE_RESULT_KEYS = Object.freeze(['code', 'kind', 'signal', 'stderr', 'stdout', 'stdoutBytes']);
 
@@ -255,13 +267,15 @@ const exactUlimits = (source, policy) => {
   return canonicalJson(actual) === canonicalJson(expected);
 };
 
+const omittedOrFalse = (source, field) => !Object.hasOwn(source, field) || source[field] === false;
+
 const exactHostMounts = (source, expected) => {
   if (!Array.isArray(source) || source.length !== expected.fileMounts.length + 1) return false;
   const byTarget = new Map(source.map((mount) => [mount?.Target, mount]));
   if (byTarget.size !== source.length) return false;
   for (const file of expected.fileMounts) {
     const mount = byTarget.get(file.target);
-    if (!mount || mount.Type !== 'bind' || mount.Source !== file.source || mount.ReadOnly !== true || !['', 'default'].includes(mount.Consistency ?? '') || mount.BindOptions?.Propagation !== 'rprivate' || mount.BindOptions?.NonRecursive !== true || (mount.BindOptions?.CreateMountpoint ?? false) !== false || (mount.BindOptions?.ReadOnlyNonRecursive ?? false) !== false || (mount.BindOptions?.ReadOnlyForceRecursive ?? false) !== false) return false;
+    if (!mount || mount.Type !== 'bind' || mount.Source !== file.source || mount.ReadOnly !== true || !['', 'default'].includes(mount.Consistency ?? '') || mount.BindOptions?.Propagation !== 'rprivate' || !omittedOrFalse(mount.BindOptions, 'NonRecursive') || !omittedOrFalse(mount.BindOptions, 'CreateMountpoint') || mount.BindOptions?.ReadOnlyNonRecursive !== true || !omittedOrFalse(mount.BindOptions, 'ReadOnlyForceRecursive')) return false;
   }
   const output = byTarget.get('/output');
   const outputReadOnly = expected.outputReadonly
@@ -554,18 +568,19 @@ export class DockerReferenceAdapter {
 
   async runTool({ runtimeImage, policy, inputHandle, jobHandle, jobId, toolHandle, signal }) {
     if (this.#poisoned) throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED');
+    const [inputSource, jobSource, toolSource] = [inputHandle, jobHandle, toolHandle].map(regularPinnedFileSource);
     const volume = await this.#createOutputVolume(policy, jobId);
     const name = containerName();
     const fileMounts = [
-      { source: procDescriptorPath(inputHandle), target: '/input/payload' },
-      { source: procDescriptorPath(jobHandle), target: '/input/job' },
-      { source: procDescriptorPath(toolHandle), target: '/tool/program' },
+      { source: inputSource, target: '/input/payload' },
+      { source: jobSource, target: '/input/job' },
+      { source: toolSource, target: '/tool/program' },
     ];
     const args = [
       ...hardeningArguments({ jobId, name, policy, role: 'parser', seccompPath: this.#seccompPath }),
-      '--mount', mountFile(inputHandle, '/input/payload'),
-      '--mount', mountFile(jobHandle, '/input/job'),
-      '--mount', mountFile(toolHandle, '/tool/program'),
+      '--mount', mountFile(inputSource, '/input/payload'),
+      '--mount', mountFile(jobSource, '/input/job'),
+      '--mount', mountFile(toolSource, '/tool/program'),
       '--mount', `type=volume,src=${volume.name},dst=/output,volume-nocopy`,
       '--entrypoint=/tool/program',
       runtimeImage,
@@ -600,11 +615,12 @@ export class DockerReferenceAdapter {
 
   async collectOutput({ runtimeImage, policy, volume, bindingHandle, framePath, jobId, maximumFrameBytes }) {
     if (this.#poisoned) throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED');
+    const bindingSource = regularPinnedFileSource(bindingHandle);
     const name = containerName();
-    const fileMounts = [{ source: procDescriptorPath(bindingHandle), target: '/input/binding' }];
+    const fileMounts = [{ source: bindingSource, target: '/input/binding' }];
     const args = [
       ...hardeningArguments({ jobId, name, policy, role: 'output-shim', seccompPath: this.#seccompPath }),
-      '--mount', mountFile(bindingHandle, '/input/binding'),
+      '--mount', mountFile(bindingSource, '/input/binding'),
       '--mount', `type=volume,src=${volume.name},dst=/output,readonly,volume-nocopy`,
       '--entrypoint=/ogvcs-output-shim',
       runtimeImage,
@@ -633,5 +649,8 @@ export class DockerReferenceAdapter {
 export const isDockerReferenceAdapter = (value) => adapters.has(value);
 
 export const executeDockerForTesting = execute;
+export const isRegularPinnedFileHandleForTesting = (handle) => {
+  try { regularPinnedFileSource(handle); return true; } catch { return false; }
+};
 export const postNonzeroFailureDispositionForTesting = postNonzeroFailureDisposition;
 export const workerFailureClassForTesting = workerFailureClass;
