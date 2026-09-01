@@ -1,5 +1,30 @@
 BEGIN;
 
+-- Freeze this candidate against the reconciled v10 bridge authority. The
+-- runner verifies every predecessor too; this local fence also prevents the
+-- v11 SQL from being applied out of sequence by an alternate migration host.
+DO $ogvcs$
+BEGIN
+    IF (
+        SELECT count(*)
+        FROM ogvcs_metadata.schema_migrations
+        WHERE version = 10
+          AND state = 'completed'
+          AND (
+              (phase = 'expand' AND checksum_sha256 =
+                  '69cd3b10a60be43f8aeb2214f18df50124f143a242e1a46f72afac10067d976e')
+              OR (phase = 'migrate' AND checksum_sha256 =
+                  '1d9691bbf721c888f52981d71bf9727a76c1f2825837bc8ba2f98bb5d00150f5')
+              OR (phase = 'contract' AND checksum_sha256 =
+                  '8526bcffb01289747a7e6de61adcedb0b81788b80738d75850635d2f441b4974')
+          )
+    ) <> 3 THEN
+        RAISE EXCEPTION USING ERRCODE = '55000',
+            MESSAGE = 'repository metadata v11 predecessor authority mismatch';
+    END IF;
+END;
+$ogvcs$;
+
 -- Private OGVCS-010 candidate state. This migration deliberately does not
 -- assign a public submit protocol or a disaster-recovery receipt format.
 CREATE TABLE ogvcs_metadata.submit_intents (

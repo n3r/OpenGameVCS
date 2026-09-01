@@ -259,19 +259,28 @@ fn private_submit_accepts_exactly_1000_operations_and_rejects_1001_before_sealin
                  (SELECT count(*) FROM ogvcs_metadata.submit_intent_operations
                   WHERE intent_id = $1),
                  (SELECT count(*) FROM ogvcs_metadata.submit_file_id_consumptions
-                  WHERE intent_id = $1)",
+                  WHERE intent_id = $1),
+                 (SELECT count(*) FROM ogvcs_metadata.submit_intent_operations
+                  WHERE intent_id = $1 AND operation_kind = 'create'),
+                 (SELECT count(*) FROM ogvcs_metadata.submit_intent_operations
+                  WHERE intent_id = $1 AND operation_kind = 'copy'),
+                 (SELECT count(*) FROM ogvcs_metadata.submit_intent_operations
+                  WHERE intent_id = $1 AND operation_kind = 'import')",
             &[&Uuid::from_bytes(*intent.intent_id())],
         )
         .unwrap();
     assert_eq!(counts.get::<_, i64>(0), 1_000);
     assert_eq!(counts.get::<_, i64>(1), 1_000);
+    assert_eq!(counts.get::<_, i64>(2), 334);
+    assert_eq!(counts.get::<_, i64>(3), 333);
+    assert_eq!(counts.get::<_, i64>(4), 333);
     assert_eq!(
         identity_consumptions(&database_url, bundle.receipt.plan_id()),
         1
     );
     assert_eq!(lifecycle_applications(&database_url, lifecycle_plan), 1);
     eprintln!(
-        "private atomic submit exact 1000: elapsed_ms={} operation_rows=1000 consumption_rows=1000",
+        "private atomic submit exact 1000: elapsed_ms={} operation_rows=1000 consumption_rows=1000 create=334 copy=333 import=333",
         started.elapsed().as_millis()
     );
     assert_atomic_submit_visible(&database_url, &fixture, outcome.outbox_event_id(), 1_000);
@@ -329,6 +338,76 @@ fn private_submit_accepts_exactly_1000_operations_and_rejects_1001_before_sealin
     assert_eq!(persisted.get::<_, i64>(1), 0);
     assert_eq!(persisted.get::<_, i64>(2), 0);
     assert_eq!(persisted.get::<_, i64>(3), 0);
+}
+
+#[test]
+fn private_submit_rejects_import_without_a_server_mapping_before_sealing() {
+    let _guard = TEST_LOCK.lock().unwrap();
+    let Ok(database_url) = std::env::var("OGVCS_METADATA_AGGREGATE_DATABASE_URL") else {
+        return;
+    };
+    reset_database(&database_url);
+    let fixture = seed(&database_url);
+    seed_atomic_candidate(&database_url, &fixture);
+    seed_additional_atomic_candidate_operations(&database_url, &fixture, 3);
+    let mut client = Client::connect(&database_url, NoTls).unwrap();
+    assert_eq!(
+        client
+            .execute(
+                "DELETE FROM ogvcs_metadata.file_id_import_mappings
+                 WHERE repository_id = $1",
+                &[&Uuid::from_bytes(*fixture.repository_id.as_bytes())],
+            )
+            .unwrap(),
+        1
+    );
+    let provider = key_provider([0x5a; 32]);
+    let participant = PostgresAggregateAuthorizationParticipant::new(provider.clone());
+    prepare_identity_authority(&database_url, &fixture, &participant);
+    let bundle = prepare_bundle(
+        &database_url,
+        &fixture,
+        &participant,
+        9_500,
+        2,
+        public_uuid(0x9b),
+        "atomic-import-mapping-missing",
+        300,
+    );
+    let lifecycle_plan = persist_lifecycle_plan(
+        &database_url,
+        &fixture,
+        &bundle,
+        public_uuid(0x9c),
+        "atomic-import-mapping-missing-plan",
+        None,
+    );
+    let mut store = production_store(&database_url, provider);
+    assert_eq!(
+        store
+            .create_preallocated_creation_submit_intent(PreallocatedCreationSubmitIntentRequest {
+                authorization: &bundle.receipt,
+                lifecycle_plan_id: lifecycle_plan,
+                expected_head: fixture.old_head,
+                expected_generation: 1,
+            })
+            .unwrap_err()
+            .code,
+        DomainErrorCode::MetadataNotFoundOrDenied
+    );
+    let persisted = client
+        .query_one(
+            "SELECT
+                 (SELECT count(*) FROM ogvcs_metadata.submit_intents),
+                 (SELECT count(*) FROM ogvcs_metadata.submit_intent_operations),
+                 (SELECT count(*) FROM ogvcs_identity.aggregate_plan_consumptions),
+                 (SELECT count(*) FROM ogvcs_metadata.lifecycle_applications)",
+            &[],
+        )
+        .unwrap();
+    for index in 0..4 {
+        assert_eq!(persisted.get::<_, i64>(index), 0);
+    }
 }
 
 #[test]
@@ -1317,13 +1396,19 @@ fn seed_additional_atomic_candidate_operations(
                  SELECT ordinal,
                         decode(repeat('59', 12), 'hex') || int4send(ordinal) AS file_id,
                         format('draft.atomic-generated-%s', ordinal) AS owner_id,
-                        convert_to(format('Game/Generated-%s.asset', ordinal), 'UTF8') AS path
+                        convert_to(format('Game/Generated-%s.asset', ordinal), 'UTF8') AS path,
+                        CASE ordinal % 3
+                            WHEN 0 THEN 'create'
+                            WHEN 1 THEN 'copy'
+                            ELSE 'import'
+                        END AS operation_kind
                  FROM generate_series(1, $1 - 1) AS ordinal
              )
              INSERT INTO ogvcs_metadata.file_id_registry
              (repository_id, file_id, state, origin, owner_kind, owner_id,
               first_change_set_digest, first_operation)
-             SELECT $2, file_id, 'active', 'create', 'draft', owner_id, $3, ordinal
+             SELECT $2, file_id, 'active', operation_kind::ogvcs_metadata.file_id_origin,
+                    'draft', owner_id, $3, ordinal
              FROM operation ORDER BY ordinal",
             &[
                 &total_operations,
@@ -1337,18 +1422,45 @@ fn seed_additional_atomic_candidate_operations(
             "WITH operation AS (
                  SELECT ordinal,
                         decode(repeat('59', 12), 'hex') || int4send(ordinal) AS file_id,
-                        convert_to(format('Game/Generated-%s.asset', ordinal), 'UTF8') AS path
+                        convert_to(format('Game/Generated-%s.asset', ordinal), 'UTF8') AS path,
+                        CASE ordinal % 3
+                            WHEN 0 THEN 'create'
+                            WHEN 1 THEN 'copy'
+                            ELSE 'import'
+                        END AS operation_kind
                  FROM generate_series(1, $1 - 1) AS ordinal
              )
              INSERT INTO ogvcs_metadata.file_path_history
              (repository_id, snapshot_digest, operation_ordinal, file_id,
               repository_path_utf8, operation_kind)
-             SELECT $2, $3, ordinal, file_id, path, 'create'
+             SELECT $2, $3, ordinal, file_id, path, operation_kind
              FROM operation ORDER BY ordinal",
             &[
                 &total_operations,
                 &Uuid::from_bytes(*fixture.repository_id.as_bytes()),
                 &&fixture.publication.digest[..],
+            ],
+        )
+        .unwrap();
+    transaction
+        .execute(
+            "WITH import_operation AS (
+                 SELECT ordinal,
+                        decode(repeat('59', 12), 'hex') || int4send(ordinal) AS file_id,
+                        decode(repeat('6a', 28), 'hex') || int4send(ordinal) AS namespace_digest,
+                        decode(repeat('6b', 28), 'hex') || int4send(ordinal) AS identity_digest
+                 FROM generate_series(1, $1 - 1) AS ordinal
+                 WHERE ordinal % 3 = 2
+             )
+             INSERT INTO ogvcs_metadata.file_id_import_mappings
+             (repository_id, importer_profile, source_namespace_digest,
+              source_identity_digest, file_id)
+             SELECT $2, 'atomic-submit-test/import@1', namespace_digest,
+                    identity_digest, file_id
+             FROM import_operation ORDER BY ordinal",
+            &[
+                &total_operations,
+                &Uuid::from_bytes(*fixture.repository_id.as_bytes()),
             ],
         )
         .unwrap();

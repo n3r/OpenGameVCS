@@ -332,7 +332,7 @@ pub const MIGRATIONS: [Migration; 33] = [
         version: 11,
         phase: MigrationPhase::Expand,
         sql: include_str!("../../../migrations/repository-metadata/000011_expand.sql"),
-        checksum_sha256: "44cb9356b661cd3c320150c4729b43d0f789779b253addff2f9cfb6fbc8759cd",
+        checksum_sha256: "ba12a576e2a186e75becb51773e9f9c4322c41f37e115546c31eb29776463f3f",
         restartable: true,
         minimum_application_version: "0.1.0",
         maximum_application_version: "0.1.x",
