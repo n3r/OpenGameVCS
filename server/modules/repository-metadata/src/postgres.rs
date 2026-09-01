@@ -30,6 +30,8 @@ mod content_manifest_transfer;
 mod lifecycle;
 mod metadata_dispatcher;
 pub(crate) use aggregate_bridge::apply_aggregate_lifecycle_publication_in_transaction;
+#[cfg(feature = "legacy-test-adapter")]
+pub use aggregate_bridge::AggregateIdentityMappingFaultForTest;
 pub use aggregate_bridge::{AggregateLifecycleApplicationReceipt, AggregateLifecycleApplyRequest};
 #[cfg(feature = "legacy-test-adapter")]
 pub use atomic_submit::{AtomicSubmitFaultForTest, AtomicSubmitRestartBoundaryForTest};

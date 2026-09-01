@@ -22,6 +22,8 @@ const BRIDGE_REACHABILITY_DOMAIN: &[u8] = b"OGVCS-LIFECYCLE-AGGREGATE-REACHABILI
 const BRIDGE_PROTECTED_INITIAL_DOMAIN: &[u8] = b"OGVCS-LIFECYCLE-AGGREGATE-PROTECTED-INITIAL-V1";
 const BRIDGE_PROTECTED_STEP_DOMAIN: &[u8] = b"OGVCS-LIFECYCLE-AGGREGATE-PROTECTED-STEP-V1";
 const BRIDGE_PROTECTED_FINAL_DOMAIN: &[u8] = b"OGVCS-LIFECYCLE-AGGREGATE-PROTECTED-FINAL-V1";
+const IDENTITY_MAPPING_ITEM_DOMAIN: &[u8] = b"OGVCS-LIFECYCLE-AGGREGATE-IDENTITY-MAPPING-ITEM-V1";
+const IDENTITY_MAPPING_SEAL_DOMAIN: &[u8] = b"OGVCS-LIFECYCLE-AGGREGATE-IDENTITY-MAPPING-SEAL-V1";
 
 /// The only production request that may enter the aggregate lifecycle apply
 /// path. The receipt remains opaque; the bridge revalidates and consumes it.
@@ -63,7 +65,7 @@ impl AggregateLifecycleApplicationReceipt {
     }
 
     /// Number of bounded keyset pages used to reconstruct the authorization
-    /// projection from sealed lifecycle rows.
+    /// projection from the sealed lifecycle-to-identity mapping.
     pub const fn projection_page_count(&self) -> u32 {
         self.projection_page_count
     }
@@ -90,6 +92,15 @@ struct ProjectionScan {
     projection: AggregateResourceDigestProjection,
     page_count: u32,
     maximum_page_items: u16,
+}
+
+#[cfg(feature = "legacy-test-adapter")]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum AggregateIdentityMappingFaultForTest {
+    #[default]
+    None,
+    ForgeFirstItemDigest,
+    ForgeSealDigest,
 }
 
 #[derive(Clone, Copy)]
@@ -259,6 +270,265 @@ impl<A, V> IdentityBoundPostgresMetadataStore<A, V> {
     }
 }
 
+#[cfg(feature = "legacy-test-adapter")]
+impl<A, V> PostgresMetadataStore<A, V> {
+    /// Private fixture writer for a relation that production can create only
+    /// after a future server-derived closure planner exists. The slice index
+    /// is the lifecycle global ordinal; its value is the identity ordinal.
+    pub fn seal_aggregate_identity_mapping_for_test(
+        &mut self,
+        lifecycle_plan_id: [u8; 16],
+        identity_plan_id: &str,
+        identity_ordinal_by_lifecycle_ordinal: &[u32],
+    ) -> Result<[u8; 32]> {
+        self.seal_aggregate_identity_mapping_with_fault_for_test(
+            lifecycle_plan_id,
+            identity_plan_id,
+            identity_ordinal_by_lifecycle_ordinal,
+            AggregateIdentityMappingFaultForTest::None,
+        )
+    }
+
+    pub fn seal_aggregate_identity_mapping_with_fault_for_test(
+        &mut self,
+        lifecycle_plan_id: [u8; 16],
+        identity_plan_id: &str,
+        identity_ordinal_by_lifecycle_ordinal: &[u32],
+        fault: AggregateIdentityMappingFaultForTest,
+    ) -> Result<[u8; 32]> {
+        crate::verify_schema_compatibility(&mut self.client)?;
+        if identity_plan_id.is_empty()
+            || identity_plan_id.len() > 256
+            || identity_ordinal_by_lifecycle_ordinal.is_empty()
+            || identity_ordinal_by_lifecycle_ordinal.len() > MAXIMUM_AGGREGATE_RESOURCES
+        {
+            return Err(denied());
+        }
+        let mut transaction = self
+            .client
+            .build_transaction()
+            .isolation_level(IsolationLevel::Serializable)
+            .start()
+            .map_err(database_error)?;
+        let result = write_aggregate_identity_mapping_for_test(
+            &mut transaction,
+            Uuid::from_bytes(lifecycle_plan_id),
+            identity_plan_id,
+            identity_ordinal_by_lifecycle_ordinal,
+            fault,
+        );
+        match result {
+            Ok(digest) => {
+                transaction.commit().map_err(|_| denied())?;
+                Ok(digest)
+            }
+            Err(_) => {
+                let _ = transaction.rollback();
+                Err(denied())
+            }
+        }
+    }
+}
+
+#[cfg(feature = "legacy-test-adapter")]
+#[derive(Clone)]
+struct MappingFixtureItem {
+    lifecycle_ordinal: u32,
+    identity_ordinal: u32,
+    object_kind: i16,
+    object_digest: [u8; 32],
+    resource_digest: [u8; 32],
+    item_digest: [u8; 32],
+}
+
+#[cfg(feature = "legacy-test-adapter")]
+fn write_aggregate_identity_mapping_for_test(
+    transaction: &mut Transaction<'_>,
+    lifecycle_plan_id: Uuid,
+    identity_plan_id: &str,
+    identity_ordinals: &[u32],
+    fault: AggregateIdentityMappingFaultForTest,
+) -> Result<[u8; 32]> {
+    let seal = transaction
+        .query_opt(
+            "SELECT lifecycle.object_count, lifecycle.plan_digest,
+                    decision.decision_digest,
+                    decision.resource_digest_projection_digest
+             FROM ogvcs_metadata.lifecycle_publication_plan_seals AS lifecycle
+             JOIN ogvcs_identity.aggregate_decision_commitments AS decision
+               ON decision.plan_id = $2
+             WHERE lifecycle.plan_id = $1
+             FOR SHARE OF lifecycle, decision",
+            &[&lifecycle_plan_id, &identity_plan_id],
+        )
+        .map_err(database_error)?
+        .ok_or_else(denied)?;
+    let object_count = u32::try_from(seal.get::<_, i32>(0)).map_err(|_| denied())?;
+    let lifecycle_plan_digest = digest32(seal.get(1))?;
+    let identity_decision_digest = digest32(seal.get(2))?;
+    let identity_projection_digest = digest32(seal.get(3))?;
+
+    let mut mappings = Vec::with_capacity(identity_ordinals.len());
+    for (page_ordinal, identity_page) in identity_ordinals
+        .chunks(PLAN_CHUNK_ITEMS_MAXIMUM)
+        .enumerate()
+    {
+        let first_lifecycle = page_ordinal
+            .checked_mul(PLAN_CHUNK_ITEMS_MAXIMUM)
+            .ok_or_else(denied)?;
+        let lifecycle_ordinals = (0..identity_page.len())
+            .map(|offset| i32::try_from(first_lifecycle + offset).map_err(|_| denied()))
+            .collect::<Result<Vec<_>>>()?;
+        let identity_page = identity_page
+            .iter()
+            .map(|ordinal| i32::try_from(*ordinal).map_err(|_| denied()))
+            .collect::<Result<Vec<_>>>()?;
+        let rows = transaction
+            .query(
+                "SELECT input.lifecycle_ordinal, input.identity_ordinal,
+                        lifecycle.object_kind, lifecycle.object_digest,
+                        lifecycle.resource_opaque_digest
+                 FROM unnest($3::integer[], $4::integer[]) WITH ORDINALITY
+                      AS input(lifecycle_ordinal, identity_ordinal, position)
+                 JOIN ogvcs_metadata.lifecycle_publication_plan_items AS lifecycle
+                   ON lifecycle.plan_id = $1
+                  AND lifecycle.global_ordinal = input.lifecycle_ordinal
+                 JOIN ogvcs_identity.aggregate_plan_resources AS identity
+                   ON identity.plan_id = $2
+                  AND identity.item_ordinal = input.identity_ordinal
+                 ORDER BY input.position",
+                &[
+                    &lifecycle_plan_id,
+                    &identity_plan_id,
+                    &lifecycle_ordinals,
+                    &identity_page,
+                ],
+            )
+            .map_err(database_error)?;
+        if rows.len() != identity_page.len() {
+            return Err(denied());
+        }
+        for row in rows {
+            let lifecycle_ordinal = u32::try_from(row.get::<_, i32>(0)).map_err(|_| denied())?;
+            let identity_ordinal = u32::try_from(row.get::<_, i32>(1)).map_err(|_| denied())?;
+            let object_kind: i16 = row.get(2);
+            let object_digest = digest32(row.get(3))?;
+            let resource_digest = digest32(row.get(4))?;
+            let item_digest = aggregate_identity_mapping_item_digest(
+                lifecycle_plan_id,
+                lifecycle_ordinal,
+                identity_plan_id,
+                identity_ordinal,
+                object_kind,
+                object_digest,
+                resource_digest,
+            )?;
+            mappings.push(MappingFixtureItem {
+                lifecycle_ordinal,
+                identity_ordinal,
+                object_kind,
+                object_digest,
+                resource_digest,
+                item_digest,
+            });
+        }
+    }
+    if fault == AggregateIdentityMappingFaultForTest::ForgeFirstItemDigest {
+        let first = mappings.first_mut().ok_or_else(denied)?;
+        first.item_digest[0] ^= 1;
+    }
+
+    let lifecycle_ordinals = mappings
+        .iter()
+        .map(|mapping| mapping.lifecycle_ordinal as i32)
+        .collect::<Vec<_>>();
+    let identity_plan_ids = vec![identity_plan_id; mappings.len()];
+    let identity_ordinals = mappings
+        .iter()
+        .map(|mapping| mapping.identity_ordinal as i32)
+        .collect::<Vec<_>>();
+    let object_kinds = mappings
+        .iter()
+        .map(|mapping| mapping.object_kind)
+        .collect::<Vec<_>>();
+    let object_digests = mappings
+        .iter()
+        .map(|mapping| mapping.object_digest.to_vec())
+        .collect::<Vec<_>>();
+    let resource_digests = mappings
+        .iter()
+        .map(|mapping| mapping.resource_digest.to_vec())
+        .collect::<Vec<_>>();
+    let item_digests = mappings
+        .iter()
+        .map(|mapping| mapping.item_digest.to_vec())
+        .collect::<Vec<_>>();
+    let inserted = transaction
+        .execute(
+            "INSERT INTO ogvcs_metadata.lifecycle_aggregate_identity_items
+             (lifecycle_plan_id, lifecycle_global_ordinal, identity_plan_id,
+              identity_item_ordinal, object_kind, object_digest, resource_digest,
+              mapping_item_digest)
+             SELECT $1, input.lifecycle_ordinal, input.identity_plan_id,
+                    input.identity_ordinal, input.object_kind, input.object_digest,
+                    input.resource_digest, input.item_digest
+             FROM unnest($2::integer[], $3::text[], $4::integer[], $5::smallint[],
+                         $6::bytea[], $7::bytea[], $8::bytea[])
+                  AS input(lifecycle_ordinal, identity_plan_id, identity_ordinal,
+                     object_kind, object_digest, resource_digest, item_digest)",
+            &[
+                &lifecycle_plan_id,
+                &lifecycle_ordinals,
+                &identity_plan_ids,
+                &identity_ordinals,
+                &object_kinds,
+                &object_digests,
+                &resource_digests,
+                &item_digests,
+            ],
+        )
+        .map_err(database_error)?;
+    if inserted != mappings.len() as u64 {
+        return Err(denied());
+    }
+
+    mappings.sort_by_key(|mapping| mapping.identity_ordinal);
+    let mut mapping_digest = aggregate_identity_mapping_seal_digest(
+        lifecycle_plan_id,
+        identity_plan_id,
+        object_count,
+        lifecycle_plan_digest,
+        identity_decision_digest,
+        identity_projection_digest,
+        mappings.iter().map(|mapping| mapping.item_digest),
+    )?;
+    if fault == AggregateIdentityMappingFaultForTest::ForgeSealDigest {
+        mapping_digest[0] ^= 1;
+    }
+    let inserted = transaction
+        .execute(
+            "INSERT INTO ogvcs_metadata.lifecycle_aggregate_identity_seals
+             (lifecycle_plan_id, identity_plan_id, object_count,
+              lifecycle_plan_digest, identity_decision_digest,
+              identity_resource_projection_digest, mapping_digest)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)",
+            &[
+                &lifecycle_plan_id,
+                &identity_plan_id,
+                &(object_count as i32),
+                &&lifecycle_plan_digest[..],
+                &&identity_decision_digest[..],
+                &&identity_projection_digest[..],
+                &&mapping_digest[..],
+            ],
+        )
+        .map_err(database_error)?;
+    if inserted != 1 {
+        return Err(denied());
+    }
+    Ok(mapping_digest)
+}
+
 /// Crate-private composition port for the branded atomic-submit coordinator.
 /// The caller owns the only commit. Every error explicitly aborts PostgreSQL
 /// transaction state so catching it cannot permit a partial commit.
@@ -290,7 +560,7 @@ fn bridge_transaction(
         return Err(denied());
     }
     let plan = load_bridge_plan(transaction, request.lifecycle_plan_id)?;
-    let projection_scan = reconstruct_projection(transaction, &plan)?;
+    let projection_scan = reconstruct_projection(transaction, &plan, request.authorization)?;
     let facts = validate_receipt_and_current_settings(
         transaction,
         &plan,
@@ -421,21 +691,77 @@ fn load_bridge_plan(
 fn reconstruct_projection(
     transaction: &mut Transaction<'_>,
     plan: &BridgePlan,
+    receipt: &AggregateAuthorizationReceipt,
 ) -> Result<ProjectionScan> {
+    let receipt_decision_digest = decode_identity_digest(receipt.decision_digest())?;
+    let receipt_projection_digest =
+        decode_identity_digest(receipt.resource_digest_projection_digest())?;
+    let seal = transaction
+        .query_opt(
+            "SELECT identity_plan_id, object_count, lifecycle_plan_digest,
+                    identity_decision_digest, identity_resource_projection_digest,
+                    mapping_digest
+             FROM ogvcs_metadata.lifecycle_aggregate_identity_seals
+             WHERE lifecycle_plan_id = $1
+             FOR SHARE",
+            &[&plan.plan_id],
+        )
+        .map_err(database_error)?
+        .ok_or_else(denied)?;
+    let identity_plan_id: String = seal.get(0);
+    let mapping_object_count = u32::try_from(seal.get::<_, i32>(1)).map_err(|_| denied())?;
+    let sealed_lifecycle_plan_digest = digest32(seal.get(2))?;
+    let sealed_identity_decision_digest = digest32(seal.get(3))?;
+    let sealed_projection_digest = digest32(seal.get(4))?;
+    let sealed_mapping_digest = digest32(seal.get(5))?;
+    if identity_plan_id != receipt.plan_id()
+        || mapping_object_count != plan.object_count
+        || sealed_lifecycle_plan_digest != plan.plan_digest
+        || sealed_identity_decision_digest != receipt_decision_digest
+        || sealed_projection_digest != receipt_projection_digest
+    {
+        return Err(denied());
+    }
+
     let mut projection = AggregateResourceDigestProjection::new();
     let mut next_ordinal = 0_u32;
     let mut page_count = 0_u32;
     let mut maximum_page_items = 0_u16;
+    let mut mapping_seal_hasher = aggregate_identity_mapping_seal_hasher(
+        plan.plan_id,
+        &identity_plan_id,
+        plan.object_count,
+        plan.plan_digest,
+        sealed_identity_decision_digest,
+        sealed_projection_digest,
+    )?;
     while next_ordinal < plan.object_count {
         let rows = transaction
             .query(
-                "SELECT global_ordinal, resource_opaque_digest
-                 FROM ogvcs_metadata.lifecycle_publication_plan_items
-                 WHERE plan_id = $1 AND global_ordinal >= $2
-                 ORDER BY global_ordinal
-                 LIMIT $3",
+                "SELECT mapping.identity_item_ordinal,
+                        mapping.lifecycle_global_ordinal,
+                        mapping.object_kind, mapping.object_digest,
+                        mapping.resource_digest, mapping.mapping_item_digest,
+                        lifecycle.object_kind, lifecycle.object_digest,
+                        lifecycle.resource_opaque_digest,
+                        identity.resource_digest, identity.resource_type,
+                        identity.path_key, identity.file_id, identity.object_id,
+                        identity.resource_name
+                 FROM ogvcs_metadata.lifecycle_aggregate_identity_items AS mapping
+                 JOIN ogvcs_metadata.lifecycle_publication_plan_items AS lifecycle
+                   ON lifecycle.plan_id = mapping.lifecycle_plan_id
+                  AND lifecycle.global_ordinal = mapping.lifecycle_global_ordinal
+                 JOIN ogvcs_identity.aggregate_plan_resources AS identity
+                   ON identity.plan_id = mapping.identity_plan_id
+                  AND identity.item_ordinal = mapping.identity_item_ordinal
+                 WHERE mapping.lifecycle_plan_id = $1
+                   AND mapping.identity_plan_id = $2
+                   AND mapping.identity_item_ordinal >= $3
+                 ORDER BY mapping.identity_item_ordinal
+                 LIMIT $4",
                 &[
                     &plan.plan_id,
+                    &identity_plan_id,
                     &(next_ordinal as i32),
                     &(PLAN_CHUNK_ITEMS_MAXIMUM as i64),
                 ],
@@ -448,23 +774,78 @@ fn reconstruct_projection(
         maximum_page_items =
             maximum_page_items.max(u16::try_from(rows.len()).map_err(|_| denied())?);
         for row in rows {
-            let ordinal = u32::try_from(row.get::<_, i32>(0)).map_err(|_| denied())?;
-            if ordinal != next_ordinal || ordinal >= plan.object_count {
+            let identity_ordinal = u32::try_from(row.get::<_, i32>(0)).map_err(|_| denied())?;
+            let lifecycle_ordinal = u32::try_from(row.get::<_, i32>(1)).map_err(|_| denied())?;
+            let mapping_object_kind: i16 = row.get(2);
+            let mapping_object_digest = digest32(row.get(3))?;
+            let mapping_resource_digest = digest32(row.get(4))?;
+            let mapping_item_digest = digest32(row.get(5))?;
+            let lifecycle_object_kind: i16 = row.get(6);
+            let lifecycle_object_digest = digest32(row.get(7))?;
+            let lifecycle_resource_digest = digest32(row.get(8))?;
+            let identity_resource_digest = digest32(row.get(9))?;
+            let identity_resource_type: String = row.get(10);
+            let identity_path: Option<String> = row.get(11);
+            let identity_file_id: Option<String> = row.get(12);
+            let identity_object_id: Option<String> = row.get(13);
+            let identity_name: Option<String> = row.get(14);
+            let exact_object_id = object_ref(
+                object_kind(lifecycle_object_kind)?,
+                lifecycle_object_digest.to_vec(),
+            )?
+            .to_string();
+            let expected_mapping_item_digest = aggregate_identity_mapping_item_digest(
+                plan.plan_id,
+                lifecycle_ordinal,
+                &identity_plan_id,
+                identity_ordinal,
+                mapping_object_kind,
+                mapping_object_digest,
+                mapping_resource_digest,
+            )?;
+            if identity_ordinal != next_ordinal
+                || identity_ordinal >= plan.object_count
+                || lifecycle_ordinal >= plan.object_count
+                || mapping_object_kind != lifecycle_object_kind
+                || mapping_object_digest != lifecycle_object_digest
+                || mapping_resource_digest != lifecycle_resource_digest
+                || mapping_resource_digest != identity_resource_digest
+                || mapping_item_digest != expected_mapping_item_digest
+                || identity_resource_type != "object"
+                || identity_path.is_some()
+                || identity_file_id.is_some()
+                || identity_name.is_some()
+                || identity_object_id.as_deref() != Some(exact_object_id.as_str())
+            {
                 return Err(denied());
             }
-            let digest: Vec<u8> = row.get(1);
-            projection.push(&digest).map_err(|_| denied())?;
+            projection
+                .push(&mapping_resource_digest)
+                .map_err(|_| denied())?;
+            mapping_seal_hasher.update(mapping_item_digest);
             next_ordinal += 1;
         }
     }
     let extra = transaction
         .query_opt(
-            "SELECT 1 FROM ogvcs_metadata.lifecycle_publication_plan_items
-             WHERE plan_id = $1 AND global_ordinal >= $2 LIMIT 1",
-            &[&plan.plan_id, &(plan.object_count as i32)],
+            "SELECT 1
+             FROM ogvcs_metadata.lifecycle_aggregate_identity_items
+             WHERE lifecycle_plan_id = $1
+               AND identity_plan_id = $2
+               AND identity_item_ordinal >= $3
+             LIMIT 1",
+            &[
+                &plan.plan_id,
+                &identity_plan_id,
+                &(plan.object_count as i32),
+            ],
         )
         .map_err(database_error)?;
-    if extra.is_some() || projection.count() != plan.object_count as usize {
+    let reconstructed_mapping_digest: [u8; 32] = mapping_seal_hasher.finalize().into();
+    if extra.is_some()
+        || projection.count() != plan.object_count as usize
+        || reconstructed_mapping_digest != sealed_mapping_digest
+    {
         return Err(denied());
     }
     Ok(ProjectionScan {
@@ -553,6 +934,106 @@ fn validate_receipt_and_current_settings(
         plan_nonce,
         signer_fingerprint,
     })
+}
+
+fn aggregate_identity_mapping_item_digest(
+    lifecycle_plan_id: Uuid,
+    lifecycle_ordinal: u32,
+    identity_plan_id: &str,
+    identity_ordinal: u32,
+    object_kind_code: i16,
+    object_digest: [u8; 32],
+    resource_digest: [u8; 32],
+) -> Result<[u8; 32]> {
+    if identity_plan_id.is_empty()
+        || identity_plan_id.len() > 256
+        || lifecycle_ordinal >= MAXIMUM_AGGREGATE_RESOURCES as u32
+        || identity_ordinal >= MAXIMUM_AGGREGATE_RESOURCES as u32
+        || !(1..=11).contains(&object_kind_code)
+    {
+        return Err(denied());
+    }
+    let mut digest = Sha256::new();
+    digest.update(IDENTITY_MAPPING_ITEM_DOMAIN);
+    digest.update([0]);
+    mapping_digest_field(&mut digest, lifecycle_plan_id.as_bytes())?;
+    mapping_digest_field(&mut digest, &lifecycle_ordinal.to_be_bytes())?;
+    mapping_digest_field(&mut digest, identity_plan_id.as_bytes())?;
+    mapping_digest_field(&mut digest, &identity_ordinal.to_be_bytes())?;
+    mapping_digest_field(&mut digest, &object_kind_code.to_be_bytes())?;
+    mapping_digest_field(&mut digest, &object_digest)?;
+    mapping_digest_field(&mut digest, &resource_digest)?;
+    Ok(digest.finalize().into())
+}
+
+#[cfg(feature = "legacy-test-adapter")]
+#[allow(clippy::too_many_arguments)]
+fn aggregate_identity_mapping_seal_digest<I>(
+    lifecycle_plan_id: Uuid,
+    identity_plan_id: &str,
+    object_count: u32,
+    lifecycle_plan_digest: [u8; 32],
+    identity_decision_digest: [u8; 32],
+    identity_projection_digest: [u8; 32],
+    ordered_item_digests: I,
+) -> Result<[u8; 32]>
+where
+    I: IntoIterator<Item = [u8; 32]>,
+{
+    let mut digest = aggregate_identity_mapping_seal_hasher(
+        lifecycle_plan_id,
+        identity_plan_id,
+        object_count,
+        lifecycle_plan_digest,
+        identity_decision_digest,
+        identity_projection_digest,
+    )?;
+    let mut observed = 0_u32;
+    for item_digest in ordered_item_digests {
+        digest.update(item_digest);
+        observed = observed.checked_add(1).ok_or_else(denied)?;
+    }
+    if observed != object_count {
+        return Err(denied());
+    }
+    Ok(digest.finalize().into())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn aggregate_identity_mapping_seal_hasher(
+    lifecycle_plan_id: Uuid,
+    identity_plan_id: &str,
+    object_count: u32,
+    lifecycle_plan_digest: [u8; 32],
+    identity_decision_digest: [u8; 32],
+    identity_projection_digest: [u8; 32],
+) -> Result<Sha256> {
+    if identity_plan_id.is_empty()
+        || identity_plan_id.len() > 256
+        || object_count == 0
+        || object_count as usize > MAXIMUM_AGGREGATE_RESOURCES
+    {
+        return Err(denied());
+    }
+    let mut digest = Sha256::new();
+    digest.update(IDENTITY_MAPPING_SEAL_DOMAIN);
+    digest.update([0]);
+    mapping_digest_field(&mut digest, lifecycle_plan_id.as_bytes())?;
+    mapping_digest_field(&mut digest, identity_plan_id.as_bytes())?;
+    mapping_digest_field(&mut digest, &object_count.to_be_bytes())?;
+    mapping_digest_field(&mut digest, &lifecycle_plan_digest)?;
+    mapping_digest_field(&mut digest, &identity_decision_digest)?;
+    mapping_digest_field(&mut digest, &identity_projection_digest)?;
+    let ordered_bytes = u64::from(object_count).checked_mul(32).ok_or_else(denied)?;
+    digest.update(ordered_bytes.to_be_bytes());
+    Ok(digest)
+}
+
+fn mapping_digest_field(digest: &mut Sha256, value: &[u8]) -> Result<()> {
+    let length = u64::try_from(value.len()).map_err(|_| denied())?;
+    digest.update(length.to_be_bytes());
+    digest.update(value);
+    Ok(())
 }
 
 fn bridge_operation_digest(

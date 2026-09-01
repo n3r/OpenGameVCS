@@ -18,7 +18,7 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
     );
     assert_eq!(manifest["database"], "postgresql-15-or-newer");
     let entries = manifest["entries"].as_array().unwrap();
-    assert_eq!(entries.len(), 36);
+    assert_eq!(entries.len(), 39);
     let expected = [
         (1, "expand"),
         (1, "migrate"),
@@ -56,6 +56,9 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
         (12, "expand"),
         (12, "migrate"),
         (12, "contract"),
+        (13, "expand"),
+        (13, "migrate"),
+        (13, "contract"),
     ];
     for (entry, (version, phase)) in entries.iter().zip(expected) {
         assert_eq!(entry["version"], version);
@@ -81,6 +84,54 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
     assert_eq!(entries[29]["requiresCompatibilityFence"], true);
     assert_eq!(entries[32]["requiresCompatibilityFence"], true);
     assert_eq!(entries[35]["requiresCompatibilityFence"], true);
+    assert_eq!(entries[38]["requiresCompatibilityFence"], true);
+}
+
+#[test]
+fn version_thirteen_seals_the_exact_identity_to_lifecycle_item_relation() {
+    let root = migration_root();
+    let expand = fs::read_to_string(root.join("000013_expand.sql")).unwrap();
+    for predecessor in [
+        "b3a9e54ca1cc526451e38072c0732c946e26a7bbb07bb45f7514e25949d70dac",
+        "5917465778e8d6b882d4b3a6d6c95b0ddd66c62bab34e31b90463cbb418a7a27",
+        "dfa4ffa12248931aeeaf76b4fe2f9040862fe7764c6fde20042536511d138d74",
+    ] {
+        assert!(
+            expand.contains(predecessor),
+            "missing v12 predecessor pin {predecessor}"
+        );
+    }
+    for evidence in [
+        "lifecycle_aggregate_identity_seals",
+        "lifecycle_aggregate_identity_items",
+        "UNIQUE (lifecycle_plan_id, identity_item_ordinal)",
+        "REFERENCES ogvcs_metadata.lifecycle_publication_plan_items",
+        "REFERENCES ogvcs_identity.aggregate_plan_resources",
+        "DEFERRABLE INITIALLY DEFERRED",
+        "mapping.resource_digest <> lifecycle_item.resource_opaque_digest",
+        "mapping.resource_digest <> identity_resource.resource_digest",
+        "identity_resource.object_id IS DISTINCT FROM",
+        "lifecycle_object_id_v13",
+        "aggregate_identity_mapping_item_digest_v13",
+        "aggregate_identity_mapping_digest_v13",
+        "ORDER BY mapping.identity_item_ordinal",
+        "aggregate identity mapping is sealed",
+        "aggregate application lacks exact identity mapping",
+        "repository metadata v13 predecessor authority mismatch",
+    ] {
+        assert!(expand.contains(evidence), "missing v13 evidence {evidence}");
+    }
+    for forbidden in ["request_root", "CREATE ROUTE", "DELETE FROM", "DROP TABLE"] {
+        assert!(!expand
+            .to_ascii_lowercase()
+            .contains(&forbidden.to_ascii_lowercase()));
+    }
+    let migrate = fs::read_to_string(root.join("000013_migrate.sql")).unwrap();
+    assert!(!migrate.contains("INSERT INTO"));
+    assert!(!migrate.contains("UPDATE "));
+    let contract = fs::read_to_string(root.join("000013_contract.sql")).unwrap();
+    assert!(!contract.contains("DROP "));
+    assert!(!contract.contains("DELETE "));
 }
 
 #[test]

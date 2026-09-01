@@ -104,14 +104,31 @@ publication bypass. Its current private metadata-transaction hook is
 submit-only and rechecks the exact `Publish` authorized view; GC and transfer
 variants remain closed until their own OGVCS-009 authority participants exist.
 Schema v10 and `apply_aggregate_lifecycle_publication` now implement that
-submit-only bridge. They reconstruct the ordered resource-digest projection in
-keyset pages of at most 1,000 rows, compare it with the sealed aggregate-v3
-receipt, consume that receipt, lock/revalidate the lifecycle plan, and apply
+submit-only bridge. Schema v13 corrects its formerly positional lifecycle-to-
+identity join: every newly eligible lifecycle plan now requires an immutable
+one-to-one seal plus an exact per-item relation to the OGVCS-009 identity plan.
+Deferred composite foreign keys and validation bind both ordinals, the exact
+`ObjectRef`, and the resource digest on both sides. Lifecycle locking and
+application retain the canonical opaque-key/global order, while authorization
+projection reconstruction follows identity item ordinal in keyset pages of at
+most 1,000 rows. The mapping-seal digest is streamed in production; the bridge
+does not materialize a 100,000-item mapping vector. It compares that projection
+with the sealed aggregate-v3 receipt, consumes that receipt, locks and
+revalidates the lifecycle plan, and applies
 facts, reachability, item outbox rows, one aggregate outbox row, and immutable
 cross-schema evidence in one caller-owned SERIALIZABLE transaction. Later
 failure, including a deferred evidence failure, rolls back both consumption and
 metadata. The API returns one aggregate result and never returns resource
 identities or failure positions. GC and transfer effects remain dormant.
+
+V13 does not fabricate mappings for historical rows. Existing committed v10
+applications and their evidence remain readable, but an old unconsumed plan
+without the new relation fails closed before one-use receipt consumption. The
+only mapping writer in this tranche is compiled by `legacy-test-adapter` for
+PostgreSQL fixtures and hostile fault injection; it is not production behavior
+and is not a closure planner. No JavaScript-to-Rust subject/scope mapper,
+manifest-byte reader, submit route, request-root carrier, closure traversal,
+recovery service, health/GC authority, or public protocol is added here.
 
 Schema v11 adds the first private OGVCS-010 atomic-submit candidate. Its name
 and scope are intentionally narrow: `finalize_preallocated_creation_submit`

@@ -116,9 +116,9 @@ pub use ports::{
     MetadataTransaction, ObjectValidationPort, ProductionObjectValidator,
 };
 #[cfg(feature = "legacy-test-adapter")]
-pub use postgres::ContentManifestAvailabilityFaultForTest;
-#[cfg(feature = "legacy-test-adapter")]
 pub use postgres::PostgresLifecyclePlanWriter;
+#[cfg(feature = "legacy-test-adapter")]
+pub use postgres::{AggregateIdentityMappingFaultForTest, ContentManifestAvailabilityFaultForTest};
 pub use postgres::{
     AggregateLifecycleApplicationReceipt, AggregateLifecycleApplyRequest,
     ContentManifestAvailabilityCommitRequest, ContentManifestAvailabilityReconciliation,

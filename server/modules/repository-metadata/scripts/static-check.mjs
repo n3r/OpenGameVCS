@@ -118,7 +118,7 @@ for (const file of rustFiles) {
 
 const manifest = JSON.parse(await readFile(resolve(migrations, 'manifest.json')));
 assert(manifest.schemaVersion === 'ogvcs.repository-metadata/migration-manifest/v1', 'migration manifest schema differs');
-assert(JSON.stringify(manifest.entries.map(({ version, phase }) => [version, phase])) === '[[1,"expand"],[1,"migrate"],[1,"contract"],[2,"expand"],[2,"migrate"],[2,"contract"],[3,"expand"],[3,"migrate"],[3,"contract"],[4,"expand"],[4,"migrate"],[4,"contract"],[5,"expand"],[5,"migrate"],[5,"contract"],[6,"expand"],[6,"migrate"],[6,"contract"],[7,"expand"],[7,"migrate"],[7,"contract"],[8,"expand"],[8,"migrate"],[8,"contract"],[9,"expand"],[9,"migrate"],[9,"contract"],[10,"expand"],[10,"migrate"],[10,"contract"],[11,"expand"],[11,"migrate"],[11,"contract"],[12,"expand"],[12,"migrate"],[12,"contract"]]', 'migration phases are not ordered');
+assert(JSON.stringify(manifest.entries.map(({ version, phase }) => [version, phase])) === '[[1,"expand"],[1,"migrate"],[1,"contract"],[2,"expand"],[2,"migrate"],[2,"contract"],[3,"expand"],[3,"migrate"],[3,"contract"],[4,"expand"],[4,"migrate"],[4,"contract"],[5,"expand"],[5,"migrate"],[5,"contract"],[6,"expand"],[6,"migrate"],[6,"contract"],[7,"expand"],[7,"migrate"],[7,"contract"],[8,"expand"],[8,"migrate"],[8,"contract"],[9,"expand"],[9,"migrate"],[9,"contract"],[10,"expand"],[10,"migrate"],[10,"contract"],[11,"expand"],[11,"migrate"],[11,"contract"],[12,"expand"],[12,"migrate"],[12,"contract"],[13,"expand"],[13,"migrate"],[13,"contract"]]', 'migration phases are not ordered');
 for (const entry of manifest.entries) {
   const bytes = await readFile(resolve(migrations, entry.path));
   const sql = bytes.toString('utf8');
@@ -312,6 +312,39 @@ assert(
   'operation digest vector does not detect tampering',
 );
 const aggregateBridge = await readFile(resolve(root, 'src/postgres/aggregate_bridge.rs'), 'utf8');
+const mappingProjectionStart = aggregateBridge.indexOf('fn reconstruct_projection(');
+const mappingProjectionEnd = aggregateBridge.indexOf(
+  '\nfn validate_receipt_and_current_settings(',
+  mappingProjectionStart,
+);
+assert(
+  mappingProjectionStart >= 0 && mappingProjectionEnd > mappingProjectionStart,
+  'v13 identity mapping projection boundary is missing',
+);
+const mappingProjectionBody = aggregateBridge.slice(mappingProjectionStart, mappingProjectionEnd);
+for (const evidence of [
+  'lifecycle_aggregate_identity_seals',
+  'lifecycle_aggregate_identity_items',
+  'mapping.identity_item_ordinal >= $3',
+  'ORDER BY mapping.identity_item_ordinal',
+  'mapping_resource_digest != lifecycle_resource_digest',
+  'mapping_resource_digest != identity_resource_digest',
+  'aggregate_identity_mapping_item_digest(',
+  'mapping_seal_hasher.update(mapping_item_digest)',
+]) assert(mappingProjectionBody.includes(evidence), `v13 bridge mapping check missing: ${evidence}`);
+assert(
+  !mappingProjectionBody.includes('Vec::with_capacity(plan.object_count'),
+  'production bridge materializes the complete identity mapping',
+);
+assert(
+  aggregateBridge.indexOf('let projection_scan = reconstruct_projection(')
+    < aggregateBridge.indexOf('.consume_receipt('),
+  'one-use receipt is consumed before the v13 mapping is proven',
+);
+assert(
+  aggregateBridge.includes('#[cfg(feature = "legacy-test-adapter")]\n#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]\npub enum AggregateIdentityMappingFaultForTest'),
+  'v13 mapping fault surface escaped the legacy test feature',
+);
 const requiredBridgeBindings = [
   'identity-receipt-schema-version',
   'identity-plan-id',
@@ -920,6 +953,37 @@ const contractV12 = await readFile(resolve(migrations, '000012_contract.sql'), '
 assert(!migrateV12.includes('INSERT INTO') && !migrateV12.includes('UPDATE '), 'version 12 fabricates historical proof');
 assert(!contractV12.includes('DROP ') && !contractV12.includes('DELETE '), 'version 12 contracts typed proof storage');
 
+const expandV13 = await readFile(resolve(migrations, '000013_expand.sql'), 'utf8');
+for (const predecessor of [
+  'b3a9e54ca1cc526451e38072c0732c946e26a7bbb07bb45f7514e25949d70dac',
+  '5917465778e8d6b882d4b3a6d6c95b0ddd66c62bab34e31b90463cbb418a7a27',
+  'dfa4ffa12248931aeeaf76b4fe2f9040862fe7764c6fde20042536511d138d74',
+]) assert(expandV13.includes(predecessor), `version 13 predecessor pin missing: ${predecessor}`);
+for (const evidence of [
+  'lifecycle_aggregate_identity_seals',
+  'lifecycle_aggregate_identity_items',
+  'UNIQUE (lifecycle_plan_id, identity_item_ordinal)',
+  'REFERENCES ogvcs_metadata.lifecycle_publication_plan_items',
+  'REFERENCES ogvcs_identity.aggregate_plan_resources',
+  'DEFERRABLE INITIALLY DEFERRED',
+  'mapping.resource_digest <> lifecycle_item.resource_opaque_digest',
+  'mapping.resource_digest <> identity_resource.resource_digest',
+  'identity_resource.object_id IS DISTINCT FROM',
+  'aggregate_identity_mapping_item_digest_v13',
+  'aggregate_identity_mapping_digest_v13',
+  'ORDER BY mapping.identity_item_ordinal',
+  'aggregate identity mapping is sealed',
+  'aggregate application lacks exact identity mapping',
+  'repository metadata v13 predecessor authority mismatch',
+]) assert(expandV13.includes(evidence), `version 13 identity mapping evidence missing: ${evidence}`);
+for (const forbidden of ['request_root', 'CREATE ROUTE', 'DELETE FROM', 'DROP TABLE']) {
+  assert(!expandV13.toLowerCase().includes(forbidden.toLowerCase()), `version 13 includes excluded authority: ${forbidden}`);
+}
+const migrateV13 = await readFile(resolve(migrations, '000013_migrate.sql'), 'utf8');
+const contractV13 = await readFile(resolve(migrations, '000013_contract.sql'), 'utf8');
+assert(!migrateV13.includes('INSERT INTO') && !migrateV13.includes('UPDATE '), 'version 13 fabricates historical mappings');
+assert(!contractV13.includes('DROP ') && !contractV13.includes('DELETE '), 'version 13 contracts typed mapping storage');
+
 const contentManifestAdapter = await readFile(
   resolve(root, 'src/postgres/content_manifest_transfer.rs'),
   'utf8',
@@ -1236,7 +1300,7 @@ assert(
 
 const migrationRunner = await readFile(resolve(root, 'src/migration_runner.rs'), 'utf8');
 assert(migrationRunner.includes('pub fn verify_schema_compatibility'), 'mutation schema compatibility gate missing');
-assert(migrationRunner.includes('MAXIMUM_SCHEMA_VERSION: i64 = 12'), 'maximum schema version does not include v12');
+assert(migrationRunner.includes('MAXIMUM_SCHEMA_VERSION: i64 = 13'), 'maximum schema version does not include v13');
 assert(
   migrationRunner.indexOf('let existing =') < migrationRunner.indexOf('migration.requires_compatibility_fence'),
   'closed migration fence bypasses ledger checksum validation',

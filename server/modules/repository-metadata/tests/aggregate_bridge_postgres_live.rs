@@ -17,9 +17,9 @@ use ogvcs_identity_policy_audit_postgres::{
 use ogvcs_object_model::{encode_canonical, Cbor, ObjectKind, ObjectRef};
 use ogvcs_repository_metadata::{
     aggregate_plan_digest, run_migrations as run_metadata_migrations, AggregateChunkCommitment,
-    AggregateLifecycleApplyRequest, AggregatePlanChunk, AggregatePublicationPlan,
-    AtomicSubmitFaultForTest, AtomicSubmitRestartBoundaryForTest, DomainErrorCode,
-    IdempotencyReservation, IdentityBoundPostgresMetadataStore, LifecycleHealth,
+    AggregateIdentityMappingFaultForTest, AggregateLifecycleApplyRequest, AggregatePlanChunk,
+    AggregatePublicationPlan, AtomicSubmitFaultForTest, AtomicSubmitRestartBoundaryForTest,
+    DomainErrorCode, IdempotencyReservation, IdentityBoundPostgresMetadataStore, LifecycleHealth,
     LifecycleObjectBinding, LifecycleState, MigrationRunOptions as MetadataMigrationRunOptions,
     PostgresMetadataStore, PreallocatedCreationSubmitFinalizeRequest,
     PreallocatedCreationSubmitIntentRequest, PreallocatedCreationSubmitPreflightRequest,
@@ -1538,6 +1538,20 @@ fn aggregate_receipt_and_lifecycle_apply_are_one_serializable_transaction() {
         "bridge-wrong-projection",
         Some(1),
     );
+    let mut mapping_writer = PostgresMetadataStore::connect(&database_url).unwrap();
+    assert_eq!(
+        mapping_writer
+            .seal_aggregate_identity_mapping_for_test(
+                wrong_plan,
+                first.receipt.plan_id(),
+                &[0, 1, 2],
+            )
+            .unwrap_err()
+            .code,
+        DomainErrorCode::MetadataNotFoundOrDenied,
+        "a lifecycle resource-projection substitution must not acquire a v13 mapping seal"
+    );
+    assert_eq!(aggregate_identity_mapping_counts(&database_url), (0, 0));
     let correct_plan = persist_lifecycle_plan(
         &database_url,
         &fixture,
@@ -1750,6 +1764,193 @@ fn aggregate_receipt_and_lifecycle_apply_are_one_serializable_transaction() {
         identity_consumptions(&database_url, wrong_key.receipt.plan_id()),
         0
     );
+}
+
+#[test]
+fn aggregate_identity_mapping_is_required_immutable_and_rolls_back_hostile_relations() {
+    let _guard = TEST_LOCK.lock().unwrap();
+    let Ok(database_url) = std::env::var("OGVCS_METADATA_AGGREGATE_DATABASE_URL") else {
+        return;
+    };
+    reset_database(&database_url);
+    let fixture = seed(&database_url);
+    let provider = key_provider([0x5a; 32]);
+    let participant = PostgresAggregateAuthorizationParticipant::new(provider.clone());
+    prepare_identity_authority(&database_url, &fixture, &participant);
+    let bundle = prepare_bundle(
+        &database_url,
+        &fixture,
+        &participant,
+        5_000,
+        3,
+        public_uuid(0xa1),
+        "mapping-hostile",
+        300,
+    );
+    let lifecycle_plan = persist_unmapped_lifecycle_plan(
+        &database_url,
+        &fixture,
+        &bundle,
+        public_uuid(0xa2),
+        "mapping-hostile-plan",
+    );
+    let mut production = production_store(&database_url, provider);
+    assert_eq!(
+        production
+            .apply_aggregate_lifecycle_publication(AggregateLifecycleApplyRequest {
+                authorization: &bundle.receipt,
+                lifecycle_plan_id: lifecycle_plan,
+                consumption_id: "mapping.consume.unmapped",
+            })
+            .unwrap_err()
+            .code,
+        DomainErrorCode::MetadataNotFoundOrDenied
+    );
+    assert_eq!(
+        identity_consumptions(&database_url, bundle.receipt.plan_id()),
+        0,
+        "an old unconsumed plan without a v13 mapping consumed authority"
+    );
+
+    let mut fixture_store = PostgresMetadataStore::connect(&database_url).unwrap();
+    for (scenario, mapping) in [
+        ("positional-swap", vec![1, 0, 2]),
+        ("duplicate", vec![0, 0, 2]),
+        ("missing", vec![0, 1]),
+        ("extra", vec![0, 1, 2, 3]),
+    ] {
+        assert_eq!(
+            fixture_store
+                .seal_aggregate_identity_mapping_for_test(
+                    lifecycle_plan,
+                    bundle.receipt.plan_id(),
+                    &mapping,
+                )
+                .unwrap_err()
+                .code,
+            DomainErrorCode::MetadataNotFoundOrDenied,
+            "hostile {scenario} mapping was accepted"
+        );
+        assert_eq!(aggregate_identity_mapping_counts(&database_url), (0, 0));
+    }
+
+    for fault in [
+        AggregateIdentityMappingFaultForTest::ForgeFirstItemDigest,
+        AggregateIdentityMappingFaultForTest::ForgeSealDigest,
+    ] {
+        assert_eq!(
+            fixture_store
+                .seal_aggregate_identity_mapping_with_fault_for_test(
+                    lifecycle_plan,
+                    bundle.receipt.plan_id(),
+                    &[0, 1, 2],
+                    fault,
+                )
+                .unwrap_err()
+                .code,
+            DomainErrorCode::MetadataNotFoundOrDenied
+        );
+        assert_eq!(aggregate_identity_mapping_counts(&database_url), (0, 0));
+    }
+
+    let cross_plan = prepare_bundle(
+        &database_url,
+        &fixture,
+        &participant,
+        5_100,
+        3,
+        public_uuid(0xa3),
+        "mapping-cross-plan",
+        300,
+    );
+    assert_eq!(
+        fixture_store
+            .seal_aggregate_identity_mapping_for_test(
+                lifecycle_plan,
+                cross_plan.receipt.plan_id(),
+                &[0, 1, 2],
+            )
+            .unwrap_err()
+            .code,
+        DomainErrorCode::MetadataNotFoundOrDenied
+    );
+    assert_eq!(aggregate_identity_mapping_counts(&database_url), (0, 0));
+    assert_eq!(
+        identity_consumptions(&database_url, cross_plan.receipt.plan_id()),
+        0
+    );
+
+    fixture_store
+        .seal_aggregate_identity_mapping_for_test(
+            lifecycle_plan,
+            bundle.receipt.plan_id(),
+            &[0, 1, 2],
+        )
+        .unwrap();
+    assert_eq!(aggregate_identity_mapping_counts(&database_url), (1, 3));
+    assert_aggregate_identity_mapping_immutable(&database_url, lifecycle_plan);
+    let applied = production
+        .apply_aggregate_lifecycle_publication(AggregateLifecycleApplyRequest {
+            authorization: &bundle.receipt,
+            lifecycle_plan_id: lifecycle_plan,
+            consumption_id: "mapping.consume.valid",
+        })
+        .unwrap();
+    assert_eq!(applied.lifecycle().object_count, 3);
+}
+
+#[test]
+fn aggregate_identity_projection_can_reverse_lifecycle_opaque_order() {
+    let _guard = TEST_LOCK.lock().unwrap();
+    let Ok(database_url) = std::env::var("OGVCS_METADATA_AGGREGATE_DATABASE_URL") else {
+        return;
+    };
+    reset_database(&database_url);
+    let fixture = seed(&database_url);
+    let provider = key_provider([0x5a; 32]);
+    let participant = PostgresAggregateAuthorizationParticipant::new(provider.clone());
+    prepare_identity_authority(&database_url, &fixture, &participant);
+    let bundle = prepare_bundle(
+        &database_url,
+        &fixture,
+        &participant,
+        5_200,
+        3,
+        public_uuid(0xa4),
+        "mapping-reversed",
+        300,
+    );
+    let lifecycle_plan = persist_reversed_lifecycle_plan(
+        &database_url,
+        &fixture,
+        &bundle,
+        public_uuid(0xa5),
+        "mapping-reversed-plan",
+    );
+    let mut store = production_store(&database_url, provider);
+    let applied = store
+        .apply_aggregate_lifecycle_publication(AggregateLifecycleApplyRequest {
+            authorization: &bundle.receipt,
+            lifecycle_plan_id: lifecycle_plan,
+            consumption_id: "mapping.consume.reversed",
+        })
+        .unwrap();
+    assert_eq!(applied.lifecycle().object_count, 3);
+    assert_eq!(applied.projection_page_count(), 1);
+    let mut client = Client::connect(&database_url, NoTls).unwrap();
+    let relation = client
+        .query(
+            "SELECT lifecycle_global_ordinal, identity_item_ordinal
+             FROM ogvcs_metadata.lifecycle_aggregate_identity_items
+             WHERE lifecycle_plan_id = $1
+             ORDER BY lifecycle_global_ordinal",
+            &[&Uuid::from_bytes(lifecycle_plan)],
+        )
+        .unwrap()
+        .into_iter()
+        .map(|row| (row.get::<_, i32>(0), row.get::<_, i32>(1)))
+        .collect::<Vec<_>>();
+    assert_eq!(relation, vec![(0, 2), (1, 1), (2, 0)]);
 }
 
 #[test]
@@ -3190,6 +3391,7 @@ fn persist_lifecycle_plan(
     key: &str,
     tamper_projection_at: Option<u32>,
 ) -> [u8; 16] {
+    let seal_mapping = tamper_projection_at.is_none();
     persist_lifecycle_plan_for_reference_with_authority(
         database_url,
         fixture,
@@ -3199,6 +3401,7 @@ fn persist_lifecycle_plan(
         REFERENCE,
         tamper_projection_at,
         decode_hex(AUTHORIZATION_MANIFEST_SHA256),
+        seal_mapping,
     )
 }
 
@@ -3211,6 +3414,7 @@ fn persist_lifecycle_plan_for_reference(
     reference: &str,
     tamper_projection_at: Option<u32>,
 ) -> [u8; 16] {
+    let seal_mapping = tamper_projection_at.is_none();
     persist_lifecycle_plan_for_reference_with_authority(
         database_url,
         fixture,
@@ -3220,6 +3424,7 @@ fn persist_lifecycle_plan_for_reference(
         reference,
         tamper_projection_at,
         decode_hex(AUTHORIZATION_MANIFEST_SHA256),
+        seal_mapping,
     )
 }
 
@@ -3233,6 +3438,7 @@ fn persist_lifecycle_plan_with_authority(
     tamper_projection_at: Option<u32>,
     authority_contract_digest: [u8; 32],
 ) -> [u8; 16] {
+    let seal_mapping = tamper_projection_at.is_none();
     persist_lifecycle_plan_for_reference_with_authority(
         database_url,
         fixture,
@@ -3242,6 +3448,7 @@ fn persist_lifecycle_plan_with_authority(
         REFERENCE,
         tamper_projection_at,
         authority_contract_digest,
+        seal_mapping,
     )
 }
 
@@ -3255,6 +3462,7 @@ fn persist_lifecycle_plan_for_reference_with_authority(
     reference: &str,
     tamper_projection_at: Option<u32>,
     authority_contract_digest: [u8; 32],
+    seal_mapping: bool,
 ) -> [u8; 16] {
     let mut client = Client::connect(database_url, NoTls).unwrap();
     seed_lifecycle_rows(
@@ -3344,7 +3552,223 @@ fn persist_lifecycle_plan_for_reference_with_authority(
         writer.append_chunk(chunk).unwrap();
     }
     assert_eq!(writer.seal().unwrap(), plan_digest);
+    if seal_mapping {
+        let identity_ordinals = (0..bundle.resource_count).collect::<Vec<_>>();
+        store
+            .seal_aggregate_identity_mapping_for_test(
+                plan_id,
+                bundle.receipt.plan_id(),
+                &identity_ordinals,
+            )
+            .unwrap();
+    }
     plan_id
+}
+
+fn persist_unmapped_lifecycle_plan(
+    database_url: &str,
+    fixture: &Fixture,
+    bundle: &PreparedBundle,
+    plan_id: [u8; 16],
+    key: &str,
+) -> [u8; 16] {
+    persist_lifecycle_plan_for_reference_with_authority(
+        database_url,
+        fixture,
+        bundle,
+        plan_id,
+        key,
+        REFERENCE,
+        None,
+        decode_hex(AUTHORIZATION_MANIFEST_SHA256),
+        false,
+    )
+}
+
+fn persist_reversed_lifecycle_plan(
+    database_url: &str,
+    fixture: &Fixture,
+    bundle: &PreparedBundle,
+    plan_id: [u8; 16],
+    key: &str,
+) -> [u8; 16] {
+    assert_eq!(bundle.resource_count, 3);
+    let identity_ordinals = [2_u32, 1, 0];
+    let mut client = Client::connect(database_url, NoTls).unwrap();
+    seed_reordered_lifecycle_rows(
+        &mut client,
+        fixture,
+        bundle.first_resource,
+        &identity_ordinals,
+    );
+    let digests = load_resource_digest_batch(
+        &mut client,
+        bundle.receipt.plan_id(),
+        0,
+        bundle.resource_count,
+    );
+    let items = identity_ordinals
+        .iter()
+        .enumerate()
+        .map(|(lifecycle_ordinal, identity_ordinal)| {
+            lifecycle_item_with_object(
+                bundle.first_resource + lifecycle_ordinal as u32,
+                bundle.first_resource + *identity_ordinal,
+                digests[*identity_ordinal as usize],
+            )
+        })
+        .collect::<Vec<_>>();
+    let chunk = AggregatePlanChunk::new(plan_id, 0, items).unwrap();
+    let encoded_bytes = u64::from(chunk.encoded_bytes);
+    let commitments = [AggregateChunkCommitment {
+        chunk_ordinal: chunk.chunk_ordinal,
+        item_count: chunk.items.len() as u16,
+        encoded_bytes: chunk.encoded_bytes,
+        chunk_digest: chunk.chunk_digest,
+    }];
+    let reservation = reservation(key, bundle.ttl_seconds);
+    let subject = decode_hex(bundle.receipt.subject_digest());
+    let scope = decode_hex(bundle.receipt.authenticated_scope_digest());
+    let authority = decode_hex(AUTHORIZATION_MANIFEST_SHA256);
+    let provisional = AggregatePublicationPlan::new_authorized(
+        plan_id,
+        fixture.tenant_id,
+        fixture.repository_id,
+        fixture.publication,
+        REFERENCE.to_owned(),
+        fixture.publication.to_string(),
+        subject,
+        bundle.receipt.authority_epoch(),
+        authority,
+        fixture.publication.digest,
+        [0; 32],
+        scope,
+        reservation.clone(),
+        bundle.resource_count,
+        encoded_bytes,
+    )
+    .unwrap();
+    let plan_digest = aggregate_plan_digest(&provisional, &commitments).unwrap();
+    let plan = AggregatePublicationPlan::new_authorized(
+        plan_id,
+        fixture.tenant_id,
+        fixture.repository_id,
+        fixture.publication,
+        REFERENCE.to_owned(),
+        fixture.publication.to_string(),
+        subject,
+        bundle.receipt.authority_epoch(),
+        authority,
+        fixture.publication.digest,
+        plan_digest,
+        scope,
+        reservation,
+        bundle.resource_count,
+        encoded_bytes,
+    )
+    .unwrap();
+    drop(client);
+    let mut store = PostgresMetadataStore::connect(database_url).unwrap();
+    let mut writer = store.begin_lifecycle_plan_for_test(plan).unwrap();
+    writer.append_chunk(chunk).unwrap();
+    assert_eq!(writer.seal().unwrap(), plan_digest);
+    store
+        .seal_aggregate_identity_mapping_for_test(
+            plan_id,
+            bundle.receipt.plan_id(),
+            &identity_ordinals,
+        )
+        .unwrap();
+    plan_id
+}
+
+fn aggregate_identity_mapping_counts(database_url: &str) -> (i64, i64) {
+    let mut client = Client::connect(database_url, NoTls).unwrap();
+    let row = client
+        .query_one(
+            "SELECT
+                 (SELECT count(*)
+                  FROM ogvcs_metadata.lifecycle_aggregate_identity_seals),
+                 (SELECT count(*)
+                  FROM ogvcs_metadata.lifecycle_aggregate_identity_items)",
+            &[],
+        )
+        .unwrap();
+    (row.get(0), row.get(1))
+}
+
+fn assert_aggregate_identity_mapping_immutable(database_url: &str, lifecycle_plan_id: [u8; 16]) {
+    let mut client = Client::connect(database_url, NoTls).unwrap();
+    let plan_id = Uuid::from_bytes(lifecycle_plan_id);
+    let before_row = client
+        .query_one(
+            "SELECT seal.mapping_digest,
+                    (SELECT count(*)
+                     FROM ogvcs_metadata.lifecycle_aggregate_identity_items AS item
+                     WHERE item.lifecycle_plan_id = seal.lifecycle_plan_id)
+             FROM ogvcs_metadata.lifecycle_aggregate_identity_seals AS seal
+             WHERE seal.lifecycle_plan_id = $1",
+            &[&plan_id],
+        )
+        .unwrap();
+    let before = (before_row.get::<_, Vec<u8>>(0), before_row.get::<_, i64>(1));
+    let late_insert = client
+        .execute(
+            "INSERT INTO ogvcs_metadata.lifecycle_aggregate_identity_items
+             (lifecycle_plan_id, lifecycle_global_ordinal, identity_plan_id,
+              identity_item_ordinal, object_kind, object_digest, resource_digest,
+              mapping_item_digest)
+             SELECT lifecycle_plan_id, 99, identity_plan_id,
+                    99, object_kind, object_digest, resource_digest,
+                    decode(repeat('7f', 32), 'hex')
+             FROM ogvcs_metadata.lifecycle_aggregate_identity_items
+             WHERE lifecycle_plan_id = $1 AND lifecycle_global_ordinal = 0",
+            &[&plan_id],
+        )
+        .unwrap_err();
+    assert_eq!(late_insert.code().map(|code| code.code()), Some("55000"));
+    assert_eq!(
+        late_insert.as_db_error().map(|error| error.message()),
+        Some("aggregate identity mapping is sealed")
+    );
+    let after_late_insert = client
+        .query_one(
+            "SELECT seal.mapping_digest,
+                    (SELECT count(*)
+                     FROM ogvcs_metadata.lifecycle_aggregate_identity_items AS item
+                     WHERE item.lifecycle_plan_id = seal.lifecycle_plan_id)
+             FROM ogvcs_metadata.lifecycle_aggregate_identity_seals AS seal
+             WHERE seal.lifecycle_plan_id = $1",
+            &[&plan_id],
+        )
+        .unwrap();
+    assert_eq!(after_late_insert.get::<_, Vec<u8>>(0), before.0);
+    assert_eq!(after_late_insert.get::<_, i64>(1), before.1);
+    for statement in [
+        "UPDATE ogvcs_metadata.lifecycle_aggregate_identity_seals
+         SET mapping_digest = mapping_digest WHERE lifecycle_plan_id = $1",
+        "DELETE FROM ogvcs_metadata.lifecycle_aggregate_identity_seals
+         WHERE lifecycle_plan_id = $1",
+        "UPDATE ogvcs_metadata.lifecycle_aggregate_identity_items
+         SET resource_digest = resource_digest WHERE lifecycle_plan_id = $1",
+        "DELETE FROM ogvcs_metadata.lifecycle_aggregate_identity_items
+         WHERE lifecycle_plan_id = $1",
+    ] {
+        assert!(client.execute(statement, &[&plan_id]).is_err());
+        let after = client
+            .query_one(
+                "SELECT seal.mapping_digest,
+                        (SELECT count(*)
+                         FROM ogvcs_metadata.lifecycle_aggregate_identity_items AS item
+                         WHERE item.lifecycle_plan_id = seal.lifecycle_plan_id)
+                 FROM ogvcs_metadata.lifecycle_aggregate_identity_seals AS seal
+                 WHERE seal.lifecycle_plan_id = $1",
+                &[&plan_id],
+            )
+            .unwrap();
+        assert_eq!(after.get::<_, Vec<u8>>(0), before.0);
+        assert_eq!(after.get::<_, i64>(1), before.1);
+    }
 }
 
 fn load_resource_digest_batch(
@@ -3472,17 +3896,99 @@ fn seed_lifecycle_rows(
     transaction.commit().unwrap();
 }
 
+fn seed_reordered_lifecycle_rows(
+    client: &mut Client,
+    fixture: &Fixture,
+    first_resource: u32,
+    identity_ordinal_by_lifecycle_ordinal: &[u32],
+) {
+    let lifecycle_contract = decode_hex(LIFECYCLE_CONTRACT_SHA256);
+    let mut transaction = client.transaction().unwrap();
+    for (lifecycle_ordinal, identity_ordinal) in
+        identity_ordinal_by_lifecycle_ordinal.iter().enumerate()
+    {
+        let storage_index = first_resource + lifecycle_ordinal as u32;
+        let object_index = first_resource + *identity_ordinal;
+        let opaque = opaque_key(storage_index);
+        let object = object_ref(object_index);
+        let authority = receipt_digest(0xa1, storage_index);
+        let backend = receipt_digest(0xb1, storage_index);
+        let health = receipt_digest(0xc1, storage_index);
+        transaction
+            .execute(
+                "INSERT INTO ogvcs_metadata.lifecycle_receipts
+                 (receipt_digest, receipt_kind, tenant_id, repository_id, opaque_key,
+                  object_kind, object_digest, expected_state, expected_generation,
+                  target_state, target_generation, authority_binding_digest,
+                  health_result, health_generation, lifecycle_contract_digest,
+                  evidence_digest)
+                 VALUES
+                 ($1, 'backend-durable', $2, $3, $4, $5, $6,
+                  'staged', 1, 'available', 2, $7, NULL, NULL, $8, $9),
+                 ($10, 'health-observation', $2, $3, $4, $5, $6,
+                  'available', 2, 'available', 2, $7, 'healthy', 1, $8, $11)",
+                &[
+                    &&backend[..],
+                    &Uuid::from_bytes(*fixture.tenant_id.as_bytes()),
+                    &Uuid::from_bytes(*fixture.repository_id.as_bytes()),
+                    &&opaque[..],
+                    &(object.kind.code() as i16),
+                    &&object.digest[..],
+                    &&authority[..],
+                    &&lifecycle_contract[..],
+                    &&receipt_digest(0xd1, storage_index)[..],
+                    &&health[..],
+                    &&receipt_digest(0xe1, storage_index)[..],
+                ],
+            )
+            .unwrap();
+        transaction
+            .execute(
+                "INSERT INTO ogvcs_metadata.object_lifecycle
+                 (tenant_id, repository_id, opaque_key, object_kind, object_digest,
+                  object_length, tenant_scope_digest, state, generation, health,
+                  health_generation, health_observation_digest, authority_binding_digest,
+                  backend_receipt_digest, verification_receipt_digest,
+                  deletion_receipt_digest, retention_until)
+                 VALUES ($1, $2, $3, $4, $5, 1, $6, 'available', 2, 'healthy',
+                         1, $7, $8, $9, NULL, NULL,
+                         clock_timestamp() + interval '1 hour')",
+                &[
+                    &Uuid::from_bytes(*fixture.tenant_id.as_bytes()),
+                    &Uuid::from_bytes(*fixture.repository_id.as_bytes()),
+                    &&opaque[..],
+                    &(object.kind.code() as i16),
+                    &&object.digest[..],
+                    &&receipt_digest(0x91, storage_index)[..],
+                    &&health[..],
+                    &&authority[..],
+                    &&backend[..],
+                ],
+            )
+            .unwrap();
+    }
+    transaction.commit().unwrap();
+}
+
 fn lifecycle_item(index: u32, resource_digest: [u8; 32]) -> LifecycleObjectBinding {
+    lifecycle_item_with_object(index, index, resource_digest)
+}
+
+fn lifecycle_item_with_object(
+    storage_index: u32,
+    object_index: u32,
+    resource_digest: [u8; 32],
+) -> LifecycleObjectBinding {
     LifecycleObjectBinding {
-        opaque_key: opaque_key(index),
-        object_ref: object_ref(index),
+        opaque_key: opaque_key(storage_index),
+        object_ref: object_ref(object_index),
         expected_state: LifecycleState::Available,
         expected_generation: 2,
         expected_health: LifecycleHealth::Healthy,
         expected_health_generation: Some(1),
-        current_health_observation_digest: Some(receipt_digest(0xc1, index)),
-        authority_binding_digest: receipt_digest(0xa1, index),
-        current_backend_receipt_digest: Some(receipt_digest(0xb1, index)),
+        current_health_observation_digest: Some(receipt_digest(0xc1, storage_index)),
+        authority_binding_digest: receipt_digest(0xa1, storage_index),
+        current_backend_receipt_digest: Some(receipt_digest(0xb1, storage_index)),
         current_verification_receipt_digest: None,
         current_deletion_receipt_digest: None,
         transition_backend_receipt_digest: None,
