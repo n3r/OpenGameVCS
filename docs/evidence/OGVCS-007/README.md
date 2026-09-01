@@ -1,6 +1,6 @@
 # OGVCS-007 bounded seven-workload authenticated selection evidence
 
-**Evidence date:** 2026-08-31
+**Evidence date:** 2026-09-01
 **Status:** Current-source bounded authenticated evidence retained; production adoption, profile ratification, and the final-scale gate remain blocked
 
 This packet retains the bounded OGVCS-007 selection evidence used to close the
@@ -51,15 +51,17 @@ Both record the same 14-file packed implementation identity
 
 ## Current bounded hosted implementation proof
 
-[Workflow run 33339889106](https://github.com/n3r/OpenGameVCS/actions/runs/33339889106)
+[Workflow run 33476471118](https://github.com/n3r/OpenGameVCS/actions/runs/33476471118)
 passed source revision
-[`244776c42866d5995407023a1bf3d17a39644eeb`](https://github.com/n3r/OpenGameVCS/commit/244776c42866d5995407023a1bf3d17a39644eeb),
-which contains the production-boundary code commit `00ed027` and this bounded
-authenticated packet. JavaScript and Rust each passed on Linux, macOS, and
-Windows; all six matrix jobs started within two seconds, and the final job
-matched all nine bounded cases across all six reports. The exact run, job,
-timing, and artifact identities are retained in
-[`github-actions-run-33339889106.json`](github-actions-run-33339889106.json).
+[`a26d302b734f07872b0f3f6e1b0036eaf1643b86`](https://github.com/n3r/OpenGameVCS/commit/a26d302b734f07872b0f3f6e1b0036eaf1643b86),
+which contains the production-boundary code commit `00ed027`, this bounded
+authenticated packet, and the bounded Rust manifest-streaming writer. JavaScript
+and Rust each passed on Linux, macOS, and Windows; all six matrix jobs started
+within one second, and the final job matched all nine bounded cases across all
+six reports. The Rust legs also passed the streaming writer unit, closure,
+golden-parity, exact-runner sink, formatting, strict Clippy, and offline package
+gates. The exact run, job, timing, and artifact identities are retained in
+[`github-actions-run-33476471118.json`](github-actions-run-33476471118.json).
 
 The run record retains the archive and inner-report byte counts and SHA-256
 digests for all six artifacts. All three JavaScript reports are byte-identical,

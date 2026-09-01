@@ -101,7 +101,10 @@ Chunk algorithm is immutable per manifest version. New algorithms are read-befor
 - Implementation changes: the
   [audited trust-boundary candidate](../../docs/reviews/OGVCS-007-r1-completion-audit.md#trust-boundary-delivered-by-the-candidate)
   at `00ed027b798f0114c3817678685b4df7f63d8741` implements the bounded
-  JavaScript/Rust candidate and fail-closed receipt boundary.
+  JavaScript/Rust candidate and fail-closed receipt boundary; the
+  [bounded streaming addendum](https://github.com/n3r/OpenGameVCS/commit/a26d302b734f07872b0f3f6e1b0036eaf1643b86)
+  adds the Rust no-payload manifest sink without changing the open scale or
+  production gates.
 - Test and benchmark results: the
   [current bounded evidence packet](../../docs/evidence/OGVCS-007/README.md)
   and [requirement matrix](../../docs/reviews/OGVCS-007-r1-completion-audit.md#requirement-matrix)

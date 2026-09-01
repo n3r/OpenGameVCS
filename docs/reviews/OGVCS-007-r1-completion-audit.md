@@ -1,8 +1,9 @@
 # OGVCS-007 R1 completion audit
 
-**Audit date:** 2026-08-31
+**Audit date:** 2026-09-01
 **Code candidate:** `00ed027b798f0114c3817678685b4df7f63d8741`
-**Hosted evidence revision:** `244776c42866d5995407023a1bf3d17a39644eeb`
+**Bounded streaming addendum:** `a26d302b734f07872b0f3f6e1b0036eaf1643b86`
+**Hosted evidence revision:** `a26d302b734f07872b0f3f6e1b0036eaf1643b86`
 **Verdict:** not Done; bounded implementation is stageable, final-scale and
 production-adoption gates remain open
 
@@ -41,13 +42,13 @@ snapshot and is never shipped as production authority.
 |---|---|---|
 | FR-01 | Bounded pass; ratification pending | ADR-0016 and the generated profile freeze initialization, recurrence, masks, min/target/max, size classes, table provenance, and unchanged OGVCS-002 ChunkID preimage. JavaScript and Rust execute the independent vectors. The row is not yet ratified. |
 | FR-02 | Bounded pass; lifecycle pending | Both implementations reproduce the exact OGVCS-002 manifest bytes, ObjectID, profile reference, logical length, whole digest, and ordered parts. The candidate registry is conformance-only; production emission remains fail closed. |
-| FR-03 | Bounded pass | JavaScript generation, verification, comparison, and reconstruction are streaming. Scalar execution admits one worker/no completed-chunk queue, a fixed budget, bounded fragments, and a disk-backed bounded ledger. Rust has the corresponding bounded scalar reader/verifier. |
+| FR-03 | Bounded pass | JavaScript generation, verification, comparison, and reconstruction are streaming. Scalar execution admits one worker/no completed-chunk queue, a fixed budget, bounded fragments, and a disk-backed bounded ledger. Rust now writes the canonical manifest through a bounded sink without retaining the manifest, part array, or boundary array; the legacy collecting API is a byte-identical compatibility wrapper. |
 | FR-04 | Pass | Empty and 1..262,144-byte whole-file cases use the same canonical manifest and full verifier contract; malformed and corrupt small-file cases reject through the same error authority. |
 | FR-05 | Pass at library/workspace boundary; server adoption pending | `reconstructManifestToWorkspace()` verifies every occurrence, length, ChunkID, Gear boundary, and final digest before atomic publication. The returned private receipt binds the exact workspace publication. OGVCS-008 adoption is still required before repository availability. |
 | FR-06 | Pass | `compareManifest()` accepts a local known-chunk index and reports exact logical, unique, repeated, reused, newly required bytes and unique chunks without remote access; conflicting known lengths reject. |
 | FR-07 | Pass in bounded suites | Generated 22-code authority, malformed vectors, overflow/count/resource admission, corrupt/short/long/missing delivery, conflicting metadata/index cases, repeated ordered references, callback/iterator failures, cancellation, scratch exhaustion, and hostile receipt/registry tests execute public APIs. |
 | FR-08 | Pass in bounded scope | The [current authenticated packet](../evidence/OGVCS-007/README.md) retains source-like, structured, already-compressed, encrypted/random, insertion, replacement, and append results separately. |
-| NFR-01 | Pass | JavaScript/Rust reports match nine golden cases. Hosted run 33339889106 replayed the production-boundary candidate on Linux, macOS, and Windows, started all six bounded jobs within two seconds, and passed the aggregate six-report comparison. |
+| NFR-01 | Pass | JavaScript/Rust reports match nine golden cases. Hosted run 33476471118 replayed the bounded Rust manifest-streaming candidate on Linux, macOS, and Windows, started all six bounded jobs within one second, and passed the aggregate six-report comparison. |
 | NFR-02 | Pending final gate | Bounded runs prove bounded admission and record observed child-process peaks, but only the deferred 100-GiB campaign can satisfy the required file-length-independent measured peak. |
 | NFR-03 | Pass | Report and independent verifier recompute `reused + newlyRequired = unique` and `unique + repeated = logical`; poor reuse is retained rather than hidden. |
 | AC-01 | Pass | Independent JavaScript and Rust implementations generated identical golden manifest bytes on the retained current-source six-leg matrix and passed the aggregate comparison. |
@@ -87,7 +88,7 @@ repository path.
   disabled/ratified simulations, and temporary-root cleanup: passed.
 - Generated authenticated-bundle test and current retained bundle replay:
   passed.
-- Hosted bounded run 33339889106: JavaScript and Rust passed on Linux, macOS,
+- Hosted bounded run 33476471118: JavaScript and Rust passed on Linux, macOS,
   and Windows; all six reports passed aggregate parity. The workflow contained
   zero scale jobs.
 - No 100-GiB, 1-TiB, or other exact-scale campaign was run.
