@@ -11,7 +11,7 @@ use std::io;
 use std::mem::{align_of, size_of, zeroed};
 use std::os::windows::ffi::OsStrExt;
 use std::os::windows::io::{AsRawHandle, FromRawHandle};
-use std::path::Path;
+use std::path::{Component, Path};
 use std::ptr::{null, null_mut};
 
 use windows_sys::Win32::Foundation::{
@@ -314,20 +314,10 @@ fn rename_confined_noreplace_with_hook(
     destination: &str,
     before_publish: impl FnOnce(),
 ) -> io::Result<()> {
+    let source_components = validate_confined_relative_path(source)?;
+    let destination_components = validate_confined_relative_path(destination)?;
     let root_handle = open_private_directory_for_sync(root)?;
     let root_final = final_path(&root_handle)?;
-    let source_components: Vec<_> = source.split('/').collect();
-    let destination_components: Vec<_> = destination.split('/').collect();
-    if source_components.is_empty()
-        || destination_components.is_empty()
-        || source_components.iter().any(|part| part.is_empty())
-        || destination_components.iter().any(|part| part.is_empty())
-    {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "empty relative path component",
-        ));
-    }
 
     let source_ancestors = open_confined_ancestors(
         root,
@@ -336,9 +326,10 @@ fn rename_confined_noreplace_with_hook(
         false,
     )?;
     let source_path = joined_relative(root, &source_components);
-    let source_handle = open_reparse_handle_with_access(
+    let source_handle = open_reparse_handle_with_access_and_share(
         &source_path,
         DELETE | FILE_READ_ATTRIBUTES | READ_CONTROL | GENERIC_READ | GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
     )?;
     validate_kind(&source_handle, false)?;
     ensure_confined_final_path(&root_final, &final_path(&source_handle)?)?;
@@ -367,6 +358,57 @@ fn rename_confined_noreplace_with_hook(
     source_handle.sync_all()?;
     source_ancestors.last().unwrap_or(&root_handle).sync_all()?;
     destination_parent.sync_all()
+}
+
+fn validate_confined_relative_path(path: &str) -> io::Result<Vec<&str>> {
+    let components: Vec<_> = path.split('/').collect();
+    if components.iter().any(|component| {
+        component.is_empty()
+            || component == &"."
+            || component == &".."
+            || component.ends_with(' ')
+            || component.ends_with('.')
+            || component.encode_utf16().count() > 255
+            || component.chars().any(|character| {
+                character <= '\u{1f}'
+                    || matches!(
+                        character,
+                        '"' | '*' | '/' | ':' | '<' | '>' | '?' | '\\' | '|'
+                    )
+            })
+            || is_reserved_windows_component(component)
+            || {
+                let mut parsed = Path::new(component).components();
+                !matches!(
+                    parsed.next(),
+                    Some(Component::Normal(value))
+                        if value == std::ffi::OsStr::new(component)
+                ) || parsed.next().is_some()
+            }
+    }) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "invalid relative path component",
+        ));
+    }
+    Ok(components)
+}
+
+fn is_reserved_windows_component(component: &str) -> bool {
+    let base = component.split('.').next().unwrap_or_default();
+    let upper = base.to_ascii_uppercase();
+    matches!(
+        upper.as_str(),
+        "CON" | "PRN" | "AUX" | "NUL" | "CLOCK$" | "CONIN$" | "CONOUT$"
+    ) || upper
+        .strip_prefix("COM")
+        .or_else(|| upper.strip_prefix("LPT"))
+        .is_some_and(|suffix| {
+            matches!(
+                suffix,
+                "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "¹" | "²" | "³"
+            )
+        })
 }
 
 fn open_confined_ancestors(
@@ -855,6 +897,78 @@ mod tests {
         rename_confined_noreplace(&root, "rename-source", "rename-destination").unwrap();
         assert!(!source.exists());
         fs::remove_file(root.join("rename-destination")).unwrap();
+
+        let pinned_source = root.join("pinned-source");
+        let mut pinned_source_file = create_new_private_file(&pinned_source).unwrap();
+        pinned_source_file.write_all(b"pinned-source").unwrap();
+        pinned_source_file.sync_all().unwrap();
+        drop(pinned_source_file);
+        let detached_source = root.join("detached-source");
+        rename_confined_noreplace_with_hook(&root, "pinned-source", "pinned-destination", || {
+            assert!(fs::rename(&pinned_source, &detached_source).is_err());
+            assert!(fs::remove_file(&pinned_source).is_err());
+        })
+        .unwrap();
+        assert!(!pinned_source.exists());
+        assert!(!detached_source.exists());
+        assert_eq!(
+            fs::read(root.join("pinned-destination")).unwrap(),
+            b"pinned-source"
+        );
+        fs::remove_file(root.join("pinned-destination")).unwrap();
+
+        let hostile_source = root.join("hostile-source");
+        let mut hostile_source_file = create_new_private_file(&hostile_source).unwrap();
+        hostile_source_file.write_all(b"hostile-source").unwrap();
+        hostile_source_file.sync_all().unwrap();
+        drop(hostile_source_file);
+        let outside_target = root.with_extension("outside-target");
+        fs::write(&outside_target, b"outside-target").unwrap();
+        let outside_name = outside_target.file_name().unwrap().to_str().unwrap();
+        let nested = root.join("nested");
+        create_new_private_directory(&nested).unwrap();
+        let nested_target = nested.join("destination");
+        let mut nested_target_file = create_new_private_file(&nested_target).unwrap();
+        nested_target_file.write_all(b"nested-target").unwrap();
+        nested_target_file.sync_all().unwrap();
+        drop(nested_target_file);
+        let ads_base = root.join("ads-target");
+        let mut ads_base_file = create_new_private_file(&ads_base).unwrap();
+        ads_base_file.write_all(b"ads-base").unwrap();
+        ads_base_file.sync_all().unwrap();
+        drop(ads_base_file);
+        let hostile_destinations = [
+            format!("../{outside_name}"),
+            format!(r"..\{outside_name}"),
+            r"nested\destination".to_owned(),
+            r"C:\ogvcs011-outside".to_owned(),
+            "ads-target:stream".to_owned(),
+        ];
+        for destination in hostile_destinations {
+            let mut entries_before: Vec<_> = fs::read_dir(&root)
+                .unwrap()
+                .map(|entry| entry.unwrap().file_name())
+                .collect();
+            entries_before.sort();
+            let error =
+                rename_confined_noreplace(&root, "hostile-source", &destination).unwrap_err();
+            assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+            assert_eq!(fs::read(&hostile_source).unwrap(), b"hostile-source");
+            assert_eq!(fs::read(&outside_target).unwrap(), b"outside-target");
+            assert_eq!(fs::read(&nested_target).unwrap(), b"nested-target");
+            assert_eq!(fs::read(&ads_base).unwrap(), b"ads-base");
+            let mut entries_after: Vec<_> = fs::read_dir(&root)
+                .unwrap()
+                .map(|entry| entry.unwrap().file_name())
+                .collect();
+            entries_after.sort();
+            assert_eq!(entries_after, entries_before);
+        }
+        fs::remove_file(&hostile_source).unwrap();
+        fs::remove_file(&outside_target).unwrap();
+        fs::remove_file(&nested_target).unwrap();
+        fs::remove_dir(&nested).unwrap();
+        fs::remove_file(&ads_base).unwrap();
 
         let parent = root.join("pinned-parent");
         create_new_private_directory(&parent).unwrap();
