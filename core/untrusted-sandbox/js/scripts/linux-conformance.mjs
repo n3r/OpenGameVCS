@@ -6,6 +6,7 @@ import { isAbsolute, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { LinuxReferenceUnavailableError, openLinuxReferenceSandboxCandidate, probeLinuxReferenceSandbox } from '../src/linux.mjs';
 import { LINUX_RUNTIME_CONTRACT_SHA256, canonicalJson, sha256 } from '../src/internal/reference-contract.mjs';
+import { authenticatedResultDiagnostic } from '../src/internal/reference-service.mjs';
 
 const runtimeImage = process.env.OGVCS_SANDBOX_RUNTIME_IMAGE;
 const dockerBinary = process.env.OGVCS_DOCKER_BINARY;
@@ -58,6 +59,8 @@ const signedManifest = (toolClass) => {
 const manifests = Object.freeze({ converter: signedManifest('converter'), importer: signedManifest('import-parser') });
 const payloads = new Map();
 const credential = `broker-secret-canary-${randomBytes(12).toString('hex')}`;
+const evidenceHmacKey = randomBytes(32);
+const evidenceKeyId = 'ogvcs.conformance.evidence.1';
 let acquisitions = 0;
 const source = Object.freeze({
   acquire: async ({ credential: presented, objectIdDigest }) => {
@@ -72,8 +75,8 @@ const source = Object.freeze({
 const configuration = Object.freeze({
   acquisitionSources: Object.freeze([source]),
   dockerBinary,
-  evidenceHmacKey: randomBytes(32),
-  evidenceHmacKeyId: 'ogvcs.conformance.evidence.1',
+  evidenceHmacKey,
+  evidenceHmacKeyId: evidenceKeyId,
   manifestCatalog: Object.freeze([
     Object.freeze({ manifestBytes: manifests.importer.bytes, toolPath }),
     Object.freeze({ manifestBytes: manifests.converter.bytes, toolPath }),
@@ -138,12 +141,11 @@ const assertNoOutput = async (jobId) => {
   await assert.rejects(stat(join(stateRoot, 'outputs', jobId)), (error) => error?.code === 'ENOENT');
 };
 
-const safeInspectDiagnostic = async (result) => {
+const safeResultDiagnostic = async (result) => {
   if (!/^[0-9a-f]{64}$/u.test(result?.provenanceDigest ?? '')) return 'none';
   try {
-    const report = JSON.parse(await readFile(join(stateRoot, 'evidence', `${result.provenanceDigest}.json`), 'utf8'));
-    const events = Array.isArray(report?.securityEvents) ? report.securityEvents.filter((value) => /^PRESTART_INSPECT_[A-Z_]{1,48}$/u.test(value)) : [];
-    return events.length === 0 ? 'none' : events.join(',');
+    const evidenceBytes = await readFile(join(stateRoot, 'evidence', `${result.provenanceDigest}.json`));
+    return authenticatedResultDiagnostic({ evidenceBytes, evidenceHmacKey, evidenceKeyId, result });
   } catch { return 'none'; }
 };
 
@@ -182,8 +184,8 @@ try {
     const started = Date.now();
     const result = await service.run(descriptor.job, descriptor.acquisition);
     const elapsedMilliseconds = Date.now() - started;
-    const diagnostic = result.code === expectedCode ? 'none' : await safeInspectDiagnostic(result);
-    assert.equal(result.code, expectedCode, `${command} result differs; safeInspectDiagnostic=${diagnostic}`);
+    const diagnostic = result.code === expectedCode ? 'none' : await safeResultDiagnostic(result);
+    assert.equal(result.code, expectedCode, `${command} result differs; safeResultDiagnostic=${diagnostic}`);
     assert(elapsedMilliseconds <= policy.elapsedMilliseconds + 5_000, `${command} exceeded cleanup envelope`);
     if (options.maximumElapsedMilliseconds !== undefined) assert(elapsedMilliseconds <= options.maximumElapsedMilliseconds, `${command} exceeded its canary-specific resource envelope`);
     if (expectedCode === 'VALIDATED') await readOutput(descriptor.job.jobId, outputExpectation[command]);
