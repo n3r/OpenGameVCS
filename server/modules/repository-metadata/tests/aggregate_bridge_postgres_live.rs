@@ -1,6 +1,6 @@
 use std::{
     collections::BTreeMap,
-    sync::{Arc, Barrier, Mutex},
+    sync::{mpsc, Arc, Barrier, Mutex},
     thread,
     time::{Duration, Instant, SystemTime},
 };
@@ -714,6 +714,312 @@ fn private_submit_rejects_import_without_a_server_mapping_before_sealing() {
     for index in 0..4 {
         assert_eq!(persisted.get::<_, i64>(index), 0);
     }
+}
+
+#[test]
+fn private_submit_binds_the_exact_aggregate_plan_and_rejects_request_reuse() {
+    let _guard = TEST_LOCK.lock().unwrap();
+    let Ok(database_url) = std::env::var("OGVCS_METADATA_AGGREGATE_DATABASE_URL") else {
+        return;
+    };
+    reset_database(&database_url);
+    let fixture = seed(&database_url);
+    seed_atomic_candidate(&database_url, &fixture);
+    let provider = key_provider([0x5a; 32]);
+    let participant = PostgresAggregateAuthorizationParticipant::new(provider.clone());
+    prepare_identity_authority(&database_url, &fixture, &participant);
+    let exact = prepare_bundle(
+        &database_url,
+        &fixture,
+        &participant,
+        9_700,
+        2,
+        public_uuid(0xa0),
+        "atomic-exact-plan",
+        300,
+    );
+    let substitute = prepare_bundle(
+        &database_url,
+        &fixture,
+        &participant,
+        9_800,
+        2,
+        public_uuid(0xa1),
+        "atomic-substitute-plan",
+        300,
+    );
+    let lifecycle_plan = persist_lifecycle_plan(
+        &database_url,
+        &fixture,
+        &exact,
+        public_uuid(0xa2),
+        "atomic-exact-plan-lifecycle",
+        None,
+    );
+    let mut store = production_store(&database_url, provider);
+    assert_eq!(
+        store
+            .create_preallocated_creation_submit_intent(PreallocatedCreationSubmitIntentRequest {
+                authorization: &substitute.receipt,
+                lifecycle_plan_id: lifecycle_plan,
+                expected_head: fixture.old_head,
+                expected_generation: 1,
+            },)
+            .unwrap_err()
+            .code,
+        DomainErrorCode::MetadataNotFoundOrDenied
+    );
+    let empty: i64 = Client::connect(&database_url, NoTls)
+        .unwrap()
+        .query_one("SELECT count(*) FROM ogvcs_metadata.submit_intents", &[])
+        .unwrap()
+        .get(0);
+    assert_eq!(empty, 0, "a substitute aggregate plan sealed an intent");
+
+    let intent = store
+        .create_preallocated_creation_submit_intent(PreallocatedCreationSubmitIntentRequest {
+            authorization: &exact.receipt,
+            lifecycle_plan_id: lifecycle_plan,
+            expected_head: fixture.old_head,
+            expected_generation: 1,
+        })
+        .unwrap();
+    let before = atomic_submit_state(
+        &database_url,
+        &fixture,
+        &exact,
+        lifecycle_plan,
+        *intent.intent_id(),
+    );
+    for error in [
+        store
+            .preflight_preallocated_creation_submit(PreallocatedCreationSubmitPreflightRequest {
+                intent_id: *intent.intent_id(),
+                authorization: &substitute.receipt,
+            })
+            .unwrap_err(),
+        store
+            .finalize_preallocated_creation_submit(PreallocatedCreationSubmitFinalizeRequest {
+                intent_id: *intent.intent_id(),
+                authorization: &substitute.receipt,
+                consumption_id: "atomic.consume.substitute",
+            })
+            .unwrap_err(),
+        store
+            .reconcile_preallocated_creation_submit(PreallocatedCreationSubmitFinalizeRequest {
+                intent_id: *intent.intent_id(),
+                authorization: &substitute.receipt,
+                consumption_id: "atomic.consume.substitute",
+            })
+            .unwrap_err(),
+        store
+            .create_preallocated_creation_submit_intent(PreallocatedCreationSubmitIntentRequest {
+                authorization: &exact.receipt,
+                lifecycle_plan_id: lifecycle_plan,
+                expected_head: fixture.old_head,
+                expected_generation: 2,
+            })
+            .unwrap_err(),
+    ] {
+        assert_eq!(error.code, DomainErrorCode::MetadataNotFoundOrDenied);
+    }
+    assert_eq!(
+        atomic_submit_state(
+            &database_url,
+            &fixture,
+            &exact,
+            lifecycle_plan,
+            *intent.intent_id(),
+        ),
+        before,
+        "receipt substitution or changed-request reuse mutated submit state"
+    );
+    assert_eq!(
+        identity_consumptions(&database_url, exact.receipt.plan_id()),
+        0
+    );
+    assert_eq!(
+        identity_consumptions(&database_url, substitute.receipt.plan_id()),
+        0
+    );
+    let preflight = store
+        .preflight_preallocated_creation_submit(PreallocatedCreationSubmitPreflightRequest {
+            intent_id: *intent.intent_id(),
+            authorization: &exact.receipt,
+        })
+        .unwrap();
+    assert!(preflight.branch_matches());
+    let outcome = store
+        .finalize_preallocated_creation_submit(PreallocatedCreationSubmitFinalizeRequest {
+            intent_id: *intent.intent_id(),
+            authorization: &exact.receipt,
+            consumption_id: "atomic.consume.exact-plan",
+        })
+        .unwrap();
+    simulate_pre_v13_committed_mapping_absence(&database_url, lifecycle_plan, 2);
+    let committed = atomic_submit_state(
+        &database_url,
+        &fixture,
+        &exact,
+        lifecycle_plan,
+        *intent.intent_id(),
+    );
+    for error in [
+        store
+            .finalize_preallocated_creation_submit(PreallocatedCreationSubmitFinalizeRequest {
+                intent_id: *intent.intent_id(),
+                authorization: &substitute.receipt,
+                consumption_id: "atomic.consume.exact-plan",
+            })
+            .unwrap_err(),
+        store
+            .reconcile_preallocated_creation_submit(PreallocatedCreationSubmitFinalizeRequest {
+                intent_id: *intent.intent_id(),
+                authorization: &substitute.receipt,
+                consumption_id: "atomic.consume.exact-plan",
+            })
+            .unwrap_err(),
+    ] {
+        assert_eq!(error.code, DomainErrorCode::MetadataNotFoundOrDenied);
+    }
+    assert_eq!(
+        atomic_submit_state(
+            &database_url,
+            &fixture,
+            &exact,
+            lifecycle_plan,
+            *intent.intent_id(),
+        ),
+        committed,
+        "receipt substitution mutated the committed replay projection"
+    );
+    assert_eq!(
+        identity_consumptions(&database_url, substitute.receipt.plan_id()),
+        0
+    );
+    let replay = store
+        .finalize_preallocated_creation_submit(PreallocatedCreationSubmitFinalizeRequest {
+            intent_id: *intent.intent_id(),
+            authorization: &exact.receipt,
+            consumption_id: "atomic.consume.exact-plan",
+        })
+        .unwrap();
+    assert!(replay.replayed());
+    assert_eq!(replay.result_digest(), outcome.result_digest());
+    let reconciliation = store
+        .reconcile_preallocated_creation_submit(PreallocatedCreationSubmitFinalizeRequest {
+            intent_id: *intent.intent_id(),
+            authorization: &exact.receipt,
+            consumption_id: "atomic.consume.exact-plan",
+        })
+        .unwrap();
+    let PreallocatedCreationSubmitReconciliation::Committed(reconciled) = reconciliation else {
+        panic!("historical committed outcome reconciled as unknown");
+    };
+    assert_eq!(reconciled.result_digest(), outcome.result_digest());
+}
+
+#[test]
+fn intent_and_preflight_observations_do_not_wait_behind_publication_locks() {
+    let _guard = TEST_LOCK.lock().unwrap();
+    let Ok(database_url) = std::env::var("OGVCS_METADATA_AGGREGATE_DATABASE_URL") else {
+        return;
+    };
+    reset_database(&database_url);
+    let fixture = seed(&database_url);
+    seed_atomic_candidate(&database_url, &fixture);
+    let provider = key_provider([0x5a; 32]);
+    let participant = PostgresAggregateAuthorizationParticipant::new(provider.clone());
+    prepare_identity_authority(&database_url, &fixture, &participant);
+    let bundle = prepare_bundle(
+        &database_url,
+        &fixture,
+        &participant,
+        9_600,
+        2,
+        public_uuid(0x9d),
+        "atomic-observation-lock-order",
+        300,
+    );
+    let lifecycle_plan = persist_lifecycle_plan(
+        &database_url,
+        &fixture,
+        &bundle,
+        public_uuid(0x9e),
+        "atomic-observation-lock-order-plan",
+        None,
+    );
+
+    let mut blocker_client = Client::connect(&database_url, NoTls).unwrap();
+    let mut blocker = blocker_client.transaction().unwrap();
+    let locked = blocker
+        .query(
+            "SELECT reference.reference_name, registry.file_id
+             FROM ogvcs_metadata.references AS reference
+             JOIN ogvcs_metadata.file_id_registry AS registry
+               ON registry.repository_id = reference.repository_id
+             WHERE reference.repository_id = $1
+               AND reference.reference_kind = 'branch'
+               AND reference.reference_name = $2
+               AND registry.file_id = $3
+             FOR UPDATE OF reference, registry",
+            &[
+                &Uuid::from_bytes(*fixture.repository_id.as_bytes()),
+                &REFERENCE,
+                &&fixture.candidate_file_id[..],
+            ],
+        )
+        .unwrap();
+    assert_eq!(
+        locked.len(),
+        1,
+        "publication blocker did not lock exact rows"
+    );
+
+    let (intent_sender, intent_receiver) = mpsc::channel();
+    let intent_database_url = database_url.clone();
+    let intent_provider = provider.clone();
+    let intent_receipt = bundle.receipt.clone();
+    let expected_head = fixture.old_head;
+    let intent_worker = thread::spawn(move || {
+        let mut store = production_store(&intent_database_url, intent_provider);
+        let result = store.create_preallocated_creation_submit_intent(
+            PreallocatedCreationSubmitIntentRequest {
+                authorization: &intent_receipt,
+                lifecycle_plan_id: lifecycle_plan,
+                expected_head,
+                expected_generation: 1,
+            },
+        );
+        intent_sender.send(result).unwrap();
+    });
+    let intent = intent_receiver
+        .recv_timeout(Duration::from_secs(5))
+        .expect("intent creation waited behind non-reserving publication rows")
+        .unwrap();
+    intent_worker.join().unwrap();
+
+    let (preflight_sender, preflight_receiver) = mpsc::channel();
+    let preflight_database_url = database_url.clone();
+    let preflight_receipt = bundle.receipt.clone();
+    let intent_id = *intent.intent_id();
+    let preflight_worker = thread::spawn(move || {
+        let mut store = production_store(&preflight_database_url, provider);
+        let result = store.preflight_preallocated_creation_submit(
+            PreallocatedCreationSubmitPreflightRequest {
+                intent_id,
+                authorization: &preflight_receipt,
+            },
+        );
+        preflight_sender.send(result).unwrap();
+    });
+    let preflight = preflight_receiver
+        .recv_timeout(Duration::from_secs(5))
+        .expect("preflight waited behind a non-reserving branch row")
+        .unwrap();
+    assert!(preflight.branch_matches());
+    preflight_worker.join().unwrap();
+    blocker.rollback().unwrap();
 }
 
 #[test]
@@ -4066,6 +4372,52 @@ fn production_store(
         PostgresAggregateAuthorizationParticipant::new(provider),
     )
     .unwrap()
+}
+
+fn simulate_pre_v13_committed_mapping_absence(
+    database_url: &str,
+    lifecycle_plan: [u8; 16],
+    object_count: u64,
+) {
+    let mut client = Client::connect(database_url, NoTls).unwrap();
+    let mut transaction = client.transaction().unwrap();
+    transaction
+        .batch_execute(
+            "ALTER TABLE ogvcs_metadata.lifecycle_aggregate_identity_items
+                 DISABLE TRIGGER lifecycle_aggregate_identity_items_immutable_v13;
+             ALTER TABLE ogvcs_metadata.lifecycle_aggregate_identity_seals
+                 DISABLE TRIGGER lifecycle_aggregate_identity_seals_immutable_v13",
+        )
+        .unwrap();
+    assert_eq!(
+        transaction
+            .execute(
+                "DELETE FROM ogvcs_metadata.lifecycle_aggregate_identity_items
+                 WHERE lifecycle_plan_id = $1",
+                &[&Uuid::from_bytes(lifecycle_plan)],
+            )
+            .unwrap(),
+        object_count
+    );
+    assert_eq!(
+        transaction
+            .execute(
+                "DELETE FROM ogvcs_metadata.lifecycle_aggregate_identity_seals
+                 WHERE lifecycle_plan_id = $1",
+                &[&Uuid::from_bytes(lifecycle_plan)],
+            )
+            .unwrap(),
+        1
+    );
+    transaction
+        .batch_execute(
+            "ALTER TABLE ogvcs_metadata.lifecycle_aggregate_identity_items
+                 ENABLE TRIGGER lifecycle_aggregate_identity_items_immutable_v13;
+             ALTER TABLE ogvcs_metadata.lifecycle_aggregate_identity_seals
+                 ENABLE TRIGGER lifecycle_aggregate_identity_seals_immutable_v13",
+        )
+        .unwrap();
+    transaction.commit().unwrap();
 }
 
 fn key_provider(key: [u8; 32]) -> Arc<HmacSha256KeyRing> {

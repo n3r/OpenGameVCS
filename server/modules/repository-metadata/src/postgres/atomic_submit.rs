@@ -344,6 +344,9 @@ struct SealedSubmitPlan {
     idempotency_key: String,
     semantic_fingerprint: [u8; 32],
     object_count: u32,
+    identity_plan_id: Option<String>,
+    identity_decision_digest: Option<[u8; 32]>,
+    identity_resource_projection_digest: Option<[u8; 32]>,
     expires_at: SystemTime,
 }
 
@@ -653,12 +656,14 @@ fn create_intent_transaction(
         return Ok(existing.intent);
     }
 
+    // Intent creation is advisory: finalization owns the exact branch lock and
+    // CAS. Keep this as an MVCC observation so the participant's repository
+    // advisory lock is never held while waiting behind a concurrent finalizer.
     let branch = transaction
         .query_opt(
             "SELECT target_snapshot_digest, generation
              FROM ogvcs_metadata.references
-             WHERE repository_id = $1 AND reference_kind = 'branch' AND reference_name = $2
-             FOR SHARE",
+             WHERE repository_id = $1 AND reference_kind = 'branch' AND reference_name = $2",
             &[&uuid(plan.repository_id), &plan.authorization_reference],
         )
         .map_err(database_error)?
@@ -769,21 +774,26 @@ fn preflight_transaction(
     participant: &PostgresAggregateAuthorizationParticipant,
     request: &PreallocatedCreationSubmitPreflightRequest<'_>,
 ) -> Result<PreallocatedCreationSubmitPreflight> {
+    // This advisory lock is derived only from the opaque intent UUID and does
+    // not inspect durable state. Acquire it before the participant's
+    // repository-scoped lock to match finalize/reconcile lock order.
+    lock_submit_intent(transaction, request.intent_id)?;
     participant
         .verify_receipt_current(transaction, request.authorization)
         .map_err(|_| denied())?;
-    lock_submit_intent(transaction, request.intent_id)?;
     let intent = load_intent(transaction, request.intent_id, false)?;
     verify_receipt_plan_binding(request.authorization, &intent.plan)?;
     if intent.intent.expires_at <= server_now(transaction)? {
         return Err(denied());
     }
+    // Preflight never reserves a head. A plain MVCC observation avoids holding
+    // the repository authorization lock while waiting on finalize's branch
+    // row; finalize repeats the exact locked comparison before any commit.
     let branch = transaction
         .query_opt(
             "SELECT target_snapshot_digest, generation
              FROM ogvcs_metadata.references
-             WHERE repository_id = $1 AND reference_kind = 'branch' AND reference_name = $2
-             FOR SHARE",
+             WHERE repository_id = $1 AND reference_kind = 'branch' AND reference_name = $2",
             &[
                 &uuid(intent.intent.repository_id),
                 &intent.intent.reference_name,
@@ -871,10 +881,11 @@ fn finalize_transaction(
         return Err(denied());
     }
 
-    // Deterministic shared lock order: submit intent -> exact branch -> FileIDs
-    // in canonical (repository, FileID) order -> identity plan -> lifecycle
-    // plan/object rows. The query restores operation ordinal before deriving or
-    // persisting ordered submit evidence.
+    // Deterministic coordinator lock order: submit intent -> exact branch ->
+    // FileIDs in canonical (repository, FileID) order -> aggregate bridge. The
+    // bridge then owns its existing aggregate-receipt and lifecycle lock order.
+    // The FileID query restores operation ordinal before deriving or persisting
+    // ordered submit evidence.
     lock_and_validate_branch(transaction, &intent)?;
     let operations = lock_and_validate_file_ids(transaction, &intent)?;
     reach_atomic_submit_boundary(transaction, control, AtomicSubmitFault::BeforeBridge)?;
@@ -1266,7 +1277,11 @@ fn load_sealed_submit_plan(
     plan_id: [u8; 16],
     lock: bool,
 ) -> Result<SealedSubmitPlan> {
-    let lock_clause = if lock { "FOR SHARE OF plan, seal" } else { "" };
+    let lock_clause = if lock {
+        "FOR SHARE OF plan, seal, identity"
+    } else {
+        ""
+    };
     let sql = format!(
         "SELECT plan.plan_id, plan.tenant_id, plan.repository_id,
                 plan.publication_kind, plan.publication_digest,
@@ -1275,19 +1290,25 @@ fn load_sealed_submit_plan(
                 seal.plan_digest, plan.idempotency_scope_digest,
                 plan.idempotency_operation, plan.idempotency_key,
                 plan.semantic_fingerprint, seal.object_count, plan.expires_at,
+                identity.identity_plan_id, identity.identity_decision_digest,
+                identity.identity_resource_projection_digest,
                 seal.object_count = plan.declared_object_count
                   AND seal.chunk_count = plan.declared_chunk_count
                   AND seal.encoded_bytes = plan.declared_encoded_bytes
                   AND seal.plan_digest = plan.declared_plan_digest
+                  AND identity.object_count = seal.object_count
+                  AND identity.lifecycle_plan_digest = seal.plan_digest
          FROM ogvcs_metadata.lifecycle_publication_plans AS plan
          JOIN ogvcs_metadata.lifecycle_publication_plan_seals AS seal USING (plan_id)
+         JOIN ogvcs_metadata.lifecycle_aggregate_identity_seals AS identity
+           ON identity.lifecycle_plan_id = plan.plan_id
          WHERE plan.plan_id = $1 {lock_clause}"
     );
     let row = transaction
         .query_opt(&sql, &[&Uuid::from_bytes(plan_id)])
         .map_err(database_error)?
         .ok_or_else(denied)?;
-    if !row.get::<_, bool>(16) {
+    if !row.get::<_, bool>(19) {
         return Err(denied());
     }
     let publication = object_ref(object_kind(row.get(3))?, row.get(4))?;
@@ -1315,6 +1336,9 @@ fn load_sealed_submit_plan(
         idempotency_key: row.get(12),
         semantic_fingerprint: digest32(row.get(13))?,
         object_count,
+        identity_plan_id: Some(row.get(16)),
+        identity_decision_digest: Some(digest32(row.get(17))?),
+        identity_resource_projection_digest: Some(digest32(row.get(18))?),
         expires_at: row.get(15),
     })
 }
@@ -1326,7 +1350,16 @@ fn verify_receipt_plan_binding(
     let metadata_tenant = Uuid::parse_str(receipt.metadata_tenant_id()).map_err(|_| denied())?;
     let metadata_repository =
         Uuid::parse_str(receipt.metadata_repository_id()).map_err(|_| denied())?;
-    let exact = metadata_tenant.as_bytes() == plan.tenant_id.as_bytes()
+    let identity_plan_id = plan.identity_plan_id.as_deref().ok_or_else(denied)?;
+    let identity_decision_digest = plan.identity_decision_digest.ok_or_else(denied)?;
+    let identity_resource_projection_digest = plan
+        .identity_resource_projection_digest
+        .ok_or_else(denied)?;
+    let exact = receipt.plan_id() == identity_plan_id
+        && decode_hex32(receipt.decision_digest())? == identity_decision_digest
+        && decode_hex32(receipt.resource_digest_projection_digest())?
+            == identity_resource_projection_digest
+        && metadata_tenant.as_bytes() == plan.tenant_id.as_bytes()
         && metadata_repository.as_bytes() == plan.repository_id.as_bytes()
         && decode_hex32(receipt.subject_digest())? == plan.subject_digest
         && decode_hex32(receipt.authenticated_scope_digest())? == plan.authenticated_scope_digest
@@ -1407,8 +1440,7 @@ fn load_candidate_operations(
               AND registry.file_id = history.file_id
              WHERE history.repository_id = $1 AND history.snapshot_digest = $2
              ORDER BY history.operation_ordinal
-             LIMIT 1001
-             FOR SHARE OF history, registry",
+             LIMIT 1001",
             &[&uuid(repository_id), &&snapshot_digest[..]],
         )
         .map_err(database_error)?;
@@ -1570,12 +1602,19 @@ fn load_intent(
                 intent.submit_fingerprint, intent.operation_count,
                 intent.operation_set_digest, intent.intent_digest, intent.expires_at,
                 plan.subject_digest, plan.authorization_epoch, plan.authorization_snapshot,
-                seal.object_count
+                seal.object_count, identity.identity_plan_id,
+                identity.identity_decision_digest,
+                identity.identity_resource_projection_digest,
+                identity.lifecycle_plan_id IS NULL OR (
+                  identity.object_count = seal.object_count
+                  AND identity.lifecycle_plan_digest = seal.plan_digest)
          FROM ogvcs_metadata.submit_intents AS intent
          JOIN ogvcs_metadata.lifecycle_publication_plans AS plan
            ON plan.plan_id = intent.lifecycle_plan_id
          JOIN ogvcs_metadata.lifecycle_publication_plan_seals AS seal
            ON seal.plan_id = plan.plan_id
+         LEFT JOIN ogvcs_metadata.lifecycle_aggregate_identity_seals AS identity
+           ON identity.lifecycle_plan_id = plan.plan_id
          WHERE intent.intent_id = $1 {lock_clause}"
     );
     let row = transaction
@@ -1609,6 +1648,25 @@ fn load_intent(
     let authorization_epoch = positive_u64(row.get(19))?;
     let authorization_snapshot: String = row.get::<_, Option<String>>(20).ok_or_else(denied)?;
     let object_count = u32::try_from(row.get::<_, i32>(21)).map_err(|_| denied())?;
+    // v13 intentionally does not fabricate mappings for historical committed
+    // applications. Preserve that outcome-replay path, but leave an absent
+    // mapping as None so every pending/fresh operation fails closed in
+    // verify_receipt_plan_binding.
+    let identity_plan_id: Option<String> = row.get(22);
+    let identity_decision_digest = row
+        .get::<_, Option<Vec<u8>>>(23)
+        .map(digest32)
+        .transpose()?;
+    let identity_resource_projection_digest = row
+        .get::<_, Option<Vec<u8>>>(24)
+        .map(digest32)
+        .transpose()?;
+    if !row.get::<_, bool>(25)
+        || identity_plan_id.is_some() != identity_decision_digest.is_some()
+        || identity_plan_id.is_some() != identity_resource_projection_digest.is_some()
+    {
+        return Err(denied());
+    }
     let intent = PreallocatedCreationSubmitIntent {
         intent_id,
         lifecycle_plan_id: *lifecycle_plan_id.as_bytes(),
@@ -1638,6 +1696,9 @@ fn load_intent(
         idempotency_key: idempotency_key.clone(),
         semantic_fingerprint: lifecycle_semantic_fingerprint,
         object_count,
+        identity_plan_id,
+        identity_decision_digest,
+        identity_resource_projection_digest,
         expires_at,
     };
     let expected_submit_fingerprint = submit_fingerprint(

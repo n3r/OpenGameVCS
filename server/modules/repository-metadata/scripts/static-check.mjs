@@ -1165,6 +1165,104 @@ assert(
   fileIdLockBody.includes('FROM locked\n             ORDER BY operation_ordinal'),
   'canonical FileID locking does not restore operation order for sealed evidence',
 );
+const createIntentStart = atomicSubmitAdapter.indexOf('fn create_intent_transaction(');
+const createIntentEnd = atomicSubmitAdapter.indexOf('\nfn preflight_transaction(', createIntentStart);
+const createIntentBody = atomicSubmitAdapter.slice(createIntentStart, createIntentEnd);
+assert(createIntentStart >= 0 && createIntentEnd > createIntentStart, 'submit intent function boundary missing');
+for (const rowLock of ['FOR UPDATE', 'FOR NO KEY UPDATE', 'FOR SHARE', 'FOR KEY SHARE']) {
+  assert(
+    !createIntentBody.includes(rowLock),
+    `advisory submit intent creation reserves mutable publication rows with ${rowLock}`,
+  );
+}
+const preflightStart = createIntentEnd + 1;
+const preflightEnd = atomicSubmitAdapter.indexOf('\nfn finalize_transaction(', preflightStart);
+const preflightBody = atomicSubmitAdapter.slice(preflightStart, preflightEnd);
+assert(preflightEnd > preflightStart, 'submit preflight function boundary missing');
+for (const rowLock of ['FOR UPDATE', 'FOR NO KEY UPDATE', 'FOR SHARE', 'FOR KEY SHARE']) {
+  assert(
+    !preflightBody.includes(rowLock),
+    `advisory submit preflight reserves the branch row with ${rowLock}`,
+  );
+}
+const preflightLockOrder = [
+  'lock_submit_intent(transaction, request.intent_id)?',
+  '.verify_receipt_current(transaction, request.authorization)',
+].map((marker) => preflightBody.indexOf(marker));
+assert(
+  preflightLockOrder.every((position, index) =>
+    position >= 0 && (index === 0 || position > preflightLockOrder[index - 1])),
+  'preflight inverts the intent/repository advisory lock order',
+);
+const finalizeStart = preflightEnd + 1;
+const finalizeEnd = atomicSubmitAdapter.indexOf('\nfn reach_atomic_submit_boundary(', finalizeStart);
+const finalizeBody = atomicSubmitAdapter.slice(finalizeStart, finalizeEnd);
+assert(finalizeEnd > finalizeStart, 'submit finalize function boundary missing');
+const finalizeLockOrder = [
+  'lock_submit_intent(transaction, request.intent_id)?',
+  'load_outcome(transaction, request.intent_id)?',
+  'verify_receipt_plan_binding(request.authorization, &intent.plan)?',
+  'lock_and_validate_branch(transaction, &intent)?',
+  'lock_and_validate_file_ids(transaction, &intent)?',
+  'apply_aggregate_lifecycle_publication_in_transaction(',
+].map((marker) => finalizeBody.indexOf(marker));
+assert(
+  finalizeLockOrder.every((position, index) =>
+    position >= 0 && (index === 0 || position > finalizeLockOrder[index - 1])),
+  'submit finalize lock/replay/bridge order changed',
+);
+const reconcileStart = atomicSubmitAdapter.indexOf('fn reconcile_transaction(');
+const reconcileEnd = atomicSubmitAdapter.indexOf('\nfn load_sealed_submit_plan(', reconcileStart);
+const reconcileBody = atomicSubmitAdapter.slice(reconcileStart, reconcileEnd);
+assert(reconcileStart >= 0 && reconcileEnd > reconcileStart, 'submit reconcile function boundary missing');
+const reconcileLockOrder = [
+  'lock_submit_intent(transaction, request.intent_id)?',
+  '.verify_receipt_current(transaction, request.authorization)',
+].map((marker) => reconcileBody.indexOf(marker));
+assert(
+  reconcileLockOrder.every((position, index) =>
+    position >= 0 && (index === 0 || position > reconcileLockOrder[index - 1])),
+  'submit reconciliation inverts the intent/repository advisory lock order',
+);
+for (const [entryPoint, body] of [
+  ['intent creation', createIntentBody],
+  ['preflight', preflightBody],
+  ['fresh finalize', finalizeBody],
+  ['unknown-result reconciliation', reconcileBody],
+]) {
+  assert(
+    body.includes('verify_receipt_plan_binding(request.authorization, &'),
+    `${entryPoint} omits exact lifecycle-to-aggregate receipt binding`,
+  );
+}
+const replayValidationStart = atomicSubmitAdapter.indexOf('fn revalidate_outcome_consumption(');
+const replayValidationEnd = atomicSubmitAdapter.indexOf(
+  '\nfn insert_reconciliation_record(',
+  replayValidationStart,
+);
+const replayValidationBody = atomicSubmitAdapter.slice(replayValidationStart, replayValidationEnd);
+assert(
+  replayValidationStart >= 0 && replayValidationEnd > replayValidationStart,
+  'submit committed-replay validation boundary missing',
+);
+assert(
+  replayValidationBody.includes('receipt.plan_id() != outcome.identity_plan_id')
+    && replayValidationBody.includes('.revalidate_consumption('),
+  'committed submit replay is not bound to the exact consumed aggregate plan',
+);
+for (const exactReceiptBinding of [
+  'receipt.plan_id() == identity_plan_id',
+  'decode_hex32(receipt.decision_digest())? == identity_decision_digest',
+  'decode_hex32(receipt.resource_digest_projection_digest())?',
+  'LEFT JOIN ogvcs_metadata.lifecycle_aggregate_identity_seals AS identity',
+  'identity.lifecycle_plan_id IS NULL OR (',
+  '.identity_resource_projection_digest\n        .ok_or_else(denied)?',
+]) {
+  assert(
+    atomicSubmitAdapter.includes(exactReceiptBinding),
+    `atomic submit omits the exact aggregate-v3 receipt mapping: ${exactReceiptBinding}`,
+  );
+}
 assert(atomicSubmitAdapter.includes('apply_aggregate_lifecycle_publication_in_transaction'), 'atomic submit does not use the caller-owned bridge');
 assert(atomicSubmitAdapter.includes('submit_file_id_consumptions'), 'atomic submit omits permanent FileID evidence');
 assert(!atomicSubmitAdapter.includes('spec/atomic-submit'), 'private candidate invents a public submit contract');

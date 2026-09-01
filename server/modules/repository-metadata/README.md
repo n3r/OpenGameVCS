@@ -160,6 +160,27 @@ unconsumed or absent. A separate eight-intent race from one branch head proves
 one exact publication, while replay after a new database connection returns
 the same durable outcome without another publication.
 
+Intent creation uses ordinary MVCC reads for the branch and staged FileID rows,
+and preflight uses an ordinary MVCC read for the branch; only finalize reserves
+those mutable publication rows. Preflight takes the opaque intent advisory lock
+before the aggregate participant's repository lock. Together these rules
+prevent create/preflight from holding repository authorization state while
+waiting behind finalize's branch or FileID locks, without weakening the locked
+finalize-time CAS, current-receipt, lifecycle, or FileID revalidation.
+
+Every new intent, preflight, fresh finalize, and unknown-result reconciliation
+also reloads the v13 one-to-one aggregate identity mapping for its lifecycle
+plan and requires the same aggregate plan ID, decision digest, and
+resource-projection digest from the supplied aggregate-v3 receipt. An otherwise
+current receipt for the same tenant, repository, reference, snapshot,
+permission, and object count cannot substitute for the receipt sealed to that
+lifecycle plan. Changed expected-head or generation input on an existing
+lifecycle/idempotency plan remains a denied key-reuse result and does not alter
+the sealed intent. Because v13 deliberately does not fabricate mappings for
+historical applications, committed v11/v12 outcomes retain their immutable
+stored identity-plan/consumption revalidation path; only pending unmapped work
+fails closed after upgrade.
+
 The private fault harness now separates bridge, FileID, snapshot marker,
 branch CAS, audit, metadata outbox, consistency-token, final-outcome, and
 reconciliation boundaries and compares the complete durable submit projection
