@@ -1,10 +1,10 @@
 [package]
 name = "ogvcs-local-cli"
-version = "0.1.0-rc.1"
+version = "0.2.0-rc.2"
 edition = "2021"
 rust-version = "1.82"
 license = "MIT"
-description = "Local-only candidate OpenGameVCS CLI and workspace foundation"
+description = "Fail-closed OpenGameVCS CLI and verified local workspace foundation"
 readme = "README.md"
 repository = "https://github.com/n3r/OpenGameVCS"
 homepage = "https://github.com/n3r/OpenGameVCS"
@@ -29,11 +29,24 @@ path = "src/main.rs"
 
 [dependencies]
 getrandom = "=0.2.16"
+ogvcs-object-model = { version = "0.1.0", path = "../../../core/object-model/rust" }
+ogvcs-path-contract = { version = "1.0.0", path = "../../../core/paths-filesystem/rust" }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
 
 [target.'cfg(windows)'.dependencies]
 sha2 = "=0.10.9"
+windows-sys = { version = "=0.52.0", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Console",
+    "Win32_System_IO",
+    "Win32_System_Memory",
+    "Win32_System_SystemServices",
+    "Win32_System_Threading",
+] }
 
 [target.'cfg(not(windows))'.dependencies]
 sha2 = { version = "=0.10.9", features = ["asm"] }

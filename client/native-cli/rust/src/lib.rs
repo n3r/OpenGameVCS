@@ -21,6 +21,9 @@ use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
 use std::{ffi::c_void, os::fd::AsRawFd};
 
 mod generated_contract;
+pub mod production;
+#[cfg(windows)]
+mod windows_security;
 
 pub use generated_contract::{
     CONFIG_SCHEMA, CONTRACT_ARTIFACT_SET_SHA256, CONTRACT_MANIFEST_SHA256, CONTRACT_VECTOR_SHA256,
@@ -122,16 +125,6 @@ fn config_error() -> CliError {
 
 fn workspace_error(code: &'static str, message: &'static str, next_step: &'static str) -> CliError {
     CliError::new(ExitClass::Workspace, code, message, next_step)
-}
-
-#[cfg(windows)]
-fn unsupported_workspace_error() -> CliError {
-    CliError::new(
-        ExitClass::Unsupported,
-        "WORKSPACE_SAFETY_UNSUPPORTED",
-        "This platform cannot make the candidate's required private-workspace safety check.",
-        "Use a supported private filesystem or wait for the platform ACL adapter contract.",
-    )
 }
 
 fn cancelled_error() -> CliError {
@@ -911,8 +904,33 @@ fn report_from_metadata(metadata: &WorkspaceMetadata) -> Result<WorkspaceReport,
 fn validated_root(requested_root: &Path) -> Result<PathBuf, CliError> {
     #[cfg(windows)]
     {
-        let _ = requested_root;
-        Err(unsupported_workspace_error())
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0000_0400;
+        if !requested_root.is_absolute() {
+            return Err(input_error());
+        }
+        let original = fs::symlink_metadata(requested_root).map_err(|_| {
+            workspace_error(
+                "WORKSPACE_ROOT_UNAVAILABLE",
+                "The workspace root is unavailable.",
+                "Create a private existing directory and pass its absolute path.",
+            )
+        })?;
+        if !original.is_dir() || original.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return Err(workspace_error(
+                "UNSAFE_WORKSPACE",
+                "The workspace root is a reparse point or is not a directory.",
+                "Use an owned private directory that is not a reparse point.",
+            ));
+        }
+        let root = fs::canonicalize(requested_root).map_err(|_| {
+            workspace_error(
+                "WORKSPACE_ROOT_UNAVAILABLE",
+                "The workspace root is unavailable.",
+                "Create a private existing directory and pass its absolute path.",
+            )
+        })?;
+        ensure_private_directory(&root)?;
+        Ok(root)
     }
     #[cfg(not(windows))]
     {
@@ -1081,14 +1099,29 @@ fn create_private_directory(path: &Path) -> Result<(), CliError> {
             "Retry on an owned private local filesystem.",
         )
     })?;
+    #[cfg(windows)]
+    windows_security::protect_private_directory(path).map_err(|_| {
+        workspace_error(
+            "WORKSPACE_CREATE_UNAVAILABLE",
+            "Private workspace metadata could not be protected from inherited access.",
+            "Retry in an owned directory with a private protected DACL.",
+        )
+    })?;
     ensure_private_directory(path)
 }
 
 fn ensure_private_directory(path: &Path) -> Result<(), CliError> {
     #[cfg(windows)]
     {
-        let _ = path;
-        Err(unsupported_workspace_error())
+        windows_security::open_private_directory(path)
+            .map(|_| ())
+            .map_err(|_| {
+                workspace_error(
+                    "UNSAFE_WORKSPACE",
+                    "Workspace ownership, DACL, or reparse-point safety is invalid.",
+                    "Use a directory owned by this identity with access limited to the owner, SYSTEM, and Administrators.",
+                )
+            })
     }
     #[cfg(not(windows))]
     {
@@ -1231,8 +1264,14 @@ fn unsafe_workspace_acl_error() -> CliError {
 }
 
 #[cfg(windows)]
-fn open_private_regular_file(_: &Path) -> Result<File, CliError> {
-    Err(unsupported_workspace_error())
+fn open_private_regular_file(path: &Path) -> Result<File, CliError> {
+    windows_security::open_private_regular_file(path).map_err(|_| {
+        workspace_error(
+            "UNSAFE_WORKSPACE",
+            "Workspace metadata ownership, DACL, or reparse-point safety is invalid.",
+            "Use metadata owned by this identity with access limited to the owner, SYSTEM, and Administrators.",
+        )
+    })
 }
 
 fn write_json_new<T: Serialize>(path: &Path, value: &T) -> Result<(), CliError> {
@@ -1273,7 +1312,10 @@ fn create_private_file(path: &Path, create_new: bool) -> Result<File, CliError> 
     options.write(true).create_new(create_new);
     #[cfg(not(windows))]
     options.mode(0o600);
-    options.open(path).map_err(|_| write_workspace_error())
+    let file = options.open(path).map_err(|_| write_workspace_error())?;
+    #[cfg(windows)]
+    windows_security::protect_private_file(&file).map_err(|_| write_workspace_error())?;
+    Ok(file)
 }
 
 fn write_workspace_error() -> CliError {
@@ -1287,8 +1329,9 @@ fn write_workspace_error() -> CliError {
 fn sync_directory(path: &Path) -> Result<(), CliError> {
     #[cfg(windows)]
     {
-        let _ = path;
-        Err(unsupported_workspace_error())
+        windows_security::open_private_directory(path)
+            .and_then(|directory| directory.sync_all())
+            .map_err(|_| write_workspace_error())
     }
     #[cfg(not(windows))]
     {
@@ -1501,18 +1544,27 @@ fn run_resolved(
     let (code, message, data) = match command {
         [first] if first == "--help" || first == "help" => (
             "HELP",
-            "Supported local candidate commands are available.",
+            "Supported verified-foundation commands are available.",
             json!({
                 "commands": [
                     "config show",
                     "auth check",
+                    "auth invoke",
                     "workspace create",
                     "workspace open",
                     "workspace recover",
+                    "workspace configure",
+                    "workspace list",
+                    "workspace remove",
+                    "file add",
+                    "file move",
+                    "file delete",
+                    "file revert",
+                    "file list",
                     "diagnostics preview",
                     "diagnostics create"
                 ],
-                "unsupported": ["sync", "submit", "status", "locks", "working-tree-mutation"]
+                "unsupported": ["sync", "submit", "status", "locks", "upload"]
             }),
         ),
         [first, second] if first == "config" && second == "show" => (
@@ -1528,57 +1580,215 @@ fn run_resolved(
                 data,
             )
         }
-        [first, second, rest @ ..] if first == "workspace" && second == "create" => {
-            let values = named_values(
-                rest,
-                &[
-                    "root",
-                    "repository-declaration-digest",
-                    "branch-declaration-digest",
-                    "baseline-declaration-digest",
-                    "spec-declaration-digest",
-                ],
+        [first, second, rest @ ..] if first == "auth" && second == "invoke" => {
+            use production::SecureCredentialProvider as _;
+            let values = named_values(rest, &["credential-env"])?;
+            let credential = production::HeadlessEnvironmentProvider::new(
+                required_value(&values, "credential-env")?.to_owned(),
             )?;
-            let root = required_value(&values, "root")?;
-            let binding = WorkspaceBindingInput {
-                repository_declaration_digest: required_value(
-                    &values,
-                    "repository-declaration-digest",
-                )?
-                .to_owned(),
-                branch_declaration_digest: required_value(&values, "branch-declaration-digest")?
-                    .to_owned(),
-                baseline_declaration_digest: required_value(
-                    &values,
-                    "baseline-declaration-digest",
-                )?
-                .to_owned(),
-                spec_declaration_digest: required_value(&values, "spec-declaration-digest")?
-                    .to_owned(),
+            let mut routes = production::UnavailablePublicRoutes;
+            let cancellation = production::ProcessSignalCancellation;
+            let session = credential.invoke(
+                &production_authentication(&config, parsed.non_interactive),
+                &mut routes,
+                &cancellation,
+            )?;
+            (
+                "AUTHENTICATION_INVOKED",
+                "Authentication completed through the selected secure provider.",
+                json!({
+                    "subjectDigest": session.subject_digest,
+                    "sessionDigest": session.session_digest,
+                    "authorityEpoch": session.authority_epoch,
+                    "securityEpoch": session.security_epoch,
+                    "expiresAtUnixMs": session.expires_at_unix_ms,
+                }),
+            )
+        }
+        [first, second, rest @ ..] if first == "workspace" && second == "create" => {
+            let values = named_values(rest, &["root", "repository", "branch", "credential-env"])?;
+            let credential = production::HeadlessEnvironmentProvider::new(
+                required_value(&values, "credential-env")?.to_owned(),
+            )?;
+            let request = production::WorkspaceCreateRequest {
+                root: PathBuf::from(required_value(&values, "root")?),
+                repository_locator: required_value(&values, "repository")?.to_owned(),
+                branch: required_value(&values, "branch")?.to_owned(),
+                authentication: production_authentication(&config, parsed.non_interactive),
             };
-            let report = create_workspace(Path::new(root), binding, &NeverCancel)?;
+            let mut routes = production::UnavailablePublicRoutes;
+            let cancellation = production::ProcessSignalCancellation;
+            let mut progress = production::DiscardProgress;
+            let report = production::create_verified_workspace(
+                &request,
+                &credential,
+                &mut routes,
+                &cancellation,
+                &mut progress,
+            )?;
             (
                 "WORKSPACE_CREATED",
-                "Private local workspace metadata was created atomically.",
+                "Verified private workspace metadata was created atomically.",
                 serde_json::to_value(report).map_err(|_| internal_error())?,
             )
         }
         [first, second, rest @ ..] if first == "workspace" && second == "open" => {
             let values = named_values(rest, &["root"])?;
-            let report = open_workspace(Path::new(required_value(&values, "root")?))?;
+            let report =
+                production::open_verified_workspace(Path::new(required_value(&values, "root")?))?;
             (
                 "WORKSPACE_OPEN",
-                "Private local workspace metadata was opened.",
+                "Verified private workspace metadata was opened.",
                 serde_json::to_value(report).map_err(|_| internal_error())?,
             )
         }
         [first, second, rest @ ..] if first == "workspace" && second == "recover" => {
             let values = named_values(rest, &["root"])?;
-            let report = recover_workspace(Path::new(required_value(&values, "root")?))?;
+            let mut progress = production::DiscardProgress;
+            let report = production::recover_verified_workspace(
+                Path::new(required_value(&values, "root")?),
+                &mut progress,
+            )?;
             (
                 "WORKSPACE_RECOVERED",
-                "Private local workspace metadata was recovered.",
+                "Verified private workspace metadata was recovered.",
                 serde_json::to_value(report).map_err(|_| internal_error())?,
+            )
+        }
+        [first, second, rest @ ..] if first == "workspace" && second == "configure" => {
+            let values = named_values(rest, &["root", "repository", "branch", "credential-env"])?;
+            let credential = production::HeadlessEnvironmentProvider::new(
+                required_value(&values, "credential-env")?.to_owned(),
+            )?;
+            let request = production::WorkspaceConfigureRequest {
+                root: PathBuf::from(required_value(&values, "root")?),
+                repository_locator: required_value(&values, "repository")?.to_owned(),
+                branch: required_value(&values, "branch")?.to_owned(),
+                authentication: production_authentication(&config, parsed.non_interactive),
+            };
+            let mut routes = production::UnavailablePublicRoutes;
+            let cancellation = production::ProcessSignalCancellation;
+            let mut progress = production::DiscardProgress;
+            let report = production::configure_verified_workspace(
+                &request,
+                &credential,
+                &mut routes,
+                &cancellation,
+                &mut progress,
+            )?;
+            (
+                "WORKSPACE_CONFIGURED",
+                "The verified workspace binding was configured atomically.",
+                serde_json::to_value(report).map_err(|_| internal_error())?,
+            )
+        }
+        [first, second, rest @ ..] if first == "workspace" && second == "list" => {
+            let values = named_values(rest, &["roots-file"])?;
+            let roots = read_root_list(Path::new(required_value(&values, "roots-file")?))?;
+            let reports = production::list_verified_workspaces(&roots)?;
+            (
+                "WORKSPACES_LISTED",
+                "Verified workspaces were listed without exposing local roots.",
+                json!({"workspaces": reports}),
+            )
+        }
+        [first, second, rest @ ..] if first == "workspace" && second == "remove" => {
+            let values = named_values(rest, &["root", "confirm"])?;
+            let report = production::remove_verified_workspace(
+                Path::new(required_value(&values, "root")?),
+                production::RemoveWorkspaceOptions {
+                    confirmed: required_value(&values, "confirm")? == "remove-local-metadata",
+                    non_interactive: parsed.non_interactive,
+                },
+                &production::ProcessSignalCancellation,
+            )?;
+            (
+                "WORKSPACE_REMOVED",
+                "Verified local workspace metadata was removed.",
+                serde_json::to_value(report).map_err(|_| internal_error())?,
+            )
+        }
+        [first, second, rest @ ..]
+            if first == "file"
+                && matches!(second.as_str(), "add" | "move" | "delete" | "revert") =>
+        {
+            let accepted = match second.as_str() {
+                "add" | "delete" => &["root", "path", "credential-env"][..],
+                "move" => &["root", "source", "destination", "credential-env"][..],
+                "revert" => &["root", "intent", "credential-env"][..],
+                _ => unreachable!(),
+            };
+            let values = named_values(rest, accepted)?;
+            let credential = production::HeadlessEnvironmentProvider::new(
+                required_value(&values, "credential-env")?.to_owned(),
+            )?;
+            let authentication = production_authentication(&config, parsed.non_interactive);
+            let mut routes = production::UnavailablePublicRoutes;
+            let cancellation = production::ProcessSignalCancellation;
+            let mut progress = production::DiscardProgress;
+            let report = match second.as_str() {
+                "add" => production::stage_add(
+                    &production::StageAddRequest {
+                        root: PathBuf::from(required_value(&values, "root")?),
+                        repository_path: required_value(&values, "path")?.to_owned(),
+                        authentication,
+                    },
+                    &credential,
+                    &mut routes,
+                    &cancellation,
+                    &mut progress,
+                )?,
+                "move" => production::stage_move(
+                    &production::StageMoveRequest {
+                        root: PathBuf::from(required_value(&values, "root")?),
+                        source_repository_path: required_value(&values, "source")?.to_owned(),
+                        destination_repository_path: required_value(&values, "destination")?
+                            .to_owned(),
+                        authentication,
+                    },
+                    &credential,
+                    &mut routes,
+                    &cancellation,
+                    &mut progress,
+                )?,
+                "delete" => production::stage_delete(
+                    &production::StageDeleteRequest {
+                        root: PathBuf::from(required_value(&values, "root")?),
+                        repository_path: required_value(&values, "path")?.to_owned(),
+                        authentication,
+                    },
+                    &credential,
+                    &mut routes,
+                    &cancellation,
+                    &mut progress,
+                )?,
+                "revert" => production::revert_staged_intent(
+                    &production::RevertIntentRequest {
+                        root: PathBuf::from(required_value(&values, "root")?),
+                        intent_id: required_value(&values, "intent")?.to_owned(),
+                        authentication,
+                    },
+                    &credential,
+                    &mut routes,
+                    &cancellation,
+                    &mut progress,
+                )?,
+                _ => unreachable!(),
+            };
+            (
+                "LOCAL_INTENT_UPDATED",
+                "The workspace-confined local intent was updated without upload or submit.",
+                serde_json::to_value(report).map_err(|_| internal_error())?,
+            )
+        }
+        [first, second, rest @ ..] if first == "file" && second == "list" => {
+            let values = named_values(rest, &["root"])?;
+            let intents =
+                production::list_staged_intents(Path::new(required_value(&values, "root")?))?;
+            (
+                "LOCAL_INTENTS_LISTED",
+                "Redacted local staged intents were listed.",
+                json!({"intents": intents}),
             )
         }
         [first, second, rest @ ..] if first == "diagnostics" && second == "preview" => {
@@ -1649,6 +1859,30 @@ fn required_value<'a>(
     name: &str,
 ) -> Result<&'a str, CliError> {
     values.get(name).map(String::as_str).ok_or_else(input_error)
+}
+
+fn production_authentication(
+    config: &ResolvedConfig,
+    non_interactive: bool,
+) -> production::AuthenticationRequest {
+    production::AuthenticationRequest {
+        endpoint: config.endpoint.value.clone(),
+        profile: config.profile.value.clone(),
+        non_interactive,
+    }
+}
+
+fn read_root_list(path: &Path) -> Result<Vec<PathBuf>, CliError> {
+    let bytes = read_config_bounded(path)?;
+    let roots: Vec<String> = serde_json::from_slice(&bytes).map_err(|_| config_error())?;
+    if roots.len() > production::MAX_LIST_ROOTS
+        || roots
+            .iter()
+            .any(|root| root.is_empty() || root.len() > 4096)
+    {
+        return Err(config_error());
+    }
+    Ok(roots.into_iter().map(PathBuf::from).collect())
 }
 
 #[cfg(test)]
