@@ -100,11 +100,7 @@ pub fn create_new_private_directory(path: &Path) -> io::Result<()> {
         FILE_SHARE_READ | FILE_SHARE_WRITE,
     )?;
     validate_kind(&directory, true)?;
-    if let Err(error) = validate_owner_and_dacl(directory.as_raw_handle() as HANDLE, true) {
-        let _ = delete_exact_on_close(&directory);
-        return Err(error);
-    }
-    Ok(())
+    validate_owner_and_dacl(directory.as_raw_handle() as HANDLE, true)
 }
 
 pub fn create_new_private_file(path: &Path) -> io::Result<File> {

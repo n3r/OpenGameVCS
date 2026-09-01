@@ -97,7 +97,9 @@ access. New Windows files and directories receive that owner and protected
 DACL through creation-time security attributes, before publication with an
 inherited broad ACL. File handles and active lock handles deny delete sharing.
 `CreateDirectoryW` does not return the created handle, so a malicious process
-with the same OS authority can still race the no-follow validation reopen.
+with the same OS authority can still race the no-follow validation reopen. A
+failed reopen/validation does not auto-delete through the uncertain handle;
+recovery must inspect the private initialization entry.
 
 The exclusive mutation file lock prevents races among cooperating CLI
 processes. A malicious process running as the same OS authority can still
