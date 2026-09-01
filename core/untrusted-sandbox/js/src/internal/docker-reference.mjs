@@ -30,6 +30,10 @@ const RUNTIME_IMAGE_MISMATCHES = Object.freeze([
 ]);
 const runtimeImageAdmissionDiagnostics = new WeakMap();
 const adapters = new WeakSet();
+const adapterTestExecutors = new WeakMap();
+const adapterTestFaults = new WeakMap();
+const anchoredOutputVolumes = new WeakMap();
+const settledOutputVolumes = new WeakMap();
 
 const containerName = () => `ogvcs-sandbox-${randomBytes(12).toString('hex')}`;
 const volumeName = () => `ogvcs-sandbox-${randomBytes(12).toString('hex')}`;
@@ -208,6 +212,21 @@ const workerFailureClass = (source) => {
   } catch { return 'CONTROL'; }
 };
 
+const detachedStartResultMatches = (source, expectedId) => {
+  try {
+    return typeof expectedId === 'string'
+      && /^[0-9a-f]{64}$/u.test(expectedId)
+      && source?.kind === 'exit'
+      && source.code === 0
+      && source.signal === null
+      && Buffer.isBuffer(source.stderr)
+      && source.stderr.length === 0
+      && Buffer.isBuffer(source.stdout)
+      && source.stdoutBytes === expectedId.length + 1
+      && source.stdout.equals(Buffer.from(`${expectedId}\n`, 'ascii'));
+  } catch { return false; }
+};
+
 const POST_NONZERO_CONTROL = Object.freeze({ failureClass: 'CONTROL', kind: 'failed', poison: true });
 const POST_NONZERO_ACTIVATION_CONTROL = Object.freeze({ failureClass: 'ACTIVATION_CONTROL', kind: 'failed', poison: false });
 const POST_NONZERO_TOOL_EXITED = Object.freeze({ failureClass: 'TOOL_EXITED', kind: 'failed', poison: false });
@@ -348,7 +367,7 @@ const containsRequiredPaths = (source, required) => Array.isArray(source)
   && new Set(source).size === source.length
   && required.every((value) => source.includes(value));
 
-export const createdContainerInspectMismatch = (container, expected) => {
+const containerInspectMismatch = (container, expected, expectedState) => {
   try {
     const config = container?.Config;
     const host = container?.HostConfig;
@@ -363,9 +382,26 @@ export const createdContainerInspectMismatch = (container, expected) => {
     const tmpfs = `rw,nosuid,nodev,noexec,size=${expected.policy.scratchBytes},uid=65532,gid=65532,mode=0700`;
     const networks = container?.NetworkSettings?.Networks;
     const networkNames = networks && typeof networks === 'object' && !Array.isArray(networks) ? Object.keys(networks).sort() : null;
+    const stateMatches = expectedState === 'running'
+      ? state?.Status === 'running'
+        && state?.Running === true
+        && state?.Paused === false
+        && state?.Restarting === false
+        && state?.Dead === false
+        && state?.OOMKilled === false
+        && state?.Error === ''
+        && state?.ExitCode === 0
+        && Number.isSafeInteger(state?.Pid)
+        && state.Pid > 0
+      : expectedState === 'created'
+        && state?.Status === 'created'
+        && state?.Running === false
+        && state?.Paused === false
+        && state?.Restarting === false
+        && state?.Pid === 0;
     const checks = [
       ['identity', container?.Id === expected.id && container?.Name === `/${expected.name}` && container?.Path === expected.entrypoint && emptyCollection(container?.Args)],
-      ['state', state?.Status === 'created' && state?.Running === false && state?.Paused === false && state?.Restarting === false && state?.Pid === 0],
+      ['state', stateMatches],
       ['config-image', config?.Image === expected.runtimeImage],
       ['config-process', config?.Hostname === 'ogvcs-worker' && config?.Domainname === '' && config?.User === '65532:65532' && Array.isArray(config?.Entrypoint) && config.Entrypoint.length === 1 && config.Entrypoint[0] === expected.entrypoint && config.WorkingDir === '/scratch'],
       ['config-content', emptyCollection(config?.Cmd) && emptyCollection(config?.Env) && emptyCollection(config?.Volumes) && emptyCollection(config?.ExposedPorts) && config?.Healthcheck == null],
@@ -395,7 +431,10 @@ export const createdContainerInspectMismatch = (container, expected) => {
   } catch { return 'inspect-shape'; }
 };
 
+export const createdContainerInspectMismatch = (container, expected) => containerInspectMismatch(container, expected, 'created');
 export const validateCreatedContainerInspect = (container, expected) => createdContainerInspectMismatch(container, expected) === null;
+export const runningContainerInspectMismatch = (container, expected) => containerInspectMismatch(container, expected, 'running');
+export const validateRunningContainerInspect = (container, expected) => runningContainerInspectMismatch(container, expected) === null;
 
 export const validateOutputVolumeInspect = (volume, name, options, jobId) => volume?.Name === name
   && volume?.Driver === 'local'
@@ -481,8 +520,16 @@ export class DockerReferenceAdapter {
   get seccompDigest() { return this.#seccompDigest; }
 
   async #control(args, options = {}) {
-    const value = await execute({ binary: this.#binary, args, ...options });
+    const testExecutor = adapterTestExecutors.get(this);
+    const value = testExecutor
+      ? await testExecutor(Object.freeze([...args]), Object.freeze({ ...options }))
+      : await execute({ binary: this.#binary, args, ...options });
     return value;
+  }
+
+  #testFault(name) {
+    const faults = adapterTestFaults.get(this);
+    if (faults?.has(name)) { faults.delete(name); throw new Error(`TEST_FAULT:${name}`); }
   }
 
   async #probeHost() {
@@ -534,6 +581,78 @@ export class DockerReferenceAdapter {
     return Object.freeze({ mountpoint: volumes[0].Mountpoint, name });
   }
 
+  async #createVolumeAnchor(volume, runtimeImage, policy, jobId) {
+    let id = null;
+    let name = null;
+    let transferred = false;
+    try {
+      this.#testFault('before-anchor-create');
+      name = containerName();
+      const expected = {
+        entrypoint: '/ogvcs-volume-anchor',
+        fileMounts: [],
+        jobId,
+        outputReadonly: true,
+        policy,
+        role: 'volume-anchor',
+        runtimeContractSha256: LINUX_RUNTIME_CONTRACT_SHA256,
+        runtimeImage,
+        volume: volume.name,
+        volumeMountpoint: volume.mountpoint,
+      };
+      const args = [
+        ...hardeningArguments({ jobId, name, policy, role: 'volume-anchor', seccompPath: this.#seccompPath }),
+        '--mount', `type=volume,src=${volume.name},dst=/output,readonly,volume-nocopy`,
+        '--entrypoint=/ogvcs-volume-anchor',
+        runtimeImage,
+      ];
+      id = await this.#createContainer(name, args, expected);
+      if (!id) {
+        if (!await this.#cleanupVolume(volume.name)) { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
+        return null;
+      }
+      const started = await this.#control(['start', id], { timeoutMilliseconds: 5_000 });
+      const startValid = detachedStartResultMatches(started, id);
+      let mismatch = 'anchor-running';
+      if (startValid) {
+        const inspected = await this.#control(['container', 'inspect', id], { timeoutMilliseconds: 2_000 });
+        let containers;
+        try { containers = inspected.kind === 'exit' && inspected.code === 0 ? JSON.parse(inspected.stdout.toString('utf8')) : null; } catch { containers = null; }
+        mismatch = Array.isArray(containers) && containers.length === 1
+          ? runningContainerInspectMismatch(containers[0], { ...expected, id, name, seccompCanonical: this.#seccompCanonical })
+          : 'anchor-running';
+      }
+      if (!startValid || mismatch !== null) {
+        const anchorGone = await this.#cleanupContainer(id, name).catch(() => false);
+        const volumeGone = await this.#cleanupVolume(volume.name).catch(() => false);
+        if (!anchorGone || !volumeGone) { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
+        if (startValid) throw new Error('SANDBOX_INSPECT_MISMATCH:anchor-running');
+        return null;
+      }
+      anchoredOutputVolumes.set(volume, Object.freeze({ adapter: this, expected: Object.freeze({ ...expected, id, name, seccompCanonical: this.#seccompCanonical }), id, name }));
+      transferred = true;
+      return volume;
+    } catch (error) {
+      if (!transferred) {
+        const anchorGone = name === null ? true : await this.#cleanupContainer(id ?? name, name).catch(() => false);
+        const volumeGone = await this.#cleanupVolume(volume.name).catch(() => false);
+        if (!anchorGone || !volumeGone) { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
+      }
+      throw error;
+    }
+  }
+
+  async #volumeAnchorRunning(volume) {
+    const anchor = anchoredOutputVolumes.get(volume);
+    if (anchor?.adapter !== this) return false;
+    const inspected = await this.#control(['container', 'inspect', anchor.id], { timeoutMilliseconds: 2_000 });
+    let containers;
+    try { containers = inspected.kind === 'exit' && inspected.code === 0 ? JSON.parse(inspected.stdout.toString('utf8')) : null; } catch { containers = null; }
+    return Array.isArray(containers)
+      && containers.length === 1
+      && runningContainerInspectMismatch(containers[0], anchor.expected) === null;
+  }
+
   async #createContainer(name, argumentsAfterCreate, expected) {
     const created = await this.#control(['create', ...argumentsAfterCreate]);
     if (created.kind !== 'exit') {
@@ -582,9 +701,22 @@ export class DockerReferenceAdapter {
     return inspect.kind === 'exit' && inspect.code !== 0;
   }
 
+  async #cleanupAnchoredOutputVolume(volume) {
+    if (settledOutputVolumes.get(volume) === this) return true;
+    const anchor = anchoredOutputVolumes.get(volume);
+    if (anchor?.adapter !== this) return false;
+    const anchorGone = await this.#cleanupContainer(anchor.id, anchor.name).catch(() => false);
+    const volumeGone = await this.#cleanupVolume(volume.name).catch(() => false);
+    if (anchorGone && volumeGone) {
+      anchoredOutputVolumes.delete(volume);
+      settledOutputVolumes.set(volume, this);
+    }
+    return anchorGone && volumeGone;
+  }
+
   async #settle(id, name, volume) {
-    const containerGone = await this.#cleanupContainer(id, name);
-    const volumeGone = containerGone && await this.#cleanupVolume(volume.name);
+    const containerGone = await this.#cleanupContainer(id, name).catch(() => false);
+    const volumeGone = await this.#cleanupAnchoredOutputVolume(volume);
     if (!containerGone || !volumeGone) { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
   }
 
@@ -596,119 +728,145 @@ export class DockerReferenceAdapter {
       statePinnedFileSource(toolHandle, { executable: true }),
     ]);
     const [inputSource, jobSource, toolSource] = pinnedSources.map((value) => value.source);
-    const volume = await this.#createOutputVolume(policy, jobId);
-    const name = containerName();
-    const fileMounts = [
-      { source: inputSource, target: '/input/payload' },
-      { source: jobSource, target: '/input/job' },
-      { source: toolSource, target: '/tool/program' },
-    ];
-    const args = [
-      ...hardeningArguments({ jobId, name, policy, role: 'parser', seccompPath: this.#seccompPath }),
-      '--mount', mountFile(inputSource, '/input/payload'),
-      '--mount', mountFile(jobSource, '/input/job'),
-      '--mount', mountFile(toolSource, '/tool/program'),
-      '--mount', `type=volume,src=${volume.name},dst=/output,volume-nocopy`,
-      '--entrypoint=/tool/program',
-      runtimeImage,
-    ];
-    let id;
+    const allocatedVolume = await this.#createOutputVolume(policy, jobId);
+    const volume = await this.#createVolumeAnchor(allocatedVolume, runtimeImage, policy, jobId);
+    if (!volume) return Object.freeze({ kind: 'unavailable', volume: null });
+    let id = null;
+    let name = null;
     try {
+      this.#testFault('before-parser-create');
+      name = containerName();
+      const fileMounts = [
+        { source: inputSource, target: '/input/payload' },
+        { source: jobSource, target: '/input/job' },
+        { source: toolSource, target: '/tool/program' },
+      ];
+      const args = [
+        ...hardeningArguments({ jobId, name, policy, role: 'parser', seccompPath: this.#seccompPath }),
+        '--mount', mountFile(inputSource, '/input/payload'),
+        '--mount', mountFile(jobSource, '/input/job'),
+        '--mount', mountFile(toolSource, '/tool/program'),
+        '--mount', `type=volume,src=${volume.name},dst=/output,volume-nocopy`,
+        '--entrypoint=/tool/program',
+        runtimeImage,
+      ];
       id = await this.#createContainer(name, args, { entrypoint: '/tool/program', fileMounts, jobId, outputReadonly: false, policy, role: 'parser', runtimeContractSha256: LINUX_RUNTIME_CONTRACT_SHA256, runtimeImage, volume: volume.name, volumeMountpoint: volume.mountpoint });
+      if (!id) {
+        const [volumeGone, aliasesValid] = await Promise.all([
+          this.#cleanupAnchoredOutputVolume(volume),
+          revalidateStatePinnedFileSources(pinnedSources).then(() => true, () => false),
+        ]);
+        if (!volumeGone || !aliasesValid) { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
+        return Object.freeze({ kind: 'unavailable', volume: null });
+      }
+      try {
+        await revalidateStatePinnedFileSources(pinnedSources);
+      } catch {
+        await this.#settle(id, name, volume).catch(() => null);
+        this.#poisoned = true;
+        throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED');
+      }
+      const deadline = Math.min(policy.elapsedMilliseconds, 60_000);
+      const value = await this.#control(['start', '--attach', id], { maximumStdout: 64 * 1024, maximumStderr: 64 * 1024, timeoutMilliseconds: deadline, signal });
+      let failureClass = workerFailureClass(value);
+      let postNonzeroKind = null;
+      if (failureClass === 'NONZERO') {
+        const inspected = await this.#control(['container', 'inspect', id], { maximumStderr: 64 * 1024, maximumStdout: 64 * 1024, timeoutMilliseconds: 2_000 });
+        const disposition = postNonzeroFailureDisposition(value, inspected, id, name);
+        failureClass = disposition.failureClass;
+        postNonzeroKind = disposition.kind;
+        if (disposition.poison) this.#poisoned = true;
+      }
+      const containerGone = await this.#cleanupContainer(id, name);
+      const aliasesValid = await revalidateStatePinnedFileSources(pinnedSources).then(() => true, () => false);
+      if (!containerGone || !aliasesValid) { await this.#cleanupAnchoredOutputVolume(volume); this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
+      if (!await this.#volumeAnchorRunning(volume)) {
+        if (!await this.#cleanupAnchoredOutputVolume(volume)) { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
+        throw new Error('SANDBOX_INSPECT_MISMATCH:anchor-running');
+      }
+      const kind = postNonzeroKind ?? (value.kind === 'timeout' ? 'timeout' : value.kind === 'aborted' ? 'cancelled' : value.kind === 'overflow' ? 'output-limit' : value.kind !== 'exit' || value.code !== 0 || value.stdoutBytes !== 0 || value.stderr.length !== 0 ? 'failed' : 'success');
+      return Object.freeze(kind === 'failed' ? { failureClass, kind, volume } : { kind, volume });
     } catch (error) {
+      const containerGone = name === null ? true : await this.#cleanupContainer(id ?? name, name).catch(() => false);
       const [volumeGone, aliasesValid] = await Promise.all([
-        this.#cleanupVolume(volume.name).catch(() => false),
+        this.#cleanupAnchoredOutputVolume(volume).catch(() => false),
         revalidateStatePinnedFileSources(pinnedSources).then(() => true, () => false),
       ]);
-      if (!volumeGone || !aliasesValid) { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
+      if (!containerGone || !volumeGone || !aliasesValid) { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
       throw error;
     }
-    if (!id) {
-      const [volumeGone, aliasesValid] = await Promise.all([
-        this.#cleanupVolume(volume.name),
-        revalidateStatePinnedFileSources(pinnedSources).then(() => true, () => false),
-      ]);
-      if (!volumeGone || !aliasesValid) { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
-      return Object.freeze({ kind: 'unavailable', volume: null });
-    }
-    try {
-      await revalidateStatePinnedFileSources(pinnedSources);
-    } catch {
-      await this.#settle(id, name, volume).catch(() => null);
-      this.#poisoned = true;
-      throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED');
-    }
-    const deadline = Math.min(policy.elapsedMilliseconds, 60_000);
-    const value = await execute({ binary: this.#binary, args: ['start', '--attach', id], maximumStdout: 64 * 1024, maximumStderr: 64 * 1024, timeoutMilliseconds: deadline, signal });
-    let failureClass = workerFailureClass(value);
-    let postNonzeroKind = null;
-    if (failureClass === 'NONZERO') {
-      const inspected = await this.#control(['container', 'inspect', id], { maximumStderr: 64 * 1024, maximumStdout: 64 * 1024, timeoutMilliseconds: 2_000 });
-      const disposition = postNonzeroFailureDisposition(value, inspected, id, name);
-      failureClass = disposition.failureClass;
-      postNonzeroKind = disposition.kind;
-      if (disposition.poison) this.#poisoned = true;
-    }
-    const containerGone = await this.#cleanupContainer(id, name);
-    const aliasesValid = await revalidateStatePinnedFileSources(pinnedSources).then(() => true, () => false);
-    if (!containerGone || !aliasesValid) { await this.#cleanupVolume(volume.name); this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
-    const kind = postNonzeroKind ?? (value.kind === 'timeout' ? 'timeout' : value.kind === 'aborted' ? 'cancelled' : value.kind === 'overflow' ? 'output-limit' : value.kind !== 'exit' || value.code !== 0 || value.stdoutBytes !== 0 || value.stderr.length !== 0 ? 'failed' : 'success');
-    return Object.freeze(kind === 'failed' ? { failureClass, kind, volume } : { kind, volume });
   }
 
   async collectOutput({ runtimeImage, policy, volume, bindingHandle, framePath, jobId, maximumFrameBytes }) {
     if (this.#poisoned) throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED');
-    const pinnedSource = await statePinnedFileSource(bindingHandle);
-    const bindingSource = pinnedSource.source;
-    const name = containerName();
-    const fileMounts = [{ source: bindingSource, target: '/input/binding' }];
-    const args = [
-      ...hardeningArguments({ jobId, name, policy, role: 'output-shim', seccompPath: this.#seccompPath }),
-      '--mount', mountFile(bindingSource, '/input/binding'),
-      '--mount', `type=volume,src=${volume.name},dst=/output,readonly,volume-nocopy`,
-      '--entrypoint=/ogvcs-output-shim',
-      runtimeImage,
-    ];
-    let id;
+    if (anchoredOutputVolumes.get(volume)?.adapter !== this) { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
+    let id = null;
+    let name = null;
+    let pinnedSource = null;
     try {
+      if (!await this.#volumeAnchorRunning(volume)) {
+        if (!await this.#cleanupAnchoredOutputVolume(volume)) { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
+        throw new Error('SANDBOX_INSPECT_MISMATCH:anchor-running');
+      }
+      pinnedSource = await statePinnedFileSource(bindingHandle);
+      const bindingSource = pinnedSource.source;
+      this.#testFault('before-collector-create');
+      name = containerName();
+      const fileMounts = [{ source: bindingSource, target: '/input/binding' }];
+      const args = [
+        ...hardeningArguments({ jobId, name, policy, role: 'output-shim', seccompPath: this.#seccompPath }),
+        '--mount', mountFile(bindingSource, '/input/binding'),
+        '--mount', `type=volume,src=${volume.name},dst=/output,readonly,volume-nocopy`,
+        '--entrypoint=/ogvcs-output-shim',
+        runtimeImage,
+      ];
       id = await this.#createContainer(name, args, { entrypoint: '/ogvcs-output-shim', fileMounts, jobId, outputReadonly: true, policy, role: 'output-shim', runtimeContractSha256: LINUX_RUNTIME_CONTRACT_SHA256, runtimeImage, volume: volume.name, volumeMountpoint: volume.mountpoint });
+      if (!id) {
+        const [volumeGone, aliasValid] = await Promise.all([
+          this.#cleanupAnchoredOutputVolume(volume),
+          revalidateStatePinnedFileSources([pinnedSource]).then(() => true, () => false),
+        ]);
+        if (!volumeGone || !aliasValid) { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
+        return Object.freeze({ kind: 'failed', frameBytes: 0 });
+      }
+      try {
+        await revalidateStatePinnedFileSources([pinnedSource]);
+      } catch {
+        await this.#settle(id, name, volume).catch(() => null);
+        this.#poisoned = true;
+        throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED');
+      }
+      const value = await this.#control(['start', '--attach', id], { stdoutPath: framePath, maximumStdout: maximumFrameBytes, maximumStderr: 64 * 1024, timeoutMilliseconds: Math.min(policy.elapsedMilliseconds, 60_000) });
+      await this.#settle(id, name, volume);
+      try { await revalidateStatePinnedFileSources([pinnedSource]); } catch { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
+      return Object.freeze({ kind: value.kind === 'overflow' ? 'output-limit' : value.kind !== 'exit' || value.code !== 0 || value.stderr.length !== 0 ? 'failed' : 'success', frameBytes: value.stdoutBytes });
     } catch (error) {
+      const containerGone = name === null ? true : await this.#cleanupContainer(id ?? name, name).catch(() => false);
       const [volumeGone, aliasValid] = await Promise.all([
-        this.#cleanupVolume(volume.name).catch(() => false),
-        revalidateStatePinnedFileSources([pinnedSource]).then(() => true, () => false),
+        this.#cleanupAnchoredOutputVolume(volume).catch(() => false),
+        pinnedSource === null ? true : revalidateStatePinnedFileSources([pinnedSource]).then(() => true, () => false),
       ]);
-      if (!volumeGone || !aliasValid) { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
+      if (!containerGone || !volumeGone || !aliasValid) { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
       throw error;
     }
-    if (!id) {
-      const [volumeGone, aliasValid] = await Promise.all([
-        this.#cleanupVolume(volume.name),
-        revalidateStatePinnedFileSources([pinnedSource]).then(() => true, () => false),
-      ]);
-      if (!volumeGone || !aliasValid) { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
-      return Object.freeze({ kind: 'failed', frameBytes: 0 });
-    }
-    try {
-      await revalidateStatePinnedFileSources([pinnedSource]);
-    } catch {
-      await this.#settle(id, name, volume).catch(() => null);
-      this.#poisoned = true;
-      throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED');
-    }
-    const value = await execute({ binary: this.#binary, args: ['start', '--attach', id], stdoutPath: framePath, maximumStdout: maximumFrameBytes, maximumStderr: 64 * 1024, timeoutMilliseconds: Math.min(policy.elapsedMilliseconds, 60_000) });
-    await this.#settle(id, name, volume);
-    try { await revalidateStatePinnedFileSources([pinnedSource]); } catch { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
-    return Object.freeze({ kind: value.kind === 'overflow' ? 'output-limit' : value.kind !== 'exit' || value.code !== 0 || value.stderr.length !== 0 ? 'failed' : 'success', frameBytes: value.stdoutBytes });
   }
 
   async discardVolume(volume) {
-    if (!await this.#cleanupVolume(volume.name)) { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
+    if (!await this.#cleanupAnchoredOutputVolume(volume)) { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
   }
 }
 
 export const isDockerReferenceAdapter = (value) => adapters.has(value);
 
 export const executeDockerForTesting = execute;
+export const createDockerReferenceAdapterForTesting = (executeCommand, seccompCanonical = '{}', faults = new Set()) => {
+  if (typeof executeCommand !== 'function' || types.isProxy(executeCommand) || typeof seccompCanonical !== 'string' || !(faults instanceof Set)) throw new TypeError('test Docker executor is invalid');
+  const adapter = new DockerReferenceAdapter('/test/docker', '/test/seccomp.json', 'e'.repeat(64), seccompCanonical);
+  adapterTestExecutors.set(adapter, executeCommand);
+  adapterTestFaults.set(adapter, faults);
+  return adapter;
+};
+export const detachedStartResultMatchesForTesting = detachedStartResultMatches;
 export const isRegularPinnedFileHandleForTesting = async (handle, options = {}) => {
   try { await statePinnedFileSource(handle, options); return true; } catch { return false; }
 };

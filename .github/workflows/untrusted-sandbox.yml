@@ -76,22 +76,24 @@ jobs:
           cache: npm
       - name: Install exact workspace dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Compile the pinned trusted shim and hostile tool
+      - name: Compile the pinned trusted runtime binaries and hostile tool
         run: |
           cc -static -O2 -std=c17 -Wall -Wextra -Werror core/untrusted-sandbox/js/linux/output_shim.c -o core/untrusted-sandbox/js/linux/output-shim
+          cc -static -O2 -std=c17 -Wall -Wextra -Werror core/untrusted-sandbox/js/linux/volume_anchor.c -o core/untrusted-sandbox/js/linux/volume-anchor
           cc -static -O2 -std=c17 -Wall -Wextra -Werror core/untrusted-sandbox/js/linux/canary_tool.c -o core/untrusted-sandbox/js/linux/canary-tool
-          chmod 0555 core/untrusted-sandbox/js/linux/output-shim core/untrusted-sandbox/js/linux/canary-tool
+          chmod 0555 core/untrusted-sandbox/js/linux/output-shim core/untrusted-sandbox/js/linux/volume-anchor core/untrusted-sandbox/js/linux/canary-tool
       - name: Import the deterministic one-layer credential-free scratch runtime
         run: |
           runtime_rootfs_dir="$(mktemp -d "${RUNNER_TEMP}/ogvcs-sandbox-rootfs.XXXXXX")"
           runtime_rootfs_tar="${RUNNER_TEMP}/ogvcs-sandbox-rootfs.tar"
           install -m 0555 core/untrusted-sandbox/js/linux/output-shim "${runtime_rootfs_dir}/ogvcs-output-shim"
-          test "$(find "${runtime_rootfs_dir}" -mindepth 1 -maxdepth 1 -printf '%f\n')" = "ogvcs-output-shim"
-          tar --format=ustar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner --mode=0555 --no-recursion -C "${runtime_rootfs_dir}" -cf "${runtime_rootfs_tar}" ogvcs-output-shim
-          test "$(tar -tf "${runtime_rootfs_tar}")" = "ogvcs-output-shim"
+          install -m 0555 core/untrusted-sandbox/js/linux/volume-anchor "${runtime_rootfs_dir}/ogvcs-volume-anchor"
+          test "$(find "${runtime_rootfs_dir}" -mindepth 1 -maxdepth 1 -printf '%f\n' | sort)" = "$(printf '%s\n' ogvcs-output-shim ogvcs-volume-anchor)"
+          tar --format=ustar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner --mode=0555 --no-recursion -C "${runtime_rootfs_dir}" -cf "${runtime_rootfs_tar}" ogvcs-output-shim ogvcs-volume-anchor
+          test "$(tar -tf "${runtime_rootfs_tar}")" = "$(printf '%s\n' ogvcs-output-shim ogvcs-volume-anchor)"
           docker image import --platform=linux/amd64 \
             --change 'LABEL org.opengamevcs.sandbox.runtime="linux-reference-v1"' \
-            --change 'LABEL org.opengamevcs.sandbox.runtime-contract-sha256="930be8bc4d5afb79830736fc1ef4c553dc5ef63e8a38766551cf28047752189d"' \
+            --change 'LABEL org.opengamevcs.sandbox.runtime-contract-sha256="f83f457feac8010f3415998877233f4bbbbaca3e13eb52b96bfd45232e99383c"' \
             "${runtime_rootfs_tar}" ogvcs-sandbox-reference:conformance
           test "$(docker image inspect --format '{{if .Config.Env}}nonempty{{else}}empty{{end}}:{{len .RootFS.Layers}}' ogvcs-sandbox-reference:conformance)" = "empty:1"
           echo "OGVCS_SANDBOX_RUNTIME_IMAGE=$(docker image inspect --format '{{.Id}}' ogvcs-sandbox-reference:conformance)" >> "$GITHUB_ENV"
@@ -104,6 +106,7 @@ jobs:
           mkdir -p artifacts
           npm run test:linux --workspace @opengamevcs/untrusted-sandbox
       - name: Retain Linux reference evidence
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: untrusted-sandbox-linux-reference-${{ github.run_attempt }}

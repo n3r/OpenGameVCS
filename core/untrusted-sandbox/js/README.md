@@ -36,7 +36,7 @@ Each parser container is created before it is started and is run as uid/gid
 `no-new-privileges`, private PID/cgroup/IPC namespaces, the owned default-deny
 seccomp allowlist, cgroup memory/PID/CPU controls, rlimits, and bounded no-exec
 scratch/output tmpfs mounts. The adapter explicitly selects a daemon-registered
-OCI runtime named `runc`, labels the exact job and parser/output-shim role,
+OCI runtime named `runc`, labels the exact job and parser/output-shim/volume-anchor role,
 requests private non-recursive bind propagation, and inspects the security,
 resource, namespace, and mount projection while the container is still stopped.
 Docker/Moby encodes its default private PID namespace as an empty inspected
@@ -48,17 +48,30 @@ for the exact local tmpfs driver, options, ownership labels, and mountpoint used
 by the container. Container ID and random name removal are both verified before
 a result can settle.
 
+The local-driver tmpfs volume is lazy-mounted and disappears when its last
+container reference is removed. A pinned pause-only `volume-anchor` container
+therefore mounts `/output` read-only before the parser starts and remains
+running through the parser-to-shim handoff. It receives no tool, input, job,
+binding, credential, environment, argument, or writable output mount; its only
+writable filesystem is the same bounded private no-exec scratch tmpfs. Its exact
+stopped and running projections are inspected, including its role/job labels,
+entrypoint, volume source, read-only access, PID, lifecycle state, and every
+ordinary isolation control. Anchor death closes the operation and settles the
+exact anchor and volume; only the exact branded volume may replay an already
+verified settlement.
+
 Signed CPU budgets have whole-second kernel-enforcement granularity: the closed
 profile accepts only 1,000 through 30,000 milliseconds in 1,000-millisecond
 increments. It never rounds a smaller declared budget up to a larger rlimit.
 
-The parser is removed before output validation begins. A separate trusted shim
-then mounts only the output volume and a fresh 256-bit frame secret. Its
-exclusive stdout emits a bounded binary stream containing sorted portable paths,
-per-file lengths and SHA-256 digests, and a terminal count/byte/stream
-commitment. The host revalidates every byte and adds HMAC-authenticated
-provenance with a broker-only evidence key. The parser never receives the frame
-secret or evidence key.
+The parser is removed before output validation begins while the read-only
+anchor retains the tmpfs reference. A separate trusted shim then mounts only
+the output volume and a fresh 256-bit frame secret. Its exclusive stdout emits
+a bounded binary stream containing sorted portable paths, per-file lengths and
+SHA-256 digests, and a terminal count/byte/stream commitment. The collector,
+anchor, and volume settle as one owned unit before the host revalidates every
+byte and adds HMAC-authenticated provenance with a broker-only evidence key.
+The parser and anchor never receive the frame secret or evidence key.
 
 Durable state lives under an operator-selected, owner-only root. It uses a
 single-process boot/PID/start-time lease, atomic fsync-backed job/idempotency/
@@ -70,16 +83,19 @@ or revocation wins and publication is denied.
 
 ## Evidence and nonclaims
 
-The Ubuntu hosted lane deterministically archives only the pinned trusted shim
-and imports that one-file rootfs as a one-layer Linux/amd64 image with an empty
-image-authored environment and the exact runtime labels. It does not use the
-Dockerfile frontend because that frontend injects a default `PATH` even for a
-`scratch` stage. The lane then exercises real Docker create/start/cleanup, uid
-65532 mount readability, network/credential/host/sibling/undeclared-input isolation,
+The Ubuntu hosted lane deterministically archives only the pinned trusted output
+shim and volume anchor and imports that exact two-file rootfs as a one-layer
+Linux/amd64 image with an empty image-authored environment and the exact runtime
+labels. It does not use the Dockerfile frontend because that frontend injects a
+default `PATH` even for a `scratch` stage. The lane is configured to exercise
+real Docker create/start/cleanup, uid 65532 mount readability,
+network/credential/host/sibling/undeclared-input isolation,
 namespace/device/traversal denial, symlink/recursion validation, bomb/hang/fork/
 clone/clone3 namespace/memory/disk/stdout/crash/CPU bounds, cancellation,
 restart, expired-deadline terminal replay, idempotency, revocation, and next-job
-health. Portable protocol tests continue on Linux, macOS, and Windows. The
+health. Every failure after live-conformance entry retains only a closed
+command/stage/result/diagnostic report; the workflow uploads that report even
+when the live step fails. Portable protocol tests continue on Linux, macOS, and Windows. The
 POSIX-owned reference-state tests are skipped on Windows without weakening
 Linux ownership/mode admission; none of these portable tests are
 kernel-isolation claims for macOS or Windows.
@@ -91,5 +107,9 @@ publication authority, validate consumer-specific semantics, or claim defense
 against a compromised daemon/kernel/host administrator. Selecting and inspecting
 the `runc` runtime name does not attest or version-pin the daemon-configured
 runtime binary; that supply-chain proof remains a completion blocker. OGVCS-045
-remains Todo until the authenticated public contract, hosted evidence,
+remains Todo until the authenticated public contract, a green hosted proof,
 crash-boundary matrix, and all PRD acceptance evidence are frozen together.
+Crash recovery currently owns durable state aliases but does not authenticate
+and reconcile daemon-side anchor/container/volume orphans. Package labels are
+diagnostic metadata, not an ownership capability, so a global label-based sweep
+is intentionally absent pending a durable state-owned instance authority.

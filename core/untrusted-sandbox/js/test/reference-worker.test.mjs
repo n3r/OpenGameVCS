@@ -1,24 +1,31 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { createHash, createHmac, generateKeyPairSync, sign } from 'node:crypto';
 import { chmodSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { chmod, mkdtemp, mkdir, open, readFile, readdir, readlink, rename, rm, stat, symlink, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import {
   createdContainerInspectMismatch,
+  createDockerReferenceAdapterForTesting,
+  detachedStartResultMatchesForTesting,
   DockerReferenceAdapter,
   isPrestartImageDiagnostic,
   isRegularPinnedFileHandleForTesting,
   postNonzeroFailureDispositionForTesting,
   prestartImageDiagnostic,
   runtimeImageInspectMismatch,
+  runningContainerInspectMismatch,
   validateCreatedContainerInspect,
   validateOutputVolumeInspect,
+  validateRunningContainerInspect,
   validateRuntimeImageInspect,
   workerFailureClassForTesting,
 } from '../src/internal/docker-reference.mjs';
 import { LINUX_RUNTIME_CONTRACT_SHA256, canonicalJson, parseAndVerifyToolManifest, sha256, snapshotTrustedManifestKeys } from '../src/internal/reference-contract.mjs';
+import { buildLinuxConformanceReport, closeLinuxConformanceFailure } from '../src/internal/linux-conformance-report.mjs';
 import { authenticatedResultDiagnostic, ReferenceSandboxService } from '../src/internal/reference-service.mjs';
 import { digestOpenFile, isPinnedFileOperationAborted, openPinnedImmutableFile, ReferenceStateStore } from '../src/internal/reference-state.mjs';
 import * as linuxBoundary from '../src/linux.mjs';
@@ -88,6 +95,72 @@ test('pre-admission image diagnostics are closed and never copy hostile details'
   assert.equal(prestartImageDiagnostic(new Proxy(new Error('hostile'), { get() { throw new Error('trap'); } })), null);
 });
 
+test('Linux conformance reports retain only closed fields and cannot reflect hostile material', () => {
+  const failure = closeLinuxConformanceFailure({ actualCode: 'VALIDATED', command: 'importer', diagnostic: 'VALIDATED_EMPTY_OUTPUT', expectedCode: 'VALIDATED', stage: 'VALIDATED_OUTPUT' });
+  assert.deepEqual(failure, { actualCode: 'VALIDATED', command: 'importer', diagnostic: 'VALIDATED_EMPTY_OUTPUT', expectedCode: 'VALIDATED', stage: 'VALIDATED_OUTPUT' });
+  const report = buildLinuxConformanceReport({
+    cases: [{ command: 'importer', elapsedMilliseconds: 42, resultCode: 'VALIDATED' }],
+    failure,
+    outcome: 'failed',
+    runtimeDigest: RUNTIME_DIGEST,
+    seccompProfileSha256: SECCOMP_DIGEST,
+  });
+  assert.equal(report.failure.diagnostic, 'VALIDATED_EMPTY_OUTPUT');
+  assert.deepEqual(report.cases, [{ command: 'importer', elapsedMilliseconds: 42, resultCode: 'VALIDATED' }]);
+  for (const hostile of [
+    { actualCode: 'SECRET=/host/code', command: 'job.secret', diagnostic: '/home/runner/private', expectedCode: 'KEY=secret', stage: 'container.123' },
+    { actualCode: new String('VALIDATED'), command: 'importer', diagnostic: 'none', expectedCode: 'VALIDATED', stage: 'RESULT_CODE' },
+    { actualCode: 'VALIDATED', command: 'importer', diagnostic: 'none', expectedCode: 'VALIDATED', rawPath: '/home/runner/private', stage: 'RESULT_CODE' },
+    new Proxy(failure, { get() { throw new Error('SECRET=/host/proxy'); } }),
+  ]) {
+    const closed = closeLinuxConformanceFailure(hostile);
+    const encoded = JSON.stringify(closed);
+    assert.match(closed.actualCode, /^(?:UNKNOWN|VALIDATED)$/u);
+    assert.match(closed.command, /^(?:harness|importer)$/u);
+    assert.match(closed.diagnostic, /^(?:none|VALIDATED_EMPTY_OUTPUT)$/u);
+    assert.match(closed.expectedCode, /^(?:UNKNOWN|VALIDATED)$/u);
+    assert.match(closed.stage, /^(?:CONTROL|RESULT_CODE|VALIDATED_OUTPUT)$/u);
+    assert.equal(encoded.includes('SECRET'), false);
+    assert.equal(encoded.includes('/home/runner'), false);
+    assert.equal(encoded.includes('container.123'), false);
+    assert.equal(encoded.includes('job.secret'), false);
+  }
+  for (const hostileCases of [
+    [{ command: 'importer', elapsedMilliseconds: 42, jobId: 'job.secret', resultCode: 'VALIDATED' }],
+    [{ command: '/host/path', elapsedMilliseconds: 42, resultCode: 'VALIDATED' }],
+    [{ command: 'importer', elapsedMilliseconds: 60_001, resultCode: 'VALIDATED' }],
+    [new Proxy({ command: 'importer', elapsedMilliseconds: 42, resultCode: 'VALIDATED' }, {})],
+  ]) assert.throws(() => buildLinuxConformanceReport({ cases: hostileCases, failure, outcome: 'failed', runtimeDigest: RUNTIME_DIGEST, seccompProfileSha256: SECCOMP_DIGEST }), /report case is invalid/u);
+});
+
+linuxReferenceStateTest('live conformance retains a closed report for entry failures before service open', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ogvcs-sandbox-report-entry-')); await chmod(root, 0o700);
+  const dockerPath = join(root, 'docker');
+  const toolPath = join(root, 'tool');
+  const reportPath = join(root, 'report.json');
+  try {
+    await writeFile(dockerPath, '#!/bin/sh\nprintf \'%s\' \'SECRET=/home/runner/private-container-job-key\' >&2\nexit 7\n', { mode: 0o555 });
+    await writeFile(toolPath, Buffer.from('tool'), { mode: 0o555 });
+    await Promise.all([chmod(dockerPath, 0o555), chmod(toolPath, 0o555)]);
+    const result = spawnSync(process.execPath, [fileURLToPath(new URL('../scripts/linux-conformance.mjs', import.meta.url))], {
+      encoding: 'utf8',
+      env: { ...process.env, OGVCS_DOCKER_BINARY: dockerPath, OGVCS_SANDBOX_CANARY_TOOL: toolPath, OGVCS_SANDBOX_REPORT_PATH: reportPath, OGVCS_SANDBOX_RUNTIME_IMAGE: `sha256:${RUNTIME_DIGEST}` },
+      maxBuffer: 1024 * 1024,
+      timeout: 15_000,
+    });
+    assert.notEqual(result.status, 0);
+    const bytes = await readFile(reportPath);
+    const report = JSON.parse(bytes.toString('utf8'));
+    assert.equal(report.outcome, 'failed');
+    assert.deepEqual(report.failure, { actualCode: 'SANDBOX_UNAVAILABLE', command: 'harness', diagnostic: 'none', expectedCode: 'VALIDATED', stage: 'OPEN' });
+    const retained = Buffer.concat([bytes, Buffer.from(result.stdout), Buffer.from(result.stderr)]).toString('utf8');
+    assert.equal(retained.includes('SECRET'), false);
+    assert.equal(retained.includes('/home/runner'), false);
+    assert.equal(retained.includes('container-job-key'), false);
+    assert.equal(retained.includes(dockerPath), false);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test('Docker hardening leaves PID mode empty for the engine private namespace', async () => {
   const source = await readFile(new URL('../src/internal/docker-reference.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /['"`]--pid(?:=|['"`])/u);
@@ -95,6 +168,34 @@ test('Docker hardening leaves PID mode empty for the engine private namespace', 
   assert.doesNotMatch(source, /bind-recursive=disabled/u);
   assert.match(source, /readlink\(descriptorPath\)/u);
   assert.doesNotMatch(source, /return `\/proc\/\$\{process\.pid\}\/fd/u);
+  const anchorCreate = source.indexOf('const volume = await this.#createVolumeAnchor');
+  const parserCreate = source.indexOf("role: 'parser'", anchorCreate);
+  const parserCleanup = source.indexOf('const containerGone = await this.#cleanupContainer(id, name)', parserCreate);
+  const continuityCheck = source.indexOf('if (!await this.#volumeAnchorRunning(volume))', parserCleanup);
+  const collectorCreate = source.indexOf("role: 'output-shim'", continuityCheck);
+  assert(anchorCreate >= 0 && parserCreate > anchorCreate && parserCleanup > parserCreate && continuityCheck > parserCleanup && collectorCreate > continuityCheck);
+  assert.match(source, /role: 'volume-anchor'/u);
+  assert.match(source, /--entrypoint=\/ogvcs-volume-anchor/u);
+});
+
+test('detached anchor start accepts only the exact full container ID line', () => {
+  const id = '1'.repeat(64);
+  const exact = workerExecuteResult({
+    code: 0,
+    stdout: Buffer.from(`${id}\n`, 'ascii'),
+    stdoutBytes: id.length + 1,
+  });
+  assert.equal(detachedStartResultMatchesForTesting(exact, id), true);
+  for (const hostile of [
+    workerExecuteResult({ code: 0, stdout: Buffer.from(id, 'ascii'), stdoutBytes: id.length }),
+    workerExecuteResult({ code: 0, stdout: Buffer.from(`${id}\n\n`, 'ascii'), stdoutBytes: id.length + 2 }),
+    workerExecuteResult({ code: 0, stdout: Buffer.from(`ogvcs-sandbox-${'2'.repeat(24)}\n`, 'ascii'), stdoutBytes: 39 }),
+    workerExecuteResult({ code: 0, stderr: Buffer.from('host-path'), stdout: Buffer.from(`${id}\n`, 'ascii'), stdoutBytes: id.length + 1 }),
+    workerExecuteResult({ code: 1, stdout: Buffer.from(`${id}\n`, 'ascii'), stdoutBytes: id.length + 1 }),
+    workerExecuteResult({ code: 0, signal: 'SIGTERM', stdout: Buffer.from(`${id}\n`, 'ascii'), stdoutBytes: id.length + 1 }),
+  ]) assert.equal(detachedStartResultMatchesForTesting(hostile, id), false);
+  assert.equal(detachedStartResultMatchesForTesting(exact, '1'.repeat(63)), false);
+  assert.equal(detachedStartResultMatchesForTesting(new Proxy(exact, { get() { throw new Error('/host/private'); } }), id), false);
 });
 
 test('service checks cancellation and deadline around every bounded alias materialization before launch', async () => {
@@ -313,7 +414,7 @@ const authenticatedEvidenceBytes = (source, evidenceHmacKey) => {
 };
 
 class FakeContainerAdapter {
-  constructor({ collectGate = null, collectKind = null, failureClass = null, gate = null, inspectMismatch = null, runKind = null, tamper = null } = {}) { this.seccompDigest = SECCOMP_DIGEST; this.collectGate = collectGate; this.collectKind = collectKind; this.failureClass = failureClass; this.gate = gate; this.inspectMismatch = inspectMismatch; this.runKind = runKind; this.tamper = tamper; this.runs = 0; this.collections = 0; this.discards = 0; this.parserSawBinding = false; this.modes = []; this.nameLinks = []; }
+  constructor({ collectError = null, collectGate = null, collectKind = null, emptyOutput = false, failureClass = null, gate = null, inspectMismatch = null, runKind = null, tamper = null } = {}) { this.seccompDigest = SECCOMP_DIGEST; this.collectError = collectError; this.collectGate = collectGate; this.collectKind = collectKind; this.emptyOutput = emptyOutput; this.failureClass = failureClass; this.gate = gate; this.inspectMismatch = inspectMismatch; this.runKind = runKind; this.tamper = tamper; this.runs = 0; this.collections = 0; this.collectSettlements = 0; this.discardCalls = 0; this.discards = 0; this.parserSawBinding = false; this.modes = []; this.nameLinks = []; this.settledVolumes = new Set(); }
   async verifyRuntimeImage(image, contract) { return image === `sha256:${RUNTIME_DIGEST}` && contract === LINUX_RUNTIME_CONTRACT_SHA256; }
   async runTool({ inputHandle, jobHandle, toolHandle, signal }) {
     this.runs += 1;
@@ -327,11 +428,17 @@ class FakeContainerAdapter {
     if (this.runKind) return Object.freeze(this.runKind === 'failed' ? { failureClass: this.failureClass, kind: this.runKind, volume: `volume.${this.runs}` } : { kind: this.runKind, volume: `volume.${this.runs}` });
     if (command === 'timeout') return Object.freeze({ kind: 'timeout', volume: `volume.${this.runs}` });
     const path = command === 'converter' ? 'preview/result' : 'import/result';
-    return Object.freeze({ kind: 'success', volume: Object.freeze({ files: Object.freeze([{ content: Buffer.from(command), path }]) }) });
+    const files = this.emptyOutput ? [] : [{ content: Buffer.from(command), path }];
+    return Object.freeze({ kind: 'success', volume: Object.freeze({ files: Object.freeze(files) }) });
   }
   async collectOutput({ volume, bindingHandle, framePath }) {
     this.collections += 1; const binding = (await readHandle(bindingHandle)).toString('ascii');
     this.nameLinks.push((await bindingHandle.stat()).nlink);
+    if (this.collectError === 'before-settlement') throw new Error('SECRET=/home/runner/private-before-settlement');
+    if (this.settledVolumes.has(volume)) throw new Error('fixture volume was already settled');
+    this.settledVolumes.add(volume);
+    this.collectSettlements += 1;
+    if (this.collectError === 'after-settlement') throw new Error('SECRET=/home/runner/private-after-settlement');
     if (this.collectKind) {
       await writeFile(framePath, Buffer.from('partial-hostile-frame'), { flag: 'wx', mode: 0o600 });
       return Object.freeze({ frameBytes: 21, kind: this.collectKind });
@@ -340,7 +447,12 @@ class FakeContainerAdapter {
     if (this.collectGate) await this.collectGate.promise;
     return Object.freeze({ frameBytes: (await stat(framePath)).size, kind: 'success' });
   }
-  async discardVolume() { this.discards += 1; }
+  async discardVolume(volume) {
+    this.discardCalls += 1;
+    if (this.settledVolumes.has(volume)) return;
+    this.settledVolumes.add(volume);
+    this.discards += 1;
+  }
 }
 
 const deferred = () => { let resolve; const promise = new Promise((done) => { resolve = done; }); return { promise, resolve }; };
@@ -359,6 +471,286 @@ const postNonzeroInspectResult = ({ id, name, state, ...containerOverrides }, ex
   const stdout = Buffer.from(JSON.stringify([{ Id: id, Name: `/${name}`, State: state, ...containerOverrides }]));
   return workerExecuteResult({ code: 0, stdout, stdoutBytes: stdout.length, ...executeOverrides });
 };
+
+const dockerExit = (code, stdout = '', stderr = '') => {
+  const stdoutBytes = Buffer.from(stdout, 'utf8');
+  return workerExecuteResult({ code, stderr: Buffer.from(stderr, 'utf8'), stdout: stdoutBytes, stdoutBytes: stdoutBytes.length });
+};
+
+const dockerCreateExpected = (args, volumeMountpoint) => {
+  const pair = (name) => args[args.indexOf(name) + 1];
+  const equal = (prefix) => args.find((value) => value.startsWith(prefix))?.slice(prefix.length);
+  const labels = Object.fromEntries(args.filter((value) => value.startsWith('--label=')).map((value) => {
+    const entry = value.slice('--label='.length); const index = entry.indexOf('='); return [entry.slice(0, index), entry.slice(index + 1)];
+  }));
+  const mounts = args.flatMap((value, index) => value === '--mount' ? [args[index + 1]] : []).map((value) => {
+    const fields = new Map(value.split(',').map((field) => {
+      const index = field.indexOf('='); return index < 0 ? [field, true] : [field.slice(0, index), field.slice(index + 1)];
+    }));
+    return { fields, value };
+  });
+  const output = mounts.find(({ fields }) => fields.get('dst') === '/output');
+  const fileMounts = mounts.filter(({ fields }) => fields.get('type') === 'bind').map(({ fields }) => ({ source: fields.get('src'), target: fields.get('dst') }));
+  const cpuSeconds = Number(equal('--ulimit=cpu=')?.split(':')[0]);
+  const outputBytes = Number(equal('--ulimit=fsize=')?.split(':')[0]);
+  const scratch = equal('--tmpfs=/scratch:')?.split(',').find((value) => value.startsWith('size='))?.slice('size='.length);
+  return Object.freeze({
+    entrypoint: equal('--entrypoint='),
+    fileMounts,
+    jobId: labels['org.opengamevcs.sandbox.job'],
+    name: pair('--name'),
+    outputReadonly: output?.fields.has('readonly') ?? false,
+    policy: Object.freeze({
+      cpuMilliseconds: cpuSeconds * 1_000,
+      memoryBytes: Number(equal('--memory=')?.slice(0, -1)),
+      outputBytes,
+      processes: Number(equal('--pids-limit=')),
+      scratchBytes: Number(scratch),
+    }),
+    role: labels['org.opengamevcs.sandbox.role'],
+    runtimeContractSha256: LINUX_RUNTIME_CONTRACT_SHA256,
+    runtimeImage: args.at(-1),
+    seccompCanonical: '{}',
+    volume: output?.fields.get('src'),
+    volumeMountpoint,
+  });
+};
+
+const dockerContainerInspect = (expected, id, stateKind = 'created') => {
+  const hostMounts = expected.fileMounts.map((mount) => ({ BindOptions: { Propagation: 'rprivate', ReadOnlyNonRecursive: true }, ReadOnly: true, Source: mount.source, Target: mount.target, Type: 'bind' }));
+  hostMounts.push({ ReadOnly: expected.outputReadonly, Source: expected.volume, Target: '/output', Type: 'volume', VolumeOptions: { NoCopy: true } });
+  const effectiveMounts = expected.fileMounts.map((mount) => ({ Destination: mount.target, Mode: 'ro', Propagation: 'rprivate', RW: false, Source: mount.source, Type: 'bind' }));
+  effectiveMounts.push({ Destination: '/output', Driver: 'local', Mode: 'z', Name: expected.volume, Propagation: '', RW: !expected.outputReadonly, Source: expected.volumeMountpoint, Type: 'volume' });
+  const state = stateKind === 'running'
+    ? { Dead: false, Error: '', ExitCode: 0, OOMKilled: false, Paused: false, Pid: 2468, Restarting: false, Running: true, Status: 'running' }
+    : { Paused: false, Pid: 0, Restarting: false, Running: false, Status: 'created' };
+  return {
+    Args: [],
+    Config: { Cmd: null, Domainname: '', Entrypoint: [expected.entrypoint], Env: null, ExposedPorts: null, Healthcheck: null, Hostname: 'ogvcs-worker', Image: expected.runtimeImage, Labels: { 'org.opengamevcs.sandbox.job': expected.jobId, 'org.opengamevcs.sandbox.role': expected.role, 'org.opengamevcs.sandbox.runtime': 'linux-reference-v1', 'org.opengamevcs.sandbox.runtime-contract-sha256': expected.runtimeContractSha256 }, OpenStdin: false, StdinOnce: false, StopTimeout: 1, Tty: false, User: '65532:65532', Volumes: null, WorkingDir: '/scratch' },
+    HostConfig: { AutoRemove: false, Binds: null, CapAdd: null, CapDrop: ['ALL'], CgroupnsMode: 'private', CpuPeriod: 0, CpuQuota: 0, CpuShares: 0, DeviceCgroupRules: null, DeviceRequests: null, Devices: null, Dns: null, DnsOptions: null, DnsSearch: null, ExtraHosts: null, GroupAdd: null, Init: null, IpcMode: 'none', Links: null, LogConfig: { Config: {}, Type: 'none' }, MaskedPaths: ['/proc/acpi', '/proc/asound', '/proc/interrupts', '/proc/kcore', '/proc/keys', '/proc/latency_stats', '/proc/sched_debug', '/proc/scsi', '/proc/timer_list', '/proc/timer_stats', '/sys/firmware'], Memory: expected.policy.memoryBytes, MemoryReservation: 0, MemorySwap: expected.policy.memoryBytes, Mounts: hostMounts, NanoCpus: 1_000_000_000, NetworkMode: 'none', OomKillDisable: false, PidMode: '', PidsLimit: expected.policy.processes, PortBindings: {}, Privileged: false, PublishAllPorts: false, ReadonlyPaths: ['/proc/bus', '/proc/fs', '/proc/irq', '/proc/sys', '/proc/sysrq-trigger'], ReadonlyRootfs: true, RestartPolicy: { MaximumRetryCount: 0, Name: 'no' }, Runtime: 'runc', SecurityOpt: ['no-new-privileges=true', 'seccomp={}'], Sysctls: null, Tmpfs: { '/scratch': `rw,nosuid,nodev,noexec,size=${expected.policy.scratchBytes},uid=65532,gid=65532,mode=0700` }, UsernsMode: '', UTSMode: '', Ulimits: [{ Hard: expected.policy.cpuMilliseconds / 1_000, Name: 'cpu', Soft: expected.policy.cpuMilliseconds / 1_000 }, { Hard: expected.policy.outputBytes, Name: 'fsize', Soft: expected.policy.outputBytes }, { Hard: 64, Name: 'nofile', Soft: 64 }], VolumesFrom: null },
+    Id: id,
+    Mounts: effectiveMounts,
+    Name: `/${expected.name}`,
+    NetworkSettings: { Networks: { none: {} } },
+    Path: expected.entrypoint,
+    State: state,
+  };
+};
+
+const fakeDockerEngine = (failure = null) => {
+  const state = { calls: [], containers: new Map(), parserRemoved: false, rejectCleanupInspect: false, volume: null };
+  const idForRole = (role) => ({ parser: 'b', 'output-shim': 'c', 'volume-anchor': 'a' })[role].repeat(64);
+  const findContainer = (query) => [...state.containers.values()].find((entry) => entry.id === query || entry.expected.name === query);
+  const executeCommand = async (args) => {
+    state.calls.push([...args]);
+    if (args[0] === 'volume' && args[1] === 'create') {
+      const name = args.at(-1);
+      state.volume = { jobId: args.find((value) => value.startsWith('--label=org.opengamevcs.sandbox.job='))?.split('=').at(-1), mountpoint: `/var/lib/docker/volumes/${name}/_data`, name, options: args.find((value) => value.startsWith('--opt=o='))?.slice('--opt=o='.length) };
+      return failure === 'volume-create' ? dockerExit(1, '', 'SECRET=/host/volume') : dockerExit(0, `${name}\n`);
+    }
+    if (args[0] === 'volume' && args[1] === 'inspect') {
+      if (!state.volume || state.volume.name !== args[2]) return dockerExit(1);
+      const volume = { Driver: failure === 'volume-inspect' ? 'hostile' : 'local', Labels: { 'org.opengamevcs.sandbox': 'reference-v1', 'org.opengamevcs.sandbox.job': state.volume.jobId, 'org.opengamevcs.sandbox.role': 'output-volume' }, Mountpoint: state.volume.mountpoint, Name: state.volume.name, Options: { device: 'tmpfs', o: state.volume.options, type: 'tmpfs' }, Scope: 'local' };
+      return dockerExit(0, JSON.stringify([volume]));
+    }
+    if (args[0] === 'volume' && args[1] === 'rm') { state.volume = null; return dockerExit(0); }
+    if (args[0] === 'create') {
+      const expected = dockerCreateExpected(args, state.volume?.mountpoint);
+      if (failure === `${expected.role}-create`) return dockerExit(1, '', 'SECRET=/host/create');
+      const id = idForRole(expected.role);
+      state.containers.set(id, { expected: { ...expected, id, name: expected.name }, id, runningInspects: 0, stateKind: 'created' });
+      return dockerExit(0, `${id}\n`);
+    }
+    if (args[0] === 'start' && args[1] !== '--attach') {
+      const container = findContainer(args[1]);
+      if (!container) return dockerExit(1);
+      if (failure === 'volume-anchor-start-reject') throw new Error('SECRET=/host/anchor-start-control');
+      if (failure === 'volume-anchor-start') return dockerExit(1, '', 'SECRET=/host/start');
+      container.stateKind = 'running';
+      return failure === 'volume-anchor-start-stdout' ? dockerExit(0, `${container.expected.name}\n`) : dockerExit(0, `${container.id}\n`);
+    }
+    if (args[0] === 'start' && args[1] === '--attach') {
+      const container = findContainer(args[2]);
+      if (!container) return dockerExit(1);
+      if (container.expected.role === 'parser' && ['parser-start-reject', 'parser-start-reject-cleanup-unconfirmed'].includes(failure)) {
+        state.rejectCleanupInspect = failure.endsWith('cleanup-unconfirmed');
+        throw new Error('SECRET=/host/parser-control');
+      }
+      if (container.expected.role === 'output-shim' && failure === 'output-shim-start-reject') throw new Error('SECRET=/host/collector-control');
+      if (container.expected.role === 'output-shim' && failure === 'output-shim-start') return dockerExit(1);
+      return dockerExit(0);
+    }
+    if (args[0] === 'container' && args[1] === 'inspect') {
+      const container = findContainer(args[2]);
+      if (!container) {
+        if (state.rejectCleanupInspect) { state.rejectCleanupInspect = false; throw new Error('SECRET=/host/cleanup-inspect'); }
+        return dockerExit(1);
+      }
+      if (container.expected.role === 'volume-anchor' && container.stateKind === 'created' && failure === 'volume-anchor-created-inspect-reject') throw new Error('SECRET=/host/anchor-created-inspect');
+      if (container.expected.role === 'volume-anchor' && container.stateKind === 'running') {
+        if (failure === 'volume-anchor-running-inspect-reject') throw new Error('SECRET=/host/anchor-running-inspect');
+        container.runningInspects += 1;
+        const shouldDie = (failure === 'anchor-post-parser' && state.parserRemoved && container.runningInspects === 2)
+          || (failure === 'anchor-pre-collector' && container.runningInspects === 3);
+        if (shouldDie) { state.containers.delete(container.id); return dockerExit(1); }
+      }
+      const inspected = dockerContainerInspect(container.expected, container.id, container.stateKind);
+      if (failure === `${container.expected.role}-created-inspect` && container.stateKind === 'created') inspected.HostConfig.Runtime = 'hostile';
+      if (failure === 'volume-anchor-running-inspect' && container.expected.role === 'volume-anchor' && container.stateKind === 'running') inspected.State.Error = 'SECRET=/host/inspect';
+      return dockerExit(0, JSON.stringify([inspected]));
+    }
+    if (args[0] === 'kill') return findContainer(args[1]) ? dockerExit(0) : dockerExit(1);
+    if (args[0] === 'rm') {
+      const container = findContainer(args.at(-1));
+      if (!container) return dockerExit(1);
+      if (container.expected.role === 'parser') state.parserRemoved = true;
+      state.containers.delete(container.id);
+      return dockerExit(0);
+    }
+    return dockerExit(1);
+  };
+  return Object.freeze({ executeCommand, state });
+};
+
+const withDockerAnchorFixture = async (failure, operation) => {
+  const root = await mkdtemp(join(tmpdir(), 'ogvcs-sandbox-anchor-fixture-')); await chmod(root, 0o700);
+  const paths = {
+    binding: join(root, 'binding'),
+    input: join(root, 'input'),
+    job: join(root, 'job'),
+    tool: join(root, 'tool'),
+  };
+  await Promise.all([
+    writeFile(paths.binding, Buffer.from('1'.repeat(64)), { mode: 0o444 }),
+    writeFile(paths.input, Buffer.from('input'), { mode: 0o444 }),
+    writeFile(paths.job, Buffer.from('job'), { mode: 0o444 }),
+    writeFile(paths.tool, Buffer.from('tool'), { mode: 0o555 }),
+  ]);
+  await Promise.all([chmod(paths.binding, 0o444), chmod(paths.input, 0o444), chmod(paths.job, 0o444), chmod(paths.tool, 0o555)]);
+  const sources = Object.fromEntries(await Promise.all(Object.entries(paths).map(async ([name, path]) => [name, await open(path, 'r')])));
+  const store = await ReferenceStateStore.open(join(root, 'state'));
+  const aliases = {};
+  try {
+    for (const [name, source] of Object.entries(sources)) {
+      const bytes = await readFile(paths[name]);
+      aliases[name] = await store.materializePinnedAlias(source, sha256(bytes), bytes.length, { continueCopy: CONTINUE_ALIAS_COPY, executable: name === 'tool' });
+    }
+    const fault = typeof failure === 'string' && failure.startsWith('fault:') ? failure.slice('fault:'.length) : null;
+    const engine = fakeDockerEngine(fault === null ? failure : null);
+    const adapter = createDockerReferenceAdapterForTesting(engine.executeCommand, '{}', new Set(fault === null ? [] : [fault]));
+    const policy = Object.freeze({ cpuMilliseconds: 1_000, elapsedMilliseconds: 5_000, memoryBytes: 64 * 1024 * 1024, outputBytes: 2 * 1024 * 1024, processes: 4, scratchBytes: 2 * 1024 * 1024 });
+    return await operation({ adapter, aliases, engine, policy, runtimeImage: `sha256:${RUNTIME_DIGEST}` });
+  } finally {
+    await Promise.allSettled(Object.values(aliases).map((alias) => store.removePinnedAlias(alias.handle)));
+    await Promise.allSettled(Object.values(sources).map((handle) => handle.close()));
+    await store.close().catch(() => {});
+    await rm(root, { recursive: true, force: true });
+  }
+};
+
+const runDockerAnchorParser = ({ adapter, aliases, policy, runtimeImage }) => adapter.runTool({
+  inputHandle: aliases.input.handle,
+  jobHandle: aliases.job.handle,
+  jobId: 'job.anchor.fixture',
+  policy,
+  runtimeImage,
+  signal: new AbortController().signal,
+  toolHandle: aliases.tool.handle,
+});
+
+linuxReferenceStateTest('anchor create, detached-start, and inspect failures settle the exact container and tmpfs volume', async () => {
+  for (const [failure, expected] of [
+    ['fault:before-anchor-create', 'TEST_FAULT:before-anchor-create'],
+    ['volume-create', 'bounded output volume is unavailable'],
+    ['volume-inspect', 'SANDBOX_INSPECT_MISMATCH:output-volume'],
+    ['volume-anchor-create', 'unavailable'],
+    ['volume-anchor-created-inspect-reject', 'SECRET=/host/anchor-created-inspect'],
+    ['volume-anchor-created-inspect', 'SANDBOX_INSPECT_MISMATCH:host-runtime'],
+    ['volume-anchor-start-reject', 'SECRET=/host/anchor-start-control'],
+    ['volume-anchor-start', 'unavailable'],
+    ['volume-anchor-start-stdout', 'unavailable'],
+    ['volume-anchor-running-inspect-reject', 'SECRET=/host/anchor-running-inspect'],
+    ['volume-anchor-running-inspect', 'SANDBOX_INSPECT_MISMATCH:anchor-running'],
+  ]) {
+    await withDockerAnchorFixture(failure, async (fixture) => {
+      if (expected === 'unavailable') assert.deepEqual(await runDockerAnchorParser(fixture), { kind: 'unavailable', volume: null });
+      else await assert.rejects(runDockerAnchorParser(fixture), (error) => error?.message === expected);
+      assert.equal(fixture.engine.state.containers.size, 0, failure);
+      assert.equal(fixture.engine.state.volume, null, failure);
+    });
+  }
+});
+
+linuxReferenceStateTest('unexpected throw after anchor transfer but before parser create settles the branded anchor and volume', async () => {
+  await withDockerAnchorFixture('fault:before-parser-create', async (fixture) => {
+    await assert.rejects(runDockerAnchorParser(fixture), (error) => error?.message === 'TEST_FAULT:before-parser-create');
+    assert.equal(fixture.engine.state.containers.size, 0);
+    assert.equal(fixture.engine.state.volume, null);
+  });
+});
+
+linuxReferenceStateTest('unexpected parser control rejection total-settles parser, anchor, and volume or poisons on uncertain proof', async () => {
+  await withDockerAnchorFixture('parser-start-reject', async (fixture) => {
+    await assert.rejects(runDockerAnchorParser(fixture), (error) => error?.message === 'SECRET=/host/parser-control');
+    assert.equal(fixture.engine.state.containers.size, 0);
+    assert.equal(fixture.engine.state.volume, null);
+    await assert.rejects(runDockerAnchorParser(fixture), (error) => error?.message === 'SECRET=/host/parser-control');
+    assert.equal(fixture.engine.state.containers.size, 0);
+    assert.equal(fixture.engine.state.volume, null);
+  });
+  await withDockerAnchorFixture('parser-start-reject-cleanup-unconfirmed', async (fixture) => {
+    await assert.rejects(runDockerAnchorParser(fixture), /SANDBOX_SETTLEMENT_UNCONFIRMED/u);
+    assert.equal(fixture.engine.state.containers.size, 0);
+    assert.equal(fixture.engine.state.volume, null);
+    await assert.rejects(runDockerAnchorParser(fixture), /SANDBOX_SETTLEMENT_UNCONFIRMED/u);
+  });
+});
+
+linuxReferenceStateTest('anchor continuity failures after parser and before collector settle once and retain no volume', async () => {
+  await withDockerAnchorFixture('anchor-post-parser', async (fixture) => {
+    await assert.rejects(runDockerAnchorParser(fixture), (error) => error?.message === 'SANDBOX_INSPECT_MISMATCH:anchor-running');
+    assert.equal(fixture.engine.state.containers.size, 0);
+    assert.equal(fixture.engine.state.volume, null);
+  });
+  await withDockerAnchorFixture('anchor-pre-collector', async (fixture) => {
+    const run = await runDockerAnchorParser(fixture);
+    assert.equal(run.kind, 'success');
+    await assert.rejects(fixture.adapter.collectOutput({ bindingHandle: fixture.aliases.binding.handle, framePath: '/not-created', jobId: 'job.anchor.fixture', maximumFrameBytes: 1024, policy: fixture.policy, runtimeImage: fixture.runtimeImage, volume: run.volume }), (error) => error?.message === 'SANDBOX_INSPECT_MISMATCH:anchor-running');
+    await fixture.adapter.discardVolume(run.volume);
+    assert.equal(fixture.engine.state.containers.size, 0);
+    assert.equal(fixture.engine.state.volume, null);
+  });
+});
+
+linuxReferenceStateTest('collector create, inspect, start, discard, and tombstone paths clean exactly once', async () => {
+  for (const [failure, expected] of [
+    ['fault:before-collector-create', 'TEST_FAULT:before-collector-create'],
+    ['output-shim-create', 'failed'],
+    ['output-shim-created-inspect', 'SANDBOX_INSPECT_MISMATCH:host-runtime'],
+    ['output-shim-start', 'failed'],
+    ['output-shim-start-reject', 'SECRET=/host/collector-control'],
+  ]) {
+    await withDockerAnchorFixture(failure, async (fixture) => {
+      const run = await runDockerAnchorParser(fixture);
+      assert.equal(run.kind, 'success');
+      const collect = fixture.adapter.collectOutput({ bindingHandle: fixture.aliases.binding.handle, framePath: '/not-created', jobId: 'job.anchor.fixture', maximumFrameBytes: 1024, policy: fixture.policy, runtimeImage: fixture.runtimeImage, volume: run.volume });
+      if (expected === 'failed') assert.equal((await collect).kind, 'failed');
+      else await assert.rejects(collect, (error) => error?.message === expected);
+      await fixture.adapter.discardVolume(run.volume);
+      assert.equal(fixture.engine.state.containers.size, 0, failure);
+      assert.equal(fixture.engine.state.volume, null, failure);
+    });
+  }
+  await withDockerAnchorFixture(null, async (fixture) => {
+    const run = await runDockerAnchorParser(fixture);
+    assert.equal(run.kind, 'success');
+    await fixture.adapter.discardVolume(run.volume);
+    await fixture.adapter.discardVolume(run.volume);
+    await assert.rejects(fixture.adapter.discardVolume(Object.freeze({ ...run.volume })), /SANDBOX_SETTLEMENT_UNCONFIRMED/u);
+    assert.equal(fixture.engine.state.containers.size, 0);
+    assert.equal(fixture.engine.state.volume, null);
+  });
+});
 
 const makeManifest = ({ privateKey, publicKey, toolDigest, nowUnixMs, resourcePolicy = null }) => {
   const policy = resourcePolicy ?? Object.freeze({ cpuMilliseconds: 1_000, elapsedMilliseconds: 10_000, fanout: 16, memoryBytes: 64 * 1024 * 1024, outputBytes: 1024 * 1024, processes: 4, profileId: 'linux-reference-v1', scratchBytes: 2 * 1024 * 1024 });
@@ -440,6 +832,29 @@ referenceStateTest('signed manifest, credential-free handle-only named aliases, 
     assert.equal(evidence.some((value) => value.includes('broker-secret-canary')), false);
     assert.equal(evidence.some((value) => value.includes('evidenceMacSha256')), true);
   });
+});
+
+referenceStateTest('validated empty output is reported only from exact authenticated provenance', async () => {
+  await withFixture(async (fixture) => {
+    const result = await fixture.service.run(fixture.jobFor(), fixture.acquisition);
+    assert.equal(result.code, 'VALIDATED');
+    const evidenceBytes = await readFile(join(fixture.root, 'state/evidence', `${result.provenanceDigest}.json`));
+    const request = { evidenceBytes, evidenceHmacKey: fixture.evidenceHmacKey, evidenceKeyId: fixture.evidenceKeyId, result };
+    assert.equal(authenticatedResultDiagnostic(request), 'VALIDATED_EMPTY_OUTPUT');
+    const provenance = JSON.parse(evidenceBytes.toString('utf8'));
+    assert.equal(provenance.outputRecords, 0);
+    assert.equal(provenance.outputBytes, 0);
+    for (const mutation of [
+      { outputRecords: 1 },
+      { outputBytes: 1 },
+      { securityEvents: ['SECRET=/home/runner/private'] },
+    ]) {
+      const hostileBytes = authenticatedEvidenceBytes({ ...provenance, ...mutation }, fixture.evidenceHmacKey);
+      assert.equal(authenticatedResultDiagnostic({ ...request, evidenceBytes: hostileBytes, result: { ...result, provenanceDigest: sha256(hostileBytes) } }), 'none');
+    }
+    const corrupt = Buffer.from(evidenceBytes); corrupt[corrupt.length - 2] ^= 1;
+    assert.equal(authenticatedResultDiagnostic({ ...request, evidenceBytes: corrupt, result: { ...result, provenanceDigest: sha256(corrupt) } }), 'none');
+  }, { adapter: new FakeContainerAdapter({ emptyOutput: true }) });
 });
 
 test('worker failure subclasses derive only from an exact bounded execute result', () => {
@@ -747,6 +1162,31 @@ referenceStateTest('post-collect cancellation removes the complete frame and bin
   }, { adapter });
 });
 
+referenceStateTest('service settles collector exceptions exactly once before or after adapter settlement', async () => {
+  for (const [collectError, expected] of [
+    ['before-settlement', { collectSettlements: 0, discards: 1 }],
+    ['after-settlement', { collectSettlements: 1, discards: 0 }],
+  ]) {
+    const adapter = new FakeContainerAdapter({ collectError });
+    await withFixture(async (fixture) => {
+      const denied = await fixture.service.run(fixture.jobFor(collectError), fixture.acquisition);
+      assert.equal(denied.code, 'SANDBOX_UNAVAILABLE');
+      assert.equal(adapter.collections, 1);
+      assert.equal(adapter.collectSettlements, expected.collectSettlements);
+      assert.equal(adapter.discards, expected.discards);
+      assert.equal(adapter.discardCalls, 1);
+      assert.equal(adapter.settledVolumes.size, 1);
+      assert.equal(fixture.service.health().poisoned, false);
+      const evidence = await readFile(join(fixture.root, 'state/evidence', `${denied.provenanceDigest}.json`), 'utf8');
+      assert.equal(evidence.includes('SECRET'), false);
+      assert.equal(evidence.includes('/home/runner'), false);
+      adapter.collectError = null;
+      const healthy = await fixture.service.run(fixture.jobFor(`${collectError}.next`), fixture.acquisition);
+      assert.equal(healthy.code, 'VALIDATED');
+    }, { adapter });
+  }
+});
+
 referenceStateTest('state recovery denies interrupted work and output commit never replaces a prior bundle', async () => {
   const root = await mkdtemp(join(tmpdir(), 'ogvcs-sandbox-state-')); await chmod(root, 0o700);
   try {
@@ -801,6 +1241,13 @@ referenceStateTest('pre-start inspect mismatch publishes only a bounded field di
     assert.equal(reports.includes(fixture.root), false);
     await assert.rejects(stat(join(fixture.root, 'state/outputs/job.1')), (error) => error?.code === 'ENOENT');
   }, { adapter: new FakeContainerAdapter({ inspectMismatch: 'host-runtime' }) });
+  await withFixture(async (fixture) => {
+    const result = await fixture.service.run(fixture.jobFor(), fixture.acquisition);
+    assert.equal(result.code, 'SANDBOX_UNAVAILABLE');
+    const evidenceBytes = await readFile(join(fixture.root, 'state/evidence', `${result.provenanceDigest}.json`));
+    assert.equal(authenticatedResultDiagnostic({ evidenceBytes, evidenceHmacKey: fixture.evidenceHmacKey, evidenceKeyId: fixture.evidenceKeyId, result }), 'PRESTART_INSPECT_ANCHOR_RUNNING');
+    await assert.rejects(stat(join(fixture.root, 'state/outputs/job.1')), (error) => error?.code === 'ENOENT');
+  }, { adapter: new FakeContainerAdapter({ inspectMismatch: 'anchor-running' }) });
   await withFixture(async (fixture) => {
     const result = await fixture.service.run(fixture.jobFor(), fixture.acquisition);
     assert.equal(result.code, 'SANDBOX_UNAVAILABLE');
@@ -1070,6 +1517,45 @@ test('pre-start inspection binds every role mount and effective isolation contro
   for (const mount of legacyShimEffectiveMounts.Mounts) delete mount.Mode;
   delete legacyShimEffectiveMounts.Mounts.at(-1).Propagation;
   assert.equal(validateCreatedContainerInspect(legacyShimEffectiveMounts, shimExpected), true);
+  const anchorExpected = { ...expected, entrypoint: '/ogvcs-volume-anchor', fileMounts: [], outputReadonly: true, role: 'volume-anchor' };
+  const anchor = structuredClone(container);
+  anchor.Path = anchorExpected.entrypoint;
+  anchor.Config.Entrypoint = [anchorExpected.entrypoint];
+  anchor.Config.Labels['org.opengamevcs.sandbox.role'] = anchorExpected.role;
+  anchor.HostConfig.Mounts = [{ ReadOnly: true, Source: expected.volume, Target: '/output', Type: 'volume', VolumeOptions: { NoCopy: true } }];
+  anchor.Mounts = [{ Destination: '/output', Driver: 'local', Mode: 'z', Name: expected.volume, Propagation: '', RW: false, Source: expected.volumeMountpoint, Type: 'volume' }];
+  assert.equal(validateCreatedContainerInspect(anchor, anchorExpected), true);
+  const runningAnchor = structuredClone(anchor);
+  runningAnchor.State = { Dead: false, Error: '', ExitCode: 0, OOMKilled: false, Paused: false, Pid: 2468, Restarting: false, Running: true, Status: 'running' };
+  assert.equal(validateRunningContainerInspect(runningAnchor, anchorExpected), true);
+  assert.equal(runningContainerInspectMismatch(anchor, anchorExpected), 'state');
+  assert.equal(createdContainerInspectMismatch(runningAnchor, anchorExpected), 'state');
+  for (const [label, mutate] of [
+    ['status', (value) => { value.State.Status = 'exited'; }],
+    ['running', (value) => { value.State.Running = false; }],
+    ['paused', (value) => { value.State.Paused = true; }],
+    ['restarting', (value) => { value.State.Restarting = true; }],
+    ['dead', (value) => { value.State.Dead = true; }],
+    ['oom', (value) => { value.State.OOMKilled = true; }],
+    ['error', (value) => { value.State.Error = 'SECRET=/home/runner/private'; }],
+    ['exit', (value) => { value.State.ExitCode = 1; }],
+    ['pid zero', (value) => { value.State.Pid = 0; }],
+    ['pid negative', (value) => { value.State.Pid = -1; }],
+    ['pid fractional', (value) => { value.State.Pid = 1.5; }],
+    ['pid string', (value) => { value.State.Pid = '2468'; }],
+  ]) {
+    const candidate = structuredClone(runningAnchor); mutate(candidate);
+    assert.equal(runningContainerInspectMismatch(candidate, anchorExpected), 'state', label);
+  }
+  for (const [expectedMismatch, mutate] of [
+    ['config-labels', (value) => { value.Config.Labels['org.opengamevcs.sandbox.role'] = 'parser'; }],
+    ['host-mounts', (value) => { value.HostConfig.Mounts[0].ReadOnly = false; }],
+    ['effective-mounts', (value) => { value.Mounts[0].RW = true; }],
+    ['effective-mounts', (value) => { value.Mounts[0].Source = '/host/substitution'; }],
+  ]) {
+    const candidate = structuredClone(runningAnchor); mutate(candidate);
+    assert.equal(runningContainerInspectMismatch(candidate, anchorExpected), expectedMismatch);
+  }
   const assertEffectiveMountRejected = (base, roleExpected, label, mutate) => {
     const candidate = structuredClone(base);
     mutate(candidate, roleExpected);

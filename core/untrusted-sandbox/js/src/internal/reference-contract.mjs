@@ -54,7 +54,7 @@ const RESOURCE_KEYS = Object.freeze([
 const OUTPUT_POLICY_KEYS = Object.freeze(['allowedTypes', 'maximumFileBytes', 'schemaVersion']);
 const TOOL_CLASSES = Object.freeze(['converter', 'import-parser']);
 
-export const LINUX_RUNTIME_CONTRACT_SHA256 = '930be8bc4d5afb79830736fc1ef4c553dc5ef63e8a38766551cf28047752189d';
+export const LINUX_RUNTIME_CONTRACT_SHA256 = 'f83f457feac8010f3415998877233f4bbbbaca3e13eb52b96bfd45232e99383c';
 
 export const REFERENCE_LIMITS = Object.freeze({
   cpuMilliseconds: 30_000,

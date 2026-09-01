@@ -5,24 +5,47 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { LinuxReferenceUnavailableError, openLinuxReferenceSandboxCandidate, probeLinuxReferenceSandbox } from '../src/linux.mjs';
+import { buildLinuxConformanceReport, closeLinuxConformanceFailure, isLinuxConformanceResultDiagnostic } from '../src/internal/linux-conformance-report.mjs';
 import { LINUX_RUNTIME_CONTRACT_SHA256, canonicalJson, sha256 } from '../src/internal/reference-contract.mjs';
 import { authenticatedResultDiagnostic } from '../src/internal/reference-service.mjs';
 
 const runtimeImage = process.env.OGVCS_SANDBOX_RUNTIME_IMAGE;
 const dockerBinary = process.env.OGVCS_DOCKER_BINARY;
 const toolPath = process.env.OGVCS_SANDBOX_CANARY_TOOL;
+const reportPath = process.env.OGVCS_SANDBOX_REPORT_PATH;
+if (reportPath !== undefined && !isAbsolute(reportPath)) throw new Error('live reference report path must be absolute');
+const admittedRuntimeDigest = /^sha256:[0-9a-f]{64}$/u.test(runtimeImage ?? '') ? runtimeImage.slice('sha256:'.length) : null;
+let reportRetained = false;
+let entryRoot = null;
+
+class ClosedConformanceFailure extends Error {
+  constructor(failure) {
+    super(`live reference conformance failed; command=${failure.command}; stage=${failure.stage}; diagnostic=${failure.diagnostic}`);
+    this.name = 'ClosedConformanceFailure';
+    this.failure = failure;
+    this.stack = `${this.name}: ${this.message}`;
+  }
+}
+
+const closedFailure = ({ actualCode, command, diagnostic = 'none', expectedCode, stage }) => {
+  const failure = closeLinuxConformanceFailure({ actualCode, command, diagnostic, expectedCode, stage });
+  throw new ClosedConformanceFailure(failure);
+};
+
+try {
 if (process.platform !== 'linux' || process.arch !== 'x64') throw new Error('live reference conformance requires Linux x86_64');
-if (!/^sha256:[0-9a-f]{64}$/u.test(runtimeImage ?? '') || !isAbsolute(dockerBinary ?? '') || !isAbsolute(toolPath ?? '')) throw new Error('live reference conformance inputs are invalid');
+if (admittedRuntimeDigest === null || !isAbsolute(dockerBinary ?? '') || !isAbsolute(toolPath ?? '')) throw new Error('live reference conformance inputs are invalid');
 
 const root = await mkdtemp(join(tmpdir(), 'ogvcs-linux-reference-'));
 await chmod(root, 0o700);
 const canonicalRoot = await realpath(root);
+entryRoot = canonicalRoot;
 const stateRoot = join(canonicalRoot, 'state');
 const nowUnixMs = Date.now();
 const keys = generateKeyPairSync('ed25519');
 const toolBytes = await readFile(toolPath);
 const toolDigest = sha256(toolBytes);
-const runtimeDigest = runtimeImage.slice('sha256:'.length);
+const runtimeDigest = admittedRuntimeDigest;
 const policy = Object.freeze({
   cpuMilliseconds: 1_000,
   elapsedMilliseconds: 5_000,
@@ -85,9 +108,6 @@ const configuration = Object.freeze({
   trustedManifestKeys: Object.freeze({ 'ogvcs.conformance.ephemeral.1': keys.publicKey }),
 });
 
-const probe = await probeLinuxReferenceSandbox({ dockerBinary });
-assert.deepEqual(probe.available, true, 'required Docker/cgroup/seccomp controls must be admitted');
-
 let serial = 0;
 const descriptorFor = (command, { toolClass = 'importer', suffix = null } = {}) => {
   serial += 1;
@@ -149,47 +169,58 @@ const safeResultDiagnostic = async (result) => {
   } catch { return 'none'; }
 };
 
-const PRESTART_IMAGE_DIAGNOSTICS = Object.freeze([
-  'PRESTART_IMAGE_CONFIG_COMMAND',
-  'PRESTART_IMAGE_CONFIG_ENV',
-  'PRESTART_IMAGE_CONFIG_HEALTH',
-  'PRESTART_IMAGE_CONFIG_LABELS',
-  'PRESTART_IMAGE_CONFIG_USER_WORKDIR',
-  'PRESTART_IMAGE_CONFIG_VOLUME',
-  'PRESTART_IMAGE_IDENTITY',
-  'PRESTART_IMAGE_INSPECT_SHAPE',
-  'PRESTART_IMAGE_PLATFORM',
-  'PRESTART_IMAGE_ROOTFS',
-  'PRESTART_IMAGE_SIZE',
-]);
-
 const safeOpenDiagnostic = (error) => {
   try {
     if (!(error instanceof LinuxReferenceUnavailableError)) return 'none';
     const descriptor = Object.getOwnPropertyDescriptor(error, 'diagnostic');
-    return descriptor && Object.hasOwn(descriptor, 'value') && PRESTART_IMAGE_DIAGNOSTICS.includes(descriptor.value) ? descriptor.value : 'none';
+    return descriptor
+      && Object.hasOwn(descriptor, 'value')
+      && typeof descriptor.value === 'string'
+      && descriptor.value.startsWith('PRESTART_IMAGE_')
+      && isLinuxConformanceResultDiagnostic(descriptor.value) ? descriptor.value : 'none';
   } catch { return 'none'; }
 };
 
 let service;
+let probe;
 const evidence = [];
+const retainReport = async (outcome, failure = null) => {
+  if (reportRetained) return;
+  const report = buildLinuxConformanceReport({
+    cases: evidence,
+    failure,
+    outcome,
+    runtimeDigest,
+    seccompProfileSha256: probe?.seccompProfileSha256 ?? null,
+  });
+  const reportBytes = Buffer.from(`${canonicalJson(report)}\n`, 'utf8');
+  if (reportPath !== undefined) await writeFile(reportPath, reportBytes, { flag: 'wx', mode: 0o600 });
+  reportRetained = true;
+  process.stdout.write(reportBytes);
+};
 try {
+  probe = await probeLinuxReferenceSandbox({ dockerBinary });
+  if (probe.available !== true) closedFailure({ actualCode: probe.code, command: 'harness', expectedCode: 'VALIDATED', stage: 'OPEN' });
   try {
     service = await openLinuxReferenceSandboxCandidate(configuration);
   } catch (error) {
-    assert.fail(`reference candidate unavailable; safeOpenDiagnostic=${safeOpenDiagnostic(error)}`);
+    closedFailure({ actualCode: error?.code, command: 'harness', diagnostic: safeOpenDiagnostic(error), expectedCode: 'VALIDATED', stage: 'OPEN' });
   }
   const run = async (command, expectedCode, options = {}) => {
     const descriptor = descriptorFor(command, options);
     const started = Date.now();
     const result = await service.run(descriptor.job, descriptor.acquisition);
     const elapsedMilliseconds = Date.now() - started;
-    const diagnostic = result.code === expectedCode ? 'none' : await safeResultDiagnostic(result);
-    assert.equal(result.code, expectedCode, `${command} result differs; safeResultDiagnostic=${diagnostic}`);
-    assert(elapsedMilliseconds <= policy.elapsedMilliseconds + 5_000, `${command} exceeded cleanup envelope`);
-    if (options.maximumElapsedMilliseconds !== undefined) assert(elapsedMilliseconds <= options.maximumElapsedMilliseconds, `${command} exceeded its canary-specific resource envelope`);
-    if (expectedCode === 'VALIDATED') await readOutput(descriptor.job.jobId, outputExpectation[command]);
-    else await assertNoOutput(descriptor.job.jobId);
+    const diagnostic = await safeResultDiagnostic(result);
+    if (result.code !== expectedCode) closedFailure({ actualCode: result.code, command, diagnostic, expectedCode, stage: 'RESULT_CODE' });
+    if (elapsedMilliseconds > policy.elapsedMilliseconds + 5_000
+      || (options.maximumElapsedMilliseconds !== undefined && elapsedMilliseconds > options.maximumElapsedMilliseconds)) closedFailure({ actualCode: result.code, command, diagnostic, expectedCode, stage: 'RESOURCE_ENVELOPE' });
+    try {
+      if (expectedCode === 'VALIDATED') await readOutput(descriptor.job.jobId, outputExpectation[command]);
+      else await assertNoOutput(descriptor.job.jobId);
+    } catch {
+      closedFailure({ actualCode: result.code, command, diagnostic, expectedCode, stage: expectedCode === 'VALIDATED' ? 'VALIDATED_OUTPUT' : 'DENIED_OUTPUT' });
+    }
     evidence.push(Object.freeze({ command, elapsedMilliseconds, resultCode: result.code }));
     return Object.freeze({ descriptor, result });
   };
@@ -261,16 +292,32 @@ try {
 
   const reports = (await Promise.all((await readdir(join(stateRoot, 'evidence'))).map((name) => readFile(join(stateRoot, 'evidence', name), 'utf8')))).join('\n');
   assert.equal(reports.includes(credential), false, 'credential entered durable evidence');
-  const report = Object.freeze({ cases: Object.freeze(evidence), profile: 'linux-reference-v1', runtimeDigest, schemaVersion: 'ogvcs.untrusted-sandbox/linux-conformance-report/v1', seccompProfileSha256: probe.seccompProfileSha256 });
-  const reportBytes = Buffer.from(`${canonicalJson(report)}\n`, 'utf8');
-  const reportPath = process.env.OGVCS_SANDBOX_REPORT_PATH;
-  if (reportPath !== undefined) {
-    if (!isAbsolute(reportPath)) throw new Error('live reference report path must be absolute');
-    await writeFile(reportPath, reportBytes, { flag: 'wx', mode: 0o600 });
-  }
-  process.stdout.write(reportBytes);
+  await retainReport('passed');
+} catch (error) {
+  const failure = error instanceof ClosedConformanceFailure
+    ? error.failure
+    : Object.freeze({ actualCode: 'UNKNOWN', command: 'harness', diagnostic: 'none', expectedCode: 'UNKNOWN', stage: 'CONTROL' });
+  try { await retainReport('failed', failure); } catch { throw new Error('live reference conformance report could not be retained'); }
+  if (error instanceof ClosedConformanceFailure) throw error;
+  throw new ClosedConformanceFailure(failure);
 } finally {
   if (service) await service.close().catch(() => {});
   configuration.evidenceHmacKey.fill(0);
   await rm(canonicalRoot, { recursive: true, force: true });
+}
+} catch (error) {
+  const failure = error instanceof ClosedConformanceFailure
+    ? error.failure
+    : closeLinuxConformanceFailure({ actualCode: 'UNKNOWN', command: 'harness', diagnostic: 'none', expectedCode: 'UNKNOWN', stage: 'CONTROL' });
+  if (!reportRetained) {
+    const report = buildLinuxConformanceReport({ cases: [], failure, outcome: 'failed', runtimeDigest: admittedRuntimeDigest, seccompProfileSha256: null });
+    const reportBytes = Buffer.from(`${canonicalJson(report)}\n`, 'utf8');
+    if (reportPath !== undefined) await writeFile(reportPath, reportBytes, { flag: 'wx', mode: 0o600 });
+    reportRetained = true;
+    process.stdout.write(reportBytes);
+  }
+  if (error instanceof ClosedConformanceFailure) throw error;
+  throw new ClosedConformanceFailure(failure);
+} finally {
+  if (entryRoot !== null) await rm(entryRoot, { recursive: true, force: true });
 }

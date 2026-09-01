@@ -4,11 +4,12 @@ import { LINUX_REFERENCE_SECCOMP_SHA256 } from '../src/linux.mjs';
 import { LINUX_RUNTIME_CONTRACT_SHA256, canonicalJson, sha256 } from '../src/internal/reference-contract.mjs';
 
 const linuxRoot = new URL('../linux/', import.meta.url);
-const [contractBytes, dockerfile, seccompBytes, shimBytes] = await Promise.all([
+const [contractBytes, dockerfile, seccompBytes, shimBytes, anchorBytes] = await Promise.all([
   readFile(new URL('runtime-contract.json', linuxRoot)),
   readFile(new URL('Dockerfile.reference', linuxRoot), 'utf8'),
   readFile(new URL('seccomp-linux-reference-v1.json', linuxRoot)),
   readFile(new URL('output_shim.c', linuxRoot)),
+  readFile(new URL('volume_anchor.c', linuxRoot)),
 ]);
 const contract = JSON.parse(contractBytes);
 assert.equal(contractBytes.toString('utf8'), `${canonicalJson(contract)}\n`);
@@ -24,8 +25,11 @@ assert.deepEqual(contract.containerProfile, {
   runtimeGid: 65532,
   runtimeUid: 65532,
   shimPath: '/ogvcs-output-shim',
+  volumeAnchorPath: '/ogvcs-volume-anchor',
 });
 assert.equal(contract.outputShimSourceSha256, sha256(shimBytes));
+assert.equal(contract.volumeAnchorSourceSha256, sha256(anchorBytes));
+assert.equal(anchorBytes.toString('utf8'), '#include <unistd.h>\n\nint main(void) {\n  for (;;) (void)pause();\n}\n');
 assert.equal(contract.seccompProfileSha256, sha256(seccompBytes));
 assert.equal(contract.seccompProfileSha256, LINUX_REFERENCE_SECCOMP_SHA256);
 
@@ -40,4 +44,5 @@ assert.deepEqual(clone, { action: 'SCMP_ACT_ALLOW', args: [{ index: 0, op: 'SCMP
 assert.match(dockerfile, /^FROM scratch$/mu);
 assert.match(dockerfile, new RegExp(`runtime-contract-sha256="${LINUX_RUNTIME_CONTRACT_SHA256}"`, 'u'));
 assert.match(dockerfile, /^COPY --chmod=0555 core\/untrusted-sandbox\/js\/linux\/output-shim \/ogvcs-output-shim$/mu);
-assert.equal(dockerfile.match(/^COPY /gmu)?.length, 1);
+assert.match(dockerfile, /^COPY --chmod=0555 core\/untrusted-sandbox\/js\/linux\/volume-anchor \/ogvcs-volume-anchor$/mu);
+assert.equal(dockerfile.match(/^COPY /gmu)?.length, 2);

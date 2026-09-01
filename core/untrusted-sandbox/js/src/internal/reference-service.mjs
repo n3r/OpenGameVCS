@@ -47,6 +47,7 @@ const WORKER_FAILURE_EVENTS = Object.freeze(WORKER_FAILURE_CLASSES.map((failureC
 const VERIFIED_WORKER_FAILURE_CLASSES = Object.freeze([...WORKER_FAILURE_CLASSES, 'NONZERO']);
 const VERIFIED_WORKER_FAILURE_EVENTS = Object.freeze(VERIFIED_WORKER_FAILURE_CLASSES.map((failureClass) => `WORKER_FAILURE_${failureClass}`));
 const PRESTART_INSPECT_MISMATCHES = Object.freeze([
+  'anchor-running',
   'config-content',
   'config-image',
   'config-io',
@@ -220,10 +221,15 @@ export const authenticatedResultDiagnostic = (source) => {
       || request.evidenceHmacKey.length !== 32
       || !isId(request.evidenceKeyId)) return 'none';
     const result = exactRecord(request.result, RESULT_KEYS);
+    const validatedResult = result?.code === 'VALIDATED'
+      && result.status === 'validated'
+      && isDigest(result.outputDigest);
+    const deniedResult = ['SANDBOX_UNAVAILABLE', 'SANDBOX_VALIDATION_FAILED'].includes(result?.code)
+      && result.status === 'denied'
+      && result.outputDigest === null;
     if (!result
       || result.schemaVersion !== 'ogvcs.untrusted-sandbox/reference-result/v1'
-      || !['SANDBOX_UNAVAILABLE', 'SANDBOX_VALIDATION_FAILED'].includes(result.code)
-      || result.status !== 'denied'
+      || (!validatedResult && !deniedResult)
       || !isId(result.jobId)
       || !isDigest(result.provenanceDigest)
       || sha256(request.evidenceBytes) !== result.provenanceDigest) return 'none';
@@ -237,7 +243,6 @@ export const authenticatedResultDiagnostic = (source) => {
       || provenance.jobId !== result.jobId
       || provenance.validationCode !== result.code
       || provenance.outputDigest !== result.outputDigest
-      || provenance.outputDigest !== null
       || provenance.cleanupReceiptDigest !== result.cleanupReceiptDigest
       || !isDigest(provenance.cleanupReceiptDigest)
       || provenance.evidenceKeyId !== request.evidenceKeyId
@@ -247,6 +252,11 @@ export const authenticatedResultDiagnostic = (source) => {
     const suppliedMac = Buffer.from(provenance.evidenceMacSha256, 'hex');
     if (suppliedMac.length !== expectedMac.length || !timingSafeEqual(suppliedMac, expectedMac)) return 'none';
     if (!Array.isArray(provenance.securityEvents)) return 'none';
+    if (validatedResult) return provenance.securityEvents.length === 0
+      && provenance.outputRecords === 0
+      && provenance.outputBytes === 0
+      ? 'VALIDATED_EMPTY_OUTPUT'
+      : 'none';
     if (result.code === 'SANDBOX_VALIDATION_FAILED') {
       if (provenance.securityEvents.length === 1 && POSTSTART_SINGLETON_DIAGNOSTIC_EVENTS.includes(provenance.securityEvents[0])) return provenance.securityEvents[0];
       if (provenance.securityEvents.length !== 2 || provenance.securityEvents[0] !== 'WORKER_FAILED') return 'none';
@@ -528,6 +538,11 @@ export class ReferenceSandboxService {
             await this.#adapter.discardVolume(volume); volume = null;
             return await this.#finalize({ base, code: controller.signal.aborted ? 'SANDBOX_CANCELLED' : 'SANDBOX_TIMEOUT', securityEvents: ['ALIAS_MATERIALIZATION_ABORTED'], startedAtUnixMs });
           }
+          // Retain service ownership until the adapter resolves. The real
+          // adapter makes discard idempotent only for this exact previously
+          // branded-and-settled volume, so either a pre-settlement exception is
+          // cleaned here or a post-settlement exception verifies the tombstone
+          // without issuing a second Docker cleanup.
           const collected = await this.#adapter.collectOutput({ runtimeImage: current.runtimeImage, policy: current.resourcePolicy, volume, bindingHandle: bindingAlias.handle, framePath, jobId: job.jobId, maximumFrameBytes });
           volume = null;
           let bindingValid = true;
