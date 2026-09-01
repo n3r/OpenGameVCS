@@ -122,6 +122,25 @@ generation, old-entry consumption, full scan, final barrier, and publication.
 A cooperating transition, watcher append, or compaction therefore cannot
 replace the generation between verify and reseal.
 
+A bounded test-only repair oracle now derives status directly from the supplied
+immutable baseline and a recursive filesystem read. It does not call the index
+probe, finding, lookup, or classification path. Healthy repair and authenticated
+rebuild after watcher-state or event-chain corruption produce the oracle's exact
+complete paged stream, including deterministic repeat pages, ignore precedence,
+materialization states, content-verification flags, and degraded watcher
+uncertainty. The fixture snapshots every workspace node outside the private
+index, including bytes, type, modification time, read-only state, and portable
+mode, before repair and compares it afterwards. Corrupt active, seal, entry,
+lookup, finding, ignore, retention, cursor-key, reader-lease, transition, and
+compaction authority fails before a new generation. Reader leases are now
+authenticated during rebuild capacity preflight, closing a path where a corrupt
+lease could otherwise survive a successful rebuild and reject its first status
+page. This added check is read-only and introduces no publication or deletion
+boundary. Distinct findings, events, and rename-source candidates now enforce
+the exact candidate-memory cap before insertion instead of only after a complete
+source pass; duplicate keys remain admissible at the bound without allocating a
+new candidate.
+
 ## Adversarial and bounded evidence
 
 The default focused Rust suite covers:
@@ -152,6 +171,11 @@ The default focused Rust suite covers:
   corruption; and
 - deleted tracked directory uncertainty, transient untracked deletion, and
   repair that leaves local work files byte-for-byte unchanged;
+- independent full-scan equivalence across bounded pages for healthy repair,
+  reconstructible watcher-state/event-chain rebuild, degraded continuity, and
+  deterministic repeat output, plus fail-closed corruption of every remaining
+  authenticated artifact/control class before publication and exact
+  pre-insertion candidate-memory admission;
 - subscribe/scan/final-barrier ordering with deterministic mutations on both
   sides of the scan; and
 - Applied Add/Move/Delete staging visibility without watcher delivery, with no
@@ -164,14 +188,16 @@ Two explicit bounded release tests produced this local candidate evidence:
 | 1,000 changed files | 1,000 modified items, every content verified, 210 ms | one local debug test run; not p95 |
 | 100,000 watcher events | 100 chunks × 1,000, full-chain verification, event 100,001 rejected before append, 11.619 s | one local debug test run; not a million-path benchmark |
 
-The final default Rust run passed 54 library tests (with the two exact tests
-explicitly ignored), 2 binary-contract tests, 2 contract-vector tests, and 12
-production-foundation integration tests. Rustfmt and all-target clippy with
-warnings denied passed on Rust 1.82. Registered workflow
+The current local Rust 1.82 default run passed 59 library tests (with the two
+exact tests explicitly ignored), 2 binary-contract tests, 2 contract-vector
+tests, and 12 production-foundation integration tests. Rustfmt, all-target
+clippy with warnings denied, the packed-crate gate, and the installed-artifact
+hermetic gate passed. Registered workflow
 [run 33513695931](https://github.com/n3r/OpenGameVCS/actions/runs/33513695931)
-then repeated the Node 24 contract/spec checks, Rust 1.82 format/default-test/
-Clippy gates, packed-crate check, and installed-artifact hermetic check from
-the exact integrated source on hosted Linux, macOS, and Windows. The retained
+previously repeated the pre-oracle Node 24 contract/spec checks, Rust 1.82
+format/default-test/Clippy gates, packed-crate check, and installed-artifact
+hermetic check from its exact integrated source on hosted Linux, macOS, and
+Windows. The retained
 [machine record](../evidence/OGVCS-012/github-actions-run-33513695931.json)
 binds the source and all three jobs. This is cross-platform evidence for the
 private fence implementation, not native watcher authority or exact-scale
@@ -194,7 +220,7 @@ pins the manifest artifact set.
 | Native watcher authority | No production constructor can mint continuity; portable watcher is always degraded | Implement and prove USN, FSEvents, and inotify adapters including resume/overflow/unclean shutdown |
 | Million-path SLO | No exact one-million warm p95 result | Pass the reference p95 target without a full walk/hash on every supported OS profile |
 | Full status state machine | Core vocabulary and hostile cases exist, not every OGVCS-004 operation/fault | Pass the complete add/move/delete/revert, rename-cycle, case-only rename, locked-open, ignore transition, and watcher matrix |
-| Repair equivalence | Rebuild preserves local files and publishes a sealed generation | Compare against an independent authenticated full scan across corruption/fault fixtures |
+| Repair equivalence | A bounded test-only independent full scan matches every page after healthy repair and reconstructible watcher/event rebuild; corrupt sealed baseline/history/control authority fails closed without changing the captured workspace bytes, node types, modification times, read-only states, or portable modes | Add a safe public discard/reseed operation for non-reconstructible private authority and retain the complete cross-OS corruption/fault matrix |
 | Product operations | No public explain, repair, compaction, telemetry, rollout, or downgrade surface | Integrate bounded public commands and operational evidence |
 
 The private reader-safe compactor closes the earlier unbounded-retention

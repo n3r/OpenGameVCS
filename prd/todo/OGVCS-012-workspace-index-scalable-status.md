@@ -110,7 +110,14 @@ evidence sufficient to move this PRD out of Todo.
   holds one mutation lock through verification, its final barrier, and
   publication. Compaction preserves the current generation, its authenticated
   numeric predecessor, and every locked or unexpired reader generation; it
-  deletes no workspace content. Its private candidate contract is
+  deletes no workspace content. A bounded test-only full-scan oracle now reads
+  the immutable baseline and workspace independently of the index classifier;
+  healthy repair and authenticated rebuild of corrupt watcher-state/event-chain
+  artifacts match its complete deterministic paged stream. Rebuild capacity
+  preflight authenticates existing reader leases before transition
+  publication, and distinct status candidates are rejected at the exact
+  in-memory bound before map insertion while preserving existing duplicate-key
+  precedence. Its private candidate contract is
   `client/native-cli/rust/contracts/workspace-index/v1` version
   `0.1.0-rc.3`, while committed generation bytes remain readable as
   `0.1.0-rc.1`.
@@ -121,7 +128,13 @@ evidence sufficient to move this PRD out of Todo.
   active/settings/profile/case/cursor staleness, digest collisions, case
   collisions/order, symlink/reparse rejection, timestamp-preserving edits,
   same-length index corruption, deleted-directory uncertainty, transient
-  untracked create/delete, and repair preserving workspace files. Retention
+  untracked create/delete, and repair preserving workspace files. Five focused
+  repair-equivalence tests additionally cover healthy and degraded-continuity
+  oracle parity across complete bounded pages, reconstructible watcher/event
+  corruption, fail-closed active/seal/entry/lookup/finding/ignore/history/key/
+  lease/control corruption before publication, exact pre-insertion candidate
+  admission, and preservation of captured workspace bytes, node types,
+  modification times, read-only states, and portable modes. Retention
   tests cover the independent HMAC known answer and hostile variants,
   cross-workspace/repository leases, exact 127/128/129 lease admission,
   prepublication history capacity, locked-reader pinning, abandoned-reader
@@ -149,7 +162,10 @@ evidence sufficient to move this PRD out of Todo.
   is created, synced, authenticated, and shared-locked before releasing the
   mutation lock; compaction authenticates the complete bounded control/lease/
   generation namespace before publishing intent. Forged, malformed, cross-
-  boundary, or overflowing metadata fails before deletion. Owner HMACs and
+  boundary, or overflowing metadata fails before deletion. Rebuild likewise
+  rejects corrupt sealed/history/control authority rather than silently
+  replacing it; only the reconstructible watcher-state/event-chain class is
+  replaced through authenticated baseline acquisition. Owner HMACs and
   kernel locks do not solve malicious same-authority lock-namespace replacement
   or promise Unix unlink-by-open-handle semantics.
 - **Documentation/runbooks:** the Rust README and
@@ -169,7 +185,9 @@ evidence sufficient to move this PRD out of Todo.
   degraded.
 - The exact one-million-path warm p95 target, three-OS watcher matrix, complete
   OGVCS-004 operation/fault matrix, rename cycles, locked-open files, and repair
-  parity against an independently authoritative scan remain unproven.
+  equivalence for a safe public discard/reseed of non-reconstructible sealed
+  authority remain unproven. The bounded test-only oracle is not that public
+  recovery operation and has no exact-candidate hosted cross-OS record.
 - Telemetry, support-facing explain/repair/compaction commands, rollout
   comparison, and downgrade behavior are not wired into a public product
   surface.

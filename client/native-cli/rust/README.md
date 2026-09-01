@@ -66,7 +66,14 @@ The private workspace-index candidate adds:
   generations per call, and always retains the current generation plus its
   authenticated numeric predecessor; and
 - authenticated rebuild/repair that publishes a new generation without
-  modifying local work files.
+  modifying local work files; a test-only full-scan oracle independently reads
+  the immutable baseline and filesystem, then compares every bounded status
+  page after healthy repair and after reconstructible watcher-state/event-chain
+  corruption. Active, seal, entry, lookup, finding, ignore, retention, key,
+  lease, and pending-control corruption remains fail-closed before another
+  generation is published. Rebuild preflight authenticates existing reader
+  leases without deleting them, and status rejects the first distinct
+  over-limit candidate before inserting it into the in-memory map.
 
 No production-callable adapter can currently mint a native watcher continuity
 proof: the only public checkpoint constructor is degraded. The first-party
@@ -88,7 +95,9 @@ private index before downgrading. Owner-HMACs and kernel locks fail closed for
 cross-workspace/repository records, but they do not solve the documented
 same-authority lock-namespace replacement or Unix unlink-by-handle residual.
 Exact one-million-path p95, telemetry, the full fault matrix, and three-OS
-native watcher evidence are also absent. OGVCS-012 therefore remains Todo.
+native watcher evidence are also absent. The independent repair oracle is a
+bounded test authority, not a public discard/reseed operation for corruption
+of sealed baseline authority. OGVCS-012 therefore remains Todo.
 
 The first-party binary installs `UnavailablePublicRoutes`, so commands that
 need OGVCS-006/008/009 fail with `PUBLIC_ROUTE_UNAVAILABLE` before local

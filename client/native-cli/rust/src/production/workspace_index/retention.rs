@@ -832,6 +832,13 @@ pub(super) fn ensure_generation_capacity(
     for record in &state.payload.generations {
         validate_generation_seal_authority(index, record)?;
     }
+    // A rebuild publishes another generation into the same authenticated
+    // retention namespace. Validate every existing reader record before the
+    // transition is created so a corrupt lease cannot survive publication and
+    // make the newly rebuilt generation unreadable on its first status page.
+    // This is a read-only preflight: live locks remain pins, and no lease or
+    // generation is removed here.
+    let _ = inspect_leases(index, metadata, &state)?;
     if state.payload.generations.len() >= MAX_AUTHENTICATED_GENERATIONS {
         return Err(index_limit("WORKSPACE_INDEX_GENERATION_HISTORY_LIMIT"));
     }

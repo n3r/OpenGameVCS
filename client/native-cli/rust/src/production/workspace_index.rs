@@ -2768,6 +2768,31 @@ struct StatusCandidate {
     staged_file_id: Option<String>,
 }
 
+fn bounded_status_candidate(
+    candidates: &mut BTreeMap<(String, String), StatusCandidate>,
+    key: (String, String),
+    candidate: StatusCandidate,
+    limit: usize,
+) -> Result<&mut StatusCandidate, CliError> {
+    if !candidates.contains_key(&key) && candidates.len() >= limit {
+        return Err(index_invalid());
+    }
+    Ok(candidates.entry(key).or_insert(candidate))
+}
+
+fn bounded_replace_status_candidate(
+    candidates: &mut BTreeMap<(String, String), StatusCandidate>,
+    key: (String, String),
+    candidate: StatusCandidate,
+    limit: usize,
+) -> Result<(), CliError> {
+    if !candidates.contains_key(&key) && candidates.len() >= limit {
+        return Err(index_invalid());
+    }
+    candidates.insert(key, candidate);
+    Ok(())
+}
+
 struct ValidatedStagingSnapshot {
     state: super::StagingState,
     state_sha256: String,
@@ -3194,7 +3219,8 @@ fn read_findings(
         line.pop();
         let finding: FindingDisk = serde_json::from_slice(&line).map_err(|_| index_invalid())?;
         let key = status_sort_key(&finding.repository_path, binding)?;
-        candidates.insert(
+        bounded_replace_status_candidate(
+            candidates,
             key,
             StatusCandidate {
                 path: finding.repository_path,
@@ -3205,7 +3231,8 @@ fn read_findings(
                 saw_deleted: false,
                 staged_file_id: None,
             },
-        );
+            MAX_STATUS_CANDIDATES,
+        )?;
         count = count.checked_add(1).ok_or_else(index_invalid)?;
         line.clear();
     }
@@ -3221,15 +3248,20 @@ fn merge_event_candidate(
     event: &WorkspaceWatchEvent,
 ) -> Result<(), CliError> {
     let key = status_sort_key(&event.repository_path, binding)?;
-    let candidate = candidates.entry(key).or_insert(StatusCandidate {
-        path: event.repository_path.clone(),
-        prior_path: None,
-        hint: WorkspaceStatus::Untracked,
-        event_kind: None,
-        saw_created: false,
-        saw_deleted: false,
-        staged_file_id: None,
-    });
+    let candidate = bounded_status_candidate(
+        candidates,
+        key,
+        StatusCandidate {
+            path: event.repository_path.clone(),
+            prior_path: None,
+            hint: WorkspaceStatus::Untracked,
+            event_kind: None,
+            saw_created: false,
+            saw_deleted: false,
+            staged_file_id: None,
+        },
+        MAX_STATUS_CANDIDATES,
+    )?;
     candidate.prior_path = event
         .prior_repository_path
         .clone()
@@ -3247,15 +3279,20 @@ fn merge_event_candidate(
     candidate.saw_deleted |= event.kind == WorkspaceWatchEventKind::Deleted;
     if let Some(prior) = &event.prior_repository_path {
         let prior_key = status_sort_key(prior, binding)?;
-        candidates.entry(prior_key).or_insert(StatusCandidate {
-            path: prior.clone(),
-            prior_path: None,
-            hint: WorkspaceStatus::Deleted,
-            event_kind: Some(WorkspaceWatchEventKind::Deleted),
-            saw_created: false,
-            saw_deleted: true,
-            staged_file_id: None,
-        });
+        bounded_status_candidate(
+            candidates,
+            prior_key,
+            StatusCandidate {
+                path: prior.clone(),
+                prior_path: None,
+                hint: WorkspaceStatus::Deleted,
+                event_kind: Some(WorkspaceWatchEventKind::Deleted),
+                saw_created: false,
+                saw_deleted: true,
+                staged_file_id: None,
+            },
+            MAX_STATUS_CANDIDATES,
+        )?;
     }
     Ok(())
 }
@@ -4683,6 +4720,770 @@ mod tests {
             .all(|name| index.join(name).is_file())
     }
 
+    mod repair_equivalence {
+        use super::*;
+
+        #[derive(Clone)]
+        struct OracleFixture {
+            baseline: Vec<WorkspaceBaselineEntry>,
+            repository_rules: Vec<WorkspaceIgnoreRule>,
+            local_rules: Vec<WorkspaceIgnoreRule>,
+        }
+
+        #[derive(Clone, Debug, Eq, PartialEq)]
+        struct PreservedNode {
+            path: String,
+            kind: &'static str,
+            bytes: Vec<u8>,
+            modified: Option<std::time::SystemTime>,
+            readonly: bool,
+            mode: u32,
+        }
+
+        #[derive(Clone, Debug, Eq, PartialEq)]
+        struct OracleStatus {
+            items: Vec<WorkspaceStatusItem>,
+            status_counts: BTreeMap<String, u64>,
+        }
+
+        #[derive(Clone, Copy, Debug)]
+        enum CorruptionClass {
+            ActivePointer,
+            GenerationSeal,
+            Entries,
+            Lookup,
+            Findings,
+            IgnoreSnapshot,
+            WatcherState,
+            EventChain,
+            RetentionHistory,
+            CursorKey,
+            ReaderLease,
+            TransitionControl,
+            CompactionControl,
+        }
+
+        fn oracle_path(root: &Path, repository_path: &str) -> PathBuf {
+            repository_path
+                .split('/')
+                .fold(root.to_path_buf(), |path, segment| path.join(segment))
+        }
+
+        fn oracle_sha256(bytes: &[u8]) -> String {
+            let digest = Sha256::digest(bytes);
+            const HEX: &[u8; 16] = b"0123456789abcdef";
+            let mut encoded = String::with_capacity(digest.len() * 2);
+            for byte in digest {
+                encoded.push(HEX[usize::from(byte >> 4)] as char);
+                encoded.push(HEX[usize::from(byte & 0x0f)] as char);
+            }
+            encoded
+        }
+
+        fn oracle_executable(metadata: &fs::Metadata) -> bool {
+            #[cfg(not(windows))]
+            {
+                metadata.permissions().mode() & 0o111 != 0
+            }
+            #[cfg(windows)]
+            {
+                let _ = metadata;
+                false
+            }
+        }
+
+        fn preserved_mode(metadata: &fs::Metadata) -> u32 {
+            #[cfg(not(windows))]
+            {
+                metadata.permissions().mode()
+            }
+            #[cfg(windows)]
+            {
+                u32::from(metadata.permissions().readonly())
+            }
+        }
+
+        fn snapshot_preserved_nodes(root: &Path) -> Vec<PreservedNode> {
+            fn visit(directory: &Path, relative: &str, out: &mut Vec<PreservedNode>) {
+                let mut entries = fs::read_dir(directory)
+                    .unwrap()
+                    .map(|entry| entry.unwrap())
+                    .collect::<Vec<_>>();
+                entries.sort_by_key(|entry| entry.file_name());
+                for entry in entries {
+                    let name = entry.file_name().into_string().unwrap();
+                    let path = if relative.is_empty() {
+                        name
+                    } else {
+                        format!("{relative}/{name}")
+                    };
+                    if path == ".ogvcs/workspace-index-v1" {
+                        continue;
+                    }
+                    let absolute = entry.path();
+                    let metadata = fs::symlink_metadata(&absolute).unwrap();
+                    let (kind, bytes) = if metadata.file_type().is_symlink() {
+                        (
+                            "symlink",
+                            fs::read_link(&absolute)
+                                .unwrap()
+                                .to_string_lossy()
+                                .as_bytes()
+                                .to_vec(),
+                        )
+                    } else if metadata.is_dir() {
+                        ("directory", Vec::new())
+                    } else if metadata.is_file() {
+                        ("file", fs::read(&absolute).unwrap())
+                    } else {
+                        ("other", Vec::new())
+                    };
+                    out.push(PreservedNode {
+                        path: path.clone(),
+                        kind,
+                        bytes,
+                        modified: metadata.modified().ok(),
+                        readonly: metadata.permissions().readonly(),
+                        mode: preserved_mode(&metadata),
+                    });
+                    if metadata.is_dir() {
+                        visit(&absolute, &path, out);
+                    }
+                }
+            }
+
+            let mut nodes = Vec::new();
+            visit(root, "", &mut nodes);
+            nodes
+        }
+
+        fn oracle_ignore(path: &str, fixture: &OracleFixture) -> (bool, Option<IgnoreExplanation>) {
+            let mut decision = None;
+            for rules in [&fixture.repository_rules, &fixture.local_rules] {
+                for rule in rules {
+                    let matches = match rule.pattern_kind {
+                        IgnorePatternKind::Exact => path == rule.repository_path,
+                        IgnorePatternKind::Subtree => {
+                            path == rule.repository_path
+                                || path
+                                    .strip_prefix(&rule.repository_path)
+                                    .is_some_and(|suffix| suffix.starts_with('/'))
+                        }
+                    };
+                    if matches {
+                        decision = Some(IgnoreExplanation {
+                            rule_id: rule.rule_id.clone(),
+                            source: rule.source,
+                            action: rule.action,
+                        });
+                    }
+                }
+            }
+            let ignored = decision
+                .as_ref()
+                .is_some_and(|rule| rule.action == IgnoreAction::Ignore);
+            (ignored, decision)
+        }
+
+        fn oracle_baseline_item(
+            root: &Path,
+            entry: &WorkspaceBaselineEntry,
+        ) -> Option<WorkspaceStatusItem> {
+            let observed = fs::symlink_metadata(oracle_path(root, &entry.repository_path));
+            let (status, content_verified) = match observed {
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                    match entry.materialization {
+                        BaselineMaterialization::Full => (WorkspaceStatus::Deleted, false),
+                        BaselineMaterialization::MetadataOnly => {
+                            (WorkspaceStatus::MetadataOnly, false)
+                        }
+                        BaselineMaterialization::AbsentBySpec => {
+                            (WorkspaceStatus::AbsentBySpec, false)
+                        }
+                    }
+                }
+                Err(_) => (WorkspaceStatus::InaccessibleError, false),
+                Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_file() => {
+                    (WorkspaceStatus::TypeModeChanged, false)
+                }
+                Ok(metadata) => {
+                    let bytes = match fs::read(oracle_path(root, &entry.repository_path)) {
+                        Ok(bytes) => bytes,
+                        Err(_) => {
+                            return Some(WorkspaceStatusItem {
+                                repository_path: entry.repository_path.clone(),
+                                status: WorkspaceStatus::InaccessibleError,
+                                prior_repository_path: None,
+                                file_id: Some(entry.file_id.clone()),
+                                ignore: None,
+                                content_verified: false,
+                            });
+                        }
+                    };
+                    match entry.materialization {
+                        BaselineMaterialization::Full
+                            if bytes.len() as u64 != entry.content_bytes
+                                || oracle_sha256(&bytes) != entry.content_sha256 =>
+                        {
+                            (WorkspaceStatus::Modified, true)
+                        }
+                        BaselineMaterialization::Full
+                            if oracle_executable(&metadata) != entry.executable =>
+                        {
+                            (WorkspaceStatus::TypeModeChanged, true)
+                        }
+                        BaselineMaterialization::Full => return None,
+                        BaselineMaterialization::MetadataOnly => {
+                            (WorkspaceStatus::MetadataOnly, true)
+                        }
+                        BaselineMaterialization::AbsentBySpec => (WorkspaceStatus::Modified, true),
+                    }
+                }
+            };
+            Some(WorkspaceStatusItem {
+                repository_path: entry.repository_path.clone(),
+                status,
+                prior_repository_path: None,
+                file_id: Some(entry.file_id.clone()),
+                ignore: None,
+                content_verified,
+            })
+        }
+
+        fn independent_full_scan_oracle(root: &Path, fixture: &OracleFixture) -> OracleStatus {
+            fn visit_files(
+                directory: &Path,
+                relative: &str,
+                observed: &mut BTreeMap<String, fs::Metadata>,
+            ) {
+                let mut entries = fs::read_dir(directory)
+                    .unwrap()
+                    .map(|entry| entry.unwrap())
+                    .collect::<Vec<_>>();
+                entries.sort_by_key(|entry| entry.file_name());
+                for entry in entries {
+                    let name = entry.file_name().into_string().unwrap();
+                    if relative.is_empty()
+                        && (name == ".ogvcs" || name == ".ogvcs-mutation-v2.lock")
+                    {
+                        continue;
+                    }
+                    let path = if relative.is_empty() {
+                        name
+                    } else {
+                        format!("{relative}/{name}")
+                    };
+                    let metadata = fs::symlink_metadata(entry.path()).unwrap();
+                    if metadata.is_dir() && !metadata.file_type().is_symlink() {
+                        visit_files(&entry.path(), &path, observed);
+                    } else {
+                        observed.insert(path, metadata);
+                    }
+                }
+            }
+
+            let baseline_by_path = fixture
+                .baseline
+                .iter()
+                .map(|entry| (entry.repository_path.as_str(), entry))
+                .collect::<BTreeMap<_, _>>();
+            let mut items = fixture
+                .baseline
+                .iter()
+                .filter_map(|entry| oracle_baseline_item(root, entry))
+                .collect::<Vec<_>>();
+            let mut observed = BTreeMap::new();
+            visit_files(root, "", &mut observed);
+            for (path, metadata) in observed {
+                if baseline_by_path.contains_key(path.as_str()) {
+                    continue;
+                }
+                let (ignored, explanation) = oracle_ignore(&path, fixture);
+                let (status, content_verified) = if metadata.file_type().is_symlink()
+                    || !metadata.is_file()
+                    || fs::read(oracle_path(root, &path)).is_err()
+                {
+                    (WorkspaceStatus::InaccessibleError, false)
+                } else if ignored {
+                    (WorkspaceStatus::Ignored, true)
+                } else {
+                    (WorkspaceStatus::Untracked, true)
+                };
+                items.push(WorkspaceStatusItem {
+                    repository_path: path,
+                    status,
+                    prior_repository_path: None,
+                    file_id: None,
+                    ignore: explanation,
+                    content_verified,
+                });
+            }
+            let binding = binding();
+            items.sort_by_key(|item| {
+                let keys = path_collision_keys(
+                    &item.repository_path,
+                    &binding.path_profile,
+                    &binding.case_mode,
+                )
+                .unwrap();
+                (keys.platform_key().to_owned(), item.repository_path.clone())
+            });
+            let mut status_counts = BTreeMap::new();
+            for item in &items {
+                *status_counts
+                    .entry(item.status.as_str().to_owned())
+                    .or_insert(0) += 1;
+            }
+            OracleStatus {
+                items,
+                status_counts,
+            }
+        }
+
+        fn fixture(root: &TestRoot) -> OracleFixture {
+            root.write("Game/clean.bin", b"clean");
+            root.write("Game/modified.bin", b"locally changed");
+            fs::create_dir_all(root.0.join("Game/type.bin")).unwrap();
+            root.write("Virtual/present.bin", b"materialized unexpectedly");
+            root.write("Loose/untracked.bin", b"untracked");
+            root.write("Cache/ignored.bin", b"ignored");
+            root.write("Cache/keep.bin", b"included locally");
+            for ordinal in 0..23u8 {
+                let path = format!("Bulk/item-{ordinal:03}.bin");
+                let bytes = format!("local-{ordinal:03}");
+                root.write(&path, bytes.as_bytes());
+            }
+            initialize_workspace(&root.0);
+            OracleFixture {
+                baseline: vec![
+                    baseline_entry(1, "Game/clean.bin", b"clean", BaselineMaterialization::Full),
+                    baseline_entry(
+                        2,
+                        "Game/modified.bin",
+                        b"baseline",
+                        BaselineMaterialization::Full,
+                    ),
+                    baseline_entry(
+                        3,
+                        "Game/deleted.bin",
+                        b"deleted",
+                        BaselineMaterialization::Full,
+                    ),
+                    baseline_entry(4, "Game/type.bin", b"file", BaselineMaterialization::Full),
+                    baseline_entry(
+                        5,
+                        "Virtual/metadata.bin",
+                        b"metadata",
+                        BaselineMaterialization::MetadataOnly,
+                    ),
+                    baseline_entry(
+                        6,
+                        "Virtual/absent.bin",
+                        b"absent",
+                        BaselineMaterialization::AbsentBySpec,
+                    ),
+                    baseline_entry(
+                        7,
+                        "Virtual/present.bin",
+                        b"absent",
+                        BaselineMaterialization::AbsentBySpec,
+                    ),
+                ],
+                repository_rules: vec![WorkspaceIgnoreRule {
+                    rule_id: "repository-cache".to_owned(),
+                    source: IgnoreSource::Repository,
+                    action: IgnoreAction::Ignore,
+                    pattern_kind: IgnorePatternKind::Subtree,
+                    repository_path: "Cache".to_owned(),
+                }],
+                local_rules: vec![WorkspaceIgnoreRule {
+                    rule_id: "local-cache-keep".to_owned(),
+                    source: IgnoreSource::Local,
+                    action: IgnoreAction::Include,
+                    pattern_kind: IgnorePatternKind::Exact,
+                    repository_path: "Cache/keep.bin".to_owned(),
+                }],
+            }
+        }
+
+        fn authenticated_rebuild(
+            root: &Path,
+            fixture: &OracleFixture,
+            continuity: bool,
+        ) -> Result<WorkspaceIndexReport, CliError> {
+            let mut routes = TestRoutes::new(fixture.baseline.clone());
+            routes.repository_rules = fixture.repository_rules.clone();
+            routes.chunk_items = 3;
+            let mut request = request(root);
+            request.local_ignore_rules = fixture.local_rules.clone();
+            let mut watcher = TestWatcher {
+                continuity,
+                queued: vec![WorkspaceWatchEvent {
+                    kind: WorkspaceWatchEventKind::Modified,
+                    repository_path: "Game/modified.bin".to_owned(),
+                    prior_repository_path: None,
+                }],
+                ..TestWatcher::default()
+            };
+            rebuild_workspace_index(
+                &request,
+                &TestProvider,
+                &mut routes,
+                &mut watcher,
+                &NeverCancelled,
+                &mut DiscardProgress,
+            )
+        }
+
+        fn collect_pages(root: &Path, limit: usize) -> Vec<WorkspaceStatusPage> {
+            let mut pages = Vec::new();
+            let mut cursor = None;
+            loop {
+                let mut request = status_request(root, limit);
+                request.cursor = cursor;
+                let page = test_status_page(&request).unwrap();
+                assert!(page.items.len() <= limit);
+                cursor = page.next_cursor.clone();
+                pages.push(page);
+                assert!(pages.len() <= MAX_STATUS_CANDIDATES / limit + 2);
+                if cursor.is_none() {
+                    break;
+                }
+            }
+            pages
+        }
+
+        fn assert_complete_stream_matches_oracle(
+            root: &Path,
+            oracle: &OracleStatus,
+            page_limit: usize,
+            complete: bool,
+            reason: &str,
+        ) {
+            let pages = collect_pages(root, page_limit);
+            let expected_pages = oracle.items.len().div_ceil(page_limit).max(1);
+            assert_eq!(pages.len(), expected_pages);
+            let generation = pages[0].generation;
+            for (ordinal, page) in pages.iter().enumerate() {
+                assert_eq!(page.generation, generation);
+                assert_eq!(page.candidate_count, oracle.items.len() as u64);
+                assert_eq!(page.status_counts, oracle.status_counts);
+                assert_eq!(page.complete, complete);
+                assert_eq!(page.reconciliation_required, !complete);
+                assert!(!page.authoritative_clean);
+                assert_eq!(page.reason, reason);
+                assert_eq!(page.next_cursor.is_some(), ordinal + 1 < pages.len());
+            }
+            let actual = pages
+                .iter()
+                .flat_map(|page| page.items.clone())
+                .collect::<Vec<_>>();
+            assert_eq!(actual, oracle.items);
+            // The same stable authority and filesystem must emit the exact
+            // same pages and opaque cursors on a second complete traversal.
+            assert_eq!(collect_pages(root, page_limit), pages);
+        }
+
+        fn flip_first_byte(path: &Path) {
+            let mut bytes = fs::read(path).unwrap();
+            assert!(!bytes.is_empty());
+            bytes[0] ^= 1;
+            let mut file = OpenOptions::new()
+                .write(true)
+                .truncate(true)
+                .open(path)
+                .unwrap();
+            file.write_all(&bytes).unwrap();
+            file.sync_all().unwrap();
+        }
+
+        fn write_corrupt_control(path: &Path) {
+            let mut file = crate::create_private_file(path, true).unwrap();
+            file.write_all(b"{corrupt-control\n").unwrap();
+            file.sync_all().unwrap();
+            sync_directory(path.parent().unwrap()).unwrap();
+        }
+
+        fn corrupt(root: &Path, class: CorruptionClass) {
+            let index = existing_index_directory(root).unwrap();
+            let active = read_optional_active(&index).unwrap().unwrap();
+            let seal: GenerationSeal = read_json_private(
+                &index.join(format!("seal-{}.v1", active.payload.generation_id)),
+                MAX_CONTROL_BYTES,
+            )
+            .unwrap();
+            let path = match class {
+                CorruptionClass::ActivePointer => index.join("active.json"),
+                CorruptionClass::GenerationSeal => {
+                    index.join(format!("seal-{}.v1", active.payload.generation_id))
+                }
+                CorruptionClass::Entries => index.join(&seal.payload.entries.name),
+                CorruptionClass::Lookup => index.join(&seal.payload.lookup.name),
+                CorruptionClass::Findings => index.join(&seal.payload.findings.name),
+                CorruptionClass::IgnoreSnapshot => index.join(&seal.payload.ignores.name),
+                CorruptionClass::WatcherState => {
+                    index.join(format!("watcher-{}.v1", active.payload.generation_id))
+                }
+                CorruptionClass::EventChain => index.join(&seal.payload.events_name),
+                CorruptionClass::RetentionHistory => index.join("retention-v1.json"),
+                CorruptionClass::CursorKey => index.join(CURSOR_KEY_NAME),
+                CorruptionClass::ReaderLease => {
+                    let lease = acquire_test_read_lease(root);
+                    let path = lease.path_for_test().to_path_buf();
+                    lease.abandon_for_test();
+                    path
+                }
+                CorruptionClass::TransitionControl => {
+                    let path = index.join("transition.json");
+                    write_corrupt_control(&path);
+                    return;
+                }
+                CorruptionClass::CompactionControl => {
+                    let path = index.join("compaction-v1.json");
+                    write_corrupt_control(&path);
+                    return;
+                }
+            };
+            flip_first_byte(&path);
+            sync_directory(path.parent().unwrap()).unwrap();
+        }
+
+        fn index_names(root: &Path) -> Vec<String> {
+            let index = existing_index_directory(root).unwrap();
+            let mut names = fs::read_dir(index)
+                .unwrap()
+                .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+                .collect::<Vec<_>>();
+            names.sort();
+            names
+        }
+
+        #[test]
+        fn status_candidate_memory_bound_is_enforced_before_distinct_admission() {
+            let candidate = |path: &str| StatusCandidate {
+                path: path.to_owned(),
+                prior_path: None,
+                hint: WorkspaceStatus::Untracked,
+                event_kind: None,
+                saw_created: false,
+                saw_deleted: false,
+                staged_file_id: None,
+            };
+            let mut candidates = BTreeMap::new();
+            for path in ["a", "b"] {
+                bounded_status_candidate(
+                    &mut candidates,
+                    (path.to_owned(), path.to_owned()),
+                    candidate(path),
+                    2,
+                )
+                .unwrap();
+            }
+            // Reusing an existing key at the exact bound is not another
+            // allocation, while the first distinct over-limit key is rejected.
+            bounded_status_candidate(
+                &mut candidates,
+                ("a".to_owned(), "a".to_owned()),
+                candidate("a"),
+                2,
+            )
+            .unwrap();
+            let error = match bounded_status_candidate(
+                &mut candidates,
+                ("c".to_owned(), "c".to_owned()),
+                candidate("c"),
+                2,
+            ) {
+                Ok(_) => panic!("distinct over-limit candidate was admitted"),
+                Err(error) => error,
+            };
+            assert_eq!(error.code, "WORKSPACE_INDEX_INVALID");
+            assert_eq!(candidates.len(), 2);
+
+            // Sealed findings historically use last-record-wins replacement.
+            // Preserve that compatibility while enforcing the same bound
+            // before the first distinct allocation.
+            bounded_replace_status_candidate(
+                &mut candidates,
+                ("a".to_owned(), "a".to_owned()),
+                candidate("replacement"),
+                2,
+            )
+            .unwrap();
+            assert_eq!(
+                candidates
+                    .get(&("a".to_owned(), "a".to_owned()))
+                    .unwrap()
+                    .path,
+                "replacement"
+            );
+            let error = bounded_replace_status_candidate(
+                &mut candidates,
+                ("d".to_owned(), "d".to_owned()),
+                candidate("d"),
+                2,
+            )
+            .unwrap_err();
+            assert_eq!(error.code, "WORKSPACE_INDEX_INVALID");
+            assert_eq!(candidates.len(), 2);
+        }
+
+        #[test]
+        fn repair_matches_an_independent_full_scan_across_complete_bounded_pages() {
+            let root = TestRoot::new("repair-independent-oracle");
+            let fixture = fixture(&root);
+            let initial = authenticated_rebuild(&root.0, &fixture, true).unwrap();
+            let oracle = independent_full_scan_oracle(&root.0, &fixture);
+            assert!(oracle.items.len() > 23);
+            let before = snapshot_preserved_nodes(&root.0);
+            for invalid_limit in [0, MAX_STATUS_PAGE_ITEMS + 1] {
+                assert_eq!(
+                    test_status_page(&status_request(&root.0, invalid_limit))
+                        .unwrap_err()
+                        .code,
+                    "INPUT_INVALID"
+                );
+            }
+
+            let repaired =
+                repair_workspace_index(&root.0, &mut TestWatcher::default(), &NeverCancelled)
+                    .unwrap();
+            assert_eq!(repaired.generation, initial.generation + 1);
+            assert_eq!(repaired.queued_event_count, 0);
+            assert_eq!(snapshot_preserved_nodes(&root.0), before);
+            assert_complete_stream_matches_oracle(
+                &root.0,
+                &oracle,
+                7,
+                true,
+                "current-native-cursor",
+            );
+            assert_eq!(snapshot_preserved_nodes(&root.0), before);
+            verify_workspace_index(&root.0).unwrap();
+        }
+
+        #[test]
+        fn repair_preserves_degraded_watcher_uncertainty_while_matching_the_oracle() {
+            let root = TestRoot::new("repair-independent-degraded");
+            let fixture = fixture(&root);
+            authenticated_rebuild(&root.0, &fixture, false).unwrap();
+            let oracle = independent_full_scan_oracle(&root.0, &fixture);
+            let before = snapshot_preserved_nodes(&root.0);
+
+            let mut degraded = TestWatcher {
+                continuity: false,
+                ..TestWatcher::default()
+            };
+            let repaired = repair_workspace_index(&root.0, &mut degraded, &NeverCancelled).unwrap();
+            assert!(repaired.reconciliation_required);
+            assert!(!repaired.authoritative_clean);
+            assert_eq!(repaired.reason, "unsupported-resume");
+            assert_complete_stream_matches_oracle(
+                &root.0,
+                &oracle,
+                11,
+                false,
+                "unsupported-resume",
+            );
+            assert_eq!(snapshot_preserved_nodes(&root.0), before);
+        }
+
+        #[test]
+        fn authenticated_rebuild_replaces_only_reconstructible_corrupt_watcher_artifacts() {
+            for class in [CorruptionClass::WatcherState, CorruptionClass::EventChain] {
+                let root = TestRoot::new(&format!("repair-reconstructible-{class:?}"));
+                let fixture = fixture(&root);
+                let initial = authenticated_rebuild(&root.0, &fixture, true).unwrap();
+                let oracle = independent_full_scan_oracle(&root.0, &fixture);
+                let before = snapshot_preserved_nodes(&root.0);
+                corrupt(&root.0, class);
+
+                assert_eq!(
+                    repair_workspace_index(&root.0, &mut TestWatcher::default(), &NeverCancelled,)
+                        .unwrap_err()
+                        .code,
+                    "WORKSPACE_INDEX_INVALID",
+                    "class={class:?}"
+                );
+                assert!(test_status_page(&status_request(&root.0, 7)).is_err());
+                let rebuilt = authenticated_rebuild(&root.0, &fixture, true).unwrap();
+                assert_eq!(rebuilt.generation, initial.generation + 1);
+                assert_eq!(snapshot_preserved_nodes(&root.0), before);
+                assert_complete_stream_matches_oracle(
+                    &root.0,
+                    &oracle,
+                    7,
+                    true,
+                    "current-native-cursor",
+                );
+                assert_eq!(snapshot_preserved_nodes(&root.0), before);
+                verify_workspace_index(&root.0).unwrap();
+            }
+        }
+
+        #[test]
+        fn non_reconstructible_corruption_fails_closed_before_a_new_generation() {
+            let cases = [
+                (CorruptionClass::ActivePointer, "WORKSPACE_INDEX_INVALID"),
+                (CorruptionClass::GenerationSeal, "WORKSPACE_INDEX_INVALID"),
+                (CorruptionClass::Entries, "WORKSPACE_INDEX_INVALID"),
+                (CorruptionClass::Lookup, "WORKSPACE_INDEX_INVALID"),
+                (CorruptionClass::Findings, "WORKSPACE_INDEX_INVALID"),
+                (CorruptionClass::IgnoreSnapshot, "WORKSPACE_INDEX_INVALID"),
+                (CorruptionClass::RetentionHistory, "WORKSPACE_INDEX_INVALID"),
+                (CorruptionClass::CursorKey, "WORKSPACE_INDEX_INVALID"),
+                (CorruptionClass::ReaderLease, "WORKSPACE_INDEX_INVALID"),
+                (
+                    CorruptionClass::TransitionControl,
+                    "WORKSPACE_INDEX_RECOVERY_REQUIRED",
+                ),
+                (
+                    CorruptionClass::CompactionControl,
+                    "WORKSPACE_INDEX_RECOVERY_REQUIRED",
+                ),
+            ];
+            for (class, expected) in cases {
+                let root = TestRoot::new(&format!("repair-fail-closed-{class:?}"));
+                let fixture = fixture(&root);
+                authenticated_rebuild(&root.0, &fixture, true).unwrap();
+                let before = snapshot_preserved_nodes(&root.0);
+                corrupt(&root.0, class);
+                let names = index_names(&root.0);
+
+                assert_eq!(
+                    repair_workspace_index(&root.0, &mut TestWatcher::default(), &NeverCancelled,)
+                        .unwrap_err()
+                        .code,
+                    expected,
+                    "repair class={class:?}"
+                );
+                assert_eq!(
+                    authenticated_rebuild(&root.0, &fixture, true)
+                        .unwrap_err()
+                        .code,
+                    expected,
+                    "rebuild class={class:?}"
+                );
+                assert!(
+                    test_status_page(&status_request(&root.0, 7)).is_err(),
+                    "status class={class:?}"
+                );
+                if matches!(
+                    class,
+                    CorruptionClass::TransitionControl | CorruptionClass::CompactionControl
+                ) {
+                    assert_eq!(
+                        recover_workspace_index(&root.0).unwrap_err().code,
+                        "WORKSPACE_INDEX_INVALID",
+                        "recovery class={class:?}"
+                    );
+                }
+                assert_eq!(index_names(&root.0), names, "class={class:?}");
+                assert_eq!(snapshot_preserved_nodes(&root.0), before, "class={class:?}");
+            }
+        }
+    }
+
     #[test]
     fn rebuild_classifies_complete_set_and_pages_with_bound_cursor() {
         let root = TestRoot::new("status");
@@ -6033,14 +6834,14 @@ mod tests {
             let lease = acquire_test_read_lease(&root.0);
             let lease_path = lease.path_for_test().to_path_buf();
             lease.abandon_for_test();
+            build_one_file_generation(&root);
+            build_one_file_generation(&root);
             retention::rewrite_lease_binding_for_test(
                 &index,
                 &lease_path,
                 &workspace_digest,
                 &repository_id,
             );
-            build_one_file_generation(&root);
-            build_one_file_generation(&root);
 
             assert_eq!(
                 compact_workspace_index(&root.0).unwrap_err().code,
@@ -6066,6 +6867,8 @@ mod tests {
                 let lease = acquire_test_read_lease(&root.0);
                 let lease_path = lease.path_for_test().to_path_buf();
                 lease.abandon_for_test();
+                build_one_file_generation(&root);
+                build_one_file_generation(&root);
                 let mut value: serde_json::Value =
                     serde_json::from_slice(&fs::read(&lease_path).unwrap()).unwrap();
                 value["macSha256"] = serde_json::Value::String("0".repeat(64));
@@ -6077,9 +6880,10 @@ mod tests {
                 serde_json::to_writer(&mut file, &value).unwrap();
                 file.write_all(b"\n").unwrap();
                 file.sync_all().unwrap();
+            } else {
+                build_one_file_generation(&root);
+                build_one_file_generation(&root);
             }
-            build_one_file_generation(&root);
-            build_one_file_generation(&root);
             if case == "unknown-root-control" {
                 let path = index.join("retention-unknown.json");
                 let mut file = crate::create_private_file(&path, true).unwrap();
