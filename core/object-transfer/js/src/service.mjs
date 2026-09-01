@@ -1450,7 +1450,6 @@ export class ObjectTransferService {
             tenantScopeSha256: session.tenantScopeSha256,
             subjectDigestSha256: this.#productionSubjectDigest(binding.claims),
             backendReceiptSha256: verified.receiptSha256,
-            verificationReceiptSha256: productionStatementSha256,
             finalizeSemanticFingerprint: fingerprint,
             productionStatement: statement,
             productionStatementSha256,

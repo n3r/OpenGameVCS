@@ -39,3 +39,7 @@ required-features = ["legacy-test-adapter"]
 [[test]]
 name = "aggregate_bridge_postgres_live"
 required-features = ["legacy-test-adapter"]
+
+[[test]]
+name = "content_manifest_transfer_postgres_live"
+required-features = ["legacy-test-adapter"]

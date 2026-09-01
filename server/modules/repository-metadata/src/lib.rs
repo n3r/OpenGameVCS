@@ -116,15 +116,23 @@ pub use ports::{
     MetadataTransaction, ObjectValidationPort, ProductionObjectValidator,
 };
 #[cfg(feature = "legacy-test-adapter")]
+pub use postgres::ContentManifestAvailabilityFaultForTest;
+#[cfg(feature = "legacy-test-adapter")]
 pub use postgres::PostgresLifecyclePlanWriter;
 pub use postgres::{
     AggregateLifecycleApplicationReceipt, AggregateLifecycleApplyRequest,
+    ContentManifestAvailabilityCommitRequest, ContentManifestAvailabilityReconciliation,
+    ContentManifestAvailabilityTransaction, ContentManifestCommittedProof,
+    ContentManifestCommittedProofLookup, ContentManifestDependencyBinding,
+    ContentManifestExplicitAuthority, ContentManifestProductionStatement,
     IdentityBoundPostgresMetadataStore, IdentityMetadataAuthorizedView,
     PostgresMetadataReadDispatcher, PostgresMetadataStore, PostgresMetadataTransaction,
     PreallocatedCreationSubmitFinalizeRequest, PreallocatedCreationSubmitIntent,
     PreallocatedCreationSubmitIntentRequest, PreallocatedCreationSubmitOutcome,
     PreallocatedCreationSubmitPreflight, PreallocatedCreationSubmitPreflightRequest,
-    PreallocatedCreationSubmitReconciliation,
+    PreallocatedCreationSubmitReconciliation, CONTENT_MANIFEST_EXPLICIT_OBJECTS_MAXIMUM,
+    CONTENT_MANIFEST_PRODUCTION_BOUNDARY, CONTENT_MANIFEST_PRODUCTION_PROFILE,
+    CONTENT_MANIFEST_PRODUCTION_VERIFIER,
 };
 #[cfg(feature = "legacy-test-adapter")]
 pub use postgres::{AtomicSubmitFaultForTest, AtomicSubmitRestartBoundaryForTest};

@@ -18,7 +18,7 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
     );
     assert_eq!(manifest["database"], "postgresql-15-or-newer");
     let entries = manifest["entries"].as_array().unwrap();
-    assert_eq!(entries.len(), 33);
+    assert_eq!(entries.len(), 36);
     let expected = [
         (1, "expand"),
         (1, "migrate"),
@@ -53,6 +53,9 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
         (11, "expand"),
         (11, "migrate"),
         (11, "contract"),
+        (12, "expand"),
+        (12, "migrate"),
+        (12, "contract"),
     ];
     for (entry, (version, phase)) in entries.iter().zip(expected) {
         assert_eq!(entry["version"], version);
@@ -77,6 +80,75 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
     assert_eq!(entries[26]["requiresCompatibilityFence"], true);
     assert_eq!(entries[29]["requiresCompatibilityFence"], true);
     assert_eq!(entries[32]["requiresCompatibilityFence"], true);
+    assert_eq!(entries[35]["requiresCompatibilityFence"], true);
+}
+
+#[test]
+fn version_twelve_adds_only_typed_private_manifest_availability_proof_storage() {
+    let root = migration_root();
+    let expand = fs::read_to_string(root.join("000012_expand.sql")).unwrap();
+    for predecessor in [
+        "ba12a576e2a186e75becb51773e9f9c4322c41f37e115546c31eb29776463f3f",
+        "2f9e6d1c74b5bd58f42cd004db6e8547c78d9c92aa98e13cc100f17eb84f1c4d",
+        "bd54d48f750ca52660d596377c5819eb66f68b8743d3286bd248c14bc03e26e3",
+    ] {
+        assert!(
+            expand.contains(predecessor),
+            "missing v11 predecessor pin {predecessor}"
+        );
+    }
+    for evidence in [
+        "content_manifest_availability_proofs",
+        "content_manifest_availability_authorization_pages",
+        "dependency_count BETWEEN 0 AND 4095",
+        "identity_subject_digest bytea NOT NULL",
+        "production_subject_digest bytea NOT NULL",
+        "content_manifest_verification_receipt_digest_v12",
+        "SELECT sha256(",
+        "verification.receipt_digest =",
+        "backend.lifecycle_contract_digest = application.lifecycle_contract_digest",
+        "verification.lifecycle_contract_digest = application.lifecycle_contract_digest",
+        "application.lifecycle_contract_digest = decode(",
+        "db379ccdd81cfe94fec08ddda2ae5031c9ab5b7750007cf1e096cf1e4299a3bc",
+        "fact.outbox_event_id = NEW.outbox_event_id",
+        "lifecycle.tenant_scope_digest = NEW.tenant_scope_digest",
+        "WHEN ordinal.value < NEW.authorization_page_count - 1",
+        "THEN 1000",
+        "statement_boundary = 'ogvcs.chunking-manifest/production-boundary@1'",
+        "statement_profile = 'chunking.opengamevcs/gear-fastcdc-1m@1'",
+        "statement_verifier = 'ogvcs.chunking-manifest/verifier@1'",
+        "content-manifest-availability",
+        "DEFERRABLE INITIALLY DEFERRED",
+        "reject_lifecycle_immutable_mutation",
+    ] {
+        assert!(expand.contains(evidence), "missing v12 evidence {evidence}");
+    }
+    for forbidden in ["jsonb", "request_root", "CREATE ROUTE", "DELETE FROM"] {
+        assert!(!expand
+            .to_ascii_lowercase()
+            .contains(&forbidden.to_ascii_lowercase()));
+    }
+    let migrate = fs::read_to_string(root.join("000012_migrate.sql")).unwrap();
+    assert!(!migrate.contains("INSERT INTO"));
+    assert!(!migrate.contains("UPDATE "));
+    let contract = fs::read_to_string(root.join("000012_contract.sql")).unwrap();
+    assert!(!contract.contains("DROP "));
+    assert!(!contract.contains("DELETE "));
+    assert!(!expand.contains("dependency_count BETWEEN 0 AND 4096"));
+    assert!(!expand.contains("production_statement_digest = verification_receipt_digest"));
+    for (dependencies, accepted) in [(0, true), (4_095, true), (4_096, false)] {
+        assert_eq!(
+            (0..=4_095).contains(&dependencies),
+            accepted,
+            "v12 dependency bound must leave room for the manifest in the 4,096-object set"
+        );
+    }
+    assert_eq!(
+        expand
+            .matches("lifecycle_contract_digest = application.lifecycle_contract_digest")
+            .count(),
+        2
+    );
 }
 
 #[test]

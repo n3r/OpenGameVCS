@@ -103,6 +103,7 @@ const rustFiles = [
   'service.rs',
   'postgres/aggregate_bridge.rs',
   'postgres/atomic_submit.rs',
+  'postgres/content_manifest_transfer.rs',
   'postgres/metadata_dispatcher.rs',
   'types.rs',
 ];
@@ -117,7 +118,7 @@ for (const file of rustFiles) {
 
 const manifest = JSON.parse(await readFile(resolve(migrations, 'manifest.json')));
 assert(manifest.schemaVersion === 'ogvcs.repository-metadata/migration-manifest/v1', 'migration manifest schema differs');
-assert(JSON.stringify(manifest.entries.map(({ version, phase }) => [version, phase])) === '[[1,"expand"],[1,"migrate"],[1,"contract"],[2,"expand"],[2,"migrate"],[2,"contract"],[3,"expand"],[3,"migrate"],[3,"contract"],[4,"expand"],[4,"migrate"],[4,"contract"],[5,"expand"],[5,"migrate"],[5,"contract"],[6,"expand"],[6,"migrate"],[6,"contract"],[7,"expand"],[7,"migrate"],[7,"contract"],[8,"expand"],[8,"migrate"],[8,"contract"],[9,"expand"],[9,"migrate"],[9,"contract"],[10,"expand"],[10,"migrate"],[10,"contract"],[11,"expand"],[11,"migrate"],[11,"contract"]]', 'migration phases are not ordered');
+assert(JSON.stringify(manifest.entries.map(({ version, phase }) => [version, phase])) === '[[1,"expand"],[1,"migrate"],[1,"contract"],[2,"expand"],[2,"migrate"],[2,"contract"],[3,"expand"],[3,"migrate"],[3,"contract"],[4,"expand"],[4,"migrate"],[4,"contract"],[5,"expand"],[5,"migrate"],[5,"contract"],[6,"expand"],[6,"migrate"],[6,"contract"],[7,"expand"],[7,"migrate"],[7,"contract"],[8,"expand"],[8,"migrate"],[8,"contract"],[9,"expand"],[9,"migrate"],[9,"contract"],[10,"expand"],[10,"migrate"],[10,"contract"],[11,"expand"],[11,"migrate"],[11,"contract"],[12,"expand"],[12,"migrate"],[12,"contract"]]', 'migration phases are not ordered');
 for (const entry of manifest.entries) {
   const bytes = await readFile(resolve(migrations, entry.path));
   const sql = bytes.toString('utf8');
@@ -611,6 +612,16 @@ assert(protocolBindings.profile.requestMediaType === 'application/json'
 assert(protocolBindings.networkRoutes.length === 0
   && protocolBindings.entries.every(({ networkRegistered }) => networkRegistered === false),
   'unwired metadata route entered production registration');
+for (const privateTransferSymbol of [
+  'commit_content_manifest_availability',
+  'ContentManifestAvailabilityCommitRequest',
+  'content-manifest-availability',
+]) {
+  assert(
+    !serviceSource.includes(privateTransferSymbol),
+    `private object-transfer participant entered service routing: ${privateTransferSymbol}`,
+  );
+}
 for (const operation of JSON.parse(await readFile(resolve(workspace, 'spec/repository-metadata/v1/registries/operations.json'))).entries) {
   assert(serviceSource.includes(`"${operation.name}"`), `service operation missing: ${operation.name}`);
 }
@@ -865,6 +876,94 @@ for (const evidence of [
 ]) assert(expandV11.includes(evidence), `version 11 private atomic-submit evidence missing: ${evidence}`);
 assert(expandV11.includes('repository metadata v11 predecessor authority mismatch'), 'version 11 predecessor fence missing');
 assert(!expandV11.includes('NEW.operation_count = 0 OR'), 'version 11 admits an unproved zero-operation submit');
+
+const expandV12 = await readFile(resolve(migrations, '000012_expand.sql'), 'utf8');
+for (const predecessor of [
+  'ba12a576e2a186e75becb51773e9f9c4322c41f37e115546c31eb29776463f3f',
+  '2f9e6d1c74b5bd58f42cd004db6e8547c78d9c92aa98e13cc100f17eb84f1c4d',
+  'bd54d48f750ca52660d596377c5819eb66f68b8743d3286bd248c14bc03e26e3',
+]) assert(expandV12.includes(predecessor), `version 12 predecessor pin missing: ${predecessor}`);
+for (const evidence of [
+  'content_manifest_availability_proofs',
+  'content_manifest_availability_authorization_pages',
+  'dependency_count BETWEEN 0 AND 4095',
+  'identity_subject_digest bytea NOT NULL',
+  'production_subject_digest bytea NOT NULL',
+  'content_manifest_verification_receipt_digest_v12',
+  "SELECT sha256(",
+  'verification.receipt_digest =',
+  'backend.lifecycle_contract_digest = application.lifecycle_contract_digest',
+  'verification.lifecycle_contract_digest = application.lifecycle_contract_digest',
+  'application.lifecycle_contract_digest = decode(',
+  'db379ccdd81cfe94fec08ddda2ae5031c9ab5b7750007cf1e096cf1e4299a3bc',
+  'fact.outbox_event_id = NEW.outbox_event_id',
+  'lifecycle.tenant_scope_digest = NEW.tenant_scope_digest',
+  'WHEN ordinal.value < NEW.authorization_page_count - 1',
+  "statement_boundary = 'ogvcs.chunking-manifest/production-boundary@1'",
+  "statement_profile = 'chunking.opengamevcs/gear-fastcdc-1m@1'",
+  "statement_verifier = 'ogvcs.chunking-manifest/verifier@1'",
+  "purpose = 'content-manifest-availability'",
+  'content_manifest_availability_proofs_immutable_v12',
+  'content_manifest_availability_authorization_pages_immutable_v12',
+  'repository metadata v12 predecessor authority mismatch',
+]) assert(expandV12.includes(evidence), `version 12 availability evidence missing: ${evidence}`);
+assert(!expandV12.includes('dependency_count BETWEEN 0 AND 4096'), 'version 12 admits 4,097 total explicit objects');
+assert(
+  !expandV12.includes('production_statement_digest = verification_receipt_digest'),
+  'version 12 conflates production evidence with global lifecycle receipt identity',
+);
+for (const forbidden of ['jsonb', 'request_root', 'DELETE FROM', 'DROP TABLE']) {
+  assert(!expandV12.toLowerCase().includes(forbidden.toLowerCase()), `version 12 includes forbidden generic/destructive storage: ${forbidden}`);
+}
+const migrateV12 = await readFile(resolve(migrations, '000012_migrate.sql'), 'utf8');
+const contractV12 = await readFile(resolve(migrations, '000012_contract.sql'), 'utf8');
+assert(!migrateV12.includes('INSERT INTO') && !migrateV12.includes('UPDATE '), 'version 12 fabricates historical proof');
+assert(!contractV12.includes('DROP ') && !contractV12.includes('DELETE '), 'version 12 contracts typed proof storage');
+
+const contentManifestAdapter = await readFile(
+  resolve(root, 'src/postgres/content_manifest_transfer.rs'),
+  'utf8',
+);
+for (const evidence of [
+  'CONTENT_MANIFEST_EXPLICIT_OBJECTS_MAXIMUM: usize = 4_096',
+  'const _: () = assert!(MAXIMUM_BATCH_RESOURCES == 1_000)',
+  '.isolation_level(IsolationLevel::Serializable)',
+  'pub struct ContentManifestAvailabilityTransaction',
+  'fn authorize_explicit_set(',
+  '.chunks(MAXIMUM_BATCH_RESOURCES)',
+  'fn lock_exact_lifecycle_set(',
+  "'content-manifest-availability'",
+  "SET state = 'available'",
+  'content_manifest_availability_proofs',
+  'content_manifest_availability_authorization_pages',
+  'ContentManifestAvailabilityReconciliation::UnknownRecovering',
+  'proof.generation != target_generation',
+  'proof.identity_subject_digest != lookup.authority.identity_subject_digest',
+  'proof.production_subject_digest != lookup.authority.production_subject_digest',
+  'stored_authorization_epoch != lookup.authority.authority_epoch',
+  'lifecycle_contract_digest = $10',
+  'fn lifecycle_verification_receipt_digest(',
+  'request.verification_receipt_digest != expected_verification_receipt',
+  'lifecycle.object_length = proof.object_length',
+  'lifecycle.tenant_scope_digest = proof.tenant_scope_digest',
+]) assert(contentManifestAdapter.includes(evidence), `content-manifest participant evidence missing: ${evidence}`);
+assert(
+  contentManifestAdapter.indexOf('let authorized = authorize_explicit_set(')
+    < contentManifestAdapter.indexOf('if let Some(proof) = load_committed_proof(')
+  && contentManifestAdapter.indexOf('if let Some(proof) = load_committed_proof(')
+    < contentManifestAdapter.indexOf('let locked = lock_exact_lifecycle_set('),
+  'content-manifest participant consults protected existence before full-set authorization',
+);
+assert(
+  contentManifestAdapter.includes(
+    '#[cfg(feature = "legacy-test-adapter")]\n#[derive(Clone, Copy, Debug, Eq, PartialEq)]\npub enum ContentManifestAvailabilityFaultForTest',
+  ),
+  'content-manifest fault surface escaped the legacy test feature',
+);
+for (const forbiddenAuthority of [
+  'request_root', 'reqwest::', 'aws_sdk_', 'std::fs::', 'tokio::net::',
+  'remove_file', 'DELETE FROM ogvcs_metadata.object_lifecycle', 'pub fn transaction(',
+]) assert(!contentManifestAdapter.includes(forbiddenAuthority), `content-manifest participant gained excluded authority: ${forbiddenAuthority}`);
 
 const atomicSubmitAdapter = await readFile(resolve(root, 'src/postgres/atomic_submit.rs'), 'utf8');
 assert(atomicSubmitAdapter.includes('finalize_preallocated_creation_submit'), 'private preallocated creation-submit finalize boundary missing');
@@ -1137,6 +1236,7 @@ assert(
 
 const migrationRunner = await readFile(resolve(root, 'src/migration_runner.rs'), 'utf8');
 assert(migrationRunner.includes('pub fn verify_schema_compatibility'), 'mutation schema compatibility gate missing');
+assert(migrationRunner.includes('MAXIMUM_SCHEMA_VERSION: i64 = 12'), 'maximum schema version does not include v12');
 assert(
   migrationRunner.indexOf('let existing =') < migrationRunner.indexOf('migration.requires_compatibility_fence'),
   'closed migration fence bypasses ledger checksum validation',

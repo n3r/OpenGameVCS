@@ -103,6 +103,8 @@ const PRODUCTION_STATEMENT_KEYS = [
   'verifier',
   'wholeFileSha256',
 ].sort().join('\0');
+const LIFECYCLE_VERIFICATION_RECEIPT_DOMAIN =
+  'OGVCS-OBJECT-TRANSFER-CONTENT-MANIFEST-LIFECYCLE-VERIFICATION-RECEIPT-V1\0';
 const COMMITTED_KEYS = [
   'applicationId',
   'authorizationClosureSha256',
@@ -145,12 +147,12 @@ const COMMIT_COMMAND_KEYS = [
   'targetState',
   'tenantId',
   'tenantScopeSha256',
-  'verificationReceiptSha256',
 ].sort().join('\0');
 const ADAPTER_COMMIT_COMMAND_KEYS = [
   ...COMMIT_COMMAND_KEYS.split('\0'),
   'dependencyCount',
   'dependencyGenerationSetSha256',
+  'verificationReceiptSha256',
 ].sort().join('\0');
 
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -286,6 +288,38 @@ function passive(
 }
 
 function sha(value) { return typeof value === 'string' && SHA.test(value); }
+
+function receiptField(value) {
+  const length = Buffer.alloc(8);
+  length.writeBigUInt64BE(BigInt(value.byteLength));
+  return Buffer.concat([length, value]);
+}
+
+function receiptInteger(value, bytes) {
+  const encoded = Buffer.alloc(bytes);
+  if (bytes === 2) encoded.writeUInt16BE(value);
+  else encoded.writeBigUInt64BE(BigInt(value));
+  return encoded;
+}
+
+function lifecycleVerificationReceiptSha256(value) {
+  const objectDigest = value.objectId.slice(value.objectId.lastIndexOf(':') + 1);
+  return sha256(Buffer.concat([
+    Buffer.from(LIFECYCLE_VERIFICATION_RECEIPT_DOMAIN),
+    receiptField(Buffer.from('production-verification')),
+    receiptField(Buffer.from(value.tenantId.replaceAll('-', ''), 'hex')),
+    receiptField(Buffer.from(value.repositoryId.replaceAll('-', ''), 'hex')),
+    receiptField(Buffer.from(value.opaqueKey, 'hex')),
+    receiptField(receiptInteger(2, 2)),
+    receiptField(Buffer.from(objectDigest, 'hex')),
+    receiptField(Buffer.from(value.expectedState)),
+    receiptField(receiptInteger(value.expectedGeneration, 8)),
+    receiptField(Buffer.from(value.targetState)),
+    receiptField(receiptInteger(value.targetGeneration, 8)),
+    receiptField(Buffer.from(value.authorityBindingSha256, 'hex')),
+    receiptField(Buffer.from(value.productionStatementSha256, 'hex')),
+  ]));
+}
 
 function authorizationClosureSha256(objectIds, requestRoot) {
   return sha256(Buffer.concat([
@@ -520,16 +554,23 @@ function validateCommitted(input, mapping, lookup) {
       || value.finalizeSemanticFingerprint !== lookup.finalizeSemanticFingerprint
       || !Number.isSafeInteger(value.generation) || value.generation < 2
       || !Number.isSafeInteger(value.dependencyCount) || value.dependencyCount < 0
-      || value.dependencyCount > 4096
+      || value.dependencyCount > 4095
       || !sha(value.dependencyGenerationSetSha256)
       || !sha(value.verificationReceiptSha256) || !sha(value.productionStatementSha256)
-      || value.verificationReceiptSha256 !== value.productionStatementSha256
       || !sha(value.proofSha256)) {
     corrupt('repository-metadata committed content-manifest proof is invalid');
   }
   const statement = validateStatement(value.productionStatement, value.objectId);
   const statementSha256 = contentManifestProductionStatementSha256(statement);
+  const expectedVerificationReceiptSha256 = lifecycleVerificationReceiptSha256({
+    ...value,
+    expectedState: 'staged',
+    expectedGeneration: value.generation - 1,
+    targetState: 'available',
+    targetGeneration: value.generation,
+  });
   if (statementSha256 !== value.productionStatementSha256
+      || expectedVerificationReceiptSha256 !== value.verificationReceiptSha256
       || committedProofDigest(value) !== value.proofSha256) {
     corrupt('repository-metadata committed content-manifest proof digest is invalid');
   }
@@ -556,8 +597,7 @@ function validateCommitCommand(input, bound) {
       || value.targetGeneration !== current.generation + 1
       || current.state !== 'staged' || current.backendReceiptSha256 !== null
       || current.verificationReceiptSha256 !== null
-      || value.verificationReceiptSha256 !== value.productionStatementSha256
-      || !sha(value.verificationReceiptSha256)) {
+      || !sha(value.productionStatementSha256)) {
     transferError('TRANSFER_AUTHORIZATION_DENIED', 'content-manifest availability commit was denied');
   }
   const statement = validateStatement(value.productionStatement, value.objectId);
@@ -734,6 +774,7 @@ function trustedFacade(portRecord) {
         ...command,
         dependencyCount: dependencyCurrents.length,
         dependencyGenerationSetSha256: contentManifestDependencyGenerationSetSha256(dependencyCurrents),
+        verificationReceiptSha256: lifecycleVerificationReceiptSha256(command),
       }, 256 * 1024);
       if (!exactKeys(adapterCommand, ADAPTER_COMMIT_COMMAND_KEYS)) {
         corrupt('content-manifest dependency commit binding is invalid');

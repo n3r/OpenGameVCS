@@ -26,6 +26,7 @@ use uuid::Uuid;
 
 mod aggregate_bridge;
 mod atomic_submit;
+mod content_manifest_transfer;
 mod lifecycle;
 mod metadata_dispatcher;
 pub(crate) use aggregate_bridge::apply_aggregate_lifecycle_publication_in_transaction;
@@ -37,6 +38,16 @@ pub use atomic_submit::{
     PreallocatedCreationSubmitIntentRequest, PreallocatedCreationSubmitOutcome,
     PreallocatedCreationSubmitPreflight, PreallocatedCreationSubmitPreflightRequest,
     PreallocatedCreationSubmitReconciliation,
+};
+#[cfg(feature = "legacy-test-adapter")]
+pub use content_manifest_transfer::ContentManifestAvailabilityFaultForTest;
+pub use content_manifest_transfer::{
+    ContentManifestAvailabilityCommitRequest, ContentManifestAvailabilityReconciliation,
+    ContentManifestAvailabilityTransaction, ContentManifestCommittedProof,
+    ContentManifestCommittedProofLookup, ContentManifestDependencyBinding,
+    ContentManifestExplicitAuthority, ContentManifestProductionStatement,
+    CONTENT_MANIFEST_EXPLICIT_OBJECTS_MAXIMUM, CONTENT_MANIFEST_PRODUCTION_BOUNDARY,
+    CONTENT_MANIFEST_PRODUCTION_PROFILE, CONTENT_MANIFEST_PRODUCTION_VERIFIER,
 };
 #[cfg(feature = "legacy-test-adapter")]
 pub use lifecycle::PostgresLifecyclePlanWriter;

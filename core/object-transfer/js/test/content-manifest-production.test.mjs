@@ -13,6 +13,7 @@ import {
   contentManifestCommittedProofSha256,
   contentManifestDependencyGenerationSetSha256,
   contentManifestProductionCandidateCapabilities,
+  contentManifestProductionStatementSha256,
   createLifecycleAdapterPort,
   createRepositoryMetadataContentManifestCandidatePort,
 } from '../src/index.mjs';
@@ -30,6 +31,183 @@ const authorizationClosureSha256 = (objectIds) => sha256(Buffer.concat([
   Buffer.from('OGVCS-OBJECT-TRANSFER-AUTHORIZATION-CLOSURE-V1\0'),
   canonicalBytes({ objectIds: [...objectIds].sort(), requestRoot: null }),
 ]));
+const receiptField = (value) => {
+  const length = Buffer.alloc(8);
+  length.writeBigUInt64BE(BigInt(value.byteLength));
+  return Buffer.concat([length, value]);
+};
+const receiptInteger = (value, bytes) => {
+  const encoded = Buffer.alloc(bytes);
+  if (bytes === 2) encoded.writeUInt16BE(value);
+  else encoded.writeBigUInt64BE(BigInt(value));
+  return encoded;
+};
+const lifecycleVerificationReceiptSha256 = (binding) => sha256(Buffer.concat([
+  Buffer.from('OGVCS-OBJECT-TRANSFER-CONTENT-MANIFEST-LIFECYCLE-VERIFICATION-RECEIPT-V1\0'),
+  receiptField(Buffer.from('production-verification')),
+  receiptField(Buffer.from(binding.tenantId.replaceAll('-', ''), 'hex')),
+  receiptField(Buffer.from(binding.repositoryId.replaceAll('-', ''), 'hex')),
+  receiptField(Buffer.from(binding.opaqueKey, 'hex')),
+  receiptField(receiptInteger(2, 2)),
+  receiptField(Buffer.from(binding.objectId.split(':').at(-1), 'hex')),
+  receiptField(Buffer.from('staged')),
+  receiptField(receiptInteger(binding.expectedGeneration, 8)),
+  receiptField(Buffer.from('available')),
+  receiptField(receiptInteger(binding.expectedGeneration + 1, 8)),
+  receiptField(Buffer.from(binding.authorityBindingSha256, 'hex')),
+  receiptField(Buffer.from(binding.productionStatementSha256, 'hex')),
+]));
+
+test('service input cannot select the lifecycle verification receipt identity', async () => {
+  const serviceSource = await readFile(new URL('../src/service.mjs', import.meta.url), 'utf8');
+  const callStart = serviceSource.indexOf(
+    'return this.#contentManifestProduction.commitAvailability(transaction, {',
+  );
+  const callEnd = serviceSource.indexOf('\n          });', callStart);
+  assert.ok(callStart > 0 && callEnd > callStart);
+  assert.doesNotMatch(serviceSource.slice(callStart, callEnd), /verificationReceiptSha256/u);
+
+  const portSource = await readFile(
+    new URL('../src/content-manifest-production-port.mjs', import.meta.url),
+    'utf8',
+  );
+  const publicCommandStart = portSource.indexOf('const COMMIT_COMMAND_KEYS = [');
+  const adapterCommandStart = portSource.indexOf('const ADAPTER_COMMIT_COMMAND_KEYS = [');
+  assert.ok(publicCommandStart > 0 && adapterCommandStart > publicCommandStart);
+  assert.doesNotMatch(
+    portSource.slice(publicCommandStart, adapterCommandStart),
+    /verificationReceiptSha256/u,
+  );
+  assert.match(
+    portSource.slice(adapterCommandStart, portSource.indexOf('\n\n', adapterCommandStart)),
+    /verificationReceiptSha256/u,
+  );
+});
+
+test('PostgreSQL proof projection matches a real chunking-manifest vector', async () => {
+  const productionSubjectSha256 = sha256(Buffer.concat([
+    Buffer.from('OGVCS-OBJECT-TRANSFER-PRODUCTION-SUBJECT-V1\0'),
+    canonicalBytes({ issuer: 'auth.example', subject: 'artist-one' }),
+  ]));
+  assert.equal(
+    productionSubjectSha256,
+    '90c0f1f509b03d44c9014f03aefd489ac58f2020891f4ea70cec5e567638ba1b',
+  );
+  const vector = await chunkBytes(Buffer.from(
+    'OGVCS PostgreSQL content manifest cross-language vector\n',
+    'utf8',
+  ));
+  const manifestObjectId = vector.manifest.objectId;
+  const manifestSha256 = sha256(vector.manifest.bytes);
+  const objectDigest = manifestObjectId.split(':').at(-1);
+  assert.equal(
+    manifestObjectId,
+    'ogvcs:v1:content-manifest:sha256:6e0acb8f9543ea98c64bd11b0dcd6decdc446cc52bf44dd3a75ecbadc973b382',
+  );
+  assert.equal(manifestSha256, 'ac762d7f4130ce05b17dfaacea1e9204c1485fa939e7c61c1a04daa90dc19a33');
+  assert.notEqual(manifestSha256, objectDigest);
+  const dependency = {
+    schemaVersion: 'ogvcs.object-transfer/content-manifest-current-object/v1',
+    tenantId: '11111111-1111-4111-8111-111111111111',
+    repositoryId: '22222222-2222-4222-8222-222222222222',
+    opaqueKey: '11'.repeat(32),
+    objectId: vector.chunks[0].objectId,
+    length: vector.chunks[0].length,
+    state: 'available',
+    generation: 2,
+    authorityBindingSha256: '44'.repeat(32),
+    backendReceiptSha256: '55'.repeat(32),
+    durableBackendReceiptSha256: '55'.repeat(32),
+    verificationReceiptSha256: null,
+  };
+  const dependencyGenerationSetSha256 = contentManifestDependencyGenerationSetSha256([
+    dependency,
+  ]);
+  assert.equal(
+    dependencyGenerationSetSha256,
+    '62e0656ff0e697c7e5cf3d80302ad979bdefbe5adb05c6191d29cbc1bcd7077e',
+  );
+  const closure = authorizationClosureSha256([
+    dependency.objectId,
+    manifestObjectId,
+  ]);
+  assert.equal(closure, '0888671dd3f318f53cd5d99436afa1d11b45044cc7466ec91708b41f7c8393b1');
+  const productionStatement = {
+    boundary: 'ogvcs.chunking-manifest/production-boundary@1',
+    logicalBytes: '56',
+    manifestObjectId,
+    manifestSha256,
+    profile: vector.manifest.profile,
+    verifier: 'ogvcs.chunking-manifest/verifier@1',
+    wholeFileSha256: Buffer.from(vector.wholeFileDigest).toString('hex'),
+  };
+  const productionStatementSha256 = contentManifestProductionStatementSha256(
+    productionStatement,
+  );
+  assert.equal(
+    productionStatementSha256,
+    '9458069ee34f5018b7bf74eb354ca59e078a3e6e10b0dc869e490a27148e32dd',
+  );
+  const receiptBinding = {
+    tenantId: '11111111-1111-4111-8111-111111111111',
+    repositoryId: '22222222-2222-4222-8222-222222222222',
+    opaqueKey: '33'.repeat(32),
+    objectId: manifestObjectId,
+    expectedGeneration: 3,
+    authorityBindingSha256: 'aa'.repeat(32),
+    productionStatementSha256,
+  };
+  const verificationReceiptSha256 = lifecycleVerificationReceiptSha256(receiptBinding);
+  assert.equal(
+    verificationReceiptSha256,
+    '4e941cced00b6fe3bb7a1855b37ac0b165a045e5f3285f6ed061700f4ace0a3d',
+  );
+  assert.equal(lifecycleVerificationReceiptSha256({ ...receiptBinding }), verificationReceiptSha256);
+  for (const hostile of [
+    { repositoryId: '22222222-2222-4222-8222-222222222223' },
+    { expectedGeneration: 4 },
+    { authorityBindingSha256: 'ab'.repeat(32) },
+    { productionStatementSha256: '94'.repeat(32) },
+    { objectId: `${manifestObjectId.slice(0, -1)}3` },
+  ]) {
+    assert.notEqual(
+      lifecycleVerificationReceiptSha256({ ...receiptBinding, ...hostile }),
+      verificationReceiptSha256,
+    );
+  }
+  const body = Object.freeze({
+    schemaVersion: 'ogvcs.object-transfer/content-manifest-committed-current/v1',
+    applicationId: '33333333-3333-4333-8333-333333333333',
+    tenantId: '11111111-1111-4111-8111-111111111111',
+    repositoryId: '22222222-2222-4222-8222-222222222222',
+    opaqueKey: '33'.repeat(32),
+    objectId: manifestObjectId,
+    length: vector.manifest.bytes.length,
+    state: 'available',
+    generation: 4,
+    authorizationClosureSha256: closure,
+    authorityBindingSha256: 'aa'.repeat(32),
+    tenantScopeSha256: 'bb'.repeat(32),
+    subjectDigestSha256: productionSubjectSha256,
+    backendReceiptSha256: 'ee'.repeat(32),
+    dependencyCount: 1,
+    dependencyGenerationSetSha256,
+    verificationReceiptSha256,
+    finalizeSemanticFingerprint: 'ff'.repeat(32),
+    productionStatement,
+    productionStatementSha256,
+  });
+  const proofSha256 = contentManifestCommittedProofSha256(body);
+  assert.equal(proofSha256, '3aa67a120438b8c5d35c87d838b1464a452dcfb8698f2368fdd9dc775b6ad6d2');
+  assert.deepEqual(Object.keys({ ...body, proofSha256 }).sort(), [
+    'applicationId', 'authorizationClosureSha256', 'authorityBindingSha256',
+    'backendReceiptSha256', 'dependencyGenerationSetSha256', 'dependencyCount',
+    'finalizeSemanticFingerprint', 'generation', 'length', 'objectId', 'opaqueKey',
+    'productionStatement', 'productionStatementSha256', 'proofSha256', 'repositoryId',
+    'schemaVersion', 'state', 'subjectDigestSha256', 'tenantId', 'tenantScopeSha256',
+    'verificationReceiptSha256',
+  ].sort());
+});
 
 function deterministicBytes(length) {
   const bytes = Buffer.alloc(length);
@@ -497,6 +675,7 @@ async function harness(options = {}) {
   await construct();
   return {
     construct,
+    committed,
     controls,
     lifecyclePort,
     productionPort,
@@ -639,6 +818,46 @@ test('settled commit response loss recovers after restart only from the exact cu
   const recovered = await finalize(restarted, value.manifest, value.uploadGrant, 'manifest-recovery');
   assert.equal(recovered.result.state, 'available');
   assert.equal(recovered.result.generation, 2);
+  assert.equal(value.statistics.commits, 1);
+});
+
+test('reconciliation rejects forged lifecycle receipt bindings and 4,096 dependencies', async () => {
+  const value = await prepare();
+  await finalize(value.service, value.manifest, value.uploadGrant, 'manifest-proof-baseline');
+  const [proof] = value.committed.values();
+  assert.ok(proof);
+  const crossRepositoryReceipt = lifecycleVerificationReceiptSha256({
+    tenantId: proof.tenantId,
+    repositoryId: '00000000-0000-4000-8000-000000000003',
+    opaqueKey: proof.opaqueKey,
+    objectId: proof.objectId,
+    expectedGeneration: proof.generation - 1,
+    authorityBindingSha256: proof.authorityBindingSha256,
+    productionStatementSha256: proof.productionStatementSha256,
+  });
+  const hostileBodies = [
+    { ...proof, verificationReceiptSha256: 'f'.repeat(64) },
+    { ...proof, verificationReceiptSha256: crossRepositoryReceipt },
+    { ...proof, dependencyCount: 4096 },
+  ];
+  for (const [index, hostileBody] of hostileBodies.entries()) {
+    delete hostileBody.proofSha256;
+    const hostile = {
+      ...hostileBody,
+      proofSha256: contentManifestCommittedProofSha256(hostileBody),
+    };
+    value.controls.lookupOverride = () => hostile;
+    await assert.rejects(
+      () => finalize(
+        value.service,
+        value.manifest,
+        value.uploadGrant,
+        `manifest-hostile-reconciliation-${index}`,
+      ),
+      { code: 'TRANSFER_BACKEND_CORRUPT' },
+    );
+  }
+  value.controls.lookupOverride = null;
   assert.equal(value.statistics.commits, 1);
 });
 
