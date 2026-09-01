@@ -598,7 +598,27 @@ impl MetadataOperationRequest {
         let Some(key) = self.idempotency_key.as_ref() else {
             return Ok(None);
         };
-        let (issued_at, expires_at) = idempotency_window(key)?;
+        let (issued_at_unix_ms, expires_at_unix_ms) = idempotency_window(key)?;
+        let server_now_unix_ms = u64::try_from(
+            server_now
+                .duration_since(UNIX_EPOCH)
+                .map_err(|_| MetadataServiceBoundaryError::InputInvalid)?
+                .as_millis(),
+        )
+        .map_err(|_| MetadataServiceBoundaryError::LimitExceeded)?;
+        if issued_at_unix_ms > server_now_unix_ms || server_now_unix_ms >= expires_at_unix_ms {
+            return Err(MetadataServiceBoundaryError::InputInvalid);
+        }
+        // Parsing remains platform-neutral for the complete OGVCS-041 safe
+        // integer domain. Convert to `SystemTime` only after the server clock
+        // proves the key is current, so an unreachable far-future timestamp
+        // cannot make otherwise valid syntax platform-dependent.
+        let issued_at = UNIX_EPOCH
+            .checked_add(Duration::from_millis(issued_at_unix_ms))
+            .ok_or(MetadataServiceBoundaryError::LimitExceeded)?;
+        let expires_at = UNIX_EPOCH
+            .checked_add(Duration::from_millis(expires_at_unix_ms))
+            .ok_or(MetadataServiceBoundaryError::LimitExceeded)?;
         let reservation = IdempotencyReservation {
             operation: self.operation.name().to_owned(),
             key: key.clone(),
@@ -1201,7 +1221,7 @@ fn semantic_fingerprint(operation: MetadataOperation, body: &Value) -> BoundaryR
     Ok(digest.finalize().into())
 }
 
-fn idempotency_window(key: &str) -> BoundaryResult<(SystemTime, SystemTime)> {
+fn idempotency_window(key: &str) -> BoundaryResult<(u64, u64)> {
     let mut parts = key.split('.');
     if parts.next() != Some("ik1") {
         return input_invalid();
@@ -1229,13 +1249,7 @@ fn idempotency_window(key: &str) -> BoundaryResult<(SystemTime, SystemTime)> {
     {
         return input_invalid();
     }
-    let issued_at = UNIX_EPOCH
-        .checked_add(Duration::from_millis(issued))
-        .ok_or(MetadataServiceBoundaryError::InputInvalid)?;
-    let expires_at = UNIX_EPOCH
-        .checked_add(Duration::from_millis(expires))
-        .ok_or(MetadataServiceBoundaryError::InputInvalid)?;
-    Ok((issued_at, expires_at))
+    Ok((issued, expires))
 }
 
 fn canonical_decimal(value: &str) -> BoundaryResult<u64> {

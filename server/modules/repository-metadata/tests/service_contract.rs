@@ -748,7 +748,13 @@ fn semantic_idempotency_is_order_independent_but_operation_and_body_bound() {
             'J',
         )),
     );
-    assert!(parse_value(&exact_safe_maximum).is_ok());
+    let exact_safe_maximum = parse_value(&exact_safe_maximum).unwrap();
+    assert_eq!(
+        exact_safe_maximum
+            .idempotency_reservation_at(UNIX_EPOCH + Duration::from_millis(1_500)),
+        Err(MetadataServiceBoundaryError::InputInvalid),
+        "a syntactically valid far-future key must be rejected as future-issued before platform time conversion"
+    );
     let over_safe_maximum = request_value(
         "file-id.allocate",
         json!({ "tenantId": TENANT, "repositoryId": REPOSITORY }),
@@ -1382,19 +1388,29 @@ fn every_success_carrier_has_one_bounded_schema_shaped_constructor() {
     assert_eq!(committed.body()["state"], "committed");
     assert_eq!(committed.body()["safeResult"], json!({ "accepted": true }));
 
-    let safe_maximum_time = UNIX_EPOCH + Duration::from_millis(9_007_199_254_740_991);
-    let maximum = MetadataHttpResponse::idempotency_status(&IdempotencyStatus::Reserved {
-        expires_at: safe_maximum_time,
-    })
-    .unwrap();
-    assert_eq!(maximum.body()["expiresAtUnixMs"], 9_007_199_254_740_991_u64);
-    let over_maximum = UNIX_EPOCH + Duration::from_millis(9_007_199_254_740_992);
-    assert!(
-        MetadataHttpResponse::idempotency_status(&IdempotencyStatus::Reserved {
-            expires_at: over_maximum,
+    // Unix targets can represent the full I-JSON integer timestamp range;
+    // Windows `SystemTime` intentionally has a smaller representable range.
+    // The request parser above still admits the exact protocol maximum on
+    // every platform, while response conversion is exercised wherever the
+    // host type can construct that value.
+    if let Some(safe_maximum_time) =
+        UNIX_EPOCH.checked_add(Duration::from_millis(9_007_199_254_740_991))
+    {
+        let maximum = MetadataHttpResponse::idempotency_status(&IdempotencyStatus::Reserved {
+            expires_at: safe_maximum_time,
         })
-        .is_err()
-    );
+        .unwrap();
+        assert_eq!(maximum.body()["expiresAtUnixMs"], 9_007_199_254_740_991_u64);
+    }
+    if let Some(over_maximum) = UNIX_EPOCH.checked_add(Duration::from_millis(9_007_199_254_740_992))
+    {
+        assert!(
+            MetadataHttpResponse::idempotency_status(&IdempotencyStatus::Reserved {
+                expires_at: over_maximum,
+            })
+            .is_err()
+        );
+    }
 }
 
 fn hex(bytes: [u8; 32]) -> String {
