@@ -4,6 +4,33 @@ This packet preserves bounded hosted evidence for the object-transfer rc.6
 candidate. It is not completion evidence for OGVCS-008 and does not change the
 PRD's **Todo** status.
 
+## Current integration bounded revalidation
+
+- Product source: [`70ef689187d7d7749e33348e472d9310b4bd0828`](https://github.com/n3r/OpenGameVCS/commit/70ef689187d7d7749e33348e472d9310b4bd0828)
+- Hosted proof revision: [`17f1bfb5ad5738c77546736609c40c22a4d4cee5`](https://github.com/n3r/OpenGameVCS/commit/17f1bfb5ad5738c77546736609c40c22a4d4cee5)
+- Workflow: [run 33502166522](https://github.com/n3r/OpenGameVCS/actions/runs/33502166522), completed successfully on 2026-09-01
+- Machine record: [`github-actions-run-33502166522.json`](github-actions-run-33502166522.json)
+
+The current integration product tree passed the complete bounded JavaScript
+contract/runtime and packed-consumer lanes on Linux, macOS, and Windows. The
+same run passed the shared backend behavior suite against pinned MinIO
+`RELEASE.2025-09-07T16-13-09Z` after checking the downloaded binary's exact
+SHA-256. This revalidates the later kind-2 production-candidate package and its
+PostgreSQL projection vectors alongside the unchanged rc.6 backend contract.
+
+GitHub could not manually dispatch this workflow before its path exists on the
+default branch. The isolated `ogvcs008-r1-hosted-70ef689-v2` alias therefore
+differs from the product source only by one nonsemantic comment in
+`.github/workflows/object-transfer.yml`. The `core/object-transfer`,
+`core/chunking-manifest`, and `spec/object-transfer` Git trees are byte-identical
+between the two revisions; the machine record preserves their exact tree IDs.
+
+This is bounded adapter conformance, not production service composition. It
+does not add the JavaScript-to-Rust subject/scope mapper, a public route,
+request-root closure, authenticated submit consumption, health/GC/delete
+authority, production deployment, or the release-only interrupted 100-GiB
+campaign. OGVCS-008 remains **Todo**.
+
 ## PostgreSQL availability-proof update
 
 - Integrated implementation: [`31aa82eb4877b7b1bf62870202f4b76d2dcca10c`](https://github.com/n3r/OpenGameVCS/commit/31aa82eb4877b7b1bf62870202f4b76d2dcca10c)

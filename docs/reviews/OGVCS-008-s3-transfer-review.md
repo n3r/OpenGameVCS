@@ -4,8 +4,8 @@
 
 **Base:** `9ad6ce9`
 
-**Verdict:** bounded candidate is ready for integration review; hosted and
-exact-scale acceptance remain open
+**Verdict:** bounded candidate and hosted MinIO conformance pass; exact-scale
+and production-composition acceptance remain open
 
 ## Closed findings
 
@@ -46,12 +46,20 @@ exact-scale acceptance remain open
 
 The generated contract independently verifies, runtime tests execute shared
 filesystem/fake-S3 and hostile cases, and workflow policy proves exact scale is
-manual-only. The live test is intentionally skipped offline. The MinIO artifact
-release, URL, platform, and SHA-256 are in
+manual-only. The live test remains skipped offline. The MinIO artifact release,
+URL, platform, and SHA-256 are in
 `tools/object-transfer-minio-provenance.json` and checked by the Linux-only
 loopback job without command tracing or credential output.
 
-Do not move OGVCS-008 from Todo until a retained hosted MinIO run passes, the
-manual exact 100-GiB interrupted run publishes whole-hash/throughput/RSS
-evidence, and the separately owned repository-metadata lifecycle integration is
+Hosted run
+[33502166522](https://github.com/n3r/OpenGameVCS/actions/runs/33502166522)
+revalidated the current integration product tree on Linux, macOS, and Windows
+and passed the pinned MinIO lane. Its exact source-equivalence and job record
+are retained in
+[`docs/evidence/OGVCS-008`](../evidence/OGVCS-008/README.md). This closes the
+bounded hosted compatible-backend check only.
+
+Do not move OGVCS-008 from Todo until the manual exact 100-GiB interrupted run
+publishes whole-hash/throughput/RSS evidence and the separately owned
+repository-metadata/identity lifecycle transport is production-composed and
 validated. Public/wire routes remain unassigned pending OGVCS-041.

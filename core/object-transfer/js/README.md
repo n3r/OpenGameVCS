@@ -103,8 +103,10 @@ deployment needs a native directory-handle-relative adapter. Windows suppresses
 only Node's exact verified-directory `EPERM` fsync limitation.
 
 This candidate does not claim public HTTP completion, OGVCS-010 publication,
-reachability/GC, hosted MinIO evidence, exact-scale throughput, or final
-OGVCS-008 acceptance until those separate gates land. In particular, the
-explicit-set candidate cannot justify the OGVCS-007 100-GiB ratification gate:
-that requires a verifier-owned bounded request-root closure and the real
-repository-metadata/authorization transport.
+reachability/GC, production MinIO composition/deployment, exact-scale
+throughput, or final OGVCS-008 acceptance until those separate gates land. The
+pinned loopback MinIO conformance lane has retained hosted evidence; it is not
+a production service rollout. In particular, the explicit-set candidate cannot
+justify the OGVCS-007 100-GiB ratification gate: that requires a verifier-owned
+bounded request-root closure and the real repository-metadata/authorization
+transport.

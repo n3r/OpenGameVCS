@@ -122,9 +122,9 @@ Start with filesystem development backend and one supported S3 profile. New back
   quota replay, plan tampering, and hidden early/middle/last denial.
 - Documentation/runbooks: contract `0.1.0-rc.6`, runtime README, changelog,
   review record, pinned MinIO provenance policy, and manual exact-scale workflow.
-- Rollout result: not performed. The PRD remains Todo until retained hosted
-  MinIO conformance, the exact 100-GiB interrupted throughput/memory result, and
-  separately owned repository-metadata lifecycle integration are complete. No
-  real OGVCS-003/006/009 production adapter or public route currently backs the
-  new acceptor, and its explicit-set profile cannot justify OGVCS-007
-  ratification.
+- Rollout result: not performed. Pinned loopback MinIO conformance is retained
+  with current-source Linux/macOS/Windows evidence. The PRD remains Todo until
+  the exact 100-GiB interrupted throughput/memory result and separately owned
+  repository-metadata/identity lifecycle integration are complete. No real
+  OGVCS-003/006/009 production adapter or public route currently backs the new
+  acceptor, and its explicit-set profile cannot justify OGVCS-007 ratification.
