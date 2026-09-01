@@ -1,3 +1,13 @@
+#![cfg_attr(
+    not(feature = "legacy-test-adapter"),
+    doc = r#"
+The default crate surface excludes the destructive live-restart harness:
+
+```compile_fail
+use ogvcs_repository_metadata::AtomicSubmitRestartBoundaryForTest;
+```
+"#
+)]
 //! OGVCS-006 repository metadata domain and transaction boundary.
 //!
 //! OGVCS-041 route and envelope assignments are authenticated, but production
@@ -106,8 +116,6 @@ pub use ports::{
     MetadataTransaction, ObjectValidationPort, ProductionObjectValidator,
 };
 #[cfg(feature = "legacy-test-adapter")]
-pub use postgres::AtomicSubmitFaultForTest;
-#[cfg(feature = "legacy-test-adapter")]
 pub use postgres::PostgresLifecyclePlanWriter;
 pub use postgres::{
     AggregateLifecycleApplicationReceipt, AggregateLifecycleApplyRequest,
@@ -118,6 +126,8 @@ pub use postgres::{
     PreallocatedCreationSubmitPreflight, PreallocatedCreationSubmitPreflightRequest,
     PreallocatedCreationSubmitReconciliation,
 };
+#[cfg(feature = "legacy-test-adapter")]
+pub use postgres::{AtomicSubmitFaultForTest, AtomicSubmitRestartBoundaryForTest};
 pub use service::{
     network_transport_descriptors, AdmittedMetadataRoute, MetadataNegotiationKeyProvider,
     MetadataNegotiationKeyRing, MetadataNegotiationPrincipal, MetadataOperation,

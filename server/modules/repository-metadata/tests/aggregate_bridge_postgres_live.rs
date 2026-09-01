@@ -18,12 +18,13 @@ use ogvcs_object_model::{encode_canonical, Cbor, ObjectKind, ObjectRef};
 use ogvcs_repository_metadata::{
     aggregate_plan_digest, run_migrations as run_metadata_migrations, AggregateChunkCommitment,
     AggregateLifecycleApplyRequest, AggregatePlanChunk, AggregatePublicationPlan,
-    AtomicSubmitFaultForTest, DomainErrorCode, IdempotencyReservation,
-    IdentityBoundPostgresMetadataStore, LifecycleHealth, LifecycleObjectBinding, LifecycleState,
-    MigrationRunOptions as MetadataMigrationRunOptions, PostgresMetadataStore,
-    PreallocatedCreationSubmitFinalizeRequest, PreallocatedCreationSubmitIntentRequest,
-    PreallocatedCreationSubmitPreflightRequest, PreallocatedCreationSubmitReconciliation,
-    RepositoryId, TenantId, AUTHORIZATION_MANIFEST_SHA256, LIFECYCLE_CONTRACT_SHA256,
+    AtomicSubmitFaultForTest, AtomicSubmitRestartBoundaryForTest, DomainErrorCode,
+    IdempotencyReservation, IdentityBoundPostgresMetadataStore, LifecycleHealth,
+    LifecycleObjectBinding, LifecycleState, MigrationRunOptions as MetadataMigrationRunOptions,
+    PostgresMetadataStore, PreallocatedCreationSubmitFinalizeRequest,
+    PreallocatedCreationSubmitIntentRequest, PreallocatedCreationSubmitPreflightRequest,
+    PreallocatedCreationSubmitReconciliation, RepositoryId, TenantId,
+    AUTHORIZATION_MANIFEST_SHA256, LIFECYCLE_CONTRACT_SHA256,
 };
 use postgres::{types::Json, Client, NoTls};
 use serde::Serialize;
@@ -252,6 +253,259 @@ fn private_preallocated_creation_submit_is_atomic_replayable_and_reconcilable() 
     );
     assert_eq!(lifecycle_applications(&database_url, lifecycle_plan), 1);
     assert_atomic_submit_visible(&database_url, &fixture, replay.outbox_event_id(), 1);
+}
+
+#[test]
+fn private_atomic_submit_hard_restart_is_exact_old_or_new_and_recoverable() {
+    let _guard = TEST_LOCK.lock().unwrap();
+    let (Ok(database_url), Ok(boundary_name)) = (
+        std::env::var("OGVCS_METADATA_RESTART_DATABASE_URL"),
+        std::env::var("OGVCS_METADATA_RESTART_BOUNDARY"),
+    ) else {
+        return;
+    };
+    let boundary = atomic_submit_restart_boundary(&boundary_name);
+    reset_database(&database_url);
+    install_commit_io_restart_rendezvous(&database_url);
+    let fixture = seed(&database_url);
+    seed_atomic_candidate(&database_url, &fixture);
+    let provider = key_provider([0x5a; 32]);
+    let participant = PostgresAggregateAuthorizationParticipant::new(provider.clone());
+    prepare_identity_authority(&database_url, &fixture, &participant);
+    let bundle = prepare_bundle(
+        &database_url,
+        &fixture,
+        &participant,
+        19_000,
+        3,
+        public_uuid(0xe1),
+        "atomic-hard-restart",
+        300,
+    );
+    let lifecycle_plan = persist_lifecycle_plan(
+        &database_url,
+        &fixture,
+        &bundle,
+        public_uuid(0xe2),
+        "atomic-hard-restart-plan",
+        None,
+    );
+    let mut store = production_store(&database_url, provider.clone());
+    let intent = store
+        .create_preallocated_creation_submit_intent(PreallocatedCreationSubmitIntentRequest {
+            authorization: &bundle.receipt,
+            lifecycle_plan_id: lifecycle_plan,
+            expected_head: fixture.old_head,
+            expected_generation: 1,
+        })
+        .unwrap();
+    let preflight = store
+        .preflight_preallocated_creation_submit(PreallocatedCreationSubmitPreflightRequest {
+            intent_id: *intent.intent_id(),
+            authorization: &bundle.receipt,
+        })
+        .unwrap();
+    assert!(preflight.branch_matches());
+    let before = atomic_submit_state(
+        &database_url,
+        &fixture,
+        &bundle,
+        lifecycle_plan,
+        *intent.intent_id(),
+    );
+
+    let restart_error = store
+        .finalize_preallocated_creation_submit_with_restart_rendezvous_for_test(
+            PreallocatedCreationSubmitFinalizeRequest {
+                intent_id: *intent.intent_id(),
+                authorization: &bundle.receipt,
+                consumption_id: "atomic.consume.hard-restart",
+            },
+            boundary,
+            120,
+        )
+        .unwrap_err();
+    assert_eq!(
+        restart_error.code,
+        DomainErrorCode::ObjectInvalid,
+        "restart call did not fail through mapped PostgreSQL I/O"
+    );
+    drop(store);
+    wait_for_restarted_database(&database_url);
+
+    let observed_after_restart = atomic_submit_state(
+        &database_url,
+        &fixture,
+        &bundle,
+        lifecycle_plan,
+        *intent.intent_id(),
+    );
+    let initial_state = if observed_after_restart == before {
+        "old"
+    } else {
+        assert_complete_new_atomic_submit_state(&observed_after_restart, 1);
+        "new"
+    };
+    match boundary {
+        AtomicSubmitRestartBoundaryForTest::CommitIo => {}
+        AtomicSubmitRestartBoundaryForTest::AfterCommitBeforeResponse => assert_eq!(
+            initial_state, "new",
+            "postcommit response-loss boundary did not preserve the committed projection"
+        ),
+        _ => assert_eq!(
+            initial_state, "old",
+            "precommit restart boundary unexpectedly committed"
+        ),
+    }
+
+    if initial_state == "old" {
+        assert_atomic_submit_not_visible(&database_url, &fixture, &bundle, lifecycle_plan);
+        let mut reconciliation_store = production_store(&database_url, provider.clone());
+        assert!(matches!(
+            reconciliation_store
+                .reconcile_preallocated_creation_submit(PreallocatedCreationSubmitFinalizeRequest {
+                    intent_id: *intent.intent_id(),
+                    authorization: &bundle.receipt,
+                    consumption_id: "atomic.consume.hard-restart",
+                },)
+                .unwrap(),
+            PreallocatedCreationSubmitReconciliation::UnknownRecovering { .. }
+        ));
+        let after_unknown = atomic_submit_state(
+            &database_url,
+            &fixture,
+            &bundle,
+            lifecycle_plan,
+            *intent.intent_id(),
+        );
+        assert_only_one_reconciliation_was_appended(&before, &after_unknown, "unknown-recovering");
+        drop(reconciliation_store);
+        let mut retry_store = production_store(&database_url, provider.clone());
+        let retry = retry_store
+            .finalize_preallocated_creation_submit(PreallocatedCreationSubmitFinalizeRequest {
+                intent_id: *intent.intent_id(),
+                authorization: &bundle.receipt,
+                consumption_id: "atomic.consume.hard-restart",
+            })
+            .unwrap();
+        assert!(!retry.replayed());
+    } else {
+        let mut replay_store = production_store(&database_url, provider.clone());
+        let replay = replay_store
+            .finalize_preallocated_creation_submit(PreallocatedCreationSubmitFinalizeRequest {
+                intent_id: *intent.intent_id(),
+                authorization: &bundle.receipt,
+                consumption_id: "atomic.consume.hard-restart",
+            })
+            .unwrap();
+        assert!(replay.replayed());
+        assert_eq!(
+            atomic_submit_state(
+                &database_url,
+                &fixture,
+                &bundle,
+                lifecycle_plan,
+                *intent.intent_id(),
+            ),
+            observed_after_restart,
+            "replay mutated the exact durable new state"
+        );
+    }
+
+    let mut replay_store = production_store(&database_url, provider.clone());
+    let canonical_replay = replay_store
+        .finalize_preallocated_creation_submit(PreallocatedCreationSubmitFinalizeRequest {
+            intent_id: *intent.intent_id(),
+            authorization: &bundle.receipt,
+            consumption_id: "atomic.consume.hard-restart",
+        })
+        .unwrap();
+    assert!(canonical_replay.replayed());
+    drop(replay_store);
+    assert_atomic_submit_visible(
+        &database_url,
+        &fixture,
+        canonical_replay.outbox_event_id(),
+        1,
+    );
+    assert_eq!(
+        identity_consumptions(&database_url, bundle.receipt.plan_id()),
+        1
+    );
+    assert_eq!(lifecycle_applications(&database_url, lifecycle_plan), 1);
+
+    let before_committed_reconciliation = atomic_submit_state(
+        &database_url,
+        &fixture,
+        &bundle,
+        lifecycle_plan,
+        *intent.intent_id(),
+    );
+    assert_complete_new_atomic_submit_state(
+        &before_committed_reconciliation,
+        if initial_state == "old" { 2 } else { 1 },
+    );
+    let mut reconciliation_store = production_store(&database_url, provider.clone());
+    let committed = reconciliation_store
+        .reconcile_preallocated_creation_submit(PreallocatedCreationSubmitFinalizeRequest {
+            intent_id: *intent.intent_id(),
+            authorization: &bundle.receipt,
+            consumption_id: "atomic.consume.hard-restart",
+        })
+        .unwrap();
+    let PreallocatedCreationSubmitReconciliation::Committed(committed) = committed else {
+        panic!("committed restart outcome reconciled as unknown");
+    };
+    assert_eq!(*committed, canonical_replay);
+    drop(reconciliation_store);
+    let after_committed_reconciliation = atomic_submit_state(
+        &database_url,
+        &fixture,
+        &bundle,
+        lifecycle_plan,
+        *intent.intent_id(),
+    );
+    assert_only_one_reconciliation_was_appended(
+        &before_committed_reconciliation,
+        &after_committed_reconciliation,
+        "committed",
+    );
+
+    let mut final_replay_store = production_store(&database_url, provider);
+    assert_eq!(
+        final_replay_store
+            .finalize_preallocated_creation_submit(PreallocatedCreationSubmitFinalizeRequest {
+                intent_id: *intent.intent_id(),
+                authorization: &bundle.receipt,
+                consumption_id: "atomic.consume.hard-restart",
+            })
+            .unwrap(),
+        canonical_replay
+    );
+    assert_eq!(
+        atomic_submit_state(
+            &database_url,
+            &fixture,
+            &bundle,
+            lifecycle_plan,
+            *intent.intent_id(),
+        ),
+        after_committed_reconciliation,
+        "fresh-connection replay changed durable recovery state"
+    );
+    println!(
+        "OGVCS_METADATA_RESTART_RESULT {}",
+        serde_json::json!({
+            "schemaVersion": "ogvcs.repository-metadata/restart-case-result/v1",
+            "boundary": boundary.name(),
+            "initialState": initial_state,
+            "identityConsumptions": 1,
+            "lifecycleApplications": 1,
+            "fileIdConsumptions": 1,
+            "finalOutcomes": 1,
+            "resultDigest": hex(canonical_replay.result_digest()),
+        })
+    );
 }
 
 #[test]
@@ -1793,6 +2047,128 @@ struct PreparedBundle {
     first_resource: u32,
     resource_count: u32,
     ttl_seconds: u64,
+}
+
+fn atomic_submit_restart_boundary(name: &str) -> AtomicSubmitRestartBoundaryForTest {
+    match name {
+        "before-bridge" => AtomicSubmitRestartBoundaryForTest::BeforeBridge,
+        "after-bridge" => AtomicSubmitRestartBoundaryForTest::AfterBridge,
+        "after-file-id-consumption" => AtomicSubmitRestartBoundaryForTest::AfterFileIdConsumption,
+        "after-snapshot-marker" => AtomicSubmitRestartBoundaryForTest::AfterSnapshotMarker,
+        "after-branch-cas" => AtomicSubmitRestartBoundaryForTest::AfterBranchCas,
+        "after-audit" => AtomicSubmitRestartBoundaryForTest::AfterAudit,
+        "after-outbox-event" => AtomicSubmitRestartBoundaryForTest::AfterOutboxEvent,
+        "after-consistency-token" => AtomicSubmitRestartBoundaryForTest::AfterConsistencyToken,
+        "after-final-outcome" => AtomicSubmitRestartBoundaryForTest::AfterFinalOutcome,
+        "after-reconciliation" => AtomicSubmitRestartBoundaryForTest::AfterReconciliation,
+        "before-commit" => AtomicSubmitRestartBoundaryForTest::BeforeCommit,
+        "commit-io" => AtomicSubmitRestartBoundaryForTest::CommitIo,
+        "after-commit-before-response" => {
+            AtomicSubmitRestartBoundaryForTest::AfterCommitBeforeResponse
+        }
+        _ => panic!("unknown bounded restart boundary: {name}"),
+    }
+}
+
+fn install_commit_io_restart_rendezvous(database_url: &str) {
+    let mut client = Client::connect(database_url, NoTls).unwrap();
+    client
+        .batch_execute(
+            "CREATE SCHEMA ogvcs_restart_test;
+             CREATE TABLE ogvcs_restart_test.commit_rendezvous (
+                 intent_id uuid PRIMARY KEY
+             );
+             CREATE FUNCTION ogvcs_restart_test.sleep_during_commit()
+             RETURNS trigger LANGUAGE plpgsql AS $$
+             DECLARE
+                 seconds integer;
+             BEGIN
+                 seconds := current_setting(
+                     'ogvcs.restart_commit_sleep_seconds', TRUE
+                 )::integer;
+                 IF seconds IS NULL OR seconds < 1 OR seconds > 300 THEN
+                     RAISE EXCEPTION 'invalid bounded commit rendezvous';
+                 END IF;
+                 PERFORM pg_sleep(seconds::double precision);
+                 RETURN NEW;
+             END
+             $$;
+             CREATE CONSTRAINT TRIGGER sleep_during_commit
+             AFTER INSERT ON ogvcs_restart_test.commit_rendezvous
+             DEFERRABLE INITIALLY DEFERRED
+             FOR EACH ROW EXECUTE FUNCTION ogvcs_restart_test.sleep_during_commit();",
+        )
+        .unwrap();
+}
+
+fn wait_for_restarted_database(database_url: &str) {
+    let deadline = Instant::now() + Duration::from_secs(90);
+    loop {
+        let mut config: postgres::Config = database_url.parse().unwrap();
+        config.connect_timeout(Duration::from_secs(2));
+        if let Ok(mut client) = config.connect(NoTls) {
+            if client.simple_query("SELECT 1").is_ok() {
+                return;
+            }
+        }
+        assert!(
+            Instant::now() < deadline,
+            "PostgreSQL did not recover within the bounded restart window"
+        );
+        thread::sleep(Duration::from_millis(250));
+    }
+}
+
+fn assert_complete_new_atomic_submit_state(state: &Value, reconciliation_count: usize) {
+    assert_eq!(state["identityPlanState"], "consumed");
+    for key in [
+        "identityConsumptions",
+        "lifecycleApplications",
+        "lifecycleAuthorizationEvidence",
+        "fileIdConsumptions",
+        "auditEvidence",
+        "metadataOutbox",
+        "consistencyTokens",
+        "finalOutcomes",
+    ] {
+        assert_eq!(state[key], 1, "incomplete committed projection: {key}");
+    }
+    assert_eq!(state["lifecycleFacts"], 3);
+    assert_eq!(state["lifecycleReachability"], 3);
+    assert_eq!(state["lifecycleOutbox"], 4);
+    assert_eq!(state["lifecycleRows"].as_array().unwrap().len(), 3);
+    assert_eq!(
+        state["reconciliations"].as_array().unwrap().len(),
+        reconciliation_count
+    );
+}
+
+fn assert_only_one_reconciliation_was_appended(
+    before: &Value,
+    after: &Value,
+    expected_observation: &str,
+) {
+    let mut before_without_reconciliations = before.clone();
+    let before_reconciliations = before_without_reconciliations
+        .as_object_mut()
+        .unwrap()
+        .remove("reconciliations")
+        .unwrap();
+    let mut after_without_reconciliations = after.clone();
+    let after_reconciliations = after_without_reconciliations
+        .as_object_mut()
+        .unwrap()
+        .remove("reconciliations")
+        .unwrap();
+    assert_eq!(
+        after_without_reconciliations, before_without_reconciliations,
+        "reconciliation changed a non-reconciliation durable projection"
+    );
+    let before_rows = before_reconciliations.as_array().unwrap();
+    let after_rows = after_reconciliations.as_array().unwrap();
+    assert_eq!(after_rows.len(), before_rows.len() + 1);
+    assert_eq!(&after_rows[..before_rows.len()], before_rows);
+    assert_eq!(after_rows.last().unwrap()[0], expected_observation);
 }
 
 fn reset_database(database_url: &str) {

@@ -321,6 +321,52 @@ OGVCS_METADATA_AGGREGATE_DATABASE_URL=postgresql://.../ogvcs_metadata_test_bridg
   --test aggregate_bridge_postgres_live -- --nocapture --test-threads=1
 ```
 
+Hard-restart evidence for the private atomic-submit candidate is a separate,
+feature-gated live harness. It is not a production fault-injection API. The
+library never reads supervisor environment, starts a process, or selects a
+database; its default feature set does not export the restart boundary. The
+live test alone installs a deferred trigger in `ogvcs_restart_test` after
+migrations on each fresh disposable database. That trigger provides a real
+`COMMIT`/`pg_sleep` rendezvous without changing migration or contract bytes.
+
+The bounded supervisor covers the eleven existing in-transaction boundaries,
+the deferred commit-I/O boundary, and the after-commit/before-response boundary
+serially. For every case it creates a uniquely named database, observes one
+exact active backend at the requested fixed application name and `PgSleep`,
+sends `SIGKILL` only to the explicitly supplied container, requires exit 137,
+starts that same container, and requires both its Docker process ID and
+`pg_postmaster_start_time()` to change. The eleven transaction boundaries must
+recover to the exact old projection; `after-commit-before-response` must recover
+to the complete new projection; only `commit-io` admits either exact old or
+complete new. The oracle applies that boundary-specific classification before
+it reconciles or replays. Any partial or boundary-inconsistent state, duplicate
+durable fact, missing child result, or absent process identity change fails the
+run. The supervisor deletes only the uniquely named test databases it created
+and writes JSONL to stdout; it retains no local evidence file itself.
+
+The supervisor refuses any image other than the workflow-pinned PostgreSQL
+15.19 digest and requires a loopback database URL prefix plus the exact
+workflow-provided 64-hex container ID. Before mutation it also requires the
+fixed `hard-kill-postgres-13-times` confirmation and an exact fresh database
+inventory containing only `postgres`, `template0`, and `template1`. It
+hard-kills PostgreSQL thirteen times, so it must never be pointed at a shared or
+production database service. A database is removed only after this invocation
+successfully created that exact random name. The workflow lane is the
+authoritative execution environment; this candidate does not claim hosted-green
+restart evidence until that lane actually completes.
+
+```sh
+OGVCS_METADATA_RESTART_POSTGRES_CONTAINER=<exact-disposable-container-id> \
+OGVCS_METADATA_RESTART_CONFIRM_DISPOSABLE=hard-kill-postgres-13-times \
+OGVCS_METADATA_RESTART_DATABASE_URL_PREFIX=postgresql://postgres:postgres@127.0.0.1:5432/ \
+  node server/modules/repository-metadata/scripts/atomic-submit-restart-matrix.mjs
+```
+
+This evidence does not add a public submit route, authentication carrier,
+production supervisor, migration, native watcher, telemetry, replica/failover
+claim, warm million-entry latency claim, or complete fault campaign. It also
+does not promote OGVCS-006 from its current roadmap state.
+
 The real 100,000-item proof is intentionally excluded from ordinary presubmit.
 It probes item 100,001 with a one-item chunk, asserts that the persisted count
 remains 100,000, then reports the measured projection/protected/write page

@@ -109,6 +109,10 @@ const rustFiles = [
 for (const file of rustFiles) {
   const source = await readFile(resolve(root, 'src', file), 'utf8');
   assert(!/\bunsafe\b/u.test(source.replace('#![forbid(unsafe_code)]', '')), `unsafe Rust appears in ${file}`);
+  assert(
+    !source.includes('OGVCS_METADATA_RESTART_'),
+    `restart supervisor environment entered the default Rust source: ${file}`,
+  );
 }
 
 const manifest = JSON.parse(await readFile(resolve(migrations, 'manifest.json')));
@@ -864,6 +868,42 @@ assert(!expandV11.includes('NEW.operation_count = 0 OR'), 'version 11 admits an 
 
 const atomicSubmitAdapter = await readFile(resolve(root, 'src/postgres/atomic_submit.rs'), 'utf8');
 assert(atomicSubmitAdapter.includes('finalize_preallocated_creation_submit'), 'private preallocated creation-submit finalize boundary missing');
+assert(
+  atomicSubmitAdapter.includes(
+    '#[cfg(feature = "legacy-test-adapter")]\n#[derive(Clone, Copy, Debug, Eq, PartialEq)]\npub enum AtomicSubmitRestartBoundaryForTest',
+  ),
+  'hard-restart boundary escaped the legacy test feature',
+);
+assert(
+  atomicSubmitAdapter.includes(
+    '#[cfg(feature = "legacy-test-adapter")]\n    Restart {\n        boundary: AtomicSubmitRestartBoundaryForTest,',
+  ),
+  'hard-restart control entered the default control variant set',
+);
+assert(
+  atomicSubmitAdapter.includes(
+    '#[cfg(feature = "legacy-test-adapter")]\n    pub fn finalize_preallocated_creation_submit_with_restart_rendezvous_for_test',
+  ),
+  'hard-restart entry point escaped the legacy test feature',
+);
+for (const gatedRestartHelper of [
+  'fn await_transaction_restart_rendezvous(',
+  'fn arm_commit_io_restart_rendezvous(',
+  'fn await_after_commit_restart_rendezvous(',
+]) {
+  assert(
+    atomicSubmitAdapter.includes(
+      `#[cfg(feature = "legacy-test-adapter")]\n${gatedRestartHelper}`,
+    ),
+    `hard-restart helper is not feature-gated: ${gatedRestartHelper}`,
+  );
+}
+for (const forbiddenDefaultAuthority of ['std::env', 'std::process', 'Command::new', 'docker ']) {
+  assert(
+    !atomicSubmitAdapter.includes(forbiddenDefaultAuthority),
+    `process/environment authority entered atomic submit: ${forbiddenDefaultAuthority}`,
+  );
+}
 const fileIdLockStart = atomicSubmitAdapter.indexOf('fn lock_and_validate_file_ids(');
 const fileIdLockEnd = atomicSubmitAdapter.indexOf('\nfn apply_file_id_first_consumptions(', fileIdLockStart);
 assert(fileIdLockStart >= 0 && fileIdLockEnd > fileIdLockStart, 'FileID lock function boundary missing');
@@ -898,6 +938,31 @@ for (const forbiddenBackendAccess of ['reqwest::', 'aws_sdk_', 'std::fs::', 'tok
 }
 
 const adapter = await readFile(resolve(root, 'src/postgres.rs'), 'utf8');
+const library = await readFile(resolve(root, 'src/lib.rs'), 'utf8');
+assert(
+  adapter.includes(
+    '#[cfg(feature = "legacy-test-adapter")]\npub use atomic_submit::{AtomicSubmitFaultForTest, AtomicSubmitRestartBoundaryForTest};',
+  ),
+  'PostgreSQL hard-restart export is not test-feature gated',
+);
+assert(
+  library.includes(
+    '#[cfg(feature = "legacy-test-adapter")]\npub use postgres::{AtomicSubmitFaultForTest, AtomicSubmitRestartBoundaryForTest};',
+  ),
+  'crate hard-restart export is not test-feature gated',
+);
+assert(
+  library.includes(
+    'not(feature = "legacy-test-adapter"),\n    doc = r#"\nThe default crate surface excludes the destructive live-restart harness:',
+  ) && library.includes(
+    '```compile_fail\nuse ogvcs_repository_metadata::AtomicSubmitRestartBoundaryForTest;',
+  ),
+  'default crate surface lacks a negative compile guard for the restart export',
+);
+for (const defaultSurface of [adapter, library, await readFile(resolve(root, 'src/service.rs'), 'utf8')]) {
+  assert(!defaultSurface.includes('ogvcs_restart_test'), 'test rendezvous schema entered a default API path');
+  assert(!defaultSurface.includes('OGVCS_METADATA_RESTART'), 'restart environment entered a default API path');
+}
 assert(
   adapter.includes('TransactionCapability::CreateRepository\n                | TransactionCapability::Publish'),
   'production identity boundary admits partial repository creation',

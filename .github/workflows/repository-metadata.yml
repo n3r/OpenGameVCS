@@ -150,3 +150,56 @@ jobs:
           path: artifacts/repository-metadata-service-report.jsonl
           if-no-files-found: error
           retention-days: 14
+
+  postgres-hard-restart:
+    name: Private atomic submit hard-restart proof (PostgreSQL 15)
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        # Official postgres:15.19-bookworm OCI index, resolved 2026-08-30.
+        image: postgres@sha256:5d1d70e254e3c5d7d76847a9deebb18478cd518df37abf6b278d4bdb1fe5d96c
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - uses: dtolnay/rust-toolchain@7d11e79e1714f6b6da93cac39ad8435666f5c337 # 1.82.0
+      - run: cargo fetch --manifest-path server/modules/repository-metadata/Cargo.toml --locked
+      - name: Compile the feature-gated restart case before supervising PostgreSQL
+        env:
+          CARGO_NET_OFFLINE: 'true'
+        run: >-
+          cargo test --manifest-path server/modules/repository-metadata/Cargo.toml
+          --locked --offline --features legacy-test-adapter
+          --test aggregate_bridge_postgres_live --no-run
+      - name: Run the serial hard-restart matrix
+        shell: bash
+        env:
+          CARGO_NET_OFFLINE: 'true'
+          OGVCS_METADATA_RESTART_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+          OGVCS_METADATA_RESTART_CONFIRM_DISPOSABLE: hard-kill-postgres-13-times
+          OGVCS_METADATA_RESTART_DATABASE_URL_PREFIX: postgresql://postgres:postgres@127.0.0.1:5432/
+        run: |
+          set -o pipefail
+          mkdir -p artifacts
+          node server/modules/repository-metadata/scripts/atomic-submit-restart-matrix.mjs \
+            | tee artifacts/repository-metadata-atomic-submit-restart.jsonl
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: repository-metadata-atomic-submit-restart-PG15
+          path: artifacts/repository-metadata-atomic-submit-restart.jsonl
+          if-no-files-found: error
+          retention-days: 14

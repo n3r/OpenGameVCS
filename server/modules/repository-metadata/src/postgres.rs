@@ -31,7 +31,7 @@ mod metadata_dispatcher;
 pub(crate) use aggregate_bridge::apply_aggregate_lifecycle_publication_in_transaction;
 pub use aggregate_bridge::{AggregateLifecycleApplicationReceipt, AggregateLifecycleApplyRequest};
 #[cfg(feature = "legacy-test-adapter")]
-pub use atomic_submit::AtomicSubmitFaultForTest;
+pub use atomic_submit::{AtomicSubmitFaultForTest, AtomicSubmitRestartBoundaryForTest};
 pub use atomic_submit::{
     PreallocatedCreationSubmitFinalizeRequest, PreallocatedCreationSubmitIntent,
     PreallocatedCreationSubmitIntentRequest, PreallocatedCreationSubmitOutcome,

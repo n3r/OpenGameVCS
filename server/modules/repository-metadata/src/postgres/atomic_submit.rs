@@ -260,6 +260,48 @@ pub enum AtomicSubmitFaultForTest {
     BeforeCommit,
 }
 
+/// Private live-harness boundary used to stop a real PostgreSQL transaction
+/// while the disposable server is hard-killed. This surface is absent unless
+/// the repository's legacy test adapter feature is selected.
+#[cfg(feature = "legacy-test-adapter")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AtomicSubmitRestartBoundaryForTest {
+    BeforeBridge,
+    AfterBridge,
+    AfterFileIdConsumption,
+    AfterSnapshotMarker,
+    AfterBranchCas,
+    AfterAudit,
+    AfterOutboxEvent,
+    AfterConsistencyToken,
+    AfterFinalOutcome,
+    AfterReconciliation,
+    BeforeCommit,
+    CommitIo,
+    AfterCommitBeforeResponse,
+}
+
+#[cfg(feature = "legacy-test-adapter")]
+impl AtomicSubmitRestartBoundaryForTest {
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::BeforeBridge => "before-bridge",
+            Self::AfterBridge => "after-bridge",
+            Self::AfterFileIdConsumption => "after-file-id-consumption",
+            Self::AfterSnapshotMarker => "after-snapshot-marker",
+            Self::AfterBranchCas => "after-branch-cas",
+            Self::AfterAudit => "after-audit",
+            Self::AfterOutboxEvent => "after-outbox-event",
+            Self::AfterConsistencyToken => "after-consistency-token",
+            Self::AfterFinalOutcome => "after-final-outcome",
+            Self::AfterReconciliation => "after-reconciliation",
+            Self::BeforeCommit => "before-commit",
+            Self::CommitIo => "commit-io",
+            Self::AfterCommitBeforeResponse => "after-commit-before-response",
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum AtomicSubmitFault {
     None,
@@ -274,6 +316,16 @@ enum AtomicSubmitFault {
     AfterFinalOutcome,
     AfterReconciliation,
     BeforeCommit,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AtomicSubmitControl {
+    Fault(AtomicSubmitFault),
+    #[cfg(feature = "legacy-test-adapter")]
+    Restart {
+        boundary: AtomicSubmitRestartBoundaryForTest,
+        rendezvous_seconds: u16,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -383,7 +435,11 @@ impl<A, V> IdentityBoundPostgresMetadataStore<A, V> {
         &mut self,
         request: PreallocatedCreationSubmitFinalizeRequest<'_>,
     ) -> Result<PreallocatedCreationSubmitOutcome> {
-        self.finalize_preallocated_creation_submit_inner(request, AtomicSubmitFault::None, false)
+        self.finalize_preallocated_creation_submit_inner(
+            request,
+            AtomicSubmitControl::Fault(AtomicSubmitFault::None),
+            false,
+        )
     }
 
     pub fn reconcile_preallocated_creation_submit(
@@ -418,7 +474,7 @@ impl<A, V> IdentityBoundPostgresMetadataStore<A, V> {
     fn finalize_preallocated_creation_submit_inner(
         &mut self,
         request: PreallocatedCreationSubmitFinalizeRequest<'_>,
-        fault: AtomicSubmitFault,
+        control: AtomicSubmitControl,
         lose_response_after_commit: bool,
     ) -> Result<PreallocatedCreationSubmitOutcome> {
         crate::verify_schema_compatibility(&mut self.store.client)?;
@@ -433,10 +489,14 @@ impl<A, V> IdentityBoundPostgresMetadataStore<A, V> {
             .isolation_level(IsolationLevel::Serializable)
             .start()
             .map_err(database_error)?;
-        let result = finalize_transaction(&mut transaction, participant, &request, fault);
+        let result = finalize_transaction(&mut transaction, participant, &request, control);
         match result {
             Ok(outcome) => {
+                #[cfg(feature = "legacy-test-adapter")]
+                arm_commit_io_restart_rendezvous(&mut transaction, request.intent_id, control)?;
                 transaction.commit().map_err(database_error)?;
+                #[cfg(feature = "legacy-test-adapter")]
+                await_after_commit_restart_rendezvous(client, control)?;
                 if lose_response_after_commit {
                     Err(DomainError::new(DomainErrorCode::TransactionRetryExhausted))
                 } else {
@@ -473,7 +533,11 @@ impl<A, V> IdentityBoundPostgresMetadataStore<A, V> {
             AtomicSubmitFaultForTest::AfterReconciliation => AtomicSubmitFault::AfterReconciliation,
             AtomicSubmitFaultForTest::BeforeCommit => AtomicSubmitFault::BeforeCommit,
         };
-        self.finalize_preallocated_creation_submit_inner(request, fault, false)
+        self.finalize_preallocated_creation_submit_inner(
+            request,
+            AtomicSubmitControl::Fault(fault),
+            false,
+        )
     }
 
     #[cfg(feature = "legacy-test-adapter")]
@@ -481,7 +545,34 @@ impl<A, V> IdentityBoundPostgresMetadataStore<A, V> {
         &mut self,
         request: PreallocatedCreationSubmitFinalizeRequest<'_>,
     ) -> Result<PreallocatedCreationSubmitOutcome> {
-        self.finalize_preallocated_creation_submit_inner(request, AtomicSubmitFault::None, true)
+        self.finalize_preallocated_creation_submit_inner(
+            request,
+            AtomicSubmitControl::Fault(AtomicSubmitFault::None),
+            true,
+        )
+    }
+
+    /// Runs one exact live-harness rendezvous. The caller must arrange the
+    /// disposable PostgreSQL supervisor and, for `CommitIo`, the test-only
+    /// deferred trigger. No environment or process control enters the library.
+    #[cfg(feature = "legacy-test-adapter")]
+    pub fn finalize_preallocated_creation_submit_with_restart_rendezvous_for_test(
+        &mut self,
+        request: PreallocatedCreationSubmitFinalizeRequest<'_>,
+        boundary: AtomicSubmitRestartBoundaryForTest,
+        rendezvous_seconds: u16,
+    ) -> Result<PreallocatedCreationSubmitOutcome> {
+        if !(1..=300).contains(&rendezvous_seconds) {
+            return Err(denied());
+        }
+        self.finalize_preallocated_creation_submit_inner(
+            request,
+            AtomicSubmitControl::Restart {
+                boundary,
+                rendezvous_seconds,
+            },
+            false,
+        )
     }
 
     /// Returns true only if PostgreSQL incorrectly permits commit after a
@@ -760,7 +851,7 @@ fn finalize_transaction(
     transaction: &mut Transaction<'_>,
     participant: &PostgresAggregateAuthorizationParticipant,
     request: &PreallocatedCreationSubmitFinalizeRequest<'_>,
-    fault: AtomicSubmitFault,
+    control: AtomicSubmitControl,
 ) -> Result<PreallocatedCreationSubmitOutcome> {
     if !valid_atomic_consumption_id(request.consumption_id) {
         return Err(denied());
@@ -786,9 +877,7 @@ fn finalize_transaction(
     // persisting ordered submit evidence.
     lock_and_validate_branch(transaction, &intent)?;
     let operations = lock_and_validate_file_ids(transaction, &intent)?;
-    if fault == AtomicSubmitFault::BeforeBridge {
-        return Err(denied());
-    }
+    reach_atomic_submit_boundary(transaction, control, AtomicSubmitFault::BeforeBridge)?;
     let lifecycle = apply_aggregate_lifecycle_publication_in_transaction(
         transaction,
         participant,
@@ -798,14 +887,14 @@ fn finalize_transaction(
             consumption_id: request.consumption_id,
         },
     )?;
-    if fault == AtomicSubmitFault::AfterBridge {
-        return Err(denied());
-    }
+    reach_atomic_submit_boundary(transaction, control, AtomicSubmitFault::AfterBridge)?;
 
     apply_file_id_first_consumptions(transaction, &intent, &operations, &lifecycle)?;
-    if fault == AtomicSubmitFault::AfterFileIdConsumption {
-        return Err(denied());
-    }
+    reach_atomic_submit_boundary(
+        transaction,
+        control,
+        AtomicSubmitFault::AfterFileIdConsumption,
+    )?;
     let sequence = lifecycle.lifecycle().commit_sequence;
     let marked = transaction
         .execute(
@@ -823,9 +912,7 @@ fn finalize_transaction(
     if marked != 1 {
         return Err(denied());
     }
-    if fault == AtomicSubmitFault::AfterSnapshotMarker {
-        return Err(denied());
-    }
+    reach_atomic_submit_boundary(transaction, control, AtomicSubmitFault::AfterSnapshotMarker)?;
     let next_generation = intent
         .intent
         .expected_generation
@@ -858,9 +945,7 @@ fn finalize_transaction(
     if advanced != 1 {
         return Err(denied());
     }
-    if fault == AtomicSubmitFault::AfterBranchCas {
-        return Err(denied());
-    }
+    reach_atomic_submit_boundary(transaction, control, AtomicSubmitFault::AfterBranchCas)?;
 
     let audit_correlation_id = random_public_uuid()?;
     let subject_digest = decode_hex32(request.authorization.subject_digest())?;
@@ -891,9 +976,7 @@ fn finalize_transaction(
             ],
         )
         .map_err(database_error)?;
-    if fault == AtomicSubmitFault::AfterAudit {
-        return Err(denied());
-    }
+    reach_atomic_submit_boundary(transaction, control, AtomicSubmitFault::AfterAudit)?;
 
     let outbox_event_id = random_public_uuid()?;
     let resource_opaque_id = opaque_token("rr1.")?;
@@ -919,9 +1002,7 @@ fn finalize_transaction(
             ],
         )
         .map_err(database_error)?;
-    if fault == AtomicSubmitFault::AfterOutboxEvent {
-        return Err(denied());
-    }
+    reach_atomic_submit_boundary(transaction, control, AtomicSubmitFault::AfterOutboxEvent)?;
     let consistency_token = opaque_token("ct1.")?;
     let consistency_token_digest: [u8; 32] = Sha256::digest(consistency_token.as_bytes()).into();
     transaction
@@ -944,9 +1025,11 @@ fn finalize_transaction(
             ],
         )
         .map_err(database_error)?;
-    if fault == AtomicSubmitFault::AfterConsistencyToken {
-        return Err(denied());
-    }
+    reach_atomic_submit_boundary(
+        transaction,
+        control,
+        AtomicSubmitFault::AfterConsistencyToken,
+    )?;
 
     let result_digest = submit_result_digest(
         &intent,
@@ -997,21 +1080,15 @@ fn finalize_transaction(
             ],
         )
         .map_err(database_error)?;
-    if fault == AtomicSubmitFault::AfterFinalOutcome {
-        return Err(denied());
-    }
+    reach_atomic_submit_boundary(transaction, control, AtomicSubmitFault::AfterFinalOutcome)?;
     insert_reconciliation_record(
         transaction,
         request.intent_id,
         Some(result_digest),
         Some(request.authorization.authority_epoch()),
     )?;
-    if fault == AtomicSubmitFault::AfterReconciliation {
-        return Err(denied());
-    }
-    if fault == AtomicSubmitFault::BeforeCommit {
-        return Err(denied());
-    }
+    reach_atomic_submit_boundary(transaction, control, AtomicSubmitFault::AfterReconciliation)?;
+    reach_atomic_submit_boundary(transaction, control, AtomicSubmitFault::BeforeCommit)?;
     Ok(PreallocatedCreationSubmitOutcome {
         intent_id: request.intent_id,
         application_id: lifecycle.lifecycle().application_id,
@@ -1032,6 +1109,121 @@ fn finalize_transaction(
         reconciliation_commitment_digest,
         replayed: false,
     })
+}
+
+fn reach_atomic_submit_boundary(
+    _transaction: &mut Transaction<'_>,
+    control: AtomicSubmitControl,
+    boundary: AtomicSubmitFault,
+) -> Result<()> {
+    match control {
+        AtomicSubmitControl::Fault(fault) if fault == boundary => Err(denied()),
+        #[cfg(feature = "legacy-test-adapter")]
+        AtomicSubmitControl::Restart {
+            boundary: restart_boundary,
+            rendezvous_seconds,
+        } if restart_boundary.atomic_fault() == Some(boundary) => {
+            await_transaction_restart_rendezvous(_transaction, restart_boundary, rendezvous_seconds)
+        }
+        _ => Ok(()),
+    }
+}
+
+#[cfg(feature = "legacy-test-adapter")]
+impl AtomicSubmitRestartBoundaryForTest {
+    const fn atomic_fault(self) -> Option<AtomicSubmitFault> {
+        Some(match self {
+            Self::BeforeBridge => AtomicSubmitFault::BeforeBridge,
+            Self::AfterBridge => AtomicSubmitFault::AfterBridge,
+            Self::AfterFileIdConsumption => AtomicSubmitFault::AfterFileIdConsumption,
+            Self::AfterSnapshotMarker => AtomicSubmitFault::AfterSnapshotMarker,
+            Self::AfterBranchCas => AtomicSubmitFault::AfterBranchCas,
+            Self::AfterAudit => AtomicSubmitFault::AfterAudit,
+            Self::AfterOutboxEvent => AtomicSubmitFault::AfterOutboxEvent,
+            Self::AfterConsistencyToken => AtomicSubmitFault::AfterConsistencyToken,
+            Self::AfterFinalOutcome => AtomicSubmitFault::AfterFinalOutcome,
+            Self::AfterReconciliation => AtomicSubmitFault::AfterReconciliation,
+            Self::BeforeCommit => AtomicSubmitFault::BeforeCommit,
+            Self::CommitIo | Self::AfterCommitBeforeResponse => return None,
+        })
+    }
+
+    fn application_name(self) -> String {
+        format!("ogvcs.restart.{}", self.name())
+    }
+}
+
+#[cfg(feature = "legacy-test-adapter")]
+fn await_transaction_restart_rendezvous(
+    transaction: &mut Transaction<'_>,
+    boundary: AtomicSubmitRestartBoundaryForTest,
+    rendezvous_seconds: u16,
+) -> Result<()> {
+    transaction
+        .query_one(
+            "SELECT set_config('application_name', $1, TRUE),
+                    pg_sleep($2::double precision)",
+            &[&boundary.application_name(), &f64::from(rendezvous_seconds)],
+        )
+        .map_err(database_error)?;
+    Err(denied())
+}
+
+#[cfg(feature = "legacy-test-adapter")]
+fn arm_commit_io_restart_rendezvous(
+    transaction: &mut Transaction<'_>,
+    intent_id: [u8; 16],
+    control: AtomicSubmitControl,
+) -> Result<()> {
+    let AtomicSubmitControl::Restart {
+        boundary: AtomicSubmitRestartBoundaryForTest::CommitIo,
+        rendezvous_seconds,
+    } = control
+    else {
+        return Ok(());
+    };
+    transaction
+        .query_one(
+            "SELECT set_config('application_name', $1, TRUE),
+                    set_config('ogvcs.restart_commit_sleep_seconds', $2, TRUE)",
+            &[
+                &AtomicSubmitRestartBoundaryForTest::CommitIo.application_name(),
+                &rendezvous_seconds.to_string(),
+            ],
+        )
+        .map_err(database_error)?;
+    transaction
+        .execute(
+            "INSERT INTO ogvcs_restart_test.commit_rendezvous (intent_id) VALUES ($1)",
+            &[&Uuid::from_bytes(intent_id)],
+        )
+        .map_err(database_error)?;
+    Ok(())
+}
+
+#[cfg(feature = "legacy-test-adapter")]
+fn await_after_commit_restart_rendezvous(
+    client: &mut Client,
+    control: AtomicSubmitControl,
+) -> Result<()> {
+    let AtomicSubmitControl::Restart {
+        boundary: AtomicSubmitRestartBoundaryForTest::AfterCommitBeforeResponse,
+        rendezvous_seconds,
+    } = control
+    else {
+        return Ok(());
+    };
+    client
+        .query_one(
+            "SELECT set_config('application_name', $1, FALSE),
+                    pg_sleep($2::double precision)",
+            &[
+                &AtomicSubmitRestartBoundaryForTest::AfterCommitBeforeResponse.application_name(),
+                &f64::from(rendezvous_seconds),
+            ],
+        )
+        .map_err(database_error)?;
+    Err(denied())
 }
 
 fn reconcile_transaction(
