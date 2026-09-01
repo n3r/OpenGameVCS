@@ -1,0 +1,136 @@
+{
+  "schemaVersion": "ogvcs.repository-metadata/hosted-evidence/v1",
+  "status": "bounded-atomic-submit-hard-restart-passed",
+  "exactScaleExecuted": false,
+  "sourceRevision": "16afa896d589efec8e8c10e694efbefed44018ba",
+  "workflow": {
+    "name": "Repository metadata bounded conformance",
+    "path": ".github/workflows/repository-metadata.yml",
+    "runId": 33479805287,
+    "runAttempt": 1,
+    "event": "workflow_dispatch",
+    "createdAt": "2026-09-01T06:56:38Z",
+    "completedAt": "2026-09-01T06:59:48Z",
+    "url": "https://github.com/n3r/OpenGameVCS/actions/runs/33479805287"
+  },
+  "toolchains": {
+    "node": "24",
+    "rust": "1.82.0"
+  },
+  "jobs": [
+    {
+      "id": 99766686509,
+      "name": "Locked bounded checks and PostgreSQL 15",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T06:56:43Z",
+      "completedAt": "2026-09-01T06:59:47Z"
+    },
+    {
+      "id": 99766686630,
+      "name": "Locked bounded checks (Windows)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T06:56:43Z",
+      "completedAt": "2026-09-01T06:58:44Z"
+    },
+    {
+      "id": 99766686715,
+      "name": "Locked bounded checks (macOS)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T06:56:45Z",
+      "completedAt": "2026-09-01T06:58:04Z"
+    },
+    {
+      "id": 99766686881,
+      "name": "Private atomic submit hard-restart proof (PostgreSQL 15)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T06:56:43Z",
+      "completedAt": "2026-09-01T06:58:28Z"
+    }
+  ],
+  "artifacts": [
+    {
+      "id": 9789526442,
+      "name": "repository-metadata-atomic-submit-restart-PG15",
+      "archiveBytes": 1455,
+      "githubDigest": "sha256:96641ace75d52c175440c678536baeaa5084263813b66aff89b7507dcd0477eb",
+      "expiresAt": "2026-09-15T06:58:24Z",
+      "retainedReport": "atomic-submit-hard-restart-report-2026-09-01.jsonl",
+      "retainedReportBytes": 10094,
+      "retainedReportSha256": "85b36ec4c7f30c9864d5b3ffc7d25594a891ad038a3850cc339b872703df32ca"
+    },
+    {
+      "id": 9789561501,
+      "name": "repository-metadata-postgres-Linux",
+      "archiveBytes": 586,
+      "githubDigest": "sha256:9e2fba9a10a9fdd7a67a000fc6184fcd3cb6941373cf1d378f20fce3f9cebed8",
+      "expiresAt": "2026-09-15T06:59:43Z",
+      "retainedReport": "repository-metadata-service-report-2026-09-01.jsonl",
+      "retainedReportBytes": 1001,
+      "retainedReportSha256": "e8dae7794e0c71205c94f610fb7a99a8c6a1c8caea2ae57cf0f8a787f9747f40",
+      "deduplicatedFromRunId": 33450207801
+    }
+  ],
+  "result": {
+    "status": "passed",
+    "caseCount": 13,
+    "passedCases": 13,
+    "failedCases": 0,
+    "summaryRows": 1,
+    "postgresImage": "postgres@sha256:5d1d70e254e3c5d7d76847a9deebb18478cd518df37abf6b278d4bdb1fe5d96c",
+    "postgresVersion": "150019",
+    "signal": "SIGKILL",
+    "boundaries": [
+      "before-bridge",
+      "after-bridge",
+      "after-file-id-consumption",
+      "after-snapshot-marker",
+      "after-branch-cas",
+      "after-audit",
+      "after-outbox-event",
+      "after-consistency-token",
+      "after-final-outcome",
+      "after-reconciliation",
+      "before-commit",
+      "commit-io",
+      "after-commit-before-response"
+    ],
+    "observedRecoveryStates": {
+      "before-bridge": "old",
+      "after-bridge": "old",
+      "after-file-id-consumption": "old",
+      "after-snapshot-marker": "old",
+      "after-branch-cas": "old",
+      "after-audit": "old",
+      "after-outbox-event": "old",
+      "after-consistency-token": "old",
+      "after-final-outcome": "old",
+      "after-reconciliation": "old",
+      "before-commit": "old",
+      "commit-io": "old",
+      "after-commit-before-response": "new"
+    },
+    "commitIoPermittedRecoveryStates": [
+      "old",
+      "new"
+    ],
+    "allObservedExit137": true,
+    "allPgSleepObserved": true,
+    "allBackendPidsObserved": true,
+    "allDockerPidsChanged": true,
+    "allPostmasterStartsChanged": true,
+    "allFileIdConsumptionsExactlyOne": true,
+    "allIdentityConsumptionsExactlyOne": true,
+    "allLifecycleApplicationsExactlyOne": true,
+    "allFinalOutcomesExactlyOne": true,
+    "diagnosticSecretsRetained": false,
+    "portableCompilationAndContracts": "passed on Windows, macOS, and Ubuntu"
+  },
+  "remainingGates": [
+    "production authenticated server host, session authority, and native CLI carrier",
+    "public and production atomic-submit request path",
+    "production OGVCS-009 request-root authorization and one-use receipt consumption",
+    "authenticated host and production-orchestrator restart campaign",
+    "production external path-profile and chunk-store adapters",
+    "million-entry bounded pagination campaign under the final scale policy"
+  ]
+}

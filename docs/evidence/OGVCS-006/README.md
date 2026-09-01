@@ -4,6 +4,44 @@ This packet preserves bounded hosted evidence for the internal PostgreSQL
 metadata adapter. It is not completion evidence for OGVCS-006 and does not
 change the PRD's **In development** status.
 
+## Private atomic-submit hard-restart update
+
+- Source: [`16afa896d589efec8e8c10e694efbefed44018ba`](https://github.com/n3r/OpenGameVCS/commit/16afa896d589efec8e8c10e694efbefed44018ba)
+- Workflow: [run 33479805287](https://github.com/n3r/OpenGameVCS/actions/runs/33479805287), completed successfully on 2026-09-01
+- Machine record: [`github-actions-run-33479805287.json`](github-actions-run-33479805287.json)
+- Retained restart report: [`atomic-submit-hard-restart-report-2026-09-01.jsonl`](atomic-submit-hard-restart-report-2026-09-01.jsonl), 10,094 bytes, SHA-256 `85b36ec4c7f30c9864d5b3ffc7d25594a891ad038a3850cc339b872703df32ca`
+
+Node 24 and Rust 1.82 locked checks passed on Windows, macOS, and Ubuntu.
+Ubuntu also passed the ordinary PostgreSQL 15 suite. A separate PostgreSQL 15
+job ran the feature-gated private atomic-submit harness through thirteen exact
+crash boundaries, killed the PostgreSQL postmaster with `SIGKILL`, observed
+exit 137, and required a changed Docker PID and postmaster start time after
+every restart.
+
+The eleven boundaries from `before-bridge` through `before-commit` recovered
+the complete old state. The `commit-io` boundary also recovered the old state
+in this run; either complete old or complete new is the accepted atomic
+outcome at that boundary. `after-commit-before-response` recovered the complete
+new state. Every recovery contained exactly one FileID consumption, identity
+consumption, lifecycle application, and final outcome. The retained report
+contains no connection URL, database name, loopback address, raw container or
+backend identifier, or SQL/COMMIT query text.
+
+The restart artifact is
+`repository-metadata-atomic-submit-restart-PG15` (artifact `9789526442`, GitHub
+digest `sha256:96641ace75d52c175440c678536baeaa5084263813b66aff89b7507dcd0477eb`).
+The ordinary report artifact is `repository-metadata-postgres-Linux` (artifact
+`9789561501`, GitHub digest
+`sha256:9e2fba9a10a9fdd7a67a000fc6184fcd3cb6941373cf1d378f20fce3f9cebed8`);
+its report is byte-identical to the already retained 2026-09-01 report and is
+therefore deduplicated.
+
+This is bounded private-adapter evidence. It does not prove a public or
+production request path, production OGVCS-009 authorization, authenticated
+server-host restart behavior, production orchestration, or the million-entry
+acceptance campaign. `exactScaleExecuted` remains `false`, and OGVCS-006 stays
+**In development**.
+
 ## Sealed metadata dispatcher update
 
 - Source: [`883e34e225a7108a6251fe6c3dd75bb080987102`](https://github.com/n3r/OpenGameVCS/commit/883e34e225a7108a6251fe6c3dd75bb080987102)
