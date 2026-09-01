@@ -791,15 +791,20 @@ test('commit remains abortable through cancellation and deadline until filesyste
       name: 'caller-cancellation',
       options() {
         const controller = new AbortController();
+        let boundaryReached = false;
         return {
           signal: controller.signal,
           hooks: {
             boundary: async (name) => {
               if (name === 'before-parent-sync') {
+                boundaryReached = true;
                 controller.abort();
                 await delay(20);
               }
             },
+          },
+          assertBoundaryReached() {
+            assert.equal(boundaryReached, true);
           },
         };
       },
@@ -807,12 +812,22 @@ test('commit remains abortable through cancellation and deadline until filesyste
     {
       name: 'deadline',
       options() {
+        let boundaryReached = false;
         return {
-          maxTimeMs: 200,
+          // Hosted Windows can spend more than 200 ms preparing the durable
+          // stage. Leave that bounded setup enough time so this scenario tests
+          // the intended settlement boundary instead of expiring beforehand.
+          maxTimeMs: 2_000,
           hooks: {
             boundary: async (name) => {
-              if (name === 'before-parent-sync') await delay(300);
+              if (name === 'before-parent-sync') {
+                boundaryReached = true;
+                await delay(2_200);
+              }
             },
+          },
+          assertBoundaryReached() {
+            assert.equal(boundaryReached, true);
           },
         };
       },
@@ -823,19 +838,21 @@ test('commit remains abortable through cancellation and deadline until filesyste
     try {
       const workspace = await openWorkspaceRoot(root);
       const plan = await publicationPlan(workspace, 'Content/asset.bin');
+      const { assertBoundaryReached, ...options } = scenario.options();
       const publication = createAtomicWriteStreamPublicationAdapter(workspace, 'Content/asset.bin', {
         manifest: fixture.result.manifest.bytes,
         createParents: true,
         maxBytes: fixture.bytes.length,
         maxScratchBytes: fixture.bytes.length,
         plan,
-        ...scenario.options(),
+        ...options,
       });
       await publication.write(fixture.bytes);
       const verificationReceipt = createVerificationReceipt(fixtureReceiptDetails(fixture));
       await assert.rejects(publication.commit({ verificationReceipt }), {
         code: 'CHUNK_PUBLICATION_FAILED',
       }, scenario.name);
+      assertBoundaryReached();
       assert.deepEqual(await readdir(workspace.transactions), [], scenario.name);
       await assert.rejects(readFile(join(root, 'Content', 'asset.bin')), { code: 'ENOENT' }, scenario.name);
     } finally {
