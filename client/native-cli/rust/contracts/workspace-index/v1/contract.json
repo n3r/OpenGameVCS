@@ -1,0 +1,129 @@
+{
+  "schema": "ogvcs.workspace-index/private-contract/v1",
+  "contractVersion": "0.1.0-rc.1",
+  "visibility": "private-local-candidate",
+  "onDiskRoot": ".ogvcs/workspace-index-v1",
+  "limits": {
+    "baselineEntries": 10000000,
+    "baselineChunkItems": 1000,
+    "baselineChunkBytes": 1048576,
+    "watchEventsPerGeneration": 100000,
+    "watchChunkItems": 1000,
+    "watchChunkBytes": 1048576,
+    "statusPageItems": 1000,
+    "ignoreRules": 2000
+  },
+  "generation": {
+    "artifacts": [
+      "entries",
+      "lookup",
+      "findings",
+      "ignores",
+      "events",
+      "watcher",
+      "seal"
+    ],
+    "publicationOrder": [
+      "publish-and-fsync-transition",
+      "create-new-generation-artifacts",
+      "fsync-artifact-files",
+      "create-and-fsync-seal",
+      "fsync-generation-directory",
+      "atomically-publish-active-pointer",
+      "fsync-generation-directory",
+      "remove-transition",
+      "fsync-generation-directory"
+    ],
+    "committedArtifactOverwrite": false,
+    "statusDuringTransition": "fail-closed-recovery-required",
+    "statusSnapshotRevalidation": [
+      "transition-absent-after-classification",
+      "active-generation-id-generation-and-payload-digest-unchanged",
+      "watcher-payload-digest-count-bytes-tail-and-event-file-length-unchanged"
+    ],
+    "readerSnapshot": "exactly-one-sealed-active-generation",
+    "retention": "retain-all-committed-generations-until-reader-safe-gc-authority"
+  },
+  "currentBindings": [
+    "workspace-id-digest",
+    "repository-id",
+    "branch",
+    "baseline-snapshot",
+    "repository-settings-digest",
+    "path-profile",
+    "case-mode"
+  ],
+  "baseline": {
+    "transport": "bounded-canonical-stream-with-complete-receipt",
+    "order": "platform-key-sha256-then-full-platform-key",
+    "duplicates": "reject",
+    "pathCollisions": "reject",
+    "orderedDigestFraming": "sha256(domain || repeated(u64-be(json-byte-length) || compact-json-utf8))",
+    "orderedDigestDomainUtf8Nul": "ogvcs.workspace-index/baseline-ordered/v1"
+  },
+  "lookup": {
+    "recordBytes": 76,
+    "digest": "sha256(full-platform-key-utf8)",
+    "collisionRule": "digest-hit-must-revalidate-repository-path-repository-key-full-platform-key-and-digest",
+    "maximumDigestCollisionScan": 32
+  },
+  "watcher": {
+    "journalSequence": "strict-plus-one",
+    "recordDigestFraming": "sha256(domain || u64-be(core-json-byte-length) || compact-core-json-utf8)",
+    "recordDigestDomainUtf8Nul": "ogvcs.workspace-index/watch-record/v1",
+    "statePublication": "append-fsync-journal-then-atomically-publish-state-and-fsync-directory",
+    "unmatchedAbsentDelete": "dirty-and-reconciliation-required-unless-same-path-created-then-deleted",
+    "productionContinuityAuthority": "built-in-native-adapter-only",
+    "portableAdapter": "always-reconciliation-required",
+    "hostAdapterLabels": [
+      "linux-inotify",
+      "macos-fsevents",
+      "windows-usn"
+    ]
+  },
+  "statusCursor": {
+    "encoding": "lowercase-hex(compact-json-utf8({payload,macSha256}))",
+    "authentication": "hmac-sha256(owner-only-random-32-byte-key,domain||compact-payload-json-utf8)",
+    "domainUtf8Nul": "ogvcs.workspace-index/status-cursor-hmac/v1",
+    "requiredBindings": [
+      "generation-id",
+      "active-payload-sha256",
+      "repository-settings-digest",
+      "path-profile",
+      "case-mode",
+      "repository-ignore-rules-sha256",
+      "local-ignore-rules-sha256",
+      "filter-sha256",
+      "after-repository-path",
+      "after-platform-key"
+    ]
+  },
+  "statusValues": [
+    "modified",
+    "added",
+    "deleted",
+    "moved-renamed-hint",
+    "type-mode-changed",
+    "untracked",
+    "ignored",
+    "conflicted",
+    "metadata-only",
+    "absent-by-spec",
+    "inaccessible-error"
+  ],
+  "safety": {
+    "timestampOnlyClean": false,
+    "indexRootOrArtifactLinkTraversal": false,
+    "repairMayModifyWorkspaceFiles": false,
+    "corruptOrGappedJournalMayReportClean": false,
+    "uncleanOrUnsupportedWatcherMayReportClean": false
+  },
+  "publicClaims": {
+    "publicStatusCliAvailable": false,
+    "nativeWatcherAdaptersImplemented": false,
+    "readerSafeGenerationGcImplemented": false,
+    "oneMillionWarmP95Proven": false,
+    "threeOsWatcherEvidenceGreen": false,
+    "ogvcs012Complete": false
+  }
+}

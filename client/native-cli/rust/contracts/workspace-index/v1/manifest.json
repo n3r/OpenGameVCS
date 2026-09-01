@@ -1,0 +1,36 @@
+{
+  "schema": "ogvcs.workspace-index/private-contract-manifest/v1",
+  "contractVersion": "0.1.0-rc.1",
+  "artifactSetSha256": "1e97e24e7c61d2b873d42f18ccdb8fb637495412f2face2b6c41dd59d2e253a9",
+  "counts": {
+    "artifacts": 5,
+    "vectors": 1
+  },
+  "artifacts": [
+    {
+      "path": "README.md",
+      "bytes": 1300,
+      "sha256": "c088ee0450af72dcbb20c3f8fa5fc6a0732555cfe229f20bca34b2f5ddbbfa1e"
+    },
+    {
+      "path": "contract.json",
+      "bytes": 4283,
+      "sha256": "a1524e204284a6ff86334bb4dedce07691986fce969faeacfd7de280e557a0c4"
+    },
+    {
+      "path": "scripts/generate.mjs",
+      "bytes": 1666,
+      "sha256": "9e1c18c906d17b27c547cde84244a3dd2f704ca6335f12c918dd43493c7fd202"
+    },
+    {
+      "path": "validate.mjs",
+      "bytes": 7076,
+      "sha256": "740561bd3d8f5f1ff5a36cf5bbffad70a92a8aec83df870d9beaa3bfdf731147"
+    },
+    {
+      "path": "vectors/status-cursor-hmac.json",
+      "bytes": 1067,
+      "sha256": "750b7edc07fbc7e3244fff93c127a05690effb45a2876662fa5a6ab2e8769d18"
+    }
+  ]
+}

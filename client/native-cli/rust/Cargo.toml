@@ -11,6 +11,7 @@ homepage = "https://github.com/n3r/OpenGameVCS"
 keywords = ["version-control", "workspace", "cli", "gamedev"]
 categories = ["command-line-utilities", "development-tools"]
 include = [
+    "contracts/**",
     "src/**",
     "scripts/**",
     "tests/**",

@@ -7,7 +7,7 @@
 **Depends on:** OGVCS-004, OGVCS-005, OGVCS-011  
 **Blocks:** OGVCS-013, OGVCS-014, OGVCS-016, OGVCS-022, OGVCS-037, OGVCS-042, OGVCS-043  
 **Source:** [OpenGameVCS proposal](../../GAME_DEV_VCS_ANALYSIS.md)  
-**Last updated:** 2026-08-14
+**Last updated:** 2026-09-01
 
 ## Outcome
 
@@ -97,8 +97,50 @@ Begin with watcher plus mandatory verification mode; enable optimized paths afte
 
 ## Completion evidence
 
-- Implementation changes:
-- Test and benchmark results:
-- Security/reliability review:
-- Documentation/runbooks:
-- Rollout result:
+This section records an incomplete private candidate. It is not completion
+evidence sufficient to move this PRD out of Todo.
+
+- **Implementation changes:** the Rust local CLI has a bounded authenticated
+  baseline sink, sealed create-new generations, fixed-width collision-safe
+  lookup, strict hash-chained watcher journal, deterministic status paging,
+  HMAC cursor, ignore evaluation, recovery, verification, and non-destructive
+  repair. Its private candidate contract is
+  `client/native-cli/rust/contracts/workspace-index/v1` version
+  `0.1.0-rc.1`.
+- **Test and benchmark results:** Rust 1.82 focused tests cover crash boundaries,
+  a synced journal tail without state publication, concurrent transition/status
+  races, active/settings/profile/case/cursor staleness, digest collisions,
+  case collisions/order, symlink/reparse rejection, timestamp-preserving edits,
+  same-length index corruption, deleted-directory uncertainty, transient
+  untracked create/delete, and repair preserving workspace files. A local
+  exact 1,000 changed-file candidate run classified and content-verified every
+  item in 210 ms. A local exact 100,000-event run used 100 chunks of 1,000,
+  completed in 11.619 s, rejected event 100,001 before append, verified the
+  complete chain, and proved a new generation resets the bound. These are
+  single-host candidate measurements, not p95 or three-OS evidence.
+- **Security/reliability review:** status fails closed during an in-progress
+  generation and performs an after-classification active/watcher snapshot
+  check. Lookup digest hits never substitute a different full path. A portable
+  or safe third-party watcher implementation cannot mint native continuity.
+  Cursor MACs bind both repository and local ignore digests in addition to the
+  exact generation/settings/filter/path key.
+- **Documentation/runbooks:** the Rust README and
+  `docs/reviews/OGVCS-012-workspace-index-boundary-review.md` describe the
+  runnable gates and exact residuals.
+- **Rollout result:** none. The first-party CLI still installs unavailable
+  public routes, and optimized status has not been enabled.
+
+### Candidate residuals blocking completion
+
+- No authenticated public workspace-baseline/status route or public CLI/JSON
+  journey exists.
+- No built-in Windows USN, macOS FSEvents, or Linux inotify authority can issue
+  the private continuity proof; every production-callable implementation is
+  degraded.
+- There is no reader lease/epoch and therefore no safe bounded retention or
+  physical compaction of old immutable generations.
+- The exact one-million-path warm p95 target, three-OS watcher matrix, complete
+  OGVCS-004 operation/fault matrix, rename cycles, locked-open files, and repair
+  parity against an independently authoritative scan remain unproven.
+- Telemetry, support-facing explain/repair commands, rollout comparison, and
+  downgrade behavior are not wired into a public product surface.
