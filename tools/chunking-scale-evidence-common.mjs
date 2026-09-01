@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
 import { lstat, open, readFile, readdir, rm } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -484,13 +484,26 @@ export async function scaleEvidenceSourceInventory() {
   let totalBytes = 0;
   for (const path of paths) {
     const absolute = resolve(SCALE_ROOT, path);
-    if (!absolute.startsWith(`${SCALE_ROOT}/`)) fail(`evidence source ${path} escapes the source root`);
+    if (!isScaleEvidencePathWithinRoot(SCALE_ROOT, absolute)) fail(`evidence source ${path} escapes the source root`);
     const { bytes } = await loadBoundedRegular(absolute, 16 * 1024 * 1024, `evidence source ${path}`);
     totalBytes += bytes.byteLength;
     if (totalBytes > 128 * 1024 * 1024) fail('evidence source inventory exceeds its aggregate byte bound');
     rows.push({ path, bytes: bytes.byteLength, sha256: sha256Bytes(bytes) });
   }
   return deepFreeze(rows);
+}
+
+const HOST_PATH_API = Object.freeze({ isAbsolute, relative, sep });
+
+export function isScaleEvidencePathWithinRoot(root, target, pathApi = HOST_PATH_API) {
+  if (typeof root !== 'string' || root.length === 0 || typeof target !== 'string' || target.length === 0
+      || typeof pathApi?.relative !== 'function' || typeof pathApi?.isAbsolute !== 'function'
+      || typeof pathApi?.sep !== 'string' || pathApi.sep.length !== 1) return false;
+  const descendant = pathApi.relative(root, target);
+  return descendant.length > 0
+    && descendant !== '..'
+    && !descendant.startsWith(`..${pathApi.sep}`)
+    && !pathApi.isAbsolute(descendant);
 }
 
 export async function scaleEvidenceSourceSetSha256() {

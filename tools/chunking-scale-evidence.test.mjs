@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, posix, win32 } from 'node:path';
 import test from 'node:test';
 
 import { canonicalDigest, canonicalJson } from '../foundation/benchmark-fault-harness/src/index.mjs';
@@ -21,6 +21,7 @@ import {
   SCALE_ROOT,
   SCALE_SOURCE,
   implementationAuthority,
+  isScaleEvidencePathWithinRoot,
   loadScaleReport,
   parseScaleReportText,
   scaleEvidenceSourceInventory,
@@ -198,6 +199,17 @@ test('current-source inventory covers the runner and transitive JS/Rust implemen
     'foundation/benchmark-fault-harness/src/canonical.mjs',
   ]) assert.ok(paths.includes(path), path);
   assert.ok(inventory.every(({ bytes, sha256 }) => bytes > 1 && /^[0-9a-f]{64}$/u.test(sha256)));
+});
+
+test('source-root containment is exact across POSIX, drive-letter, and UNC paths', () => {
+  assert.equal(isScaleEvidencePathWithinRoot('/srv/repo', '/srv/repo/tools/report.mjs', posix), true);
+  assert.equal(isScaleEvidencePathWithinRoot('/srv/repo', '/srv/repository/report.mjs', posix), false);
+  assert.equal(isScaleEvidencePathWithinRoot('/srv/repo', '/srv/repo', posix), false);
+  assert.equal(isScaleEvidencePathWithinRoot('D:\\a\\repo', 'D:\\a\\repo\\tools\\report.mjs', win32), true);
+  assert.equal(isScaleEvidencePathWithinRoot('D:\\a\\repo', 'D:\\a\\repository\\report.mjs', win32), false);
+  assert.equal(isScaleEvidencePathWithinRoot('D:\\a\\repo', 'E:\\a\\repo\\report.mjs', win32), false);
+  assert.equal(isScaleEvidencePathWithinRoot('\\\\host\\share\\repo', '\\\\host\\share\\repo\\tools\\report.mjs', win32), true);
+  assert.equal(isScaleEvidencePathWithinRoot('\\\\host\\share\\repo', '\\\\host\\share\\other\\report.mjs', win32), false);
 });
 
 test('tiny projections publish as two content-addressed bundles and compare only through verified brands', { timeout: 120_000 }, async (t) => {
