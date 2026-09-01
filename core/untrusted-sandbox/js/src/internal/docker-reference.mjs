@@ -175,13 +175,25 @@ const exactHostMounts = (source, expected) => {
     && emptyCollection(output.VolumeOptions?.DriverConfig);
 };
 
+const omittedOrEmptyReportedMountField = (mount, field) => !Object.hasOwn(mount, field) || mount[field] === '';
+
+const exactReportedMountMode = (mount, currentMode) => mount.Mode === currentMode
+  || omittedOrEmptyReportedMountField(mount, 'Mode');
+
 const exactEffectiveMounts = (source, expected) => {
   if (!Array.isArray(source) || source.length !== expected.fileMounts.length + 1) return false;
   const byDestination = new Map(source.map((mount) => [mount?.Destination, mount]));
   if (byDestination.size !== source.length) return false;
   for (const file of expected.fileMounts) {
     const mount = byDestination.get(file.target);
-    if (!mount || mount.Type !== 'bind' || mount.Source !== file.source || mount.RW !== false || mount.Propagation !== 'rprivate' || (mount.Mode ?? '') !== '') return false;
+    if (!mount
+      || mount.Type !== 'bind'
+      || mount.Source !== file.source
+      || mount.RW !== false
+      || mount.Propagation !== 'rprivate'
+      || !exactReportedMountMode(mount, 'ro')
+      || !omittedOrEmptyReportedMountField(mount, 'Name')
+      || !omittedOrEmptyReportedMountField(mount, 'Driver')) return false;
   }
   const output = byDestination.get('/output');
   return output?.Type === 'volume'
@@ -189,8 +201,8 @@ const exactEffectiveMounts = (source, expected) => {
     && output.Driver === 'local'
     && output.Source === expected.volumeMountpoint
     && output.RW === !expected.outputReadonly
-    && (output.Mode ?? '') === ''
-    && (output.Propagation ?? '') === '';
+    && exactReportedMountMode(output, 'z')
+    && omittedOrEmptyReportedMountField(output, 'Propagation');
 };
 
 const containsRequiredPaths = (source, required) => Array.isArray(source)
