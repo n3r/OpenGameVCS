@@ -1,0 +1,63 @@
+{
+  "schemaVersion": "ogvcs.cli-workspace/hosted-evidence/v1",
+  "status": "native-cli-hermetic-passed",
+  "hostedExactScaleExecuted": false,
+  "integrationRevision": "fadb76e0a8cae1429d1547cfcbdfb923d107aff2",
+  "workflow": {
+    "name": "Native CLI local candidate",
+    "path": ".github/workflows/native-cli-local-candidate.yml",
+    "runId": 33496814160,
+    "runAttempt": 1,
+    "event": "push",
+    "headBranch": "r1-foundation-integration",
+    "createdAt": "2026-09-01T10:19:22Z",
+    "completedAt": "2026-09-01T10:24:52Z",
+    "url": "https://github.com/n3r/OpenGameVCS/actions/runs/33496814160"
+  },
+  "jobs": [
+    {
+      "id": 99820794882,
+      "name": "Verified local foundation (Linux)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T10:19:26Z",
+      "completedAt": "2026-09-01T10:21:39Z",
+      "packedOffline": "success",
+      "installedArtifactHermetic": "success"
+    },
+    {
+      "id": 99820794629,
+      "name": "Verified local foundation (macOS)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T10:19:26Z",
+      "completedAt": "2026-09-01T10:22:24Z",
+      "packedOffline": "success",
+      "installedArtifactHermetic": "success"
+    },
+    {
+      "id": 99820794885,
+      "name": "Verified local foundation (Windows)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T10:19:27Z",
+      "completedAt": "2026-09-01T10:24:51Z",
+      "packedOffline": "success",
+      "installedArtifactHermetic": "success",
+      "nativeProtectedDaclFixture": "success",
+      "hostileEveryoneWritableRootRejected": "success"
+    }
+  ],
+  "boundary": {
+    "normalReleaseTargetInstalledSeparately": true,
+    "controllerBuiltOutsideRuntimePayload": true,
+    "runtimeSourceLeakageRejected": true,
+    "processRestartExercised": true,
+    "credentialAndLocatorDisclosureRejected": true,
+    "hostileRootMutationRejected": true
+  },
+  "remainingGates": [
+    "first-party OGVCS-006, OGVCS-008, and OGVCS-009 public adapters",
+    "local OGVCS-041 receipt-MAC verification",
+    "remote end-to-end authentication, discovery, binding, and FileID allocation",
+    "integrated sync, status, materialize, submit, and lock journeys",
+    "rollout and final acceptance"
+  ]
+}

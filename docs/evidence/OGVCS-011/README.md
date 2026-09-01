@@ -26,6 +26,29 @@ The evidence source uses a disposable replacement of the already registered
 carrier commit is excluded from integration; only the audited production
 commits were cherry-picked.
 
+## Installed-artifact hermetic boundary
+
+- Integrated source: [`fadb76e0a8cae1429d1547cfcbdfb923d107aff2`](https://github.com/n3r/OpenGameVCS/commit/fadb76e0a8cae1429d1547cfcbdfb923d107aff2)
+- Registered workflow: [`.github/workflows/native-cli-local-candidate.yml`](../../../.github/workflows/native-cli-local-candidate.yml)
+- Workflow: [run 33496814160](https://github.com/n3r/OpenGameVCS/actions/runs/33496814160), completed successfully on 2026-09-01
+- Machine record: [`github-actions-run-33496814160.json`](github-actions-run-33496814160.json)
+
+The registered push workflow passed on Ubuntu, macOS, and Windows from the
+exact integrated source. In addition to the contract, native, Clippy, and
+packed-crate gates above, each host built the normal release target, installed
+only its declared runtime payload into a fresh directory, built the independent
+test controller elsewhere, and exercised the installed binary through process
+restart. The gate rejects build/source leakage, mutation on hostile roots,
+credential or locator disclosure, and cross-command secret persistence. The
+Windows controller creates the valid fixture root with the product's native
+protected-DACL primitive and separately proves that an Everyone-writable root
+is rejected before `.ogvcs` creation.
+
+This later run supersedes the earlier packet only for the hermetic
+installed-artifact and Windows fixture-root checks. It does not turn the local
+candidate into a public service or satisfy the unfinished adapters and
+integrated journeys below.
+
 ## Deliberately unclaimed
 
 The first-party OGVCS-006/008/009 public adapters, local OGVCS-041 receipt-MAC
