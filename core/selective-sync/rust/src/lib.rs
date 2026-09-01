@@ -17,7 +17,17 @@ use std::{
 use ogvcs_path_contract::{case_fold, path_collision_keys_with_options, CaseMode, PathProfile};
 use sha2::{Digest as _, Sha256};
 
+mod dry_run;
 mod generated_contract;
+pub use dry_run::{
+    BlockerKind, CacheProbeOutcome, CacheProbeRecord, CandidateActionKind,
+    CandidateMaterializationState, DryRunAction, DryRunActionSink, DryRunBindings, DryRunError,
+    DryRunFullIdentity, DryRunLedgers, DryRunPlanner, DryRunRequiredObject, DryRunSummary,
+    DryRunTargetRecord, IteratorPlanSource, LocalObservation, MutationKind, PlanSource,
+    PlanSourceError, RetainedCurrentState, RetainedWorkspaceRecord, CACHE_PROBES_MAXIMUM,
+    DRY_RUN_ACTIONS_MAXIMUM, DRY_RUN_INPUT_BYTES_MAXIMUM, DRY_RUN_LEDGER_BYTES_MAXIMUM,
+    DRY_RUN_RETAINED_BYTES_MAXIMUM, REQUIRED_OBJECTS_MAXIMUM,
+};
 pub use generated_contract::{
     CONTRACT_ARTIFACT_SET_SHA256, CONTRACT_MANIFEST_SHA256, CONTRACT_VERSION,
     ERROR_REGISTRY_SHA256, GOLDEN_VECTORS_SHA256, PATH_CONTRACT_MANIFEST_SHA256,

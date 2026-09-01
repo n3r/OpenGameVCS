@@ -7,7 +7,7 @@
 **Depends on:** OGVCS-007, OGVCS-008, OGVCS-009, OGVCS-011, OGVCS-012  
 **Blocks:** OGVCS-014, OGVCS-019, OGVCS-022, OGVCS-023, OGVCS-025, OGVCS-027, OGVCS-031, OGVCS-037, OGVCS-042, OGVCS-043  
 **Source:** [OpenGameVCS proposal](../../GAME_DEV_VCS_ANALYSIS.md)  
-**Last updated:** 2026-08-14
+**Last updated:** 2026-09-01
 
 ## Outcome
 
@@ -97,8 +97,31 @@ Start with explicit CLI specs and full materialization; enable metadata class af
 
 ## Completion evidence
 
-- Implementation changes:
-- Test and benchmark results:
+- Implementation changes: the private Rust candidate now includes a bounded,
+  discard-on-error current-versus-target dry-run planner. It reports
+  add/update/delete/move-or-equivalent/materialization-state/conflict actions,
+  exact logical/object/cache/transfer/payload-reservation ledgers under the
+  documented model, deterministic single-owner current-row plan/reuse
+  semantics, and explicit modified/untracked blockers. It reuses
+  OGVCS-002 object/file identities, OGVCS-004 path rules, and OGVCS-007 object
+  ceilings. It adds no language-neutral contract field or public entry point.
+- Test and benchmark results: Rust 1.82 table/property/hostile coverage exercises
+  persona-like selection outcomes, all action classes, warm/cold probe
+  arithmetic, permission-hidden omission equivalence, metadata-only non-file
+  behavior, move destination retirement, deterministic generated matrices,
+  Windows platform-alias/stable-ID plan/source ownership permutations,
+  bounds/overflow, cancellation, and source/sink failures. This is bounded local
+  candidate evidence, not the million-path/reference-workstation performance
+  or three-OS materialization campaign.
 - Security/reliability review:
-- Documentation/runbooks:
-- Rollout result:
+  [private dry-run planner boundary review](../../docs/reviews/OGVCS-013-dry-run-planner-boundary-review.md).
+  Target/current/object-closure/cache-probe inputs remain untrusted arithmetic
+  authorities; no cache bytes, authorization, request root, or mutation is
+  verified or granted.
+- Documentation/runbooks: the private crate README defines action ordering,
+  failure/discard semantics, ledger vocabulary, planner versus source/sink
+  memory accounting, explicit ceilings, and production residuals. There is no
+  execution runbook because this tranche cannot execute a sync.
+- Rollout result: no rollout. No materialization, transfer, resume, crash
+  recovery, public CLI/route, hosted conformance, or acceptance criterion is
+  claimed. OGVCS-013 remains **Todo**.

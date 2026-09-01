@@ -5,11 +5,13 @@ import test from 'node:test';
 const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 
-test('private kernel stays unwired, unbranded, bounded, and Todo', async () => {
-  const [contract, manifest, rust, packageValue, prd] = await Promise.all([
+test('private kernel and dry-run stay unwired, unbranded, bounded, and Todo', async () => {
+  const [contract, manifest, rust, dryRun, review, packageValue, prd] = await Promise.all([
     read('spec/selective-sync/v1/contract.json').then(JSON.parse),
     read('spec/selective-sync/v1/manifest.json').then(JSON.parse),
     read('core/selective-sync/rust/src/lib.rs'),
+    read('core/selective-sync/rust/src/dry_run.rs'),
+    read('docs/reviews/OGVCS-013-dry-run-planner-boundary-review.md'),
     read('package.json').then(JSON.parse),
     read('prd/todo/OGVCS-013-selective-sync-materialization.md'),
   ]);
@@ -37,9 +39,18 @@ test('private kernel stays unwired, unbranded, bounded, and Todo', async () => {
   const outputEncoder = rust.slice(rust.indexOf('fn encode_output_record('), rust.indexOf('\nfn append_content('));
   assert.doesNotMatch(outputEncoder, /entry_digest/u);
   assert.doesNotMatch(rust, /Vec<MetadataRecord>|AuthorizationContext|TransactionAuthorized|TcpListener|std::fs|reqwest|object fetch|cache hit/iu);
+  assert.match(dryRun, /pub const DRY_RUN_ACTIONS_MAXIMUM: u64 = METADATA_RECORDS_MAXIMUM \* 2;/u);
+  assert.match(dryRun, /pub const DRY_RUN_RETAINED_BYTES_MAXIMUM: u64 = 268_435_456;/u);
+  assert.match(dryRun, /pub const DRY_RUN_INPUT_BYTES_MAXIMUM: u64 = 1_073_741_824;/u);
+  assert.doesNotMatch(dryRun, /std::fs|TcpListener|reqwest|AuthorizationContext|TransactionAuthorized/iu);
+  assert.match(review, /Every input remains an untrusted adapter claim/u);
+  assert.match(review, /adapter-buffer or allocator measurement/u);
+  assert.match(review, /sink-owned action copies are explicitly\s+excluded/u);
+  assert.match(review, /does not satisfy an acceptance criterion/u);
   assert.equal(packageValue.scripts['test:selective'].includes('selective-sync-kernel-policy.test.mjs'), true);
   assert.match(prd, /^\*\*Status:\*\* Todo  $/mu);
-  assert.match(prd, /## Completion evidence\n\n- Implementation changes:\n- Test and benchmark results:/u);
+  assert.match(prd, /private Rust candidate now includes a bounded/u);
+  assert.match(prd, /No materialization, transfer, resume, crash/u);
 });
 
 test('ordinary selective gates contain no million-path or production route work', async () => {

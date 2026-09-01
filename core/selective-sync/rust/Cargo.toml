@@ -21,6 +21,8 @@ include = [
 path = "src/lib.rs"
 
 [dependencies]
+ogvcs-chunking-manifest = { path = "../../chunking-manifest/rust", version = "0.1.0" }
+ogvcs-object-model = { path = "../../object-model/rust", version = "0.1.0" }
 ogvcs-path-contract = { path = "../../paths-filesystem/rust", version = "1.0.0" }
 sha2 = "=0.10.9"
 
