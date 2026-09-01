@@ -711,6 +711,10 @@ fn cancellation_cleans_unpublished_create_and_recovers_published_intent_journals
     )
     .unwrap_err();
     assert_eq!(error.code, "OPERATION_CANCELLED");
+    assert_eq!(
+        error.data["remoteDurableState"],
+        "unchanged-after-preflight"
+    );
     assert!(!early.0.join(".ogvcs").exists());
     assert!(fs::read_dir(&early.0).unwrap().all(|entry| !entry
         .unwrap()
@@ -739,6 +743,10 @@ fn cancellation_cleans_unpublished_create_and_recovers_published_intent_journals
     )
     .unwrap_err();
     assert_eq!(error.code, "OPERATION_CANCELLED");
+    assert_eq!(
+        error.data["remoteDurableState"],
+        "unchanged-after-preflight"
+    );
     assert!(error.data["resumeToken"].as_str().is_some());
     assert_eq!(
         open_verified_workspace(&published.0).unwrap_err().code,
@@ -796,6 +804,10 @@ fn cancellation_cleans_unpublished_create_and_recovers_published_intent_journals
     .unwrap_err();
     assert_eq!(error.code, "OPERATION_CANCELLED");
     assert_eq!(
+        error.data["remoteDurableState"],
+        "unchanged-after-preflight"
+    );
+    assert_eq!(
         open_verified_workspace(&configured.0).unwrap_err().code,
         "WORKSPACE_RECOVERY_REQUIRED"
     );
@@ -826,6 +838,10 @@ fn cancellation_cleans_unpublished_create_and_recovers_published_intent_journals
     )
     .unwrap_err();
     assert_eq!(error.code, "OPERATION_CANCELLED");
+    assert_eq!(
+        error.data["remoteDurableState"],
+        "unchanged-after-preflight"
+    );
     assert_eq!(
         open_verified_workspace(&staged.0).unwrap_err().code,
         "WORKSPACE_RECOVERY_REQUIRED"
@@ -1224,4 +1240,14 @@ fn credential_provider_status_is_nonsecret() {
     let provider = OsCredentialProvider::new(&FixedStore);
     assert_eq!(provider.kind(), "os-credential-store");
     assert_eq!(provider.status(), CredentialStatus::Available);
+}
+
+#[test]
+fn generic_cancellation_does_not_invent_remote_durable_state() {
+    let token = CancellationToken::default();
+    token.cancel();
+    let error = token.check("ambiguous-route-boundary").unwrap_err();
+    assert_eq!(error.code, "OPERATION_CANCELLED");
+    assert_eq!(error.data["phase"], "ambiguous-route-boundary");
+    assert!(error.data.get("remoteDurableState").is_none());
 }

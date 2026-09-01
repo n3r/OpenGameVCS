@@ -48,7 +48,7 @@
     "test:selective:rust": "node core/selective-sync/rust/scripts/sync-contract.mjs --check && cargo +1.82.0 fmt --manifest-path core/selective-sync/rust/Cargo.toml -- --check && cargo +1.82.0 test --manifest-path core/selective-sync/rust/Cargo.toml --locked --offline && cargo +1.82.0 clippy --manifest-path core/selective-sync/rust/Cargo.toml --locked --offline --all-targets -- -D warnings",
     "test:metadata:spec": "npm run test --workspace @opengamevcs/repository-metadata-contract-v1",
     "test:metadata": "node server/modules/repository-metadata/scripts/static-check.mjs && node server/modules/repository-metadata/scripts/service-report.mjs --check && node --test tools/repository-metadata-workflow-policy.test.mjs",
-    "test:cli-workspace:spec": "node spec/cli-workspace/v1/scripts/generate.mjs --check && node client/native-cli/rust/scripts/sync-contract.mjs --check && npm run test --workspace @opengamevcs/cli-workspace-contract-v1 && node --test spec/cli-workspace/v1/test/*.test.mjs",
+    "test:cli-workspace:spec": "node spec/cli-workspace/v1/scripts/generate.mjs --check && node client/native-cli/rust/scripts/sync-contract.mjs --check && npm run test --workspace @opengamevcs/cli-workspace-contract-v1 && node --test spec/cli-workspace/v1/test/*.test.mjs tools/native-cli-workflow-policy.test.mjs",
     "test:transfer": "npm run test --workspace @opengamevcs/object-transfer && node --test tools/object-transfer-workflow-policy.test.mjs",
     "test:transfer:spec": "npm run test --workspace @opengamevcs/object-transfer-contract-v1",
     "test:identity": "node core/paths-filesystem/rust/scripts/sync-contract.mjs --check && npm run test --workspace @opengamevcs/identity-policy-audit && node --test tools/identity-policy-workflow-policy.test.mjs",

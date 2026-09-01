@@ -9,6 +9,7 @@ on:
       - 'core/paths-filesystem/rust/**'
       - 'spec/cli-workspace/v1/**'
       - 'docs/reviews/OGVCS-011-local-foundation-boundary-review.md'
+      - 'tools/native-cli-workflow-policy.test.mjs'
       - 'package.json'
       - 'package-lock.json'
   push:
@@ -20,6 +21,7 @@ on:
       - 'core/paths-filesystem/rust/**'
       - 'spec/cli-workspace/v1/**'
       - 'docs/reviews/OGVCS-011-local-foundation-boundary-review.md'
+      - 'tools/native-cli-workflow-policy.test.mjs'
       - 'package.json'
       - 'package-lock.json'
   workflow_dispatch:
@@ -42,7 +44,7 @@ jobs:
           - { runner: macos-latest, label: macOS }
           - { runner: windows-latest, label: Windows }
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -51,6 +53,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@7d11e79e1714f6b6da93cac39ad8435666f5c337 # 1.82.0
         with:
           components: clippy, rustfmt
+      - run: node --test tools/native-cli-workflow-policy.test.mjs
       - run: node spec/cli-workspace/v1/scripts/generate.mjs --check
       - run: node client/native-cli/rust/scripts/sync-contract.mjs --check
       - run: node spec/cli-workspace/v1/validate-spec.mjs
@@ -60,4 +63,6 @@ jobs:
       - run: cargo clippy --manifest-path client/native-cli/rust/Cargo.toml --locked --all-targets -- -D warnings
       - run: ./scripts/test-packed.sh
         shell: bash
+        working-directory: client/native-cli/rust
+      - run: node scripts/test-hermetic.mjs
         working-directory: client/native-cli/rust

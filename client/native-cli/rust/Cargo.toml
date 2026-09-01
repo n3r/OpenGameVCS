@@ -28,6 +28,15 @@ path = "src/lib.rs"
 name = "ogvcs"
 path = "src/main.rs"
 
+# Test-only controller compiled by the hermetic artifact gate. Cargo never
+# installs examples as production binaries, and the gate keeps it outside the
+# installed runtime root.
+[[example]]
+name = "ogvcs-hermetic-fixture"
+path = "tests/support/hermetic_fixture.rs"
+test = false
+bench = false
+
 [dependencies]
 getrandom = "=0.2.16"
 ogvcs-object-model = { version = "0.1.0", path = "../../../core/object-model/rust" }

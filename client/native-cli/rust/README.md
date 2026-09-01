@@ -127,10 +127,41 @@ cargo fmt --all -- --check
 cargo test --locked --offline
 cargo clippy --locked --offline --all-targets -- -D warnings
 ./scripts/test-packed.sh
+node scripts/test-hermetic.mjs
 ```
 
 `test-packed.sh` packages and tests the CLI together with the unpublished
 OGVCS-002 and OGVCS-004 Rust crates as one offline artifact set.
+
+`test-hermetic.mjs` is a test-only installed-artifact and process-recovery
+gate. It packages those same three crates, unpacks them away from the checkout,
+and builds the ordinary release `ogvcs` binary with no test feature or
+test-specific environment adapter. It then copies only that binary and the
+authenticated CLI contract into an initially empty runtime root. Package
+archives, unpacked sources, and the build tree are removed before the copied
+binary is exercised under fresh home, profile, configuration, and temporary
+directories. The build may use Cargo's already provisioned offline dependency
+cache; this is not a clean-host dependency-fetch or signed-distribution proof.
+
+The separately built `ogvcs-hermetic-fixture` Cargo example is a controller,
+not an installed product binary. It remains outside the runtime root and uses
+the existing typed repository-route adapter boundary to prepare deterministic
+local state and stop the controller process immediately after durable journal
+and removal boundaries. Recovery, listing, and removal are then executed only
+through the copied release binary. The installed binary has no fixture path,
+feature, environment override, or route implementation. Cargo examples are not
+installed, and workflow policy mechanically checks the separate target and
+runtime inventories.
+
+The gate delivers real SIGINT and SIGTERM to the synchronized controller on
+Linux and macOS. On Windows it creates a dedicated console process group and
+requires `CTRL_BREAK_EVENT` delivery to that exact group; an unsupported or
+failed delivery fails the gate, and the cleanup kill is never accepted as
+signal evidence. Local macOS execution is proven by the source gate. Linux and
+Windows execution remain unproven for this exact candidate until the existing
+three-OS workflow is registered on the default branch and completes there.
+This gate does not add a public route or authentication carrier, selective-sync
+semantics, signing, installation packaging, or an OGVCS-011 completion claim.
 
 The exact watcher/status limit proofs are opt-in bounded release tests:
 
