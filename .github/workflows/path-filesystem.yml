@@ -1,4 +1,4 @@
-name: Native CLI Windows rename probe
+name: Native CLI evidence only
 
 on:
   workflow_dispatch:
@@ -11,11 +11,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  windows-native-rename:
-    name: Windows native rename unit
-    runs-on: windows-latest
-    timeout-minutes: 10
+  native-cli:
+    name: Native CLI (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
       - uses: dtolnay/rust-toolchain@7d11e79e1714f6b6da93cac39ad8435666f5c337 # 1.82.0
-      - run: cargo test --manifest-path client/native-cli/rust/Cargo.toml --locked --lib windows_security::tests::private_creation_is_protected_and_pinned_against_path_replacement -- --exact --nocapture
+        with:
+          components: clippy, rustfmt
+      - run: node spec/cli-workspace/v1/scripts/generate.mjs --check
+      - run: node client/native-cli/rust/scripts/sync-contract.mjs --check
+      - run: node spec/cli-workspace/v1/validate-spec.mjs
+      - run: node --test spec/cli-workspace/v1/test/*.test.mjs
+      - run: cargo fmt --manifest-path client/native-cli/rust/Cargo.toml -- --check
+      - run: cargo test --manifest-path client/native-cli/rust/Cargo.toml --locked
+      - run: cargo clippy --manifest-path client/native-cli/rust/Cargo.toml --locked --all-targets -- -D warnings
+      - run: ./scripts/test-packed.sh
+        shell: bash
+        working-directory: client/native-cli/rust
