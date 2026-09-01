@@ -4,8 +4,8 @@ import { chmod, mkdtemp, mkdir, open, readFile, readdir, rm, stat, writeFile } f
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { validateRuntimeImageInspect } from '../src/internal/docker-reference.mjs';
-import { LINUX_RUNTIME_CONTRACT_SHA256, canonicalJson, sha256 } from '../src/internal/reference-contract.mjs';
+import { createdContainerInspectMismatch, validateCreatedContainerInspect, validateOutputVolumeInspect, validateRuntimeImageInspect } from '../src/internal/docker-reference.mjs';
+import { LINUX_RUNTIME_CONTRACT_SHA256, canonicalJson, parseAndVerifyToolManifest, sha256, snapshotTrustedManifestKeys } from '../src/internal/reference-contract.mjs';
 import { ReferenceSandboxService } from '../src/internal/reference-service.mjs';
 import { ReferenceStateStore } from '../src/internal/reference-state.mjs';
 import * as linuxBoundary from '../src/linux.mjs';
@@ -16,11 +16,18 @@ const SECCOMP_DIGEST = 'e'.repeat(64);
 const ACTOR_DIGEST = 'a'.repeat(64);
 const OPTIONS_DIGEST = 'c'.repeat(64);
 const OBJECT_ID_DIGEST = 'd'.repeat(64);
+const referenceStateTest = process.platform === 'win32' ? test.skip : test;
 
 test('Linux reference export remains candidate-named until live controls are verified', () => {
   assert.equal(Object.hasOwn(linuxBoundary, 'openLinuxReferenceSandbox'), false);
   assert.equal(typeof linuxBoundary.openLinuxReferenceSandboxCandidate, 'function');
   assert.equal(typeof linuxBoundary.probeLinuxReferenceSandbox, 'function');
+});
+
+test('non-Linux hosts keep the Linux state boundary fail closed while portable tests remain runnable', async (context) => {
+  if (process.platform === 'linux') { context.skip('Linux admission is covered by the live reference lane'); return; }
+  assert.deepEqual(await linuxBoundary.probeLinuxReferenceSandbox({ dockerBinary: '/not/consulted' }), { available: false, code: 'SANDBOX_UNAVAILABLE', profile: 'linux-reference-v1' });
+  await assert.rejects(linuxBoundary.openLinuxReferenceSandboxCandidate(Object.freeze({})), (error) => error?.code === 'SANDBOX_UNAVAILABLE');
 });
 
 const u32 = (value) => { const bytes = Buffer.alloc(4); bytes.writeUInt32BE(value); return bytes; };
@@ -47,10 +54,11 @@ const outputFrame = (binding, files, tamper = null) => {
 };
 
 class FakeContainerAdapter {
-  constructor({ gate = null, tamper = null } = {}) { this.seccompDigest = SECCOMP_DIGEST; this.gate = gate; this.tamper = tamper; this.runs = 0; this.collections = 0; this.discards = 0; this.parserSawBinding = false; this.modes = []; }
+  constructor({ gate = null, inspectMismatch = null, tamper = null } = {}) { this.seccompDigest = SECCOMP_DIGEST; this.gate = gate; this.inspectMismatch = inspectMismatch; this.tamper = tamper; this.runs = 0; this.collections = 0; this.discards = 0; this.parserSawBinding = false; this.modes = []; }
   async verifyRuntimeImage(image, contract) { return image === `sha256:${RUNTIME_DIGEST}` && contract === LINUX_RUNTIME_CONTRACT_SHA256; }
   async runTool({ inputHandle, jobHandle, toolHandle, signal }) {
     this.runs += 1;
+    if (this.inspectMismatch) throw new Error(`SANDBOX_INSPECT_MISMATCH:${this.inspectMismatch}`);
     this.parserSawBinding ||= Object.keys(arguments[0]).includes('bindingHandle');
     this.modes.push((await inputHandle.stat()).mode & 0o777, (await jobHandle.stat()).mode & 0o777, (await toolHandle.stat()).mode & 0o777);
     const command = (await readHandle(inputHandle)).toString('utf8');
@@ -92,32 +100,44 @@ const makeManifest = ({ privateKey, publicKey, toolDigest, nowUnixMs, resourcePo
   return Object.freeze({ bytes, digest: sha256(bytes), policyDigest: sha256(Buffer.from(canonicalJson(policy), 'utf8')), publicKey });
 };
 
-const withFixture = async (operation, { adapter = new FakeContainerAdapter(), faults = null, acquireGate = null } = {}) => {
+const withFixture = async (operation, { adapter = new FakeContainerAdapter(), faults = null, acquireGate = null, clock = Date.now, resourcePolicy = null } = {}) => {
   const root = await mkdtemp(join(tmpdir(), 'ogvcs-sandbox-reference-')); await chmod(root, 0o700);
   const toolPath = join(root, 'dummy-tool'); await writeFile(toolPath, Buffer.from('dummy-tool-v1'), { mode: 0o555 }); await chmod(toolPath, 0o555);
   const toolDigest = sha256(await readFile(toolPath));
-  const nowUnixMs = Date.now();
+  const nowUnixMs = clock();
   const keys = generateKeyPairSync('ed25519');
-  const manifest = makeManifest({ ...keys, nowUnixMs, toolDigest });
+  const manifest = makeManifest({ ...keys, nowUnixMs, resourcePolicy, toolDigest });
   let acquisitions = 0; let credentialObserved = false;
   const source = Object.freeze({
     acquire: async ({ credential }) => { acquisitions += 1; credentialObserved ||= credential === 'broker-secret-canary'; if (acquireGate) await acquireGate.promise; return Buffer.from('importer'); },
     credential: 'broker-secret-canary', maximumBytes: 1024, sourceId: 'fixture.source',
   });
-  const service = await ReferenceSandboxService.open({
+  const configuration = {
     acquisitionSources: [source], adapter, evidenceHmacKey: Buffer.alloc(32, 0x5a), evidenceHmacKeyId: 'test.evidence.1', faults,
-    manifestCatalog: [{ manifestBytes: manifest.bytes, toolPath }], stateRoot: join(root, 'state'), trustedManifestKeys: { 'test.signer.1': keys.publicKey },
-  });
+    manifestCatalog: [{ manifestBytes: manifest.bytes, toolPath }], stateRoot: join(root, 'state'), trustedManifestKeys: { 'test.signer.1': keys.publicKey }, clock,
+  };
+  let service = await ReferenceSandboxService.open(configuration);
   const jobFor = (suffix = '1', overrides = {}) => Object.freeze({
-    actorDigest: ACTOR_DIGEST, deadlineUnixMs: Date.now() + 9_000, idempotencyKey: `idempotency.${suffix}`, inputDigest: sha256(Buffer.from('importer')), jobId: `job.${suffix}`, manifestDigest: manifest.digest, optionsDigest: OPTIONS_DIGEST,
+    actorDigest: ACTOR_DIGEST, deadlineUnixMs: clock() + 9_000, idempotencyKey: `idempotency.${suffix}`, inputDigest: sha256(Buffer.from('importer')), jobId: `job.${suffix}`, manifestDigest: manifest.digest, optionsDigest: OPTIONS_DIGEST,
     outputSchema: 'ogvcs.untrusted-sandbox/parser-output/v1', purpose: 'conformance', resourcePolicyDigest: manifest.policyDigest, runtimeDigest: RUNTIME_DIGEST, schemaVersion: 'ogvcs.untrusted-sandbox/reference-job/v1', toolDigest, ...overrides,
   });
   const acquisition = Object.freeze({ maximumBytes: 1024, objectIdDigest: OBJECT_ID_DIGEST, schemaVersion: 'ogvcs.untrusted-sandbox/acquisition-request/v1', sourceId: 'fixture.source' });
-  try { return await operation({ acquisition, adapter, get acquisitions() { return acquisitions; }, get credentialObserved() { return credentialObserved; }, jobFor, manifest, root, service }); }
+  const fixture = {
+    acquisition,
+    adapter,
+    get acquisitions() { return acquisitions; },
+    get credentialObserved() { return credentialObserved; },
+    jobFor,
+    manifest,
+    async restart() { await service.close(); service = await ReferenceSandboxService.open(configuration); },
+    root,
+    get service() { return service; },
+  };
+  try { return await operation(fixture); }
   finally { await service.close().catch(() => {}); await rm(root, { recursive: true, force: true }); }
 };
 
-test('signed manifest, credential-free held-FD mounts, frame channel, provenance, and idempotency are exact', async () => {
+referenceStateTest('signed manifest, credential-free held-FD mounts, frame channel, provenance, and idempotency are exact', async () => {
   await withFixture(async (fixture) => {
     const job = fixture.jobFor();
     const first = await fixture.service.run(job, fixture.acquisition);
@@ -134,7 +154,7 @@ test('signed manifest, credential-free held-FD mounts, frame channel, provenance
   });
 });
 
-test('forced concurrent identical calls join one acquisition, container, validation, and commit', async () => {
+referenceStateTest('forced concurrent identical calls join one acquisition, container, validation, and commit', async () => {
   const gate = deferred();
   await withFixture(async (fixture) => {
     const job = fixture.jobFor();
@@ -148,7 +168,7 @@ test('forced concurrent identical calls join one acquisition, container, validat
   }, { acquireGate: gate });
 });
 
-test('durable admission bounds distinct queued jobs without partial overflow state', async () => {
+referenceStateTest('durable admission bounds distinct queued jobs without partial overflow state', async () => {
   const gate = deferred();
   await withFixture(async (fixture) => {
     const admitted = Array.from({ length: 64 }, (_, index) => fixture.service.run(fixture.jobFor(`queue.${index}`), fixture.acquisition));
@@ -166,7 +186,7 @@ test('durable admission bounds distinct queued jobs without partial overflow sta
   }, { acquireGate: gate });
 });
 
-test('revocation blocks new work, counts prior validated jobs, and frame tamper publishes nothing', async () => {
+referenceStateTest('revocation blocks new work, counts prior validated jobs, and frame tamper publishes nothing', async () => {
   await withFixture(async (fixture) => {
     const priorJob = fixture.jobFor('first');
     assert.equal((await fixture.service.run(priorJob, fixture.acquisition)).code, 'VALIDATED');
@@ -185,7 +205,7 @@ test('revocation blocks new work, counts prior validated jobs, and frame tamper 
   }, { adapter: new FakeContainerAdapter({ tamper: 'terminal' }) });
 });
 
-test('cancellation and bounded failures leave the next job healthy', async () => {
+referenceStateTest('cancellation and bounded failures leave the next job healthy', async () => {
   const gate = deferred(); const adapter = new FakeContainerAdapter({ gate });
   await withFixture(async (fixture) => {
     const pending = fixture.service.run(fixture.jobFor('cancelled'), fixture.acquisition);
@@ -198,7 +218,7 @@ test('cancellation and bounded failures leave the next job healthy', async () =>
   }, { adapter });
 });
 
-test('state recovery denies interrupted work and output commit never replaces a prior bundle', async () => {
+referenceStateTest('state recovery denies interrupted work and output commit never replaces a prior bundle', async () => {
   const root = await mkdtemp(join(tmpdir(), 'ogvcs-sandbox-state-')); await chmod(root, 0o700);
   try {
     let store = await ReferenceStateStore.open(root);
@@ -219,7 +239,7 @@ test('state recovery denies interrupted work and output commit never replaces a 
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test('fault after durable output rename rolls back publication and records one denied result', async () => {
+referenceStateTest('fault after durable output rename rolls back publication and records one denied result', async () => {
   await withFixture(async (fixture) => {
     const result = await fixture.service.run(fixture.jobFor(), fixture.acquisition);
     assert.equal(result.code, 'SANDBOX_UNAVAILABLE');
@@ -230,10 +250,57 @@ test('fault after durable output rename rolls back publication and records one d
   }, { faults: new Set(['after-output-commit']) });
 });
 
+referenceStateTest('pre-start inspect mismatch publishes only a bounded field diagnostic and no output', async () => {
+  await withFixture(async (fixture) => {
+    const result = await fixture.service.run(fixture.jobFor(), fixture.acquisition);
+    assert.equal(result.code, 'SANDBOX_UNAVAILABLE');
+    const reports = (await Promise.all((await readdir(join(fixture.root, 'state/evidence'))).map((name) => readFile(join(fixture.root, 'state/evidence', name), 'utf8')))).join('\n');
+    assert.match(reports, /PRESTART_INSPECT_HOST_RUNTIME/u);
+    assert.equal(reports.includes(fixture.root), false);
+    await assert.rejects(stat(join(fixture.root, 'state/outputs/job.1')), (error) => error?.code === 'ENOENT');
+  }, { adapter: new FakeContainerAdapter({ inspectMismatch: 'host-runtime' }) });
+});
+
+referenceStateTest('a durable terminal result replays exactly after restart even after its execution deadline', async () => {
+  let nowUnixMs = Date.now();
+  const clock = () => nowUnixMs;
+  await withFixture(async (fixture) => {
+    const job = fixture.jobFor('expired-replay', { deadlineUnixMs: nowUnixMs + 1_000 });
+    const first = await fixture.service.run(job, fixture.acquisition);
+    assert.equal(first.code, 'VALIDATED');
+    const acquisitions = fixture.acquisitions;
+    nowUnixMs += 2_000;
+    await fixture.restart();
+    assert.deepEqual(await fixture.service.run(job, fixture.acquisition), first);
+    assert.equal(fixture.acquisitions, acquisitions);
+    const freshExpired = fixture.jobFor('fresh-expired', { deadlineUnixMs: nowUnixMs - 1 });
+    assert.equal((await fixture.service.run(freshExpired, fixture.acquisition)).code, 'SANDBOX_PROTOCOL_INVALID');
+  }, { clock });
+});
+
+test('signed CPU policy admits only exact whole seconds from one through thirty', () => {
+  const nowUnixMs = Date.now();
+  const keys = generateKeyPairSync('ed25519');
+  const toolDigest = '4'.repeat(64);
+  const base = { cpuMilliseconds: 1_000, elapsedMilliseconds: 10_000, fanout: 16, memoryBytes: 64 * 1024 * 1024, outputBytes: 1024 * 1024, processes: 4, profileId: 'linux-reference-v1', scratchBytes: 2 * 1024 * 1024 };
+  const trustedKeys = snapshotTrustedManifestKeys({ 'test.signer.1': keys.publicKey });
+  for (const cpuMilliseconds of [1_000, 30_000]) {
+    const manifest = makeManifest({ ...keys, nowUnixMs, resourcePolicy: Object.freeze({ ...base, cpuMilliseconds }), toolDigest });
+    assert.notEqual(parseAndVerifyToolManifest({ manifestBytes: manifest.bytes, nowUnixMs, trustedKeys }), null);
+  }
+  for (const cpuMilliseconds of [1, 999, 1_001, 30_001]) {
+    const manifest = makeManifest({ ...keys, nowUnixMs, resourcePolicy: Object.freeze({ ...base, cpuMilliseconds }), toolDigest });
+    assert.equal(parseAndVerifyToolManifest({ manifestBytes: manifest.bytes, nowUnixMs, trustedKeys }), null);
+  }
+});
+
 test('image admission rejects config, architecture, layer, label, and writable-volume substitutions', () => {
   const contract = LINUX_RUNTIME_CONTRACT_SHA256;
   const base = { Architecture: 'amd64', Config: { Cmd: null, Entrypoint: null, Env: null, ExposedPorts: null, Healthcheck: null, Labels: { 'org.opengamevcs.sandbox.runtime': 'linux-reference-v1', 'org.opengamevcs.sandbox.runtime-contract-sha256': contract }, User: '', Volumes: null, WorkingDir: '' }, Id: `sha256:${RUNTIME_DIGEST}`, Os: 'linux', RootFS: { Layers: ['sha256:layer'], Type: 'layers' }, Size: 1024 };
   assert.equal(validateRuntimeImageInspect(base, base.Id, contract), true);
+  const omittedEmptyFields = structuredClone(base);
+  for (const field of ['Cmd', 'Entrypoint', 'Env', 'ExposedPorts', 'Healthcheck', 'Volumes']) delete omittedEmptyFields.Config[field];
+  assert.equal(validateRuntimeImageInspect(omittedEmptyFields, base.Id, contract), true);
   for (const mutate of [
     (value) => { value.Architecture = 'arm64'; },
     (value) => { value.Config.Env = ['SECRET=x']; },
@@ -247,4 +314,100 @@ test('image admission rejects config, architecture, layer, label, and writable-v
     const candidate = structuredClone(base); mutate(candidate);
     assert.equal(validateRuntimeImageInspect(candidate, base.Id, contract), false);
   }
+});
+
+test('pre-start inspection binds every role mount and effective isolation control', () => {
+  const policy = { cpuMilliseconds: 1_000, memoryBytes: 64 * 1024 * 1024, outputBytes: 2 * 1024 * 1024, processes: 4, scratchBytes: 2 * 1024 * 1024 };
+  const seccomp = canonicalJson({ defaultAction: 'SCMP_ACT_ERRNO', syscalls: [] });
+  const expected = {
+    entrypoint: '/tool/program',
+    fileMounts: [
+      { source: '/proc/123/fd/10', target: '/input/payload' },
+      { source: '/proc/123/fd/11', target: '/input/job' },
+      { source: '/proc/123/fd/12', target: '/tool/program' },
+    ],
+    id: '1'.repeat(64), jobId: 'job.fixture', name: 'ogvcs-sandbox-fixture', outputReadonly: false, policy, role: 'parser',
+    runtimeContractSha256: LINUX_RUNTIME_CONTRACT_SHA256, runtimeImage: `sha256:${RUNTIME_DIGEST}`, seccompCanonical: seccomp, volume: 'ogvcs-sandbox-volume', volumeMountpoint: '/var/lib/docker/volumes/fixture/_data',
+  };
+  const hostMounts = expected.fileMounts.map((mount) => ({ BindOptions: { NonRecursive: true, Propagation: 'rprivate' }, ReadOnly: true, Source: mount.source, Target: mount.target, Type: 'bind' }));
+  hostMounts.push({ ReadOnly: false, Source: expected.volume, Target: '/output', Type: 'volume', VolumeOptions: { DriverConfig: null, Labels: null, NoCopy: true } });
+  const effectiveMounts = expected.fileMounts.map((mount) => ({ Destination: mount.target, Propagation: 'rprivate', RW: false, Source: mount.source, Type: 'bind' }));
+  effectiveMounts.push({ Destination: '/output', Driver: 'local', Name: expected.volume, Propagation: '', RW: true, Source: expected.volumeMountpoint, Type: 'volume' });
+  const container = {
+    Args: [], Config: { Cmd: null, Domainname: '', Entrypoint: ['/tool/program'], Env: null, ExposedPorts: null, Healthcheck: null, Hostname: 'ogvcs-worker', Image: expected.runtimeImage, Labels: { 'org.opengamevcs.sandbox.job': expected.jobId, 'org.opengamevcs.sandbox.role': expected.role, 'org.opengamevcs.sandbox.runtime': 'linux-reference-v1', 'org.opengamevcs.sandbox.runtime-contract-sha256': LINUX_RUNTIME_CONTRACT_SHA256 }, NetworkDisabled: false, OpenStdin: false, StdinOnce: false, StopTimeout: 1, Tty: false, User: '65532:65532', Volumes: null, WorkingDir: '/scratch' },
+    HostConfig: { AutoRemove: false, Binds: null, CapAdd: null, CapDrop: ['ALL'], CgroupnsMode: 'private', CpuPeriod: 0, CpuQuota: 0, CpuShares: 0, DeviceCgroupRules: null, DeviceRequests: null, Devices: null, Dns: null, DnsOptions: null, DnsSearch: null, ExtraHosts: null, GroupAdd: null, Init: null, IpcMode: 'none', Links: null, LogConfig: { Config: {}, Type: 'none' }, MaskedPaths: ['/proc/acpi', '/proc/asound', '/proc/interrupts', '/proc/kcore', '/proc/keys', '/proc/latency_stats', '/proc/sched_debug', '/proc/scsi', '/proc/timer_list', '/proc/timer_stats', '/sys/firmware'], Memory: policy.memoryBytes, MemoryReservation: 0, MemorySwap: policy.memoryBytes, Mounts: hostMounts, NanoCpus: 1_000_000_000, NetworkMode: 'none', OomKillDisable: false, PidMode: 'private', PidsLimit: policy.processes, PortBindings: {}, Privileged: false, PublishAllPorts: false, ReadonlyPaths: ['/proc/bus', '/proc/fs', '/proc/irq', '/proc/sys', '/proc/sysrq-trigger'], ReadonlyRootfs: true, RestartPolicy: { MaximumRetryCount: 0, Name: 'no' }, Runtime: 'runc', SecurityOpt: ['no-new-privileges=true', `seccomp=${seccomp}`], Sysctls: null, Tmpfs: { '/scratch': `rw,nosuid,nodev,noexec,size=${policy.scratchBytes},uid=65532,gid=65532,mode=0700` }, UsernsMode: '', UTSMode: '', Ulimits: [{ Hard: 1, Name: 'cpu', Soft: 1 }, { Hard: policy.outputBytes, Name: 'fsize', Soft: policy.outputBytes }, { Hard: 64, Name: 'nofile', Soft: 64 }], VolumesFrom: null },
+    Id: expected.id, Mounts: effectiveMounts, Name: `/${expected.name}`, NetworkSettings: { Networks: { none: {} } }, Path: '/tool/program', State: { Paused: false, Pid: 0, Restarting: false, Running: false, Status: 'created' },
+  };
+  assert.equal(validateCreatedContainerInspect(container, expected), true);
+  const detached = structuredClone(container); detached.NetworkSettings.Networks = {};
+  assert.equal(validateCreatedContainerInspect(detached, expected), true);
+  for (const mutate of [
+    (value) => { value.State.Running = true; },
+    (value) => { value.HostConfig.NetworkMode = 'bridge'; },
+    (value) => { value.NetworkSettings.Networks = { bridge: {} }; },
+    (value) => { value.HostConfig.ReadonlyRootfs = false; },
+    (value) => { value.HostConfig.ReadonlyPaths.splice(0, 1); },
+    (value) => { value.HostConfig.MaskedPaths.splice(0, 1); },
+    (value) => { value.HostConfig.CapDrop = []; },
+    (value) => { value.HostConfig.SecurityOpt[1] = 'seccomp={"defaultAction":"SCMP_ACT_ALLOW"}'; },
+    (value) => { value.HostConfig.SecurityOpt.push('no-new-privileges=true'); },
+    (value) => { value.HostConfig.CgroupnsMode = 'host'; },
+    (value) => { value.HostConfig.PidMode = 'host'; },
+    (value) => { value.HostConfig.IpcMode = 'host'; },
+    (value) => { value.HostConfig.UsernsMode = 'host'; },
+    (value) => { value.HostConfig.Runtime = 'io.containerd.alt.v2'; },
+    (value) => { value.HostConfig.OomKillDisable = true; },
+    (value) => { value.HostConfig.Init = true; },
+    (value) => { value.Config.User = '0:0'; },
+    (value) => { value.HostConfig.Privileged = true; },
+    (value) => { value.HostConfig.Devices = [{ PathOnHost: '/dev/null' }]; },
+    (value) => { value.HostConfig.PortBindings = { '80/tcp': [{ HostPort: '80' }] }; },
+    (value) => { value.HostConfig.RestartPolicy.Name = 'always'; },
+    (value) => { value.HostConfig.Memory += 1; },
+    (value) => { value.HostConfig.MemorySwap += 1; },
+    (value) => { value.HostConfig.PidsLimit += 1; },
+    (value) => { value.HostConfig.NanoCpus = 0; },
+    (value) => { value.HostConfig.Ulimits[0].Hard += 1; },
+    (value) => { value.HostConfig.Tmpfs['/scratch'] = 'rw'; },
+    (value) => { value.HostConfig.Mounts[0].Source = '/tmp/substitution'; },
+    (value) => { value.HostConfig.Mounts[0].ReadOnly = false; },
+    (value) => { value.HostConfig.Mounts[0].BindOptions.Propagation = 'rshared'; },
+    (value) => { value.HostConfig.Mounts[0].BindOptions.NonRecursive = false; },
+    (value) => { value.HostConfig.Mounts[0].BindOptions.CreateMountpoint = true; },
+    (value) => { value.HostConfig.Mounts[0].BindOptions.ReadOnlyNonRecursive = true; },
+    (value) => { value.Mounts[0].Propagation = 'rshared'; },
+    (value) => { value.HostConfig.Mounts.at(-1).Source = 'ogvcs-sandbox-substitution'; },
+    (value) => { value.HostConfig.Mounts.at(-1).ReadOnly = true; },
+    (value) => { value.HostConfig.Mounts.at(-1).VolumeOptions.NoCopy = false; },
+    (value) => { value.HostConfig.Mounts.at(-1).VolumeOptions.Labels = { extra: 'x' }; },
+    (value) => { value.HostConfig.Mounts.at(-1).VolumeOptions.DriverConfig = { Name: 'other', Options: {} }; },
+    (value) => { value.HostConfig.Mounts.at(-1).VolumeOptions.Subpath = 'nested'; },
+    (value) => { value.Mounts.push({ Destination: '/extra', RW: true, Type: 'bind' }); },
+    (value) => { value.Mounts.at(-1).RW = false; },
+    (value) => { value.Mounts.at(-1).Name = 'ogvcs-sandbox-substitution'; },
+    (value) => { value.Mounts.at(-1).Driver = 'bind'; },
+    (value) => { value.Mounts.at(-1).Source = '/var/lib/docker/volumes/substitution/_data'; },
+    (value) => { value.Config.Env = ['SECRET=x']; },
+    (value) => { value.Config.Entrypoint = ['/bin/sh']; },
+    (value) => { value.Config.Labels['org.opengamevcs.sandbox.job'] = 'job.substituted'; },
+    (value) => { value.Config.Labels['org.opengamevcs.sandbox.role'] = 'output-shim'; },
+  ]) {
+    const candidate = structuredClone(container); mutate(candidate);
+    assert.equal(validateCreatedContainerInspect(candidate, expected), false);
+  }
+  const runtimeMismatch = structuredClone(container); runtimeMismatch.HostConfig.Runtime = 'io.containerd.alt.v2';
+  assert.equal(createdContainerInspectMismatch(runtimeMismatch, expected), 'host-runtime');
+  const shimExpected = { ...expected, entrypoint: '/ogvcs-output-shim', fileMounts: [{ source: '/proc/123/fd/13', target: '/input/binding' }], outputReadonly: true, role: 'output-shim' };
+  const shim = structuredClone(container);
+  shim.Path = shimExpected.entrypoint;
+  shim.Config.Entrypoint = [shimExpected.entrypoint];
+  shim.Config.Labels['org.opengamevcs.sandbox.role'] = shimExpected.role;
+  shim.HostConfig.Mounts = [{ BindOptions: { NonRecursive: true, Propagation: 'rprivate' }, ReadOnly: true, Source: shimExpected.fileMounts[0].source, Target: shimExpected.fileMounts[0].target, Type: 'bind' }, { ReadOnly: true, Source: expected.volume, Target: '/output', Type: 'volume', VolumeOptions: { DriverConfig: null, Labels: null, NoCopy: true } }];
+  shim.Mounts = [{ Destination: shimExpected.fileMounts[0].target, Propagation: 'rprivate', RW: false, Source: shimExpected.fileMounts[0].source, Type: 'bind' }, { Destination: '/output', Driver: 'local', Name: expected.volume, Propagation: '', RW: false, Source: expected.volumeMountpoint, Type: 'volume' }];
+  assert.equal(validateCreatedContainerInspect(shim, shimExpected), true);
+  const volume = { Driver: 'local', Labels: { 'org.opengamevcs.sandbox': 'reference-v1', 'org.opengamevcs.sandbox.job': expected.jobId, 'org.opengamevcs.sandbox.role': 'output-volume' }, Mountpoint: '/var/lib/docker/volumes/fixture/_data', Name: expected.volume, Options: { device: 'tmpfs', o: 'size=1,uid=65532,gid=65532,mode=0700,nosuid,nodev,noexec', type: 'tmpfs' }, Scope: 'local' };
+  assert.equal(validateOutputVolumeInspect(volume, expected.volume, volume.Options.o, expected.jobId), true);
+  assert.equal(validateOutputVolumeInspect({ ...volume, Driver: 'bind' }, expected.volume, volume.Options.o, expected.jobId), false);
+  assert.equal(validateOutputVolumeInspect({ ...volume, Options: { ...volume.Options, o: 'size=2' } }, expected.volume, volume.Options.o, expected.jobId), false);
+  assert.equal(validateOutputVolumeInspect({ ...volume, Labels: { ...volume.Labels, 'org.opengamevcs.sandbox.job': 'job.substituted' } }, expected.volume, volume.Options.o, expected.jobId), false);
 });

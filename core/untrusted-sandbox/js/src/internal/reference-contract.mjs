@@ -130,6 +130,7 @@ const snapshotResourcePolicy = (source) => {
   for (const key of Object.keys(REFERENCE_LIMITS)) {
     if (!exactInteger(policy[key], 1, REFERENCE_LIMITS[key])) return null;
   }
+  if (policy.cpuMilliseconds < 1_000 || policy.cpuMilliseconds % 1_000 !== 0) return null;
   return Object.freeze({ ...policy });
 };
 
@@ -211,10 +212,19 @@ export const parseAndVerifyToolManifest = ({ manifestBytes, trustedKeys, nowUnix
   });
 };
 
-export const snapshotReferenceJob = (source, nowUnixMs) => {
+export const snapshotReferenceJobForReplay = (source) => {
   const job = exactRecord(source, REFERENCE_JOB_KEYS);
-  if (!job || job.schemaVersion !== 'ogvcs.untrusted-sandbox/reference-job/v1' || !exactId(job.jobId) || !exactId(job.idempotencyKey) || !exactDigest(job.actorDigest) || !exactDigest(job.inputDigest) || !exactDigest(job.manifestDigest) || !exactDigest(job.optionsDigest) || !exactDigest(job.resourcePolicyDigest) || !exactDigest(job.runtimeDigest) || !exactDigest(job.toolDigest) || job.outputSchema !== 'ogvcs.untrusted-sandbox/parser-output/v1' || typeof job.purpose !== 'string' || [...job.purpose].length < 1 || [...job.purpose].length > 128 || !hasValidUnicode(job.purpose) || !exactInteger(job.deadlineUnixMs, nowUnixMs + 1, nowUnixMs + REFERENCE_LIMITS.elapsedMilliseconds)) return null;
+  if (!job || job.schemaVersion !== 'ogvcs.untrusted-sandbox/reference-job/v1' || !exactId(job.jobId) || !exactId(job.idempotencyKey) || !exactDigest(job.actorDigest) || !exactDigest(job.inputDigest) || !exactDigest(job.manifestDigest) || !exactDigest(job.optionsDigest) || !exactDigest(job.resourcePolicyDigest) || !exactDigest(job.runtimeDigest) || !exactDigest(job.toolDigest) || job.outputSchema !== 'ogvcs.untrusted-sandbox/parser-output/v1' || typeof job.purpose !== 'string' || [...job.purpose].length < 1 || [...job.purpose].length > 128 || !hasValidUnicode(job.purpose) || !exactInteger(job.deadlineUnixMs, 0, Number.MAX_SAFE_INTEGER)) return null;
   return Object.freeze({ ...job });
+};
+
+export const isReferenceJobDeadlineCurrent = (job, nowUnixMs) => exactInteger(nowUnixMs, 0, Number.MAX_SAFE_INTEGER)
+  && job.deadlineUnixMs > nowUnixMs
+  && job.deadlineUnixMs - nowUnixMs <= REFERENCE_LIMITS.elapsedMilliseconds;
+
+export const snapshotReferenceJob = (source, nowUnixMs) => {
+  const job = snapshotReferenceJobForReplay(source);
+  return job && isReferenceJobDeadlineCurrent(job, nowUnixMs) ? job : null;
 };
 
 export const snapshotAcquisitionRequest = (source, inputMaximum) => {

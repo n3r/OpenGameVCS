@@ -27,8 +27,19 @@ Each parser container is created before it is started and is run as uid/gid
 65532 with no network, a read-only root, all capabilities dropped,
 `no-new-privileges`, private PID/cgroup/IPC namespaces, the owned default-deny
 seccomp allowlist, cgroup memory/PID/CPU controls, rlimits, and bounded no-exec
-scratch/output tmpfs mounts. Container ID and random name removal are both
-verified before a result can settle.
+scratch/output tmpfs mounts. The adapter explicitly selects a daemon-registered
+OCI runtime named `runc`, labels the exact job and parser/output-shim role,
+requests private non-recursive bind propagation, and inspects the security,
+resource, namespace, and mount projection while the container is still stopped.
+It requires the standard protected `/proc` and `/sys` masks/read-only paths but
+admits additional daemon hardening paths. The output volume is also inspected
+for the exact local tmpfs driver, options, ownership labels, and mountpoint used
+by the container. Container ID and random name removal are both verified before
+a result can settle.
+
+Signed CPU budgets have whole-second kernel-enforcement granularity: the closed
+profile accepts only 1,000 through 30,000 milliseconds in 1,000-millisecond
+increments. It never rounds a smaller declared budget up to a larger rlimit.
 
 The parser is removed before output validation begins. A separate trusted shim
 then mounts only the output volume and a fresh 256-bit frame secret. Its
@@ -52,14 +63,19 @@ The Ubuntu hosted lane builds a one-layer `scratch` image containing only the
 pinned trusted shim, then exercises real Docker create/start/cleanup, uid 65532
 mount readability, network/credential/host/sibling/undeclared-input isolation,
 namespace/device/traversal denial, symlink/recursion validation, bomb/hang/fork/
-memory/disk/stdout/crash bounds, cancellation, restart, idempotency, revocation,
-and next-job health. Portable protocol tests continue on Linux, macOS, and
-Windows; they are not kernel-isolation claims for macOS or Windows.
+clone/clone3 namespace/memory/disk/stdout/crash/CPU bounds, cancellation,
+restart, expired-deadline terminal replay, idempotency, revocation, and next-job
+health. Portable protocol tests continue on Linux, macOS, and Windows. The
+POSIX-owned reference-state tests are skipped on Windows without weakening
+Linux ownership/mode admission; none of these portable tests are
+kernel-isolation claims for macOS or Windows.
 
 The Docker daemon, Linux kernel, broker host administrator, signed-manifest
 authority, acquisition adapter, and evidence-key custody remain trusted. This
 package does not expose Git/Perforce credentials to tools, provide repository
 publication authority, validate consumer-specific semantics, or claim defense
-against a compromised daemon/kernel/host administrator. OGVCS-045 remains Todo
-until the authenticated public contract, hosted evidence, crash-boundary matrix,
-and all PRD acceptance evidence are frozen together.
+against a compromised daemon/kernel/host administrator. Selecting and inspecting
+the `runc` runtime name does not attest or version-pin the daemon-configured
+runtime binary; that supply-chain proof remains a completion blocker. OGVCS-045
+remains Todo until the authenticated public contract, hosted evidence,
+crash-boundary matrix, and all PRD acceptance evidence are frozen together.

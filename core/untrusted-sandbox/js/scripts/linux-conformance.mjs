@@ -115,6 +115,8 @@ const descriptorFor = (command, { toolClass = 'importer', suffix = null } = {}) 
 };
 
 const outputExpectation = Object.freeze({
+  'clone-namespace': Object.freeze({ content: 'denied', path: 'evidence/clone-namespace' }),
+  'clone3-namespace': Object.freeze({ content: 'denied', path: 'evidence/clone3-namespace' }),
   converter: Object.freeze({ content: 'dummy-convert', path: 'preview/result' }),
   credential: Object.freeze({ content: 'absent', path: 'evidence/credential' }),
   device: Object.freeze({ content: 'denied', path: 'evidence/device' }),
@@ -136,6 +138,15 @@ const assertNoOutput = async (jobId) => {
   await assert.rejects(stat(join(stateRoot, 'outputs', jobId)), (error) => error?.code === 'ENOENT');
 };
 
+const safeInspectDiagnostic = async (result) => {
+  if (!/^[0-9a-f]{64}$/u.test(result?.provenanceDigest ?? '')) return 'none';
+  try {
+    const report = JSON.parse(await readFile(join(stateRoot, 'evidence', `${result.provenanceDigest}.json`), 'utf8'));
+    const events = Array.isArray(report?.securityEvents) ? report.securityEvents.filter((value) => /^PRESTART_INSPECT_[A-Z_]{1,48}$/u.test(value)) : [];
+    return events.length === 0 ? 'none' : events.join(',');
+  } catch { return 'none'; }
+};
+
 let service;
 const evidence = [];
 try {
@@ -145,8 +156,10 @@ try {
     const started = Date.now();
     const result = await service.run(descriptor.job, descriptor.acquisition);
     const elapsedMilliseconds = Date.now() - started;
-    assert.equal(result.code, expectedCode, `${command} result differs`);
+    const diagnostic = result.code === expectedCode ? 'none' : await safeInspectDiagnostic(result);
+    assert.equal(result.code, expectedCode, `${command} result differs; safeInspectDiagnostic=${diagnostic}`);
     assert(elapsedMilliseconds <= policy.elapsedMilliseconds + 5_000, `${command} exceeded cleanup envelope`);
+    if (options.maximumElapsedMilliseconds !== undefined) assert(elapsedMilliseconds <= options.maximumElapsedMilliseconds, `${command} exceeded its canary-specific resource envelope`);
     if (expectedCode === 'VALIDATED') await readOutput(descriptor.job.jobId, outputExpectation[command]);
     else await assertNoOutput(descriptor.job.jobId);
     evidence.push(Object.freeze({ command, elapsedMilliseconds, resultCode: result.code }));
@@ -168,13 +181,15 @@ try {
     ['traversal', 'VALIDATED'],
     ['device', 'VALIDATED'],
     ['namespace', 'VALIDATED'],
+    ['clone-namespace', 'VALIDATED'],
+    ['clone3-namespace', 'VALIDATED'],
     ['symlink', 'SANDBOX_VALIDATION_FAILED'],
     ['recursion', 'SANDBOX_VALIDATION_FAILED'],
     ['disk', 'SANDBOX_VALIDATION_FAILED'],
     ['bomb', 'SANDBOX_VALIDATION_FAILED'],
     ['hang', 'SANDBOX_TIMEOUT'],
     ['fork', 'SANDBOX_TIMEOUT'],
-    ['memory', 'SANDBOX_VALIDATION_FAILED'],
+    ['memory', 'SANDBOX_RESOURCE_LIMIT'],
     ['stdout', 'SANDBOX_OUTPUT_LIMIT'],
     ['crash', 'SANDBOX_VALIDATION_FAILED'],
   ]);
@@ -183,6 +198,9 @@ try {
     await run('importer', 'VALIDATED');
     assert.equal(service.health().poisoned, false, `${command} poisoned the next-job boundary`);
   }
+  await run('cpu', 'SANDBOX_RESOURCE_LIMIT', { maximumElapsedMilliseconds: policy.elapsedMilliseconds - 1 });
+  await run('importer', 'VALIDATED');
+  assert.equal(service.health().poisoned, false, 'CPU-limit settlement poisoned the next-job boundary');
 
   const cancellation = descriptorFor('hang', { suffix: 'cancel' });
   const pending = service.run(cancellation.job, cancellation.acquisition);

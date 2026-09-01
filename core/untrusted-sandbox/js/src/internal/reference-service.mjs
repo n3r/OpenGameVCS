@@ -3,6 +3,7 @@ import { rm } from 'node:fs/promises';
 import { types } from 'node:util';
 import {
   canonicalJson,
+  isReferenceJobDeadlineCurrent,
   isDigest,
   isId,
   parseAndVerifyToolManifest,
@@ -10,7 +11,7 @@ import {
   safeResult,
   sha256,
   snapshotAcquisitionRequest,
-  snapshotReferenceJob,
+  snapshotReferenceJobForReplay,
   snapshotTrustedManifestKeys,
   validateJobManifestBinding,
 } from './reference-contract.mjs';
@@ -84,6 +85,19 @@ const boundedAcquisition = async ({ operation, controller, deadlineMilliseconds 
 };
 
 const resultFromStored = (record) => record?.result ? Object.freeze({ ...record.result }) : null;
+
+const safeErrorMessage = (error) => {
+  try {
+    if (error === null || typeof error !== 'object' || types.isProxy(error)) return null;
+    const descriptor = Object.getOwnPropertyDescriptor(error, 'message');
+    return descriptor && Object.hasOwn(descriptor, 'value') && typeof descriptor.value === 'string' ? descriptor.value : null;
+  } catch { return null; }
+};
+
+const safeInspectEvent = (message) => {
+  const match = /^SANDBOX_INSPECT_MISMATCH:([a-z-]{1,32})$/u.exec(message ?? '');
+  return match ? `PRESTART_INSPECT_${match[1].replaceAll('-', '_').toUpperCase()}` : null;
+};
 
 export class ReferenceSandboxService {
   #adapter;
@@ -256,7 +270,7 @@ export class ReferenceSandboxService {
       const jobHandle = await this.#state.createEphemeralPinnedFile('job', Buffer.from(canonicalJson(job), 'utf8'));
       try {
         await this.#state.writeJob({ ...base, stagedBytes: staged.bytes, startedAtUnixMs, state: 'running' });
-        const run = await this.#adapter.runTool({ runtimeImage: current.runtimeImage, policy: current.resourcePolicy, inputHandle: input.handle, jobHandle, toolHandle: tool.handle, signal: controller.signal });
+        const run = await this.#adapter.runTool({ runtimeImage: current.runtimeImage, policy: current.resourcePolicy, inputHandle: input.handle, jobHandle, jobId: job.jobId, toolHandle: tool.handle, signal: controller.signal });
         volume = run.volume;
         const inputAfter = await digestOpenFile(input.handle, acquisition.maximumBytes);
         const toolAfter = await digestOpenFile(tool.handle, MAXIMUM_INPUT_BYTES);
@@ -264,7 +278,7 @@ export class ReferenceSandboxService {
         if (run.kind !== 'success') {
           if (volume) await this.#adapter.discardVolume(volume);
           volume = null;
-          const codes = { cancelled: 'SANDBOX_CANCELLED', failed: 'SANDBOX_VALIDATION_FAILED', 'output-limit': 'SANDBOX_OUTPUT_LIMIT', timeout: 'SANDBOX_TIMEOUT' };
+          const codes = { cancelled: 'SANDBOX_CANCELLED', failed: 'SANDBOX_VALIDATION_FAILED', 'output-limit': 'SANDBOX_OUTPUT_LIMIT', 'resource-limit': 'SANDBOX_RESOURCE_LIMIT', timeout: 'SANDBOX_TIMEOUT' };
           securityEvents.push(`WORKER_${run.kind.toUpperCase().replace('-', '_')}`);
           return await this.#finalize({ base, code: codes[run.kind] ?? 'SANDBOX_UNAVAILABLE', securityEvents, startedAtUnixMs });
         }
@@ -279,7 +293,7 @@ export class ReferenceSandboxService {
       const framePath = this.#state.path('temporary', `frame.${job.jobId}.${randomBytes(12).toString('hex')}`);
       const maximumFrameBytes = current.resourcePolicy.outputBytes + current.resourcePolicy.fanout * (1 + 12 + 32 + 4096) + 53;
       try {
-        const collected = await this.#adapter.collectOutput({ runtimeImage: current.runtimeImage, policy: current.resourcePolicy, volume, bindingHandle, framePath, maximumFrameBytes });
+        const collected = await this.#adapter.collectOutput({ runtimeImage: current.runtimeImage, policy: current.resourcePolicy, volume, bindingHandle, framePath, jobId: job.jobId, maximumFrameBytes });
         volume = null;
         if (collected.kind !== 'success') return await this.#finalize({ base, code: collected.kind === 'output-limit' ? 'SANDBOX_OUTPUT_LIMIT' : 'SANDBOX_VALIDATION_FAILED', securityEvents: ['TRUSTED_OUTPUT_SHIM_REJECTED'], startedAtUnixMs });
       } finally {
@@ -321,7 +335,10 @@ export class ReferenceSandboxService {
       if (volume) await this.#adapter.discardVolume(volume).catch(() => { this.#poisoned = true; });
       if (outputTemporary) await rm(outputTemporary, { recursive: true, force: true }).catch(() => {});
       await this.#state.removeOutput(base.jobId).catch(() => { this.#poisoned = true; });
-      if (error?.message === 'SANDBOX_SETTLEMENT_UNCONFIRMED' || this.#poisoned) { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
+      const errorMessage = safeErrorMessage(error);
+      if (errorMessage === 'SANDBOX_SETTLEMENT_UNCONFIRMED' || this.#poisoned) { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
+      const inspectEvent = safeInspectEvent(errorMessage);
+      if (inspectEvent) securityEvents.push(inspectEvent);
       securityEvents.push('REFERENCE_INTERNAL_FAILURE');
       return this.#finalize({ base, code: 'SANDBOX_UNAVAILABLE', securityEvents, startedAtUnixMs });
     }
@@ -330,7 +347,7 @@ export class ReferenceSandboxService {
   async run(jobSource, acquisitionSource) {
     if (this.#closed || this.#poisoned) throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED');
     const nowUnixMs = this.#now();
-    const job = snapshotReferenceJob(jobSource, nowUnixMs);
+    const job = snapshotReferenceJobForReplay(jobSource);
     const acquisition = job && snapshotAcquisitionRequest(acquisitionSource, MAXIMUM_INPUT_BYTES);
     if (!job || !acquisition) return safeResult({ jobId: job?.jobId ?? 'invalid', code: 'SANDBOX_PROTOCOL_INVALID' });
     const entry = this.#catalog.get(job.manifestDigest);
@@ -355,6 +372,7 @@ export class ReferenceSandboxService {
           return Object.freeze({ result: resultFromStored(existingJob) });
         }
       }
+      if (!isReferenceJobDeadlineCurrent(job, nowUnixMs)) return Object.freeze({ deadlineInvalid: true });
       if (this.#queueDepth >= MAXIMUM_QUEUE_DEPTH) return Object.freeze({ queueFull: true });
       const base = Object.freeze({
         actorDigest: job.actorDigest,
@@ -380,7 +398,7 @@ export class ReferenceSandboxService {
       this.#queueDepth += 1;
       return Object.freeze({ active: activeReservation, base, created: true });
     });
-    if (reservation.mismatch) return safeResult({ jobId: job.jobId, code: 'SANDBOX_PROTOCOL_INVALID' });
+    if (reservation.mismatch || reservation.deadlineInvalid) return safeResult({ jobId: job.jobId, code: 'SANDBOX_PROTOCOL_INVALID' });
     if (reservation.result) return reservation.result;
     if (reservation.queueFull || reservation.orphaned) return safeResult({ jobId: job.jobId, code: 'SANDBOX_UNAVAILABLE' });
     if (!reservation.created) return reservation.active.promise;
