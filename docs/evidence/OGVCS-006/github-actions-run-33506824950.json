@@ -1,0 +1,112 @@
+{
+  "schemaVersion": "ogvcs.repository-metadata/hosted-evidence/v1",
+  "status": "bounded-v13-identity-mapping-passed",
+  "exactScaleExecuted": false,
+  "implementationRevision": "aa13161cca228d5f92154928508f9f866225d9f5",
+  "sourceRevision": "aa13161cca228d5f92154928508f9f866225d9f5",
+  "workflow": {
+    "name": "Repository metadata bounded conformance",
+    "path": ".github/workflows/repository-metadata.yml",
+    "runId": 33506824950,
+    "runAttempt": 1,
+    "event": "workflow_dispatch",
+    "headBranch": "r1-foundation-integration",
+    "createdAt": "2026-09-01T12:16:58Z",
+    "completedAt": "2026-09-01T12:20:30Z",
+    "url": "https://github.com/n3r/OpenGameVCS/actions/runs/33506824950"
+  },
+  "toolchains": {
+    "node": "24",
+    "rust": "1.82.0"
+  },
+  "jobs": [
+    {
+      "id": 99852743695,
+      "name": "Locked bounded checks and PostgreSQL 15",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T12:17:04Z",
+      "completedAt": "2026-09-01T12:20:29Z"
+    },
+    {
+      "id": 99852743836,
+      "name": "Private atomic submit hard-restart proof (PostgreSQL 15)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T12:17:04Z",
+      "completedAt": "2026-09-01T12:19:08Z"
+    },
+    {
+      "id": 99852743876,
+      "name": "Locked bounded checks (Windows)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T12:17:06Z",
+      "completedAt": "2026-09-01T12:19:02Z"
+    },
+    {
+      "id": 99852744028,
+      "name": "Locked bounded checks (macOS)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T12:17:05Z",
+      "completedAt": "2026-09-01T12:19:59Z"
+    }
+  ],
+  "artifacts": [
+    {
+      "id": 9800045416,
+      "name": "repository-metadata-postgres-Linux",
+      "archiveBytes": 586,
+      "githubDigest": "sha256:3362401bf20f4410a371e717778d44348a81c0daafb115347c0984166f9a4678",
+      "expiresAt": "2026-09-15T12:20:25Z",
+      "retainedReport": "repository-metadata-service-report-2026-09-01.jsonl",
+      "retainedReportBytes": 1001,
+      "retainedReportSha256": "e8dae7794e0c71205c94f610fb7a99a8c6a1c8caea2ae57cf0f8a787f9747f40",
+      "deduplicatedFromRunId": 33500174865
+    },
+    {
+      "id": 9799995753,
+      "name": "repository-metadata-atomic-submit-restart-PG15",
+      "archiveBytes": 1455,
+      "githubDigest": "sha256:4b5e6ea29b68b13f3c361bac6a241973b1e6ff0769ce530d63418400990e3968",
+      "expiresAt": "2026-09-15T12:19:02Z",
+      "reportBytes": 10094,
+      "reportSha256": "69b4781b431e761cde5fd6f402ec7978e2af0234db17034bd441bb87cbea37b3",
+      "caseCount": 13
+    }
+  ],
+  "migrationV13": {
+    "expandSha256": "d02ce035560b15e6a3df342072aa56268717e152574d791437a9549106d9433e",
+    "migrateSha256": "afc8442777c631741e17df44c57357bcc4f65bcff1ee70d15a0821f7c608199b",
+    "contractSha256": "eeb8c9ddfc5c1e2cd42661f37f9defab3d4a76f3d4cd8d0b996a049b8e58e176"
+  },
+  "result": {
+    "status": "passed",
+    "postgresImage": "postgres@sha256:5d1d70e254e3c5d7d76847a9deebb18478cd518df37abf6b278d4bdb1fe5d96c",
+    "postgresVersion": "150019",
+    "aggregateIdentityLifecycleMappingV13": "passed",
+    "reverseOrdinalProjection": "passed",
+    "requiredImmutableMappingSeal": "passed",
+    "hostileRelationRollback": "passed",
+    "sameTransactionReceiptConsumption": "passed",
+    "routeLessContentManifestAvailability": "passed",
+    "hardRestartCaseCount": 13,
+    "portableCompilationAndContracts": "passed on Windows, macOS, and Ubuntu",
+    "serviceReportSha256": "e8dae7794e0c71205c94f610fb7a99a8c6a1c8caea2ae57cf0f8a787f9747f40"
+  },
+  "nonClaims": [
+    "no exact 100000-item aggregate execution",
+    "no production identity-to-lifecycle mapping writer",
+    "no JavaScript-to-Rust subject, tenant-scope, or authority mapper",
+    "no public OGVCS-041 submit or object-transfer route",
+    "no request-root issuance, expansion, or ratification",
+    "no production S3 or MinIO composition",
+    "no exact 100-GiB execution"
+  ],
+  "remainingGates": [
+    "additive identity typed operation authorization before metadata dual-receipt consumption",
+    "production identity-to-lifecycle mapping writer and closure planner",
+    "production JavaScript-to-Rust identity-subject, tenant-scope, and authority mapper",
+    "public authenticated aggregate coordinator route",
+    "request-root issuance, expansion, and ratification",
+    "production object-store and lifecycle composition",
+    "release-only exact-scale campaigns"
+  ]
+}

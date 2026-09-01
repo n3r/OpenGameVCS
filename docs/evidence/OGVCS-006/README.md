@@ -4,6 +4,31 @@ This packet preserves bounded hosted evidence for the internal PostgreSQL
 metadata adapter. It is not completion evidence for OGVCS-006 and does not
 change the PRD's **In development** status.
 
+## V13 aggregate identity-to-lifecycle mapping update
+
+- Integrated and hosted source: [`aa13161cca228d5f92154928508f9f866225d9f5`](https://github.com/n3r/OpenGameVCS/commit/aa13161cca228d5f92154928508f9f866225d9f5)
+- Workflow: [run 33506824950](https://github.com/n3r/OpenGameVCS/actions/runs/33506824950), completed successfully on 2026-09-01
+- Machine record: [`github-actions-run-33506824950.json`](github-actions-run-33506824950.json)
+
+The exact hosted source passed locked Node 24 and Rust 1.82 checks on Windows,
+macOS, and Ubuntu. PostgreSQL 15 passed both Clippy profiles, the full bounded
+aggregate bridge matrix, the content-manifest availability matrix, and the
+live metadata report. The v13 cases require an immutable one-to-one mapping
+seal between each lifecycle plan and OGVCS-009 identity plan, verify the exact
+per-item relation even when lifecycle opaque-key order reverses identity order,
+reject missing or hostile relations before receipt consumption, and roll back
+mapping/evidence failures with the caller-owned SERIALIZABLE transaction.
+
+The separate hard-restart job also passed all thirteen process-kill boundaries
+with changed Docker and PostgreSQL process identities. The retained service
+report is byte-identical to the existing 2026-09-01 packet; the new restart
+artifact is content-bound by the machine record.
+
+This remains bounded private-bridge evidence. The exact 100,000-item cases were
+not enabled, no production mapping writer or JavaScript-to-Rust subject/scope
+mapper exists, and no public submit route, request-root authority, or production
+object-store composition is claimed. OGVCS-006 remains **In development**.
+
 ## Private content-manifest availability update
 
 - Integrated implementation: [`31aa82eb4877b7b1bf62870202f4b76d2dcca10c`](https://github.com/n3r/OpenGameVCS/commit/31aa82eb4877b7b1bf62870202f4b76d2dcca10c)

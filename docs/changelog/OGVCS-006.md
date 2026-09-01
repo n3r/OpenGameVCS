@@ -6,6 +6,19 @@
 
 **Date:** 2026-09-01
 
+## Hosted v13 aggregate mapping evidence
+
+- Exact integrated source `aa13161cca228d5f92154928508f9f866225d9f5`
+  passed GitHub Actions run
+  [33506824950](https://github.com/n3r/OpenGameVCS/actions/runs/33506824950).
+  Locked Node 24/Rust 1.82 checks passed on Windows, macOS, and Ubuntu;
+  PostgreSQL 15 additionally passed the full bounded v13 aggregate mapping,
+  content-manifest availability, and thirteen-boundary hard-restart matrices.
+- The v13 bridge now requires the immutable exact identity-to-lifecycle item
+  relation described below. This is hosted private-participant evidence, not a
+  production mapping writer, public route, request-root proof, or exact-scale
+  result. OGVCS-006 remains **In development**.
+
 ## Hosted boundary evidence and portable protocol time
 
 - Retained successful Node 24/Rust 1.82 hosted conformance for source
@@ -20,7 +33,7 @@
   represent that far-future instant, without weakening reservation-window
   enforcement. Response tests likewise avoid constructing an unrepresentable
   platform clock while the parser still proves the exact wire maximum.
-- The hosted packet remains bounded: it does not claim the production
+- That earlier hosted packet remains bounded: it does not claim the production
   dispatcher, aggregate lifecycle bridge, or million-entry campaign.
 
 ## Local OGVCS-041 envelope tranche

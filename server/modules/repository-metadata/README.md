@@ -366,8 +366,9 @@ transport or authentication carrier; no request-root issuance, expansion or
 ratification; no S3/MinIO production composition; no GC/delete authority; and
 no selective-sync or sandbox behavior. Its 4,096-object bound is not 100 GiB
 evidence and is not an OGVCS-008 completion claim. Local PostgreSQL 16 execution
-is syntax/liveness evidence only. The pinned PostgreSQL 15 workflow step is
-registered but is not hosted evidence until that exact workflow run succeeds.
+is syntax/liveness evidence only. The pinned PostgreSQL 15 workflow passed the
+exact v12 source in run 33500174865 and the v13 successor source in run
+33506824950; neither run is production deployment or exact-scale evidence.
 
 Production persistence deployment evidence, public API/HTTP bindings, external chunk-store
 composition, and hosted production-service evidence remain deferred. The
@@ -439,8 +440,9 @@ inventory containing only `postgres`, `template0`, and `template1`. It
 hard-kills PostgreSQL thirteen times, so it must never be pointed at a shared or
 production database service. A database is removed only after this invocation
 successfully created that exact random name. The workflow lane is the
-authoritative execution environment; this candidate does not claim hosted-green
-restart evidence until that lane actually completes.
+authoritative execution environment. The exact v13 integration source passed
+that hosted lane in run 33506824950; this remains bounded candidate evidence,
+not a production supervisor or deployment claim.
 
 ```sh
 OGVCS_METADATA_RESTART_POSTGRES_CONTAINER=<exact-disposable-container-id> \
