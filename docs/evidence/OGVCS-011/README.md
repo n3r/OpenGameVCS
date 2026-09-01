@@ -49,10 +49,36 @@ installed-artifact and Windows fixture-root checks. It does not turn the local
 candidate into a public service or satisfy the unfinished adapters and
 integrated journeys below.
 
+## Exact accessibility candidate
+
+- Candidate source: [`e918fdefd8dc8c0fc9b7397e0635c367599692e1`](https://github.com/n3r/OpenGameVCS/commit/e918fdefd8dc8c0fc9b7397e0635c367599692e1)
+- Registered workflow: [`.github/workflows/native-cli-local-candidate.yml`](../../../.github/workflows/native-cli-local-candidate.yml)
+- Workflow: [run 33522298418](https://github.com/n3r/OpenGameVCS/actions/runs/33522298418), completed successfully on 2026-09-01
+- Machine record: [`github-actions-run-33522298418.json`](github-actions-run-33522298418.json)
+
+The workflow-dispatch run's `head_sha` is the exact accessibility candidate.
+Its Linux, macOS, and Windows jobs all passed contract generation and tests,
+Rust 1.82 formatting/tests/Clippy, packed-source execution, and the hermetic
+installed-binary gate. The logs name the human-result shape guard, hostile
+shape/length rejection, color-free ordered bounded terminal-environment test,
+and remote human-failure redaction test as successful in both the direct and
+packed Rust runs on every host. The installed-binary gate also passed on every
+host. The jobs used Node 24.19.0 on Linux and Windows and Node 24.18.0 on
+macOS, resolving the workflow's `node-version: 24` selector at execution time.
+
+GitHub reported no uploaded artifacts for this run. The machine record instead
+binds the authenticated 132,228-byte run-log archive by SHA-256, records the
+per-host release-target and independent-controller digests emitted by the
+hermetic gates, and binds the executable accessibility source and workflow by
+Git blob and SHA-256. This is exact-candidate three-OS process evidence, not a
+downloadable or signed release-artifact proof.
+
 ## Deliberately unclaimed
 
 The first-party OGVCS-006/008/009 public adapters, local OGVCS-041 receipt-MAC
 verification, remote end-to-end journeys, and later sync/status/materialize/
 submit/lock integration remain open. Same-authority between-command namespace
 replacement and the `CreateDirectoryW`-to-validation interval remain explicit
-local residuals. OGVCS-011 therefore remains **Todo**.
+local residuals. A real screen-reader study, localized-output and shell-wrapping
+review, interactive TTY/PTY coverage, and signed package/release proof also
+remain open. OGVCS-011 therefore remains **Todo**.

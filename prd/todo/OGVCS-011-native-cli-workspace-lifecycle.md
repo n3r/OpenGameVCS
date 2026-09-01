@@ -108,7 +108,12 @@ Ship developer-preview binaries with explicit server compatibility range. Destru
   clippy, spec, and three-crate packed-artifact gates are recorded in the
   candidate boundary review. Hosted run 33463547586 passed the same bounded
   contract, native, Clippy, and packed/offline gates on Ubuntu, macOS, and
-  Windows; the machine record is retained under `docs/evidence/OGVCS-011`.
+  Windows. Exact accessibility candidate
+  `e918fdefd8dc8c0fc9b7397e0635c367599692e1` then passed the registered
+  direct, packed-source, and hermetic installed-binary gates on Linux, macOS,
+  and Windows in hosted run 33522298418. Its logs name all four accessibility
+  and redaction tests as successful in direct and packed execution on every
+  host. Machine records are retained under `docs/evidence/OGVCS-011`.
 - Security/reliability review: hostile link/reparse/ACL/lock, no-replace race,
   cancellation, journal recovery, removal crash, capability skew, and secret
   redaction cases are executable. Same-authority lock namespace replacement
@@ -122,9 +127,11 @@ Ship developer-preview binaries with explicit server compatibility range. Destru
   order, plain non-TTY log bounds, terminal-environment invariance, machine
   stream/byte invariance for ordinary post-signal-install command outcomes, and
   human-failure redaction. The separate signal-handler-install fatal path
-  remains bounded plain stderr but has no machine envelope. This remains source
-  and local process evidence rather than a screen-reader study or
-  exact-candidate hosted three-OS certification.
+  remains bounded plain stderr but has no machine envelope. The exact candidate
+  now has hosted three-OS process evidence, but no real screen-reader study,
+  localization or shell-wrapping review, interactive TTY/PTY matrix, signed
+  package behavior, or signed preview release proof.
 - Rollout result: not rolled out. OGVCS-011 remains Todo because the owning
   OGVCS-006/008/009 public routes, branded/verified receipt integration, and
-  complete remote and later-feature journeys are absent.
+  complete remote and later-feature journeys are absent; the remaining
+  accessibility and signed-release evidence above is also unexecuted.

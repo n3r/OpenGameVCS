@@ -2,6 +2,8 @@
 
 **Reviewed integration baseline:** `64988fe5461c12a6efcafef8ebc8649e9c0c73ec`
 
+**Exact hosted candidate:** `e918fdefd8dc8c0fc9b7397e0635c367599692e1`
+
 **Acceptance criterion:** OGVCS-011-AC-05
 
 **Verdict:** bounded source/process evidence; OGVCS-011 remains Todo.
@@ -51,11 +53,31 @@ The evidence therefore tests both the source boundary and the ordinary release
 binary after it has been packaged, unpacked, copied into an otherwise empty
 runtime root, and detached from the build/source trees.
 
+## Exact-candidate hosted process evidence
+
+[GitHub Actions run 33522298418](https://github.com/n3r/OpenGameVCS/actions/runs/33522298418)
+completed successfully from exact `head_sha`
+`e918fdefd8dc8c0fc9b7397e0635c367599692e1`. The registered native CLI
+workflow ran the direct Rust suite, the packed-source suite, and the hermetic
+installed-binary gate on Linux, macOS, and Windows. All three logs name the two
+human-result guard tests, the color-free ordered bounded terminal-environment
+test, and the remote-boundary human-failure redaction test as successful in
+both direct and packed execution. All three hermetic gates also emitted a
+successful record with a per-host release-target digest, independent-controller
+digest, common contract-manifest digest, and 24-file runtime payload.
+
+The authenticated GitHub API reported zero uploaded artifacts. The retained
+[machine record](../evidence/OGVCS-011/github-actions-run-33522298418.json)
+therefore binds the reproducibly downloaded run-log archive, its byte length
+and SHA-256, the per-host log records, and the exact workflow and executable
+accessibility source hashes. This closes the earlier exact-candidate hosted
+process-evidence gap only; it is not downloadable-package or release evidence.
+
 ## Nonclaims and remaining release evidence
 
-This review does not claim a screen-reader user study, shell-specific wrapping
-policy, localized text, an interactive TTY/PTY matrix, signed package behavior,
-or hosted Linux/macOS/Windows results for the exact candidate. It also does not
-close the existing public-route, remote E2E, receipt-proof, or later-command
-residuals. Those completion conditions remain unchanged, so this tranche must
-not move OGVCS-011 to Done.
+This review does not claim a real screen-reader user study, shell-specific
+wrapping policy, localized text, an interactive TTY/PTY matrix, signed package
+behavior, or signed preview release proof. It also does not close the existing
+public-route, remote E2E, receipt-proof, or later-command residuals. Those
+completion conditions remain unchanged, so this tranche must not move
+OGVCS-011 to Done.

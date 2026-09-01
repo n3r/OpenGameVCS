@@ -1,0 +1,161 @@
+{
+  "schemaVersion": "ogvcs.cli-workspace/hosted-evidence/v1",
+  "status": "native-cli-accessibility-hosted-passed",
+  "hostedExactScaleExecuted": false,
+  "candidateRevision": "e918fdefd8dc8c0fc9b7397e0635c367599692e1",
+  "workflow": {
+    "id": 347356747,
+    "name": "Native CLI local candidate",
+    "path": ".github/workflows/native-cli-local-candidate.yml",
+    "runId": 33522298418,
+    "runNumber": 7,
+    "runAttempt": 1,
+    "event": "workflow_dispatch",
+    "headBranch": "r1-foundation-integration",
+    "headSha": "e918fdefd8dc8c0fc9b7397e0635c367599692e1",
+    "conclusion": "success",
+    "createdAt": "2026-09-01T14:53:26Z",
+    "startedAt": "2026-09-01T14:53:26Z",
+    "completedAt": "2026-09-01T15:00:26Z",
+    "url": "https://github.com/n3r/OpenGameVCS/actions/runs/33522298418"
+  },
+  "sourceBindings": [
+    {
+      "path": ".github/workflows/native-cli-local-candidate.yml",
+      "gitBlobSha1": "05212aaa9985a0a5e4691842c9ebd3240b55b0b0",
+      "byteLength": 2596,
+      "sha256": "1117b1b259a0093d6a65a28c3225295097f8944fcb80c7164bee8682ac359ff4"
+    },
+    {
+      "path": "client/native-cli/rust/scripts/test-hermetic.mjs",
+      "gitBlobSha1": "5a771ebc77dd69f722ac3321e6703ee5c364c66b",
+      "byteLength": 36194,
+      "sha256": "14bab3deba3850206f1bec3dcbd97c7af41afc6962a2b50f6c6f11969bac58fc"
+    },
+    {
+      "path": "client/native-cli/rust/src/main.rs",
+      "gitBlobSha1": "12faff6e4c0996f2862ef4c93d69796b7d5bd83e",
+      "byteLength": 4152,
+      "sha256": "8222864ed010a0f205fc88ab4095048fb5a0ae995cf9d9f77fe95f7a4e6ec58b"
+    },
+    {
+      "path": "client/native-cli/rust/tests/cli_contract.rs",
+      "gitBlobSha1": "ca484e1dfe64f0377044fa131dc1ad78957deeb5",
+      "byteLength": 12014,
+      "sha256": "edcb2d4316a295b2de8ca8f1e95a72f85ffd41c5cee9519e8e2cff5458e5808d"
+    }
+  ],
+  "nativeSuiteCountOrder": [
+    "src/lib.rs",
+    "src/main.rs",
+    "tests/cli_contract.rs",
+    "tests/contract_vectors.rs",
+    "tests/production_foundation.rs"
+  ],
+  "jobs": [
+    {
+      "id": 99904641407,
+      "name": "Verified local foundation (Linux)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T14:54:25Z",
+      "completedAt": "2026-09-01T14:57:02Z",
+      "nodeVersion": "24.19.0",
+      "rustVersion": "1.82.0",
+      "nativeSuitePassCounts": [53, 2, 3, 2, 12],
+      "nativeSuiteIgnoredCounts": [2, 0, 0, 0, 0],
+      "packedSuitePassCounts": [53, 2, 3, 2, 12],
+      "packedSuiteIgnoredCounts": [2, 0, 0, 0, 0],
+      "accessibilityNamedTestsDirect": "success",
+      "accessibilityNamedTestsPacked": "success",
+      "hermetic": {
+        "status": "passed",
+        "ogvcsSha256": "3a01e55798b0a3533cf9c72ccd1d6c01758a404ad394eb8a0d7578879ddcfefa",
+        "controllerSha256": "09b4d049e240b514b03e1ba1cf68ae6af45767826ec883788c0ca7445ea3a3e5",
+        "contractManifestSha256": "44080958394ac47bb12ae43b6fd897f14a7d0ada98b68f8b0474afed8b18e4ad",
+        "runtimeFileCount": 24
+      }
+    },
+    {
+      "id": 99904641205,
+      "name": "Verified local foundation (macOS)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T14:54:28Z",
+      "completedAt": "2026-09-01T14:57:29Z",
+      "nodeVersion": "24.18.0",
+      "rustVersion": "1.82.0",
+      "nativeSuitePassCounts": [54, 2, 3, 2, 12],
+      "nativeSuiteIgnoredCounts": [2, 0, 0, 0, 0],
+      "packedSuitePassCounts": [54, 2, 3, 2, 12],
+      "packedSuiteIgnoredCounts": [2, 0, 0, 0, 0],
+      "accessibilityNamedTestsDirect": "success",
+      "accessibilityNamedTestsPacked": "success",
+      "hermetic": {
+        "status": "passed",
+        "ogvcsSha256": "bbd8879251ef72fe697d404d49cf8390b0d74f840131c56b8b01151c3c3205ac",
+        "controllerSha256": "c33042989054a2754fbbf1f6e1605585b3e2f82910d7c608645515987dafd387",
+        "contractManifestSha256": "44080958394ac47bb12ae43b6fd897f14a7d0ada98b68f8b0474afed8b18e4ad",
+        "runtimeFileCount": 24
+      }
+    },
+    {
+      "id": 99904640823,
+      "name": "Verified local foundation (Windows)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T14:54:24Z",
+      "completedAt": "2026-09-01T15:00:25Z",
+      "nodeVersion": "24.19.0",
+      "rustVersion": "1.82.0",
+      "nativeSuitePassCounts": [46, 2, 3, 1, 12],
+      "nativeSuiteIgnoredCounts": [2, 0, 0, 0, 0],
+      "packedSuitePassCounts": [46, 2, 3, 1, 12],
+      "packedSuiteIgnoredCounts": [2, 0, 0, 0, 0],
+      "accessibilityNamedTestsDirect": "success",
+      "accessibilityNamedTestsPacked": "success",
+      "hermetic": {
+        "status": "passed",
+        "ogvcsSha256": "b7556bb9e05b4c3c4382be4060bc0a910b42aa7213ef3eb1a71fe8285081bdb7",
+        "controllerSha256": "36e733834d558ef4d20f70fe9c8f6cffe012af2a2986c6edd5957b965b70e142",
+        "contractManifestSha256": "44080958394ac47bb12ae43b6fd897f14a7d0ada98b68f8b0474afed8b18e4ad",
+        "runtimeFileCount": 24
+      }
+    }
+  ],
+  "namedAccessibilityTests": [
+    "tests::human_result_guard_accepts_the_registered_plain_shape",
+    "tests::human_result_guard_rejects_controls_invalid_code_shapes_and_long_lines",
+    "binary_plain_logs_are_color_free_ordered_bounded_and_environment_invariant",
+    "binary_remote_boundary_fails_closed_without_emitting_paths_locators_or_secrets"
+  ],
+  "logs": {
+    "authenticatedArchiveDownloaded": true,
+    "archiveByteLength": 132228,
+    "archiveSha256": "8604495df523585f53167f097dc2963e270908f01901aff8b1ed0e73e7e50823",
+    "secondDownloadHashMatched": true,
+    "allThreeJobDirectoriesPresent": true
+  },
+  "artifacts": {
+    "authenticatedApiTotalCount": 0,
+    "archiveDownloaded": false,
+    "reason": "The workflow did not upload a GitHub Actions artifact. Per-host release-target digests are retained from the successful hermetic-gate log records."
+  },
+  "acceptanceCoverage": {
+    "criterion": "OGVCS-011-AC-05",
+    "status": "bounded-hosted-process-evidence-only",
+    "proved": [
+      "the exact candidate's named color-independent, ordered, bounded, terminal-environment-invariant plain-log tests passed directly and from packed sources on Linux, macOS, and Windows",
+      "the exact candidate's installed-binary hermetic gate passed on Linux, macOS, and Windows",
+      "the exercised hostile human failure remained redacted and mutation-free on all three runners"
+    ]
+  },
+  "remainingGates": [
+    "a real screen-reader usability study",
+    "localized output and shell-specific wrapping review",
+    "an interactive TTY/PTY compatibility matrix",
+    "signed package and signed preview release proof",
+    "first-party OGVCS-006, OGVCS-008, and OGVCS-009 public adapters",
+    "local OGVCS-041 receipt-MAC verification",
+    "remote end-to-end authentication, discovery, binding, and FileID allocation",
+    "integrated sync, status, materialize, submit, and lock journeys",
+    "rollout and final acceptance"
+  ]
+}
