@@ -4,7 +4,16 @@ import { chmod, mkdtemp, mkdir, open, readFile, readdir, rm, stat, writeFile } f
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { createdContainerInspectMismatch, validateCreatedContainerInspect, validateOutputVolumeInspect, validateRuntimeImageInspect } from '../src/internal/docker-reference.mjs';
+import {
+  createdContainerInspectMismatch,
+  DockerReferenceAdapter,
+  isPrestartImageDiagnostic,
+  prestartImageDiagnostic,
+  runtimeImageInspectMismatch,
+  validateCreatedContainerInspect,
+  validateOutputVolumeInspect,
+  validateRuntimeImageInspect,
+} from '../src/internal/docker-reference.mjs';
 import { LINUX_RUNTIME_CONTRACT_SHA256, canonicalJson, parseAndVerifyToolManifest, sha256, snapshotTrustedManifestKeys } from '../src/internal/reference-contract.mjs';
 import { ReferenceSandboxService } from '../src/internal/reference-service.mjs';
 import { ReferenceStateStore } from '../src/internal/reference-state.mjs';
@@ -28,6 +37,49 @@ test('non-Linux hosts keep the Linux state boundary fail closed while portable t
   if (process.platform === 'linux') { context.skip('Linux admission is covered by the live reference lane'); return; }
   assert.deepEqual(await linuxBoundary.probeLinuxReferenceSandbox({ dockerBinary: '/not/consulted' }), { available: false, code: 'SANDBOX_UNAVAILABLE', profile: 'linux-reference-v1' });
   await assert.rejects(linuxBoundary.openLinuxReferenceSandboxCandidate(Object.freeze({})), (error) => error?.code === 'SANDBOX_UNAVAILABLE');
+});
+
+test('pre-admission image diagnostics are closed and never copy hostile details', () => {
+  const authorizedDiagnostics = Object.freeze([
+    'PRESTART_IMAGE_IDENTITY',
+    'PRESTART_IMAGE_PLATFORM',
+    'PRESTART_IMAGE_ROOTFS',
+    'PRESTART_IMAGE_SIZE',
+    'PRESTART_IMAGE_CONFIG_ENV',
+    'PRESTART_IMAGE_CONFIG_COMMAND',
+    'PRESTART_IMAGE_CONFIG_VOLUME',
+    'PRESTART_IMAGE_CONFIG_HEALTH',
+    'PRESTART_IMAGE_CONFIG_USER_WORKDIR',
+    'PRESTART_IMAGE_CONFIG_LABELS',
+    'PRESTART_IMAGE_INSPECT_SHAPE',
+  ]);
+  for (const value of authorizedDiagnostics) assert.equal(isPrestartImageDiagnostic(value), true, value);
+  for (const retired of [
+    'PRESTART_IMAGE_CONTROL',
+    'PRESTART_IMAGE_CONFIG_EXPOSED_PORTS',
+    'PRESTART_IMAGE_CONFIG_SHAPE',
+  ]) assert.equal(isPrestartImageDiagnostic(retired), false, retired);
+
+  const diagnostic = 'PRESTART_IMAGE_CONFIG_ENV';
+  for (const hostile of [
+    diagnostic,
+    'PRESTART_IMAGE_CONFIG_ENV_RAW_/home/runner/secret',
+    'PRESTART_IMAGE_CONFIG_ENV\nSECRET=value',
+    'PRESTART_IMAGE_UNKNOWN',
+    new String(diagnostic),
+    null,
+  ]) {
+    const error = new linuxBoundary.LinuxReferenceUnavailableError(hostile);
+    assert.equal(error.code, 'SANDBOX_UNAVAILABLE');
+    assert.equal(error.message, 'required Linux reference sandbox controls are unavailable');
+    assert.equal(error.stack, 'LinuxReferenceUnavailableError: required Linux reference sandbox controls are unavailable');
+    assert.equal(error.diagnostic, null);
+    assert.equal(JSON.stringify(error).includes('SECRET'), false);
+    assert.equal(JSON.stringify(error).includes('/home/runner'), false);
+  }
+  assert.equal(prestartImageDiagnostic(new Error('runtime image admission failed: SECRET=/host/path')), null);
+  assert.equal(prestartImageDiagnostic(Object.assign(new Error('runtime image admission failed'), { diagnostic })), null);
+  assert.equal(prestartImageDiagnostic(new Proxy(new Error('hostile'), { get() { throw new Error('trap'); } })), null);
 });
 
 const u32 = (value) => { const bytes = Buffer.alloc(4); bytes.writeUInt32BE(value); return bytes; };
@@ -298,21 +350,74 @@ test('image admission rejects config, architecture, layer, label, and writable-v
   const contract = LINUX_RUNTIME_CONTRACT_SHA256;
   const base = { Architecture: 'amd64', Config: { Cmd: null, Entrypoint: null, Env: null, ExposedPorts: null, Healthcheck: null, Labels: { 'org.opengamevcs.sandbox.runtime': 'linux-reference-v1', 'org.opengamevcs.sandbox.runtime-contract-sha256': contract }, User: '', Volumes: null, WorkingDir: '' }, Id: `sha256:${RUNTIME_DIGEST}`, Os: 'linux', RootFS: { Layers: ['sha256:layer'], Type: 'layers' }, Size: 1024 };
   assert.equal(validateRuntimeImageInspect(base, base.Id, contract), true);
+  assert.equal(runtimeImageInspectMismatch(base, base.Id, contract), null);
   const omittedEmptyFields = structuredClone(base);
   for (const field of ['Cmd', 'Entrypoint', 'Env', 'ExposedPorts', 'Healthcheck', 'Volumes']) delete omittedEmptyFields.Config[field];
   assert.equal(validateRuntimeImageInspect(omittedEmptyFields, base.Id, contract), true);
-  for (const mutate of [
-    (value) => { value.Architecture = 'arm64'; },
-    (value) => { value.Config.Env = ['SECRET=x']; },
-    (value) => { value.Config.Cmd = ['/bin/sh']; },
-    (value) => { value.Config.Entrypoint = ['/tool']; },
-    (value) => { value.Config.Volumes = { '/data': {} }; },
-    (value) => { value.Config.Healthcheck = { Test: ['NONE'] }; },
-    (value) => { value.RootFS.Layers.push('sha256:extra'); },
-    (value) => { value.Config.Labels['extra'] = 'x'; },
+  for (const [expected, mutate] of [
+    ['identity', (value) => { value.Id = `sha256:${'f'.repeat(64)}`; }],
+    ['platform', (value) => { value.Architecture = 'arm64'; }],
+    ['rootfs', (value) => { value.RootFS.Layers.push('sha256:extra'); }],
+    ['size', (value) => { value.Size = 0; }],
+    ['inspect-shape', (value) => { value.Config = null; }],
+    ['config-env', (value) => { value.Config.Env = ['PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin']; }],
+    ['config-command', (value) => { value.Config.Cmd = ['/bin/sh']; }],
+    ['config-command', (value) => { value.Config.Entrypoint = ['/tool']; }],
+    ['config-volume', (value) => { value.Config.Volumes = { '/data': {} }; }],
+    ['config-health', (value) => { value.Config.Healthcheck = { Test: ['NONE'] }; }],
+    ['config-command', (value) => { value.Config.ExposedPorts = { '80/tcp': {} }; }],
+    ['config-user-workdir', (value) => { value.Config.User = '0'; }],
+    ['config-user-workdir', (value) => { value.Config.WorkingDir = '/'; }],
+    ['config-labels', (value) => { value.Config.Labels['extra'] = 'x'; }],
   ]) {
     const candidate = structuredClone(base); mutate(candidate);
     assert.equal(validateRuntimeImageInspect(candidate, base.Id, contract), false);
+    assert.equal(runtimeImageInspectMismatch(candidate, base.Id, contract), expected);
+  }
+  assert.equal(runtimeImageInspectMismatch(new Proxy(base, { get() { throw new Error('SECRET=/host/path'); } }), base.Id, contract), 'inspect-shape');
+});
+
+referenceStateTest('runtime image admission brands only closed field mismatches and drops Docker details', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ogvcs-image-admission-'));
+  const contract = LINUX_RUNTIME_CONTRACT_SHA256;
+  const base = { Architecture: 'amd64', Config: { Cmd: null, Entrypoint: null, Env: ['PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'], ExposedPorts: null, Healthcheck: null, Labels: { 'org.opengamevcs.sandbox.runtime': 'linux-reference-v1', 'org.opengamevcs.sandbox.runtime-contract-sha256': contract }, User: '', Volumes: null, WorkingDir: '' }, Id: `sha256:${RUNTIME_DIGEST}`, Os: 'linux', RootFS: { Layers: ['sha256:layer'], Type: 'layers' }, Size: 1024 };
+  const executable = async (name, body) => {
+    const path = join(root, name);
+    await writeFile(path, `#!/bin/sh\n${body}\n`, { mode: 0o700 });
+    await chmod(path, 0o555);
+    return path;
+  };
+  try {
+    const mismatchBinary = await executable('docker-mismatch', `printf '%s' '${JSON.stringify([base])}'`);
+    const mismatchAdapter = new DockerReferenceAdapter(mismatchBinary, '/not-consulted', 'e'.repeat(64), '{}');
+    await assert.rejects(mismatchAdapter.verifyRuntimeImage(base.Id, contract), (error) => {
+      assert.equal(error?.message, 'runtime image admission failed');
+      assert.equal(prestartImageDiagnostic(error), 'PRESTART_IMAGE_CONFIG_ENV');
+      assert.equal(String(error).includes('PATH='), false);
+      return true;
+    });
+
+    const malformedBinary = await executable('docker-malformed', "printf '%s' '{\"SECRET\":\"/home/runner/private\"}'");
+    const malformedAdapter = new DockerReferenceAdapter(malformedBinary, '/not-consulted', 'e'.repeat(64), '{}');
+    await assert.rejects(malformedAdapter.verifyRuntimeImage(base.Id, contract), (error) => {
+      assert.equal(error?.message, 'runtime image admission failed');
+      assert.equal(prestartImageDiagnostic(error), 'PRESTART_IMAGE_INSPECT_SHAPE');
+      assert.equal(String(error).includes('SECRET'), false);
+      assert.equal(String(error).includes('/home/runner'), false);
+      return true;
+    });
+
+    const controlBinary = await executable('docker-control', "printf '%s' 'SECRET=/home/runner/private' >&2\nexit 7");
+    const controlAdapter = new DockerReferenceAdapter(controlBinary, '/not-consulted', 'e'.repeat(64), '{}');
+    await assert.rejects(controlAdapter.verifyRuntimeImage(base.Id, contract), (error) => {
+      assert.equal(error?.message, 'runtime image admission failed');
+      assert.equal(prestartImageDiagnostic(error), null);
+      assert.equal(String(error).includes('SECRET'), false);
+      assert.equal(String(error).includes('/home/runner'), false);
+      return true;
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });
 

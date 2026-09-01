@@ -4,7 +4,7 @@ import { chmod, mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from
 import { tmpdir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { openLinuxReferenceSandboxCandidate, probeLinuxReferenceSandbox } from '../src/linux.mjs';
+import { LinuxReferenceUnavailableError, openLinuxReferenceSandboxCandidate, probeLinuxReferenceSandbox } from '../src/linux.mjs';
 import { LINUX_RUNTIME_CONTRACT_SHA256, canonicalJson, sha256 } from '../src/internal/reference-contract.mjs';
 
 const runtimeImage = process.env.OGVCS_SANDBOX_RUNTIME_IMAGE;
@@ -147,10 +147,36 @@ const safeInspectDiagnostic = async (result) => {
   } catch { return 'none'; }
 };
 
+const PRESTART_IMAGE_DIAGNOSTICS = Object.freeze([
+  'PRESTART_IMAGE_CONFIG_COMMAND',
+  'PRESTART_IMAGE_CONFIG_ENV',
+  'PRESTART_IMAGE_CONFIG_HEALTH',
+  'PRESTART_IMAGE_CONFIG_LABELS',
+  'PRESTART_IMAGE_CONFIG_USER_WORKDIR',
+  'PRESTART_IMAGE_CONFIG_VOLUME',
+  'PRESTART_IMAGE_IDENTITY',
+  'PRESTART_IMAGE_INSPECT_SHAPE',
+  'PRESTART_IMAGE_PLATFORM',
+  'PRESTART_IMAGE_ROOTFS',
+  'PRESTART_IMAGE_SIZE',
+]);
+
+const safeOpenDiagnostic = (error) => {
+  try {
+    if (!(error instanceof LinuxReferenceUnavailableError)) return 'none';
+    const descriptor = Object.getOwnPropertyDescriptor(error, 'diagnostic');
+    return descriptor && Object.hasOwn(descriptor, 'value') && PRESTART_IMAGE_DIAGNOSTICS.includes(descriptor.value) ? descriptor.value : 'none';
+  } catch { return 'none'; }
+};
+
 let service;
 const evidence = [];
 try {
-  service = await openLinuxReferenceSandboxCandidate(configuration);
+  try {
+    service = await openLinuxReferenceSandboxCandidate(configuration);
+  } catch (error) {
+    assert.fail(`reference candidate unavailable; safeOpenDiagnostic=${safeOpenDiagnostic(error)}`);
+  }
   const run = async (command, expectedCode, options = {}) => {
     const descriptor = descriptorFor(command, options);
     const started = Date.now();

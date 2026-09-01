@@ -12,6 +12,20 @@ const ROLE_LABEL = 'org.opengamevcs.sandbox.role';
 const JOB_LABEL = 'org.opengamevcs.sandbox.job';
 const REQUIRED_MASKED_PATHS = Object.freeze(['/proc/acpi', '/proc/asound', '/proc/interrupts', '/proc/kcore', '/proc/keys', '/proc/latency_stats', '/proc/sched_debug', '/proc/scsi', '/proc/timer_list', '/proc/timer_stats', '/sys/firmware']);
 const REQUIRED_READONLY_PATHS = Object.freeze(['/proc/bus', '/proc/fs', '/proc/irq', '/proc/sys', '/proc/sysrq-trigger']);
+const RUNTIME_IMAGE_MISMATCHES = Object.freeze([
+  'config-command',
+  'config-env',
+  'config-health',
+  'config-labels',
+  'config-user-workdir',
+  'config-volume',
+  'identity',
+  'inspect-shape',
+  'platform',
+  'rootfs',
+  'size',
+]);
+const runtimeImageAdmissionDiagnostics = new WeakMap();
 const adapters = new WeakSet();
 
 const containerName = () => `ogvcs-sandbox-${randomBytes(12).toString('hex')}`;
@@ -235,34 +249,49 @@ export const validateOutputVolumeInspect = (volume, name, options, jobId) => vol
   && canonicalJson(volume?.Labels) === canonicalJson({ [JOB_LABEL]: jobId, [ROLE_LABEL]: 'output-volume', 'org.opengamevcs.sandbox': 'reference-v1' })
   && canonicalJson(volume?.Options) === canonicalJson({ device: 'tmpfs', o: options, type: 'tmpfs' });
 
-export const validateRuntimeImageInspect = (image, runtimeImage, runtimeContractSha256) => {
-  const config = image?.Config;
-  const empty = (candidate) => candidate == null || (Array.isArray(candidate) && candidate.length === 0);
-  const emptyRecord = (candidate) => candidate == null || (candidate && typeof candidate === 'object' && !Array.isArray(candidate) && Object.keys(candidate).length === 0);
-  const labels = config?.Labels;
-  return image?.Id === runtimeImage
-    && image?.Os === 'linux'
-    && image?.Architecture === 'amd64'
-    && image?.RootFS?.Type === 'layers'
-    && Array.isArray(image?.RootFS?.Layers)
-    && image.RootFS.Layers.length === 1
-    && Number.isSafeInteger(image?.Size)
-    && image.Size > 0
-    && image.Size <= 32 * 1024 * 1024
-    && config !== null
-    && typeof config === 'object'
-    && empty(config.Env)
-    && empty(config.Cmd)
-    && empty(config.Entrypoint)
-    && emptyRecord(config.Volumes)
-    && config.Healthcheck == null
-    && emptyRecord(config.ExposedPorts)
-    && config.User === ''
-    && config.WorkingDir === ''
-    && Object.keys(labels ?? {}).sort().join(',') === 'org.opengamevcs.sandbox.runtime,org.opengamevcs.sandbox.runtime-contract-sha256'
-    && labels['org.opengamevcs.sandbox.runtime'] === 'linux-reference-v1'
-    && labels['org.opengamevcs.sandbox.runtime-contract-sha256'] === runtimeContractSha256;
+const runtimeImageEvent = (mismatch) => RUNTIME_IMAGE_MISMATCHES.includes(mismatch)
+  ? `PRESTART_IMAGE_${mismatch.replaceAll('-', '_').toUpperCase()}`
+  : null;
+
+const runtimeImageAdmissionError = (mismatch) => {
+  const diagnostic = runtimeImageEvent(mismatch);
+  const error = new Error('runtime image admission failed');
+  if (diagnostic !== null) runtimeImageAdmissionDiagnostics.set(error, diagnostic);
+  return error;
 };
+
+export const prestartImageDiagnostic = (error) => {
+  try { return runtimeImageAdmissionDiagnostics.get(error) ?? null; } catch { return null; }
+};
+
+export const isPrestartImageDiagnostic = (value) => typeof value === 'string'
+  && RUNTIME_IMAGE_MISMATCHES.some((mismatch) => value === runtimeImageEvent(mismatch));
+
+export const runtimeImageInspectMismatch = (image, runtimeImage, runtimeContractSha256) => {
+  try {
+    const empty = (candidate) => candidate == null || (Array.isArray(candidate) && candidate.length === 0);
+    const emptyRecord = (candidate) => candidate == null || (candidate && typeof candidate === 'object' && !Array.isArray(candidate) && Object.keys(candidate).length === 0);
+    if (image === null || typeof image !== 'object' || Array.isArray(image)) return 'inspect-shape';
+    if (image.Id !== runtimeImage) return 'identity';
+    if (image.Os !== 'linux' || image.Architecture !== 'amd64') return 'platform';
+    if (image.RootFS?.Type !== 'layers' || !Array.isArray(image.RootFS?.Layers) || image.RootFS.Layers.length !== 1) return 'rootfs';
+    if (!Number.isSafeInteger(image.Size) || image.Size <= 0 || image.Size > 32 * 1024 * 1024) return 'size';
+    const config = image.Config;
+    if (config === null || typeof config !== 'object' || Array.isArray(config)) return 'inspect-shape';
+    if (!empty(config.Env)) return 'config-env';
+    if (!empty(config.Cmd) || !empty(config.Entrypoint) || !emptyRecord(config.ExposedPorts)) return 'config-command';
+    if (!emptyRecord(config.Volumes)) return 'config-volume';
+    if (config.Healthcheck != null) return 'config-health';
+    if (config.User !== '' || config.WorkingDir !== '') return 'config-user-workdir';
+    const labels = config.Labels;
+    if (Object.keys(labels ?? {}).sort().join(',') !== 'org.opengamevcs.sandbox.runtime,org.opengamevcs.sandbox.runtime-contract-sha256'
+      || labels['org.opengamevcs.sandbox.runtime'] !== 'linux-reference-v1'
+      || labels['org.opengamevcs.sandbox.runtime-contract-sha256'] !== runtimeContractSha256) return 'config-labels';
+    return null;
+  } catch { return 'inspect-shape'; }
+};
+
+export const validateRuntimeImageInspect = (image, runtimeImage, runtimeContractSha256) => runtimeImageInspectMismatch(image, runtimeImage, runtimeContractSha256) === null;
 
 export class DockerReferenceAdapter {
   #binary;
@@ -317,11 +346,13 @@ export class DockerReferenceAdapter {
 
   async verifyRuntimeImage(runtimeImage, runtimeContractSha256) {
     const value = await this.#control(['image', 'inspect', runtimeImage]);
-    if (value.kind !== 'exit' || value.code !== 0) return false;
+    if (value.kind !== 'exit' || value.code !== 0) throw new Error('runtime image admission failed');
     let images;
-    try { images = JSON.parse(value.stdout.toString('utf8')); } catch { return false; }
-    if (!Array.isArray(images) || images.length !== 1) return false;
-    return validateRuntimeImageInspect(images[0], runtimeImage, runtimeContractSha256);
+    try { images = JSON.parse(value.stdout.toString('utf8')); } catch { throw runtimeImageAdmissionError('inspect-shape'); }
+    if (!Array.isArray(images) || images.length !== 1) throw runtimeImageAdmissionError('inspect-shape');
+    const mismatch = runtimeImageInspectMismatch(images[0], runtimeImage, runtimeContractSha256);
+    if (mismatch !== null) throw runtimeImageAdmissionError(mismatch);
+    return true;
   }
 
   async #createOutputVolume(policy, jobId) {

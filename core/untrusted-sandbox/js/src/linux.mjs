@@ -1,10 +1,15 @@
 import { types } from 'node:util';
 import { fileURLToPath } from 'node:url';
-import { DockerReferenceAdapter } from './internal/docker-reference.mjs';
+import {
+  DockerReferenceAdapter,
+  isPrestartImageDiagnostic,
+  prestartImageDiagnostic,
+} from './internal/docker-reference.mjs';
 import { ReferenceSandboxService } from './internal/reference-service.mjs';
 
 export const LINUX_REFERENCE_SECCOMP_SHA256 = 'd25dfdd48dbfccb7fcb30e1468f0f2adb4974d26e3bd205231abac0bd062f1f0';
 const SECCOMP_PATH = fileURLToPath(new URL('../linux/seccomp-linux-reference-v1.json', import.meta.url));
+const IMAGE_DIAGNOSTIC_BRAND = Symbol('image-diagnostic-brand');
 const CONFIGURATION_KEYS = Object.freeze([
   'acquisitionSources',
   'dockerBinary',
@@ -26,10 +31,11 @@ const snapshotConfiguration = (source) => {
 };
 
 export class LinuxReferenceUnavailableError extends Error {
-  constructor() {
+  constructor(diagnostic = null, brand = null) {
     super('required Linux reference sandbox controls are unavailable');
     this.name = 'LinuxReferenceUnavailableError';
     this.code = 'SANDBOX_UNAVAILABLE';
+    this.diagnostic = brand === IMAGE_DIAGNOSTIC_BRAND && isPrestartImageDiagnostic(diagnostic) ? diagnostic : null;
     this.stack = `${this.name}: ${this.message}`;
     Object.freeze(this);
   }
@@ -59,7 +65,7 @@ export async function openLinuxReferenceSandboxCandidate(configurationSource) {
     adapter = await openAdapter(configuration.dockerBinary);
     const service = await ReferenceSandboxService.open({ adapter, ...configuration });
     return Object.freeze(service);
-  } catch {
-    throw new LinuxReferenceUnavailableError();
+  } catch (error) {
+    throw new LinuxReferenceUnavailableError(prestartImageDiagnostic(error), IMAGE_DIAGNOSTIC_BRAND);
   }
 }

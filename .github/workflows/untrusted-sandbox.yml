@@ -81,11 +81,19 @@ jobs:
           cc -static -O2 -std=c17 -Wall -Wextra -Werror core/untrusted-sandbox/js/linux/output_shim.c -o core/untrusted-sandbox/js/linux/output-shim
           cc -static -O2 -std=c17 -Wall -Wextra -Werror core/untrusted-sandbox/js/linux/canary_tool.c -o core/untrusted-sandbox/js/linux/canary-tool
           chmod 0555 core/untrusted-sandbox/js/linux/output-shim core/untrusted-sandbox/js/linux/canary-tool
-      - name: Build the one-layer credential-free scratch runtime
-        env:
-          DOCKER_BUILDKIT: "1"
+      - name: Import the deterministic one-layer credential-free scratch runtime
         run: |
-          docker build --pull=false --network=none --file core/untrusted-sandbox/js/linux/Dockerfile.reference --tag ogvcs-sandbox-reference:conformance .
+          runtime_rootfs_dir="$(mktemp -d "${RUNNER_TEMP}/ogvcs-sandbox-rootfs.XXXXXX")"
+          runtime_rootfs_tar="${RUNNER_TEMP}/ogvcs-sandbox-rootfs.tar"
+          install -m 0555 core/untrusted-sandbox/js/linux/output-shim "${runtime_rootfs_dir}/ogvcs-output-shim"
+          test "$(find "${runtime_rootfs_dir}" -mindepth 1 -maxdepth 1 -printf '%f\n')" = "ogvcs-output-shim"
+          tar --format=ustar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner --mode=0555 --no-recursion -C "${runtime_rootfs_dir}" -cf "${runtime_rootfs_tar}" ogvcs-output-shim
+          test "$(tar -tf "${runtime_rootfs_tar}")" = "ogvcs-output-shim"
+          docker image import --platform=linux/amd64 \
+            --change 'LABEL org.opengamevcs.sandbox.runtime="linux-reference-v1"' \
+            --change 'LABEL org.opengamevcs.sandbox.runtime-contract-sha256="930be8bc4d5afb79830736fc1ef4c553dc5ef63e8a38766551cf28047752189d"' \
+            "${runtime_rootfs_tar}" ogvcs-sandbox-reference:conformance
+          test "$(docker image inspect --format '{{if .Config.Env}}nonempty{{else}}empty{{end}}:{{len .RootFS.Layers}}' ogvcs-sandbox-reference:conformance)" = "empty:1"
           echo "OGVCS_SANDBOX_RUNTIME_IMAGE=$(docker image inspect --format '{{.Id}}' ogvcs-sandbox-reference:conformance)" >> "$GITHUB_ENV"
       - name: Run live Docker/cgroup/seccomp conformance
         env:
