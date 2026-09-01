@@ -4,6 +4,27 @@ This packet preserves bounded hosted evidence for the internal PostgreSQL
 metadata adapter. It is not completion evidence for OGVCS-006 and does not
 change the PRD's **In development** status.
 
+## Sealed metadata dispatcher update
+
+- Source: [`883e34e225a7108a6251fe6c3dd75bb080987102`](https://github.com/n3r/OpenGameVCS/commit/883e34e225a7108a6251fe6c3dd75bb080987102)
+- Workflow: [run 33470484624](https://github.com/n3r/OpenGameVCS/actions/runs/33470484624), completed successfully on 2026-09-01
+- Machine record: [`github-actions-run-33470484624.json`](github-actions-run-33470484624.json)
+- Retained live report: [`repository-metadata-service-report-2026-09-01.jsonl`](repository-metadata-service-report-2026-09-01.jsonl), 1,001 bytes, SHA-256 `e8dae7794e0c71205c94f610fb7a99a8c6a1c8caea2ae57cf0f8a787f9747f40`
+
+Node 24 and Rust 1.82 locked checks passed on Windows, macOS, and Ubuntu.
+Ubuntu additionally ran both Clippy profiles, the existing bounded PostgreSQL
+suite, and the sealed metadata dispatcher regression against a separately
+created fresh PostgreSQL 15 database. That regression proves successful
+`repository.get-settings` and `reference.read`, subject-bound consistency
+tokens, uniform hidden/missing/cross-tenant/stale/forged denials, retained
+negotiation-key verification, and rollback on a deferred commit fault.
+
+This remains bounded adapter evidence. The dispatcher is private, all public
+metadata routes remain unregistered, the other twenty operations are absent,
+and no authenticated server host, durable session authority, or native CLI
+network carrier exists. The report artifact is byte-identical to the retained
+lifecycle-v9 report and is therefore deduplicated.
+
 ## Public service-contract boundary update
 
 - Source: [`e3c325c7f2b69a8ffb57a4723b814f2286569ba5`](https://github.com/n3r/OpenGameVCS/commit/e3c325c7f2b69a8ffb57a4723b814f2286569ba5)

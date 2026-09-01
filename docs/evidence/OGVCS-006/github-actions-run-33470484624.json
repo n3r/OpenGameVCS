@@ -1,0 +1,76 @@
+{
+  "schemaVersion": "ogvcs.repository-metadata/hosted-evidence/v1",
+  "status": "bounded-sealed-metadata-dispatcher-passed",
+  "exactScaleExecuted": false,
+  "sourceRevision": "883e34e225a7108a6251fe6c3dd75bb080987102",
+  "workflow": {
+    "name": "Repository metadata bounded conformance",
+    "path": ".github/workflows/repository-metadata.yml",
+    "runId": 33470484624,
+    "runAttempt": 1,
+    "event": "workflow_dispatch",
+    "createdAt": "2026-09-01T04:36:42Z",
+    "completedAt": "2026-09-01T04:39:17Z",
+    "url": "https://github.com/n3r/OpenGameVCS/actions/runs/33470484624"
+  },
+  "toolchains": {
+    "node": "24",
+    "rust": "1.82.0"
+  },
+  "jobs": [
+    {
+      "id": 99739073041,
+      "name": "Locked bounded checks (Windows)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T04:36:46Z",
+      "completedAt": "2026-09-01T04:38:43Z"
+    },
+    {
+      "id": 99739073064,
+      "name": "Locked bounded checks (macOS)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T04:36:47Z",
+      "completedAt": "2026-09-01T04:37:34Z"
+    },
+    {
+      "id": 99739073171,
+      "name": "Locked bounded checks and PostgreSQL 15",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T04:36:46Z",
+      "completedAt": "2026-09-01T04:39:16Z"
+    }
+  ],
+  "artifact": {
+    "id": 9786392860,
+    "name": "repository-metadata-postgres-Linux",
+    "archiveBytes": 586,
+    "archiveSha256": "98be0cde55f6612b474cc85837853932237163efc89898c95168de8f8bb6c89d",
+    "expiresAt": "2026-09-15T04:39:13Z",
+    "retainedReport": "repository-metadata-service-report-2026-09-01.jsonl",
+    "retainedReportBytes": 1001,
+    "retainedReportSha256": "e8dae7794e0c71205c94f610fb7a99a8c6a1c8caea2ae57cf0f8a787f9747f40",
+    "deduplicatedFromRunId": 33450207801
+  },
+  "result": {
+    "status": "passed",
+    "rowCount": 15,
+    "passedRows": 15,
+    "failedRows": 0,
+    "skippedRows": 0,
+    "sealedDispatcherOperations": [
+      "repository.get-settings",
+      "reference.read"
+    ],
+    "freshDispatcherDatabase": "disposable PostgreSQL 15 database on Ubuntu",
+    "dispatcherHostileRegression": "passed",
+    "portableCompilationAndContracts": "passed on Windows, macOS, and Ubuntu"
+  },
+  "remainingGates": [
+    "production authenticated server host, session authority, and native CLI carrier",
+    "network registration and dispatch for the remaining twenty metadata operations",
+    "participant-derived negotiation-session authority and currentness",
+    "coordinated repository creation and mutation operations owned by OGVCS-010",
+    "production external path-profile and chunk-store adapters",
+    "million-entry bounded pagination campaign under the final scale policy"
+  ]
+}
