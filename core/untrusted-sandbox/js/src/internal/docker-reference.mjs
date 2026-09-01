@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { lstat, open, readFile, realpath } from 'node:fs/promises';
 import { isAbsolute } from 'node:path';
+import { types } from 'node:util';
 import { LINUX_RUNTIME_CONTRACT_SHA256, canonicalJson, isDigest, sha256 } from './reference-contract.mjs';
 
 const SAFE_COMMAND_ENVIRONMENT = Object.freeze({ LANG: 'C', LC_ALL: 'C', PATH: '/usr/bin:/bin' });
@@ -130,6 +131,40 @@ const hardeningArguments = ({ jobId, name, policy, role, seccompPath }) => [
 ];
 
 const mountFile = (handle, target) => `type=bind,src=${procDescriptorPath(handle)},dst=${target},readonly,bind-propagation=rprivate,bind-recursive=disabled`;
+
+const WORKER_EXECUTE_RESULT_KEYS = Object.freeze(['code', 'kind', 'signal', 'stderr', 'stdout', 'stdoutBytes']);
+
+const workerFailureClass = (source) => {
+  try {
+    if (source === null || typeof source !== 'object' || types.isProxy(source) || !Object.isFrozen(source)) return 'CONTROL';
+    const descriptors = Object.getOwnPropertyDescriptors(source);
+    if (Object.keys(descriptors).sort().join('\0') !== WORKER_EXECUTE_RESULT_KEYS.join('\0')
+      || Object.values(descriptors).some((descriptor) => !descriptor.enumerable || !Object.hasOwn(descriptor, 'value') || Object.hasOwn(descriptor, 'get') || Object.hasOwn(descriptor, 'set'))) return 'CONTROL';
+    const value = Object.fromEntries(WORKER_EXECUTE_RESULT_KEYS.map((key) => [key, descriptors[key].value]));
+    if (value.kind !== 'exit'
+      || value.signal !== null
+      || !Number.isSafeInteger(value.code)
+      || value.code < 0
+      || value.code > 255
+      || !Number.isSafeInteger(value.stdoutBytes)
+      || value.stdoutBytes < 0
+      || value.stdoutBytes > 64 * 1024
+      || !Buffer.isBuffer(value.stdout)
+      || Object.getPrototypeOf(value.stdout) !== Buffer.prototype
+      || value.stdout.length !== value.stdoutBytes
+      || !Buffer.isBuffer(value.stderr)
+      || Object.getPrototypeOf(value.stderr) !== Buffer.prototype
+      || value.stderr.length > 64 * 1024) return 'CONTROL';
+    const stderrBytes = value.stderr.length;
+    if (value.code === 63 && value.stdoutBytes === 0 && stderrBytes === 0) return 'INPUT_READ';
+    if (value.code === 64 && value.stdoutBytes === 0 && stderrBytes === 0) return 'OUTPUT_WRITE';
+    if ([126, 127].includes(value.code)) return 'ENTRYPOINT';
+    if (value.code !== 0) return 'NONZERO';
+    if (value.stdoutBytes > 0 && stderrBytes === 0) return 'STDOUT';
+    if (stderrBytes > 0 && value.stdoutBytes === 0) return 'STDERR';
+    return 'CONTROL';
+  } catch { return 'CONTROL'; }
+};
 
 const emptyCollection = (value) => value == null
   || (Array.isArray(value) && value.length === 0)
@@ -481,10 +516,11 @@ export class DockerReferenceAdapter {
     }
     const deadline = Math.min(policy.elapsedMilliseconds, 60_000);
     const value = await execute({ binary: this.#binary, args: ['start', '--attach', id], maximumStdout: 64 * 1024, maximumStderr: 64 * 1024, timeoutMilliseconds: deadline, signal });
+    const failureClass = workerFailureClass(value);
     const containerGone = await this.#cleanupContainer(id, name);
     if (!containerGone) { await this.#cleanupVolume(volume.name); this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
     const kind = value.kind === 'timeout' ? 'timeout' : value.kind === 'aborted' ? 'cancelled' : value.kind === 'overflow' ? 'output-limit' : value.kind === 'exit' && [137, 152].includes(value.code) ? 'resource-limit' : value.kind !== 'exit' || value.code !== 0 || value.stdoutBytes !== 0 || value.stderr.length !== 0 ? 'failed' : 'success';
-    return Object.freeze({ kind, volume });
+    return Object.freeze(kind === 'failed' ? { failureClass, kind, volume } : { kind, volume });
   }
 
   async collectOutput({ runtimeImage, policy, volume, bindingHandle, framePath, jobId, maximumFrameBytes }) {
@@ -522,3 +558,4 @@ export class DockerReferenceAdapter {
 export const isDockerReferenceAdapter = (value) => adapters.has(value);
 
 export const executeDockerForTesting = execute;
+export const workerFailureClassForTesting = workerFailureClass;

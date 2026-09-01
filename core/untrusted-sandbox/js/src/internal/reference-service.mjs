@@ -29,11 +29,20 @@ const MAXIMUM_INPUT_BYTES = 256 * 1024 * 1024;
 const MAXIMUM_QUEUE_DEPTH = 64;
 const ACQUISITION_SETTLEMENT_MILLISECONDS = 1_000;
 const MAXIMUM_PROVENANCE_BYTES = 64 * 1024;
-const POSTSTART_DIAGNOSTIC_EVENTS = Object.freeze([
+const POSTSTART_SINGLETON_DIAGNOSTIC_EVENTS = Object.freeze([
   'OUTPUT_FRAME_INVALID',
   'TRUSTED_OUTPUT_SHIM_REJECTED',
-  'WORKER_FAILED',
 ]);
+const WORKER_FAILURE_CLASSES = Object.freeze([
+  'CONTROL',
+  'ENTRYPOINT',
+  'INPUT_READ',
+  'NONZERO',
+  'OUTPUT_WRITE',
+  'STDERR',
+  'STDOUT',
+]);
+const WORKER_FAILURE_EVENTS = Object.freeze(WORKER_FAILURE_CLASSES.map((failureClass) => `WORKER_FAILURE_${failureClass}`));
 const PRESTART_INSPECT_MISMATCHES = Object.freeze([
   'config-content',
   'config-image',
@@ -185,6 +194,11 @@ const safeInspectEvent = (message) => {
   return index < 0 ? null : PRESTART_DIAGNOSTIC_EVENTS[index];
 };
 
+const workerFailureEvent = (failureClass) => {
+  const index = typeof failureClass === 'string' ? WORKER_FAILURE_CLASSES.indexOf(failureClass) : -1;
+  return index < 0 ? null : WORKER_FAILURE_EVENTS[index];
+};
+
 const evidenceMacSha256 = (key, payload) => createHmac('sha256', key)
   .update('OGVCS-SANDBOX-EVIDENCE-V1\0', 'utf8')
   .update(canonicalJson(payload), 'utf8')
@@ -230,8 +244,12 @@ export const authenticatedResultDiagnostic = (source) => {
     const suppliedMac = Buffer.from(provenance.evidenceMacSha256, 'hex');
     if (suppliedMac.length !== expectedMac.length || !timingSafeEqual(suppliedMac, expectedMac)) return 'none';
     if (!Array.isArray(provenance.securityEvents)) return 'none';
-    if (result.code === 'SANDBOX_VALIDATION_FAILED') return provenance.securityEvents.length === 1
-      && POSTSTART_DIAGNOSTIC_EVENTS.includes(provenance.securityEvents[0]) ? provenance.securityEvents[0] : 'none';
+    if (result.code === 'SANDBOX_VALIDATION_FAILED') {
+      if (provenance.securityEvents.length === 1 && POSTSTART_SINGLETON_DIAGNOSTIC_EVENTS.includes(provenance.securityEvents[0])) return provenance.securityEvents[0];
+      if (provenance.securityEvents.length !== 2 || provenance.securityEvents[0] !== 'WORKER_FAILED') return 'none';
+      const detailIndex = WORKER_FAILURE_EVENTS.indexOf(provenance.securityEvents[1]);
+      return detailIndex < 0 ? 'none' : `WORKER_FAILED:${WORKER_FAILURE_CLASSES[detailIndex]}`;
+    }
     return provenance.securityEvents.length === 2
       && PRESTART_DIAGNOSTIC_EVENTS.includes(provenance.securityEvents[0])
       && provenance.securityEvents[1] === 'REFERENCE_INTERNAL_FAILURE' ? provenance.securityEvents[0] : 'none';
@@ -418,7 +436,11 @@ export class ReferenceSandboxService {
           if (volume) await this.#adapter.discardVolume(volume);
           volume = null;
           const codes = { cancelled: 'SANDBOX_CANCELLED', failed: 'SANDBOX_VALIDATION_FAILED', 'output-limit': 'SANDBOX_OUTPUT_LIMIT', 'resource-limit': 'SANDBOX_RESOURCE_LIMIT', timeout: 'SANDBOX_TIMEOUT' };
-          securityEvents.push(`WORKER_${run.kind.toUpperCase().replace('-', '_')}`);
+          if (run.kind === 'failed') {
+            securityEvents.push('WORKER_FAILED');
+            const detailEvent = workerFailureEvent(run.failureClass);
+            if (detailEvent) securityEvents.push(detailEvent);
+          } else securityEvents.push(`WORKER_${run.kind.toUpperCase().replace('-', '_')}`);
           return await this.#finalize({ base, code: codes[run.kind] ?? 'SANDBOX_UNAVAILABLE', securityEvents, startedAtUnixMs });
         }
       } finally {
