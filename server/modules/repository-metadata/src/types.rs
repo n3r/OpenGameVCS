@@ -722,35 +722,35 @@ pub enum IdempotencyStatus {
 
 /// Framework-neutral response envelope.  OGVCS-041 owns routes, media types,
 /// and transport status codes; this contract intentionally binds none of them.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MetadataHttpResponse {
-    pub schema_version: &'static str,
-    pub operation: &'static str,
-    pub outcome: &'static str,
-    pub carrier: &'static str,
-    pub body: Value,
+    pub(crate) schema_version: &'static str,
+    pub(crate) operation: &'static str,
+    pub(crate) outcome: &'static str,
+    pub(crate) carrier: &'static str,
+    pub(crate) body: Value,
 }
 
 impl MetadataHttpResponse {
-    pub fn page<T: Serialize>(
-        operation: &'static str,
-        page: Page<T>,
-        consistency: &ConsistencyToken,
-    ) -> crate::Result<Self> {
-        let items = serde_json::to_value(page.items)
-            .map_err(|_| crate::DomainError::new(crate::DomainErrorCode::ObjectInvalid))?;
-        Ok(Self {
-            schema_version: "ogvcs.repository-metadata/http-response/v1",
-            operation,
-            outcome: "success",
-            carrier: "page-result",
-            body: serde_json::json!({
-                "schemaVersion": "ogvcs.repository-metadata/page-result/v1",
-                "operation": operation, "state": if page.next_cursor.is_some() { "more" } else { "complete" },
-                "items": items, "nextCursor": page.next_cursor.map(|value| value.as_str().to_owned()),
-                "incompleteReason": Value::Null, "consistencyToken": consistency.as_str(),
-            }),
-        })
+    pub const fn schema_version(&self) -> &'static str {
+        self.schema_version
+    }
+
+    pub const fn operation(&self) -> &'static str {
+        self.operation
+    }
+
+    pub const fn outcome(&self) -> &'static str {
+        self.outcome
+    }
+
+    pub const fn carrier(&self) -> &'static str {
+        self.carrier
+    }
+
+    pub fn body(&self) -> &Value {
+        &self.body
     }
 }
 
@@ -783,6 +783,7 @@ pub enum PageState {
 pub enum HistoryIncompleteReason {
     DepthLimit,
     WorkLimit,
+    RetentionGap,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

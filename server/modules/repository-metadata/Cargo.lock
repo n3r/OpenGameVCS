@@ -326,6 +326,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "subtle",
+ "unicode-normalization",
  "uuid",
 ]
 

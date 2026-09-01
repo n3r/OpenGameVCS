@@ -3,6 +3,18 @@
 The normative artifacts are the authenticated registries, schemas, and vectors.
 This prose cannot widen them.
 
+Object put/get semantic admission is limited to the nine repository-metadata
+kinds owned by this service; Chunk and ShelfRevision remain outside its storage
+boundary even though the shared lexical `ObjectRef` grammar can represent them.
+Path and prefix segments additionally follow the pinned OGVCS-004 canonical
+path contract, including both-separator, C0/DEL, and `.ogvcs` rejection. The
+`ownerId` and internal `consumerId` receiver profile applies the persistence
+boundary's 256 UTF-8-byte ceiling and NUL exclusion in addition to JSON Schema
+`maxLength`. Reference names similarly apply their named 512 UTF-8-byte ceiling
+and NUL exclusion. Repository roots and all history snapshot fields require a
+Snapshot; tree paging requires Snapshot plus Tree; reference CAS present and
+desired targets require Snapshot.
+
 All protected operations receive an OGVCS-003 decision before resource lookup or
 response construction. List, tree, and history operations build the authorized
 input view before page limits, counts, positions, and cursor state. The default

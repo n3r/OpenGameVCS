@@ -49,6 +49,7 @@ mod migration;
 mod migration_runner;
 mod ports;
 mod postgres;
+mod service;
 mod types;
 
 pub use error::{DomainError, DomainErrorCode, Result};
@@ -76,6 +77,16 @@ pub use postgres::PostgresLifecyclePlanWriter;
 pub use postgres::{
     IdentityBoundPostgresMetadataStore, IdentityMetadataAuthorizedView, PostgresMetadataStore,
     PostgresMetadataTransaction,
+};
+pub use service::{
+    MetadataOperation, MetadataOperationClass, MetadataOperationDescriptor,
+    MetadataOperationExposure, MetadataOperationRequest, MetadataPayloadCarrier,
+    MetadataServiceBoundaryError, ServicePageRequest, METADATA_OPERATION_DESCRIPTORS,
+    METADATA_SERVICE_CONTRACT_VERSION, METADATA_SERVICE_MANIFEST_SHA256,
+    METADATA_SERVICE_OPERATION_COUNT, METADATA_SERVICE_REQUEST_SCHEMA,
+    METADATA_SERVICE_RESPONSE_SCHEMA, PUBLIC_CANONICAL_METADATA_BYTES_MAXIMUM,
+    PUBLIC_HISTORY_DEPTH_MAXIMUM, PUBLIC_OUTBOX_CLAIM_ITEMS_MAXIMUM, PUBLIC_PAGE_ITEMS_MAXIMUM,
+    PUBLIC_TOKEN_TTL_SECONDS_MAXIMUM,
 };
 pub use types::{
     AllocationReceipt, AncestryRecord, AuthorizationContext, AuthorizationResource, CaseMode,

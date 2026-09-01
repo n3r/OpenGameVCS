@@ -47,6 +47,7 @@ test('repository metadata workflow pins the bounded three-host and PostgreSQL bo
   );
   assert.equal(workflow.match(/spec\/benchmark-fault\/v1\/\*\*/gu)?.length, 2);
   assert.equal(workflow.match(/spec\/object-transfer\/v1\/\*\*/gu)?.length, 2);
+  assert.equal(workflow.match(/docs\/changelog\/OGVCS-006\.md/gu)?.length, 2);
   assert.equal(workflow.match(/server\/migrations\/identity-policy-audit\/\*\*/gu)?.length, 2);
   assert.equal(workflow.match(/server\/modules\/identity-policy-audit\/\*\*/gu)?.length, 2);
   assert.match(workflow, /cargo clippy .* --locked --offline --all-targets -- -D warnings/u);

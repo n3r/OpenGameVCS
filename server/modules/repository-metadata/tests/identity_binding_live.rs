@@ -212,7 +212,20 @@ fn identity_bound_metadata_is_scope_receipt_and_commitment_atomic() {
     );
     import_scope.rollback().unwrap();
 
+    let repository_rows_before: (i64, i64, i64, i64) = Client::connect(&database_url, NoTls)
+        .unwrap()
+        .query_one(
+            "SELECT
+                 (SELECT count(*) FROM ogvcs_metadata.repositories WHERE repository_id = $1),
+                 (SELECT count(*) FROM ogvcs_metadata.repository_settings WHERE repository_id = $1),
+                 (SELECT count(*) FROM ogvcs_metadata.metadata_objects WHERE repository_id = $1),
+                 (SELECT count(*) FROM ogvcs_metadata.repository_commit_sequences WHERE repository_id = $1)",
+            &[&Uuid::from_bytes(*repository_id.as_bytes())],
+        )
+        .map(|row| (row.get(0), row.get(1), row.get(2), row.get(3)))
+        .unwrap();
     for (index, capability) in [
+        TransactionCapability::CreateRepository,
         TransactionCapability::Publish,
         TransactionCapability::CompareAndSwapReference,
         TransactionCapability::TombstoneFileId,
@@ -240,6 +253,22 @@ fn identity_bound_metadata_is_scope_receipt_and_commitment_atomic() {
             }
         }
     }
+    let repository_rows_after: (i64, i64, i64, i64) = Client::connect(&database_url, NoTls)
+        .unwrap()
+        .query_one(
+            "SELECT
+                 (SELECT count(*) FROM ogvcs_metadata.repositories WHERE repository_id = $1),
+                 (SELECT count(*) FROM ogvcs_metadata.repository_settings WHERE repository_id = $1),
+                 (SELECT count(*) FROM ogvcs_metadata.metadata_objects WHERE repository_id = $1),
+                 (SELECT count(*) FROM ogvcs_metadata.repository_commit_sequences WHERE repository_id = $1)",
+            &[&Uuid::from_bytes(*repository_id.as_bytes())],
+        )
+        .map(|row| (row.get(0), row.get(1), row.get(2), row.get(3)))
+        .unwrap();
+    assert_eq!(
+        repository_rows_after, repository_rows_before,
+        "coordinator-only capabilities must not leave partial repository rows"
+    );
 
     let allocate = idempotency("file-id.allocate", "allocation-a", [0x31; 32]);
     let first = store

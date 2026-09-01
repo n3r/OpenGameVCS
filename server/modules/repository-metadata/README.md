@@ -3,10 +3,13 @@
 This non-published Rust crate is the OGVCS-006 production-reference PostgreSQL
 module. It exposes typed domain errors, authorization-gated reads, a
 transaction-composable OGVCS-010 write boundary, opaque consistency/cursor
-tokens, a checksummed migration runner, and deterministic keyset paging. HTTP
-remains disabled until a future protocol release assigns the public error
-carrier. OGVCS-009 now supplies the same-transaction PostgreSQL authorization
-participant; the built-in legacy authorizer still denies every request.
+tokens, a checksummed migration runner, and deterministic keyset paging. A
+framework-neutral OGVCS-006 candidate adapter now validates the complete
+22-operation request registry and constructs its assigned result/error
+carriers. HTTP remains disabled until a future protocol release assigns routes,
+statuses, and media types. OGVCS-009 now supplies the same-transaction
+PostgreSQL authorization participant; the built-in legacy authorizer still
+denies every request.
 
 The Rust surface is an internal persistence/composition port, not an
 implementation claim for the contract's complete 22-operation public API. It
@@ -15,20 +18,42 @@ listing, reference-kind filtering, minimum-consistency-aware repository pages,
 bounded ancestry plus snapshot-rooted FileID/path histories, and outbox
 lease/acknowledgement/release. The production persistence port also implements
 idempotency-keyed `file-id.allocate` with an exact replayable one-use receipt.
-Public request parsing, protocol routing, and the HTTP binding remain open. The
-internal page ports deliberately use a stricter 1,000-item cap and do not yet
-carry the public `PageResult` consistency-token field. They must not be
-presented as generated wire-contract implementations.
+Public request parsing now enforces closed duplicate-free JSON, exact operation
+members, the authenticated candidate-manifest identity, semantic path/profile
+rules, the 10,000-item public page cap, opaque 48-byte cursor and 47-byte
+consistency-token forms, self-dating idempotency binding, and bounded
+request/response resources. Object streaming is limited to the nine
+persistence-owned metadata kinds; Chunk and ShelfRevision are rejected at the
+adapter boundary. Canonical path checks apply the OGVCS-004 both-separator,
+C0/DEL, `.ogvcs`, NFC, and UTF-8 limits. Persistence-backed `ownerId` and
+internal `consumerId` values also retain their 256 UTF-8-byte receiver limit.
+Protocol routing, streaming transport, and the storage dispatcher remain open.
+The internal persistence page ports
+deliberately retain a stricter 1,000-item cap; only the framework-neutral
+adapter constructs the public `PageResult` consistency-token field.
+
+Syntax admission is not authority. The adapter classifies every operation by
+its exact permission/resource assignment and exposes an explicit
+identity-bound guard. Repository creation carries an initial root publication,
+so it is coordinator-required alongside reference CAS and FileID tombstone;
+the restore form of `file-id.register` is dynamically coordinator-required.
+The three outbox lease operations are internal-only. No dispatcher is included,
+and none of those operations can enter a direct identity-bound path. Candidate
+repository settings may carry authenticated conformance-only fixture profiles
+for contract testing, but the future coordinator must revalidate exact
+production-write profile eligibility before mutation.
 
 The production constructor is `IdentityBoundPostgresMetadataStore::connect`;
 it requires the OGVCS-009 PostgreSQL participant before returning a store and
 exposes only credential-presentation entry points. The default identity-bound
-transaction admits immutable `PutObject`, `CreateRepository`, receipt-backed
-`ReserveFileId`, `ImportFileId` staging, and consistency-token issuance. It
-rejects `Publish`, generic reference CAS, tombstone, and restore before opening
-a transaction. Those operations reopen only through a future server-derived,
-sealed submit-plan/coordinator port; caller-driven incremental transactions
-must not become an `advanceBranch` or protected-state oracle. The low-level
+transaction admits immutable `PutObject`, receipt-backed `ReserveFileId`,
+`ImportFileId` staging, and consistency-token issuance. It rejects
+`CreateRepository`, `Publish`, generic reference CAS, tombstone, and restore
+before opening a transaction. Repository creation is coordinator-owned because
+the public operation also publishes its initial root and default reference.
+Those operations reopen only through a future server-derived, sealed
+submit-plan/coordinator port; caller-driven incremental transactions must not
+become an `advanceBranch` or protected-state oracle. The low-level
 composition primitives remain available only with `legacy-test-adapter` for
 coordinator tests.
 

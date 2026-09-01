@@ -16,6 +16,7 @@ const cargo = await readFile(resolve(root, 'Cargo.toml'), 'utf8');
 assert(cargo.includes('name = "ogvcs-repository-metadata"'), 'Cargo package name differs');
 assert(cargo.includes('ogvcs-object-model = { path = "../../../core/object-model/rust" }'), 'object-model dependency is not public path dependency');
 assert(cargo.includes('postgres = { version = "=0.19.10"'), 'PostgreSQL dependency is not exactly pinned');
+assert(cargo.includes('unicode-normalization = "=0.1.24"'), 'NFC dependency is not exactly pinned');
 assert(cargo.includes('rust-version = "1.82"'), 'Rust MSRV differs');
 assert(cargo.includes('legacy-test-adapter = []'), 'legacy adapter is not feature-gated');
 assert(cargo.includes('required-features = ["legacy-test-adapter"]'), 'legacy live test is not isolated behind its feature');
@@ -28,6 +29,7 @@ const rustFiles = [
   'lifecycle.rs',
   'ports.rs',
   'postgres.rs',
+  'service.rs',
   'types.rs',
 ];
 for (const file of rustFiles) {
@@ -51,6 +53,56 @@ for (const error of errors) {
   assert(errorSource.includes(`= ${error.code},`), `Rust domain error code missing: ${error.name}`);
   assert(errorSource.includes(`"${error.name}"`), `Rust domain error name missing: ${error.name}`);
 }
+
+const serviceSource = await readFile(resolve(root, 'src/service.rs'), 'utf8');
+const metadataManifestBytes = await readFile(resolve(workspace, 'spec/repository-metadata/v1/manifest.json'));
+const metadataManifest = JSON.parse(metadataManifestBytes);
+assert(metadataManifest.counts.operations === 22, 'candidate metadata operation count differs');
+assert(
+  digest(metadataManifestBytes) === '19f0139ad22f8546d1c3c998e972ebc5c21b39d742a92b8fe3eefb8042d13d89',
+  'candidate metadata manifest identity differs',
+);
+assert(
+  serviceSource.includes('19f0139ad22f8546d1c3c998e972ebc5c21b39d742a92b8fe3eefb8042d13d89'),
+  'service boundary does not pin the exact candidate manifest',
+);
+for (const operation of JSON.parse(await readFile(resolve(workspace, 'spec/repository-metadata/v1/registries/operations.json'))).entries) {
+  assert(serviceSource.includes(`"${operation.name}"`), `service operation missing: ${operation.name}`);
+}
+for (const evidence of [
+  'pub const PUBLIC_PAGE_ITEMS_MAXIMUM: u16 = 10_000',
+  'pub fn parse(bytes: &[u8])',
+  'duplicate JSON member',
+  'semantic_fingerprint(operation, &body)',
+  'normalize_json_numbers(&mut value)',
+  'idempotency_reservation_at',
+  'pub fn require_identity_bound',
+  'MetadataOperationExposure::AggregateCoordinatorRequired',
+  'MetadataOperationExposure::InternalOnly',
+  'Operation::ConformanceWrite',
+  'HistoryIncompleteReason::RetentionGap',
+  'fn metadata_kind(kind: ObjectKind)',
+  'value.contains(\'\\\\\')',
+  'PERSISTED_IDENTIFIER_BYTES_MAXIMUM',
+  'BoundedJsonBuffer',
+  'pub fn domain_error',
+]) assert(serviceSource.includes(evidence), `public service boundary evidence missing: ${evidence}`);
+for (const forbiddenFramework of ['axum::', 'actix_web::', 'hyper::', 'rocket::', '#[get(', '#[post(']) {
+  assert(!serviceSource.includes(forbiddenFramework), `unassigned HTTP binding appears: ${forbiddenFramework}`);
+}
+const serviceContractTests = await readFile(resolve(root, 'tests/service_contract.rs'), 'utf8');
+for (const evidence of [
+  'all_twenty_two_request_variants_are_validated_and_bound',
+  'public_page_and_consistency_token_boundaries_are_exact',
+  'coordinator_and_internal_mutations_cannot_enter_identity_bound_dispatch',
+  'semantic_idempotency_is_order_independent_but_operation_and_body_bound',
+  'malformed_duplicate_and_over_limit_inputs_fail_before_dispatch',
+  'object_stream_operations_admit_only_repository_metadata_kinds',
+  'response_constructors_bind_shapes_limits_and_non_disclosure',
+]) assert(serviceContractTests.includes(evidence), `public service regression missing: ${evidence}`);
+const responseType = await readFile(resolve(root, 'src/types.rs'), 'utf8');
+assert(responseType.includes('pub(crate) schema_version:'), 'response envelope fields remain publicly forgeable');
+assert(responseType.includes('RetentionGap'), 'retention-gap page result is not represented');
 
 const expandV1Bytes = await readFile(resolve(migrations, '000001_expand.sql'));
 const expand = expandV1Bytes.toString('utf8');
@@ -131,6 +183,10 @@ for (const forbiddenBackendAccess of ['reqwest::', 'aws_sdk_', 'std::fs::', 'tok
 }
 
 const adapter = await readFile(resolve(root, 'src/postgres.rs'), 'utf8');
+assert(
+  adapter.includes('TransactionCapability::CreateRepository\n                | TransactionCapability::Publish'),
+  'production identity boundary admits partial repository creation',
+);
 const ports = await readFile(resolve(root, 'src/ports.rs'), 'utf8');
 assert(
   adapter.split('crate::verify_schema_compatibility(&mut self.client)?').length - 1 === 19,

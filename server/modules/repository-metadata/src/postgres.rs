@@ -975,7 +975,8 @@ impl<A: AuthorizationPort, V: ObjectValidationPort> PostgresMetadataStore<A, V> 
     ) -> Result<PostgresMetadataTransaction<'_, V, IdentityMetadataAuthorizedView>> {
         if matches!(
             capability,
-            TransactionCapability::Publish
+            TransactionCapability::CreateRepository
+                | TransactionCapability::Publish
                 | TransactionCapability::CompareAndSwapReference
                 | TransactionCapability::TombstoneFileId
                 | TransactionCapability::RestoreFileId

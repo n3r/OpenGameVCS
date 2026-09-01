@@ -8,6 +8,8 @@ import { fileURLToPath } from 'node:url';
 const defaultRoot = dirname(fileURLToPath(import.meta.url));
 const profileRefPattern = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)+\/[a-z][a-z0-9]*(?:-[a-z0-9]+)*@[1-9][0-9]{0,9}$/u;
 const allocationReceiptPattern = /^far1\.[A-Za-z0-9_-]{43}$/u;
+const objectRefPattern = /^ogvcs:v1:(chunk|content-manifest|tree|change-set|asset-group-set|repository-descriptor|snapshot|shelf-revision|provenance|attestation|conflict-set):sha256:[0-9a-f]{64}$/u;
+const metadataObjectKinds = new Set(['content-manifest', 'tree', 'change-set', 'asset-group-set', 'repository-descriptor', 'snapshot', 'provenance', 'attestation', 'conflict-set']);
 
 function digest(bytes) { return createHash('sha256').update(bytes).digest('hex'); }
 function assert(condition, message) { if (!condition) throw new Error(message); }
@@ -30,12 +32,46 @@ function validatePath(parts) {
   assert(Array.isArray(parts) && parts.length <= 256, 'path segment count exceeds contract');
   let bytes = Math.max(0, parts.length - 1);
   for (const part of parts) {
-    assert(typeof part === 'string' && part.length > 0 && part.normalize('NFC') === part && part !== '.' && part !== '..' && !part.includes('/') && !part.includes('\0'), 'path segment is invalid');
+    assert(typeof part === 'string'
+      && part.length > 0
+      && part.normalize('NFC') === part
+      && part !== '.'
+      && part !== '..'
+      && part !== '.ogvcs'
+      && !part.includes('/')
+      && !part.includes('\\')
+      && !/[\u0000-\u001f\u007f]/u.test(part), 'path segment is invalid');
     const segmentBytes = Buffer.byteLength(part, 'utf8');
     assert(segmentBytes <= 255, 'path segment UTF-8 bytes exceed contract');
     bytes += segmentBytes;
   }
   assert(bytes <= 4_096, 'path UTF-8 bytes exceed contract');
+}
+
+function validatePersistedIdentifier(value) {
+  assert(typeof value === 'string'
+    && [...value].length > 0
+    && [...value].length <= 256
+    && Buffer.byteLength(value, 'utf8') <= 256
+    && !value.includes('\0'), 'persisted identifier is invalid');
+}
+
+function validateReferenceName(value) {
+  assert(typeof value === 'string'
+    && [...value].length > 0
+    && [...value].length <= 512
+    && Buffer.byteLength(value, 'utf8') <= 512
+    && !value.includes('\0'), 'reference name is invalid');
+}
+
+function objectKind(value) {
+  const match = typeof value === 'string' ? objectRefPattern.exec(value) : null;
+  assert(match !== null, 'object reference is invalid');
+  return match[1];
+}
+
+function requireObjectKind(value, expected, field) {
+  assert(objectKind(value) === expected, `${field} must be ${expected}`);
 }
 
 export async function validateMetadataOperationSemantics(operation, body, root = defaultRoot) {
@@ -48,9 +84,28 @@ export async function validateMetadataOperationSemantics(operation, body, root =
     requireProfileFamily(body.settings.pathProfile, 'path', profileDocument.entries);
     requireProfileFamily(body.settings.platformProfile, 'path', profileDocument.entries);
     requireProfileFamily(body.settings.contentPolicyProfile, 'content-policy', profileDocument.entries);
+    requireObjectKind(body.rootSnapshot, 'snapshot', 'rootSnapshot');
+    validateReferenceName(body.defaultReference);
   }
   if (Object.hasOwn(body, 'path')) validatePath(body.path);
   if (Object.hasOwn(body, 'prefix')) validatePath(body.prefix);
+  if (operation === 'object.put' || operation === 'object.get') {
+    assert(metadataObjectKinds.has(objectKind(body.objectRef)), 'object reference is not repository metadata');
+  }
+  if (operation === 'tree.page') {
+    requireObjectKind(body.snapshot, 'snapshot', 'snapshot');
+    requireObjectKind(body.tree, 'tree', 'tree');
+  }
+  if (operation === 'reference.read' || operation === 'reference.compare-and-swap') {
+    validateReferenceName(body.referenceName);
+  }
+  if (operation === 'reference.compare-and-swap') {
+    if (body.expected?.state === 'present') requireObjectKind(body.expected.target, 'snapshot', 'expected.target');
+    if (body.desired !== null) requireObjectKind(body.desired, 'snapshot', 'desired');
+  }
+  if (['history.ancestry-page', 'history.file-id-page', 'history.path-page'].includes(operation)) {
+    requireObjectKind(body.snapshot, 'snapshot', 'snapshot');
+  }
   if (operation === 'file-id.register') {
     if (body.origin === 'create' || body.origin === 'copy') {
       assert(typeof body.allocationReceipt === 'string' && allocationReceiptPattern.test(body.allocationReceipt), 'native FileID registration lacks an allocation receipt');
@@ -58,6 +113,10 @@ export async function validateMetadataOperationSemantics(operation, body, root =
       assert(body.allocationReceipt === null, 'restore cannot counterfeit a native allocation receipt');
     }
   }
+  if (operation === 'file-id.register' || operation === 'file-id.register-import') {
+    validatePersistedIdentifier(body.ownerId);
+  }
+  if (operation.startsWith('outbox.')) validatePersistedIdentifier(body.consumerId);
   return true;
 }
 

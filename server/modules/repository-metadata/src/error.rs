@@ -48,7 +48,6 @@ impl DomainErrorCode {
 pub struct DomainError {
     pub code: DomainErrorCode,
     pub retry_after_ms: Option<u64>,
-    pub visible_current_generation: Option<u64>,
     retry_origin: RetryOrigin,
 }
 
@@ -63,7 +62,6 @@ impl DomainError {
         Self {
             code,
             retry_after_ms: None,
-            visible_current_generation: None,
             retry_origin: RetryOrigin::None,
         }
     }
@@ -72,7 +70,6 @@ impl DomainError {
         Self {
             code: DomainErrorCode::TransactionRetryExhausted,
             retry_after_ms: None,
-            visible_current_generation: None,
             retry_origin: RetryOrigin::DatabaseConcurrency,
         }
     }
