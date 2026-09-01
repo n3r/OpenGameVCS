@@ -35,9 +35,11 @@ protected from inheritance and may grant access only to the owner, LocalSystem,
 or Administrators. Creation-time Windows security descriptors prevent a broad
 inherited-DACL publication interval; files and active lock handles deny delete
 sharing. `CreateDirectoryW` still requires a subsequent no-follow validation
-open, leaving a documented same-authority namespace interval. A persistent
-private root-level lock serializes cooperating create/configure/stage/remove/
-recover operations and survives `.ogvcs` detach.
+open, leaving a documented same-authority namespace interval. Failure there
+leaves uncertain directory cleanup to explicit recovery rather than deleting a
+possibly substituted handle. A persistent private root-level lock serializes
+cooperating create/configure/stage/remove/recover operations and survives
+`.ogvcs` detach.
 
 ## Evidence at this branch
 
