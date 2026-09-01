@@ -16,6 +16,11 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#ifdef __linux__
+#include <linux/sched.h>
+#include <sys/syscall.h>
+#endif
+
 extern char **environ;
 
 #ifndef SOCK_CLOEXEC
@@ -130,10 +135,39 @@ static int device_canary(void) {
 
 static int namespace_canary(void) {
 #ifdef __linux__
-  if (unshare(CLONE_NEWUSER | CLONE_NEWNS | CLONE_NEWNET) == 0) return 111;
+  if (unshare(CLONE_NEWUSER | CLONE_NEWNS | CLONE_NEWNET) == 0 || errno != EPERM) return 111;
   return valid_output("evidence/namespace", "denied") == 0 ? 0 : 112;
 #else
   return 113;
+#endif
+}
+
+static int clone_namespace_canary(void) {
+#ifdef __linux__
+  long result = syscall(SYS_clone, (unsigned long)(CLONE_NEWUSER | CLONE_NEWNS | SIGCHLD), NULL, NULL, NULL, 0UL);
+  if (result == 0) _exit(114);
+  if (result > 0) { waitpid((pid_t)result, NULL, 0); return 115; }
+  if (errno != EPERM) return 116;
+  return valid_output("evidence/clone-namespace", "denied") == 0 ? 0 : 117;
+#else
+  return 118;
+#endif
+}
+
+static int clone3_namespace_canary(void) {
+#if defined(__linux__) && defined(SYS_clone3)
+  struct clone_args arguments;
+  long result;
+  memset(&arguments, 0, sizeof(arguments));
+  arguments.flags = CLONE_NEWUSER | CLONE_NEWNS;
+  arguments.exit_signal = SIGCHLD;
+  result = syscall(SYS_clone3, &arguments, sizeof(arguments));
+  if (result == 0) _exit(119);
+  if (result > 0) { waitpid((pid_t)result, NULL, 0); return 120; }
+  if (errno != EPERM) return 121;
+  return valid_output("evidence/clone3-namespace", "denied") == 0 ? 0 : 122;
+#else
+  return 123;
 #endif
 }
 
@@ -192,6 +226,11 @@ static int stdout_canary(void) {
   for (;;) if (write_all(STDOUT_FILENO, buffer, sizeof(buffer)) != 0) return 0;
 }
 
+static int cpu_canary(void) {
+  volatile uint64_t value = 1;
+  for (;;) value = value * 6364136223846793005ULL + 1442695040888963407ULL;
+}
+
 int main(int argc, char **argv) {
   char command[65];
   if (read_command(command) != 0) return 63;
@@ -203,12 +242,15 @@ int main(int argc, char **argv) {
   if (strcmp(command, "traversal") == 0) return traversal_canary();
   if (strcmp(command, "device") == 0) return device_canary();
   if (strcmp(command, "namespace") == 0) return namespace_canary();
+  if (strcmp(command, "clone-namespace") == 0) return clone_namespace_canary();
+  if (strcmp(command, "clone3-namespace") == 0) return clone3_namespace_canary();
   if (strcmp(command, "symlink") == 0) return symlink_canary();
   if (strcmp(command, "recursion") == 0) return recursion_canary();
   if (strcmp(command, "disk") == 0 || strcmp(command, "bomb") == 0) return disk_canary();
   if (strcmp(command, "fork") == 0) return fork_canary();
   if (strcmp(command, "memory") == 0) return memory_canary();
   if (strcmp(command, "stdout") == 0) return stdout_canary();
+  if (strcmp(command, "cpu") == 0) return cpu_canary();
   if (strcmp(command, "hang") == 0) for (;;) pause();
   if (strcmp(command, "crash") == 0) { raise(SIGSEGV); return 109; }
   return 110;

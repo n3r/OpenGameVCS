@@ -22,6 +22,7 @@ test('untrusted sandbox workflow pins portable protocol and live Linux isolation
   assert.match(workflow, /npm run test:linux --workspace @opengamevcs\/untrusted-sandbox/u);
   assert.match(workflow, /OGVCS_DOCKER_BINARY: \/usr\/bin\/docker/u);
   assert.match(workflow, /untrusted-sandbox-linux-reference\.json/u);
+  assert.doesNotMatch(workflow, /Retain Linux reference evidence\n        if: always\(\)/u);
   assert.match(workflow, /timeout-minutes: 20/u);
   assert.doesNotMatch(workflow, /continue-on-error|privileged|--network=(?:host|bridge)|--cap-add|--security-opt[= ]seccomp=unconfined/iu);
   assert.match(rootPackage.scripts['test:sandbox'], /untrusted-sandbox-workflow-policy\.test\.mjs/u);
