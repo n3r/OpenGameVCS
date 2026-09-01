@@ -1,4 +1,4 @@
-import { createHmac, randomBytes } from 'node:crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { rm } from 'node:fs/promises';
 import { types } from 'node:util';
 import {
@@ -28,6 +28,92 @@ const TERMINAL_STATES = new Set(['denied', 'validated']);
 const MAXIMUM_INPUT_BYTES = 256 * 1024 * 1024;
 const MAXIMUM_QUEUE_DEPTH = 64;
 const ACQUISITION_SETTLEMENT_MILLISECONDS = 1_000;
+const MAXIMUM_PROVENANCE_BYTES = 64 * 1024;
+const POSTSTART_DIAGNOSTIC_EVENTS = Object.freeze([
+  'OUTPUT_FRAME_INVALID',
+  'TRUSTED_OUTPUT_SHIM_REJECTED',
+  'WORKER_FAILED',
+]);
+const PRESTART_INSPECT_MISMATCHES = Object.freeze([
+  'config-content',
+  'config-image',
+  'config-io',
+  'config-labels',
+  'config-process',
+  'effective-mounts',
+  'host-capabilities',
+  'host-devices',
+  'host-lifecycle',
+  'host-logging',
+  'host-mounts',
+  'host-namespaces',
+  'host-network',
+  'host-resources',
+  'host-root',
+  'host-runtime',
+  'host-security',
+  'host-tmpfs',
+  'host-ulimits',
+  'identity',
+  'inspect-response',
+  'inspect-shape',
+  'network-attachment',
+  'output-volume',
+  'state',
+]);
+const PRESTART_DIAGNOSTIC_EVENTS = Object.freeze(PRESTART_INSPECT_MISMATCHES.map((mismatch) => `PRESTART_INSPECT_${mismatch.replaceAll('-', '_').toUpperCase()}`));
+const DIAGNOSTIC_REQUEST_KEYS = Object.freeze(['evidenceBytes', 'evidenceHmacKey', 'evidenceKeyId', 'result']);
+const RESULT_KEYS = Object.freeze(['cleanupReceiptDigest', 'code', 'jobId', 'outputDigest', 'provenanceDigest', 'schemaVersion', 'status']);
+const PROVENANCE_PAYLOAD_KEYS = Object.freeze([
+  'actorDigest',
+  'brokerVersion',
+  'cleanupReceiptDigest',
+  'completedAtUnixMs',
+  'frameBytes',
+  'inputDigest',
+  'jobFingerprint',
+  'jobId',
+  'manifestDigest',
+  'optionsDigest',
+  'outputBytes',
+  'outputDigest',
+  'outputRecords',
+  'resourcePolicyDigest',
+  'runtimeDigest',
+  'sandboxVersion',
+  'schemaVersion',
+  'seccompProfileDigest',
+  'securityEvents',
+  'startedAtUnixMs',
+  'toolDigest',
+  'validationCode',
+]);
+const PROVENANCE_KEYS = Object.freeze([
+  'actorDigest',
+  'brokerVersion',
+  'cleanupReceiptDigest',
+  'completedAtUnixMs',
+  'evidenceKeyId',
+  'evidenceMacSha256',
+  'frameBytes',
+  'inputDigest',
+  'jobFingerprint',
+  'jobId',
+  'manifestDigest',
+  'optionsDigest',
+  'outputBytes',
+  'outputDigest',
+  'outputRecords',
+  'resourcePolicyDigest',
+  'runtimeDigest',
+  'sandboxVersion',
+  'schemaVersion',
+  'seccompProfileDigest',
+  'securityEvents',
+  'startedAtUnixMs',
+  'toolDigest',
+  'validationCode',
+]);
 const services = new WeakSet();
 
 const exactRecord = (source, keys) => {
@@ -95,8 +181,61 @@ const safeErrorMessage = (error) => {
 };
 
 const safeInspectEvent = (message) => {
-  const match = /^SANDBOX_INSPECT_MISMATCH:([a-z-]{1,32})$/u.exec(message ?? '');
-  return match ? `PRESTART_INSPECT_${match[1].replaceAll('-', '_').toUpperCase()}` : null;
+  const index = PRESTART_INSPECT_MISMATCHES.findIndex((mismatch) => message === `SANDBOX_INSPECT_MISMATCH:${mismatch}`);
+  return index < 0 ? null : PRESTART_DIAGNOSTIC_EVENTS[index];
+};
+
+const evidenceMacSha256 = (key, payload) => createHmac('sha256', key)
+  .update('OGVCS-SANDBOX-EVIDENCE-V1\0', 'utf8')
+  .update(canonicalJson(payload), 'utf8')
+  .digest('hex');
+
+export const authenticatedResultDiagnostic = (source) => {
+  try {
+    const request = exactRecord(source, DIAGNOSTIC_REQUEST_KEYS);
+    if (!request
+      || !Buffer.isBuffer(request.evidenceBytes)
+      || Object.getPrototypeOf(request.evidenceBytes) !== Buffer.prototype
+      || request.evidenceBytes.length < 1
+      || request.evidenceBytes.length > MAXIMUM_PROVENANCE_BYTES
+      || !Buffer.isBuffer(request.evidenceHmacKey)
+      || Object.getPrototypeOf(request.evidenceHmacKey) !== Buffer.prototype
+      || request.evidenceHmacKey.length !== 32
+      || !isId(request.evidenceKeyId)) return 'none';
+    const result = exactRecord(request.result, RESULT_KEYS);
+    if (!result
+      || result.schemaVersion !== 'ogvcs.untrusted-sandbox/reference-result/v1'
+      || !['SANDBOX_UNAVAILABLE', 'SANDBOX_VALIDATION_FAILED'].includes(result.code)
+      || result.status !== 'denied'
+      || !isId(result.jobId)
+      || !isDigest(result.provenanceDigest)
+      || sha256(request.evidenceBytes) !== result.provenanceDigest) return 'none';
+    const text = request.evidenceBytes.toString('utf8');
+    if (!Buffer.from(text, 'utf8').equals(request.evidenceBytes) || !text.endsWith('\n')) return 'none';
+    const parsed = JSON.parse(text.slice(0, -1));
+    if (`${canonicalJson(parsed)}\n` !== text) return 'none';
+    const provenance = exactRecord(parsed, PROVENANCE_KEYS);
+    if (!provenance
+      || provenance.schemaVersion !== 'ogvcs.untrusted-sandbox/provenance/v1'
+      || provenance.jobId !== result.jobId
+      || provenance.validationCode !== result.code
+      || provenance.outputDigest !== result.outputDigest
+      || provenance.outputDigest !== null
+      || provenance.cleanupReceiptDigest !== result.cleanupReceiptDigest
+      || !isDigest(provenance.cleanupReceiptDigest)
+      || provenance.evidenceKeyId !== request.evidenceKeyId
+      || !isDigest(provenance.evidenceMacSha256)) return 'none';
+    const payload = Object.fromEntries(PROVENANCE_PAYLOAD_KEYS.map((key) => [key, provenance[key]]));
+    const expectedMac = Buffer.from(evidenceMacSha256(request.evidenceHmacKey, payload), 'hex');
+    const suppliedMac = Buffer.from(provenance.evidenceMacSha256, 'hex');
+    if (suppliedMac.length !== expectedMac.length || !timingSafeEqual(suppliedMac, expectedMac)) return 'none';
+    if (!Array.isArray(provenance.securityEvents)) return 'none';
+    if (result.code === 'SANDBOX_VALIDATION_FAILED') return provenance.securityEvents.length === 1
+      && POSTSTART_DIAGNOSTIC_EVENTS.includes(provenance.securityEvents[0]) ? provenance.securityEvents[0] : 'none';
+    return provenance.securityEvents.length === 2
+      && PRESTART_DIAGNOSTIC_EVENTS.includes(provenance.securityEvents[0])
+      && provenance.securityEvents[1] === 'REFERENCE_INTERNAL_FAILURE' ? provenance.securityEvents[0] : 'none';
+  } catch { return 'none'; }
 };
 
 export class ReferenceSandboxService {
@@ -171,7 +310,7 @@ export class ReferenceSandboxService {
   }
 
   #authenticateEvidence(payload) {
-    return createHmac('sha256', this.#evidenceKey).update('OGVCS-SANDBOX-EVIDENCE-V1\0', 'utf8').update(canonicalJson(payload), 'utf8').digest('hex');
+    return evidenceMacSha256(this.#evidenceKey, payload);
   }
 
   async #finalize({ base, code, output = null, outputTemporary = null, securityEvents, startedAtUnixMs }) {

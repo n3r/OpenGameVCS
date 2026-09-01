@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createHash, generateKeyPairSync, sign } from 'node:crypto';
+import { createHash, createHmac, generateKeyPairSync, sign } from 'node:crypto';
 import { chmod, mkdtemp, mkdir, open, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -15,7 +15,7 @@ import {
   validateRuntimeImageInspect,
 } from '../src/internal/docker-reference.mjs';
 import { LINUX_RUNTIME_CONTRACT_SHA256, canonicalJson, parseAndVerifyToolManifest, sha256, snapshotTrustedManifestKeys } from '../src/internal/reference-contract.mjs';
-import { ReferenceSandboxService } from '../src/internal/reference-service.mjs';
+import { authenticatedResultDiagnostic, ReferenceSandboxService } from '../src/internal/reference-service.mjs';
 import { ReferenceStateStore } from '../src/internal/reference-state.mjs';
 import * as linuxBoundary from '../src/linux.mjs';
 
@@ -110,8 +110,18 @@ const outputFrame = (binding, files, tamper = null) => {
   return Buffer.concat(parts);
 };
 
+const authenticatedEvidenceBytes = (source, evidenceHmacKey) => {
+  const { evidenceKeyId, evidenceMacSha256: ignoredMac, ...payload } = source;
+  assert.equal(typeof ignoredMac, 'string');
+  const evidenceMacSha256 = createHmac('sha256', evidenceHmacKey)
+    .update('OGVCS-SANDBOX-EVIDENCE-V1\0', 'utf8')
+    .update(canonicalJson(payload), 'utf8')
+    .digest('hex');
+  return Buffer.from(`${canonicalJson({ ...payload, evidenceKeyId, evidenceMacSha256 })}\n`, 'utf8');
+};
+
 class FakeContainerAdapter {
-  constructor({ gate = null, inspectMismatch = null, tamper = null } = {}) { this.seccompDigest = SECCOMP_DIGEST; this.gate = gate; this.inspectMismatch = inspectMismatch; this.tamper = tamper; this.runs = 0; this.collections = 0; this.discards = 0; this.parserSawBinding = false; this.modes = []; }
+  constructor({ collectKind = null, gate = null, inspectMismatch = null, runKind = null, tamper = null } = {}) { this.seccompDigest = SECCOMP_DIGEST; this.collectKind = collectKind; this.gate = gate; this.inspectMismatch = inspectMismatch; this.runKind = runKind; this.tamper = tamper; this.runs = 0; this.collections = 0; this.discards = 0; this.parserSawBinding = false; this.modes = []; }
   async verifyRuntimeImage(image, contract) { return image === `sha256:${RUNTIME_DIGEST}` && contract === LINUX_RUNTIME_CONTRACT_SHA256; }
   async runTool({ inputHandle, jobHandle, toolHandle, signal }) {
     this.runs += 1;
@@ -121,12 +131,14 @@ class FakeContainerAdapter {
     const command = (await readHandle(inputHandle)).toString('utf8');
     if (this.gate && !signal.aborted) await Promise.race([this.gate.promise, new Promise((resolve) => signal.addEventListener('abort', resolve, { once: true }))]);
     if (signal.aborted) return Object.freeze({ kind: 'cancelled', volume: `volume.${this.runs}` });
+    if (this.runKind) return Object.freeze({ kind: this.runKind, volume: `volume.${this.runs}` });
     if (command === 'timeout') return Object.freeze({ kind: 'timeout', volume: `volume.${this.runs}` });
     const path = command === 'converter' ? 'preview/result' : 'import/result';
     return Object.freeze({ kind: 'success', volume: Object.freeze({ files: Object.freeze([{ content: Buffer.from(command), path }]) }) });
   }
   async collectOutput({ volume, bindingHandle, framePath }) {
     this.collections += 1; const binding = (await readHandle(bindingHandle)).toString('ascii');
+    if (this.collectKind) return Object.freeze({ frameBytes: 0, kind: this.collectKind });
     await writeFile(framePath, outputFrame(binding, volume.files, this.tamper), { flag: 'wx', mode: 0o600 });
     return Object.freeze({ frameBytes: (await stat(framePath)).size, kind: 'success' });
   }
@@ -164,13 +176,15 @@ const withFixture = async (operation, { adapter = new FakeContainerAdapter(), fa
   const nowUnixMs = clock();
   const keys = generateKeyPairSync('ed25519');
   const manifest = makeManifest({ ...keys, nowUnixMs, resourcePolicy, toolDigest });
+  const evidenceHmacKey = Buffer.alloc(32, 0x5a);
+  const evidenceKeyId = 'test.evidence.1';
   let acquisitions = 0; let credentialObserved = false;
   const source = Object.freeze({
     acquire: async ({ credential }) => { acquisitions += 1; credentialObserved ||= credential === 'broker-secret-canary'; if (acquireGate) await acquireGate.promise; return Buffer.from('importer'); },
     credential: 'broker-secret-canary', maximumBytes: 1024, sourceId: 'fixture.source',
   });
   const configuration = {
-    acquisitionSources: [source], adapter, evidenceHmacKey: Buffer.alloc(32, 0x5a), evidenceHmacKeyId: 'test.evidence.1', faults,
+    acquisitionSources: [source], adapter, evidenceHmacKey, evidenceHmacKeyId: evidenceKeyId, faults,
     manifestCatalog: [{ manifestBytes: manifest.bytes, toolPath }], stateRoot: join(root, 'state'), trustedManifestKeys: { 'test.signer.1': keys.publicKey }, clock,
   };
   let service = await ReferenceSandboxService.open(configuration);
@@ -182,6 +196,8 @@ const withFixture = async (operation, { adapter = new FakeContainerAdapter(), fa
   const fixture = {
     acquisition,
     adapter,
+    evidenceHmacKey,
+    evidenceKeyId,
     get acquisitions() { return acquisitions; },
     get credentialObserved() { return credentialObserved; },
     jobFor,
@@ -209,6 +225,49 @@ referenceStateTest('signed manifest, credential-free held-FD mounts, frame chann
     assert.equal(evidence.some((value) => value.includes('broker-secret-canary')), false);
     assert.equal(evidence.some((value) => value.includes('evidenceMacSha256')), true);
   });
+});
+
+referenceStateTest('post-start diagnostics require exact authenticated provenance and expose only closed stages', async () => {
+  const cases = Object.freeze([
+    Object.freeze({ adapter: new FakeContainerAdapter({ runKind: 'failed' }), event: 'WORKER_FAILED' }),
+    Object.freeze({ adapter: new FakeContainerAdapter({ collectKind: 'failed' }), event: 'TRUSTED_OUTPUT_SHIM_REJECTED' }),
+    Object.freeze({ adapter: new FakeContainerAdapter({ tamper: 'terminal' }), event: 'OUTPUT_FRAME_INVALID' }),
+  ]);
+  for (const entry of cases) {
+    await withFixture(async (fixture) => {
+      const result = await fixture.service.run(fixture.jobFor(), fixture.acquisition);
+      assert.equal(result.code, 'SANDBOX_VALIDATION_FAILED');
+      const evidenceBytes = await readFile(join(fixture.root, 'state/evidence', `${result.provenanceDigest}.json`));
+      const request = { evidenceBytes, evidenceHmacKey: fixture.evidenceHmacKey, evidenceKeyId: fixture.evidenceKeyId, result };
+      assert.equal(authenticatedResultDiagnostic(request), entry.event);
+      assert.equal(authenticatedResultDiagnostic({ ...request, evidenceHmacKey: Buffer.alloc(32, 0x11) }), 'none');
+      assert.equal(authenticatedResultDiagnostic({ ...request, evidenceKeyId: 'test.evidence.substitution' }), 'none');
+      assert.equal(authenticatedResultDiagnostic({ ...request, result: { ...result, code: 'VALIDATED', status: 'validated' } }), 'none');
+      assert.equal(authenticatedResultDiagnostic({ ...request, result: { ...result, status: 'validated' } }), 'none');
+      assert.equal(authenticatedResultDiagnostic({ ...request, result: { ...result, outputDigest: '7'.repeat(64) } }), 'none');
+      assert.equal(authenticatedResultDiagnostic({ ...request, result: { ...result, cleanupReceiptDigest: '8'.repeat(64) } }), 'none');
+      assert.equal(authenticatedResultDiagnostic(new Proxy(request, { get() { throw new Error('SECRET=/home/runner/private'); } })), 'none');
+
+      const provenance = JSON.parse(evidenceBytes.toString('utf8'));
+      const substitutedEvent = entry.event === 'WORKER_FAILED' ? 'OUTPUT_FRAME_INVALID' : 'WORKER_FAILED';
+      const tampered = Buffer.from(`${canonicalJson({ ...provenance, securityEvents: [substitutedEvent] })}\n`, 'utf8');
+      assert.equal(authenticatedResultDiagnostic({ ...request, evidenceBytes: tampered, result: { ...result, provenanceDigest: sha256(tampered) } }), 'none');
+      const nonCanonical = Buffer.from(`${JSON.stringify(provenance, null, 2)}\n`, 'utf8');
+      assert.equal(authenticatedResultDiagnostic({ ...request, evidenceBytes: nonCanonical, result: { ...result, provenanceDigest: sha256(nonCanonical) } }), 'none');
+
+      for (const securityEvents of [
+        [entry.event, entry.event],
+        [entry.event, 'SECRET=/home/runner/private'],
+        ['SECRET=/home/runner/private'],
+      ]) {
+        const hostileBytes = authenticatedEvidenceBytes({ ...provenance, securityEvents }, fixture.evidenceHmacKey);
+        const diagnostic = authenticatedResultDiagnostic({ ...request, evidenceBytes: hostileBytes, result: { ...result, provenanceDigest: sha256(hostileBytes) } });
+        assert.equal(diagnostic, 'none');
+        assert.equal(diagnostic.includes('SECRET'), false);
+        assert.equal(diagnostic.includes('/home/runner'), false);
+      }
+    }, { adapter: entry.adapter });
+  }
 });
 
 referenceStateTest('forced concurrent identical calls join one acquisition, container, validation, and commit', async () => {
@@ -311,11 +370,32 @@ referenceStateTest('pre-start inspect mismatch publishes only a bounded field di
   await withFixture(async (fixture) => {
     const result = await fixture.service.run(fixture.jobFor(), fixture.acquisition);
     assert.equal(result.code, 'SANDBOX_UNAVAILABLE');
+    const evidenceBytes = await readFile(join(fixture.root, 'state/evidence', `${result.provenanceDigest}.json`));
+    const request = { evidenceBytes, evidenceHmacKey: fixture.evidenceHmacKey, evidenceKeyId: fixture.evidenceKeyId, result };
+    assert.equal(authenticatedResultDiagnostic(request), 'PRESTART_INSPECT_HOST_RUNTIME');
+    const provenance = JSON.parse(evidenceBytes.toString('utf8'));
+    for (const securityEvents of [
+      ['PRESTART_INSPECT_HOST_RUNTIME'],
+      ['PRESTART_INSPECT_HOST_RUNTIME', 'REFERENCE_INTERNAL_FAILURE', 'REFERENCE_INTERNAL_FAILURE'],
+      ['PRESTART_INSPECT_RAW_HOST_PATH', 'REFERENCE_INTERNAL_FAILURE'],
+      ['PRESTART_INSPECT_HOST_RUNTIME', 'SECRET=/home/runner/private'],
+    ]) {
+      const hostileBytes = authenticatedEvidenceBytes({ ...provenance, securityEvents }, fixture.evidenceHmacKey);
+      assert.equal(authenticatedResultDiagnostic({ ...request, evidenceBytes: hostileBytes, result: { ...result, provenanceDigest: sha256(hostileBytes) } }), 'none');
+    }
     const reports = (await Promise.all((await readdir(join(fixture.root, 'state/evidence'))).map((name) => readFile(join(fixture.root, 'state/evidence', name), 'utf8')))).join('\n');
     assert.match(reports, /PRESTART_INSPECT_HOST_RUNTIME/u);
     assert.equal(reports.includes(fixture.root), false);
     await assert.rejects(stat(join(fixture.root, 'state/outputs/job.1')), (error) => error?.code === 'ENOENT');
   }, { adapter: new FakeContainerAdapter({ inspectMismatch: 'host-runtime' }) });
+  await withFixture(async (fixture) => {
+    const result = await fixture.service.run(fixture.jobFor(), fixture.acquisition);
+    assert.equal(result.code, 'SANDBOX_UNAVAILABLE');
+    const evidenceBytes = await readFile(join(fixture.root, 'state/evidence', `${result.provenanceDigest}.json`));
+    assert.equal(authenticatedResultDiagnostic({ evidenceBytes, evidenceHmacKey: fixture.evidenceHmacKey, evidenceKeyId: fixture.evidenceKeyId, result }), 'none');
+    assert.equal(evidenceBytes.includes(Buffer.from('SECRET')), false);
+    assert.equal(evidenceBytes.includes(Buffer.from('/home/runner')), false);
+  }, { adapter: new FakeContainerAdapter({ inspectMismatch: 'host-runtime-SECRET-/home/runner' }) });
 });
 
 referenceStateTest('a durable terminal result replays exactly after restart even after its execution deadline', async () => {
