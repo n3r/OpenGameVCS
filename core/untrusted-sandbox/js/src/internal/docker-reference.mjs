@@ -113,7 +113,6 @@ const hardeningArguments = ({ jobId, name, policy, role, seccompPath }) => [
   `--security-opt=seccomp=${seccompPath}`,
   '--cgroupns=private',
   '--ipc=none',
-  '--pid=private',
   '--hostname=ogvcs-worker',
   '--log-driver=none',
   `--pids-limit=${policy.processes}`,
@@ -224,7 +223,9 @@ export const createdContainerInspectMismatch = (container, expected) => {
       ['host-root', host?.ReadonlyRootfs === true && containsRequiredPaths(host?.MaskedPaths, REQUIRED_MASKED_PATHS) && containsRequiredPaths(host?.ReadonlyPaths, REQUIRED_READONLY_PATHS)],
       ['host-capabilities', canonicalJson(host?.CapDrop) === '["ALL"]' && emptyCollection(host?.CapAdd) && emptyCollection(host?.GroupAdd)],
       ['host-security', exactSecurityOptions(host?.SecurityOpt, expected.seccompCanonical) && host?.Privileged === false && host?.OomKillDisable === false && (host?.Init == null || host.Init === false)],
-      ['host-namespaces', host?.CgroupnsMode === 'private' && host?.PidMode === 'private' && host?.IpcMode === 'none' && (host?.UTSMode ?? '') === '' && (host?.UsernsMode ?? '') === ''],
+      // Moby represents its private PID namespace with an empty PidMode and
+      // rejects the otherwise intuitive literal `private` as invalid.
+      ['host-namespaces', host?.CgroupnsMode === 'private' && host?.PidMode === '' && host?.IpcMode === 'none' && (host?.UTSMode ?? '') === '' && (host?.UsernsMode ?? '') === ''],
       ['host-lifecycle', host?.AutoRemove === false && host?.PublishAllPorts === false && host?.RestartPolicy?.Name === 'no' && host?.RestartPolicy?.MaximumRetryCount === 0],
       ['host-devices', emptyCollection(host?.Binds) && emptyCollection(host?.VolumesFrom) && emptyCollection(host?.Devices) && emptyCollection(host?.DeviceCgroupRules) && emptyCollection(host?.DeviceRequests) && emptyCollection(host?.Sysctls)],
       ['host-resources', host?.Memory === expected.policy.memoryBytes && host?.MemorySwap === expected.policy.memoryBytes && (host?.MemoryReservation ?? 0) === 0 && host?.PidsLimit === expected.policy.processes && host?.NanoCpus === 1_000_000_000 && (host?.CpuPeriod ?? 0) === 0 && (host?.CpuQuota ?? 0) === 0 && (host?.CpuShares ?? 0) === 0],
