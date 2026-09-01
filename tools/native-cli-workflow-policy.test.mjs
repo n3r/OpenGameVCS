@@ -37,6 +37,7 @@ test('native CLI workflow pins the three-OS hermetic installed-binary gate', asy
   assert.match(workflow, /# 1\.82\.0/u);
   assert.match(workflow, /components: clippy, rustfmt/u);
   assert.match(workflow, /timeout-minutes: 30/u);
+  assert.match(workflow, /branches: \[main, r1-foundation-integration\]/u);
   assert.match(workflow, /node --test tools\/native-cli-workflow-policy\.test\.mjs/u);
   assert.match(workflow, /node scripts\/test-hermetic\.mjs/u);
   assert.match(workflow, /working-directory: client\/native-cli\/rust/u);
