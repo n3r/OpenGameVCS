@@ -229,6 +229,7 @@ static int stdout_canary(void) {
 static int cpu_canary(void) {
   volatile uint64_t value = 1;
   for (;;) value = value * 6364136223846793005ULL + 1442695040888963407ULL;
+  return (int)value;
 }
 
 int main(int argc, char **argv) {
