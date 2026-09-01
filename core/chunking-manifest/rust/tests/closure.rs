@@ -1,6 +1,7 @@
 use std::{
     collections::BTreeMap,
     fs::{create_dir, read_dir, remove_dir},
+    io::{self, Write},
     path::PathBuf,
     sync::atomic::{AtomicU64, Ordering},
     time::Duration,
@@ -525,8 +526,12 @@ fn ledger_spill_and_exhaustion_clean_private_scratch() {
             0o600
         );
     }
-    let result = chunker.finish().unwrap();
+    let mut manifest = Vec::new();
+    let result = chunker.finish_to_manifest(&mut manifest).unwrap();
     assert!(result.ledger.spilled);
+    assert_eq!(result.manifest_bytes, manifest.len() as u64);
+    assert_eq!(result.manifest_sha256, sha256(&manifest));
+    assert_eq!(result.part_count, delivered.len() as u64);
     assert_eq!(read_dir(&directory).unwrap().count(), 0);
 
     let mut exhausted = Chunker::new_bounded(
@@ -545,6 +550,94 @@ fn ledger_spill_and_exhaustion_clean_private_scratch() {
         exhausted.update(&exhausted_fragment).unwrap_err(),
         ChunkError::ScratchExhausted
     );
+    assert_eq!(read_dir(&directory).unwrap().count(), 0);
+    remove_dir(directory).unwrap();
+}
+
+struct FailAfter {
+    accepted: u64,
+    maximum: u64,
+}
+
+impl Write for FailAfter {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        if self.accepted >= self.maximum {
+            return Err(io::Error::new(io::ErrorKind::Other, "injected failure"));
+        }
+        let remaining = usize::try_from(self.maximum - self.accepted).unwrap_or(usize::MAX);
+        let accepted = remaining.min(bytes.len());
+        self.accepted += accepted as u64;
+        Ok(accepted)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+struct CancelOnWrite {
+    control: OperationControl,
+    writes: u64,
+}
+
+impl Write for CancelOnWrite {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        if self.writes == 0 {
+            self.control.cancel();
+        }
+        self.writes += 1;
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+#[test]
+fn streaming_sink_failures_and_cancellation_return_no_summary_and_clean_spills() {
+    let directory = scratch_directory();
+    let bytes = source(&vector("counter-a-six-mib")["recipe"]);
+    let complete = chunk_bytes(&bytes, |_chunk, _part, _index| Ok(())).unwrap();
+    let manifest_bytes = complete.manifest.bytes.len() as u64;
+
+    for maximum in [0, manifest_bytes / 2, manifest_bytes - 1] {
+        let mut chunker = Chunker::new_bounded(
+            bytes.len() as u64,
+            PROFILE,
+            LedgerOptions {
+                max_memory_bytes: 0,
+                max_scratch_bytes: 1024 * 1024,
+                scratch_directory: directory.clone(),
+            },
+            |_chunk, _part, _index| Ok(()),
+        )
+        .unwrap();
+        chunker.update(&bytes).unwrap();
+        assert_eq!(read_dir(&directory).unwrap().count(), 1);
+        let error = chunker
+            .finish_to_manifest(FailAfter {
+                accepted: 0,
+                maximum,
+            })
+            .unwrap_err();
+        assert_eq!(error, ChunkError::SinkFailed);
+        assert_eq!(read_dir(&directory).unwrap().count(), 0);
+    }
+
+    let control = OperationControl::default();
+    let mut chunker = Chunker::new_controlled(
+        bytes.len() as u64,
+        PROFILE,
+        control.clone(),
+        |_chunk, _part, _index| Ok(()),
+    )
+    .unwrap();
+    chunker.update(&bytes).unwrap();
+    let error = chunker
+        .finish_to_manifest(CancelOnWrite { control, writes: 0 })
+        .unwrap_err();
+    assert_eq!(error, ChunkError::ResourceExhausted);
     assert_eq!(read_dir(&directory).unwrap().count(), 0);
     remove_dir(directory).unwrap();
 }

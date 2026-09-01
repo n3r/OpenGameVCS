@@ -10,6 +10,7 @@ pub use verify::{
 };
 
 use std::{
+    io::Write,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, OnceLock,
@@ -19,7 +20,8 @@ use std::{
 
 use ledger::{Ledger, LedgerRecord};
 use ogvcs_object_model::{
-    encode_canonical, object_id, sha256, Cbor, ObjectKind, ObjectRef, ProfileRef, Sha256Writer,
+    encode_canonical, object_id, sha256, Cbor, ObjectHashWriter, ObjectKind, ObjectRef, ProfileRef,
+    Sha256Writer,
 };
 
 pub const PROFILE: &str = "chunking.opengamevcs/gear-fastcdc-1m@1";
@@ -31,6 +33,17 @@ pub const LOGICAL_MAXIMUM: u64 = 1_099_511_627_776;
 pub const CHUNK_COUNT_MAXIMUM: usize = 1_048_576;
 pub const SCALAR_WORKING_MINIMUM: u64 = 4_259_840;
 pub const WORKING_MAXIMUM: u64 = 1_073_741_824;
+/// Maximum temporary canonical fragment passed to a manifest writer.
+///
+/// Manifest generation encodes one fixed-shape field or part at a time and
+/// rejects an internal codec drift that would exceed this bound.
+pub const MANIFEST_EMIT_BYTES_MAXIMUM: usize = 64;
+/// Maximum canonical manifest payload admitted by this bounded encoder.
+///
+/// Every part is emitted as one fixed-shape fragment and the fixed envelope is
+/// covered by the final 2 KiB allowance.
+pub const MANIFEST_BYTES_MAXIMUM: u64 =
+    CHUNK_COUNT_MAXIMUM as u64 * MANIFEST_EMIT_BYTES_MAXIMUM as u64 + 2 * 1024;
 const EARLY_MASK: u64 = 0x001f_ffff;
 const LATE_MASK: u64 = 0x0007_ffff;
 const TABLE_DOMAIN: &[u8] = b"OpenGameVCS Gear table v1\0";
@@ -197,6 +210,101 @@ pub struct ChunkResult {
     pub whole_file_digest: [u8; 32],
     pub manifest: Manifest,
     pub ledger: LedgerMetrics,
+}
+
+/// Bounded manifest-generation outcome. It contains no manifest payload,
+/// chunk array, or boundary array.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifestStreamSummary {
+    pub class: &'static str,
+    pub logical_length: u64,
+    pub part_count: u64,
+    pub whole_file_digest: [u8; 32],
+    pub manifest_object_id: String,
+    pub manifest_sha256: [u8; 32],
+    pub manifest_bytes: u64,
+    pub ledger: LedgerMetrics,
+}
+
+#[derive(Debug)]
+struct ManifestEncodingSummary {
+    object_id: String,
+    sha256: [u8; 32],
+    bytes: u64,
+}
+
+struct ManifestOutput<W> {
+    writer: W,
+    sha256: Sha256Writer,
+    object: ObjectHashWriter,
+    bytes: u64,
+}
+
+impl<W: Write> ManifestOutput<W> {
+    fn new(writer: W) -> Self {
+        Self {
+            writer,
+            sha256: Sha256Writer::new(),
+            object: ObjectHashWriter::new(ObjectKind::ContentManifest, 0, usize::MAX),
+            bytes: 0,
+        }
+    }
+
+    fn emit(&mut self, bytes: &[u8]) -> Result<(), ChunkError> {
+        if bytes.len() > MANIFEST_EMIT_BYTES_MAXIMUM {
+            return Err(ChunkError::SessionFailed);
+        }
+        let next = self
+            .bytes
+            .checked_add(bytes.len() as u64)
+            .ok_or(ChunkError::SessionFailed)?;
+        if next > MANIFEST_BYTES_MAXIMUM {
+            return Err(ChunkError::SessionFailed);
+        }
+        self.writer
+            .write_all(bytes)
+            .map_err(|_| ChunkError::SinkFailed)?;
+        self.bytes = next;
+        self.sha256.update(bytes);
+        self.object
+            .update(bytes)
+            .map_err(|_| ChunkError::SessionFailed)
+    }
+
+    fn finish(mut self) -> Result<ManifestEncodingSummary, ChunkError> {
+        self.writer.flush().map_err(|_| ChunkError::SinkFailed)?;
+        let reference = self
+            .object
+            .finish()
+            .map_err(|_| ChunkError::SessionFailed)?;
+        Ok(ManifestEncodingSummary {
+            object_id: reference.to_string(),
+            sha256: self.sha256.finish(),
+            bytes: self.bytes,
+        })
+    }
+}
+
+trait ManifestRecords {
+    fn record_count(&self) -> u64;
+
+    fn visit_records(
+        &mut self,
+        consume: &mut dyn FnMut(LedgerRecord) -> Result<(), ChunkError>,
+    ) -> Result<(), ChunkError>;
+}
+
+impl ManifestRecords for Ledger {
+    fn record_count(&self) -> u64 {
+        self.len()
+    }
+
+    fn visit_records(
+        &mut self,
+        consume: &mut dyn FnMut(LedgerRecord) -> Result<(), ChunkError>,
+    ) -> Result<(), ChunkError> {
+        self.for_each(consume)
+    }
 }
 
 fn shared_gear_table() -> &'static [u64; 256] {
@@ -465,7 +573,11 @@ where
         Ok(self.consumed)
     }
 
-    pub fn finish(mut self) -> Result<ChunkResult, ChunkError> {
+    fn finish_internal<W: Write>(
+        mut self,
+        writer: W,
+        collect_entries: bool,
+    ) -> Result<(ManifestStreamSummary, Vec<u64>, Vec<ChunkPart>), ChunkError> {
         if self.failed {
             return Err(ChunkError::SessionFailed);
         }
@@ -477,7 +589,8 @@ where
             self.emit()?;
         }
         let whole_file_digest = self.whole.finish();
-        let manifest_bytes = encode_manifest(
+        let manifest = encode_manifest_to(
+            writer,
             self.declared_length,
             whole_file_digest,
             &mut self.ledger,
@@ -485,12 +598,10 @@ where
             self.started,
         )?;
         self.control.check(self.started)?;
-        let manifest_digest = object_id(ObjectKind::ContentManifest, &manifest_bytes)
-            .map_err(|_| ChunkError::SessionFailed)?;
         let ledger_metrics = self.ledger.metrics();
         let mut boundaries = Vec::new();
         let mut parts = Vec::new();
-        if self.retain_entries {
+        if collect_entries && self.retain_entries {
             self.ledger.for_each(|record| {
                 self.control.check(self.started)?;
                 boundaries.push(record.boundary);
@@ -502,23 +613,61 @@ where
                 Ok(())
             })?;
         }
+        Ok((
+            ManifestStreamSummary {
+                class: if self.declared_length == 0 {
+                    "empty"
+                } else if self.declared_length <= SMALL_MAXIMUM {
+                    "whole"
+                } else {
+                    "cdc-1m"
+                },
+                logical_length: self.declared_length,
+                part_count: ledger_metrics.records,
+                whole_file_digest,
+                manifest_object_id: manifest.object_id,
+                manifest_sha256: manifest.sha256,
+                manifest_bytes: manifest.bytes,
+                ledger: ledger_metrics,
+            },
+            boundaries,
+            parts,
+        ))
+    }
+
+    /// Finishes chunking and writes canonical manifest bytes directly to
+    /// `writer` without retaining a manifest, part array, or boundary array.
+    ///
+    /// A writer error returns [`ChunkError::SinkFailed`]. Any bytes accepted by
+    /// the writer before an error are untrusted partial output and must not be
+    /// published. A summary is returned only after the complete manifest has
+    /// been written and both manifest digests have been finalized.
+    pub fn finish_to_manifest<W: Write>(
+        self,
+        writer: W,
+    ) -> Result<ManifestStreamSummary, ChunkError> {
+        let (summary, _, _) = self.finish_internal(writer, false)?;
+        Ok(summary)
+    }
+
+    /// Compatibility wrapper that collects the manifest and, when configured,
+    /// the part and boundary arrays. Its bytes are produced by the same encoder
+    /// as [`Chunker::finish_to_manifest`].
+    pub fn finish(self) -> Result<ChunkResult, ChunkError> {
+        let mut manifest_bytes = Vec::new();
+        let (summary, boundaries, parts) = self.finish_internal(&mut manifest_bytes, true)?;
+        debug_assert_eq!(manifest_bytes.len() as u64, summary.manifest_bytes);
         Ok(ChunkResult {
             boundaries,
-            class: if self.declared_length == 0 {
-                "empty"
-            } else if self.declared_length <= SMALL_MAXIMUM {
-                "whole"
-            } else {
-                "cdc-1m"
-            },
-            logical_length: self.declared_length,
+            class: summary.class,
+            logical_length: summary.logical_length,
             parts,
-            whole_file_digest,
+            whole_file_digest: summary.whole_file_digest,
             manifest: Manifest {
                 bytes: manifest_bytes,
-                object_id: object_text(ObjectKind::ContentManifest, manifest_digest),
+                object_id: summary.manifest_object_id,
             },
-            ledger: ledger_metrics,
+            ledger: summary.ledger,
         })
     }
 }
@@ -584,23 +733,30 @@ fn cbor_array_header(length: u64) -> Result<Vec<u8>, ChunkError> {
     })
 }
 
-fn append_canonical(output: &mut Vec<u8>, value: &Cbor) -> Result<(), ChunkError> {
-    output.extend_from_slice(&encode_canonical(value).map_err(|_| ChunkError::SessionFailed)?);
-    Ok(())
+fn append_canonical<W: Write>(
+    output: &mut ManifestOutput<W>,
+    value: &Cbor,
+) -> Result<(), ChunkError> {
+    let encoded = encode_canonical(value).map_err(|_| ChunkError::SessionFailed)?;
+    output.emit(&encoded)
 }
 
-fn encode_manifest(
+fn encode_manifest_to<W: Write, R: ManifestRecords>(
+    writer: W,
     logical_length: u64,
     whole: [u8; 32],
-    ledger: &mut Ledger,
+    records: &mut R,
     control: &OperationControl,
     started: Instant,
-) -> Result<Vec<u8>, ChunkError> {
+) -> Result<ManifestEncodingSummary, ChunkError> {
     control.check(started)?;
+    if records.record_count() > CHUNK_COUNT_MAXIMUM as u64 {
+        return Err(ChunkError::CountExceeded);
+    }
     let profile = ProfileRef::new("chunking.opengamevcs", "gear-fastcdc-1m", 1)
         .map_err(|_| ChunkError::SessionFailed)?;
-    let mut output = Vec::new();
-    output.push(0xa7);
+    let mut output = ManifestOutput::new(writer);
+    output.emit(&[0xa7])?;
     for value in [
         Cbor::UInt(0),
         Cbor::UInt(1),
@@ -621,8 +777,8 @@ fn encode_manifest(
     ] {
         append_canonical(&mut output, &value)?;
     }
-    output.extend_from_slice(&cbor_array_header(ledger.len())?);
-    ledger.for_each(|record| {
+    output.emit(&cbor_array_header(records.record_count())?)?;
+    records.visit_records(&mut |record| {
         control.check(started)?;
         append_canonical(
             &mut output,
@@ -639,5 +795,9 @@ fn encode_manifest(
             ]),
         )
     })?;
-    Ok(output)
+    control.check(started)?;
+    output.finish()
 }
+
+#[cfg(test)]
+mod streaming_tests;

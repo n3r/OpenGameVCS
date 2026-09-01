@@ -39,6 +39,14 @@ test('exact 100-GiB work is isolated from ordinary and bounded checks', async ()
   assert.match(rustRunner, /PATTERN_SHA256: &str = "b4798e6f4c78cbeb0b69d6a83b60dfb1bb68196f8c7913dec1bf1bc6fa3921a4"/u);
   assert.match(rustRunner, /"x86_64" => "x64"/u);
   assert.match(rustRunner, /"aarch64" => "arm64"/u);
+  assert.match(rustRunner, /\.finish_to_manifest\(&mut manifest_sink\)/u);
+  assert.match(rustRunner, /create_new\(true\)/u);
+  assert.match(rustRunner, /manifest\.cbor\.partial/u);
+  assert.match(rustRunner, /maximum_write_bytes > MANIFEST_EMIT_BYTES_MAXIMUM/u);
+  assert.match(rustRunner, /MANIFEST_BYTES_MAXIMUM\.saturating_sub\(self\.bytes\)/u);
+  assert.match(rustRunner, /sync_and_remove/u);
+  assert.doesNotMatch(rustRunner, /result\.manifest\.bytes/u);
+  assert.doesNotMatch(rustRunner, /let mut manifest(?:_bytes)? = Vec/u);
   assert.doesNotMatch(rustRunner, /env::args/u);
 });
 

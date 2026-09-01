@@ -131,6 +131,36 @@ fn public_object_model_codec_matches_every_independent_golden_manifest() {
 }
 
 #[test]
+fn streaming_finish_matches_every_legacy_golden_manifest_byte_for_byte() {
+    let golden: Value = serde_json::from_str(GOLDEN).unwrap();
+    for vector in golden["cases"].as_array().unwrap() {
+        let bytes = source(&vector["recipe"]);
+        let legacy = chunk_bytes(&bytes, |_bytes, _part, _index| Ok(())).unwrap();
+        let mut streamed_bytes = Vec::new();
+        let mut chunker =
+            Chunker::new(bytes.len() as u64, PROFILE, |_bytes, _part, _index| Ok(())).unwrap();
+        for fragment in bytes.chunks(4_093) {
+            chunker.update(fragment).unwrap();
+        }
+        let streamed = chunker.finish_to_manifest(&mut streamed_bytes).unwrap();
+
+        assert_eq!(
+            streamed_bytes, legacy.manifest.bytes,
+            "{}",
+            vector["caseId"]
+        );
+        assert_eq!(streamed.class, legacy.class);
+        assert_eq!(streamed.logical_length, legacy.logical_length);
+        assert_eq!(streamed.part_count, legacy.parts.len() as u64);
+        assert_eq!(streamed.whole_file_digest, legacy.whole_file_digest);
+        assert_eq!(streamed.manifest_object_id, legacy.manifest.object_id);
+        assert_eq!(streamed.manifest_sha256, sha256(&streamed_bytes));
+        assert_eq!(streamed.manifest_bytes, streamed_bytes.len() as u64);
+        assert_eq!(streamed.ledger, legacy.ledger);
+    }
+}
+
+#[test]
 fn update_fragmentation_does_not_change_boundaries_or_manifest() {
     let golden: Value = serde_json::from_str(GOLDEN).unwrap();
     let fragmentation: Value = serde_json::from_str(FRAGMENTATION).unwrap();
