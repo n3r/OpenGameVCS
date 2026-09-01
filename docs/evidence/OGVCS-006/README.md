@@ -4,6 +4,39 @@ This packet preserves bounded hosted evidence for the internal PostgreSQL
 metadata adapter. It is not completion evidence for OGVCS-006 and does not
 change the PRD's **In development** status.
 
+## Private content-manifest availability update
+
+- Integrated implementation: [`31aa82eb4877b7b1bf62870202f4b76d2dcca10c`](https://github.com/n3r/OpenGameVCS/commit/31aa82eb4877b7b1bf62870202f4b76d2dcca10c)
+- Hosted source: [`3827586d9d2f0cec489149b84b20eedf9c0bc03f`](https://github.com/n3r/OpenGameVCS/commit/3827586d9d2f0cec489149b84b20eedf9c0bc03f)
+- Workflow: [run 33500174865](https://github.com/n3r/OpenGameVCS/actions/runs/33500174865), completed successfully on 2026-09-01
+- Machine record: [`github-actions-run-33500174865.json`](github-actions-run-33500174865.json)
+
+The exact hosted source passed Node 24 and Rust 1.82 locked checks on Windows,
+macOS, and Ubuntu. The PostgreSQL 15 job passed both Clippy profiles, the
+identity-bound and same-transaction aggregate regressions, and the new
+route-less content-manifest availability matrix against fresh databases. The
+matrix proves full explicit-set authorization before protected lookup,
+one-use production-verification receipt consumption, staged-to-available CAS,
+immutable typed proof and authorization-page commitments, lost-response
+reconciliation, current lifecycle-contract pinning, tenant-scope equality,
+fact/outbox identity, and current length/scope replay joins.
+
+The first hosted attempt, run `33499729455`, exposed one stale v7-to-current
+migration-count assertion after schema v12 added three phases. Commit
+`3827586` changed the expected remaining count from twelve to fifteen; the
+formerly failing identity-bound PostgreSQL test and the complete rerun then
+passed. The retained service report remains byte-identical to
+[`repository-metadata-service-report-2026-09-01.jsonl`](repository-metadata-service-report-2026-09-01.jsonl)
+and is deduplicated.
+
+This is bounded private-participant evidence. It adds no public route,
+transport, JavaScript-to-Rust subject/scope mapper, request-root authority,
+production S3/MinIO composition, health/GC/delete authority, or 100-GiB result.
+PostgreSQL independently recomputes the lifecycle verification receipt, but
+the Rust adapter remains authoritative for production-statement,
+committed-proof, dependency-generation-set, and authorization-closure digests.
+OGVCS-006 remains **In development**.
+
 ## Private atomic-submit hard-restart update
 
 - Source: [`16afa896d589efec8e8c10e694efbefed44018ba`](https://github.com/n3r/OpenGameVCS/commit/16afa896d589efec8e8c10e694efbefed44018ba)

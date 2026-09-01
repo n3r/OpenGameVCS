@@ -1,0 +1,109 @@
+{
+  "schemaVersion": "ogvcs.repository-metadata/hosted-evidence/v1",
+  "status": "bounded-content-manifest-availability-passed",
+  "exactScaleExecuted": false,
+  "implementationRevision": "31aa82eb4877b7b1bf62870202f4b76d2dcca10c",
+  "sourceRevision": "3827586d9d2f0cec489149b84b20eedf9c0bc03f",
+  "workflow": {
+    "name": "Repository metadata bounded conformance",
+    "path": ".github/workflows/repository-metadata.yml",
+    "runId": 33500174865,
+    "runAttempt": 1,
+    "event": "workflow_dispatch",
+    "headBranch": "r1-foundation-integration",
+    "createdAt": "2026-09-01T10:59:24Z",
+    "completedAt": "2026-09-01T11:02:49Z",
+    "url": "https://github.com/n3r/OpenGameVCS/actions/runs/33500174865"
+  },
+  "toolchains": {
+    "node": "24",
+    "rust": "1.82.0"
+  },
+  "jobs": [
+    {
+      "id": 99831445444,
+      "name": "Locked bounded checks and PostgreSQL 15",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T10:59:29Z",
+      "completedAt": "2026-09-01T11:02:48Z"
+    },
+    {
+      "id": 99831445618,
+      "name": "Private atomic submit hard-restart proof (PostgreSQL 15)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T10:59:28Z",
+      "completedAt": "2026-09-01T11:01:22Z"
+    },
+    {
+      "id": 99831445625,
+      "name": "Locked bounded checks (macOS)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T10:59:29Z",
+      "completedAt": "2026-09-01T11:00:14Z"
+    },
+    {
+      "id": 99831445664,
+      "name": "Locked bounded checks (Windows)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T10:59:30Z",
+      "completedAt": "2026-09-01T11:01:19Z"
+    }
+  ],
+  "artifacts": [
+    {
+      "id": 9797467726,
+      "name": "repository-metadata-postgres-Linux",
+      "archiveBytes": 586,
+      "githubDigest": "sha256:ec4d422dbb74a88ac3ec43549ba71d41d8313ad84335f45da3b0f070c6ec8447",
+      "expiresAt": "2026-09-15T11:02:43Z",
+      "retainedReport": "repository-metadata-service-report-2026-09-01.jsonl",
+      "retainedReportBytes": 1001,
+      "retainedReportSha256": "e8dae7794e0c71205c94f610fb7a99a8c6a1c8caea2ae57cf0f8a787f9747f40",
+      "deduplicatedFromRunId": 33450207801
+    },
+    {
+      "id": 9797421657,
+      "name": "repository-metadata-atomic-submit-restart-PG15",
+      "archiveBytes": 1457,
+      "githubDigest": "sha256:2e3d2bb50d8938c212e76d75cace72bb11e8ce1e1e10c54efbeaffc4d6b90d6c",
+      "expiresAt": "2026-09-15T11:01:20Z"
+    }
+  ],
+  "migrationV12": {
+    "expandSha256": "b3a9e54ca1cc526451e38072c0732c946e26a7bbb07bb45f7514e25949d70dac",
+    "migrateSha256": "5917465778e8d6b882d4b3a6d6c95b0ddd66c62bab34e31b90463cbb418a7a27",
+    "contractSha256": "dfa4ffa12248931aeeaf76b4fe2f9040862fe7764c6fde20042536511d138d74"
+  },
+  "result": {
+    "status": "passed",
+    "postgresImage": "postgres@sha256:5d1d70e254e3c5d7d76847a9deebb18478cd518df37abf6b278d4bdb1fe5d96c",
+    "postgresVersion": "150019",
+    "routeLessContentManifestAvailability": "passed",
+    "identityBoundPredecessor": "passed",
+    "sameTransactionAggregateLifecycle": "passed",
+    "deferredSqlHardening": [
+      "proof lifecycle tenant-scope equality",
+      "fact-to-proof/outbox event identity",
+      "current lifecycle-contract digest pin",
+      "current object-length replay join",
+      "current tenant-scope replay join"
+    ],
+    "portableCompilationAndContracts": "passed on Windows, macOS, and Ubuntu",
+    "serviceReportSha256": "e8dae7794e0c71205c94f610fb7a99a8c6a1c8caea2ae57cf0f8a787f9747f40"
+  },
+  "predecessorFinding": {
+    "runId": 33499729455,
+    "conclusion": "failure",
+    "finding": "v7-to-current live fixture expected twelve remaining migrations after v12 added three phases",
+    "fixedByRevision": "3827586d9d2f0cec489149b84b20eedf9c0bc03f"
+  },
+  "remainingGates": [
+    "production JavaScript-to-Rust identity-subject, tenant-scope, and authority mapper",
+    "public OGVCS-041 object-transfer and metadata routes",
+    "request-root issuance, expansion, and ratification",
+    "production S3 or MinIO composition with authenticated lifecycle persistence",
+    "health, quarantine-revival, reachability, garbage-collection, and delete authority",
+    "authenticated atomic-submit consumption and independent postcommit verification",
+    "release-only exact 100-GiB transfer and reconstruction campaign"
+  ]
+}

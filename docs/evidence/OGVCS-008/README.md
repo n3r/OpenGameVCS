@@ -4,6 +4,29 @@ This packet preserves bounded hosted evidence for the object-transfer rc.6
 candidate. It is not completion evidence for OGVCS-008 and does not change the
 PRD's **Todo** status.
 
+## PostgreSQL availability-proof update
+
+- Integrated implementation: [`31aa82eb4877b7b1bf62870202f4b76d2dcca10c`](https://github.com/n3r/OpenGameVCS/commit/31aa82eb4877b7b1bf62870202f4b76d2dcca10c)
+- Hosted source: [`3827586d9d2f0cec489149b84b20eedf9c0bc03f`](https://github.com/n3r/OpenGameVCS/commit/3827586d9d2f0cec489149b84b20eedf9c0bc03f)
+- Workflow: [run 33500174865](https://github.com/n3r/OpenGameVCS/actions/runs/33500174865), completed successfully on 2026-09-01
+- Machine record: [`../OGVCS-006/github-actions-run-33500174865.json`](../OGVCS-006/github-actions-run-33500174865.json)
+
+PostgreSQL 15 passed the route-less explicit content-manifest availability
+matrix at the exact hosted source. The candidate binds a separately derived
+lifecycle verification receipt to the exact manifest transition, authorizes
+the full sorted explicit set in fixed pages before protected lookup, commits
+the lifecycle application/fact/outbox/proof/identity pages in one caller-owned
+SERIALIZABLE transaction, and reconciles a lost response only from the current
+typed proof. The shared JavaScript/Rust vector keeps raw manifest SHA-256,
+OGVCS-002 ObjectRef identity, production-statement digest, lifecycle receipt,
+and committed-proof digest distinct.
+
+This closes only the private PostgreSQL availability-proof boundary. The
+production JavaScript-to-Rust subject/scope mapper, public transfer route,
+request-root closure, S3/MinIO service composition, health/GC/delete authority,
+authenticated submit consumption, and release-only 100-GiB campaign remain
+open. OGVCS-008 therefore remains **Todo**.
+
 ## Hosted rc.6 boundary
 
 - Integrated source: [`a36de6d516732ecb7699284b82f0d9c836246c7c`](https://github.com/n3r/OpenGameVCS/commit/a36de6d516732ecb7699284b82f0d9c836246c7c)
