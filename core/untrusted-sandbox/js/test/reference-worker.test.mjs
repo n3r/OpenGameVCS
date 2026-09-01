@@ -171,7 +171,7 @@ test('Docker hardening leaves PID mode empty for the engine private namespace', 
   const anchorCreate = source.indexOf('const volume = await this.#createVolumeAnchor');
   const parserCreate = source.indexOf("role: 'parser'", anchorCreate);
   const parserCleanup = source.indexOf('const containerGone = await this.#cleanupContainer(id, name)', parserCreate);
-  const continuityCheck = source.indexOf('if (!await this.#volumeAnchorRunning(volume))', parserCleanup);
+  const continuityCheck = source.indexOf('const anchorMismatch = await this.#volumeAnchorMismatch(volume)', parserCleanup);
   const collectorCreate = source.indexOf("role: 'output-shim'", continuityCheck);
   assert(anchorCreate >= 0 && parserCreate > anchorCreate && parserCleanup > parserCreate && continuityCheck > parserCleanup && collectorCreate > continuityCheck);
   assert.match(source, /role: 'volume-anchor'/u);
@@ -670,7 +670,7 @@ linuxReferenceStateTest('anchor create, detached-start, and inspect failures set
     ['volume-anchor-start', 'unavailable'],
     ['volume-anchor-start-stdout', 'unavailable'],
     ['volume-anchor-running-inspect-reject', 'SECRET=/host/anchor-running-inspect'],
-    ['volume-anchor-running-inspect', 'SANDBOX_INSPECT_MISMATCH:anchor-running'],
+    ['volume-anchor-running-inspect', 'SANDBOX_INSPECT_MISMATCH:state'],
   ]) {
     await withDockerAnchorFixture(failure, async (fixture) => {
       if (expected === 'unavailable') assert.deepEqual(await runDockerAnchorParser(fixture), { kind: 'unavailable', volume: null });
@@ -708,14 +708,14 @@ linuxReferenceStateTest('unexpected parser control rejection total-settles parse
 
 linuxReferenceStateTest('anchor continuity failures after parser and before collector settle once and retain no volume', async () => {
   await withDockerAnchorFixture('anchor-post-parser', async (fixture) => {
-    await assert.rejects(runDockerAnchorParser(fixture), (error) => error?.message === 'SANDBOX_INSPECT_MISMATCH:anchor-running');
+    await assert.rejects(runDockerAnchorParser(fixture), (error) => error?.message === 'SANDBOX_INSPECT_MISMATCH:inspect-response');
     assert.equal(fixture.engine.state.containers.size, 0);
     assert.equal(fixture.engine.state.volume, null);
   });
   await withDockerAnchorFixture('anchor-pre-collector', async (fixture) => {
     const run = await runDockerAnchorParser(fixture);
     assert.equal(run.kind, 'success');
-    await assert.rejects(fixture.adapter.collectOutput({ bindingHandle: fixture.aliases.binding.handle, framePath: '/not-created', jobId: 'job.anchor.fixture', maximumFrameBytes: 1024, policy: fixture.policy, runtimeImage: fixture.runtimeImage, volume: run.volume }), (error) => error?.message === 'SANDBOX_INSPECT_MISMATCH:anchor-running');
+    await assert.rejects(fixture.adapter.collectOutput({ bindingHandle: fixture.aliases.binding.handle, framePath: '/not-created', jobId: 'job.anchor.fixture', maximumFrameBytes: 1024, policy: fixture.policy, runtimeImage: fixture.runtimeImage, volume: run.volume }), (error) => error?.message === 'SANDBOX_INSPECT_MISMATCH:inspect-response');
     await fixture.adapter.discardVolume(run.volume);
     assert.equal(fixture.engine.state.containers.size, 0);
     assert.equal(fixture.engine.state.volume, null);

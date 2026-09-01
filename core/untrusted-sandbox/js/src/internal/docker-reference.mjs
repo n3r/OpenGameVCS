@@ -626,7 +626,7 @@ export class DockerReferenceAdapter {
         const anchorGone = await this.#cleanupContainer(id, name).catch(() => false);
         const volumeGone = await this.#cleanupVolume(volume.name).catch(() => false);
         if (!anchorGone || !volumeGone) { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
-        if (startValid) throw new Error('SANDBOX_INSPECT_MISMATCH:anchor-running');
+        if (startValid) throw new Error(`SANDBOX_INSPECT_MISMATCH:${mismatch}`);
         return null;
       }
       anchoredOutputVolumes.set(volume, Object.freeze({ adapter: this, expected: Object.freeze({ ...expected, id, name, seccompCanonical: this.#seccompCanonical }), id, name }));
@@ -642,15 +642,16 @@ export class DockerReferenceAdapter {
     }
   }
 
-  async #volumeAnchorRunning(volume) {
+  async #volumeAnchorMismatch(volume) {
     const anchor = anchoredOutputVolumes.get(volume);
-    if (anchor?.adapter !== this) return false;
-    const inspected = await this.#control(['container', 'inspect', anchor.id], { timeoutMilliseconds: 2_000 });
+    if (anchor?.adapter !== this) return 'anchor-running';
+    let inspected;
+    try { inspected = await this.#control(['container', 'inspect', anchor.id], { timeoutMilliseconds: 2_000 }); } catch { return 'inspect-response'; }
     let containers;
     try { containers = inspected.kind === 'exit' && inspected.code === 0 ? JSON.parse(inspected.stdout.toString('utf8')) : null; } catch { containers = null; }
-    return Array.isArray(containers)
-      && containers.length === 1
-      && runningContainerInspectMismatch(containers[0], anchor.expected) === null;
+    return Array.isArray(containers) && containers.length === 1
+      ? runningContainerInspectMismatch(containers[0], anchor.expected)
+      : 'inspect-response';
   }
 
   async #createContainer(name, argumentsAfterCreate, expected) {
@@ -780,9 +781,10 @@ export class DockerReferenceAdapter {
       const containerGone = await this.#cleanupContainer(id, name);
       const aliasesValid = await revalidateStatePinnedFileSources(pinnedSources).then(() => true, () => false);
       if (!containerGone || !aliasesValid) { await this.#cleanupAnchoredOutputVolume(volume); this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
-      if (!await this.#volumeAnchorRunning(volume)) {
+      const anchorMismatch = await this.#volumeAnchorMismatch(volume);
+      if (anchorMismatch !== null) {
         if (!await this.#cleanupAnchoredOutputVolume(volume)) { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
-        throw new Error('SANDBOX_INSPECT_MISMATCH:anchor-running');
+        throw new Error(`SANDBOX_INSPECT_MISMATCH:${anchorMismatch}`);
       }
       const kind = postNonzeroKind ?? (value.kind === 'timeout' ? 'timeout' : value.kind === 'aborted' ? 'cancelled' : value.kind === 'overflow' ? 'output-limit' : value.kind !== 'exit' || value.code !== 0 || value.stdoutBytes !== 0 || value.stderr.length !== 0 ? 'failed' : 'success');
       return Object.freeze(kind === 'failed' ? { failureClass, kind, volume } : { kind, volume });
@@ -804,9 +806,10 @@ export class DockerReferenceAdapter {
     let name = null;
     let pinnedSource = null;
     try {
-      if (!await this.#volumeAnchorRunning(volume)) {
+      const anchorMismatch = await this.#volumeAnchorMismatch(volume);
+      if (anchorMismatch !== null) {
         if (!await this.#cleanupAnchoredOutputVolume(volume)) { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
-        throw new Error('SANDBOX_INSPECT_MISMATCH:anchor-running');
+        throw new Error(`SANDBOX_INSPECT_MISMATCH:${anchorMismatch}`);
       }
       pinnedSource = await statePinnedFileSource(bindingHandle);
       const bindingSource = pinnedSource.source;
