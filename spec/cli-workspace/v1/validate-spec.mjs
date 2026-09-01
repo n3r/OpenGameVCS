@@ -9,13 +9,22 @@ const readBytes = (relative) => readFileSync(join(root, relative));
 const readJson = (relative) => JSON.parse(readBytes(relative).toString('utf8'));
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const canonicalBytes = (value) => Buffer.from(`${JSON.stringify(value)}\n`, 'utf8');
-const version = '0.1.0-rc.1';
+const version = '0.2.0-rc.2';
 const schemaFiles = [
   'CliResult.schema.json',
+  'CapabilitySelection.schema.json',
   'ConfigResolution.schema.json',
   'DiagnosticPreview.schema.json',
   'InitializationRecord.schema.json',
+  'IntentReport.schema.json',
+  'ProgressEvent.schema.json',
+  'RemovalRecord.schema.json',
+  'StagingState.schema.json',
+  'VerifiedDiagnosticPreview.schema.json',
+  'VerifiedWorkspaceMetadata.schema.json',
+  'VerifiedWorkspaceReport.schema.json',
   'WorkspaceMetadata.schema.json',
+  'WorkspaceJournal.schema.json',
   'WorkspaceReport.schema.json',
 ];
 
@@ -41,7 +50,7 @@ assert.equal(manifest.registrySetSha256, digestSet('registries/'));
 assert.equal(manifest.schemaSetSha256, digestSet('schemas/'));
 assert.equal(manifest.vectorSetSha256, digestSet('vectors/'));
 assert.equal(manifest.generatorSha256, sha256(readBytes('scripts/generate.mjs')));
-assert.deepEqual(manifest.counts, { artifacts: 13, registries: 1, schemas: 6, vectors: 1 });
+assert.deepEqual(manifest.counts, { artifacts: 22, registries: 1, schemas: 15, vectors: 1 });
 
 const schemas = new Map(schemaFiles.map((file) => [file, readJson(`schemas/${file}`)]));
 assert.equal(new Set([...schemas.values()].map((schema) => schema.$id)).size, schemas.size);
@@ -57,9 +66,38 @@ function resolveReference(reference, document) {
 }
 
 function validateInstance(value, schema, document = schema, path = '$') {
-  if (schema.$ref !== undefined) return validateInstance(value, resolveReference(schema.$ref, document), document, path);
+  if (schema.$ref !== undefined) {
+    if (schema.$ref.startsWith('#/')) {
+      return validateInstance(value, resolveReference(schema.$ref, document), document, path);
+    }
+    const referenced = schemas.get(schema.$ref);
+    assert(referenced !== undefined, `${path}: unknown schema reference ${schema.$ref}`);
+    return validateInstance(value, referenced, referenced, path);
+  }
+  if (schema.oneOf !== undefined) {
+    let matches = 0;
+    for (const candidate of schema.oneOf) {
+      try {
+        validateInstance(value, candidate, document, path);
+        matches += 1;
+      } catch {
+        // A oneOf candidate is expected to reject nonmatching variants.
+      }
+    }
+    assert.equal(matches, 1, `${path}: oneOf`);
+  }
   if (schema.const !== undefined) assert.deepEqual(value, schema.const, `${path}: const`);
   if (schema.enum !== undefined) assert(schema.enum.some((candidate) => JSON.stringify(candidate) === JSON.stringify(value)), `${path}: enum`);
+  if (Array.isArray(schema.type)) {
+    const matches = schema.type.some((type) => type === 'null'
+      ? value === null
+      : type === 'integer'
+        ? Number.isInteger(value)
+        : typeof value === type);
+    assert(matches, `${path}: ${schema.type.join('|')}`);
+    if (value === null) return;
+    schema = { ...schema, type: schema.type.find((type) => type !== 'null') };
+  }
   if (schema.type === 'object') {
     assert(value !== null && typeof value === 'object' && !Array.isArray(value), `${path}: object`);
     for (const required of schema.required ?? []) assert(Object.hasOwn(value, required), `${path}: missing ${required}`);
@@ -103,6 +141,18 @@ assert.deepEqual(schemas.get('CliResult.schema.json').properties.exitClass.enum,
 assert.equal(schemas.get('WorkspaceMetadata.schema.json').properties.binding.properties.verification.const, 'unverified-local-declaration');
 assert.equal(schemas.get('WorkspaceReport.schema.json').properties.schema.const, 'ogvcs.cli-workspace/workspace-report/v1');
 assert.deepEqual(schemas.get('InitializationRecord.schema.json').properties.state.enum, ['initializing', 'complete']);
+assert.equal(schemas.get('VerifiedWorkspaceMetadata.schema.json').properties.binding.properties.verification.const, 'public-service-verified');
+assert.equal(schemas.get('VerifiedWorkspaceMetadata.schema.json').properties.binding.properties.repositoryIdHex.pattern, '^[0-9a-f]{12}[1-8][0-9a-f]{3}[89ab][0-9a-f]{15}$');
+assert.equal(schemas.get('VerifiedWorkspaceReport.schema.json').properties.schema.const, 'ogvcs.cli-workspace/verified-workspace-report/v2');
+assert.equal(schemas.get('CapabilitySelection.schema.json').properties.authorizationRegistrySha256.const, '293f9ab0be023a9ded33326d04a8314080bda56e7c70dd18d0cca38b70bed9cc');
+assert.equal(schemas.get('CapabilitySelection.schema.json').properties.pathRegistrySha256.const, 'bbabdd95d78cfe0dd9751ab67ccbd9dfa5565bf8c049468aea3129bec787bd42');
+assert.equal(schemas.get('IntentReport.schema.json').properties.uploadsStarted.const, false);
+assert.equal(schemas.get('IntentReport.schema.json').properties.submitStarted.const, false);
+assert.equal(schemas.get('IntentReport.schema.json').properties.remoteDurableState.const, 'unchanged');
+const stagedIntent = schemas.get('StagingState.schema.json').properties.intents.items;
+assert(stagedIntent.required.includes('allocationReceipt'));
+assert(stagedIntent.required.includes('allocationIdempotencyKeySha256'));
+assert.equal(stagedIntent.properties.allocationReceipt.pattern, '^far1\\.[A-Za-z0-9_-]{43}$');
 
 const vectors = readJson('vectors/contract-v1.json');
 assert.equal(vectors.contractVersion, version);
@@ -112,6 +162,10 @@ for (const example of vectors.schemaExamples) {
   validateInstance(example.value, schema);
   assert.throws(() => validateInstance({ ...example.value, unexpected: true }, schema));
 }
+const stagingExample = vectors.schemaExamples.find(({ schemaFile }) => schemaFile === 'StagingState.schema.json').value;
+const stagingWithoutReceipt = structuredClone(stagingExample);
+stagingWithoutReceipt.intents[0].allocationReceipt = null;
+assert.throws(() => validateInstance(stagingWithoutReceipt, schemas.get('StagingState.schema.json')));
 
 const expectedIds = [
   'config-precedence-source-report',

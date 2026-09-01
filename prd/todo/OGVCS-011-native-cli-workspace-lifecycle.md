@@ -7,7 +7,7 @@
 **Depends on:** OGVCS-004, OGVCS-006, OGVCS-008, OGVCS-009, OGVCS-041  
 **Blocks:** OGVCS-012, OGVCS-013, OGVCS-014, OGVCS-015, OGVCS-016, OGVCS-022, OGVCS-042, OGVCS-043  
 **Source:** [OpenGameVCS proposal](../../GAME_DEV_VCS_ANALYSIS.md)  
-**Last updated:** 2026-08-14
+**Last updated:** 2026-09-01
 
 ## Outcome
 
@@ -99,8 +99,22 @@ Ship developer-preview binaries with explicit server compatibility range. Destru
 
 ## Completion evidence
 
-- Implementation changes:
-- Test and benchmark results:
-- Security/reliability review:
-- Documentation/runbooks:
-- Rollout result:
+- Implementation changes: candidate contract `0.2.0-rc.2` and the Rust verified
+  local foundation implement typed predecessor ports, atomic workspace v2
+  lifecycle, OGVCS-004-confined staged intent with a private receipt-bearing
+  preallocated-FileID handoff, secret-safe providers,
+  progress/signals, deterministic removal reconciliation, and diagnostics.
+- Test and benchmark results: bounded Rust 1.82 unit/integration/contract,
+  clippy, spec, and three-crate packed-artifact gates are recorded in the
+  candidate boundary review. Hosted three-OS runtime evidence is still pending.
+- Security/reliability review: hostile link/reparse/ACL/lock, no-replace race,
+  cancellation, journal recovery, removal crash, capability skew, and secret
+  redaction cases are executable. Same-authority lock namespace replacement
+  and local OGVCS-041 receipt-MAC verification remain explicit residuals;
+  OGVCS-006 allocation/lost-response reconciliation remains owned by its absent
+  public adapter and is not performed by `stage_add`.
+- Documentation/runbooks: `spec/cli-workspace/v1/README.md`, the Rust crate
+  README, and `docs/reviews/OGVCS-011-local-foundation-boundary-review.md`.
+- Rollout result: not rolled out. OGVCS-011 remains Todo because the owning
+  OGVCS-006/008/009 public routes, branded/verified receipt integration, and
+  hosted three-OS evidence are absent.

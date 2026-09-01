@@ -1,65 +1,63 @@
-# OpenGameVCS local CLI candidate — Rust
+# OpenGameVCS verified local CLI foundation — Rust
 
-`ogvcs-local-cli` is a deliberately small, local-only candidate for the
-OGVCS-011 native CLI foundation. It fixes the public shape of selected local
-operations without asserting that the larger OGVCS-011 journey is complete.
+`ogvcs-local-cli` implements contract `0.2.0-rc.2`, a fail-closed OGVCS-011
+local foundation candidate. It is a production-oriented local tranche, not an
+OGVCS-011 completion or remote E2E claim.
 
-## Included candidate surface
+Implemented surface:
 
-- configuration resolution with the frozen precedence `flag > environment >
-  workspace > user profile > system default`, including a source report for
-  nonsecret values;
-- versioned result envelopes and stable exit classes;
-- atomic private `.ogvcs` metadata creation, inspection, and journal recovery
-  after an interrupted publication;
-- a cooperative cancellation/fault-injection seam for bounded library tests;
-- a noninteractive credential-provider seam that never obtains a credential;
-- explicit, redacted diagnostic preview and creation.
+- fieldwise configuration precedence `flag > environment > workspace > user
+  profile > system default`, with nonsecret source reporting;
+- stable human/JSON results and exit classes;
+- explicit headless and OS credential-provider interfaces whose secret bytes
+  cannot be cloned, debugged, serialized, or retained after authentication;
+- typed, versioned authentication/discovery/capability/binding/FileID ports,
+  including a receipt-bearing handoff for an already reconciled allocation;
+- atomic verified workspace create/open/list/configure/recover/remove with
+  digest-bound journals and deterministic crash reconciliation;
+- OGVCS-004 canonical-path and collision-key preflight plus bounded local
+  add/move/delete/revert intent that never uploads or submits;
+- progress, resume tokens, cooperative cancellation, Unix signals, Windows
+  console cancellation, and explicit redacted diagnostics;
+- owner/mode/ACL/link/reparse checks on Unix, macOS, and Windows; atomic
+  no-replace handle-relative mutation on Linux/macOS and a Windows
+  `SetFileInformationByHandle` adapter.
 
-The machine result envelope is `ogvcs.cli-workspace/result/v1`, and this crate
-implements contract version `0.1.0-rc.1`. Every envelope carries the SHA-256 of
-the generated companion manifest. Contract constants, exit codes, schema IDs,
-and executable vectors are generated from
-[`spec/cli-workspace/v1`](../../../spec/cli-workspace/v1); the sync check fails
-if the crate and that authenticated artifact set drift.
+The first-party binary installs `UnavailablePublicRoutes`, so commands that
+need OGVCS-006/008/009 fail with `PUBLIC_ROUTE_UNAVAILABLE` before local
+mutation. Tests use typed fakes. Capability selections are bound to exact
+predecessor registry hashes, but this crate does not itself MAC-verify complete
+OGVCS-041 negotiation receipt claims; that remains a public-adapter blocker.
 
-## Deliberate boundaries
+`stage_add` does not own or invoke OGVCS-006 `file-id.allocate`. It accepts only
+a predecessor-presented allocation that was already completed and reconciled,
+then retains the opaque `far1` receipt plus idempotency-key digest in the
+private staging journal. Public reports contain digests only. Publishing the
+allocation/status adapter and proving its lost-response recovery remain
+explicit residuals.
 
-This candidate performs **no** server call, credential retrieval, repository
-discovery, capability negotiation, sync, submit, status, locking, or working
-tree mutation. It accepts only opaque, lower-case 32-byte declaration digests
-for repository/branch/baseline/spec and retains those values with
-`unverified-local-declaration`; they are not proof of an
-OGVCS-006 repository, OGVCS-008 lifecycle state, OGVCS-009 identity session,
-or OGVCS-041 negotiated protocol. A future owner must replace that seam only
-after those public bindings exist.
+The local mutation lock serializes cooperating CLI processes. It is not a
+security boundary against a malicious same-authority process that replaces the
+lock namespace entry; Windows delete-sharing and Unix unlink semantics remain
+an explicit residual. The Windows adapter is cross-compiled locally, while
+hosted Windows runtime evidence is tracked separately.
 
-Metadata commands fail closed when private ownership/permission checks cannot
-be made. On macOS, any extended ACL entry is rejected in addition to the owner
-and mode checks. The first candidate reports `WORKSPACE_SAFETY_UNSUPPORTED` on
-Windows instead of making an unsupported ACL-security claim.
+The authenticated companion schemas/vectors live in
+[`spec/cli-workspace/v1`](../../../spec/cli-workspace/v1). The original v1
+unverified local-declaration library surface remains for compatibility; the
+binary uses the verified v2 path.
 
-The binary does not yet expose signal handling, progress, or a user-facing
-cancellation control; the cancellation probe is a library/test seam only.
-Crash recovery covers a control directory that reached atomic publication.
-The root and its namespace ancestors must not be concurrently replaced by code
-running with the same operating-system authority; this candidate rejects
-observed final symlinks and reparse points but does not claim a handle-relative
-defense against a continuously hostile same-authority process.
-
-## Local validation
-
-Rust 1.82 is required. The normal bounded checks are:
+Rust 1.82 bounded gates:
 
 ```sh
 node ../../../spec/cli-workspace/v1/scripts/generate.mjs --check
+node ../../../spec/cli-workspace/v1/validate-spec.mjs
 node scripts/sync-contract.mjs --check
 cargo fmt --all -- --check
 cargo test --locked --offline
 cargo clippy --locked --offline --all-targets -- -D warnings
-cargo package --locked --offline
 ./scripts/test-packed.sh
 ```
 
-These checks are local and bounded; no exact-scale campaign or network access
-is part of this candidate.
+`test-packed.sh` packages and tests the CLI together with the unpublished
+OGVCS-002 and OGVCS-004 Rust crates as one offline artifact set.

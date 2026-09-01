@@ -11,17 +11,26 @@ if (process.argv.length > 3 || (process.argv.length === 3 && !CHECK)) {
   throw new Error('usage: node scripts/generate.mjs [--check]');
 }
 
-const CONTRACT_VERSION = '0.1.0-rc.1';
+const CONTRACT_VERSION = '0.2.0-rc.2';
 const ARTIFACTS = [
   'LICENSE',
   'README.md',
   'package.json',
   'registries/exit-classes.json',
   'schemas/CliResult.schema.json',
+  'schemas/CapabilitySelection.schema.json',
   'schemas/ConfigResolution.schema.json',
   'schemas/DiagnosticPreview.schema.json',
   'schemas/InitializationRecord.schema.json',
+  'schemas/IntentReport.schema.json',
+  'schemas/ProgressEvent.schema.json',
+  'schemas/RemovalRecord.schema.json',
+  'schemas/StagingState.schema.json',
+  'schemas/VerifiedDiagnosticPreview.schema.json',
+  'schemas/VerifiedWorkspaceMetadata.schema.json',
+  'schemas/VerifiedWorkspaceReport.schema.json',
   'schemas/WorkspaceMetadata.schema.json',
+  'schemas/WorkspaceJournal.schema.json',
   'schemas/WorkspaceReport.schema.json',
   'scripts/generate.mjs',
   'validate-spec.mjs',

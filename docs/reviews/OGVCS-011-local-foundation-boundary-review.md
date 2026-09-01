@@ -1,45 +1,85 @@
-# OGVCS-011 local-foundation candidate boundary review
+# OGVCS-011 verified local-foundation candidate boundary review
 
-**Reviewed integration baseline:** `252deacef1df273102dca99e9d49b1ea83b1f722`
-**Candidate contract:** `spec/cli-workspace/v1` version `0.1.0-rc.1`
-**Verdict:** safe to cut as a local-only, explicitly unverified candidate.
+**Reviewed integration baseline:** `12512b4d75f93e4c3136be5dca68a2317e27ebfe`
+**Candidate contract:** `spec/cli-workspace/v1` version `0.2.0-rc.2`
+**Verdict:** a substantial fail-closed local tranche; OGVCS-011 remains Todo.
 
-## Why this limited contract is safe now
+## What this tranche establishes
 
-OGVCS-006 and OGVCS-009 still leave their public protocol bindings assigned to
-a future release. OGVCS-008 is a development candidate rather than an
-authoritative client lifecycle integration, and OGVCS-041 supplies generic
-envelope ownership without an OGVCS-011/domain route. No local metadata field
-can honestly certify a remote repository, capability, authentication session,
-or lifecycle state at this baseline.
+The candidate has a native command tree, exact fieldwise nonsecret config
+precedence, stable human/JSON errors, explicit noninteractive behavior,
+secret-safe headless/OS credential interfaces, typed versioned public ports,
+and a real binary that fails before mutation when an owning public route is
+unavailable.
 
-The candidate consequently owns only local values whose authority it can prove:
-source resolution, a manifest-bound versioned result envelope, private metadata layout,
-post-publication interruption recovery, a credential **availability** seam, and redaction. Its
-declaration values are retained as one-way digests labelled
-`unverified-local-declaration`; no server or raw credential is touched.
+Workspace v2 create/configure use digest-bound pending metadata and journals;
+open/list/configure/remove/staging require a complete journal matching current
+metadata. Recovery commits prepared transitions, removes validated stale
+pending state, and reconciles deterministic root-bound removal records.
+Configure/list/remove and diagnostics serialize only redacted reports.
 
-## Explicit non-goals and predecessor blockers
+Local add/move/delete/revert use OGVCS-004 canonical/collision keys and
+server-issued FileIDs, retain a bounded local intent journal, and never upload
+or submit. Add accepts only a completed, predecessor-reconciled allocation
+handoff; it does not call `file-id.allocate`. The private journal retains the
+opaque `far1` receipt and allocation idempotency-key digest for later first
+registration, while every public report is digest-only. Linux/macOS mutations
+use pinned parent descriptors and atomic no-replace rename primitives with both
+parents synced. Windows has a
+cross-compiled source-handle plus pinned destination-parent
+`SetFileInformationByHandle` no-replace adapter.
 
-The candidate does not preflight OGVCS-004 working-tree semantics because it
-does not mutate a repository path. It fails closed where its own filesystem
-ownership/permission check is not supportable. macOS owner, mode, and extended
-ACL checks are enforced; a Windows ACL adapter remains a required predecessor
-before claiming cross-platform workspace safety. Continuously hostile
-same-authority namespace replacement remains outside this local candidate's
-documented boundary, and the binary does not yet expose user-facing progress or
-signal cancellation.
+Unix owner/mode/link checks, macOS extended ACL rejection, and Windows
+owner/DACL/reparse/multi-link checks protect metadata. Windows DACLs must be
+protected from inheritance and may grant access only to the owner, LocalSystem,
+or Administrators. A persistent private root-level lock serializes cooperating
+create/configure/stage/remove/recover operations and survives `.ogvcs` detach.
 
-The following must wait for predecessor contracts:
+## Evidence at this branch
 
-| Deferred surface | Required owner/binding |
-| --- | --- |
-| repository discovery and capability negotiation | OGVCS-006 public route/capability contract plus OGVCS-041 message binding |
-| sign-in/token persistence or device flow | OGVCS-009 identity/credential contract |
-| verified repository/branch/baseline/spec binding | OGVCS-006 repository identity plus OGVCS-008 lifecycle authority |
-| working-tree add/move/delete/revert | OGVCS-004 native path adapter and an OGVCS-008 transaction/lifecycle seam |
-| sync, submit, status, locks | their feature PRDs and OGVCS-043 integration ownership |
-| Windows private metadata claim | native ACL ownership/permission adapter and hostile Windows coverage |
+The local Rust 1.82 gates include all-target tests, clippy with warnings denied,
+an x86_64 Windows cross-compile, authenticated schema/vector checks, and an
+offline packed artifact set containing the CLI plus the unpublished OGVCS-002
+and OGVCS-004 Rust crates. Hostile cases cover:
 
-This is therefore an implementation tranche, not an OGVCS-011 Done claim and
-not a compatibility promise for unfinished remote commands.
+- cancellation before publication and after create/configure/staging journals;
+- deterministic removal crash reconciliation and concurrent remove/recover;
+- symlink, junction, reparse, unsafe mode, inherited/broad DACL, and hostile
+  lock/removal namespace entries;
+- kernel-level racing-destination no-replace behavior;
+- exact registry capability skew before mutation;
+- credential redaction and explicit secret-byte zeroization;
+- receipt redaction/zeroization and lost-handoff response with no local journal;
+- explicit/private diagnostic creation with no path, endpoint, locator,
+  identity, or secret output.
+
+Hosted three-OS runtime evidence is pending. The workflow matrix is defined for
+Linux, macOS, and Windows with Node 24 and Rust 1.82, but the workflow file is
+not on the repository default branch and cannot yet be dispatched by path from
+this branch. An evidence-only ref using an already discoverable default-branch
+workflow may be used; no PR is part of this review.
+
+## Exact residual matrix
+
+| Residual | Current behavior | Owning completion condition |
+| --- | --- | --- |
+| OGVCS-009 authentication route | `UnavailablePublicRoutes` fails before mutation | Publish and integrate the public authentication/session route |
+| OGVCS-006 discovery/binding route | Typed port and fakes only; no private DB access | Publish repository discovery and binding validation routes |
+| OGVCS-006 FileID allocation/status | Not called by `stage_add`; the command requires a complete preallocated fact | Publish an idempotent allocation/status adapter that reconciles lost responses and hands off FileID + `far1` receipt |
+| OGVCS-008 lifecycle/FileID lookup | Typed resolve/presentation seams and fakes only | Publish the owning lifecycle and registered-identity authority |
+| OGVCS-041 receipt proof | Exact selected facts/registry pins and receipt digest are checked; client does not MAC-verify full claims | Branded verified receipt from an exact MAC-first verifier, or client-visible claims/session-key verification |
+| Remote E2E | No first-party network adapter exists | Exercise real authentication/discovery/binding without invented routes |
+| Hosted Windows runtime | Adapter cross-compiles; runtime result pending | Green Windows lifecycle/mutation/ACL/reparse/race workflow evidence |
+| Same-authority lock attack | Root lock serializes cooperating processes | Stronger OS namespace exclusion if same-authority malicious replacement is in threat scope |
+| Later CLI journeys | No sync/status/materialize/submit/locks | Integrate owning PRDs through OGVCS-043 |
+
+The `public-service-verified` metadata label therefore means “validated through
+the typed adapter contract” in this candidate. It is not independent evidence
+of a real remote receipt until the residual above is closed.
+
+## Release decision
+
+This commit is suitable for integration as an incomplete, executable local
+foundation. It must not move the PRD to Done, claim remote compatibility, or
+ship as a trusted production binding until the public routes, receipt proof,
+and hosted three-OS evidence are complete.

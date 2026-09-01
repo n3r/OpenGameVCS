@@ -5,6 +5,8 @@ on:
     paths:
       - '.github/workflows/native-cli-local-candidate.yml'
       - 'client/native-cli/rust/**'
+      - 'core/object-model/rust/**'
+      - 'core/paths-filesystem/rust/**'
       - 'spec/cli-workspace/v1/**'
       - 'docs/reviews/OGVCS-011-local-foundation-boundary-review.md'
       - 'package.json'
@@ -14,6 +16,8 @@ on:
     paths:
       - '.github/workflows/native-cli-local-candidate.yml'
       - 'client/native-cli/rust/**'
+      - 'core/object-model/rust/**'
+      - 'core/paths-filesystem/rust/**'
       - 'spec/cli-workspace/v1/**'
       - 'docs/reviews/OGVCS-011-local-foundation-boundary-review.md'
       - 'package.json'
@@ -28,8 +32,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  bounded-local-candidate:
-    name: Local candidate (${{ matrix.label }})
+  verified-local-foundation:
+    name: Verified local foundation (${{ matrix.label }})
     strategy:
       fail-fast: false
       matrix:
@@ -54,7 +58,6 @@ jobs:
       - run: cargo fmt --manifest-path client/native-cli/rust/Cargo.toml -- --check
       - run: cargo test --manifest-path client/native-cli/rust/Cargo.toml --locked
       - run: cargo clippy --manifest-path client/native-cli/rust/Cargo.toml --locked --all-targets -- -D warnings
-      - run: cargo package --manifest-path client/native-cli/rust/Cargo.toml --locked --offline
-      - if: runner.os != 'Windows'
-        run: ./scripts/test-packed.sh
+      - run: ./scripts/test-packed.sh
+        shell: bash
         working-directory: client/native-cli/rust

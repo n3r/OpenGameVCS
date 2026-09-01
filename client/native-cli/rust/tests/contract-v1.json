@@ -1,12 +1,12 @@
 {
   "schema": "ogvcs.cli-workspace/vectors/v1",
-  "contractVersion": "0.1.0-rc.1",
+  "contractVersion": "0.2.0-rc.2",
   "schemaExamples": [
     {
       "schemaFile": "CliResult.schema.json",
       "value": {
         "schema": "ogvcs.cli-workspace/result/v1",
-        "contractVersion": "0.1.0-rc.1",
+        "contractVersion": "0.2.0-rc.2",
         "contractManifestSha256": "0000000000000000000000000000000000000000000000000000000000000000",
         "ok": true,
         "exitClass": "success",
@@ -17,10 +17,30 @@
       }
     },
     {
+      "schemaFile": "CapabilitySelection.schema.json",
+      "value": {
+        "protocolVersion": "ogvcs.control.https-json@1",
+        "messageSchemaVersion": "ogvcs.protocol.schema@1",
+        "repositoryFormat": "ogvcs.repository-format@1",
+        "authorizationContract": "ogvcs.authorization@1",
+        "authorizationRegistrySha256": "293f9ab0be023a9ded33326d04a8314080bda56e7c70dd18d0cca38b70bed9cc",
+        "pathContract": "ogvcs.path-filesystem@1",
+        "pathProfile": "path.opengamevcs/portable@1",
+        "pathRegistrySha256": "bbabdd95d78cfe0dd9751ab67ccbd9dfa5565bf8c049468aea3129bec787bd42",
+        "eventVersion": "ogvcs.events.base@1",
+        "transferProfile": "ogvcs.transfer.range-resume-probe@1",
+        "protocolRegistrySetSha256": "2b1913f9451b9f99966a24942a262846f07662b17cbb41ad6eea6474c23b4352",
+        "repositoryRegistrySha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
+        "requiredFeatures": ["ogvcs.receipt.hmac-sha256@1", "ogvcs.stream.explicit-terminal@1", "ogvcs.idempotency.semantic-jcs@1"],
+        "receiptSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "expiresAtUnixMs": 1
+      }
+    },
+    {
       "schemaFile": "ConfigResolution.schema.json",
       "value": {
         "schema": "ogvcs.cli-workspace/config-resolution/v1",
-        "contractVersion": "0.1.0-rc.1",
+        "contractVersion": "0.2.0-rc.2",
         "endpoint": { "value": "https://flag.example", "source": "flag" },
         "profile": { "value": "environment", "source": "environment" },
         "output": { "value": "json", "source": "flag" }
@@ -30,7 +50,7 @@
       "schemaFile": "DiagnosticPreview.schema.json",
       "value": {
         "schema": "ogvcs.cli-workspace/diagnostic-preview/v1",
-        "contractVersion": "0.1.0-rc.1",
+        "contractVersion": "0.2.0-rc.2",
         "preview": true,
         "written": false,
         "workspaceState": "ready",
@@ -54,6 +74,146 @@
       }
     },
     {
+      "schemaFile": "IntentReport.schema.json",
+      "value": {
+        "intentId": "wsi1.0000000000000000000000000000000000000000000000000000000000000001",
+        "kind": "add",
+        "state": "applied",
+        "fileIdDigest": "1111111111111111111111111111111111111111111111111111111111111111",
+        "allocationReceiptDigest": "3333333333333333333333333333333333333333333333333333333333333333",
+        "allocationIdempotencyKeyDigest": "4444444444444444444444444444444444444444444444444444444444444444",
+        "sourcePathDigest": null,
+        "destinationPathDigest": "2222222222222222222222222222222222222222222222222222222222222222",
+        "uploadsStarted": false,
+        "submitStarted": false,
+        "remoteDurableState": "unchanged"
+      }
+    },
+    {
+      "schemaFile": "ProgressEvent.schema.json",
+      "value": {
+        "schema": "ogvcs.cli-workspace/progress/v1",
+        "phase": "journal",
+        "completedItems": 2,
+        "totalItems": 3,
+        "completedBytes": 1024,
+        "totalBytes": 1024,
+        "resumeToken": "wsi1.0000000000000000000000000000000000000000000000000000000000000001"
+      }
+    },
+    {
+      "schemaFile": "RemovalRecord.schema.json",
+      "value": {
+        "schema": "ogvcs.cli-workspace/removal-record/v2",
+        "formatVersion": 2,
+        "rootDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "workspaceIdDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    },
+    {
+      "schemaFile": "StagingState.schema.json",
+      "value": {
+        "schema": "ogvcs.cli-workspace/staging/v1",
+        "formatVersion": 1,
+        "generation": 1,
+        "intents": [
+          {
+            "intentId": "wsi1.0000000000000000000000000000000000000000000000000000000000000001",
+            "kind": "add",
+            "state": "applied",
+            "fileId": "fid:00000000000000000000000000000001",
+            "allocationReceipt": "far1.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "allocationIdempotencyKeySha256": "6666666666666666666666666666666666666666666666666666666666666666",
+            "allocationExpiresAtUnixMs": 4102444800000,
+            "sourcePath": null,
+            "destinationPath": "Game/new.bin",
+            "sourceRepositoryKey": null,
+            "destinationRepositoryKey": "ogvcs-path-key-v1:example",
+            "trashName": null,
+            "createdAtUnixMs": 1
+          }
+        ]
+      }
+    },
+    {
+      "schemaFile": "VerifiedDiagnosticPreview.schema.json",
+      "value": {
+        "schema": "ogvcs.cli-workspace/verified-diagnostic-preview/v2",
+        "preview": true,
+        "written": false,
+        "workspaceState": "ready",
+        "workspaceRootDigest": "1111111111111111111111111111111111111111111111111111111111111111",
+        "workspaceIdDigest": "2222222222222222222222222222222222222222222222222222222222222222",
+        "repositoryIdDigest": "3333333333333333333333333333333333333333333333333333333333333333",
+        "branchDigest": "4444444444444444444444444444444444444444444444444444444444444444",
+        "stagedIntents": 0,
+        "credentialProviderKind": "os-credential-store",
+        "credentialStatus": "available",
+        "endpointScheme": "https",
+        "authorizationRegistrySha256": "293f9ab0be023a9ded33326d04a8314080bda56e7c70dd18d0cca38b70bed9cc",
+        "pathRegistrySha256": "bbabdd95d78cfe0dd9751ab67ccbd9dfa5565bf8c049468aea3129bec787bd42",
+        "protocolRegistrySetSha256": "2b1913f9451b9f99966a24942a262846f07662b17cbb41ad6eea6474c23b4352",
+        "repositoryRegistrySha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
+        "redactionPolicy": "v2-no-paths-locators-identities-endpoints-or-secrets"
+      }
+    },
+    {
+      "schemaFile": "VerifiedWorkspaceMetadata.schema.json",
+      "value": {
+        "schema": "ogvcs.cli-workspace/verified-workspace/v2",
+        "formatVersion": 2,
+        "state": "ready",
+        "workspaceId": "wsv2.5555555555555555555555555555555555555555555555555555555555555555",
+        "rootDigest": "6666666666666666666666666666666666666666666666666666666666666666",
+        "binding": {
+          "repositoryIdHex": "00000000000040008000000000000002",
+          "branch": "main",
+          "baseline": "ogvcs:v1:snapshot:sha256:8888888888888888888888888888888888888888888888888888888888888888",
+          "caseMode": "case-folded",
+          "pathProfile": "path.opengamevcs/portable@1",
+          "repositorySettingsDigest": "9999999999999999999999999999999999999999999999999999999999999999",
+          "negotiation": {
+            "protocolVersion": "ogvcs.control.https-json@1",
+            "messageSchemaVersion": "ogvcs.protocol.schema@1",
+            "repositoryFormat": "ogvcs.repository-format@1",
+            "authorizationContract": "ogvcs.authorization@1",
+            "authorizationRegistrySha256": "293f9ab0be023a9ded33326d04a8314080bda56e7c70dd18d0cca38b70bed9cc",
+            "pathContract": "ogvcs.path-filesystem@1",
+            "pathProfile": "path.opengamevcs/portable@1",
+            "pathRegistrySha256": "bbabdd95d78cfe0dd9751ab67ccbd9dfa5565bf8c049468aea3129bec787bd42",
+            "eventVersion": "ogvcs.events.base@1",
+            "transferProfile": "ogvcs.transfer.range-resume-probe@1",
+            "protocolRegistrySetSha256": "2b1913f9451b9f99966a24942a262846f07662b17cbb41ad6eea6474c23b4352",
+            "repositoryRegistrySha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
+            "requiredFeatures": ["ogvcs.receipt.hmac-sha256@1", "ogvcs.stream.explicit-terminal@1", "ogvcs.idempotency.semantic-jcs@1"],
+            "receiptSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "expiresAtUnixMs": 1
+          },
+          "subjectDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "authorityEpoch": 1,
+          "securityEpoch": 1,
+          "verification": "public-service-verified"
+        },
+        "createdAtUnixMs": 1,
+        "updatedAtUnixMs": 1
+      }
+    },
+    {
+      "schemaFile": "VerifiedWorkspaceReport.schema.json",
+      "value": {
+        "schema": "ogvcs.cli-workspace/verified-workspace-report/v2",
+        "state": "ready",
+        "rootDigest": "1111111111111111111111111111111111111111111111111111111111111111",
+        "workspaceIdDigest": "2222222222222222222222222222222222222222222222222222222222222222",
+        "repositoryIdDigest": "3333333333333333333333333333333333333333333333333333333333333333",
+        "branchDigest": "4444444444444444444444444444444444444444444444444444444444444444",
+        "baseline": "ogvcs:v1:snapshot:sha256:5555555555555555555555555555555555555555555555555555555555555555",
+        "bindingVerification": "public-service-verified",
+        "capabilityReceiptSha256": "6666666666666666666666666666666666666666666666666666666666666666",
+        "stagedIntents": 0
+      }
+    },
+    {
       "schemaFile": "WorkspaceMetadata.schema.json",
       "value": {
         "schema": "ogvcs.cli-workspace/workspace/v1",
@@ -72,10 +232,23 @@
       }
     },
     {
+      "schemaFile": "WorkspaceJournal.schema.json",
+      "value": {
+        "schema": "ogvcs.cli-workspace/workspace-journal/v2",
+        "formatVersion": 2,
+        "operation": "create",
+        "state": "prepared",
+        "workspaceId": "wsv2.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "rootDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "priorMetadataDigest": null,
+        "desiredMetadataDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    },
+    {
       "schemaFile": "WorkspaceReport.schema.json",
       "value": {
         "schema": "ogvcs.cli-workspace/workspace-report/v1",
-        "contractVersion": "0.1.0-rc.1",
+        "contractVersion": "0.2.0-rc.2",
         "state": "ready",
         "rootDigest": "8888888888888888888888888888888888888888888888888888888888888888",
         "workspaceIdDigest": "9999999999999999999999999999999999999999999999999999999999999999",

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opengamevcs.dev/schemas/cli-workspace/progress/v1",
+  "title": "OGVCS cancellable operation progress v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "phase", "completedItems", "totalItems", "completedBytes", "totalBytes", "resumeToken"],
+  "properties": {
+    "schema": { "const": "ogvcs.cli-workspace/progress/v1" },
+    "phase": { "enum": ["authentication", "discovery", "negotiation", "preflight", "journal", "mutation", "recovery", "complete"] },
+    "completedItems": { "type": "integer", "minimum": 0 },
+    "totalItems": { "type": ["integer", "null"], "minimum": 0 },
+    "completedBytes": { "type": "integer", "minimum": 0 },
+    "totalBytes": { "type": ["integer", "null"], "minimum": 0 },
+    "resumeToken": { "type": ["string", "null"], "maxLength": 128 }
+  }
+}
