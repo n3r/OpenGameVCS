@@ -103,6 +103,7 @@ const rustFiles = [
   'service.rs',
   'postgres/aggregate_bridge.rs',
   'postgres/atomic_submit.rs',
+  'postgres/metadata_dispatcher.rs',
   'types.rs',
 ];
 for (const file of rustFiles) {
@@ -583,6 +584,10 @@ for (const error of errors) {
 }
 
 const serviceSource = await readFile(resolve(root, 'src/service.rs'), 'utf8');
+const metadataDispatcher = await readFile(
+  resolve(root, 'src/postgres/metadata_dispatcher.rs'),
+  'utf8',
+);
 const metadataManifestBytes = await readFile(resolve(workspace, 'spec/repository-metadata/v1/manifest.json'));
 const metadataManifest = JSON.parse(metadataManifestBytes);
 assert(metadataManifest.counts.operations === 22, 'candidate metadata operation count differs');
@@ -628,6 +633,121 @@ for (const evidence of [
 for (const forbiddenFramework of ['axum::', 'actix_web::', 'hyper::', 'rocket::', '#[get(', '#[post(']) {
   assert(!serviceSource.includes(forbiddenFramework), `unassigned HTTP binding appears: ${forbiddenFramework}`);
 }
+for (const forbiddenDisclosure of ['eprintln!', 'println!', 'dbg!', 'AuthorizationContext']) {
+  assert(
+    !metadataDispatcher.includes(forbiddenDisclosure),
+    `metadata dispatcher contains a disclosure/bypass surface: ${forbiddenDisclosure}`,
+  );
+}
+assert(
+  metadataDispatcher.includes(
+    'pub fn dispatch_verified_read(\n        &mut self,\n        verified: NegotiationVerifiedMetadataRequest,\n        credentials: TransactionCredentialRequest',
+  ),
+  'production metadata dispatcher does not require the negotiation request brand and credential presentation',
+);
+const dispatchOuterStart = metadataDispatcher.indexOf('    pub fn dispatch_verified_read(');
+const dispatchOuterEnd = metadataDispatcher.indexOf('\n    fn dispatch_verified_read_inner(', dispatchOuterStart);
+const dispatchOuter = metadataDispatcher.slice(dispatchOuterStart, dispatchOuterEnd);
+assert(dispatchOuterStart >= 0 && dispatchOuterEnd > dispatchOuterStart, 'dispatcher public entry boundary is missing');
+assert(!dispatchOuter.includes('MetadataOperationRequest'), 'dispatcher accepts a syntax-only metadata request');
+assert(
+  dispatchOuter.includes('Err(_) => verified')
+    && dispatchOuter.includes('MetadataTransportError::AuthorizationDenied'),
+  'post-admission dispatcher errors are not mapped to one fixed denial',
+);
+const dispatchInnerStart = metadataDispatcher.indexOf('    fn dispatch_verified_read_inner(');
+const dispatchInnerEnd = metadataDispatcher.indexOf('\n}\n\nfn dispatch_resource(', dispatchInnerStart);
+assert(dispatchInnerStart >= 0 && dispatchInnerEnd > dispatchInnerStart, 'dispatcher inner boundary is missing');
+const dispatchInner = metadataDispatcher.slice(dispatchInnerStart, dispatchInnerEnd);
+for (const requiredBinding of [
+  'metadata_negotiation_tenant_digest(tenant_id)',
+  'verified.principal().tenant_digest()',
+  '.reverify_at(self.negotiation_keys.as_ref(), now_unix_ms)',
+  'credential_presentation: credentials.credential_presentation',
+  'view.tenant() != tenant',
+  'view.repository() != repository',
+  'view.authority_epoch() != verified.principal().authority_epoch()',
+  'verified.principal().subject_digest()',
+  'view.authenticated_scope_digest()',
+  'request.minimum_consistency_token()',
+  'finalize_identity_decision(',
+  'transaction.commit()',
+  'CommittedMetadataReadDispatch { _sealed: () }',
+]) assert(dispatchInner.includes(requiredBinding), `metadata dispatcher binding missing: ${requiredBinding}`);
+const orderedDispatchSteps = [
+  'dispatch_resource(request)?',
+  '.reverify_at(self.negotiation_keys.as_ref(), now_unix_ms)',
+  '.authorize(',
+  'SELECT tenant_id FROM ogvcs_metadata.repositories',
+  'require_dispatch_consistency(',
+  'load_repository_settings(',
+  'finalize_identity_decision(',
+  'transaction.commit()',
+  'CommittedMetadataReadDispatch { _sealed: () }',
+];
+let dispatchOffset = 0;
+for (const step of orderedDispatchSteps) {
+  const next = dispatchInner.indexOf(step, dispatchOffset);
+  assert(next >= dispatchOffset, `metadata dispatcher ordering differs at: ${step}`);
+  dispatchOffset = next + step.length;
+}
+const resourceStart = metadataDispatcher.indexOf('fn dispatch_resource(');
+const resourceEnd = metadataDispatcher.indexOf('\nfn reference_dispatch_resource(', resourceStart);
+assert(resourceStart >= 0 && resourceEnd > resourceStart, 'dispatcher resource whitelist boundary is missing');
+const resourceBody = metadataDispatcher.slice(resourceStart, resourceEnd);
+assert(
+  (resourceBody.match(/MetadataOperation::RepositoryGetSettings/gu) ?? []).length === 1
+    && (resourceBody.match(/MetadataOperation::ReferenceRead/gu) ?? []).length === 1
+    && resourceBody.includes('_ => denied()'),
+  'dispatcher operation whitelist is not exactly repository.get-settings/reference.read with closed fallback',
+);
+const dispatcherContractOperations = JSON.parse(
+  await readFile(resolve(workspace, 'spec/repository-metadata/v1/registries/operations.json')),
+).entries.filter(({ name }) => ['repository.get-settings', 'reference.read'].includes(name));
+assert(
+  JSON.stringify(dispatcherContractOperations.map(({ name, permission, resourceType }) => [name, permission, resourceType]))
+    === JSON.stringify([
+      ['repository.get-settings', 'metadata.read', 'repository'],
+      ['reference.read', 'metadata.read', 'reference'],
+    ])
+    && metadataDispatcher.includes('const METADATA_READ_PERMISSION: &str = "metadata.read";'),
+  'dispatcher permission/resource whitelist differs from the authenticated operation registry',
+);
+assert(
+  serviceSource.includes('pub(crate) fn success_for_committed_dispatch(')
+    && serviceSource.includes('_committed: crate::postgres::CommittedMetadataReadDispatch'),
+  'metadata success construction is not sealed behind a committed dispatch brand',
+);
+assert(
+  serviceSource.includes('pub(crate) fn metadata_negotiation_tenant_digest(')
+    && !serviceSource.includes('pub fn metadata_negotiation_tenant_digest('),
+  'private tenant projection became a public protocol mapping',
+);
+const tenantProjection = createHash('sha256')
+  .update(Buffer.from('OGVCS-METADATA-NEGOTIATION-TENANT-BINDING-V1\0', 'utf8'))
+  .update(Buffer.from('11111111111141119111111111111111', 'hex'))
+  .digest('hex');
+assert(
+  tenantProjection === 'd14c066eb9bd93d48f3506b3c6585c9a2c7d84b3649ccb390ac4f897e6260c9f'
+    && serviceSource.includes(tenantProjection),
+  'private tenant projection golden differs between Node and Rust',
+);
+const referenceKind = Buffer.from('branch', 'utf8');
+const referenceName = Buffer.from('main', 'utf8');
+const referenceProjection = createHash('sha256')
+  .update(Buffer.from('OGVCS-METADATA-REFERENCE-DISPATCH-RESOURCE-V1\0', 'utf8'))
+  .update(encodeUnsigned(referenceKind.length, 8, 'reference kind byte length'))
+  .update(referenceKind)
+  .update(encodeUnsigned(referenceName.length, 8, 'reference name byte length'))
+  .update(referenceName)
+  .digest('hex');
+assert(
+  referenceProjection === '018091fc8353e10067e61086bb9c21889eb805c3c9ef179505202658450afc18'
+    && metadataDispatcher.includes('REFERENCE_DISPATCH_RESOURCE_DOMAIN')
+    && metadataDispatcher.includes('(kind.len() as u64).to_be_bytes()')
+    && metadataDispatcher.includes('(name.as_str().len() as u64).to_be_bytes()'),
+  'private reference projection framing differs between Node and Rust',
+);
 const serviceContractTests = await readFile(resolve(root, 'tests/service_contract.rs'), 'utf8');
 for (const evidence of [
   'all_twenty_two_request_variants_are_validated_and_bound',

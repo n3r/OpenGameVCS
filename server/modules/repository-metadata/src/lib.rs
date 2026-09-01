@@ -1,10 +1,39 @@
 //! OGVCS-006 repository metadata domain and transaction boundary.
 //!
 //! OGVCS-041 route and envelope assignments are authenticated, but production
-//! network registration remains empty until an identity-authorized dispatcher
-//! retains its OGVCS-009 brand through response construction. This crate does
-//! include the reference PostgreSQL adapter and the transaction-composable API
-//! used by the OGVCS-010 submit coordinator.
+//! network registration remains empty. The first sealed PostgreSQL dispatcher
+//! accepts only negotiation-verified `repository.get-settings` and
+//! `reference.read` requests, retains its OGVCS-009 decision through commit,
+//! and constructs success only after commit. It is an adapter-internal
+//! candidate, not an HTTP/authentication carrier or protocol authority. This
+//! crate also includes the transaction-composable API used by the OGVCS-010
+//! submit coordinator.
+//!
+//! A syntax-only request cannot enter the production read dispatcher:
+//!
+//! ```compile_fail
+//! use ogvcs_repository_metadata::{
+//!     MetadataOperationRequest, PostgresMetadataReadDispatcher,
+//!     TransactionCredentialRequest,
+//! };
+//!
+//! fn bypass(
+//!     dispatcher: &mut PostgresMetadataReadDispatcher,
+//!     request: MetadataOperationRequest,
+//!     credentials: TransactionCredentialRequest<'_>,
+//! ) {
+//!     let _ = dispatcher.dispatch_verified_read(request, credentials);
+//! }
+//! ```
+//!
+//! Success-envelope construction and its committed authorization brand remain
+//! private to the adapter:
+//!
+//! ```compile_fail
+//! use ogvcs_repository_metadata::MetadataResponseEnvelope;
+//!
+//! let _ = MetadataResponseEnvelope::success_for_committed_dispatch;
+//! ```
 #![forbid(unsafe_code)]
 #![cfg_attr(
     not(feature = "legacy-test-adapter"),
@@ -82,22 +111,23 @@ pub use postgres::AtomicSubmitFaultForTest;
 pub use postgres::PostgresLifecyclePlanWriter;
 pub use postgres::{
     AggregateLifecycleApplicationReceipt, AggregateLifecycleApplyRequest,
-    IdentityBoundPostgresMetadataStore, IdentityMetadataAuthorizedView, PostgresMetadataStore,
-    PostgresMetadataTransaction, PreallocatedCreationSubmitFinalizeRequest,
-    PreallocatedCreationSubmitIntent, PreallocatedCreationSubmitIntentRequest,
-    PreallocatedCreationSubmitOutcome, PreallocatedCreationSubmitPreflight,
-    PreallocatedCreationSubmitPreflightRequest, PreallocatedCreationSubmitReconciliation,
+    IdentityBoundPostgresMetadataStore, IdentityMetadataAuthorizedView,
+    PostgresMetadataReadDispatcher, PostgresMetadataStore, PostgresMetadataTransaction,
+    PreallocatedCreationSubmitFinalizeRequest, PreallocatedCreationSubmitIntent,
+    PreallocatedCreationSubmitIntentRequest, PreallocatedCreationSubmitOutcome,
+    PreallocatedCreationSubmitPreflight, PreallocatedCreationSubmitPreflightRequest,
+    PreallocatedCreationSubmitReconciliation,
 };
 pub use service::{
     network_transport_descriptors, AdmittedMetadataRoute, MetadataNegotiationKeyProvider,
-    MetadataNegotiationPrincipal, MetadataOperation, MetadataOperationClass,
-    MetadataOperationDescriptor, MetadataOperationExposure, MetadataOperationRequest,
-    MetadataPayloadCarrier, MetadataProtocolProblem, MetadataResponseEnvelope,
-    MetadataServerCorrelationId, MetadataServiceBoundaryError, MetadataStreamBinding,
-    MetadataTransportDescriptor, MetadataTransportError, MetadataTransportRequest,
-    NegotiationVerifiedMetadataRequest, NegotiationVerifiedMetadataRoute, ServicePageRequest,
-    METADATA_CONTROL_MEDIA_TYPE, METADATA_OPERATION_DESCRIPTORS, METADATA_PROTOCOL_PROFILE,
-    METADATA_RESPONSE_MEDIA_TYPE, METADATA_SERVICE_CONTRACT_VERSION,
+    MetadataNegotiationKeyRing, MetadataNegotiationPrincipal, MetadataOperation,
+    MetadataOperationClass, MetadataOperationDescriptor, MetadataOperationExposure,
+    MetadataOperationRequest, MetadataPayloadCarrier, MetadataProtocolProblem,
+    MetadataResponseEnvelope, MetadataServerCorrelationId, MetadataServiceBoundaryError,
+    MetadataStreamBinding, MetadataTransportDescriptor, MetadataTransportError,
+    MetadataTransportRequest, NegotiationVerifiedMetadataRequest, NegotiationVerifiedMetadataRoute,
+    ServicePageRequest, METADATA_CONTROL_MEDIA_TYPE, METADATA_OPERATION_DESCRIPTORS,
+    METADATA_PROTOCOL_PROFILE, METADATA_RESPONSE_MEDIA_TYPE, METADATA_SERVICE_CONTRACT_VERSION,
     METADATA_SERVICE_MANIFEST_SHA256, METADATA_SERVICE_OPERATION_COUNT,
     METADATA_SERVICE_REQUEST_SCHEMA, METADATA_SERVICE_RESPONSE_SCHEMA,
     METADATA_SERVICE_RESULT_BODY_SCHEMA, METADATA_TRANSPORT_DESCRIPTORS,

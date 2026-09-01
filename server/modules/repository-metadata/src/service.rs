@@ -10,8 +10,8 @@ use crate::{
     AllocationReceipt, CaseMode, CommitSequence, ConsistencyToken, CursorToken, DomainError,
     DomainErrorCode, FileIdAllocation, HistoryIncompleteReason, HistoryPage,
     IdempotencyReservation, IdempotencyStatus, MetadataHttpResponse, MetadataPermission, Page,
-    PageState, ProjectId, ReferenceKind, ReferenceRecord, RepositoryId, RepositorySettings,
-    TenantId,
+    PageState, ProjectId, ReferenceKind, ReferenceName, ReferenceRecord, RepositoryId,
+    RepositorySettings, TenantId,
 };
 use base64::Engine as _;
 use hmac::{Hmac, Mac};
@@ -23,6 +23,7 @@ use serde::{
 use serde_json::{Map, Number, Value};
 use sha2::{Digest, Sha256};
 use std::{
+    collections::BTreeMap,
     fmt,
     io::{self, Write},
     str::FromStr,
@@ -83,6 +84,7 @@ const IDEMPOTENCY_KEY_SCHEMA_BYTES_MAXIMUM: usize = 256;
 const PERSISTED_IDENTIFIER_BYTES_MAXIMUM: usize = 256;
 const SAFE_RESULT_BYTES_MAXIMUM: usize = 1_048_576;
 const JSON_SAFE_INTEGER_MAXIMUM: u64 = 9_007_199_254_740_991;
+const METADATA_NEGOTIATION_TENANT_DOMAIN: &[u8] = b"OGVCS-METADATA-NEGOTIATION-TENANT-BINDING-V1\0";
 const IDEMPOTENCY_FINGERPRINT_DOMAIN: &[u8] = b"ogvcs.protocol/idempotency/v1\0";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -250,6 +252,40 @@ pub trait MetadataNegotiationKeyProvider {
     fn key(&self, key_id: &str) -> Option<&[u8]>;
 }
 
+/// Bounded server-owned key ring used to reverify a negotiation brand at the
+/// PostgreSQL dispatch boundary. Holding an independently constructed ring is
+/// not enough: the dispatcher always uses the ring installed at startup.
+pub struct MetadataNegotiationKeyRing {
+    keys: BTreeMap<String, Box<[u8]>>,
+}
+
+impl MetadataNegotiationKeyRing {
+    pub fn new(
+        entries: Vec<(String, Vec<u8>)>,
+    ) -> std::result::Result<Self, MetadataServiceBoundaryError> {
+        if entries.is_empty() || entries.len() > 16 {
+            return input_invalid();
+        }
+        let mut keys = BTreeMap::new();
+        for (key_id, key) in entries {
+            if !(1..=256).contains(&key_id.len())
+                || !protocol_identifier(&key_id)
+                || !(32..=64).contains(&key.len())
+                || keys.insert(key_id, key.into_boxed_slice()).is_some()
+            {
+                return input_invalid();
+            }
+        }
+        Ok(Self { keys })
+    }
+}
+
+impl MetadataNegotiationKeyProvider for MetadataNegotiationKeyRing {
+    fn key(&self, key_id: &str) -> Option<&[u8]> {
+        self.keys.get(key_id).map(AsRef::as_ref)
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MetadataNegotiationPrincipal {
     pub subject_digest: [u8; 32],
@@ -257,6 +293,20 @@ pub struct MetadataNegotiationPrincipal {
     pub authority_epoch: u64,
     pub session_id: String,
     pub now_unix_ms: u64,
+}
+
+impl MetadataNegotiationPrincipal {
+    pub(crate) const fn subject_digest(&self) -> &[u8; 32] {
+        &self.subject_digest
+    }
+
+    pub(crate) const fn tenant_digest(&self) -> &[u8; 32] {
+        &self.tenant_digest
+    }
+
+    pub(crate) const fn authority_epoch(&self) -> u64 {
+        self.authority_epoch
+    }
 }
 
 /// Brand returned only after the receipt MAC, selected authority tuple,
@@ -272,6 +322,7 @@ pub struct NegotiationVerifiedMetadataRoute {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NegotiationVerifiedMetadataRequest {
     request: MetadataOperationRequest,
+    principal: MetadataNegotiationPrincipal,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -307,6 +358,26 @@ pub struct MetadataResponseEnvelope {
     body: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     problem: Option<MetadataProtocolProblem>,
+}
+
+pub(crate) struct PreparedMetadataDispatchSuccess {
+    body: Value,
+}
+
+impl PreparedMetadataDispatchSuccess {
+    pub(crate) const fn decision_result(&self) -> &Value {
+        &self.body
+    }
+}
+
+/// Private adapter projection used only to join an authenticated negotiation
+/// principal to the exact parsed metadata tenant. OGVCS-041 intentionally
+/// treats `tenantDigest` as opaque; this is not a protocol-level mapping.
+pub(crate) fn metadata_negotiation_tenant_digest(tenant_id: TenantId) -> [u8; 32] {
+    let mut digest = Sha256::new();
+    digest.update(METADATA_NEGOTIATION_TENANT_DOMAIN);
+    digest.update(tenant_id.as_bytes());
+    digest.finalize().into()
 }
 
 /// Closed registered OGVCS-041 `ProblemDetails` subset used by this adapter.
@@ -382,6 +453,22 @@ impl NegotiationVerifiedMetadataRequest {
     pub fn into_request(self) -> MetadataOperationRequest {
         self.request
     }
+
+    pub(crate) const fn principal(&self) -> &MetadataNegotiationPrincipal {
+        &self.principal
+    }
+
+    pub(crate) fn reverify_at<K: MetadataNegotiationKeyProvider>(
+        &self,
+        keys: &K,
+        now_unix_ms: u64,
+    ) -> std::result::Result<(), MetadataTransportError> {
+        let mut principal = self.principal.clone();
+        principal.now_unix_ms = now_unix_ms;
+        self.request
+            .verify_negotiation(keys, &principal)
+            .map(|_| ())
+    }
 }
 
 impl MetadataResponseEnvelope {
@@ -410,11 +497,9 @@ impl MetadataResponseEnvelope {
         })
     }
 
-    #[cfg(test)]
-    fn success_for_authorized_dispatch(
-        correlation_id: &str,
+    pub(crate) fn prepare_authorized_dispatch(
         result: MetadataHttpResponse,
-    ) -> BoundaryResult<Self> {
+    ) -> BoundaryResult<PreparedMetadataDispatchSuccess> {
         let body =
             serde_json::to_value(result).map_err(|_| MetadataServiceBoundaryError::InputInvalid)?;
         inspect_protocol_json_value(
@@ -422,13 +507,21 @@ impl MetadataResponseEnvelope {
             PROTOCOL_JSON_VALUE_DEPTH_MAXIMUM,
             PROTOCOL_JSON_VALUE_NODES_MAXIMUM,
         )?;
-        Ok(Self {
+        Ok(PreparedMetadataDispatchSuccess { body })
+    }
+
+    pub(crate) fn success_for_committed_dispatch(
+        _committed: crate::postgres::CommittedMetadataReadDispatch,
+        correlation_id: &str,
+        prepared: PreparedMetadataDispatchSuccess,
+    ) -> Self {
+        Self {
             schema_version: METADATA_SERVICE_RESPONSE_SCHEMA,
             correlation_id: correlation_id.to_owned(),
             success: true,
-            body: Some(body),
+            body: Some(prepared.body),
             problem: None,
-        })
+        }
     }
 
     pub const fn schema_version(&self) -> &'static str {
@@ -1128,6 +1221,8 @@ pub struct MetadataOperationRequest {
     repository_id: Option<RepositoryId>,
     project_id: Option<ProjectId>,
     minimum_consistency_token: Option<ConsistencyToken>,
+    reference_kind: Option<ReferenceKind>,
+    reference_name: Option<ReferenceName>,
     page: Option<ServicePageRequest>,
     exposure: MetadataOperationExposure,
 }
@@ -1236,6 +1331,8 @@ impl MetadataOperationRequest {
             repository_id: facts.repository_id,
             project_id: facts.project_id,
             minimum_consistency_token: facts.minimum_consistency_token,
+            reference_kind: facts.reference_kind,
+            reference_name: facts.reference_name,
             page: facts.page,
             exposure: facts.exposure.unwrap_or(operation.exposure()),
         })
@@ -1292,6 +1389,14 @@ impl MetadataOperationRequest {
         self.minimum_consistency_token.as_ref()
     }
 
+    pub(crate) const fn reference_kind(&self) -> Option<ReferenceKind> {
+        self.reference_kind
+    }
+
+    pub(crate) fn reference_name(&self) -> Option<&ReferenceName> {
+        self.reference_name.as_ref()
+    }
+
     pub fn page(&self) -> Option<&ServicePageRequest> {
         self.page.as_ref()
     }
@@ -1325,6 +1430,7 @@ impl MetadataOperationRequest {
         )?;
         Ok(NegotiationVerifiedMetadataRequest {
             request: self.clone(),
+            principal: principal.clone(),
         })
     }
 
@@ -1472,6 +1578,8 @@ struct BodyFacts {
     repository_id: Option<RepositoryId>,
     project_id: Option<ProjectId>,
     minimum_consistency_token: Option<ConsistencyToken>,
+    reference_kind: Option<ReferenceKind>,
+    reference_name: Option<ReferenceName>,
     page: Option<ServicePageRequest>,
     exposure: Option<MetadataOperationExposure>,
 }
@@ -1693,9 +1801,18 @@ fn validate_reference_read(body: &Map<String, Value>) -> BoundaryResult<BodyFact
             "referenceName",
         ],
     )?;
-    let facts = scoped_consistent(body)?;
-    enum_text(body, "referenceKind", &["branch", "tag"])?;
-    reference_name(body, "referenceName")?;
+    let mut facts = scoped_consistent(body)?;
+    facts.reference_kind = Some(
+        match enum_text(body, "referenceKind", &["branch", "tag"])? {
+            "branch" => ReferenceKind::Branch,
+            "tag" => ReferenceKind::Tag,
+            _ => return input_invalid(),
+        },
+    );
+    facts.reference_name = Some(
+        ReferenceName::new(reference_name(body, "referenceName")?.to_owned())
+            .ok_or(MetadataServiceBoundaryError::InputInvalid)?,
+    );
     Ok(facts)
 }
 
@@ -3425,15 +3542,52 @@ mod tests {
     use super::*;
 
     #[test]
+    fn private_tenant_projection_and_key_ring_boundaries_are_frozen() {
+        let mut tenant = [0x11; 16];
+        tenant[6] = 0x41;
+        tenant[8] = 0x91;
+        assert_eq!(
+            hex(&metadata_negotiation_tenant_digest(TenantId::from_bytes(
+                tenant
+            ))),
+            "d14c066eb9bd93d48f3506b3c6585c9a2c7d84b3649ccb390ac4f897e6260c9f"
+        );
+        assert!(MetadataNegotiationKeyRing::new(Vec::new()).is_err());
+        assert!(MetadataNegotiationKeyRing::new(vec![("key@1".to_owned(), vec![0; 31])]).is_err());
+        assert!(MetadataNegotiationKeyRing::new(vec![("key@1".to_owned(), vec![0; 65])]).is_err());
+        assert!(MetadataNegotiationKeyRing::new(
+            (0..17)
+                .map(|index| (format!("key@{index}"), vec![index as u8; 32]))
+                .collect(),
+        )
+        .is_err());
+        assert!(MetadataNegotiationKeyRing::new(vec![
+            ("key@1".to_owned(), vec![1; 32]),
+            ("key@1".to_owned(), vec![2; 32]),
+        ])
+        .is_err());
+        let ring = MetadataNegotiationKeyRing::new(vec![
+            ("key@1".to_owned(), vec![1; 32]),
+            ("key@2".to_owned(), vec![2; 64]),
+        ])
+        .unwrap();
+        assert_eq!(ring.key("key@1"), Some([1; 32].as_slice()));
+        assert!(ring.key("key@3").is_none());
+    }
+
+    #[test]
     fn authorized_success_uses_the_exact_ogvcs_041_response_envelope() {
         let result = MetadataHttpResponse::success_json(
             MetadataOperation::RepositoryGetSettings,
             serde_json::json!({"settingsGeneration": 1}),
         )
         .unwrap();
-        let response =
-            MetadataResponseEnvelope::success_for_authorized_dispatch("correlation-0001", result)
-                .unwrap();
+        let prepared = MetadataResponseEnvelope::prepare_authorized_dispatch(result).unwrap();
+        let response = MetadataResponseEnvelope::success_for_committed_dispatch(
+            crate::postgres::committed_metadata_read_dispatch_for_test(),
+            "correlation-0001",
+            prepared,
+        );
         let response = serde_json::to_value(response).unwrap();
         assert_eq!(
             response,

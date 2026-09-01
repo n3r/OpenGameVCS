@@ -27,6 +27,7 @@ use uuid::Uuid;
 mod aggregate_bridge;
 mod atomic_submit;
 mod lifecycle;
+mod metadata_dispatcher;
 pub(crate) use aggregate_bridge::apply_aggregate_lifecycle_publication_in_transaction;
 pub use aggregate_bridge::{AggregateLifecycleApplicationReceipt, AggregateLifecycleApplyRequest};
 #[cfg(feature = "legacy-test-adapter")]
@@ -39,6 +40,7 @@ pub use atomic_submit::{
 };
 #[cfg(feature = "legacy-test-adapter")]
 pub use lifecycle::PostgresLifecyclePlanWriter;
+pub use metadata_dispatcher::PostgresMetadataReadDispatcher;
 
 #[cfg(feature = "legacy-test-adapter")]
 use crate::IdempotencyStatus;
@@ -96,6 +98,18 @@ pub struct IdentityBoundPostgresMetadataStore<
     V = ProductionObjectValidator,
 > {
     store: PostgresMetadataStore<A, V>,
+}
+
+/// Proof token constructed only after the dispatcher-owned PostgreSQL
+/// transaction has committed its decision commitment and consistency token.
+/// The service module can consume it but cannot construct it.
+pub(crate) struct CommittedMetadataReadDispatch {
+    _sealed: (),
+}
+
+#[cfg(test)]
+pub(crate) fn committed_metadata_read_dispatch_for_test() -> CommittedMetadataReadDispatch {
+    CommittedMetadataReadDispatch { _sealed: () }
 }
 
 impl PostgresMetadataStore<DenyAllAuthorization, ProductionObjectValidator> {

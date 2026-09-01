@@ -27,8 +27,8 @@ persistence-owned metadata kinds; Chunk and ShelfRevision are rejected at the
 adapter boundary. Canonical path checks apply the OGVCS-004 both-separator,
 C0/DEL, `.ogvcs`, NFC, and UTF-8 limits. Persistence-backed `ownerId` and
 internal `consumerId` values also retain their 256 UTF-8-byte receiver limit.
-Protocol routing, streaming transport, and the storage dispatcher remain open.
-The internal persistence page ports
+Protocol routing, streaming transport, and dispatch for the other twenty
+operations remain open. The internal persistence page ports
 deliberately retain a stricter 1,000-item cap; only the framework-neutral
 adapter constructs the public `PageResult` consistency-token field.
 
@@ -37,11 +37,37 @@ its exact permission/resource assignment and exposes an explicit
 identity-bound guard. Repository creation carries an initial root publication,
 so it is coordinator-required alongside reference CAS and FileID tombstone;
 the restore form of `file-id.register` is dynamically coordinator-required.
-The three outbox lease operations are internal-only. No dispatcher is included,
-and none of those operations can enter a direct identity-bound path. Candidate
+The three outbox lease operations are internal-only. The sealed
+`PostgresMetadataReadDispatcher` admits exactly `repository.get-settings` and
+`reference.read`; no other operation can enter that path. It accepts only a
+`NegotiationVerifiedMetadataRequest`, reverifies that receipt with the
+dispatcher-owned key ring at the PostgreSQL clock, and accepts only
+`TransactionCredentialRequest` presentation material for OGVCS-009. Candidate
 repository settings may carry authenticated conformance-only fixture profiles
 for contract testing, but the future coordinator must revalidate exact
 production-write profile eligibility before mutation.
+
+The read dispatcher authorizes the exact repository or kind/name reference
+projection before any repository/reference existence lookup. In one
+SERIALIZABLE transaction it binds the participant-derived subject, authority
+epoch, tenant, repository, and authenticated scope to the negotiation brand
+and parsed body; checks a subject/epoch/scope-bound minimum consistency token;
+reads at one observed repository sequence; issues a current token; rechecks and
+appends the identity decision commitment; and commits. Only a private committed
+brand can construct a success envelope. Denied, missing, hidden, stale,
+cross-subject, cross-tenant, invalid-token, and commit-fault cases all produce
+the same registered authorization failure without logging adapter/database or
+protected identity details.
+
+Two adapter-private versioned projections close otherwise-unassigned joins:
+the raw metadata `TenantId` is domain-hashed to the negotiation receipt's
+opaque `tenantDigest`, and the exact reference kind plus UTF-8 name is
+length-framed and domain-hashed to the identity resource/reference name. These
+are not OGVCS-041 protocol mappings, are not network authorities, and do not
+derive an identity participant session claim. The dispatcher is still not a
+network service: `networkRegistered` remains false for every operation and
+`networkRoutes` remains empty. HTTP authentication, trusted principal creation,
+and a native CLI carrier remain explicit integration blockers.
 
 The direct production constructor is `IdentityBoundPostgresMetadataStore::connect`;
 it requires the OGVCS-009 PostgreSQL participant before returning a store and
@@ -253,6 +279,10 @@ database as skipped and never claims hosted or exact-scale evidence.
 Live integration and concurrency evidence is opt-in:
 
 ```sh
+OGVCS_METADATA_DISPATCH_DATABASE_URL=postgresql://.../ogvcs_metadata_test_dispatch \
+  cargo test --manifest-path server/modules/repository-metadata/Cargo.toml \
+  --locked --offline --test metadata_dispatcher_live -- --nocapture --test-threads=1
+
 OGVCS_METADATA_DATABASE_URL=postgresql://.../ogvcs_metadata_test_local \
   cargo test --manifest-path server/modules/repository-metadata/Cargo.toml \
   --locked --test postgres_integration -- --nocapture --test-threads=1
@@ -287,7 +317,12 @@ project-list cursor isolation, bounded ancestry/FileID/path history,
 authorization non-disclosure and revalidation, outbox delivery leases, FileID
 races/import replay/tombstones, transaction poisoning and fault rollbacks,
 migration repeat/checksum/downgrade behavior, and representable replica-lag
-token behavior. The lifecycle-v9 row adds corrected health-axis constraints,
+token behavior. The dispatcher-specific fresh-schema harness covers both
+successful reads, participant-first lookup ordering, current token issuance,
+valid cross-subject token substitution, hidden/missing/cross-tenant/stale
+authority failures, attacker-key negotiation forgery, exact denial-envelope
+equivalence, and post-decision commit failure rollback. The lifecycle-v9 row
+adds corrected health-axis constraints,
 exact receipt binding, atomic direct application facts, and reduced 1,000+1
 aggregate chunk/order/tamper coverage; it is not an exact-scale campaign.
 The current bounded three-platform result and retained PostgreSQL report are in

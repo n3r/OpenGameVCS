@@ -111,14 +111,22 @@ Ship behind a developer-preview API version. Apply expand/migrate/contract schem
   ordering against a Node golden. This tranche does not add new million-entry,
   100-CAS, or scale-campaign evidence.
 - Security/reliability review: negotiation verification is explicitly not an
-  OGVCS-009 authorization brand; success-envelope construction remains private
-  to a future authorized dispatcher. Domain errors remain internal and cannot
-  impersonate ratified OGVCS-041 `ProblemDetails`.
+  OGVCS-009 authorization brand. The first sealed PostgreSQL dispatcher now
+  accepts only negotiation-verified `repository.get-settings` and
+  `reference.read`, authorizes before existence lookup, binds the participant
+  subject/epoch/tenant/repository in one SERIALIZABLE transaction, commits its
+  decision before private success construction, and maps all post-admission
+  failures to one non-enumerating denial. Its tenant/reference projections are
+  private versioned adapter joins, not OGVCS-041 mappings or network authority.
+  Domain errors remain internal and cannot impersonate ratified OGVCS-041
+  `ProblemDetails`.
 - Documentation/runbooks: the authenticated contract README records the empty
   network inventory, coordinator ownership, stream-carrier gap, and the
   post-allocation global JSON-counter residual. Downstream identity-policy and
   untrusted-sandbox predecessor pins are regenerated with the candidate.
-- Rollout result: none. Repository create/list, object transfer, ordinary CAS,
-  tombstone/restore, submit publication, and all identity-bound reads remain
-  network-closed until their exact same-transaction authority/coordinator is
-  implemented and tested. OGVCS-006 remains in development.
+- Rollout result: none. Every registry entry remains `networkRegistered=false`
+  and `networkRoutes` remains empty. HTTP/authentication/native-CLI carrier
+  registration, trusted principal construction, the other twenty operation
+  dispatchers, repository create/list, object transfer, ordinary CAS,
+  tombstone/restore, and submit publication remain network-closed. OGVCS-006
+  remains in development.

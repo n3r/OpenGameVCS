@@ -107,12 +107,19 @@ Policies deploy in monitor/dry-run mode against captured authorized test request
   mutation, trusted checkpoint/rate-source, streamed aggregate authorization,
   and a private repository-metadata lifecycle bridge are implemented. The
   bridge consumes the opaque current receipt and commits identity consumption
-  plus lifecycle evidence in one caller-owned serializable transaction.
+  plus lifecycle evidence in one caller-owned serializable transaction. A
+  sealed adapter-internal metadata read dispatcher additionally covers exactly
+  `repository.get-settings` and `reference.read`: it reverifies negotiation at
+  the database clock, authorizes the exact resource before existence lookup,
+  and retains the decision through same-transaction commitment and commit.
 - Test and benchmark results: 30 bounded contract vectors, 60 JavaScript
   runtime tests, independent mutation/package gates, and bounded hosted
   three-OS evidence are present. Local PostgreSQL 16 evidence covers exact
   100,000-resource identity authorization and the reconciled hostile lifecycle
-  bridge; the final combined hosted scale/latency campaign remains open.
+  bridge. A fresh PostgreSQL dispatcher test covers valid cross-subject token
+  substitution, hidden/missing/cross-tenant/stale authority equivalence,
+  attacker-key negotiation forgery, and post-decision commit rollback; the
+  final combined hosted scale/latency campaign remains open.
 - Security/reliability review: caller-selected checkpoints, rate identities,
   transaction identities, policy preview, device-flow outage retry, and
   ambiguous decision commits fail closed.
@@ -120,4 +127,8 @@ Policies deploy in monitor/dry-run mode against captured authorized test request
   operations runbook describe adapter ownership and recovery procedures.
 - Rollout result: not yet rolled out. Studio OIDC/KMS providers, external audit
   checkpoint/root authority, public route binding, production SLO/fault proof,
-  and an end-to-end rollout remain completion gates.
+  participant-derived session authority, HTTP/authentication/native-CLI
+  carriers, the remaining metadata operations, and an end-to-end rollout
+  remain completion gates. The dispatcher-private tenant/reference projections
+  are not OGVCS-041 protocol mappings; every public metadata route remains
+  unregistered.
