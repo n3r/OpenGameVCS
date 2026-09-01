@@ -1,0 +1,61 @@
+{
+  "schemaVersion": "ogvcs.cli-workspace/hosted-evidence/v1",
+  "status": "native-cli-bounded-passed",
+  "hostedExactScaleExecuted": false,
+  "productionRevision": "e23437f4762e7639bf40033546919211a2b4ce9b",
+  "integrationRevision": "ebfa77f9ebd40e472301afcf8471aa8fe4118a86",
+  "evidenceSourceRevision": "0493d298fd367ed2115f8218a3f784e2a8a46e90",
+  "workflow": {
+    "name": "Native CLI evidence only",
+    "registrationCarrier": ".github/workflows/path-filesystem.yml",
+    "runId": 33463547586,
+    "runAttempt": 1,
+    "event": "workflow_dispatch",
+    "createdAt": "2026-09-01T02:42:37Z",
+    "completedAt": "2026-09-01T02:45:02Z",
+    "url": "https://github.com/n3r/OpenGameVCS/actions/runs/33463547586"
+  },
+  "jobs": [
+    {
+      "id": 99718622901,
+      "name": "Native CLI (ubuntu-latest)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T02:42:41Z",
+      "completedAt": "2026-09-01T02:43:53Z",
+      "packedOffline": "success"
+    },
+    {
+      "id": 99718622998,
+      "name": "Native CLI (macos-latest)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T02:42:42Z",
+      "completedAt": "2026-09-01T02:44:19Z",
+      "packedOffline": "success"
+    },
+    {
+      "id": 99718623023,
+      "name": "Native CLI (windows-latest)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T02:42:42Z",
+      "completedAt": "2026-09-01T02:45:01Z",
+      "packedOffline": "success",
+      "nativeWindowsSecurityRuntime": "success"
+    }
+  ],
+  "localIntegration": {
+    "revision": "ebfa77f9ebd40e472301afcf8471aa8fe4118a86",
+    "rustVersion": "1.82.0",
+    "contractTests": 3,
+    "nativeTests": 27,
+    "roadmapTests": 8,
+    "clippyWarningsDenied": true,
+    "packedOffline": "success"
+  },
+  "remainingGates": [
+    "first-party OGVCS-006, OGVCS-008, and OGVCS-009 public adapters",
+    "local OGVCS-041 receipt-MAC verification",
+    "remote end-to-end authentication, discovery, binding, and FileID allocation",
+    "integrated sync, status, materialize, submit, and lock journeys",
+    "rollout and final acceptance"
+  ]
+}

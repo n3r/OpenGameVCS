@@ -106,7 +106,9 @@ Ship developer-preview binaries with explicit server compatibility range. Destru
   progress/signals, deterministic removal reconciliation, and diagnostics.
 - Test and benchmark results: bounded Rust 1.82 unit/integration/contract,
   clippy, spec, and three-crate packed-artifact gates are recorded in the
-  candidate boundary review. Hosted three-OS runtime evidence is still pending.
+  candidate boundary review. Hosted run 33463547586 passed the same bounded
+  contract, native, Clippy, and packed/offline gates on Ubuntu, macOS, and
+  Windows; the machine record is retained under `docs/evidence/OGVCS-011`.
 - Security/reliability review: hostile link/reparse/ACL/lock, no-replace race,
   cancellation, journal recovery, removal crash, capability skew, and secret
   redaction cases are executable. Same-authority lock namespace replacement
@@ -117,4 +119,4 @@ Ship developer-preview binaries with explicit server compatibility range. Destru
   README, and `docs/reviews/OGVCS-011-local-foundation-boundary-review.md`.
 - Rollout result: not rolled out. OGVCS-011 remains Todo because the owning
   OGVCS-006/008/009 public routes, branded/verified receipt integration, and
-  hosted three-OS evidence are absent.
+  complete remote and later-feature journeys are absent.

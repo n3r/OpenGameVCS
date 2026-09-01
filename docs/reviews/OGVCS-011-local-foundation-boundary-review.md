@@ -2,6 +2,8 @@
 
 **Reviewed integration baseline:** `12512b4d75f93e4c3136be5dca68a2317e27ebfe`
 **Candidate contract:** `spec/cli-workspace/v1` version `0.2.0-rc.2`
+**Hosted production revision:** `e23437f4762e7639bf40033546919211a2b4ce9b`
+**Integrated revision:** `ebfa77f9ebd40e472301afcf8471aa8fe4118a86`
 **Verdict:** a substantial fail-closed local tranche; OGVCS-011 remains Todo.
 
 ## What this tranche establishes
@@ -25,9 +27,11 @@ handoff; it does not call `file-id.allocate`. The private journal retains the
 opaque `far1` receipt and allocation idempotency-key digest for later first
 registration, while every public report is digest-only. Linux/macOS mutations
 use pinned parent descriptors and atomic no-replace rename primitives with both
-parents synced. Windows has a
-cross-compiled source-handle plus pinned destination-parent
-`SetFileInformationByHandle` no-replace adapter.
+parents synced. Windows uses a source handle plus pinned root/source/destination
+ancestors and a destination-parent-relative
+`NtSetInformationFile(FileRenameInformation)` no-replace adapter. The source
+and ancestor handles deny delete sharing through publication, and the adapter
+rejects non-normal Windows path components before opening a handle.
 
 Unix owner/mode/link checks, macOS extended ACL rejection, and Windows
 owner/DACL/reparse/multi-link checks protect metadata. Windows DACLs must be
@@ -59,11 +63,15 @@ and OGVCS-004 Rust crates. Hostile cases cover:
 - explicit/private diagnostic creation with no path, endpoint, locator,
   identity, or secret output.
 
-Hosted three-OS runtime evidence is pending. The workflow matrix is defined for
-Linux, macOS, and Windows with Node 24 and Rust 1.82, but the workflow file is
-not on the repository default branch and cannot yet be dispatched by path from
-this branch. An evidence-only ref using an already discoverable default-branch
-workflow may be used; no PR is part of this review.
+Hosted run [33463547586](https://github.com/n3r/OpenGameVCS/actions/runs/33463547586)
+passed the contract, generated-source, formatting, native tests, Clippy with
+warnings denied, and packed/offline gates on Ubuntu, macOS, and Windows with
+Node 24 and Rust 1.82. The Windows job executed the private-DACL,
+file/directory-flush, root/ancestor/source detach, target-collision,
+handle-relative rename, and hostile component tests on Windows itself. The run
+used a disposable evidence ref whose workflow carrier is not integrated. The
+production changes are integrated separately, and the retained machine record
+is in [`docs/evidence/OGVCS-011`](../evidence/OGVCS-011/README.md).
 
 ## Exact residual matrix
 
@@ -75,7 +83,6 @@ workflow may be used; no PR is part of this review.
 | OGVCS-008 lifecycle/FileID lookup | Typed resolve/presentation seams and fakes only | Publish the owning lifecycle and registered-identity authority |
 | OGVCS-041 receipt proof | Exact selected facts/registry pins and receipt digest are checked; client does not MAC-verify full claims | Branded verified receipt from an exact MAC-first verifier, or client-visible claims/session-key verification |
 | Remote E2E | No first-party network adapter exists | Exercise real authentication/discovery/binding without invented routes |
-| Hosted Windows runtime | Adapter cross-compiles; runtime result pending | Green Windows lifecycle/mutation/ACL/reparse/race workflow evidence |
 | Same-authority namespace attack | Root lock serializes cooperating processes; Windows denies delete sharing while held, but Unix detach and Windows between-command replacement plus `CreateDirectoryW`→validation races remain | Stronger root/dirfd or native directory-handle namespace exclusion if same-authority malicious replacement is in threat scope |
 | Later CLI journeys | No sync/status/materialize/submit/locks | Integrate owning PRDs through OGVCS-043 |
 
@@ -88,4 +95,4 @@ of a real remote receipt until the residual above is closed.
 This commit is suitable for integration as an incomplete, executable local
 foundation. It must not move the PRD to Done, claim remote compatibility, or
 ship as a trusted production binding until the public routes, receipt proof,
-and hosted three-OS evidence are complete.
+and owning integrated journeys are complete.
