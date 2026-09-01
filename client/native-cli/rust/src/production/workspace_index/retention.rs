@@ -1538,6 +1538,19 @@ fn unlock_file(file: &File) {
     }
 }
 
+#[cfg(windows)]
+fn unlock_file(file: &File) {
+    use std::mem::zeroed;
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Storage::FileSystem::UnlockFileEx;
+    use windows_sys::Win32::System::IO::OVERLAPPED;
+    // SAFETY: the live handle owns the matching byte-range lock.
+    let mut overlapped: OVERLAPPED = unsafe { zeroed() };
+    unsafe {
+        UnlockFileEx(file.as_raw_handle() as _, 0, 1, 0, &mut overlapped);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1584,18 +1597,5 @@ mod tests {
             RETENTION_STATE_DOMAIN,
         )
         .is_err());
-    }
-}
-
-#[cfg(windows)]
-fn unlock_file(file: &File) {
-    use std::mem::zeroed;
-    use std::os::windows::io::AsRawHandle;
-    use windows_sys::Win32::Storage::FileSystem::UnlockFileEx;
-    use windows_sys::Win32::System::IO::OVERLAPPED;
-    // SAFETY: the live handle owns the matching byte-range lock.
-    let mut overlapped: OVERLAPPED = unsafe { zeroed() };
-    unsafe {
-        UnlockFileEx(file.as_raw_handle() as _, 0, 1, 0, &mut overlapped);
     }
 }

@@ -3403,11 +3403,13 @@ mod tests {
                 std::process::id(),
                 random_hex(8).unwrap()
             ));
-            fs::create_dir(&path).unwrap();
             #[cfg(not(windows))]
-            fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).unwrap();
+            {
+                fs::create_dir(&path).unwrap();
+                fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).unwrap();
+            }
             #[cfg(windows)]
-            crate::windows_security::protect_private_directory(&path).unwrap();
+            crate::windows_security::create_new_private_directory(&path).unwrap();
             Self(fs::canonicalize(path).unwrap())
         }
 
@@ -4279,6 +4281,7 @@ mod tests {
             BaselineMaterialization::Full,
         )]);
         build(&root.0, &mut routes, &mut TestWatcher::default());
+        #[cfg(not(windows))]
         let original = fs::metadata(root.0.join("Game/value.bin")).unwrap();
         fs::write(root.0.join("Game/value.bin"), b"BBBB").unwrap();
         #[cfg(not(windows))]
