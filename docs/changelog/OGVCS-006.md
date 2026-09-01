@@ -6,6 +6,23 @@
 
 **Date:** 2026-09-01
 
+## Hosted boundary evidence and portable protocol time
+
+- Retained successful Node 24/Rust 1.82 hosted conformance for source
+  `e3c325c7f2b69a8ffb57a4723b814f2286569ba5` as GitHub Actions run
+  [33454673693](https://github.com/n3r/OpenGameVCS/actions/runs/33454673693).
+  The locked default and feature-gated tests passed on Windows and macOS;
+  Ubuntu additionally passed formatting, both Clippy profiles, identity-bound
+  regressions, and the bounded live PostgreSQL 15 report.
+- Kept self-dating idempotency timestamps as validated Unix-millisecond
+  integers until the server-clock future/expiry decision is complete. This
+  preserves the exact protocol maximum on hosts whose `SystemTime` cannot
+  represent that far-future instant, without weakening reservation-window
+  enforcement. Response tests likewise avoid constructing an unrepresentable
+  platform clock while the parser still proves the exact wire maximum.
+- The hosted packet remains bounded: it does not claim the production
+  dispatcher, aggregate lifecycle bridge, or million-entry campaign.
+
 ## Public service-contract boundary tranche
 
 - Added a framework-neutral Rust adapter for all 22 authenticated candidate

@@ -1,0 +1,73 @@
+{
+  "schemaVersion": "ogvcs.repository-metadata/hosted-evidence/v1",
+  "status": "bounded-public-service-contract-passed",
+  "exactScaleExecuted": false,
+  "sourceRevision": "e3c325c7f2b69a8ffb57a4723b814f2286569ba5",
+  "workflow": {
+    "name": "Repository metadata bounded conformance",
+    "path": ".github/workflows/repository-metadata.yml",
+    "runId": 33454673693,
+    "runAttempt": 1,
+    "event": "workflow_dispatch",
+    "createdAt": "2026-09-01T00:25:13Z",
+    "completedAt": "2026-09-01T00:27:10Z",
+    "url": "https://github.com/n3r/OpenGameVCS/actions/runs/33454673693"
+  },
+  "toolchains": {
+    "node": "24",
+    "rust": "1.82.0"
+  },
+  "jobs": [
+    {
+      "id": 99691994275,
+      "name": "Locked bounded checks (Windows)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T00:25:18Z",
+      "completedAt": "2026-09-01T00:27:00Z"
+    },
+    {
+      "id": 99691994402,
+      "name": "Locked bounded checks (macOS)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T00:25:19Z",
+      "completedAt": "2026-09-01T00:26:33Z"
+    },
+    {
+      "id": 99691994549,
+      "name": "Locked bounded checks and PostgreSQL 15",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T00:25:18Z",
+      "completedAt": "2026-09-01T00:27:09Z"
+    }
+  ],
+  "artifact": {
+    "id": 9781039804,
+    "name": "repository-metadata-postgres-Linux",
+    "archiveBytes": 586,
+    "archiveSha256": "f6eca3ac40815eefe296d9eac8cb6b2087e879092e7c7aa2eebc7d7c1f75500b",
+    "expiresAt": "2026-09-15T00:27:05Z",
+    "retainedReport": "repository-metadata-service-report-2026-09-01.jsonl",
+    "retainedReportBytes": 1001,
+    "retainedReportSha256": "e8dae7794e0c71205c94f610fb7a99a8c6a1c8caea2ae57cf0f8a787f9747f40",
+    "deduplicatedFromRunId": 33450207801
+  },
+  "result": {
+    "status": "passed",
+    "rowCount": 15,
+    "passedRows": 15,
+    "failedRows": 0,
+    "skippedRows": 0,
+    "casRacers": 100,
+    "publicOperationAssignments": 22,
+    "publicPageMaximum": 10000,
+    "database": "disposable PostgreSQL 15 service on Ubuntu",
+    "portableProtocolTimeValidation": "passed on Windows, macOS, and Ubuntu"
+  },
+  "remainingGates": [
+    "production authenticated metadata transport and transaction-retained dispatcher",
+    "same-transaction aggregate OGVCS-009 receipt consumption and lifecycle application",
+    "coordinated repository creation and mutation operations owned by OGVCS-010",
+    "production external path-profile and chunk-store adapters",
+    "million-entry bounded pagination campaign under the final scale policy"
+  ]
+}

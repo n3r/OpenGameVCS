@@ -4,6 +4,27 @@ This packet preserves bounded hosted evidence for the internal PostgreSQL
 metadata adapter. It is not completion evidence for OGVCS-006 and does not
 change the PRD's **In development** status.
 
+## Public service-contract boundary update
+
+- Source: [`e3c325c7f2b69a8ffb57a4723b814f2286569ba5`](https://github.com/n3r/OpenGameVCS/commit/e3c325c7f2b69a8ffb57a4723b814f2286569ba5)
+- Workflow: [run 33454673693](https://github.com/n3r/OpenGameVCS/actions/runs/33454673693), completed successfully on 2026-09-01
+- Machine record: [`github-actions-run-33454673693.json`](github-actions-run-33454673693.json)
+- Retained live report: [`repository-metadata-service-report-2026-09-01.jsonl`](repository-metadata-service-report-2026-09-01.jsonl), 1,001 bytes, SHA-256 `e8dae7794e0c71205c94f610fb7a99a8c6a1c8caea2ae57cf0f8a787f9747f40`
+
+Node 24 and Rust 1.82 locked checks passed on macOS, Windows, and Ubuntu;
+Ubuntu also ran both Clippy profiles and the live PostgreSQL 15 harness. This
+run covers the framework-neutral 22-operation contract adapter, bounded closed
+request parsing, the 10,000-item public page limit, semantic idempotency, and
+bounded response/error carriers. Protocol timestamps are validated as portable
+Unix-millisecond integers before conversion to a platform `SystemTime`, so the
+exact protocol maximum remains parseable and unreachable future reservations
+are rejected consistently on Windows as well as Unix hosts.
+
+The live report is byte-identical to the retained lifecycle-v9 report and is
+therefore deduplicated. This is bounded service-contract evidence, not evidence
+for a production transport/dispatcher, same-transaction aggregate lifecycle
+coordination, or the million-entry acceptance campaign.
+
 ## Identity-v3 compatibility update
 
 - Source: [`664bc0af1c53ded3bd85a4b262e246e187948c5f`](https://github.com/n3r/OpenGameVCS/commit/664bc0af1c53ded3bd85a4b262e246e187948c5f)
