@@ -102,20 +102,24 @@ evidence sufficient to move this PRD out of Todo.
 
 - **Implementation changes:** the Rust local CLI has a bounded authenticated
   baseline sink, sealed create-new generations, fixed-width collision-safe
-  lookup, strict hash-chained watcher journal, deterministic status paging,
-  HMAC cursor, per-page authenticated/kernel-locked reader leases, a durable
-  logical epoch, bounded physical generation compaction, ignore evaluation,
-  recovery, verification, and non-destructive repair. Compaction preserves the
-  current generation, its authenticated numeric predecessor, and every locked
-  or unexpired reader generation; it deletes no workspace content. Its private
-  candidate contract is
+  lookup, strict hash-chained watcher journal, an opening/final native-watcher
+  status fence, deterministic status paging, a v2 HMAC cursor, and Applied
+  Add/Move/Delete staging visibility. Per-page authenticated/kernel-locked
+  reader leases, a durable logical epoch, and bounded physical generation
+  compaction protect active readers. Repair subscribes before its scan and
+  holds one mutation lock through verification, its final barrier, and
+  publication. Compaction preserves the current generation, its authenticated
+  numeric predecessor, and every locked or unexpired reader generation; it
+  deletes no workspace content. Its private candidate contract is
   `client/native-cli/rust/contracts/workspace-index/v1` version
-  `0.1.0-rc.2`, while committed generation bytes remain readable as
+  `0.1.0-rc.3`, while committed generation bytes remain readable as
   `0.1.0-rc.1`.
 - **Test and benchmark results:** Rust 1.82 focused tests cover crash boundaries,
-  a synced journal tail without state publication, concurrent transition/status
-  races, active/settings/profile/case/cursor staleness, digest collisions,
-  case collisions/order, symlink/reparse rejection, timestamp-preserving edits,
+  a synced journal tail without state publication, withheld final-barrier
+  events, session/authority substitution, closed-but-continuous watcher state,
+  idle-cursor pagination, concurrent transition/status races, staging changes,
+  active/settings/profile/case/cursor staleness, digest collisions, case
+  collisions/order, symlink/reparse rejection, timestamp-preserving edits,
   same-length index corruption, deleted-directory uncertainty, transient
   untracked create/delete, and repair preserving workspace files. Retention
   tests cover the independent HMAC known answer and hostile variants,
@@ -124,24 +128,30 @@ evidence sufficient to move this PRD out of Todo.
   expiry, current/predecessor retention, malformed/unknown controls before
   intent, deterministic mutation races, one-call paging leases, and idempotent
   recovery at epoch, lease, intent, unlink, directory-sync, state, and intent-
-  removal boundaries. A local
+  removal boundaries. The default suite passed from the exact integrated
+  source on hosted Linux, macOS, and Windows in
+  [run 33513695931](https://github.com/n3r/OpenGameVCS/actions/runs/33513695931);
+  the [retained record](../../docs/evidence/OGVCS-012/README.md) binds all three
+  jobs. A local
   exact 1,000 changed-file candidate run classified and content-verified every
   item in 210 ms. A local exact 100,000-event run used 100 chunks of 1,000,
   completed in 11.619 s, rejected event 100,001 before append, verified the
   complete chain, and proved a new generation resets the bound. These are
-  single-host candidate measurements, not p95 or three-OS evidence.
+  single-host scale measurements, not p95 or hosted exact-scale evidence.
 - **Security/reliability review:** status fails closed during an in-progress
-  generation and performs an after-classification active/watcher snapshot
-  check. Lookup digest hits never substitute a different full path. A portable
-  or safe third-party watcher implementation cannot mint native continuity.
-  Cursor MACs bind both repository and local ignore digests in addition to the
-  exact generation/settings/filter/path key. A status lease is created,
-  synced, authenticated, and shared-locked before releasing the mutation lock;
-  compaction authenticates the complete bounded control/lease/generation
-  namespace before publishing intent. Forged, malformed, cross-boundary, or
-  overflowing metadata fails before deletion. Owner HMACs and kernel locks do
-  not solve malicious same-authority lock-namespace replacement or promise
-  Unix unlink-by-open-handle semantics.
+  generation and brackets every filesystem probe with opening/final native
+  barriers. An event or authority/transcript change rejects the in-flight page;
+  only a bound cursor-only idle advance can continue pagination. Lookup digest
+  hits never substitute a different full path. A portable or safe third-party
+  watcher implementation cannot mint native continuity. Cursor MACs bind both
+  repository and local ignore digests, exact staging state, watcher authority
+  and transcript, and the generation/settings/filter/path key. A status lease
+  is created, synced, authenticated, and shared-locked before releasing the
+  mutation lock; compaction authenticates the complete bounded control/lease/
+  generation namespace before publishing intent. Forged, malformed, cross-
+  boundary, or overflowing metadata fails before deletion. Owner HMACs and
+  kernel locks do not solve malicious same-authority lock-namespace replacement
+  or promise Unix unlink-by-open-handle semantics.
 - **Documentation/runbooks:** the Rust README and
   `docs/reviews/OGVCS-012-workspace-index-boundary-review.md` describe the
   runnable gates and exact residuals.
