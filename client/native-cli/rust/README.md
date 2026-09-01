@@ -4,6 +4,9 @@
 local foundation candidate. It is a production-oriented local tranche, not an
 OGVCS-011 completion or remote E2E claim.
 
+The crate also contains a private OGVCS-012 workspace-index candidate. It does
+not add a public `status` command or change the first-party route adapter.
+
 Implemented surface:
 
 - fieldwise configuration precedence `flag > environment > workspace > user
@@ -22,6 +25,34 @@ Implemented surface:
 - owner/mode/ACL/link/reparse checks on Unix, macOS, and Windows; atomic
   no-replace handle-relative mutation on Linux/macOS and a Windows
   `NtSetInformationFile(FileRenameInformation)` adapter.
+
+The private workspace-index candidate adds:
+
+- bounded canonical baseline streaming (at most 1,000 entries and 1 MiB per
+  chunk) with a complete current-binding receipt, rather than a caller-owned
+  million-entry vector;
+- create-new, sealed generations whose artifacts and owning directory are
+  synced before an atomic active-pointer promotion; status fails closed while
+  a transition is active and revalidates active/watcher state before return;
+- a fixed-width digest lookup that always revalidates the complete canonical
+  path, repository key, and platform key after a digest hit;
+- a strict `+1`, hash-chained watcher journal with exact 100,000-event and
+  bounded-chunk limits, atomic cursor state, gap/overflow degradation, and
+  content hashing for every event-touched regular file;
+- deterministic status classification, repository/local ignore precedence,
+  and owner-keyed HMAC paging cursors bound to the generation, repository
+  settings, path profile/case mode, both ignore digests, filter, and full last
+  path key; and
+- authenticated rebuild/repair that publishes a new generation without
+  modifying local work files.
+
+No production-callable adapter can currently mint a native watcher continuity
+proof: the only public checkpoint constructor is degraded. The first-party
+binary also has no authenticated workspace-baseline route, so authoritative
+clean status is not publicly available. Old committed generations are retained
+because reader-safe leases/GC do not exist yet. Exact one-million-path p95 and
+three-OS native watcher evidence are also absent. OGVCS-012 therefore remains
+Todo.
 
 The first-party binary installs `UnavailablePublicRoutes`, so commands that
 need OGVCS-006/008/009 fail with `PUBLIC_ROUTE_UNAVAILABLE` before local
@@ -64,12 +95,19 @@ The authenticated companion schemas/vectors live in
 unverified local-declaration library surface remains for compatibility; the
 binary uses the verified v2 path.
 
+The private workspace-index format, limits, crash ordering, cursor bindings,
+and nonclaims are authenticated separately in
+[`contracts/workspace-index/v1`](contracts/workspace-index/v1). This contract
+is local implementation evidence, not a public protocol assignment.
+
 Rust 1.82 bounded gates:
 
 ```sh
 node ../../../spec/cli-workspace/v1/scripts/generate.mjs --check
 node ../../../spec/cli-workspace/v1/validate-spec.mjs
 node scripts/sync-contract.mjs --check
+node contracts/workspace-index/v1/scripts/generate.mjs --check
+node contracts/workspace-index/v1/validate.mjs
 cargo fmt --all -- --check
 cargo test --locked --offline
 cargo clippy --locked --offline --all-targets -- -D warnings
@@ -78,3 +116,14 @@ cargo clippy --locked --offline --all-targets -- -D warnings
 
 `test-packed.sh` packages and tests the CLI together with the unpublished
 OGVCS-002 and OGVCS-004 Rust crates as one offline artifact set.
+
+The exact watcher/status limit proofs are opt-in bounded release tests:
+
+```sh
+cargo test --locked --offline \
+  production::workspace_index::tests::exact_100000_watch_events_plus_one_and_new_generation_are_bounded \
+  -- --ignored --exact --nocapture
+cargo test --locked --offline \
+  production::workspace_index::tests::exact_1000_changed_files_status_is_bounded \
+  -- --ignored --exact --nocapture
+```

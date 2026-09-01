@@ -25,6 +25,24 @@ use std::str::FromStr;
 use std::sync::atomic::{compiler_fence, AtomicBool, Ordering};
 use std::sync::Arc;
 
+mod workspace_index;
+
+pub use workspace_index::{
+    rebuild_workspace_index, record_workspace_change_batch, recover_workspace_index,
+    repair_workspace_index, verify_workspace_index, workspace_status_page, BaselineMaterialization,
+    IgnoreAction, IgnorePatternKind, IgnoreSource, UnavailableWorkspaceWatcher,
+    WorkspaceBaselineEntry, WorkspaceBaselineReceipt, WorkspaceBaselineSink, WorkspaceIgnoreRule,
+    WorkspaceIndexBuildRequest, WorkspaceIndexReport, WorkspaceStatus, WorkspaceStatusFilter,
+    WorkspaceStatusItem, WorkspaceStatusPage, WorkspaceStatusPageRequest, WorkspaceWatchBatch,
+    WorkspaceWatchEvent, WorkspaceWatchEventKind, WorkspaceWatchEventSink,
+    WorkspaceWatcherAuthority, WorkspaceWatcherCheckpoint, WorkspaceWatcherStart,
+    BASELINE_RECEIPT_SCHEMA, MAX_BASELINE_CHUNK_BYTES, MAX_BASELINE_CHUNK_ITEMS,
+    MAX_BASELINE_ENTRIES, MAX_IGNORE_RULES, MAX_STATUS_PAGE_ITEMS, MAX_WATCH_CHUNK_BYTES,
+    MAX_WATCH_CHUNK_ITEMS, MAX_WATCH_EVENTS, WORKSPACE_INDEX_CONTRACT_ARTIFACT_SET_SHA256,
+    WORKSPACE_INDEX_CONTRACT_SHA256, WORKSPACE_INDEX_CONTRACT_VERSION,
+    WORKSPACE_INDEX_REPORT_SCHEMA, WORKSPACE_INDEX_SCHEMA, WORKSPACE_STATUS_SCHEMA,
+};
+
 #[cfg(not(windows))]
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 #[cfg(windows)]
@@ -512,6 +530,24 @@ pub trait RepositoryPublicRoutes: AuthenticationTransport {
         repository_path_key: &str,
         cancellation: &dyn Cancellation,
     ) -> Result<String, CliError>;
+
+    /// Streams the immutable baseline facts for the exact verified workspace
+    /// binding. Chunks are bounded by the sink and the returned receipt is
+    /// checked against the complete ordered stream before local publication.
+    ///
+    /// This is a typed future OGVCS-006/007 adapter boundary. The first-party
+    /// binary deliberately leaves it unavailable; callers cannot publish an
+    /// authoritative index by handing a raw `Vec` to local storage.
+    fn stream_workspace_baseline(
+        &mut self,
+        _: &AuthenticationSession,
+        _: &VerifiedBinding,
+        _: &mut dyn WorkspaceBaselineSink,
+        _: &dyn Cancellation,
+        _: &mut dyn ProgressSink,
+    ) -> Result<WorkspaceBaselineReceipt, CliError> {
+        Err(route_unavailable("metadata.workspace-baseline-stream"))
+    }
 }
 
 #[derive(Default)]

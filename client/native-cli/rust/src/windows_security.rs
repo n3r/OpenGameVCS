@@ -299,6 +299,26 @@ fn validate_kind(file: &File, directory: bool) -> io::Result<()> {
     Ok(())
 }
 
+/// Returns the stable volume/file identity from an already validated handle.
+/// This avoids Rust's unstable `MetadataExt::file_index` APIs while retaining
+/// a handle-derived identity for workspace-index fingerprints on Rust 1.82.
+pub fn file_identity(file: &File) -> io::Result<(u32, u64)> {
+    let mut information: BY_HANDLE_FILE_INFORMATION = unsafe { zeroed() };
+    // SAFETY: the file handle is live and the output buffer has the exact API type.
+    if unsafe {
+        GetFileInformationByHandle(
+            file.as_raw_handle() as HANDLE,
+            &mut information as *mut BY_HANDLE_FILE_INFORMATION,
+        )
+    } == 0
+    {
+        return Err(io::Error::last_os_error());
+    }
+    let file_index =
+        (u64::from(information.nFileIndexHigh) << 32) | u64::from(information.nFileIndexLow);
+    Ok((information.dwVolumeSerialNumber, file_index))
+}
+
 /// Atomically renames a regular file without replacing an existing target.
 /// The source file and every source/destination ancestor are opened without
 /// following their final reparse points; live handles pin the validated
