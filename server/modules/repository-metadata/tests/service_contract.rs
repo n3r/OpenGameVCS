@@ -1,15 +1,22 @@
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+use hmac::{Hmac, Mac};
 use ogvcs_repository_metadata::{
-    AllocationReceipt, ConsistencyToken, CursorToken, DomainError, DomainErrorCode, FileId,
+    network_transport_descriptors, AllocationReceipt, ConsistencyToken, CursorToken, FileId,
     FileIdAllocation, HistoryIncompleteReason, HistoryPage, IdempotencyStatus,
-    MetadataHttpResponse, MetadataOperation, MetadataOperationClass, MetadataOperationExposure,
-    MetadataOperationRequest, MetadataPayloadCarrier, MetadataPermission,
-    MetadataServiceBoundaryError, ObjectRef, Page, PageState, RepositoryId,
-    METADATA_OPERATION_DESCRIPTORS, METADATA_SERVICE_CONTRACT_VERSION,
+    MetadataHttpResponse, MetadataNegotiationKeyProvider, MetadataNegotiationPrincipal,
+    MetadataOperation, MetadataOperationClass, MetadataOperationExposure, MetadataOperationRequest,
+    MetadataPayloadCarrier, MetadataPermission, MetadataServerCorrelationId,
+    MetadataServiceBoundaryError, MetadataTransportError, MetadataTransportRequest, ObjectRef,
+    Page, PageState, RepositoryId, METADATA_CONTROL_MEDIA_TYPE, METADATA_OPERATION_DESCRIPTORS,
+    METADATA_RESPONSE_MEDIA_TYPE, METADATA_SERVICE_CONTRACT_VERSION,
     METADATA_SERVICE_MANIFEST_SHA256, METADATA_SERVICE_OPERATION_COUNT,
-    METADATA_SERVICE_REQUEST_SCHEMA, PUBLIC_PAGE_ITEMS_MAXIMUM,
+    METADATA_SERVICE_REQUEST_SCHEMA, METADATA_SERVICE_RESPONSE_SCHEMA,
+    METADATA_TRANSPORT_DESCRIPTORS, OGVCS_041_NEGOTIATION_REGISTRY_SET_SHA256,
+    OGVCS_041_REGISTRY_SET_SHA256, PUBLIC_PAGE_ITEMS_MAXIMUM,
 };
 use serde::{ser::SerializeSeq, Serialize, Serializer};
 use serde_json::{json, Map, Value};
+use sha2::{Digest, Sha256};
 use std::{
     str::FromStr,
     time::{Duration, UNIX_EPOCH},
@@ -41,12 +48,163 @@ fn dated_idempotency_key(issued: u64, expires: u64, entropy: char) -> String {
 }
 
 fn request_value(operation: &str, body: Value, key: Option<&str>) -> Value {
+    let extensions = json!({});
+    let mut request = json!({
+        "schemaVersion": METADATA_SERVICE_REQUEST_SCHEMA,
+        "operation": operation,
+        "correlationId": "correlation-0001",
+        "negotiationReceipt": negotiation_receipt(OGVCS_041_NEGOTIATION_REGISTRY_SET_SHA256),
+        "body": body,
+        "extensions": extensions,
+    });
+    if let Some(key) = key {
+        let mut parts = key.split('.');
+        assert_eq!(parts.next(), Some("ik1"));
+        let issued_at_unix_ms: u64 = parts.next().unwrap().parse().unwrap();
+        let expires_at_unix_ms: u64 = parts.next().unwrap().parse().unwrap();
+        assert!(parts.next().is_some() && parts.next().is_none());
+        request["idempotency"] = json!({
+            "key": key,
+            "algorithm": "OGVCS-SEMANTIC-JCS-SHA-256",
+            "projectionVersion": "ogvcs.protocol/fingerprint-projection@1",
+            "fingerprint": fingerprint(operation, &request["body"], &extensions),
+            "issuedAtUnixMs": issued_at_unix_ms,
+            "expiresAtUnixMs": expires_at_unix_ms,
+        });
+    }
+    request
+}
+
+fn negotiation_receipt(protocol_registry_set_sha256: &str) -> Value {
     json!({
+        "algorithm": "HMAC-SHA-256",
+        "keyId": "fixture-key@1",
+        "claims": {
+            "schemaVersion": "ogvcs.protocol/negotiation-receipt-claims/v1",
+            "selection": {
+                "schemaVersion": "ogvcs.protocol/negotiation-selection/v1",
+                "protocolVersion": "ogvcs.control.https-json@1",
+                "messageSchemaVersion": "ogvcs.protocol.schema@1",
+                "repositoryFormat": "ogvcs.repository-format@1",
+                "authorizationContract": "ogvcs.authorization@1",
+                "authorizationRegistrySha256": "293f9ab0be023a9ded33326d04a8314080bda56e7c70dd18d0cca38b70bed9cc",
+                "pathContract": "ogvcs.path-filesystem@1",
+                "pathProfile": "path.opengamevcs/portable@1",
+                "pathRegistrySha256": "bbabdd95d78cfe0dd9751ab67ccbd9dfa5565bf8c049468aea3129bec787bd42",
+                "eventVersion": "ogvcs.events.base@1",
+                "transferProfile": "ogvcs.transfer.range-resume-probe@1",
+                "extensions": [],
+                "protocolRegistrySetSha256": protocol_registry_set_sha256,
+                "repositoryRegistrySha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6"
+            },
+            "subjectDigest": "11".repeat(32),
+            "tenantDigest": "22".repeat(32),
+            "authorityEpoch": 7,
+            "sessionId": "session-00000001",
+            "clientNonce": "AAAAAAAAAAAAAAAAAAAAAA",
+            "serverNonce": "AQEBAQEBAQEBAQEBAQEBAQ",
+            "issuedAtUnixMs": 1_000,
+            "expiresAtUnixMs": 301_000
+        },
+        "mac": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    })
+}
+
+fn fingerprint(operation: &str, body: &Value, extensions: &Value) -> String {
+    let projection = json!({
         "schemaVersion": METADATA_SERVICE_REQUEST_SCHEMA,
         "operation": operation,
         "body": body,
-        "idempotencyKey": key,
-    })
+        "extensions": extensions,
+    });
+    let mut digest = Sha256::new();
+    digest.update(b"ogvcs.protocol/idempotency/v1\0");
+    digest.update(jcs(&projection));
+    hex(digest.finalize().into())
+}
+
+fn jcs(value: &Value) -> Vec<u8> {
+    let mut output = Vec::new();
+    write_jcs(value, &mut output);
+    output
+}
+
+fn write_jcs(value: &Value, output: &mut Vec<u8>) {
+    match value {
+        Value::Null => output.extend_from_slice(b"null"),
+        Value::Bool(false) => output.extend_from_slice(b"false"),
+        Value::Bool(true) => output.extend_from_slice(b"true"),
+        Value::Number(number) => {
+            let canonical = if let Some(value) = number.as_u64() {
+                value.to_string()
+            } else if let Some(value) = number.as_i64() {
+                value.to_string()
+            } else {
+                let value = number.as_f64().unwrap();
+                if value >= 0.0 {
+                    (value as u64).to_string()
+                } else {
+                    (value as i64).to_string()
+                }
+            };
+            output.extend_from_slice(canonical.as_bytes());
+        }
+        Value::String(value) => serde_json::to_writer(output, value).unwrap(),
+        Value::Array(values) => {
+            output.push(b'[');
+            for (index, value) in values.iter().enumerate() {
+                if index != 0 {
+                    output.push(b',');
+                }
+                write_jcs(value, output);
+            }
+            output.push(b']');
+        }
+        Value::Object(values) => {
+            let mut entries: Vec<_> = values.iter().collect();
+            entries.sort_by(|(left, _), (right, _)| left.encode_utf16().cmp(right.encode_utf16()));
+            output.push(b'{');
+            for (index, (key, value)) in entries.into_iter().enumerate() {
+                if index != 0 {
+                    output.push(b',');
+                }
+                serde_json::to_writer(&mut *output, key).unwrap();
+                output.push(b':');
+                write_jcs(value, output);
+            }
+            output.push(b'}');
+        }
+    }
+}
+
+fn sign_receipt(request: &mut Value, key: &[u8]) {
+    let key_id = request["negotiationReceipt"]["keyId"].as_str().unwrap();
+    let claims = &request["negotiationReceipt"]["claims"];
+    let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(key).unwrap();
+    mac.update(b"OGVCS-PROTOCOL-NEGOTIATION-RECEIPT-V1\0");
+    mac.update(key_id.as_bytes());
+    mac.update(&[0]);
+    mac.update(&jcs(claims));
+    request["negotiationReceipt"]["mac"] =
+        Value::String(URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes()));
+}
+
+struct TestNegotiationKeys([u8; 32]);
+
+impl MetadataNegotiationKeyProvider for TestNegotiationKeys {
+    fn key(&self, key_id: &str) -> Option<&[u8]> {
+        (key_id == "fixture-key@1").then_some(self.0.as_slice())
+    }
+}
+
+fn negotiation_principal(now_unix_ms: u64) -> MetadataNegotiationPrincipal {
+    MetadataNegotiationPrincipal {
+        subject_digest: [0x11; 32],
+        tenant_digest: [0x22; 32],
+        authority_epoch: 7,
+        session_id: "session-00000001".to_owned(),
+        now_unix_ms,
+    }
 }
 
 fn parse_value(value: &Value) -> Result<MetadataOperationRequest, MetadataServiceBoundaryError> {
@@ -313,10 +471,10 @@ fn valid_cases() -> Vec<(&'static str, Value)> {
 
 #[test]
 fn descriptor_table_is_the_exact_authenticated_candidate_registry() {
-    assert_eq!(METADATA_SERVICE_CONTRACT_VERSION, "0.2.0");
+    assert_eq!(METADATA_SERVICE_CONTRACT_VERSION, "0.3.0");
     assert_eq!(
         METADATA_SERVICE_MANIFEST_SHA256,
-        "19f0139ad22f8546d1c3c998e972ebc5c21b39d742a92b8fe3eefb8042d13d89"
+        "58e595947993900f530fa16a9181f3a064fd66d0363f5ae976017c162a57cdde"
     );
     assert_eq!(METADATA_SERVICE_OPERATION_COUNT, 22);
     assert_eq!(METADATA_OPERATION_DESCRIPTORS.len(), 22);
@@ -609,8 +767,15 @@ fn public_page_and_consistency_token_boundaries_are_exact() {
 
 #[test]
 fn coordinator_and_internal_mutations_cannot_enter_identity_bound_dispatch() {
+    assert_eq!(
+        MetadataOperation::RepositoryCreate.exposure(),
+        MetadataOperationExposure::AtomicCreateCoordinator
+    );
+    assert_eq!(
+        MetadataOperation::RepositoryList.exposure(),
+        MetadataOperationExposure::ProjectAuthorityRequired
+    );
     for operation in [
-        MetadataOperation::RepositoryCreate,
         MetadataOperation::ReferenceCompareAndSwap,
         MetadataOperation::FileIdRegister,
         MetadataOperation::FileIdTombstone,
@@ -639,7 +804,9 @@ fn coordinator_and_internal_mutations_cannot_enter_identity_bound_dispatch() {
         let parsed = parse_value(&request_value(name, body, key.as_deref())).unwrap();
         if matches!(
             parsed.exposure(),
-            MetadataOperationExposure::AggregateCoordinatorRequired
+            MetadataOperationExposure::AtomicCreateCoordinator
+                | MetadataOperationExposure::ProjectAuthorityRequired
+                | MetadataOperationExposure::AggregateCoordinatorRequired
                 | MetadataOperationExposure::InternalOnly
         ) {
             assert_eq!(
@@ -689,25 +856,37 @@ fn coordinator_and_internal_mutations_cannot_enter_identity_bound_dispatch() {
 
 #[test]
 fn semantic_idempotency_is_order_independent_but_operation_and_body_bound() {
-    let first = format!(
-        "{{\"schemaVersion\":\"{METADATA_SERVICE_REQUEST_SCHEMA}\",\"operation\":\"object.put\",\"body\":{{\"tenantId\":\"{TENANT}\",\"repositoryId\":\"{REPOSITORY}\",\"objectRef\":\"{TREE}\",\"canonicalByteLength\":7,\"streamDigestSha256\":\"{}\"}},\"idempotencyKey\":\"{}\"}}",
-        "ab".repeat(32),
-        idempotency_key('A')
-    );
-    let reordered = format!(
-        "{{\"idempotencyKey\":\"{}\",\"body\":{{\"streamDigestSha256\":\"{}\",\"canonicalByteLength\":7,\"objectRef\":\"{TREE}\",\"repositoryId\":\"{REPOSITORY}\",\"tenantId\":\"{TENANT}\"}},\"operation\":\"object.put\",\"schemaVersion\":\"{METADATA_SERVICE_REQUEST_SCHEMA}\"}}",
-        idempotency_key('B'),
-        "ab".repeat(32),
-    );
-    let first = MetadataOperationRequest::parse(first.as_bytes()).unwrap();
-    let reordered = MetadataOperationRequest::parse(reordered.as_bytes()).unwrap();
+    let first = parse_value(&request_value(
+        "object.put",
+        json!({
+            "tenantId": TENANT,
+            "repositoryId": REPOSITORY,
+            "objectRef": TREE,
+            "canonicalByteLength": 7,
+            "streamDigestSha256": "ab".repeat(32),
+        }),
+        Some(&idempotency_key('A')),
+    ))
+    .unwrap();
+    let reordered = parse_value(&request_value(
+        "object.put",
+        json!({
+            "streamDigestSha256": "ab".repeat(32),
+            "canonicalByteLength": 7,
+            "objectRef": TREE,
+            "repositoryId": REPOSITORY,
+            "tenantId": TENANT,
+        }),
+        Some(&idempotency_key('B')),
+    ))
+    .unwrap();
     assert_eq!(
         first.semantic_fingerprint(),
         reordered.semantic_fingerprint()
     );
     assert_eq!(
         hex(first.semantic_fingerprint().unwrap()),
-        "b1bb38aff0d8b09f2cd7d56a74bcfcc98c33b6d6f17433b28f4e0609d828ca96"
+        "29fc2e18ec5ce4ea0e07502d6bc0c574a79c56d5ae40423445d9b43991f3cfad"
     );
 
     let mut changed_body = first.body().clone();
@@ -769,11 +948,23 @@ fn semantic_idempotency_is_order_independent_but_operation_and_body_bound() {
         Err(MetadataServiceBoundaryError::LimitExceeded)
     );
 
+    let integer_request = serde_json::to_string(&request_value(
+        "object.put",
+        json!({
+            "tenantId": TENANT,
+            "repositoryId": REPOSITORY,
+            "objectRef": TREE,
+            "canonicalByteLength": 1,
+            "streamDigestSha256": "cd".repeat(32),
+        }),
+        Some(&idempotency_key('Q')),
+    ))
+    .unwrap();
     let integer_forms = ["1", "1.0", "1e0"].map(|number| {
-        let request = format!(
-            "{{\"schemaVersion\":\"{METADATA_SERVICE_REQUEST_SCHEMA}\",\"operation\":\"object.put\",\"body\":{{\"tenantId\":\"{TENANT}\",\"repositoryId\":\"{REPOSITORY}\",\"objectRef\":\"{TREE}\",\"canonicalByteLength\":{number},\"streamDigestSha256\":\"{}\"}},\"idempotencyKey\":\"{}\"}}",
-            "cd".repeat(32),
-            idempotency_key('Q'),
+        let request = integer_request.replacen(
+            "\"canonicalByteLength\":1",
+            &format!("\"canonicalByteLength\":{number}"),
+            1,
         );
         MetadataOperationRequest::parse(request.as_bytes())
             .expect("schema-equivalent integer form")
@@ -784,10 +975,10 @@ fn semantic_idempotency_is_order_independent_but_operation_and_body_bound() {
     assert_eq!(integer_forms[1], integer_forms[2]);
 
     for number in ["1.5", "9007199254740992.0", "-9007199254740992.0"] {
-        let request = format!(
-            "{{\"schemaVersion\":\"{METADATA_SERVICE_REQUEST_SCHEMA}\",\"operation\":\"object.put\",\"body\":{{\"tenantId\":\"{TENANT}\",\"repositoryId\":\"{REPOSITORY}\",\"objectRef\":\"{TREE}\",\"canonicalByteLength\":{number},\"streamDigestSha256\":\"{}\"}},\"idempotencyKey\":\"{}\"}}",
-            "cd".repeat(32),
-            idempotency_key('Q'),
+        let request = integer_request.replacen(
+            "\"canonicalByteLength\":1",
+            &format!("\"canonicalByteLength\":{number}"),
+            1,
         );
         assert!(MetadataOperationRequest::parse(request.as_bytes()).is_err());
     }
@@ -887,17 +1078,25 @@ fn malformed_duplicate_and_over_limit_inputs_fail_before_dispatch() {
         MetadataOperationRequest::parse(b""),
         Err(MetadataServiceBoundaryError::InputInvalid)
     );
-    let duplicate = format!(
-        "{{\"schemaVersion\":\"{METADATA_SERVICE_REQUEST_SCHEMA}\",\"operation\":\"file-id.allocate\",\"operation\":\"file-id.allocate\",\"body\":{{\"tenantId\":\"{TENANT}\",\"repositoryId\":\"{REPOSITORY}\"}},\"idempotencyKey\":\"{}\"}}",
-        idempotency_key('D')
+    let valid = serde_json::to_string(&request_value(
+        "file-id.allocate",
+        json!({"tenantId": TENANT, "repositoryId": REPOSITORY}),
+        Some(&idempotency_key('D')),
+    ))
+    .unwrap();
+    let duplicate = valid.replacen(
+        "\"operation\":\"file-id.allocate\"",
+        "\"operation\":\"file-id.allocate\",\"operation\":\"file-id.allocate\"",
+        1,
     );
     assert_eq!(
         MetadataOperationRequest::parse(duplicate.as_bytes()),
         Err(MetadataServiceBoundaryError::InputInvalid)
     );
-    let duplicate_nested = format!(
-        "{{\"schemaVersion\":\"{METADATA_SERVICE_REQUEST_SCHEMA}\",\"operation\":\"file-id.allocate\",\"body\":{{\"tenantId\":\"{TENANT}\",\"tenantId\":\"{TENANT}\",\"repositoryId\":\"{REPOSITORY}\"}},\"idempotencyKey\":\"{}\"}}",
-        idempotency_key('D')
+    let duplicate_nested = valid.replacen(
+        &format!("\"tenantId\":\"{TENANT}\""),
+        &format!("\"tenantId\":\"{TENANT}\",\"tenantId\":\"{TENANT}\""),
+        1,
     );
     assert_eq!(
         MetadataOperationRequest::parse(duplicate_nested.as_bytes()),
@@ -918,7 +1117,7 @@ fn malformed_duplicate_and_over_limit_inputs_fail_before_dispatch() {
         .as_object_mut()
         .unwrap()
         .remove("protectedPath");
-    unknown.as_object_mut().unwrap().remove("idempotencyKey");
+    unknown.as_object_mut().unwrap().remove("idempotency");
     assert_eq!(
         parse_value(&unknown),
         Err(MetadataServiceBoundaryError::InputInvalid)
@@ -933,11 +1132,12 @@ fn malformed_duplicate_and_over_limit_inputs_fail_before_dispatch() {
         parse_value(&no_key),
         Err(MetadataServiceBoundaryError::InputInvalid)
     );
-    let malformed_key = request_value(
+    let mut malformed_key = request_value(
         "file-id.allocate",
         json!({ "tenantId": TENANT, "repositoryId": REPOSITORY }),
-        Some("not-self-dating"),
+        Some(&idempotency_key('X')),
     );
+    malformed_key["idempotency"]["key"] = json!("not-self-dating");
     assert_eq!(
         parse_value(&malformed_key),
         Err(MetadataServiceBoundaryError::InputInvalid)
@@ -1002,6 +1202,57 @@ fn malformed_duplicate_and_over_limit_inputs_fail_before_dispatch() {
     assert_eq!(
         parse_value(&many_items),
         Err(MetadataServiceBoundaryError::LimitExceeded)
+    );
+    let over_array = request_value(
+        "file-id.allocate",
+        json!({ "unexpected": vec![Value::Null; 4_097] }),
+        Some(&idempotency_key('A')),
+    );
+    assert_eq!(
+        parse_value(&over_array),
+        Err(MetadataServiceBoundaryError::LimitExceeded),
+        "the OGVCS-041 array cap is enforced while decoding"
+    );
+
+    let mut over_body_depth = Value::Null;
+    for _ in 0..33 {
+        over_body_depth = json!([over_body_depth]);
+    }
+    let over_body_depth = request_value("repository.get-settings", over_body_depth, None);
+    assert_eq!(
+        parse_value(&over_body_depth),
+        Err(MetadataServiceBoundaryError::LimitExceeded),
+        "body JsonValue depth is capped at 32"
+    );
+
+    let mut over_extension_depth = Value::Null;
+    for _ in 0..9 {
+        over_extension_depth = json!([over_extension_depth]);
+    }
+    let mut extension_request = request_value(
+        "repository.get-settings",
+        json!({
+            "tenantId": TENANT,
+            "repositoryId": REPOSITORY,
+            "minimumConsistencyToken": null,
+        }),
+        None,
+    );
+    extension_request["extensions"] = json!({
+        "ogvcs.extension.safe-optional@1": over_extension_depth,
+    });
+    assert_eq!(
+        parse_value(&extension_request),
+        Err(MetadataServiceBoundaryError::LimitExceeded),
+        "each extension value has its own depth-eight bound"
+    );
+    extension_request["extensions"] = json!({
+        "ogvcs.extension.safe-optional@1": vec![Value::Null; 1_000],
+    });
+    assert_eq!(
+        parse_value(&extension_request),
+        Err(MetadataServiceBoundaryError::LimitExceeded),
+        "each extension value has its own one-thousand-node bound"
     );
     let long_string = request_value(
         "file-id.allocate",
@@ -1164,7 +1415,7 @@ fn response_constructors_bind_shapes_limits_and_non_disclosure() {
     let page = MetadataHttpResponse::page(
         MetadataOperation::RepositoryList,
         Page {
-            items: vec![Value::Null; 10_000],
+            items: vec![Value::Null; 4_096],
             next_cursor: Some(cursor),
         },
         &consistency,
@@ -1173,19 +1424,19 @@ fn response_constructors_bind_shapes_limits_and_non_disclosure() {
     let page_json = serde_json::to_value(&page).unwrap();
     assert_eq!(
         page.schema_version(),
-        "ogvcs.repository-metadata/http-response/v1"
+        "ogvcs.repository-metadata/result-body/v1"
     );
     assert_eq!(page.operation(), "repository.list");
     assert_eq!(page.outcome(), "success");
     assert_eq!(page.carrier(), "page-result");
     assert_eq!(page_json["body"]["state"], "more");
-    assert_eq!(page_json["body"]["items"].as_array().unwrap().len(), 10_000);
+    assert_eq!(page_json["body"]["items"].as_array().unwrap().len(), 4_096);
     assert_eq!(page_json["body"]["consistencyToken"], consistency.as_str());
 
     assert!(MetadataHttpResponse::page(
         MetadataOperation::RepositoryList,
         Page {
-            items: vec![Value::Null; 10_001],
+            items: vec![Value::Null; 4_097],
             next_cursor: None,
         },
         &consistency,
@@ -1236,60 +1487,313 @@ fn response_constructors_bind_shapes_limits_and_non_disclosure() {
     .unwrap();
     assert_eq!(history.body()["state"], "incomplete");
     assert_eq!(history.body()["incompleteReason"], "retention-gap");
+}
 
-    let mut hidden = DomainError::new(DomainErrorCode::ObjectInvalid);
-    hidden.retry_after_ms = Some(12);
-    let hidden = MetadataHttpResponse::domain_error(MetadataOperation::ObjectPut, &hidden);
-    assert_eq!(hidden.body()["safeParameters"], json!({}));
-    assert!(!serde_json::to_string(&hidden)
-        .unwrap()
-        .contains("protected"));
-
-    let mut conflict = DomainError::new(DomainErrorCode::ReferenceConflict);
-    conflict.retry_after_ms = Some(99);
-    let conflict =
-        MetadataHttpResponse::domain_error(MetadataOperation::ReferenceCompareAndSwap, &conflict);
-    assert_eq!(conflict.body()["safeParameters"], json!({}));
-
-    let mut retry = DomainError::new(DomainErrorCode::ConsistencyTokenUnsatisfied);
-    retry.retry_after_ms = Some(86_400_000);
-    let retry = MetadataHttpResponse::domain_error(MetadataOperation::ObjectGet, &retry);
-    assert_eq!(
-        retry.body()["safeParameters"],
-        json!({ "retryAfterMs": 86_400_000_u64 })
-    );
-
-    let mut excessive_retry = DomainError::new(DomainErrorCode::TransactionRetryExhausted);
-    excessive_retry.retry_after_ms = Some(86_400_001);
-    let excessive_retry = MetadataHttpResponse::domain_error(
-        MetadataOperation::RepositoryGetSettings,
-        &excessive_retry,
-    );
-    assert_eq!(excessive_retry.body()["safeParameters"], json!({}));
-
-    let all_errors = [
-        DomainErrorCode::RepositorySettingsImmutable,
-        DomainErrorCode::ObjectInvalid,
-        DomainErrorCode::ObjectIdCollision,
-        DomainErrorCode::ReferenceConflict,
-        DomainErrorCode::FileIdConflict,
-        DomainErrorCode::HistoryLimitReached,
-        DomainErrorCode::ConsistencyTokenUnsatisfied,
-        DomainErrorCode::MigrationIncompatible,
-        DomainErrorCode::MigrationChecksumMismatch,
-        DomainErrorCode::MetadataNotFoundOrDenied,
-        DomainErrorCode::TransactionRetryExhausted,
-    ];
-    for (index, code) in all_errors.into_iter().enumerate() {
-        let response = MetadataHttpResponse::domain_error(
-            MetadataOperation::RepositoryGetSettings,
-            &DomainError::new(code),
+#[test]
+fn protocol_route_media_stream_and_coordinator_boundaries_are_exact() {
+    assert_eq!(METADATA_TRANSPORT_DESCRIPTORS.len(), 22);
+    assert_eq!(network_transport_descriptors().count(), 0);
+    assert!(METADATA_TRANSPORT_DESCRIPTORS.iter().all(|descriptor| {
+        descriptor.network_registered == descriptor.exposure.network_registered()
+    }));
+    for (operation, body) in valid_cases() {
+        let key = MetadataOperation::from_name(operation)
+            .unwrap()
+            .descriptor()
+            .idempotency_required
+            .then(|| idempotency_key('R'));
+        let control = serde_json::to_vec(&request_value(operation, body, key.as_deref())).unwrap();
+        let descriptor = MetadataOperation::from_name(operation)
+            .unwrap()
+            .transport_descriptor();
+        let result = MetadataTransportRequest {
+            method: "POST",
+            path: descriptor.path,
+            request_media_type: METADATA_CONTROL_MEDIA_TYPE,
+            accept: descriptor.success_media_type,
+            content_coding: "identity",
+            redirect_hops: 0,
+            control: &control,
+        }
+        .admit();
+        assert_eq!(
+            result.unwrap_err(),
+            MetadataTransportError::Unsupported,
+            "{operation}"
         );
-        assert_eq!(response.body()["code"], code.name());
-        assert_eq!(response.body()["numericCode"], 1001 + index);
-        assert_eq!(response.body()["retryable"], code.retryable());
-        assert_eq!(response.body()["safeParameters"], json!({}));
+        assert!(descriptor
+            .required_capabilities()
+            .contains(&"ogvcs.authorization@1"));
+        assert!(descriptor
+            .required_capabilities()
+            .contains(&"ogvcs.receipt.hmac-sha256@1"));
     }
+
+    let restore = request_value(
+        "file-id.register",
+        json!({
+            "tenantId": TENANT,
+            "repositoryId": REPOSITORY,
+            "fileId": FILE_ID,
+            "origin": "restore",
+            "allocationReceipt": null,
+            "ownerKind": "published",
+            "ownerId": "restore-1",
+        }),
+        Some(&idempotency_key('N')),
+    );
+    let restore = serde_json::to_vec(&restore).unwrap();
+    let descriptor = MetadataOperation::FileIdRegister.transport_descriptor();
+    assert_eq!(
+        MetadataTransportRequest {
+            method: "POST",
+            path: descriptor.path,
+            request_media_type: METADATA_CONTROL_MEDIA_TYPE,
+            accept: METADATA_RESPONSE_MEDIA_TYPE,
+            content_coding: "identity",
+            redirect_hops: 0,
+            control: &restore,
+        }
+        .admit()
+        .unwrap_err(),
+        MetadataTransportError::Unsupported
+    );
+
+    let settings = valid_cases()
+        .into_iter()
+        .find(|(operation, _)| *operation == "repository.get-settings")
+        .unwrap()
+        .1;
+    let control =
+        serde_json::to_vec(&request_value("repository.get-settings", settings, None)).unwrap();
+    let descriptor = MetadataOperation::RepositoryGetSettings.transport_descriptor();
+    let request = |method, path, media, coding, redirects| MetadataTransportRequest {
+        method,
+        path,
+        request_media_type: media,
+        accept: METADATA_RESPONSE_MEDIA_TYPE,
+        content_coding: coding,
+        redirect_hops: redirects,
+        control: &control,
+    };
+    assert_eq!(
+        request(
+            "GET",
+            descriptor.path,
+            METADATA_CONTROL_MEDIA_TYPE,
+            "identity",
+            0
+        )
+        .admit()
+        .unwrap_err(),
+        MetadataTransportError::Malformed
+    );
+    assert_eq!(
+        request("POST", "/wrong", METADATA_CONTROL_MEDIA_TYPE, "identity", 0)
+            .admit()
+            .unwrap_err(),
+        MetadataTransportError::Malformed
+    );
+    assert_eq!(
+        request("POST", descriptor.path, "application/cbor", "identity", 0)
+            .admit()
+            .unwrap_err(),
+        MetadataTransportError::Unsupported
+    );
+    assert_eq!(
+        request(
+            "POST",
+            descriptor.path,
+            METADATA_CONTROL_MEDIA_TYPE,
+            "gzip",
+            1
+        )
+        .admit()
+        .unwrap_err(),
+        MetadataTransportError::Unsupported
+    );
+    assert_eq!(
+        request(
+            "POST",
+            descriptor.path,
+            METADATA_CONTROL_MEDIA_TYPE,
+            "identity",
+            1
+        )
+        .admit()
+        .unwrap_err(),
+        MetadataTransportError::Unsupported
+    );
+}
+
+#[test]
+fn route_closure_precedes_control_parse_for_every_unregistered_class() {
+    for operation in [
+        MetadataOperation::RepositoryCreate,
+        MetadataOperation::RepositoryList,
+        MetadataOperation::ObjectPut,
+        MetadataOperation::ObjectGet,
+        MetadataOperation::ReferenceCompareAndSwap,
+        MetadataOperation::OutboxClaim,
+    ] {
+        let descriptor = operation.transport_descriptor();
+        let result = MetadataTransportRequest {
+            method: descriptor.method,
+            path: descriptor.path,
+            request_media_type: METADATA_CONTROL_MEDIA_TYPE,
+            accept: METADATA_RESPONSE_MEDIA_TYPE,
+            content_coding: "identity",
+            redirect_hops: 0,
+            control: b"{not-json",
+        }
+        .admit();
+        assert_eq!(
+            result.unwrap_err(),
+            MetadataTransportError::Unsupported,
+            "{}",
+            operation.name()
+        );
+    }
+}
+
+#[test]
+fn negotiation_receipt_verification_is_mac_first_current_and_problem_exact() {
+    let keys = TestNegotiationKeys([0x5a; 32]);
+    let body = json!({
+        "tenantId": TENANT,
+        "repositoryId": REPOSITORY,
+        "minimumConsistencyToken": null,
+    });
+    let mut valid = request_value("repository.get-settings", body.clone(), None);
+    sign_receipt(&mut valid, &keys.0);
+    let admitted = parse_value(&valid).unwrap();
+    let verified = admitted
+        .verify_negotiation(&keys, &negotiation_principal(1_500))
+        .unwrap();
+    assert_eq!(
+        verified.request().operation(),
+        MetadataOperation::RepositoryGetSettings
+    );
+
+    let problem = admitted.problem_response(MetadataTransportError::AuthorizationDenied);
+    let problem_json = serde_json::to_value(&problem).unwrap();
+    assert_eq!(
+        problem_json["schemaVersion"],
+        METADATA_SERVICE_RESPONSE_SCHEMA
+    );
+    assert_eq!(problem_json["correlationId"], "correlation-0001");
+    assert_eq!(problem_json["success"], false);
+    assert!(problem_json.get("body").is_none());
+    assert_eq!(
+        problem_json["problem"],
+        json!({
+            "type": "https://errors.opengamevcs.dev/protocol/v1/authorization-denied",
+            "title": "Operation not authorized",
+            "status": 403,
+            "code": "AUTHORIZATION_DENIED",
+            "retryable": false,
+            "correlationId": "correlation-0001",
+        })
+    );
+
+    let server_correlation =
+        MetadataServerCorrelationId::new("server-correlation-0001".to_owned()).unwrap();
+    let preparse = ogvcs_repository_metadata::MetadataResponseEnvelope::preparse_problem(
+        &server_correlation,
+        MetadataTransportError::Malformed,
+    )
+    .unwrap();
+    let preparse = serde_json::to_value(preparse).unwrap();
+    assert_eq!(preparse["correlationId"], server_correlation.as_str());
+    assert_eq!(preparse["problem"]["code"], "PROTOCOL_MALFORMED");
+    assert_eq!(preparse["problem"]["status"], 400);
+    assert!(
+        ogvcs_repository_metadata::MetadataResponseEnvelope::preparse_problem(
+            &server_correlation,
+            MetadataTransportError::NegotiationReceiptInvalid,
+        )
+        .is_err(),
+        "a preparse path cannot fabricate a receipt-verification problem"
+    );
+
+    let mut corrupt_mac_and_stale_selection = valid.clone();
+    corrupt_mac_and_stale_selection["negotiationReceipt"]["claims"]["selection"]
+        ["protocolRegistrySetSha256"] = json!(OGVCS_041_REGISTRY_SET_SHA256);
+    let admitted = parse_value(&corrupt_mac_and_stale_selection).unwrap();
+    assert_eq!(
+        admitted.verify_negotiation(&keys, &negotiation_principal(1_500)),
+        Err(MetadataTransportError::NegotiationReceiptInvalid),
+        "MAC failure must precede selected-digest classification"
+    );
+
+    let mut authenticated_stale_selection = corrupt_mac_and_stale_selection;
+    sign_receipt(&mut authenticated_stale_selection, &keys.0);
+    let admitted = parse_value(&authenticated_stale_selection).unwrap();
+    assert_eq!(
+        admitted.verify_negotiation(&keys, &negotiation_principal(1_500)),
+        Err(MetadataTransportError::NegotiationReceiptInvalid),
+        "artifact registry-set hash cannot substitute for negotiation registry-set hash"
+    );
+
+    let admitted = parse_value(&valid).unwrap();
+    assert_eq!(
+        admitted.verify_negotiation(&keys, &negotiation_principal(301_000)),
+        Err(MetadataTransportError::NegotiationReceiptExpired)
+    );
+
+    let mut expired_deadline_and_bad_mac = request_value("repository.get-settings", body, None);
+    expired_deadline_and_bad_mac["deadlineUnixMs"] = json!(1_500);
+    let admitted = parse_value(&expired_deadline_and_bad_mac).unwrap();
+    assert_eq!(
+        admitted.verify_negotiation(&keys, &negotiation_principal(1_500)),
+        Err(MetadataTransportError::DeadlineExceeded),
+        "deadline must fail before receipt verification"
+    );
+
+    let mut unselected_extension = valid;
+    unselected_extension["extensions"] = json!({
+        "ogvcs.extension.safe-optional@1": {"enabled": true}
+    });
+    sign_receipt(&mut unselected_extension, &keys.0);
+    let admitted = parse_value(&unselected_extension).unwrap();
+    assert_eq!(
+        admitted.verify_negotiation(&keys, &negotiation_principal(1_500)),
+        Err(MetadataTransportError::NegotiationReceiptInvalid)
+    );
+}
+
+#[test]
+fn semantic_jcs_matches_node_for_utf16_key_order_and_integer_spellings() {
+    let extension_id = "ogvcs.extension.safe-optional@1";
+    let mut request = request_value(
+        "file-id.allocate",
+        json!({"tenantId": TENANT, "repositoryId": REPOSITORY}),
+        Some(&idempotency_key('U')),
+    );
+    request["extensions"] = json!({
+        (extension_id): {"😀": 1.0, "\u{e000}": 2}
+    });
+    request["negotiationReceipt"]["claims"]["selection"]["extensions"] = json!([extension_id]);
+    request["idempotency"]["fingerprint"] = json!(fingerprint(
+        "file-id.allocate",
+        &request["body"],
+        &request["extensions"],
+    ));
+    let parsed = parse_value(&request).unwrap();
+    assert_eq!(
+        hex(parsed.semantic_fingerprint().unwrap()),
+        "32df1c3aa20d4440b4afb31bbb3a6c8cff5014e58b738fc93bcc918ef55674af"
+    );
+
+    let decimal = serde_json::to_string(&request).unwrap();
+    assert!(decimal.contains(":1.0"));
+    let exponent = decimal.replace(":1.0", ":1e0");
+    let exponent = MetadataOperationRequest::parse(exponent.as_bytes()).unwrap();
+    assert_eq!(
+        exponent.semantic_fingerprint(),
+        parsed.semantic_fingerprint(),
+        "equivalent JSON number spellings must have one semantic fingerprint"
+    );
 }
 
 #[test]

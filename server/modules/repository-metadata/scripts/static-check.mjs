@@ -59,13 +59,21 @@ const metadataManifestBytes = await readFile(resolve(workspace, 'spec/repository
 const metadataManifest = JSON.parse(metadataManifestBytes);
 assert(metadataManifest.counts.operations === 22, 'candidate metadata operation count differs');
 assert(
-  digest(metadataManifestBytes) === '19f0139ad22f8546d1c3c998e972ebc5c21b39d742a92b8fe3eefb8042d13d89',
+  digest(metadataManifestBytes) === '58e595947993900f530fa16a9181f3a064fd66d0363f5ae976017c162a57cdde',
   'candidate metadata manifest identity differs',
 );
 assert(
-  serviceSource.includes('19f0139ad22f8546d1c3c998e972ebc5c21b39d742a92b8fe3eefb8042d13d89'),
+  serviceSource.includes('58e595947993900f530fa16a9181f3a064fd66d0363f5ae976017c162a57cdde'),
   'service boundary does not pin the exact candidate manifest',
 );
+const protocolBindings = JSON.parse(await readFile(resolve(workspace, 'spec/repository-metadata/v1/registries/protocol-bindings.json')));
+assert(protocolBindings.profile.id === 'ogvcs.control.https-json@1', 'OGVCS-041 profile differs');
+assert(protocolBindings.profile.requestMediaType === 'application/json'
+  && protocolBindings.profile.responseMediaType === 'application/json'
+  && protocolBindings.profile.errorMediaType === 'application/json', 'OGVCS-041 media profile differs');
+assert(protocolBindings.networkRoutes.length === 0
+  && protocolBindings.entries.every(({ networkRegistered }) => networkRegistered === false),
+  'unwired metadata route entered production registration');
 for (const operation of JSON.parse(await readFile(resolve(workspace, 'spec/repository-metadata/v1/registries/operations.json'))).entries) {
   assert(serviceSource.includes(`"${operation.name}"`), `service operation missing: ${operation.name}`);
 }
@@ -73,7 +81,7 @@ for (const evidence of [
   'pub const PUBLIC_PAGE_ITEMS_MAXIMUM: u16 = 10_000',
   'pub fn parse(bytes: &[u8])',
   'duplicate JSON member',
-  'semantic_fingerprint(operation, &body)',
+  'semantic_fingerprint(operation, &body, &extensions)',
   'normalize_json_numbers(&mut value)',
   'idempotency_reservation_at',
   'pub fn require_identity_bound',
@@ -85,7 +93,9 @@ for (const evidence of [
   'value.contains(\'\\\\\')',
   'PERSISTED_IDENTIFIER_BYTES_MAXIMUM',
   'BoundedJsonBuffer',
-  'pub fn domain_error',
+  'pub fn problem_response',
+  'pub fn verify_negotiation',
+  'OGVCS_041_NEGOTIATION_REGISTRY_SET_SHA256',
 ]) assert(serviceSource.includes(evidence), `public service boundary evidence missing: ${evidence}`);
 for (const forbiddenFramework of ['axum::', 'actix_web::', 'hyper::', 'rocket::', '#[get(', '#[post(']) {
   assert(!serviceSource.includes(forbiddenFramework), `unassigned HTTP binding appears: ${forbiddenFramework}`);

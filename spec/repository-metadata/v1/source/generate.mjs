@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import {
   CONTRACT_VERSION,
   DOMAIN_ERRORS,
+  OGVCS_041_AUTHORITY,
   OPERATIONS,
   PACKAGE_NAME,
   REGISTRIES,
@@ -75,7 +76,9 @@ function assertModel() {
   const errorNames = new Set();
   const errorCodes = new Set();
   for (const error of DOMAIN_ERRORS) {
-    if (errorNames.has(error.name) || errorCodes.has(error.code) || error.protocolBinding !== 'unassigned') throw new Error('invalid domain-error assignment');
+    if (errorNames.has(error.name) || errorCodes.has(error.code)
+      || error.protocolBinding !== null
+      || error.wireSurface !== 'internal-unassigned') throw new Error('invalid domain-error assignment');
     errorNames.add(error.name);
     errorCodes.add(error.code);
   }
@@ -113,7 +116,10 @@ async function generate() {
     repository: await predecessorPin('spec/repository-format/v1/vectors/manifest.json', 'ogvcs.repository-format@1'),
     authorization: await predecessorPin('spec/authorization/v1/manifest.json', 'ogvcs.authorization@1'),
     path: await predecessorPin('spec/path-filesystem/v1/manifest.json', 'ogvcs.path-filesystem@1'),
-    protocol: await predecessorPin('spec/protocols/v1/manifest.json', 'ogvcs.protocol@1'),
+    protocol: {
+      ...await predecessorPin('spec/protocols/v1/manifest.json', 'ogvcs.protocol@1'),
+      negotiationRegistrySetSha256: OGVCS_041_AUTHORITY.negotiationRegistrySetSha256,
+    },
     benchmarkFault: await predecessorPin('spec/benchmark-fault/v1/manifest.json', 'ogvcs.benchmark-fault@1'),
   };
   const manifest = {
@@ -122,7 +128,7 @@ async function generate() {
     packageName: PACKAGE_NAME,
     state: 'candidate',
     license: 'MIT',
-    protocolBinding: 'unassigned-future-release-required',
+    protocolBinding: 'ogvcs.control.https-json@1',
     generatedBy: { modelSha256: digest(modelBytes), generatorSha256: digest(generatorBytes) },
     predecessorPins,
     artifacts,

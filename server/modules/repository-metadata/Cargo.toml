@@ -20,8 +20,10 @@ path = "src/lib.rs"
 [dependencies]
 base64 = "=0.22.1"
 getrandom = "=0.2.16"
+hmac = "=0.12.1"
 ogvcs-identity-policy-audit-postgres = { path = "../identity-policy-audit" }
 ogvcs-object-model = { path = "../../../core/object-model/rust" }
+opengamevcs-protocol-v1 = { path = "../../../foundation/protocol-baseline/bindings/rust" }
 postgres = { version = "=0.19.10", features = ["with-serde_json-1", "with-uuid-1"] }
 serde_json = "=1.0.151"
 serde = { version = "=1.0.229", features = ["derive"] }

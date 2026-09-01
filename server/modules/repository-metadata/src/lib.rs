@@ -1,8 +1,10 @@
 //! OGVCS-006 repository metadata domain and transaction boundary.
 //!
-//! HTTP remains disabled until a later protocol release binds the domain
-//! errors. This crate does include the reference PostgreSQL adapter and the
-//! transaction-composable API used by the OGVCS-010 submit coordinator.
+//! OGVCS-041 route and envelope assignments are authenticated, but production
+//! network registration remains empty until an identity-authorized dispatcher
+//! retains its OGVCS-009 brand through response construction. This crate does
+//! include the reference PostgreSQL adapter and the transaction-composable API
+//! used by the OGVCS-010 submit coordinator.
 #![forbid(unsafe_code)]
 #![cfg_attr(
     not(feature = "legacy-test-adapter"),
@@ -79,12 +81,22 @@ pub use postgres::{
     PostgresMetadataTransaction,
 };
 pub use service::{
-    MetadataOperation, MetadataOperationClass, MetadataOperationDescriptor,
-    MetadataOperationExposure, MetadataOperationRequest, MetadataPayloadCarrier,
-    MetadataServiceBoundaryError, ServicePageRequest, METADATA_OPERATION_DESCRIPTORS,
-    METADATA_SERVICE_CONTRACT_VERSION, METADATA_SERVICE_MANIFEST_SHA256,
-    METADATA_SERVICE_OPERATION_COUNT, METADATA_SERVICE_REQUEST_SCHEMA,
-    METADATA_SERVICE_RESPONSE_SCHEMA, PUBLIC_CANONICAL_METADATA_BYTES_MAXIMUM,
+    network_transport_descriptors, AdmittedMetadataRoute, MetadataNegotiationKeyProvider,
+    MetadataNegotiationPrincipal, MetadataOperation, MetadataOperationClass,
+    MetadataOperationDescriptor, MetadataOperationExposure, MetadataOperationRequest,
+    MetadataPayloadCarrier, MetadataProtocolProblem, MetadataResponseEnvelope,
+    MetadataServerCorrelationId, MetadataServiceBoundaryError, MetadataStreamBinding,
+    MetadataTransportDescriptor, MetadataTransportError, MetadataTransportRequest,
+    NegotiationVerifiedMetadataRequest, NegotiationVerifiedMetadataRoute, ServicePageRequest,
+    METADATA_CONTROL_MEDIA_TYPE, METADATA_OPERATION_DESCRIPTORS, METADATA_PROTOCOL_PROFILE,
+    METADATA_RESPONSE_MEDIA_TYPE, METADATA_SERVICE_CONTRACT_VERSION,
+    METADATA_SERVICE_MANIFEST_SHA256, METADATA_SERVICE_OPERATION_COUNT,
+    METADATA_SERVICE_REQUEST_SCHEMA, METADATA_SERVICE_RESPONSE_SCHEMA,
+    METADATA_SERVICE_RESULT_BODY_SCHEMA, METADATA_TRANSPORT_DESCRIPTORS,
+    OGVCS_041_CONTROL_PROFILE_SHA256, OGVCS_041_ERROR_REGISTRY_SHA256, OGVCS_041_MANIFEST_SHA256,
+    OGVCS_041_NEGOTIATION_REGISTRY_SET_SHA256, OGVCS_041_PROBLEM_DETAILS_SHA256,
+    OGVCS_041_REGISTRY_SET_SHA256, OGVCS_041_REQUEST_ENVELOPE_SHA256,
+    OGVCS_041_RESPONSE_ENVELOPE_SHA256, PUBLIC_CANONICAL_METADATA_BYTES_MAXIMUM,
     PUBLIC_HISTORY_DEPTH_MAXIMUM, PUBLIC_OUTBOX_CLAIM_ITEMS_MAXIMUM, PUBLIC_PAGE_ITEMS_MAXIMUM,
     PUBLIC_TOKEN_TTL_SECONDS_MAXIMUM,
 };

@@ -5,7 +5,11 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { validateMetadataOperationSemantics, validateRepositoryMetadataContract } from '../validate-spec.mjs';
+import {
+  evaluateMetadataTransportVector,
+  validateMetadataOperationSemantics,
+  validateRepositoryMetadataContract,
+} from '../validate-spec.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 
@@ -15,8 +19,9 @@ test('generated metadata contract authenticates and covers every OGVCS-006 requi
   assert.equal(result.errors, 11);
   assert.equal(result.vectors, 10);
   const manifest = JSON.parse(await readFile(join(root, 'manifest.json')));
-  assert.equal(manifest.contractVersion, '0.2.0');
+  assert.equal(manifest.contractVersion, '0.3.0');
   assert.equal(manifest.counts.schemas, 8);
+  assert.equal(manifest.counts.registries, 6);
 });
 
 test('contract validation rejects a generated registry tamper', async (t) => {
@@ -29,10 +34,43 @@ test('contract validation rejects a generated registry tamper', async (t) => {
   await assert.rejects(() => validateRepositoryMetadataContract(directory), /authentication failed/u);
 });
 
-test('domain errors do not claim frozen OGVCS-041 assignments', async () => {
+test('unratified domain errors stay internal and cannot impersonate OGVCS-041 ProblemDetails', async () => {
   const registry = JSON.parse(await readFile(join(root, 'registries', 'domain-errors.json')));
-  assert.ok(registry.entries.every(({ protocolBinding }) => protocolBinding === 'unassigned'));
+  assert.ok(registry.entries.every(({ protocolBinding }) => protocolBinding === null));
+  assert.ok(registry.entries.every(({ wireSurface }) => wireSurface === 'internal-unassigned'));
   assert.ok(registry.entries.every(({ code }) => code >= 1001));
+});
+
+test('transport vectors execute exact route, media, stream, and exposure assignments', async () => {
+  const bindings = JSON.parse(await readFile(join(root, 'registries', 'protocol-bindings.json'))).entries;
+  const vectors = JSON.parse(await readFile(join(root, 'vectors', 'protocol.json'))).cases;
+  for (const vector of vectors) {
+    assert.deepEqual(evaluateMetadataTransportVector(vector, bindings), vector.expected, vector.id);
+  }
+  assert.equal(bindings.length, 22);
+  assert.ok(bindings.every(({ path }) => !path.includes('{')));
+  assert.ok(bindings.every(({ networkRegistered }) => networkRegistered === false));
+
+  // Exercise the inherited profile constraints without claiming that the
+  // syntax-only v0.3 assignment installs a production route.
+  const assigned = bindings.find(({ operation }) => operation === 'reference.read');
+  const hypotheticalRegistered = [{ ...assigned, networkRegistered: true }];
+  assert.equal(evaluateMetadataTransportVector({
+    method: assigned.method,
+    path: assigned.path,
+    requestMediaType: assigned.requestMediaType,
+    accept: assigned.successMediaType,
+    contentCoding: 'gzip',
+    redirect: false,
+  }, hypotheticalRegistered).result, 'COMPRESSION_FORBIDDEN');
+  assert.equal(evaluateMetadataTransportVector({
+    method: assigned.method,
+    path: assigned.path,
+    requestMediaType: assigned.requestMediaType,
+    accept: assigned.successMediaType,
+    contentCoding: 'identity',
+    redirect: true,
+  }, hypotheticalRegistered).result, 'REDIRECT_FORBIDDEN');
 });
 
 test('semantic validation enforces profile, path, metadata-kind, and persistence bounds', async () => {

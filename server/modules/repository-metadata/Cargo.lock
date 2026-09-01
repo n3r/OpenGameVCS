@@ -319,8 +319,10 @@ version = "0.1.0"
 dependencies = [
  "base64",
  "getrandom 0.2.16",
+ "hmac",
  "ogvcs-identity-policy-audit-postgres",
  "ogvcs-object-model",
+ "opengamevcs-protocol-v1",
  "postgres",
  "serde",
  "serde_json",
@@ -335,6 +337,10 @@ name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
+
+[[package]]
+name = "opengamevcs-protocol-v1"
+version = "1.0.0-rc.1"
 
 [[package]]
 name = "parking_lot"

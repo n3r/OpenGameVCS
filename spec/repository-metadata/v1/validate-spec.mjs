@@ -10,10 +10,23 @@ const profileRefPattern = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\.[a-z][a-z0-9]*(?:-
 const allocationReceiptPattern = /^far1\.[A-Za-z0-9_-]{43}$/u;
 const objectRefPattern = /^ogvcs:v1:(chunk|content-manifest|tree|change-set|asset-group-set|repository-descriptor|snapshot|shelf-revision|provenance|attestation|conflict-set):sha256:[0-9a-f]{64}$/u;
 const metadataObjectKinds = new Set(['content-manifest', 'tree', 'change-set', 'asset-group-set', 'repository-descriptor', 'snapshot', 'provenance', 'attestation', 'conflict-set']);
+const metadataProtocolProfile = 'ogvcs.control.https-json@1';
+const controlMediaType = 'application/json';
+const responseMediaType = 'application/json';
+const protocolManifestSha256 = 'bc343842291040b6b0c2c941b183863500c4d60a4618256ffc6e36a1d6afbe72';
+const protocolRegistrySetSha256 = '2a49361363cc16e743948fa3cc5e266cd1bc6e31b312cde15b5dab1ad7e5c5b0';
+const protocolNegotiationRegistrySetSha256 = '2b1913f9451b9f99966a24942a262846f07662b17cbb41ad6eea6474c23b4352';
 
 function digest(bytes) { return createHash('sha256').update(bytes).digest('hex'); }
 function assert(condition, message) { if (!condition) throw new Error(message); }
 function unique(values) { return new Set(values).size === values.length; }
+function canonical(value) {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])]));
+  }
+  return value;
+}
 
 function profileParts(value) {
   assert(typeof value === 'string' && Buffer.byteLength(value, 'utf8') <= 328 && profileRefPattern.test(value), 'profile reference grammar is invalid');
@@ -120,12 +133,49 @@ export async function validateMetadataOperationSemantics(operation, body, root =
   return true;
 }
 
+export function evaluateMetadataTransportVector(vector, bindings) {
+  const binding = bindings.find(({ path }) => path === vector.path);
+  if (!binding || vector.method !== binding.method) {
+    return { admitted: false, result: 'PROTOCOL_MALFORMED' };
+  }
+  if (!binding.networkRegistered) {
+    return { admitted: false, result: 'PROTOCOL_UNSUPPORTED', exposure: binding.exposure };
+  }
+  if (vector.contentCoding && vector.contentCoding !== 'identity') {
+    return { admitted: false, result: 'COMPRESSION_FORBIDDEN' };
+  }
+  if (vector.redirect === true) return { admitted: false, result: 'REDIRECT_FORBIDDEN' };
+  if (vector.requestMediaType !== binding.requestMediaType || vector.accept !== binding.successMediaType) {
+    return { admitted: false, result: 'PROTOCOL_UNSUPPORTED' };
+  }
+  const envelope = vector.control;
+  if (envelope === null || typeof envelope !== 'object' || Array.isArray(envelope)) {
+    return { admitted: false, result: 'PROTOCOL_MALFORMED' };
+  }
+  const keys = Object.keys(envelope);
+  const allowed = new Set(['schemaVersion', 'operation', 'correlationId', 'deadlineUnixMs', 'negotiationReceipt', 'idempotency', 'body', 'extensions']);
+  if (keys.some((key) => !allowed.has(key))
+      || envelope.schemaVersion !== 'ogvcs.protocol/request-envelope/v1'
+      || envelope.operation !== binding.operation
+      || typeof envelope.correlationId !== 'string'
+      || envelope.negotiationReceipt?.algorithm !== 'HMAC-SHA-256'
+      || envelope.body === undefined) {
+    return { admitted: false, result: 'PROTOCOL_MALFORMED' };
+  }
+  return {
+    admitted: true,
+    status: binding.successStatus,
+    ...(binding.stream !== 'none' ? { stream: binding.stream } : { stream: 'none' }),
+    ...(binding.exposure === 'atomic-create-coordinator' ? { exposure: binding.exposure } : {}),
+  };
+}
+
 export async function validateRepositoryMetadataContract(root = defaultRoot) {
   const manifestBytes = await readFile(resolve(root, 'manifest.json'));
   const manifest = JSON.parse(manifestBytes);
   assert(manifest.schemaVersion === 'ogvcs.repository-metadata/contract-manifest/v1', 'manifest schema is invalid');
-  assert(manifest.contractVersion === '0.2.0', 'candidate contract version is invalid');
-  assert(manifest.protocolBinding === 'unassigned-future-release-required', 'contract must not claim an R0 protocol binding');
+  assert(manifest.contractVersion === '0.3.0', 'candidate contract version is invalid');
+  assert(manifest.protocolBinding === metadataProtocolProfile, 'metadata protocol profile binding differs');
 
   for (const artifact of manifest.artifacts) {
     const bytes = await readFile(resolve(root, artifact.path));
@@ -134,7 +184,7 @@ export async function validateRepositoryMetadataContract(root = defaultRoot) {
   }
 
   const registries = {};
-  for (const name of ['operations', 'domain-errors', 'events', 'limits', 'schemas']) {
+  for (const name of ['operations', 'domain-errors', 'events', 'limits', 'protocol-bindings', 'schemas']) {
     registries[name] = JSON.parse(await readFile(resolve(root, 'registries', `${name}.json`)));
     assert(registries[name].registry === name && registries[name].schemaVersion === 'ogvcs.repository-metadata/registry/v1', `invalid registry: ${name}`);
   }
@@ -142,7 +192,10 @@ export async function validateRepositoryMetadataContract(root = defaultRoot) {
   const operations = registries.operations.entries;
   assert(operations.length === manifest.counts.operations, 'operation count differs');
   assert(unique(operations.map(({ code }) => code)) && unique(operations.map(({ name }) => name)), 'operation assignments are not unique');
-  assert(operations.every(({ state, requestSchema }) => state === 'candidate' && requestSchema === 'MetadataOperationRequest.schema.json'), 'operation state/schema differs');
+  assert(operations.every(({ state, requestEnvelopeSchema, requestEnvelopeSha256, bodyProjectionSchema }) => state === 'candidate'
+    && requestEnvelopeSchema === 'schemas/RequestEnvelope.schema.json'
+    && requestEnvelopeSha256 === '740fc71a4ba1e480076b8b6d3fc8bb5b5374e86157976747795a139694bbadd9'
+    && bodyProjectionSchema === 'MetadataOperationBodyProjection.schema.json'), 'operation envelope/body schema differs');
   assert(operations.filter(({ class: kind }) => kind === 'mutation').every(({ idempotencyRequired }) => idempotencyRequired), 'public mutation lacks idempotency requirement');
   assert(operations.filter(({ name }) => name.startsWith('outbox.')).every(({ class: kind, idempotencyRequired }) => kind === 'internal-mutation' && !idempotencyRequired), 'outbox delivery incorrectly became a replay-cache surface');
   assert(operations.filter(({ name }) => name.startsWith('outbox.')).every(({ permission }) => permission === 'service-internal'), 'outbox operation became public permission surface');
@@ -150,21 +203,79 @@ export async function validateRepositoryMetadataContract(root = defaultRoot) {
   const errors = registries['domain-errors'];
   assert(errors.entries.length === manifest.counts.domainErrors, 'domain-error count differs');
   assert(unique(errors.entries.map(({ code }) => code)) && unique(errors.entries.map(({ name }) => name)), 'domain-error assignments are not unique');
-  assert(errors.entries.every(({ protocolBinding, state }) => protocolBinding === 'unassigned' && state === 'candidate'), 'domain error claimed frozen protocol authority');
+  assert(errors.entries.every(({ protocolBinding, wireSurface, state }) => protocolBinding === null
+    && wireSurface === 'internal-unassigned' && state === 'candidate'), 'unassigned domain error became a protocol ProblemDetails code');
   assert(errors.entries.every(({ safeParameters }) => safeParameters.every((name) => ['currentGeneration', 'retryAfterMs'].includes(name))), 'domain error has unsafe parameter');
   assert(errors.forbiddenParameters.every((name) => !errors.entries.some(({ safeParameters }) => safeParameters.includes(name))), 'forbidden parameter is exposed');
 
   const schemas = new Set(registries.schemas.entries.map(({ path }) => path));
-  for (const operation of operations) assert(schemas.has(`schemas/${operation.requestSchema}`), `operation schema missing: ${operation.name}`);
+  for (const operation of operations) assert(schemas.has(`schemas/${operation.bodyProjectionSchema}`), `operation body projection schema missing: ${operation.name}`);
 
   const vectors = JSON.parse(await readFile(resolve(root, 'vectors/contract.json'))).cases;
-  assert(vectors.length === manifest.counts.scenarios && unique(vectors.map(({ id }) => id)), 'vector inventory differs');
+  const protocolVectors = JSON.parse(await readFile(resolve(root, 'vectors/protocol.json'))).cases;
+  assert(vectors.length + protocolVectors.length === manifest.counts.scenarios
+    && unique([...vectors, ...protocolVectors].map(({ id }) => id)), 'vector inventory differs');
   const operationNames = new Set(operations.map(({ name }) => name));
   const errorNames = new Set(errors.entries.map(({ name }) => name));
   for (const vector of vectors) {
     assert(operationNames.has(vector.operation), `vector operation is unregistered: ${vector.id}`);
     if (!['accept', 'idempotent'].includes(vector.result)) assert(errorNames.has(vector.result), `vector error is unregistered: ${vector.id}`);
     if (vector.input) await validateMetadataOperationSemantics(vector.operation, vector.input, root);
+  }
+
+  const transport = registries['protocol-bindings'];
+  assert(transport.profile.id === metadataProtocolProfile
+    && transport.profile.requestMediaType === controlMediaType
+    && transport.profile.responseMediaType === responseMediaType
+    && transport.profile.errorMediaType === responseMediaType
+    && transport.profile.requestEnvelopeSchemaVersion === 'ogvcs.protocol/request-envelope/v1'
+    && transport.profile.responseEnvelopeSchemaVersion === 'ogvcs.protocol/response-envelope/v1'
+    && transport.profile.authority.manifestSha256 === protocolManifestSha256
+    && transport.profile.authority.registrySetSha256 === protocolRegistrySetSha256
+    && transport.profile.authority.negotiationRegistrySetSha256 === protocolNegotiationRegistrySetSha256
+    && transport.profile.authority.controlProfileSha256 === '3934506ee6d21005dc4b9b91e924e33601de3ade5417e4393a8acb8178bb36f9'
+    && transport.profile.authority.requestEnvelopeSha256 === '740fc71a4ba1e480076b8b6d3fc8bb5b5374e86157976747795a139694bbadd9'
+    && transport.profile.authority.responseEnvelopeSha256 === '47792190106b0742af4245c69eff3eb9d6e9555c557b16f23fae3d12d8790900'
+    && transport.profile.authority.problemDetailsSha256 === 'deba5763c47a54e23489d427eb094fa905fadfa81806a3e2da5f752501dfb6a1'
+    && transport.profile.authority.errorRegistrySha256 === '2801e26224536b8b9f2072324d25c6b472274ce45135bd65e6e9e11a643a922f'
+    && transport.profile.contentCoding === 'identity'
+    && transport.profile.redirects === 'forbidden', 'transport profile differs');
+  assert(transport.entries.length === operations.length
+    && unique(transport.entries.map(({ path }) => path))
+    && unique(transport.entries.map(({ code }) => code)), 'transport assignments are not one-to-one');
+  for (const [index, binding] of transport.entries.entries()) {
+    const operation = operations[index];
+    assert(binding.code === operation.code && binding.operation === operation.name
+      && binding.method === 'POST'
+      && binding.path === `/v1/repository-metadata/operations/${operation.name}`
+      && binding.profile === metadataProtocolProfile
+      && binding.requestMediaType === controlMediaType
+      && binding.errorMediaType === responseMediaType
+      && binding.state === 'candidate', `transport tuple differs: ${operation.name}`);
+    assert(binding.requiredCapabilities.includes('ogvcs.control.https-json@1')
+      && binding.requiredCapabilities.includes('ogvcs.protocol.schema@1')
+      && binding.requiredCapabilities.includes('ogvcs.authorization@1')
+      && binding.requiredCapabilities.includes('ogvcs.receipt.hmac-sha256@1'), `transport capabilities differ: ${operation.name}`);
+    assert(!/[{}]/u.test(binding.path), `protected identifier entered route template: ${operation.name}`);
+    assert(binding.networkRegistered === false,
+      `v0.3 network registration must remain empty: ${operation.name}`);
+    if (binding.exposure === 'stream-carrier-required') {
+      assert(binding.stream === 'carrier-unassigned-closed', `unassigned stream route became usable: ${operation.name}`);
+    }
+  }
+  const expectedNetworkRoutes = transport.entries
+    .filter(({ networkRegistered }) => networkRegistered)
+    .map(({ code, operation, method, path }) => ({ code, operation, method, path }));
+  assert(JSON.stringify(canonical(transport.networkRoutes)) === JSON.stringify(canonical(expectedNetworkRoutes)),
+    'network route inventory differs from registered bindings');
+  assert(transport.networkRoutes.length === 0, 'v0.3 cannot claim an unwired production route');
+  assert(transport.networkRoutes.every(({ operation }) => {
+    const binding = transport.entries.find((entry) => entry.operation === operation);
+    return binding && !['internal-only', 'aggregate-coordinator-required', 'stream-carrier-required', 'atomic-create-coordinator', 'project-authority-required'].includes(binding.exposure);
+  }), 'closed operation entered the network route inventory');
+  for (const vector of protocolVectors) {
+    assert(JSON.stringify(canonical(evaluateMetadataTransportVector(vector, transport.entries)))
+      === JSON.stringify(canonical(vector.expected)), `transport vector differs: ${vector.id}`);
   }
 
   const errorSchema = JSON.parse(await readFile(resolve(root, 'schemas/MetadataDomainError.schema.json')));
@@ -177,7 +288,7 @@ export async function validateRepositoryMetadataContract(root = defaultRoot) {
   const eventSchema = JSON.parse(await readFile(resolve(root, 'schemas/OutboxEvent.schema.json')));
   const resourceRef = eventSchema.properties.resourceRef;
   assert(resourceRef.additionalProperties === false && resourceRef.properties.opaqueId.pattern.startsWith('^rr1') && !Object.hasOwn(resourceRef.properties, 'path') && !Object.hasOwn(resourceRef.properties, 'fileId'), 'outbox resource reference is not opaque and typed');
-  const requestSchema = JSON.parse(await readFile(resolve(root, 'schemas/MetadataOperationRequest.schema.json')));
+  const requestSchema = JSON.parse(await readFile(resolve(root, 'schemas/MetadataOperationBodyProjection.schema.json')));
   const requestFor = (name) => requestSchema.oneOf.find((variant) => variant.properties.operation.const === name).properties.body;
   for (const operation of ['repository.get-settings', 'object.get', 'tree.page', 'reference.read', 'reference.list', 'history.ancestry-page', 'history.file-id-page', 'history.path-page', 'file-id.history']) {
     assert(requestFor(operation).properties.minimumConsistencyToken.anyOf[1].pattern.startsWith('^ct1'), `read cannot consume consistency token: ${operation}`);
@@ -202,10 +313,11 @@ export async function validateRepositoryMetadataContract(root = defaultRoot) {
   assert(statusSchema.oneOf?.length === 3 && !JSON.stringify(statusSchema).includes('authenticatedScopeDigest'), 'idempotency status is not scope-opaque');
   const pageSchema = JSON.parse(await readFile(resolve(root, 'schemas/PageResult.schema.json')));
   assert(pageSchema.required.includes('operation') && pageSchema.required.includes('consistencyToken'), 'PageResult lacks its public operation/consistency carrier');
-  const responseSchema = JSON.parse(await readFile(resolve(root, 'schemas/MetadataHttpResponse.schema.json')));
-  assert(responseSchema.oneOf?.length === 6, 'public response carrier branches differ');
+  const responseSchema = JSON.parse(await readFile(resolve(root, 'schemas/MetadataResultBody.schema.json')));
+  assert(responseSchema.oneOf?.length === 4, 'domain success body branches differ');
   assert(responseSchema.oneOf.some((variant) => variant.properties.carrier?.const === 'page-result' && variant.properties.body?.$ref === 'PageResult.schema.json'), 'public response does not carry PageResult');
-  assert(!['path', 'method', 'status', 'mediaType'].some((field) => JSON.stringify(responseSchema).includes(`\"${field}\"`)), 'candidate response carrier claimed an unassigned protocol binding');
+  assert(!JSON.stringify(responseSchema).includes('domain-error')
+    && !['path', 'method', 'status', 'mediaType', 'correlationId', 'problem'].some((field) => JSON.stringify(responseSchema).includes(`\"${field}\"`)), 'domain result body attempted to replace OGVCS-041 ResponseEnvelope/ProblemDetails');
   const covered = new Set(vectors.flatMap(({ requirementIds }) => requirementIds));
   for (const [family, count] of [['FR', 9], ['NFR', 3], ['AC', 6]]) {
     for (let index = 1; index <= count; index += 1) {
@@ -215,6 +327,25 @@ export async function validateRepositoryMetadataContract(root = defaultRoot) {
   }
 
   const workspace = resolve(root, '../../..');
+  const protocolManifest = await readFile(resolve(workspace, 'spec/protocols/v1/manifest.json'));
+  assert(digest(protocolManifest) === protocolManifestSha256, 'OGVCS-041 manifest pin drifted');
+  const protocolAuthority = JSON.parse(protocolManifest);
+  assert(protocolAuthority.registrySetSha256 === protocolRegistrySetSha256
+    && protocolAuthority.negotiationRegistrySetSha256 === protocolNegotiationRegistrySetSha256,
+  'OGVCS-041 registry-set pins differ');
+  assert(manifest.predecessorPins.protocol.registrySetSha256 === protocolRegistrySetSha256
+    && manifest.predecessorPins.protocol.negotiationRegistrySetSha256 === protocolNegotiationRegistrySetSha256,
+  'metadata manifest does not name both OGVCS-041 registry-set identities');
+  for (const [path, expected] of [
+    ['profiles/control-https-json-v1.json', transport.profile.authority.controlProfileSha256],
+    ['schemas/RequestEnvelope.schema.json', transport.profile.authority.requestEnvelopeSha256],
+    ['schemas/ResponseEnvelope.schema.json', transport.profile.authority.responseEnvelopeSha256],
+    ['schemas/ProblemDetails.schema.json', transport.profile.authority.problemDetailsSha256],
+    ['registries/error-codes.json', transport.profile.authority.errorRegistrySha256],
+  ]) {
+    assert(digest(await readFile(resolve(workspace, 'spec/protocols/v1', path))) === expected,
+      `OGVCS-041 authority artifact drifted: ${path}`);
+  }
   for (const pin of Object.values(manifest.predecessorPins)) {
     const bytes = await readFile(resolve(workspace, pin.manifestPath));
     assert(digest(bytes) === pin.manifestSha256, `predecessor pin drifted: ${pin.authority}`);
