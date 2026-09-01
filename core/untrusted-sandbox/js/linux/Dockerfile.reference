@@ -1,0 +1,4 @@
+FROM scratch
+LABEL org.opengamevcs.sandbox.runtime="linux-reference-v1"
+LABEL org.opengamevcs.sandbox.runtime-contract-sha256="930be8bc4d5afb79830736fc1ef4c553dc5ef63e8a38766551cf28047752189d"
+COPY --chmod=0555 core/untrusted-sandbox/js/linux/output-shim /ogvcs-output-shim
