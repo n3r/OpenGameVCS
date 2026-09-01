@@ -1531,6 +1531,12 @@ test('pre-start inspection binds every role mount and effective isolation contro
   runningAnchor.HostConfig.SecurityOpt.unshift('apparmor=docker-default');
   runningAnchor.State = { Dead: false, Error: '', ExitCode: 0, OOMKilled: false, Paused: false, Pid: 2468, Restarting: false, Running: true, Status: 'running' };
   assert.equal(validateRunningContainerInspect(runningAnchor, anchorExpected), true);
+  const defaultOomPolicy = structuredClone(runningAnchor);
+  defaultOomPolicy.HostConfig.OomKillDisable = null;
+  assert.equal(validateRunningContainerInspect(defaultOomPolicy, anchorExpected), true);
+  const omittedOomPolicy = structuredClone(runningAnchor);
+  delete omittedOomPolicy.HostConfig.OomKillDisable;
+  assert.equal(runningContainerInspectMismatch(omittedOomPolicy, anchorExpected), 'host-security-oom');
   for (const [expectedMismatch, mutate] of [
     ['host-security-apparmor', (value) => { value.AppArmorProfile = 'unconfined'; }],
     ['host-security-apparmor', (value) => { value.HostConfig.SecurityOpt[0] = 'apparmor=unconfined'; }],

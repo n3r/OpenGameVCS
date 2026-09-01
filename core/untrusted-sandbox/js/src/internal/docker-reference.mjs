@@ -426,7 +426,10 @@ const containerInspectMismatch = (container, expected, expectedState) => {
       ['host-capabilities', canonicalJson(host?.CapDrop) === '["ALL"]' && emptyCollection(host?.CapAdd) && emptyCollection(host?.GroupAdd)],
       [securityMismatch ?? 'host-security', securityMismatch === null],
       ['host-security-privileged', host?.Privileged === false],
-      ['host-security-oom', host?.OomKillDisable === false],
+      // OomKillDisable is a nullable HostConfig pointer. Both null (the CLI
+      // default) and false leave the kernel OOM killer enabled; true weakens
+      // that fail-safe and remains rejected.
+      ['host-security-oom', Object.hasOwn(host ?? {}, 'OomKillDisable') && (host.OomKillDisable === null || host.OomKillDisable === false)],
       ['host-security-init', host?.Init == null || host.Init === false],
       // Moby represents its private PID namespace with an empty PidMode and
       // rejects the otherwise intuitive literal `private` as invalid.
