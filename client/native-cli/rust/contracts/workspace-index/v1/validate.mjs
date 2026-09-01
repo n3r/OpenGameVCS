@@ -7,9 +7,12 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)));
 const RUST = resolve(ROOT, '../../../src/production/workspace_index.rs');
+const RETENTION_RUST = resolve(ROOT, '../../../src/production/workspace_index/retention.rs');
 const contract = JSON.parse(await readFile(resolve(ROOT, 'contract.json'), 'utf8'));
 const vector = JSON.parse(await readFile(resolve(ROOT, 'vectors/status-cursor-hmac.json'), 'utf8'));
+const retentionVector = JSON.parse(await readFile(resolve(ROOT, 'vectors/retention-hmac.json'), 'utf8'));
 const source = await readFile(RUST, 'utf8');
+const retentionSource = await readFile(RETENTION_RUST, 'utf8');
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest();
 
 function assert(condition, message) {
@@ -54,6 +57,20 @@ assert(contract.limits.watchChunkItems === 1_000, 'watchChunkItems contract drif
 assert(contract.limits.watchChunkBytes === 1024 * 1024, 'watchChunkBytes contract drift');
 assert(contract.limits.statusPageItems === 1_000, 'statusPageItems contract drift');
 assert(contract.limits.ignoreRules === 2_000, 'ignoreRules contract drift');
+assert(contract.limits.authenticatedGenerations === 128, 'authenticatedGenerations contract drift');
+assert(contract.limits.readerLeases === 128, 'readerLeases contract drift');
+assert(contract.limits.baseRetainedGenerations === 2, 'baseRetainedGenerations contract drift');
+assert(contract.limits.compactionGenerationsPerRun === 8, 'compactionGenerationsPerRun contract drift');
+assert(contract.limits.leaseExpiryEpochs === 2, 'leaseExpiryEpochs contract drift');
+for (const [name, rendered] of new Map([
+  ['MAX_AUTHENTICATED_GENERATIONS', '128'],
+  ['MAX_READER_LEASES', '128'],
+  ['BASE_RETAINED_GENERATIONS', '2'],
+  ['MAX_COMPACTION_GENERATIONS_PER_RUN', '8'],
+])) {
+  assert(retentionSource.includes(`pub const ${name}: usize = ${rendered};`), `${name} drift`);
+}
+assert(retentionSource.includes('const LEASE_EXPIRY_EPOCHS: u64 = 2;'), 'LEASE_EXPIRY_EPOCHS drift');
 
 assert(new Set(contract.statusCursor.requiredBindings).size === contract.statusCursor.requiredBindings.length, 'cursor bindings must be unique');
 const cursorBody = bodyAfter('fn encode_status_cursor(');
@@ -78,6 +95,7 @@ assert(cursorBody.includes('hmac_sha256(key, &payload_bytes)'), 'runtime cursor 
 
 const statusBody = bodyAfter('pub fn workspace_status_page(');
 assert(statusBody.includes('load_active(&root, false)?'), 'status must fail closed during a transition');
+assert(statusBody.includes('retention::acquire_generation_read_lease(&index, &metadata, &active)?'), 'status must acquire a generation lease');
 assert((statusBody.match(/revalidate_status_snapshot\(/g) ?? []).length === 2, 'status must revalidate both early and classified returns');
 const statusRevalidation = bodyAfter('fn revalidate_status_snapshot(');
 for (const needle of [
@@ -104,6 +122,7 @@ assert(!checkpointStruct.includes('pub continuity_proven'), 'external callers ma
 const checkpointImpl = bodyAfter('impl WorkspaceWatcherCheckpoint');
 assert(!checkpointImpl.includes('continuity_proven: true'), 'production constructor may not mint native continuity');
 
+assert(contract.privateCandidateClaims.readerSafeGenerationGcImplemented === true, 'private reader-safe compaction claim drift');
 for (const [claim, value] of Object.entries(contract.publicClaims)) {
   assert(value === false, `public completion claim must remain false: ${claim}`);
 }
@@ -124,5 +143,30 @@ for (let index = 0; index < key.length; index += 1) {
 const inner = sha256(Buffer.concat([innerKey, domain, payload]));
 const actualMac = createHash('sha256').update(Buffer.concat([outerKey, inner])).digest('hex');
 assert(actualMac === vector.expectedMacSha256, 'independent Node cursor HMAC vector mismatch');
+
+const retentionKey = Buffer.from(retentionVector.keyHex, 'hex');
+assert(retentionKey.length === 32, 'retention vector key must be 32 bytes');
+const retentionDomain = Buffer.from(`${retentionVector.domainUtf8Nul}\0`, 'utf8');
+const retentionMessage = Buffer.from(retentionVector.messageUtf8, 'utf8');
+const retentionInnerKey = Buffer.alloc(64, 0x36);
+const retentionOuterKey = Buffer.alloc(64, 0x5c);
+for (let index = 0; index < retentionKey.length; index += 1) {
+  retentionInnerKey[index] ^= retentionKey[index];
+  retentionOuterKey[index] ^= retentionKey[index];
+}
+const retentionInner = sha256(Buffer.concat([retentionInnerKey, retentionDomain, retentionMessage]));
+const retentionMac = createHash('sha256').update(Buffer.concat([retentionOuterKey, retentionInner])).digest('hex');
+assert(retentionMac === retentionVector.expectedMacSha256, 'independent Node retention HMAC vector mismatch');
+
+for (const needle of [
+  'lock_shared(&validated.file)?',
+  'sync_directory(&directory)?',
+  'validate_authenticated_namespace(&index, &state)?',
+  'validate_recovery_namespace(index, metadata, &state, &intent)?',
+  'write_intent(&index, &intent)?',
+  'pinned.insert(active_record.generation_id.clone())',
+  'pinned.insert(record.generation_id.clone())',
+  'remove_generation(index, record, missing_ok)?',
+]) assert(retentionSource.includes(needle), `retention implementation omits: ${needle}`);
 
 process.stdout.write(`workspace-index private contract ${contract.contractVersion}: valid\n`);

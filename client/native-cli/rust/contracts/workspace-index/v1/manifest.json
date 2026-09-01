@@ -1,31 +1,36 @@
 {
   "schema": "ogvcs.workspace-index/private-contract-manifest/v1",
-  "contractVersion": "0.1.0-rc.1",
-  "artifactSetSha256": "1e97e24e7c61d2b873d42f18ccdb8fb637495412f2face2b6c41dd59d2e253a9",
+  "contractVersion": "0.1.0-rc.2",
+  "artifactSetSha256": "edc1657f17204135bc8e25c39134275f4ac5cda2c2c8b253148b630befd48831",
   "counts": {
-    "artifacts": 5,
-    "vectors": 1
+    "artifacts": 6,
+    "vectors": 2
   },
   "artifacts": [
     {
       "path": "README.md",
-      "bytes": 1300,
-      "sha256": "c088ee0450af72dcbb20c3f8fa5fc6a0732555cfe229f20bca34b2f5ddbbfa1e"
+      "bytes": 2524,
+      "sha256": "ae931e149fda4b68ee98bd40b2f91da3c4262d61caab6170781a3f70b3cfcd65"
     },
     {
       "path": "contract.json",
-      "bytes": 4283,
-      "sha256": "a1524e204284a6ff86334bb4dedce07691986fce969faeacfd7de280e557a0c4"
+      "bytes": 6485,
+      "sha256": "5d2ed804e47862b5387bc09d07bd95cf6464f5f228452314bba3b48008216eb5"
     },
     {
       "path": "scripts/generate.mjs",
-      "bytes": 1666,
-      "sha256": "9e1c18c906d17b27c547cde84244a3dd2f704ca6335f12c918dd43493c7fd202"
+      "bytes": 1699,
+      "sha256": "e5fa5f98a4c538a85b7f1b7c453220a12c0ef4d32e78e6dd29110d23012baa4e"
     },
     {
       "path": "validate.mjs",
-      "bytes": 7076,
-      "sha256": "740561bd3d8f5f1ff5a36cf5bbffad70a92a8aec83df870d9beaa3bfdf731147"
+      "bytes": 9881,
+      "sha256": "a6d5c802bd8a30a6cb8f0a72e1691f8b4037c6dbce435de9eef7841d8934ed2c"
+    },
+    {
+      "path": "vectors/retention-hmac.json",
+      "bytes": 334,
+      "sha256": "cf8e17ec1f0b34f37b99dcef7581ecd7ac9990ebd2c99cd46a3d108207358a06"
     },
     {
       "path": "vectors/status-cursor-hmac.json",
