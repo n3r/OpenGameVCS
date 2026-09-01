@@ -57,10 +57,10 @@ codes, transition assignments, and public/wire route ownership are unchanged.
 
 ## Deliberate remaining work and open gates
 
-OGVCS-008 and OGVCS-010 remain Todo. The pinned live-MinIO workflow has not yet
-produced retained hosted evidence, and the separately confirmed exact 100-GiB
-interrupted transfer/reconstruction workflow has not run. Reference throughput
-and memory acceptance therefore remain open. Public protocol routes,
+OGVCS-008 and OGVCS-010 remain Todo. The pinned live-MinIO workflow now has
+retained bounded hosted evidence, but the separately confirmed exact 100-GiB
+interrupted transfer/reconstruction workflow has not run. Exact reference
+throughput and memory acceptance therefore remain open. Public protocol routes,
 reachability/GC, authenticated publication, retention and transfer authority,
 KMS integration, and hosted production deployment remain owned by their
 separate lanes.
@@ -89,6 +89,10 @@ The retained 15-row report and machine record are in the
 not claim hosted production deployment or exact-scale completion.
 
 The object-transfer candidate passed its local contract, runtime, workflow
-policy, roadmap, hostile-case, syntax, and package dry-run gates. Its live-MinIO
-and exact 100-GiB jobs remain explicitly unexecuted until hosted evidence is
-retained.
+policy, roadmap, hostile-case, syntax, and package dry-run gates. Hosted run
+[33452796108](https://github.com/n3r/OpenGameVCS/actions/runs/33452796108)
+passed Linux, macOS, Windows, and the pinned MinIO shared-backend job after an
+earlier run exposed and commit `a36de6d` fixed an exact Windows lock-cleanup
+race. The retained machine record is in the
+[OGVCS-008 bounded evidence packet](../evidence/OGVCS-008/README.md). The
+release-only exact 100-GiB job remains explicitly unexecuted.

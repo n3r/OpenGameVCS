@@ -1,0 +1,80 @@
+{
+  "schemaVersion": "ogvcs.identity-policy/hosted-evidence/v1",
+  "status": "aggregate-v3-bounded-passed",
+  "hostedExactScaleExecuted": false,
+  "aggregateFeatureRevision": "436bd02ed3e10bb8975f20c6729ed66a2dd77165",
+  "sourceRevision": "664bc0af1c53ded3bd85a4b262e246e187948c5f",
+  "workflow": {
+    "name": "Identity, policy, and audit candidate",
+    "path": ".github/workflows/identity-policy-audit.yml",
+    "runId": 33452552924,
+    "runAttempt": 1,
+    "event": "workflow_dispatch",
+    "createdAt": "2026-08-31T23:53:26Z",
+    "completedAt": "2026-08-31T23:55:22Z",
+    "url": "https://github.com/n3r/OpenGameVCS/actions/runs/33452552924"
+  },
+  "jobs": [
+    {
+      "id": 99685462598,
+      "name": "Rust 1.82 and guarded PostgreSQL 15 participant",
+      "conclusion": "success",
+      "startedAt": "2026-08-31T23:53:31Z",
+      "completedAt": "2026-08-31T23:54:46Z"
+    },
+    {
+      "id": 99685462697,
+      "name": "Rust 1.82 bounded checks (windows-latest)",
+      "conclusion": "success",
+      "startedAt": "2026-08-31T23:53:31Z",
+      "completedAt": "2026-08-31T23:55:21Z"
+    },
+    {
+      "id": 99685462728,
+      "name": "Bounded conformance (ubuntu-latest)",
+      "conclusion": "success",
+      "startedAt": "2026-08-31T23:53:31Z",
+      "completedAt": "2026-08-31T23:53:53Z"
+    },
+    {
+      "id": 99685462777,
+      "name": "Rust 1.82 bounded checks (macos-latest)",
+      "conclusion": "success",
+      "startedAt": "2026-08-31T23:53:32Z",
+      "completedAt": "2026-08-31T23:55:10Z"
+    },
+    {
+      "id": 99685462805,
+      "name": "Bounded conformance (macos-latest)",
+      "conclusion": "success",
+      "startedAt": "2026-08-31T23:53:31Z",
+      "completedAt": "2026-08-31T23:53:49Z"
+    },
+    {
+      "id": 99685463101,
+      "name": "Bounded conformance (windows-latest)",
+      "conclusion": "success",
+      "startedAt": "2026-08-31T23:53:31Z",
+      "completedAt": "2026-08-31T23:54:20Z"
+    }
+  ],
+  "exactLocalProof": {
+    "sourceRevision": "a36de6d516732ecb7699284b82f0d9c836246c7c",
+    "rustVersion": "1.82.0",
+    "postgresVersion": "16.11",
+    "resourceCount": 100000,
+    "chunkCount": 100,
+    "chunkMaximum": 1000,
+    "resource100001Rejected": true,
+    "orderedProjectionReconstructed": true,
+    "aggregateMemory": "O(1) outside the bounded current chunk",
+    "elapsedSeconds": 30.81,
+    "conclusion": "success"
+  },
+  "remainingGates": [
+    "same-transaction aggregate receipt consumption and repository lifecycle application",
+    "configured production OIDC, KMS, nonce, and external checkpoint providers",
+    "public-route adapters and production revocation/latency fault evidence",
+    "end-to-end rollout and final acceptance"
+  ]
+}

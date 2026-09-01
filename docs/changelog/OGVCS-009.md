@@ -131,6 +131,11 @@ authority; request-root grant issuance; production latency/revocation SLO and
 fault evidence; an end-to-end rollout; or final acceptance. The aggregate
 PostgreSQL participant has local restart reconstruction and exact-scale proof,
 but hosted exact-scale and cross-service lifecycle evidence remain open. Hosted
-bounded 0.2 conformance is green on Linux, macOS, and Windows at run
-`33444182014`. No OGVCS-010/disaster-recovery receipt is claimed, and OGVCS-009
-is not marked complete.
+bounded aggregate-v3 conformance is green across Node 24 on Linux, macOS, and
+Windows, Rust 1.82 on macOS and Windows, and PostgreSQL 15 on Ubuntu at run
+[33452552924](https://github.com/n3r/OpenGameVCS/actions/runs/33452552924).
+The retained [OGVCS-009 evidence packet](../evidence/OGVCS-009/README.md) also
+records the integrated Rust 1.82/PostgreSQL 16 exact 100,000-resource proof,
+which passed in 30.81 seconds; ordinary hosted CI leaves that test ignored. No
+OGVCS-010/disaster-recovery receipt is claimed, and OGVCS-009 is not marked
+complete.

@@ -1,0 +1,78 @@
+{
+  "schemaVersion": "ogvcs.object-transfer/hosted-evidence/v1",
+  "status": "bounded-candidate-passed",
+  "exactScaleExecuted": false,
+  "sourceRevision": "a36de6d516732ecb7699284b82f0d9c836246c7c",
+  "hostedProofRevision": "658733fed8d0c9902aae0bfa13c66898d2bf9003",
+  "workflow": {
+    "name": "Object transfer bounded conformance",
+    "registeredPath": ".github/workflows/repository-metadata.yml",
+    "candidatePath": ".github/workflows/object-transfer.yml",
+    "dispatchBranch": "r1-object-transfer-hosted-dispatch",
+    "runId": 33452796108,
+    "runAttempt": 1,
+    "event": "workflow_dispatch",
+    "createdAt": "2026-08-31T23:57:08Z",
+    "completedAt": "2026-08-31T23:58:43Z",
+    "url": "https://github.com/n3r/OpenGameVCS/actions/runs/33452796108"
+  },
+  "codeEquivalence": {
+    "onlyDifferingPath": ".github/workflows/repository-metadata.yml",
+    "coreObjectTransferTree": "10fb8f7309ab46bc699a71290caec79a33a34288",
+    "specObjectTransferTree": "7e39472126f71503c1a6f4456b0ba2d73ba5586e"
+  },
+  "jobs": [
+    {
+      "id": 99686207450,
+      "name": "Pinned MinIO shared backend conformance (Linux)",
+      "conclusion": "success",
+      "startedAt": "2026-08-31T23:57:13Z",
+      "completedAt": "2026-08-31T23:57:21Z"
+    },
+    {
+      "id": 99686207566,
+      "name": "JavaScript bounded (macOS)",
+      "conclusion": "success",
+      "startedAt": "2026-08-31T23:57:14Z",
+      "completedAt": "2026-08-31T23:57:53Z"
+    },
+    {
+      "id": 99686207596,
+      "name": "JavaScript bounded (Windows)",
+      "conclusion": "success",
+      "startedAt": "2026-08-31T23:57:14Z",
+      "completedAt": "2026-08-31T23:58:42Z"
+    },
+    {
+      "id": 99686207629,
+      "name": "JavaScript bounded (Linux)",
+      "conclusion": "success",
+      "startedAt": "2026-08-31T23:57:13Z",
+      "completedAt": "2026-08-31T23:57:44Z"
+    }
+  ],
+  "contract": {
+    "version": "0.1.0-rc.6",
+    "manifestSha256": "6748334b4cbc9b155941d8382b6a67c348f0612432a9555cfa215f62681af1d3",
+    "artifactSetSha256": "8e96a6fc57aeabb9c3bd8a363b4bbb70b2bfc4832206b20c1581e92e463bec38",
+    "artifactCount": 40
+  },
+  "minio": {
+    "release": "RELEASE.2025-09-07T16-13-09Z",
+    "sha256": "7c5bd8512c6e966455b1d198209358b2d191c77a83ab377c4073281065fb855f",
+    "transport": "loopback HTTP inside the isolated hosted runner"
+  },
+  "predecessorFinding": {
+    "runId": 33452480057,
+    "conclusion": "failure",
+    "platform": "Windows",
+    "finding": "lock directory vanished between EEXIST and pinned recovery inspection",
+    "fixedByRevision": "a36de6d516732ecb7699284b82f0d9c836246c7c"
+  },
+  "remainingGates": [
+    "release-only exact 100-GiB interrupted transfer and reconstruction campaign",
+    "same-transaction OGVCS-009 authorization and repository lifecycle application",
+    "authenticated OGVCS-010 publication and public OGVCS-041 routes",
+    "production KMS, reachability, garbage collection, and hosted deployment"
+  ]
+}

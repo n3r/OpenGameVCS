@@ -4,6 +4,24 @@ This packet preserves bounded hosted evidence for the internal PostgreSQL
 metadata adapter. It is not completion evidence for OGVCS-006 and does not
 change the PRD's **In development** status.
 
+## Identity-v3 compatibility update
+
+- Source: [`664bc0af1c53ded3bd85a4b262e246e187948c5f`](https://github.com/n3r/OpenGameVCS/commit/664bc0af1c53ded3bd85a4b262e246e187948c5f)
+- Workflow: [run 33452564678](https://github.com/n3r/OpenGameVCS/actions/runs/33452564678), completed successfully on 2026-09-01
+- Machine record: [`github-actions-run-33452564678.json`](github-actions-run-33452564678.json)
+- Retained live report: [`repository-metadata-service-report-2026-09-01.jsonl`](repository-metadata-service-report-2026-09-01.jsonl), 1,001 bytes, SHA-256 `e8dae7794e0c71205c94f610fb7a99a8c6a1c8caea2ae57cf0f8a787f9747f40`
+
+This rerun proves lifecycle-v9 together with identity migration v3 on macOS,
+Windows, and Ubuntu/PostgreSQL 15. The integration regression found locally was
+fixed without relaxing v3 credential immutability: authority promotion leaves
+the epoch-1 credential unchanged and issues a new generation-2 credential with
+a new presentation. The live test proves the old presentation is stale before
+using the new credential. The hosted report is byte-identical to the retained
+lifecycle-v9 report, so it is deduplicated rather than checked in twice.
+
+This remains bounded evidence. It does not claim the public service,
+same-transaction aggregate lifecycle application, or exact million-entry gate.
+
 ## Lifecycle-v9 update
 
 - Source: [`a96f410a26e30a02116c2ecdf410ab040168b912`](https://github.com/n3r/OpenGameVCS/commit/a96f410a26e30a02116c2ecdf410ab040168b912)

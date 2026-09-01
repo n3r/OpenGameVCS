@@ -1,0 +1,65 @@
+{
+  "schemaVersion": "ogvcs.repository-metadata/hosted-evidence/v1",
+  "status": "bounded-integration-passed",
+  "exactScaleExecuted": false,
+  "sourceRevision": "664bc0af1c53ded3bd85a4b262e246e187948c5f",
+  "workflow": {
+    "name": "Repository metadata bounded conformance",
+    "path": ".github/workflows/repository-metadata.yml",
+    "runId": 33452564678,
+    "runAttempt": 1,
+    "event": "workflow_dispatch",
+    "createdAt": "2026-08-31T23:53:37Z",
+    "completedAt": "2026-08-31T23:55:34Z",
+    "url": "https://github.com/n3r/OpenGameVCS/actions/runs/33452564678"
+  },
+  "jobs": [
+    {
+      "id": 99685500333,
+      "name": "Locked bounded checks (macOS)",
+      "conclusion": "success",
+      "startedAt": "2026-08-31T23:53:42Z",
+      "completedAt": "2026-08-31T23:54:39Z"
+    },
+    {
+      "id": 99685500497,
+      "name": "Locked bounded checks (Windows)",
+      "conclusion": "success",
+      "startedAt": "2026-08-31T23:53:42Z",
+      "completedAt": "2026-08-31T23:55:28Z"
+    },
+    {
+      "id": 99685500614,
+      "name": "Locked bounded checks and PostgreSQL 15",
+      "conclusion": "success",
+      "startedAt": "2026-08-31T23:53:42Z",
+      "completedAt": "2026-08-31T23:55:33Z"
+    }
+  ],
+  "artifact": {
+    "id": 9780314028,
+    "name": "repository-metadata-postgres-Linux",
+    "archiveBytes": 586,
+    "expiresAt": "2026-09-14T23:55:29Z",
+    "retainedReport": "repository-metadata-service-report-2026-09-01.jsonl",
+    "retainedReportBytes": 1001,
+    "retainedReportSha256": "e8dae7794e0c71205c94f610fb7a99a8c6a1c8caea2ae57cf0f8a787f9747f40",
+    "deduplicatedFromRunId": 33450207801
+  },
+  "result": {
+    "status": "passed",
+    "rowCount": 15,
+    "passedRows": 15,
+    "failedRows": 0,
+    "skippedRows": 0,
+    "casRacers": 100,
+    "credentialAuthorityRotation": "immutable generation-2 credential issued; generation-1 presentation rejected as stale",
+    "database": "disposable PostgreSQL 15 service on Ubuntu"
+  },
+  "remainingGates": [
+    "complete public 22-operation metadata service and protocol binding",
+    "same-transaction aggregate OGVCS-009 receipt consumption and lifecycle application",
+    "production external path-profile and chunk-store adapters",
+    "million-entry bounded pagination campaign under the final scale policy"
+  ]
+}
