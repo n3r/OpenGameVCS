@@ -256,6 +256,36 @@ and path limits, canonical tree/snapshot indexes, and every stored file-history
 fact against the snapshot's canonical change set. Chunk bytes remain owned by
 the object-storage/content boundary and are deliberately not persisted here.
 
+Candidate acquisition is rooted only at that exact Snapshot `ObjectRef`.
+Metadata is discovered from the existing canonical reference walker and read
+in sorted batches of at most 1,000 exact `(kind, digest)` pairs. Each batch
+first returns only the stored tuple, validation-contract match, and byte length;
+its canonical bytes are fetched only after that batch's lengths plus all
+previously discovered candidate bytes remain within the cumulative 128 MiB
+bound. Later graph nodes are discovered only from those authenticated bytes.
+Both phases run in the same SERIALIZABLE snapshot, bind request
+ordinal and full stored tuple, and reject missing, reordered, substituted, or
+changed rows. FileID evidence is read only for the union already derived from
+canonical lifetime operations and the candidate tree; import mappings are read
+only for the resulting import FileIDs. These exact-key joins return one checked
+row per request ordinal and never use a `LIMIT` result as evidence that a row
+is absent. The existing 100,000-object, 1,000,000-edge, chunk, retained/scratch,
+and 600-second repository limits remain authoritative; each acquisition
+statement receives the remaining deadline without weakening a shorter caller
+timeout. The budget is checked before each external chunk-resolution call and
+the remaining time is passed to the final object-model lookup, but this module
+cannot hard-interrupt a single blocking resolver implementation; that port must
+provide its own bounded-call guarantee.
+
+Unreachable repository rows are deliberately outside candidate publication
+validation. A corrupt or foreign-contract object not referenced by the
+candidate, and unrelated FileID/import registry growth, therefore cannot reject
+an otherwise valid candidate. Such rows are not declared healthy or repaired;
+repository-wide inventory, corruption findings, quarantine, and repair remain
+the OGVCS-017 operator-integrity boundary. This acquisition refactor adds no
+authorization resource, public route, request-root, submit-plan, lifecycle,
+content-backend, garbage-collection, or destructive-cleanup behavior.
+
 The production transaction rejects generic receiptless native create/copy and
 requires the exact one-use allocation receipt returned by idempotency-keyed
 `file-id.allocate`. Receipt scope comes only from the OGVCS-009 sealed view;
@@ -476,7 +506,13 @@ project-list cursor isolation, bounded ancestry/FileID/path history,
 authorization non-disclosure and revalidation, outbox delivery leases, FileID
 races/import replay/tombstones, transaction poisoning and fault rollbacks,
 migration repeat/checksum/downgrade behavior, and representable replica-lag
-token behavior. The dispatcher-specific fresh-schema harness covers both
+token behavior. The same live harness proves that unreachable corrupt metadata
+and 1,001 unrelated FileID/import rows do not enter candidate validation, while
+reachable contract, identity, positional-substitution, and missing-row faults
+poison and roll back without partial reference, sequence, idempotency, or
+outbox state. Pure boundary tests cover exact 1,000/1,001 batching, byte-limit
+overflow, ordinal/tuple substitution, and header-to-payload phase changes. The
+dispatcher-specific fresh-schema harness covers both
 successful reads, participant-first lookup ordering, current token issuance,
 valid cross-subject token substitution, hidden/missing/cross-tenant/stale
 authority failures, attacker-key negotiation forgery, exact denial-envelope

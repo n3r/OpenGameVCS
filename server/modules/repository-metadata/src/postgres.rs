@@ -19,7 +19,7 @@ use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet},
-    time::{Duration, SystemTime},
+    time::{Duration, Instant, SystemTime},
 };
 use subtle::ConstantTimeEq;
 use uuid::Uuid;
@@ -84,6 +84,92 @@ const MAX_JSON_PREFLIGHT_BYTES: usize = 1_048_576;
 const MAX_JSON_PREFLIGHT_DEPTH: usize = 128;
 const MAX_JSON_PREFLIGHT_NODES: usize = 131_072;
 const MAX_IDENTITY_AUTHORIZATION_BATCH_BYTES: usize = 8_388_608;
+const CANDIDATE_ACQUISITION_BATCH_MAXIMUM: usize = 1_000;
+const MAX_IMPORTER_PROFILE_BYTES: usize = 512;
+
+const CANDIDATE_METADATA_HEADER_SQL: &str = "WITH requested AS (
+       SELECT requested_kind, requested_digest, ordinal
+       FROM unnest($2::smallint[], $3::bytea[])
+            WITH ORDINALITY AS request(requested_kind, requested_digest, ordinal)
+     )
+     SELECT requested.ordinal, requested.requested_kind, requested.requested_digest,
+            object.object_kind, object.object_digest, object.digest_algorithm,
+            object.byte_length, object.validation_contract = $4
+     FROM requested
+     LEFT JOIN ogvcs_metadata.metadata_objects AS object
+       ON object.repository_id = $1
+      AND object.object_kind = requested.requested_kind
+      AND object.digest_algorithm = 1
+      AND object.object_digest = requested.requested_digest
+     ORDER BY requested.ordinal";
+
+const CANDIDATE_METADATA_PAYLOAD_SQL: &str = "WITH requested AS (
+       SELECT requested_kind, requested_digest, ordinal
+       FROM unnest($2::smallint[], $3::bytea[])
+            WITH ORDINALITY AS request(requested_kind, requested_digest, ordinal)
+     )
+     SELECT requested.ordinal, requested.requested_kind, requested.requested_digest,
+            object.object_kind, object.object_digest, object.digest_algorithm,
+            object.byte_length, object.validation_contract = $4, object.canonical_bytes
+     FROM requested
+     LEFT JOIN ogvcs_metadata.metadata_objects AS object
+       ON object.repository_id = $1
+      AND object.object_kind = requested.requested_kind
+      AND object.digest_algorithm = 1
+      AND object.object_digest = requested.requested_digest
+     ORDER BY requested.ordinal";
+
+#[derive(Clone, Copy, Debug)]
+struct CandidateAcquisitionBudget {
+    started: Instant,
+    maximum: Duration,
+}
+
+impl CandidateAcquisitionBudget {
+    fn new(limits: RepositoryLimits) -> Result<Self> {
+        let maximum = limits
+            .max_time
+            .filter(|maximum| !maximum.is_zero())
+            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        Ok(Self {
+            started: Instant::now(),
+            maximum,
+        })
+    }
+
+    fn remaining(self) -> Result<Duration> {
+        self.maximum
+            .checked_sub(self.started.elapsed())
+            .filter(|remaining| !remaining.is_zero())
+            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))
+    }
+
+    fn statement_timeout(self) -> Result<String> {
+        let remaining = self.remaining()?;
+        let milliseconds = remaining.as_millis().max(1).min(i32::MAX as u128);
+        Ok(format!("{milliseconds}ms"))
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct CandidateMetadataHeaderObservation {
+    ordinal: i64,
+    requested_kind: i16,
+    requested_digest: Vec<u8>,
+    stored_kind: Option<i16>,
+    stored_digest: Option<Vec<u8>>,
+    digest_algorithm: Option<i16>,
+    byte_length: Option<i64>,
+    contract_matches: Option<bool>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct CandidateMetadataPayloadObservation {
+    header: CandidateMetadataHeaderObservation,
+    canonical_bytes: Option<Vec<u8>>,
+}
+
+type CandidateMetadataBatch = Vec<(ObjectRef, Vec<u8>)>;
 
 macro_rules! poison_transaction_on_error {
     ($transaction:ident, $body:block) => {{
@@ -3280,11 +3366,199 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
         }
     }
 
+    fn begin_candidate_statement_budget(
+        &mut self,
+        budget: CandidateAcquisitionBudget,
+    ) -> Result<String> {
+        let previous: String = self
+            .transaction()?
+            .query_one("SELECT current_setting('statement_timeout')", &[])
+            .map_err(database_error)?
+            .get(0);
+        self.refresh_candidate_statement_budget(budget, &previous)?;
+        Ok(previous)
+    }
+
+    fn refresh_candidate_statement_budget(
+        &mut self,
+        budget: CandidateAcquisitionBudget,
+        previous: &str,
+    ) -> Result<()> {
+        let remaining = budget.statement_timeout()?;
+        let _: String = self
+            .transaction()?
+            .query_one(
+                "SELECT set_config(
+                   'statement_timeout',
+                   CASE
+                     WHEN $1::text = '0' THEN $2::text
+                     WHEN ($1::text)::interval <= ($2::text)::interval THEN $1::text
+                     ELSE $2::text
+                   END,
+                   true
+                 )",
+                &[&previous, &remaining],
+            )
+            .map_err(database_error)?
+            .get(0);
+        Ok(())
+    }
+
+    fn restore_candidate_statement_budget(&mut self, previous: &str) -> Result<()> {
+        let _: String = self
+            .transaction()?
+            .query_one(
+                "SELECT set_config('statement_timeout', $1, true)",
+                &[&previous],
+            )
+            .map_err(database_error)?
+            .get(0);
+        Ok(())
+    }
+
+    fn load_candidate_metadata_batch(
+        &mut self,
+        requested: &[ObjectRef],
+        loaded_bytes: usize,
+        limits: RepositoryLimits,
+        budget: CandidateAcquisitionBudget,
+        previous_statement_timeout: &str,
+    ) -> Result<(CandidateMetadataBatch, usize)> {
+        if requested.is_empty() || requested.len() > CANDIDATE_ACQUISITION_BATCH_MAXIMUM {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        let repository_id = uuid(self.authorized_repository_id);
+        let kinds = requested
+            .iter()
+            .map(|reference| {
+                i16::try_from(reference.kind.code())
+                    .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let digests = requested
+            .iter()
+            .map(|reference| reference.digest.to_vec())
+            .collect::<Vec<_>>();
+
+        self.refresh_candidate_statement_budget(budget, previous_statement_timeout)?;
+        let header_rows = self
+            .transaction()?
+            .query(
+                CANDIDATE_METADATA_HEADER_SQL,
+                &[&repository_id, &kinds, &digests, &VALIDATION_CONTRACT],
+            )
+            .map_err(database_error)?;
+        let headers = header_rows
+            .into_iter()
+            .map(candidate_metadata_header_observation)
+            .collect::<Vec<_>>();
+        let (expected_lengths, loaded_bytes) = validate_candidate_metadata_headers(
+            requested,
+            &headers,
+            loaded_bytes,
+            limits.max_bytes,
+        )?;
+
+        self.refresh_candidate_statement_budget(budget, previous_statement_timeout)?;
+        let payload_rows = self
+            .transaction()?
+            .query(
+                CANDIDATE_METADATA_PAYLOAD_SQL,
+                &[&repository_id, &kinds, &digests, &VALIDATION_CONTRACT],
+            )
+            .map_err(database_error)?;
+        let payloads = payload_rows
+            .into_iter()
+            .map(candidate_metadata_payload_observation)
+            .collect::<Vec<_>>();
+        let loaded = validate_candidate_metadata_payloads(requested, &expected_lengths, payloads)?;
+        Ok((loaded, loaded_bytes))
+    }
+
+    fn load_candidate_metadata(
+        &mut self,
+        candidate: ObjectRef,
+        limits: RepositoryLimits,
+        budget: CandidateAcquisitionBudget,
+        previous_statement_timeout: &str,
+    ) -> Result<(BTreeMap<ObjectRef, Vec<u8>>, usize)> {
+        let mut entries = BTreeMap::new();
+        let mut pending = BTreeSet::from([candidate]);
+        let mut traversed_edges = 0_usize;
+        let mut loaded_bytes = 0_usize;
+        while !pending.is_empty() {
+            budget.remaining()?;
+            let batch = pending
+                .iter()
+                .take(CANDIDATE_ACQUISITION_BATCH_MAXIMUM)
+                .copied()
+                .collect::<Vec<_>>();
+            let in_flight = batch.iter().copied().collect::<BTreeSet<_>>();
+            for reference in &batch {
+                pending.remove(reference);
+                if !metadata_kind(reference.kind) || entries.contains_key(reference) {
+                    return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+                }
+            }
+            if entries
+                .len()
+                .checked_add(batch.len())
+                .is_none_or(|count| count > limits.max_objects)
+            {
+                return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+            }
+            let (loaded, next_loaded_bytes) = self.load_candidate_metadata_batch(
+                &batch,
+                loaded_bytes,
+                limits,
+                budget,
+                previous_statement_timeout,
+            )?;
+            loaded_bytes = next_loaded_bytes;
+            for (reference, canonical) in loaded {
+                let value = decode_canonical(&canonical, Limits::METADATA)
+                    .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+                let mut outbound = Vec::new();
+                collect_object_references(&value, &mut outbound);
+                traversed_edges = traversed_edges
+                    .checked_add(outbound.len())
+                    .filter(|count| *count <= limits.max_edges)
+                    .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+                if entries.insert(reference, canonical).is_some() {
+                    return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+                }
+                for target in outbound {
+                    if target.kind == ObjectKind::Chunk
+                        || entries.contains_key(&target)
+                        || in_flight.contains(&target)
+                    {
+                        continue;
+                    }
+                    if !metadata_kind(target.kind) {
+                        return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+                    }
+                    pending.insert(target);
+                }
+            }
+        }
+        let closure = metadata_closure(&entries, candidate)?;
+        if closure.len() != entries.len()
+            || !entries.keys().all(|reference| closure.contains(reference))
+        {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        Ok((entries, loaded_bytes))
+    }
+
     fn validate_publication_candidate(&mut self, candidate: ObjectRef) -> Result<()> {
         if candidate.kind != ObjectKind::Snapshot {
             return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
         }
+        let limits = RepositoryLimits::default();
+        let budget = CandidateAcquisitionBudget::new(limits)?;
+        let previous_statement_timeout = self.begin_candidate_statement_budget(budget)?;
         let repository_id = self.authorized_repository_id;
+        self.refresh_candidate_statement_budget(budget, &previous_statement_timeout)?;
         let settings = self
             .transaction()?
             .query_one(
@@ -3330,48 +3604,11 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
             &content_policy_profile,
         )?;
 
-        let limits = RepositoryLimits::default();
-        let preflight = self
-            .transaction()?
-            .query_one(
-                "SELECT count(*)::bigint, COALESCE(sum(byte_length), 0)::text
-                 FROM ogvcs_metadata.metadata_objects WHERE repository_id = $1",
-                &[&uuid(repository_id)],
-            )
-            .map_err(database_error)?;
-        let object_count = usize::try_from(preflight.get::<_, i64>(0))
-            .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
-        let byte_count = preflight
-            .get::<_, String>(1)
-            .parse::<usize>()
-            .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
-        if object_count > limits.max_objects || byte_count > limits.max_bytes {
-            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
-        }
-        let rows = self
-            .transaction()?
-            .query(
-                "SELECT object_kind, object_digest, canonical_bytes, validation_contract
-                 FROM ogvcs_metadata.metadata_objects
-                 WHERE repository_id = $1 ORDER BY object_kind, object_digest",
-                &[&uuid(repository_id)],
-            )
-            .map_err(database_error)?;
-        let mut entries = BTreeMap::new();
-        for row in rows {
-            let reference = object_ref(object_kind(row.get(0))?, row.get(1))?;
-            let canonical: Vec<u8> = row.get(2);
-            let validation_contract: String = row.get(3);
-            if validation_contract != VALIDATION_CONTRACT {
-                return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
-            }
-            if entries.insert(reference, canonical).is_some() {
-                return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
-            }
-        }
+        let (mut entries, byte_count) =
+            self.load_candidate_metadata(candidate, limits, budget, &previous_statement_timeout)?;
         let closure = metadata_closure(&entries, candidate)?;
         let designated_root = designated_snapshot_root(&entries, candidate)?;
-        self.verify_publication_indexes(&entries, &closure)?;
+        self.verify_publication_indexes(&entries, &closure, budget, &previous_statement_timeout)?;
 
         let descriptor = object_ref(ObjectKind::RepositoryDescriptor, descriptor_digest)?;
         if !closure.contains(&descriptor)
@@ -3391,6 +3628,7 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
             derive_lifetime_evidence(&entries, &closure, candidate)?;
         let candidate_change = snapshot_change_ref(&entries, candidate)?;
         let candidate_base = change_base_snapshot_ref(&entries, candidate_change)?;
+        let candidate_file_ids = candidate_tree_file_ids(&entries, candidate)?;
         let required_active = lifetime_records
             .iter()
             .filter(|record| record.first_change_set == candidate_change)
@@ -3400,9 +3638,19 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
                     .iter()
                     .map(|record| record.file_id),
             )
-            .chain(candidate_tree_file_ids(&entries, candidate)?)
+            .chain(candidate_file_ids.iter().copied())
             .collect::<BTreeSet<_>>();
-        let file_id_evidence = self.load_file_id_evidence(limits.max_edges)?;
+        let required_file_ids = lifetime_records
+            .iter()
+            .chain(&working_lifetime_additions)
+            .map(|record| record.file_id)
+            .chain(candidate_file_ids)
+            .collect::<BTreeSet<_>>();
+        if required_file_ids.len() > limits.max_edges {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        let file_id_evidence =
+            self.load_file_id_evidence(&required_file_ids, budget, &previous_statement_timeout)?;
         verify_lifetime_evidence(
             &file_id_evidence,
             lifetime_records.iter().chain(&working_lifetime_additions),
@@ -3426,15 +3674,19 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
             descriptor,
             &required_imports,
             &published_imports,
-            limits.max_edges,
+            limits,
+            budget,
+            &previous_statement_timeout,
         )?;
         let chunk_references = required_chunk_references(&entries, &closure)?;
         let mut loaded_bytes = byte_count;
         for reference in chunk_references {
+            budget.remaining()?;
             let payload = self.validation.resolve_chunk(reference)?;
-            if object_id(ObjectKind::Chunk, &payload)
-                .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?
-                != reference.digest
+            if payload.len() > limits.max_chunk_bytes
+                || object_id(ObjectKind::Chunk, &payload)
+                    .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?
+                    != reference.digest
             {
                 return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
             }
@@ -3450,8 +3702,11 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
         }
         let registry = self.validation.registry();
         let mode = self.validation.validation_mode();
-        let lookup = RepositoryObjectLookup::new(entries.into_iter(), registry, mode, limits)
-            .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        let mut remaining_limits = limits;
+        remaining_limits.max_time = Some(budget.remaining()?);
+        let lookup =
+            RepositoryObjectLookup::new(entries.into_iter(), registry, mode, remaining_limits)
+                .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
         for reference in &closure {
             lookup
                 .resolve(*reference)
@@ -3503,6 +3758,8 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
                 base_paths = Some(expansion.entries);
             }
         }
+        budget.remaining()?;
+        self.refresh_candidate_statement_budget(budget, &previous_statement_timeout)?;
         self.record_exact_tree_delta_resources(
             base_paths
                 .as_ref()
@@ -3512,6 +3769,7 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
                 .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?,
             candidate,
         )?;
+        self.restore_candidate_statement_budget(&previous_statement_timeout)?;
         Ok(())
     }
 
@@ -3542,60 +3800,92 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
 
     fn load_file_id_evidence(
         &mut self,
-        maximum_records: usize,
+        required: &BTreeSet<FileId>,
+        budget: CandidateAcquisitionBudget,
+        previous_statement_timeout: &str,
     ) -> Result<BTreeMap<FileId, StoredFileIdEvidence>> {
-        let repository_id = self.authorized_repository_id;
-        let fetch_limit = maximum_records
-            .checked_add(1)
-            .and_then(|value| i64::try_from(value).ok())
-            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
-        let rows = self
-            .transaction()?
-            .query(
-                "SELECT file_id, state::text, origin::text, first_change_set_digest,
-                        first_operation
-                 FROM ogvcs_metadata.file_id_registry
-                 WHERE repository_id = $1 ORDER BY file_id LIMIT $2",
-                &[&uuid(repository_id), &fetch_limit],
-            )
-            .map_err(database_error)?;
-        if rows.len() > maximum_records {
-            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
-        }
+        let repository_id = uuid(self.authorized_repository_id);
         let mut evidence = BTreeMap::new();
-        for row in rows {
-            let file_id = file_id(row.get(0))?;
-            let first_change_set = row
-                .get::<_, Option<Vec<u8>>>(3)
-                .map(|digest| {
-                    digest
-                        .try_into()
-                        .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))
-                })
-                .transpose()?;
-            let first_operation = row
-                .get::<_, Option<i32>>(4)
-                .map(|value| {
-                    u64::try_from(value)
-                        .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))
-                })
-                .transpose()?;
-            if evidence
-                .insert(
-                    file_id,
-                    StoredFileIdEvidence {
-                        state: row.get(1),
-                        origin: row.get(2),
-                        first_change_set,
-                        first_operation,
-                    },
+        let requested = required.iter().copied().collect::<Vec<_>>();
+        for batch in requested.chunks(CANDIDATE_ACQUISITION_BATCH_MAXIMUM) {
+            self.refresh_candidate_statement_budget(budget, previous_statement_timeout)?;
+            let file_ids = batch
+                .iter()
+                .map(|file_id| file_id.as_bytes().to_vec())
+                .collect::<Vec<_>>();
+            let rows = self
+                .transaction()?
+                .query(
+                    "WITH requested AS (
+                       SELECT requested_file_id, ordinal
+                       FROM unnest($2::bytea[])
+                            WITH ORDINALITY AS request(requested_file_id, ordinal)
+                     )
+                     SELECT requested.ordinal, requested.requested_file_id, registry.file_id,
+                            registry.state::text, registry.origin::text,
+                            registry.first_change_set_digest, registry.first_operation
+                     FROM requested
+                     LEFT JOIN ogvcs_metadata.file_id_registry AS registry
+                       ON registry.repository_id = $1
+                      AND registry.file_id = requested.requested_file_id
+                     ORDER BY requested.ordinal",
+                    &[&repository_id, &file_ids],
                 )
-                .is_some()
-            {
+                .map_err(database_error)?;
+            if rows.len() != batch.len() {
                 return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
             }
+            for (index, (row, expected)) in rows.into_iter().zip(batch).enumerate() {
+                let ordinal = i64::try_from(index + 1)
+                    .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+                let requested_file_id: Vec<u8> = row.get(1);
+                let stored_file_id: Option<Vec<u8>> = row.get(2);
+                if row.get::<_, i64>(0) != ordinal
+                    || requested_file_id.as_slice() != expected.as_bytes()
+                    || stored_file_id.as_deref() != Some(expected.as_bytes().as_slice())
+                {
+                    return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+                }
+                let first_change_set = row
+                    .get::<_, Option<Vec<u8>>>(5)
+                    .map(|digest| {
+                        digest
+                            .try_into()
+                            .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))
+                    })
+                    .transpose()?;
+                let first_operation = row
+                    .get::<_, Option<i32>>(6)
+                    .map(|value| {
+                        u64::try_from(value)
+                            .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))
+                    })
+                    .transpose()?;
+                if evidence
+                    .insert(
+                        *expected,
+                        StoredFileIdEvidence {
+                            state: row
+                                .get::<_, Option<String>>(3)
+                                .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?,
+                            origin: row
+                                .get::<_, Option<String>>(4)
+                                .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?,
+                            first_change_set,
+                            first_operation,
+                        },
+                    )
+                    .is_some()
+                {
+                    return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+                }
+            }
         }
-        Ok(evidence)
+        if evidence.len() == required.len() {
+            Ok(evidence)
+        } else {
+            Err(DomainError::new(DomainErrorCode::ObjectInvalid))
+        }
     }
 
     fn load_import_mappings(
@@ -3603,73 +3893,163 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
         descriptor: ObjectRef,
         required: &BTreeSet<FileId>,
         published: &BTreeSet<FileId>,
-        maximum_records: usize,
+        limits: RepositoryLimits,
+        budget: CandidateAcquisitionBudget,
+        previous_statement_timeout: &str,
     ) -> Result<Vec<ImportMapping>> {
-        let repository_id = self.authorized_repository_id;
-        let fetch_limit = maximum_records
-            .checked_add(1)
-            .and_then(|value| i64::try_from(value).ok())
-            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
-        let rows = self
-            .transaction()?
-            .query(
-                "SELECT mapping.importer_profile, mapping.source_namespace_digest,
-                        mapping.source_identity_digest, mapping.file_id, registry.state::text
-                 FROM ogvcs_metadata.file_id_import_mappings AS mapping
-                 JOIN ogvcs_metadata.file_id_registry AS registry
-                   ON registry.repository_id = mapping.repository_id
-                  AND registry.file_id = mapping.file_id
-                 WHERE mapping.repository_id = $1
-                 ORDER BY mapping.importer_profile, mapping.source_namespace_digest,
-                          mapping.source_identity_digest
-                 LIMIT $2",
-                &[&uuid(repository_id), &fetch_limit],
-            )
-            .map_err(database_error)?;
-        if rows.len() > maximum_records {
+        if required.len() > limits.max_edges {
             return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
         }
-        let mut mappings = Vec::with_capacity(rows.len());
-        for row in rows {
-            let file_id = file_id(row.get(3))?;
-            if !required.contains(&file_id) {
-                continue;
+        let repository_id = uuid(self.authorized_repository_id);
+        let requested = required.iter().copied().collect::<Vec<_>>();
+        let mut mappings = Vec::with_capacity(requested.len());
+        let mut profile_bytes = 0_usize;
+        for batch in requested.chunks(CANDIDATE_ACQUISITION_BATCH_MAXIMUM) {
+            let file_ids = batch
+                .iter()
+                .map(|file_id| file_id.as_bytes().to_vec())
+                .collect::<Vec<_>>();
+            self.refresh_candidate_statement_budget(budget, previous_statement_timeout)?;
+            let header_rows = self
+                .transaction()?
+                .query(
+                    "WITH requested AS (
+                       SELECT requested_file_id, ordinal
+                       FROM unnest($2::bytea[])
+                            WITH ORDINALITY AS request(requested_file_id, ordinal)
+                     )
+                     SELECT requested.ordinal, requested.requested_file_id, mapping.file_id,
+                            octet_length(mapping.importer_profile)::bigint
+                     FROM requested
+                     LEFT JOIN ogvcs_metadata.file_id_import_mappings AS mapping
+                       ON mapping.repository_id = $1
+                      AND mapping.file_id = requested.requested_file_id
+                     ORDER BY requested.ordinal",
+                    &[&repository_id, &file_ids],
+                )
+                .map_err(database_error)?;
+            if header_rows.len() != batch.len() {
+                return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
             }
-            let state: String = row.get(4);
-            let state = if published.contains(&file_id) {
-                ImportState::Published
-            } else {
-                match state.as_str() {
-                    "reserved" => ImportState::Reserved,
-                    "active" => ImportState::Materialized,
-                    _ => return Err(DomainError::new(DomainErrorCode::ObjectInvalid)),
+            let mut expected_profile_lengths = Vec::with_capacity(batch.len());
+            for (index, (row, expected)) in header_rows.into_iter().zip(batch).enumerate() {
+                let ordinal = i64::try_from(index + 1)
+                    .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+                let requested_file_id: Vec<u8> = row.get(1);
+                let stored_file_id: Option<Vec<u8>> = row.get(2);
+                let length = row
+                    .get::<_, Option<i64>>(3)
+                    .and_then(|length| usize::try_from(length).ok())
+                    .filter(|length| *length <= MAX_IMPORTER_PROFILE_BYTES)
+                    .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+                if row.get::<_, i64>(0) != ordinal
+                    || requested_file_id.as_slice() != expected.as_bytes()
+                    || stored_file_id.as_deref() != Some(expected.as_bytes().as_slice())
+                {
+                    return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
                 }
-            };
-            let mut mapping = ImportMapping {
-                descriptor,
-                importer_profile: row
-                    .get::<_, String>(0)
-                    .parse()
-                    .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?,
-                source_namespace_digest: row
-                    .get::<_, Vec<u8>>(1)
-                    .try_into()
-                    .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?,
-                source_identity_digest: row
-                    .get::<_, Vec<u8>>(2)
-                    .try_into()
-                    .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?,
-                file_id,
-                state,
-                declared_mapping_key: [0; 32],
-            };
-            mapping.declared_mapping_key = import_mapping_key(descriptor, &mapping)
-                .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
-            mappings.push(mapping);
+                profile_bytes = profile_bytes
+                    .checked_add(length)
+                    .filter(|total| *total <= limits.max_memory_bytes)
+                    .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+                expected_profile_lengths.push(length);
+            }
+
+            self.refresh_candidate_statement_budget(budget, previous_statement_timeout)?;
+            let rows = self
+                .transaction()?
+                .query(
+                    "WITH requested AS (
+                       SELECT requested_file_id, ordinal
+                       FROM unnest($2::bytea[])
+                            WITH ORDINALITY AS request(requested_file_id, ordinal)
+                     )
+                     SELECT requested.ordinal, requested.requested_file_id, mapping.file_id,
+                            mapping.importer_profile, mapping.source_namespace_digest,
+                            mapping.source_identity_digest, registry.state::text
+                     FROM requested
+                     LEFT JOIN ogvcs_metadata.file_id_import_mappings AS mapping
+                       ON mapping.repository_id = $1
+                      AND mapping.file_id = requested.requested_file_id
+                     LEFT JOIN ogvcs_metadata.file_id_registry AS registry
+                       ON registry.repository_id = mapping.repository_id
+                      AND registry.file_id = mapping.file_id
+                     ORDER BY requested.ordinal",
+                    &[&repository_id, &file_ids],
+                )
+                .map_err(database_error)?;
+            if rows.len() != batch.len() {
+                return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+            }
+            for (index, ((row, expected), expected_length)) in rows
+                .into_iter()
+                .zip(batch)
+                .zip(expected_profile_lengths)
+                .enumerate()
+            {
+                let ordinal = i64::try_from(index + 1)
+                    .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+                let requested_file_id: Vec<u8> = row.get(1);
+                let stored_file_id: Option<Vec<u8>> = row.get(2);
+                let importer_profile = row
+                    .get::<_, Option<String>>(3)
+                    .filter(|profile| profile.len() == expected_length)
+                    .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+                if row.get::<_, i64>(0) != ordinal
+                    || requested_file_id.as_slice() != expected.as_bytes()
+                    || stored_file_id.as_deref() != Some(expected.as_bytes().as_slice())
+                {
+                    return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+                }
+                let state = row
+                    .get::<_, Option<String>>(6)
+                    .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+                let state = if published.contains(expected) {
+                    ImportState::Published
+                } else {
+                    match state.as_str() {
+                        "reserved" => ImportState::Reserved,
+                        "active" => ImportState::Materialized,
+                        _ => return Err(DomainError::new(DomainErrorCode::ObjectInvalid)),
+                    }
+                };
+                let mut mapping = ImportMapping {
+                    descriptor,
+                    importer_profile: importer_profile
+                        .parse()
+                        .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?,
+                    source_namespace_digest: row
+                        .get::<_, Option<Vec<u8>>>(4)
+                        .and_then(|digest| digest.try_into().ok())
+                        .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?,
+                    source_identity_digest: row
+                        .get::<_, Option<Vec<u8>>>(5)
+                        .and_then(|digest| digest.try_into().ok())
+                        .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?,
+                    file_id: *expected,
+                    state,
+                    declared_mapping_key: [0; 32],
+                };
+                mapping.declared_mapping_key = import_mapping_key(descriptor, &mapping)
+                    .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+                mappings.push(mapping);
+            }
         }
         if mappings.len() != required.len() {
             return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
         }
+        mappings.sort_by(|left, right| {
+            left.importer_profile
+                .cmp(&right.importer_profile)
+                .then_with(|| {
+                    left.source_namespace_digest
+                        .cmp(&right.source_namespace_digest)
+                })
+                .then_with(|| {
+                    left.source_identity_digest
+                        .cmp(&right.source_identity_digest)
+                })
+        });
         Ok(mappings)
     }
 
@@ -3677,6 +4057,8 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
         &mut self,
         entries: &BTreeMap<ObjectRef, Vec<u8>>,
         closure: &BTreeSet<ObjectRef>,
+        budget: CandidateAcquisitionBudget,
+        previous_statement_timeout: &str,
     ) -> Result<()> {
         let repository_id = self.authorized_repository_id;
         for reference in closure {
@@ -3691,6 +4073,7 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
                         Some(Cbor::Array(entries)) => entries.len(),
                         _ => return Err(DomainError::new(DomainErrorCode::ObjectInvalid)),
                     };
+                    self.refresh_candidate_statement_budget(budget, previous_statement_timeout)?;
                     let rows = self
                         .transaction()?
                         .query(
@@ -3726,7 +4109,12 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
                     }
                 }
                 ObjectKind::Snapshot => {
-                    self.verify_snapshot_index(entries, *reference)?;
+                    self.verify_snapshot_index(
+                        entries,
+                        *reference,
+                        budget,
+                        previous_statement_timeout,
+                    )?;
                 }
                 _ => {}
             }
@@ -3738,6 +4126,8 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
         &mut self,
         entries: &BTreeMap<ObjectRef, Vec<u8>>,
         snapshot: ObjectRef,
+        budget: CandidateAcquisitionBudget,
+        previous_statement_timeout: &str,
     ) -> Result<()> {
         let repository_id = self.authorized_repository_id;
         let canonical = entries
@@ -3756,6 +4146,7 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
                 .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?,
             _ => return Err(DomainError::new(DomainErrorCode::ObjectInvalid)),
         };
+        self.refresh_candidate_statement_budget(budget, previous_statement_timeout)?;
         let indexed = self
             .transaction()?
             .query_opt(
@@ -3769,6 +4160,7 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
         if indexed_root.as_slice() != &root.digest[..] {
             return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
         }
+        self.refresh_candidate_statement_budget(budget, previous_statement_timeout)?;
         let indexed_parents = self
             .transaction()?
             .query(
@@ -3790,6 +4182,7 @@ impl<'a, V: ObjectValidationPort, View: AuthorizedView> PostgresMetadataTransact
             return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
         }
         let expected_history = canonical_file_history_facts(entries, snapshot)?;
+        self.refresh_candidate_statement_budget(budget, previous_statement_timeout)?;
         let actual_history = self
             .transaction()?
             .query(
@@ -5859,6 +6252,126 @@ struct StoredFileIdEvidence {
     first_operation: Option<u64>,
 }
 
+fn candidate_metadata_header_observation(row: Row) -> CandidateMetadataHeaderObservation {
+    CandidateMetadataHeaderObservation {
+        ordinal: row.get(0),
+        requested_kind: row.get(1),
+        requested_digest: row.get(2),
+        stored_kind: row.get(3),
+        stored_digest: row.get(4),
+        digest_algorithm: row.get(5),
+        byte_length: row.get(6),
+        contract_matches: row.get(7),
+    }
+}
+
+fn candidate_metadata_payload_observation(row: Row) -> CandidateMetadataPayloadObservation {
+    CandidateMetadataPayloadObservation {
+        header: CandidateMetadataHeaderObservation {
+            ordinal: row.get(0),
+            requested_kind: row.get(1),
+            requested_digest: row.get(2),
+            stored_kind: row.get(3),
+            stored_digest: row.get(4),
+            digest_algorithm: row.get(5),
+            byte_length: row.get(6),
+            contract_matches: row.get(7),
+        },
+        canonical_bytes: row.get(8),
+    }
+}
+
+fn candidate_metadata_header_matches(
+    expected: ObjectRef,
+    ordinal: usize,
+    observation: &CandidateMetadataHeaderObservation,
+) -> bool {
+    let expected_kind = i16::try_from(expected.kind.code()).ok();
+    let expected_ordinal = i64::try_from(ordinal + 1).ok();
+    Some(observation.ordinal) == expected_ordinal
+        && Some(observation.requested_kind) == expected_kind
+        && observation.requested_digest.as_slice() == &expected.digest[..]
+        && observation.stored_kind == expected_kind
+        && observation.stored_digest.as_deref() == Some(&expected.digest[..])
+        && observation.digest_algorithm == Some(1)
+        && observation.contract_matches == Some(true)
+}
+
+fn validate_candidate_metadata_headers(
+    requested: &[ObjectRef],
+    observations: &[CandidateMetadataHeaderObservation],
+    loaded_bytes: usize,
+    maximum_bytes: usize,
+) -> Result<(Vec<usize>, usize)> {
+    if requested.is_empty()
+        || requested.len() > CANDIDATE_ACQUISITION_BATCH_MAXIMUM
+        || observations.len() != requested.len()
+        || !requested.windows(2).all(|pair| pair[0] < pair[1])
+    {
+        return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+    }
+    let mut total = loaded_bytes;
+    let mut lengths = Vec::with_capacity(requested.len());
+    for (ordinal, (expected, observation)) in requested.iter().zip(observations).enumerate() {
+        if !candidate_metadata_header_matches(*expected, ordinal, observation) {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        let length = observation
+            .byte_length
+            .and_then(|length| usize::try_from(length).ok())
+            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        total = total
+            .checked_add(length)
+            .filter(|total| *total <= maximum_bytes)
+            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        lengths.push(length);
+    }
+    Ok((lengths, total))
+}
+
+fn validate_candidate_metadata_payloads(
+    requested: &[ObjectRef],
+    expected_lengths: &[usize],
+    observations: Vec<CandidateMetadataPayloadObservation>,
+) -> Result<Vec<(ObjectRef, Vec<u8>)>> {
+    if requested.is_empty()
+        || requested.len() > CANDIDATE_ACQUISITION_BATCH_MAXIMUM
+        || expected_lengths.len() != requested.len()
+        || observations.len() != requested.len()
+    {
+        return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+    }
+    let mut loaded = Vec::with_capacity(requested.len());
+    for (ordinal, ((expected, expected_length), observation)) in requested
+        .iter()
+        .zip(expected_lengths)
+        .zip(observations)
+        .enumerate()
+    {
+        if !candidate_metadata_header_matches(*expected, ordinal, &observation.header)
+            || observation
+                .header
+                .byte_length
+                .and_then(|length| usize::try_from(length).ok())
+                != Some(*expected_length)
+        {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        let canonical = observation
+            .canonical_bytes
+            .filter(|canonical| canonical.len() == *expected_length)
+            .ok_or_else(|| DomainError::new(DomainErrorCode::ObjectInvalid))?;
+        if object_id(expected.kind, &canonical)
+            .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?
+            != expected.digest
+        {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        loaded.push((*expected, canonical));
+    }
+    Ok(loaded)
+}
+
 fn metadata_closure(
     entries: &BTreeMap<ObjectRef, Vec<u8>>,
     candidate: ObjectRef,
@@ -6982,11 +7495,15 @@ fn file_id_database_error(error: postgres::Error) -> DomainError {
 #[cfg(test)]
 mod tests {
     use super::{
-        canonical_file_history_from_change, canonical_identity_resource_batch,
-        canonical_json_bytes, decode_canonical_identity_resource_batch, exact_tree_delta_facts,
-        identity_file_resource, identity_metadata_scope_digest, prepare_identity_resource,
-        record_identity_resource_in_batch, IdentityAuthorizationResource, ObjectKind,
-        MAXIMUM_BATCH_RESOURCES, MAX_IDENTITY_AUTHORIZATION_BATCH_BYTES,
+        candidate_metadata_header_matches, canonical_file_history_from_change,
+        canonical_identity_resource_batch, canonical_json_bytes,
+        decode_canonical_identity_resource_batch, exact_tree_delta_facts, identity_file_resource,
+        identity_metadata_scope_digest, prepare_identity_resource,
+        record_identity_resource_in_batch, validate_candidate_metadata_headers,
+        validate_candidate_metadata_payloads, CandidateMetadataHeaderObservation,
+        CandidateMetadataPayloadObservation, IdentityAuthorizationResource, ObjectKind,
+        CANDIDATE_ACQUISITION_BATCH_MAXIMUM, MAXIMUM_BATCH_RESOURCES,
+        MAX_IDENTITY_AUTHORIZATION_BATCH_BYTES,
     };
     use crate::{FileId, ObjectRef, RepositoryId, TenantId, TransactionCapability};
     use std::collections::{BTreeMap, BTreeSet};
@@ -7005,6 +7522,156 @@ mod tests {
             object_id: None,
             name: Some(name),
         }
+    }
+
+    fn candidate_reference(index: u16) -> ObjectRef {
+        let mut digest = [0_u8; 32];
+        digest[..2].copy_from_slice(&index.to_be_bytes());
+        ObjectRef {
+            kind: ObjectKind::Attestation,
+            digest,
+        }
+    }
+
+    fn candidate_header(
+        expected: ObjectRef,
+        ordinal: usize,
+        byte_length: usize,
+    ) -> CandidateMetadataHeaderObservation {
+        CandidateMetadataHeaderObservation {
+            ordinal: i64::try_from(ordinal + 1).unwrap(),
+            requested_kind: i16::try_from(expected.kind.code()).unwrap(),
+            requested_digest: expected.digest.to_vec(),
+            stored_kind: Some(i16::try_from(expected.kind.code()).unwrap()),
+            stored_digest: Some(expected.digest.to_vec()),
+            digest_algorithm: Some(1),
+            byte_length: Some(i64::try_from(byte_length).unwrap()),
+            contract_matches: Some(true),
+        }
+    }
+
+    #[test]
+    fn candidate_acquisition_batches_are_exact_bounded_and_never_truncated() {
+        let requested = (0..CANDIDATE_ACQUISITION_BATCH_MAXIMUM)
+            .map(|index| candidate_reference(u16::try_from(index).unwrap()))
+            .collect::<Vec<_>>();
+        let headers = requested
+            .iter()
+            .enumerate()
+            .map(|(ordinal, reference)| candidate_header(*reference, ordinal, 1))
+            .collect::<Vec<_>>();
+        let (lengths, total) =
+            validate_candidate_metadata_headers(&requested, &headers, 0, requested.len()).unwrap();
+        assert_eq!(lengths.len(), CANDIDATE_ACQUISITION_BATCH_MAXIMUM);
+        assert_eq!(total, CANDIDATE_ACQUISITION_BATCH_MAXIMUM);
+
+        let mut over_page = requested;
+        over_page.push(candidate_reference(
+            u16::try_from(CANDIDATE_ACQUISITION_BATCH_MAXIMUM).unwrap(),
+        ));
+        assert_eq!(
+            over_page
+                .chunks(CANDIDATE_ACQUISITION_BATCH_MAXIMUM)
+                .map(<[ObjectRef]>::len)
+                .collect::<Vec<_>>(),
+            vec![CANDIDATE_ACQUISITION_BATCH_MAXIMUM, 1]
+        );
+        let over_headers = over_page
+            .iter()
+            .enumerate()
+            .map(|(ordinal, reference)| candidate_header(*reference, ordinal, 1))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            validate_candidate_metadata_headers(&over_page, &over_headers, 0, over_page.len())
+                .unwrap_err()
+                .code,
+            crate::DomainErrorCode::ObjectInvalid
+        );
+    }
+
+    #[test]
+    fn candidate_metadata_headers_reject_missing_swapped_duplicate_and_oversized_rows() {
+        let first = candidate_reference(1);
+        let second = candidate_reference(2);
+        let requested = [first, second];
+        let exact = [
+            candidate_header(first, 0, 4),
+            candidate_header(second, 1, 4),
+        ];
+        assert_eq!(
+            validate_candidate_metadata_headers(&requested, &exact, 0, 8)
+                .unwrap()
+                .1,
+            8
+        );
+        assert_eq!(
+            validate_candidate_metadata_headers(&requested, &exact, 0, 7)
+                .unwrap_err()
+                .code,
+            crate::DomainErrorCode::ObjectInvalid
+        );
+        assert!(validate_candidate_metadata_headers(&requested, &exact[..1], 0, 8).is_err());
+
+        let swapped = [exact[1].clone(), exact[0].clone()];
+        assert!(validate_candidate_metadata_headers(&requested, &swapped, 0, 8).is_err());
+        assert!(validate_candidate_metadata_headers(&[first, first], &exact, 0, 8).is_err());
+
+        let mut foreign_contract = exact.to_vec();
+        foreign_contract[0].contract_matches = Some(false);
+        assert!(validate_candidate_metadata_headers(&requested, &foreign_contract, 0, 8).is_err());
+        let mut substituted_digest = exact.to_vec();
+        substituted_digest[0].stored_digest = Some(second.digest.to_vec());
+        assert!(
+            validate_candidate_metadata_headers(&requested, &substituted_digest, 0, 8).is_err()
+        );
+    }
+
+    #[test]
+    fn candidate_metadata_payload_rechecks_tuple_length_identity_and_phase_stability() {
+        let canonical = include_bytes!(
+            "../../../../spec/repository-format/v1/vectors/objects/10-attestation.cbor"
+        )
+        .to_vec();
+        let reference = ObjectRef {
+            kind: ObjectKind::Attestation,
+            digest: ogvcs_object_model::object_id(ObjectKind::Attestation, &canonical).unwrap(),
+        };
+        let observation = CandidateMetadataPayloadObservation {
+            header: candidate_header(reference, 0, canonical.len()),
+            canonical_bytes: Some(canonical.clone()),
+        };
+        assert_eq!(
+            validate_candidate_metadata_payloads(
+                &[reference],
+                &[canonical.len()],
+                vec![observation.clone()]
+            )
+            .unwrap(),
+            vec![(reference, canonical.clone())]
+        );
+
+        let mut changed_length = observation.clone();
+        changed_length.header.byte_length = Some(2);
+        assert!(
+            validate_candidate_metadata_payloads(&[reference], &[1], vec![changed_length]).is_err()
+        );
+        let mut changed_bytes = observation.clone();
+        let mut substituted = canonical.clone();
+        substituted[0] ^= 1;
+        changed_bytes.canonical_bytes = Some(substituted);
+        assert!(validate_candidate_metadata_payloads(
+            &[reference],
+            &[canonical.len()],
+            vec![changed_bytes]
+        )
+        .is_err());
+        let mut changed_tuple = observation;
+        changed_tuple.header.ordinal = 2;
+        assert!(!candidate_metadata_header_matches(
+            reference,
+            0,
+            &changed_tuple.header
+        ));
     }
 
     #[test]

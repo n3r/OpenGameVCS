@@ -116,6 +116,90 @@ for (const file of rustFiles) {
   );
 }
 
+const postgresSource = await readFile(resolve(root, 'src/postgres.rs'), 'utf8');
+const candidateLoaderStart = postgresSource.indexOf('fn load_candidate_metadata_batch(');
+const candidateLoaderEnd = postgresSource.indexOf(
+  '\n    fn record_exact_tree_delta_resources(',
+  candidateLoaderStart,
+);
+assert(
+  candidateLoaderStart >= 0 && candidateLoaderEnd > candidateLoaderStart,
+  'root-scoped candidate acquisition boundary is missing',
+);
+const candidateLoader = postgresSource.slice(candidateLoaderStart, candidateLoaderEnd);
+for (const evidence of [
+  'CANDIDATE_ACQUISITION_BATCH_MAXIMUM',
+  'CANDIDATE_METADATA_HEADER_SQL',
+  'CANDIDATE_METADATA_PAYLOAD_SQL',
+  'validate_candidate_metadata_headers(',
+  'validate_candidate_metadata_payloads(',
+  'collect_object_references(&value, &mut outbound)',
+  'traversed_edges',
+  'metadata_closure(&entries, candidate)',
+  'closure.len() != entries.len()',
+  'let required_file_ids = lifetime_records',
+  'self.load_file_id_evidence(',
+  'self.load_import_mappings(',
+  'remaining_limits.max_time = Some(budget.remaining()?)',
+  'self.restore_candidate_statement_budget(&previous_statement_timeout)',
+  'self.record_exact_tree_delta_resources(',
+]) assert(candidateLoader.includes(evidence), `root-scoped candidate evidence missing: ${evidence}`);
+for (const forbidden of [
+  'SELECT count(*)::bigint, COALESCE(sum(byte_length)',
+  'WHERE repository_id = $1 ORDER BY object_kind, object_digest',
+  'WHERE repository_id = $1 ORDER BY file_id LIMIT',
+  'WHERE mapping.repository_id = $1\n                 ORDER BY mapping.importer_profile',
+]) assert(!candidateLoader.includes(forbidden), `whole-repository candidate scan returned: ${forbidden}`);
+
+const metadataHeaderSqlStart = postgresSource.indexOf('const CANDIDATE_METADATA_HEADER_SQL');
+const metadataPayloadSqlStart = postgresSource.indexOf('const CANDIDATE_METADATA_PAYLOAD_SQL');
+const metadataSqlEnd = postgresSource.indexOf(
+  '#[derive(Clone, Copy, Debug)]\nstruct CandidateAcquisitionBudget',
+  metadataPayloadSqlStart,
+);
+assert(
+  metadataHeaderSqlStart >= 0
+    && metadataPayloadSqlStart > metadataHeaderSqlStart
+    && metadataSqlEnd > metadataPayloadSqlStart,
+  'candidate metadata SQL boundary is missing',
+);
+const metadataSql = postgresSource.slice(metadataHeaderSqlStart, metadataSqlEnd);
+for (const evidence of [
+  'unnest($2::smallint[], $3::bytea[])',
+  'WITH ORDINALITY',
+  'object.object_kind = requested.requested_kind',
+  'object.digest_algorithm = 1',
+  'object.object_digest = requested.requested_digest',
+  'object.byte_length',
+  'object.validation_contract = $4',
+  'object.canonical_bytes',
+  'ORDER BY requested.ordinal',
+]) assert(metadataSql.includes(evidence), `candidate metadata SQL binding missing: ${evidence}`);
+assert(!metadataSql.includes('LIMIT'), 'candidate metadata SQL uses LIMIT as an absence proof');
+
+const fileIdLoaderStart = postgresSource.indexOf('fn load_file_id_evidence(');
+const importLoaderStart = postgresSource.indexOf('fn load_import_mappings(', fileIdLoaderStart);
+const indexVerifierStart = postgresSource.indexOf('fn verify_publication_indexes(', importLoaderStart);
+assert(
+  fileIdLoaderStart >= 0 && importLoaderStart > fileIdLoaderStart
+    && indexVerifierStart > importLoaderStart,
+  'candidate FileID/import loader boundary is missing',
+);
+const fileIdLoader = postgresSource.slice(fileIdLoaderStart, importLoaderStart);
+const importLoader = postgresSource.slice(importLoaderStart, indexVerifierStart);
+for (const loader of [fileIdLoader, importLoader]) {
+  assert(loader.includes('unnest($2::bytea[])'), 'candidate identity loader is not exact-key');
+  assert(loader.includes('WITH ORDINALITY'), 'candidate identity loader omits ordinality');
+  assert(loader.includes('LEFT JOIN'), 'candidate identity loader cannot prove missing rows');
+  assert(loader.includes('ORDER BY requested.ordinal'), 'candidate identity loader order differs');
+  assert(!loader.includes('LIMIT'), 'candidate identity loader uses LIMIT as an absence proof');
+}
+assert(
+  importLoader.indexOf('octet_length(mapping.importer_profile)::bigint')
+    < importLoader.indexOf('mapping.importer_profile, mapping.source_namespace_digest'),
+  'candidate import loader fetches the variable profile before its byte bound',
+);
+
 const manifest = JSON.parse(await readFile(resolve(migrations, 'manifest.json')));
 assert(manifest.schemaVersion === 'ogvcs.repository-metadata/migration-manifest/v1', 'migration manifest schema differs');
 assert(JSON.stringify(manifest.entries.map(({ version, phase }) => [version, phase])) === '[[1,"expand"],[1,"migrate"],[1,"contract"],[2,"expand"],[2,"migrate"],[2,"contract"],[3,"expand"],[3,"migrate"],[3,"contract"],[4,"expand"],[4,"migrate"],[4,"contract"],[5,"expand"],[5,"migrate"],[5,"contract"],[6,"expand"],[6,"migrate"],[6,"contract"],[7,"expand"],[7,"migrate"],[7,"contract"],[8,"expand"],[8,"migrate"],[8,"contract"],[9,"expand"],[9,"migrate"],[9,"contract"],[10,"expand"],[10,"migrate"],[10,"contract"],[11,"expand"],[11,"migrate"],[11,"contract"],[12,"expand"],[12,"migrate"],[12,"contract"],[13,"expand"],[13,"migrate"],[13,"contract"]]', 'migration phases are not ordered');

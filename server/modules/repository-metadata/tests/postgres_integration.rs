@@ -888,6 +888,17 @@ fn production_reference_postgres_report() {
         file_id,
     );
     report("publication-index-and-lifetime-binding");
+    root_scoped_candidate_acquisition_report(
+        &database_url,
+        &mut store,
+        &context,
+        repository_id,
+        &child_tree,
+        &tree,
+        &snapshot,
+        &provenance,
+    );
+    report("root-scoped-candidate-acquisition");
     object_replay_and_collision(
         &database_url,
         &mut store,
@@ -3171,6 +3182,320 @@ fn publication_binding_report(
     assert_eq!(counts(database_url, repository_id), baseline);
 }
 
+#[allow(clippy::too_many_arguments)]
+fn root_scoped_candidate_acquisition_report(
+    database_url: &str,
+    store: &mut PostgresMetadataStore<IsolatedAllow, IsolatedConformanceValidation>,
+    context: &AuthorizationContext,
+    repository_id: RepositoryId,
+    child_tree: &(ObjectRef, Vec<u8>),
+    tree: &(ObjectRef, Vec<u8>),
+    snapshot: &(ObjectRef, Vec<u8>),
+    provenance: &(ObjectRef, Vec<u8>),
+) {
+    let original_counts = candidate_mutation_counts(database_url, repository_id);
+    let repository = Uuid::from_bytes(*repository_id.as_bytes());
+    let unreachable_foreign_digest = [0xe1_u8; 32];
+    let unreachable_corrupt_digest = [0xe2_u8; 32];
+    let mut client = Client::connect(database_url, NoTls).unwrap();
+    client
+        .execute(
+            "INSERT INTO ogvcs_metadata.metadata_objects
+             (repository_id, object_kind, digest_algorithm, object_digest, canonical_bytes,
+              validation_contract)
+             VALUES ($1, 10, 1, $2, $3, 'fault-injection'),
+                    ($1, 11, 1, $4, $5, 'ogvcs.repository-format@1')",
+            &[
+                &repository,
+                &&unreachable_foreign_digest[..],
+                &&b"unreachable-foreign"[..],
+                &&unreachable_corrupt_digest[..],
+                &&b"unreachable-corrupt"[..],
+            ],
+        )
+        .unwrap();
+    client
+        .execute(
+            "INSERT INTO ogvcs_metadata.file_id_registry
+             (repository_id, file_id, state, origin, owner_kind, owner_id)
+             SELECT $1, decode(lpad(to_hex(value), 32, '0'), 'hex'),
+                    'active', 'import', 'published', 'root-scoped-unrelated'
+             FROM generate_series(50000, 51000) AS series(value)",
+            &[&repository],
+        )
+        .unwrap();
+    client
+        .execute(
+            "INSERT INTO ogvcs_metadata.file_id_import_mappings
+             (repository_id, importer_profile, source_namespace_digest,
+              source_identity_digest, file_id)
+             SELECT repository_id, 'not-a-candidate-profile', file_id || file_id,
+                    decode(repeat('ab', 32), 'hex'), file_id
+             FROM ogvcs_metadata.file_id_registry
+             WHERE repository_id = $1 AND owner_id = 'root-scoped-unrelated'",
+            &[&repository],
+        )
+        .unwrap();
+    drop(client);
+
+    assert_candidate_validation_succeeds_and_rolls_back(
+        database_url,
+        store,
+        context,
+        repository_id,
+        snapshot.0,
+        "root-scoped-unreachable",
+        [0xe1; 32],
+    );
+
+    let baseline = candidate_mutation_counts(database_url, repository_id);
+    let mut client = Client::connect(database_url, NoTls).unwrap();
+    client
+        .execute(
+            "UPDATE ogvcs_metadata.metadata_objects SET validation_contract = 'fault-injection'
+             WHERE repository_id = $1 AND object_kind = $2 AND object_digest = $3",
+            &[
+                &repository,
+                &(provenance.0.kind.code() as i16),
+                &&provenance.0.digest[..],
+            ],
+        )
+        .unwrap();
+    drop(client);
+    assert_publication_rejected(
+        store,
+        context,
+        repository_id,
+        snapshot.0,
+        "root-scoped-reachable-contract",
+        [0xe2; 32],
+    );
+    assert_eq!(
+        candidate_mutation_counts(database_url, repository_id),
+        baseline
+    );
+    let mut client = Client::connect(database_url, NoTls).unwrap();
+    client
+        .execute(
+            "UPDATE ogvcs_metadata.metadata_objects
+             SET validation_contract = 'ogvcs.repository-format@1'
+             WHERE repository_id = $1 AND object_kind = $2 AND object_digest = $3",
+            &[
+                &repository,
+                &(provenance.0.kind.code() as i16),
+                &&provenance.0.digest[..],
+            ],
+        )
+        .unwrap();
+
+    let attestation = fixture(ObjectKind::Attestation, "10-attestation.cbor");
+    client
+        .execute(
+            "UPDATE ogvcs_metadata.metadata_objects SET canonical_bytes = $4
+             WHERE repository_id = $1 AND object_kind = $2 AND object_digest = $3",
+            &[
+                &repository,
+                &(provenance.0.kind.code() as i16),
+                &&provenance.0.digest[..],
+                &&attestation.1[..],
+            ],
+        )
+        .unwrap();
+    drop(client);
+    assert_publication_rejected(
+        store,
+        context,
+        repository_id,
+        snapshot.0,
+        "root-scoped-reachable-identity",
+        [0xe3; 32],
+    );
+    assert_eq!(
+        candidate_mutation_counts(database_url, repository_id),
+        baseline
+    );
+    let mut client = Client::connect(database_url, NoTls).unwrap();
+    client
+        .execute(
+            "UPDATE ogvcs_metadata.metadata_objects SET canonical_bytes = $4
+             WHERE repository_id = $1 AND object_kind = $2 AND object_digest = $3",
+            &[
+                &repository,
+                &(provenance.0.kind.code() as i16),
+                &&provenance.0.digest[..],
+                &&provenance.1[..],
+            ],
+        )
+        .unwrap();
+
+    client
+        .execute(
+            "UPDATE ogvcs_metadata.metadata_objects
+             SET canonical_bytes = CASE object_digest WHEN $3 THEN $4::bytea ELSE $5::bytea END
+             WHERE repository_id = $1 AND object_kind = 3 AND object_digest IN ($2, $3)",
+            &[
+                &repository,
+                &&child_tree.0.digest[..],
+                &&tree.0.digest[..],
+                &&child_tree.1[..],
+                &&tree.1[..],
+            ],
+        )
+        .unwrap();
+    drop(client);
+    assert_publication_rejected(
+        store,
+        context,
+        repository_id,
+        snapshot.0,
+        "root-scoped-positional-substitution",
+        [0xe4; 32],
+    );
+    assert_eq!(
+        candidate_mutation_counts(database_url, repository_id),
+        baseline
+    );
+    let mut client = Client::connect(database_url, NoTls).unwrap();
+    client
+        .execute(
+            "UPDATE ogvcs_metadata.metadata_objects
+             SET canonical_bytes = CASE object_digest WHEN $2 THEN $4::bytea ELSE $5::bytea END
+             WHERE repository_id = $1 AND object_kind = 3 AND object_digest IN ($2, $3)",
+            &[
+                &repository,
+                &&child_tree.0.digest[..],
+                &&tree.0.digest[..],
+                &&child_tree.1[..],
+                &&tree.1[..],
+            ],
+        )
+        .unwrap();
+
+    client
+        .execute(
+            "DELETE FROM ogvcs_metadata.metadata_objects
+             WHERE repository_id = $1 AND object_kind = $2 AND object_digest = $3",
+            &[
+                &repository,
+                &(provenance.0.kind.code() as i16),
+                &&provenance.0.digest[..],
+            ],
+        )
+        .unwrap();
+    drop(client);
+    assert_publication_rejected(
+        store,
+        context,
+        repository_id,
+        snapshot.0,
+        "root-scoped-missing-object",
+        [0xe5; 32],
+    );
+    assert_eq!(
+        candidate_mutation_counts(database_url, repository_id),
+        baseline
+    );
+
+    let mut client = Client::connect(database_url, NoTls).unwrap();
+    client
+        .execute(
+            "INSERT INTO ogvcs_metadata.metadata_objects
+             (repository_id, object_kind, digest_algorithm, object_digest, canonical_bytes,
+              validation_contract) VALUES ($1, $2, 1, $3, $4, 'ogvcs.repository-format@1')",
+            &[
+                &repository,
+                &(provenance.0.kind.code() as i16),
+                &&provenance.0.digest[..],
+                &&provenance.1[..],
+            ],
+        )
+        .unwrap();
+    client
+        .execute(
+            "DELETE FROM ogvcs_metadata.file_id_import_mappings
+             WHERE repository_id = $1 AND file_id IN (
+               SELECT file_id FROM ogvcs_metadata.file_id_registry
+               WHERE repository_id = $1 AND owner_id = 'root-scoped-unrelated'
+             )",
+            &[&repository],
+        )
+        .unwrap();
+    client
+        .execute(
+            "DELETE FROM ogvcs_metadata.file_id_registry
+             WHERE repository_id = $1 AND owner_id = 'root-scoped-unrelated'",
+            &[&repository],
+        )
+        .unwrap();
+    client
+        .execute(
+            "DELETE FROM ogvcs_metadata.metadata_objects
+             WHERE repository_id = $1 AND object_digest IN ($2, $3)",
+            &[
+                &repository,
+                &&unreachable_foreign_digest[..],
+                &&unreachable_corrupt_digest[..],
+            ],
+        )
+        .unwrap();
+    drop(client);
+    assert_eq!(
+        candidate_mutation_counts(database_url, repository_id),
+        original_counts
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn assert_candidate_validation_succeeds_and_rolls_back(
+    database_url: &str,
+    store: &mut PostgresMetadataStore<IsolatedAllow, IsolatedConformanceValidation>,
+    context: &AuthorizationContext,
+    repository_id: RepositoryId,
+    snapshot: ObjectRef,
+    reference_name: &str,
+    fingerprint: [u8; 32],
+) {
+    let baseline = candidate_mutation_counts(database_url, repository_id);
+    let mut transaction = store
+        .begin_authorized(
+            context,
+            TransactionCapability::CompareAndSwapReference,
+            repository_id,
+            TransactionOptions::Serializable { maximum_retries: 0 },
+        )
+        .unwrap();
+    transaction
+        .reserve_idempotency(idempotency("reference.cas", reference_name, fingerprint))
+        .unwrap();
+    transaction
+        .compare_and_swap_reference(ReferenceCasRequest {
+            repository_id,
+            kind: ReferenceKind::Branch,
+            name: ReferenceName::new(reference_name.to_owned()).unwrap(),
+            expected: ReferenceExpected::Absent,
+            desired: Some(snapshot),
+        })
+        .unwrap();
+    transaction.rollback().unwrap();
+    assert_eq!(
+        candidate_mutation_counts(database_url, repository_id),
+        baseline
+    );
+    let mut client = Client::connect(database_url, NoTls).unwrap();
+    let count: i64 = client
+        .query_one(
+            "SELECT count(*) FROM ogvcs_metadata.references
+             WHERE repository_id = $1 AND reference_kind = 'branch' AND reference_name = $2",
+            &[
+                &Uuid::from_bytes(*repository_id.as_bytes()),
+                &reference_name,
+            ],
+        )
+        .unwrap()
+        .get(0);
+    assert_eq!(count, 0);
+}
+
 fn assert_publication_rejected(
     store: &mut PostgresMetadataStore<IsolatedAllow, IsolatedConformanceValidation>,
     context: &AuthorizationContext,
@@ -4487,6 +4812,46 @@ fn counts(database_url: &str, repository_id: RepositoryId) -> (i64, i64, i64, i6
         )
         .unwrap();
     (row.get(0), row.get(1), row.get(2), row.get(3))
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct CandidateMutationCounts {
+    file_ids: i64,
+    idempotency_records: i64,
+    outbox_events: i64,
+    references: i64,
+    main_generation: i64,
+    applied_sequence: i64,
+}
+
+fn candidate_mutation_counts(
+    database_url: &str,
+    repository_id: RepositoryId,
+) -> CandidateMutationCounts {
+    let mut client = Client::connect(database_url, NoTls).unwrap();
+    let repository = Uuid::from_bytes(*repository_id.as_bytes());
+    let row = client
+        .query_one(
+            "SELECT
+               (SELECT count(*) FROM ogvcs_metadata.file_id_registry WHERE repository_id = $1),
+               (SELECT count(*) FROM ogvcs_metadata.idempotency_records),
+               (SELECT count(*) FROM ogvcs_metadata.outbox_events WHERE repository_id = $1),
+               (SELECT count(*) FROM ogvcs_metadata.references WHERE repository_id = $1),
+               (SELECT generation FROM ogvcs_metadata.references
+                WHERE repository_id = $1 AND reference_kind = 'branch' AND reference_name = 'main'),
+               (SELECT applied_sequence FROM ogvcs_metadata.repository_commit_sequences
+                WHERE repository_id = $1)",
+            &[&repository],
+        )
+        .unwrap();
+    CandidateMutationCounts {
+        file_ids: row.get(0),
+        idempotency_records: row.get(1),
+        outbox_events: row.get(2),
+        references: row.get(3),
+        main_generation: row.get(4),
+        applied_sequence: row.get(5),
+    }
 }
 
 fn fixture(kind: ObjectKind, name: &str) -> (ObjectRef, Vec<u8>) {
