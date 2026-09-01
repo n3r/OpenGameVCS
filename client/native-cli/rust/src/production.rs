@@ -1332,7 +1332,8 @@ fn publish_verified_workspace(
         safe_remove_initialization_stage(&stage)?;
         return Err(cancelled_local("before-control-publication", None));
     }
-    fs::rename(&stage, control_path(root)).map_err(|_| workspace_write_unavailable())?;
+    fs::rename(&stage, control_path(root))
+        .map_err(|error| workspace_write_io_error("workspace-control-publish", &error))?;
     sync_directory(root)?;
     progress.emit(&ProgressEvent {
         resume_token: Some(digest_text("workspace-recover")),
@@ -1586,7 +1587,8 @@ pub fn remove_verified_workspace_with_progress(
     })?;
     let control = control_path(&root);
     let tombstone = removal_tombstone_path(&root);
-    fs::rename(&control, &tombstone).map_err(|_| workspace_write_unavailable())?;
+    fs::rename(&control, &tombstone)
+        .map_err(|error| workspace_write_io_error("workspace-control-detach", &error))?;
     sync_directory(&root)?;
     progress.emit(&ProgressEvent {
         resume_token: Some(digest_text("workspace-recover")),
@@ -1913,6 +1915,13 @@ fn workspace_write_unavailable() -> CliError {
         "Local workspace metadata could not be committed safely.",
         "Check filesystem ownership and run workspace recover before retrying.",
     )
+}
+
+fn workspace_write_io_error(operation: &'static str, error: &io::Error) -> CliError {
+    workspace_write_unavailable().with_data(json!({
+        "ioErrorCode": error.raw_os_error(),
+        "operation": operation
+    }))
 }
 
 fn cancelled_local(phase: &'static str, resume_token: Option<String>) -> CliError {
