@@ -441,8 +441,8 @@ test('pre-start inspection binds every role mount and effective isolation contro
   };
   const hostMounts = expected.fileMounts.map((mount) => ({ BindOptions: { NonRecursive: true, Propagation: 'rprivate' }, ReadOnly: true, Source: mount.source, Target: mount.target, Type: 'bind' }));
   hostMounts.push({ Source: expected.volume, Target: '/output', Type: 'volume', VolumeOptions: { NoCopy: true } });
-  const effectiveMounts = expected.fileMounts.map((mount) => ({ Destination: mount.target, Propagation: 'rprivate', RW: false, Source: mount.source, Type: 'bind' }));
-  effectiveMounts.push({ Destination: '/output', Driver: 'local', Name: expected.volume, Propagation: '', RW: true, Source: expected.volumeMountpoint, Type: 'volume' });
+  const effectiveMounts = expected.fileMounts.map((mount) => ({ Destination: mount.target, Mode: 'ro', Propagation: 'rprivate', RW: false, Source: mount.source, Type: 'bind' }));
+  effectiveMounts.push({ Destination: '/output', Driver: 'local', Mode: 'z', Name: expected.volume, Propagation: '', RW: true, Source: expected.volumeMountpoint, Type: 'volume' });
   const container = {
     Args: [], Config: { Cmd: null, Domainname: '', Entrypoint: ['/tool/program'], Env: null, ExposedPorts: null, Healthcheck: null, Hostname: 'ogvcs-worker', Image: expected.runtimeImage, Labels: { 'org.opengamevcs.sandbox.job': expected.jobId, 'org.opengamevcs.sandbox.role': expected.role, 'org.opengamevcs.sandbox.runtime': 'linux-reference-v1', 'org.opengamevcs.sandbox.runtime-contract-sha256': LINUX_RUNTIME_CONTRACT_SHA256 }, OpenStdin: false, StdinOnce: false, StopTimeout: 1, Tty: false, User: '65532:65532', Volumes: null, WorkingDir: '/scratch' },
     HostConfig: { AutoRemove: false, Binds: null, CapAdd: null, CapDrop: ['ALL'], CgroupnsMode: 'private', CpuPeriod: 0, CpuQuota: 0, CpuShares: 0, DeviceCgroupRules: null, DeviceRequests: null, Devices: null, Dns: null, DnsOptions: null, DnsSearch: null, ExtraHosts: null, GroupAdd: null, Init: null, IpcMode: 'none', Links: null, LogConfig: { Config: {}, Type: 'none' }, MaskedPaths: ['/proc/acpi', '/proc/asound', '/proc/interrupts', '/proc/kcore', '/proc/keys', '/proc/latency_stats', '/proc/sched_debug', '/proc/scsi', '/proc/timer_list', '/proc/timer_stats', '/sys/firmware'], Memory: policy.memoryBytes, MemoryReservation: 0, MemorySwap: policy.memoryBytes, Mounts: hostMounts, NanoCpus: 1_000_000_000, NetworkMode: 'none', OomKillDisable: false, PidMode: '', PidsLimit: policy.processes, PortBindings: {}, Privileged: false, PublishAllPorts: false, ReadonlyPaths: ['/proc/bus', '/proc/fs', '/proc/irq', '/proc/sys', '/proc/sysrq-trigger'], ReadonlyRootfs: true, RestartPolicy: { MaximumRetryCount: 0, Name: 'no' }, Runtime: 'runc', SecurityOpt: ['no-new-privileges=true', `seccomp=${seccomp}`], Sysctls: null, Tmpfs: { '/scratch': `rw,nosuid,nodev,noexec,size=${policy.scratchBytes},uid=65532,gid=65532,mode=0700` }, UsernsMode: '', UTSMode: '', Ulimits: [{ Hard: 1, Name: 'cpu', Soft: 1 }, { Hard: policy.outputBytes, Name: 'fsize', Soft: policy.outputBytes }, { Hard: 64, Name: 'nofile', Soft: 64 }], VolumesFrom: null },
@@ -460,6 +460,14 @@ test('pre-start inspection binds every role mount and effective isolation contro
     Object.assign(mount.BindOptions, { CreateMountpoint: false, ReadOnlyForceRecursive: false, ReadOnlyNonRecursive: false });
   }
   assert.equal(validateCreatedContainerInspect(legacyExplicitWritableMount, expected), true);
+  const legacyOmittedEffectiveModes = structuredClone(container);
+  for (const mount of legacyOmittedEffectiveModes.Mounts) delete mount.Mode;
+  delete legacyOmittedEffectiveModes.Mounts.at(-1).Propagation;
+  assert.equal(validateCreatedContainerInspect(legacyOmittedEffectiveModes, expected), true);
+  const legacyEmptyEffectiveModes = structuredClone(container);
+  for (const mount of legacyEmptyEffectiveModes.Mounts) mount.Mode = '';
+  for (const mount of legacyEmptyEffectiveModes.Mounts.slice(0, -1)) Object.assign(mount, { Driver: '', Name: '' });
+  assert.equal(validateCreatedContainerInspect(legacyEmptyEffectiveModes, expected), true);
   const detached = structuredClone(container); detached.NetworkSettings.Networks = {};
   assert.equal(validateCreatedContainerInspect(detached, expected), true);
   for (const mutate of [
@@ -559,8 +567,47 @@ test('pre-start inspection binds every role mount and effective isolation contro
   shim.Config.Entrypoint = [shimExpected.entrypoint];
   shim.Config.Labels['org.opengamevcs.sandbox.role'] = shimExpected.role;
   shim.HostConfig.Mounts = [{ BindOptions: { NonRecursive: true, Propagation: 'rprivate' }, ReadOnly: true, Source: shimExpected.fileMounts[0].source, Target: shimExpected.fileMounts[0].target, Type: 'bind' }, { ReadOnly: true, Source: expected.volume, Target: '/output', Type: 'volume', VolumeOptions: { NoCopy: true } }];
-  shim.Mounts = [{ Destination: shimExpected.fileMounts[0].target, Propagation: 'rprivate', RW: false, Source: shimExpected.fileMounts[0].source, Type: 'bind' }, { Destination: '/output', Driver: 'local', Name: expected.volume, Propagation: '', RW: false, Source: expected.volumeMountpoint, Type: 'volume' }];
+  shim.Mounts = [{ Destination: shimExpected.fileMounts[0].target, Mode: 'ro', Propagation: 'rprivate', RW: false, Source: shimExpected.fileMounts[0].source, Type: 'bind' }, { Destination: '/output', Driver: 'local', Mode: 'z', Name: expected.volume, Propagation: '', RW: false, Source: expected.volumeMountpoint, Type: 'volume' }];
   assert.equal(validateCreatedContainerInspect(shim, shimExpected), true);
+  const legacyShimEffectiveMounts = structuredClone(shim);
+  for (const mount of legacyShimEffectiveMounts.Mounts) delete mount.Mode;
+  delete legacyShimEffectiveMounts.Mounts.at(-1).Propagation;
+  assert.equal(validateCreatedContainerInspect(legacyShimEffectiveMounts, shimExpected), true);
+  const assertEffectiveMountRejected = (base, roleExpected, label, mutate) => {
+    const candidate = structuredClone(base);
+    mutate(candidate, roleExpected);
+    assert.equal(createdContainerInspectMismatch(candidate, roleExpected), 'effective-mounts', `${roleExpected.role}: ${label}`);
+  };
+  const hostileEffectiveMountMutations = [
+    ['bind type', (value) => { value.Mounts[0].Type = 'volume'; }],
+    ['bind source', (value) => { value.Mounts[0].Source = '/proc/123/fd/99'; }],
+    ['bind destination', (value) => { value.Mounts[0].Destination = '/input/substitution'; }],
+    ['bind writable', (value) => { value.Mounts[0].RW = true; }],
+    ['bind propagation empty', (value) => { value.Mounts[0].Propagation = ''; }],
+    ['bind propagation shared', (value) => { value.Mounts[0].Propagation = 'rshared'; }],
+    ['bind mode writable', (value) => { value.Mounts[0].Mode = 'rw'; }],
+    ['bind mode volume-label', (value) => { value.Mounts[0].Mode = 'z'; }],
+    ['bind mode null', (value) => { value.Mounts[0].Mode = null; }],
+    ['bind volume name', (value) => { value.Mounts[0].Name = 'ogvcs-sandbox-substitution'; }],
+    ['bind volume driver', (value) => { value.Mounts[0].Driver = 'local'; }],
+    ['output type', (value) => { value.Mounts.at(-1).Type = 'bind'; }],
+    ['output source', (value) => { value.Mounts.at(-1).Source = '/var/lib/docker/volumes/substitution/_data'; }],
+    ['output destination', (value) => { value.Mounts.at(-1).Destination = '/output/substitution'; }],
+    ['output access', (value, roleExpected) => { value.Mounts.at(-1).RW = roleExpected.outputReadonly; }],
+    ['output propagation private', (value) => { value.Mounts.at(-1).Propagation = 'rprivate'; }],
+    ['output propagation null', (value) => { value.Mounts.at(-1).Propagation = null; }],
+    ['output mode writable', (value) => { value.Mounts.at(-1).Mode = 'rw'; }],
+    ['output mode readonly', (value) => { value.Mounts.at(-1).Mode = 'ro'; }],
+    ['output mode null', (value) => { value.Mounts.at(-1).Mode = null; }],
+    ['output name', (value) => { value.Mounts.at(-1).Name = 'ogvcs-sandbox-substitution'; }],
+    ['output name missing', (value) => { delete value.Mounts.at(-1).Name; }],
+    ['output driver', (value) => { value.Mounts.at(-1).Driver = 'bind'; }],
+    ['output driver missing', (value) => { delete value.Mounts.at(-1).Driver; }],
+  ];
+  for (const [label, mutate] of hostileEffectiveMountMutations) {
+    assertEffectiveMountRejected(container, expected, label, mutate);
+    assertEffectiveMountRejected(shim, shimExpected, label, mutate);
+  }
   for (const hostile of [undefined, false, null, 1, 'true']) {
     const hostileShimMount = structuredClone(shim);
     if (hostile === undefined) delete hostileShimMount.HostConfig.Mounts.at(-1).ReadOnly;
