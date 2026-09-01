@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash, createHmac, generateKeyPairSync, sign } from 'node:crypto';
-import { chmod, mkdtemp, mkdir, open, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { chmodSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { chmod, mkdtemp, mkdir, open, readFile, readdir, readlink, rename, rm, stat, symlink, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -19,7 +20,7 @@ import {
 } from '../src/internal/docker-reference.mjs';
 import { LINUX_RUNTIME_CONTRACT_SHA256, canonicalJson, parseAndVerifyToolManifest, sha256, snapshotTrustedManifestKeys } from '../src/internal/reference-contract.mjs';
 import { authenticatedResultDiagnostic, ReferenceSandboxService } from '../src/internal/reference-service.mjs';
-import { ReferenceStateStore } from '../src/internal/reference-state.mjs';
+import { digestOpenFile, isPinnedFileOperationAborted, openPinnedImmutableFile, ReferenceStateStore } from '../src/internal/reference-state.mjs';
 import * as linuxBoundary from '../src/linux.mjs';
 
 const MAGIC = Buffer.from([0x4f, 0x47, 0x56, 0x43, 0x53, 0x42, 0x31, 0x00]);
@@ -28,7 +29,9 @@ const SECCOMP_DIGEST = 'e'.repeat(64);
 const ACTOR_DIGEST = 'a'.repeat(64);
 const OPTIONS_DIGEST = 'c'.repeat(64);
 const OBJECT_ID_DIGEST = 'd'.repeat(64);
+const CONTINUE_ALIAS_COPY = () => true;
 const referenceStateTest = process.platform === 'win32' ? test.skip : test;
+const linuxReferenceStateTest = process.platform === 'linux' ? test : test.skip;
 
 test('Linux reference export remains candidate-named until live controls are verified', () => {
   assert.equal(Object.hasOwn(linuxBoundary, 'openLinuxReferenceSandbox'), false);
@@ -90,24 +93,188 @@ test('Docker hardening leaves PID mode empty for the engine private namespace', 
   assert.doesNotMatch(source, /['"`]--pid(?:=|['"`])/u);
   assert.match(source, /bind-recursive=writable/u);
   assert.doesNotMatch(source, /bind-recursive=disabled/u);
+  assert.match(source, /readlink\(descriptorPath\)/u);
+  assert.doesNotMatch(source, /return `\/proc\/\$\{process\.pid\}\/fd/u);
 });
 
-referenceStateTest('held mount admission accepts only open regular pinned file descriptors', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'ogvcs-sandbox-held-fd-'));
+test('service checks cancellation and deadline around every bounded alias materialization before launch', async () => {
+  const source = await readFile(new URL('../src/internal/reference-service.mjs', import.meta.url), 'utf8');
+  assert.match(source, /materializePinnedAlias\(handle, digest, maximumBytes, \{ \.\.\.options, continueCopy: continuePinnedFileOperation \}\)/u);
+  const parserStart = source.indexOf('const inputAlias = await materializeAlias');
+  const parserLaunch = source.indexOf('const run = await this.#adapter.runTool', parserStart);
+  const parserAdmission = source.slice(parserStart, parserLaunch);
+  assert.notEqual(parserStart, -1); assert.notEqual(parserLaunch, -1);
+  assert.equal(parserAdmission.match(/materializeAlias/gu)?.length, 3);
+  assert.equal(parserAdmission.match(/controller\.signal\.aborted \|\| job\.deadlineUnixMs <= this\.#now\(\)/gu)?.length, 3);
+  const bindingStart = source.indexOf('bindingAlias = await materializeAlias');
+  const shimLaunch = source.indexOf('const collected = await this.#adapter.collectOutput', bindingStart);
+  assert.notEqual(bindingStart, -1); assert.notEqual(shimLaunch, -1);
+  assert.match(source.slice(bindingStart, shimLaunch), /controller\.signal\.aborted \|\| job\.deadlineUnixMs <= this\.#now\(\)/u);
+});
+
+linuxReferenceStateTest('held mount admission accepts only state-pinned named aliases and rejects magic, deleted, substituted, and wrong-mode sources', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ogvcs-sandbox-held-alias-')); await chmod(root, 0o700);
   const filePath = join(root, 'regular');
-  await writeFile(filePath, Buffer.from('pinned'));
+  const toolPath = join(root, 'tool');
+  await writeFile(filePath, Buffer.from('pinned'), { mode: 0o444 }); await chmod(filePath, 0o444);
+  await writeFile(toolPath, Buffer.from('tool'), { mode: 0o555 }); await chmod(toolPath, 0o555);
   const file = await open(filePath, 'r');
+  const tool = await open(toolPath, 'r');
   const directory = await open(root, 'r');
+  const procFile = await open('/proc/self/status', 'r');
+  const store = await ReferenceStateStore.open(join(root, 'state'));
+  let alias = null;
   try {
-    assert.equal(isRegularPinnedFileHandleForTesting(file), true);
-    assert.equal(isRegularPinnedFileHandleForTesting(directory), false);
-    assert.equal(isRegularPinnedFileHandleForTesting({ fd: directory.fd }), false);
-    assert.equal(isRegularPinnedFileHandleForTesting(new Proxy(file, {})), false);
-    await file.close();
-    assert.equal(isRegularPinnedFileHandleForTesting(file), false);
+    assert.equal(await isRegularPinnedFileHandleForTesting(file), false);
+    assert.equal(await isRegularPinnedFileHandleForTesting(directory), false);
+    assert.equal(await isRegularPinnedFileHandleForTesting({ fd: directory.fd }), false);
+    assert.equal(await isRegularPinnedFileHandleForTesting(new Proxy(file, {})), false);
+    assert.equal(await isRegularPinnedFileHandleForTesting(procFile), false);
+
+    const executable = await store.materializePinnedAlias(tool, sha256(Buffer.from('tool')), 64, { continueCopy: CONTINUE_ALIAS_COPY, executable: true });
+    assert.equal(await isRegularPinnedFileHandleForTesting(executable.handle), false);
+    assert.equal(await isRegularPinnedFileHandleForTesting(executable.handle, { executable: true }), true);
+    await store.removePinnedAlias(executable.handle);
+
+    alias = await store.materializePinnedAlias(file, sha256(Buffer.from('pinned')), 64, { continueCopy: CONTINUE_ALIAS_COPY });
+    const aliasPath = await readlink(`/proc/self/fd/${alias.handle.fd}`);
+    assert.match(aliasPath, /\/temporary\/alias\.[0-9a-f]{32}$/u);
+    assert.equal(await isRegularPinnedFileHandleForTesting(alias.handle), true);
+    assert.equal(await isRegularPinnedFileHandleForTesting(alias.handle, { executable: true }), false);
+    await chmod(aliasPath, 0o644);
+    assert.equal(await isRegularPinnedFileHandleForTesting(alias.handle), false);
+    await chmod(aliasPath, 0o444);
+    assert.equal(await isRegularPinnedFileHandleForTesting(alias.handle), true);
+
+    const originalPath = aliasPath;
+    const substitutedPath = `${aliasPath}.substituted`;
+    await rename(originalPath, substitutedPath);
+    await symlink(substitutedPath, originalPath);
+    assert.equal(await isRegularPinnedFileHandleForTesting(alias.handle), false);
+    await assert.rejects(store.removePinnedAlias(alias.handle), /pinned alias cleanup failed/u);
+    alias = null;
+    await unlink(originalPath);
+    await unlink(substitutedPath);
+
+    const deleted = await store.materializePinnedAlias(file, sha256(Buffer.from('pinned')), 64, { continueCopy: CONTINUE_ALIAS_COPY });
+    const deletedPath = await readlink(`/proc/self/fd/${deleted.handle.fd}`);
+    await unlink(deletedPath);
+    assert.equal(await isRegularPinnedFileHandleForTesting(deleted.handle), false);
+    await assert.rejects(store.removePinnedAlias(deleted.handle), /pinned alias cleanup failed/u);
   } finally {
+    if (alias) await store.removePinnedAlias(alias.handle).catch(() => {});
     await file.close().catch(() => {});
+    await tool.close().catch(() => {});
     await directory.close();
+    await procFile.close();
+    await store.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+referenceStateTest('state aliases are bounded positional copies retained through use, durably removed, and recovered after interruption', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ogvcs-sandbox-alias-state-')); await chmod(root, 0o700);
+  const sourcePath = join(root, 'source');
+  const bytes = Buffer.alloc(2 * 64 * 1024 + 17, 0x5a);
+  await writeFile(sourcePath, bytes, { mode: 0o444 }); await chmod(sourcePath, 0o444);
+  const source = await open(sourcePath, 'r');
+  let store = await ReferenceStateStore.open(join(root, 'state'));
+  try {
+    let digestChecks = 0;
+    await assert.rejects(digestOpenFile(source, bytes.length, { continueRead: () => {
+      digestChecks += 1;
+      return digestChecks < 6;
+    } }), (error) => isPinnedFileOperationAborted(error));
+    assert.equal(digestChecks, 6);
+    let openChecks = 0;
+    await assert.rejects(openPinnedImmutableFile(sourcePath, sha256(bytes), bytes.length, { continueRead: () => {
+      openChecks += 1;
+      return openChecks < 6;
+    } }), (error) => isPinnedFileOperationAborted(error));
+    assert.equal(openChecks, 6);
+
+    await assert.rejects(store.materializePinnedAlias(source, sha256(bytes), bytes.length - 1, { continueCopy: CONTINUE_ALIAS_COPY }), /pinned alias source is invalid/u);
+    await assert.rejects(store.materializePinnedAlias(source, '0'.repeat(64), bytes.length, { continueCopy: CONTINUE_ALIAS_COPY }), /pinned alias source digest differs/u);
+    assert.deepEqual(await readdir(join(root, 'state/temporary')), []);
+
+    let cancellationChecks = 0;
+    await assert.rejects(store.materializePinnedAlias(source, sha256(bytes), bytes.length, { continueCopy: () => {
+      cancellationChecks += 1;
+      return cancellationChecks < 7;
+    } }), (error) => isPinnedFileOperationAborted(error));
+    assert.equal(cancellationChecks, 7);
+    assert.deepEqual(await readdir(join(root, 'state/temporary')), []);
+
+    let simulatedNow = 0;
+    const deadline = 8;
+    await assert.rejects(store.materializePinnedAlias(source, sha256(bytes), bytes.length, { continueCopy: () => {
+      simulatedNow += 1;
+      return simulatedNow < deadline;
+    } }), (error) => isPinnedFileOperationAborted(error));
+    assert.equal(simulatedNow, deadline);
+    assert.deepEqual(await readdir(join(root, 'state/temporary')), []);
+
+    let prebrandTampered = false;
+    const temporaryPath = join(root, 'state/temporary');
+    await assert.rejects(store.materializePinnedAlias(source, sha256(bytes), bytes.length, { continueCopy: () => {
+      if (!prebrandTampered) {
+        const names = readdirSync(temporaryPath).filter((name) => name.startsWith('alias.'));
+        if (names.length === 1) {
+          const candidate = join(temporaryPath, names[0]);
+          if ((statSync(candidate).mode & 0o777) === 0o444) {
+            chmodSync(candidate, 0o644);
+            writeFileSync(candidate, Buffer.alloc(bytes.length, 0x21));
+            chmodSync(candidate, 0o444);
+            prebrandTampered = true;
+          }
+        }
+      }
+      return true;
+    } }), /pinned alias bytes differ/u);
+    assert.equal(prebrandTampered, true);
+    assert.deepEqual(await readdir(temporaryPath), []);
+
+    const alias = await store.materializePinnedAlias(source, sha256(bytes), bytes.length, { continueCopy: CONTINUE_ALIAS_COPY });
+    const names = await readdir(join(root, 'state/temporary'));
+    assert.equal(names.length, 1);
+    assert.match(names[0], /^alias\.[0-9a-f]{32}$/u);
+    const aliasPath = join(root, 'state/temporary', names[0]);
+    assert.equal((await stat(aliasPath)).mode & 0o777, 0o444);
+    assert.deepEqual(await store.verifyPinnedAlias(alias.handle, sha256(bytes), bytes.length), { bytes: bytes.length, digest: sha256(bytes) });
+    let postUseChecks = 0;
+    await assert.rejects(store.verifyPinnedAlias(alias.handle, sha256(bytes), bytes.length, { continueRead: () => {
+      postUseChecks += 1;
+      return postUseChecks < 6;
+    } }), (error) => isPinnedFileOperationAborted(error));
+    assert.equal(postUseChecks, 6);
+    assert.equal((await alias.handle.stat()).nlink, 1);
+    await store.removePinnedAlias(alias.handle);
+    await assert.rejects(stat(aliasPath), (error) => error?.code === 'ENOENT');
+    assert.deepEqual(await readdir(join(root, 'state/temporary')), []);
+
+    const tampered = await store.materializePinnedAlias(source, sha256(bytes), bytes.length, { continueCopy: CONTINUE_ALIAS_COPY });
+    const tamperedName = (await readdir(join(root, 'state/temporary')))[0];
+    const tamperedPath = join(root, 'state/temporary', tamperedName);
+    await chmod(tamperedPath, 0o644);
+    await writeFile(tamperedPath, Buffer.alloc(bytes.length, 0x33));
+    await chmod(tamperedPath, 0o444);
+    await assert.rejects(store.verifyPinnedAlias(tampered.handle, sha256(bytes), bytes.length), /pinned alias digest differs/u);
+    await store.removePinnedAlias(tampered.handle);
+    assert.deepEqual(await readdir(join(root, 'state/temporary')), []);
+
+    const cleanClose = await store.materializePinnedAlias(source, sha256(bytes), bytes.length, { continueCopy: CONTINUE_ALIAS_COPY });
+    assert.equal((await cleanClose.handle.stat()).nlink, 1);
+    await store.close();
+    assert.deepEqual(await readdir(join(root, 'state/temporary')), []);
+    const crashLeftover = join(root, 'state/temporary', `alias.${'f'.repeat(32)}`);
+    await writeFile(crashLeftover, Buffer.from('crash-leftover'), { mode: 0o444 }); await chmod(crashLeftover, 0o444);
+    store = await ReferenceStateStore.open(join(root, 'state'));
+    assert.equal((await readdir(join(root, 'state/temporary'))).length, 1);
+    assert.deepEqual(await store.recoverInterrupted(Date.now()), []);
+    assert.deepEqual(await readdir(join(root, 'state/temporary')), []);
+  } finally {
+    await source.close().catch(() => {});
+    await store.close().catch(() => {});
     await rm(root, { recursive: true, force: true });
   }
 });
@@ -146,13 +313,14 @@ const authenticatedEvidenceBytes = (source, evidenceHmacKey) => {
 };
 
 class FakeContainerAdapter {
-  constructor({ collectKind = null, failureClass = null, gate = null, inspectMismatch = null, runKind = null, tamper = null } = {}) { this.seccompDigest = SECCOMP_DIGEST; this.collectKind = collectKind; this.failureClass = failureClass; this.gate = gate; this.inspectMismatch = inspectMismatch; this.runKind = runKind; this.tamper = tamper; this.runs = 0; this.collections = 0; this.discards = 0; this.parserSawBinding = false; this.modes = []; }
+  constructor({ collectGate = null, collectKind = null, failureClass = null, gate = null, inspectMismatch = null, runKind = null, tamper = null } = {}) { this.seccompDigest = SECCOMP_DIGEST; this.collectGate = collectGate; this.collectKind = collectKind; this.failureClass = failureClass; this.gate = gate; this.inspectMismatch = inspectMismatch; this.runKind = runKind; this.tamper = tamper; this.runs = 0; this.collections = 0; this.discards = 0; this.parserSawBinding = false; this.modes = []; this.nameLinks = []; }
   async verifyRuntimeImage(image, contract) { return image === `sha256:${RUNTIME_DIGEST}` && contract === LINUX_RUNTIME_CONTRACT_SHA256; }
   async runTool({ inputHandle, jobHandle, toolHandle, signal }) {
     this.runs += 1;
     if (this.inspectMismatch) throw new Error(`SANDBOX_INSPECT_MISMATCH:${this.inspectMismatch}`);
     this.parserSawBinding ||= Object.keys(arguments[0]).includes('bindingHandle');
     this.modes.push((await inputHandle.stat()).mode & 0o777, (await jobHandle.stat()).mode & 0o777, (await toolHandle.stat()).mode & 0o777);
+    this.nameLinks.push((await inputHandle.stat()).nlink, (await jobHandle.stat()).nlink, (await toolHandle.stat()).nlink);
     const command = (await readHandle(inputHandle)).toString('utf8');
     if (this.gate && !signal.aborted) await Promise.race([this.gate.promise, new Promise((resolve) => signal.addEventListener('abort', resolve, { once: true }))]);
     if (signal.aborted) return Object.freeze({ kind: 'cancelled', volume: `volume.${this.runs}` });
@@ -163,8 +331,13 @@ class FakeContainerAdapter {
   }
   async collectOutput({ volume, bindingHandle, framePath }) {
     this.collections += 1; const binding = (await readHandle(bindingHandle)).toString('ascii');
-    if (this.collectKind) return Object.freeze({ frameBytes: 0, kind: this.collectKind });
+    this.nameLinks.push((await bindingHandle.stat()).nlink);
+    if (this.collectKind) {
+      await writeFile(framePath, Buffer.from('partial-hostile-frame'), { flag: 'wx', mode: 0o600 });
+      return Object.freeze({ frameBytes: 21, kind: this.collectKind });
+    }
     await writeFile(framePath, outputFrame(binding, volume.files, this.tamper), { flag: 'wx', mode: 0o600 });
+    if (this.collectGate) await this.collectGate.promise;
     return Object.freeze({ frameBytes: (await stat(framePath)).size, kind: 'success' });
   }
   async discardVolume() { this.discards += 1; }
@@ -250,7 +423,7 @@ const withFixture = async (operation, { adapter = new FakeContainerAdapter(), fa
   finally { await service.close().catch(() => {}); await rm(root, { recursive: true, force: true }); }
 };
 
-referenceStateTest('signed manifest, credential-free held-FD mounts, frame channel, provenance, and idempotency are exact', async () => {
+referenceStateTest('signed manifest, credential-free handle-only named aliases, frame channel, provenance, and idempotency are exact', async () => {
   await withFixture(async (fixture) => {
     const job = fixture.jobFor();
     const first = await fixture.service.run(job, fixture.acquisition);
@@ -259,6 +432,8 @@ referenceStateTest('signed manifest, credential-free held-FD mounts, frame chann
     assert.equal(fixture.acquisitions, 1); assert.equal(fixture.adapter.runs, 1); assert.equal(fixture.adapter.collections, 1);
     assert.equal(fixture.credentialObserved, true); assert.equal(fixture.adapter.parserSawBinding, false);
     assert.deepEqual(fixture.adapter.modes, [0o444, 0o444, 0o555]);
+    assert.deepEqual(fixture.adapter.nameLinks, [1, 1, 1, 1]);
+    assert.equal((await readdir(join(fixture.root, 'state/temporary'))).some((name) => name.startsWith('alias.')), false);
     const mismatch = await fixture.service.run(fixture.jobFor('1', { optionsDigest: 'f'.repeat(64) }), fixture.acquisition);
     assert.equal(mismatch.code, 'SANDBOX_PROTOCOL_INVALID'); assert.equal(fixture.adapter.runs, 1);
     const evidence = await Promise.all((await readdir(join(fixture.root, 'state/evidence'))).map((name) => readFile(join(fixture.root, 'state/evidence', name), 'utf8')));
@@ -417,6 +592,8 @@ referenceStateTest('post-start diagnostics require exact authenticated provenanc
         assert.equal(diagnostic.includes('SECRET'), false);
         assert.equal(diagnostic.includes('/home/runner'), false);
       }
+      const temporaryEntries = await readdir(join(fixture.root, 'state/temporary'));
+      assert.equal(temporaryEntries.some((name) => name.startsWith('alias.') || name.startsWith('frame.')), false);
     }, { adapter: entry.adapter });
   }
 });
@@ -553,6 +730,20 @@ referenceStateTest('cancellation and bounded failures leave the next job healthy
     gate.resolve(); fixture.adapter.gate = null;
     const clean = await fixture.service.run(fixture.jobFor('clean'), fixture.acquisition);
     assert.equal(clean.code, 'VALIDATED'); assert.equal(fixture.service.health().poisoned, false);
+  }, { adapter });
+});
+
+referenceStateTest('post-collect cancellation removes the complete frame and binding alias before returning', async () => {
+  const collectGate = deferred(); const adapter = new FakeContainerAdapter({ collectGate });
+  await withFixture(async (fixture) => {
+    const pending = fixture.service.run(fixture.jobFor('collect-cancelled'), fixture.acquisition);
+    while (adapter.collections === 0) await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(fixture.service.cancel('job.collect-cancelled'), true);
+    collectGate.resolve();
+    assert.equal((await pending).code, 'SANDBOX_CANCELLED');
+    const temporaryEntries = await readdir(join(fixture.root, 'state/temporary'));
+    assert.equal(temporaryEntries.some((name) => name.startsWith('alias.') || name.startsWith('frame.')), false);
+    assert.equal(fixture.service.health().poisoned, false);
   }, { adapter });
 });
 
@@ -734,9 +925,9 @@ test('pre-start inspection binds every role mount and effective isolation contro
   const expected = {
     entrypoint: '/tool/program',
     fileMounts: [
-      { source: '/proc/123/fd/10', target: '/input/payload' },
-      { source: '/proc/123/fd/11', target: '/input/job' },
-      { source: '/proc/123/fd/12', target: '/tool/program' },
+      { source: `/var/lib/ogvcs/state/temporary/alias.${'1'.repeat(32)}`, target: '/input/payload' },
+      { source: `/var/lib/ogvcs/state/temporary/alias.${'2'.repeat(32)}`, target: '/input/job' },
+      { source: `/var/lib/ogvcs/state/temporary/alias.${'3'.repeat(32)}`, target: '/tool/program' },
     ],
     id: '1'.repeat(64), jobId: 'job.fixture', name: 'ogvcs-sandbox-fixture', outputReadonly: false, policy, role: 'parser',
     runtimeContractSha256: LINUX_RUNTIME_CONTRACT_SHA256, runtimeImage: `sha256:${RUNTIME_DIGEST}`, seccompCanonical: seccomp, volume: 'ogvcs-sandbox-volume', volumeMountpoint: '/var/lib/docker/volumes/fixture/_data',
@@ -867,7 +1058,7 @@ test('pre-start inspection binds every role mount and effective isolation contro
     const sharedOrInvalidPid = structuredClone(container); sharedOrInvalidPid.HostConfig.PidMode = pidMode;
     assert.equal(createdContainerInspectMismatch(sharedOrInvalidPid, expected), 'host-namespaces', pidMode);
   }
-  const shimExpected = { ...expected, entrypoint: '/ogvcs-output-shim', fileMounts: [{ source: '/proc/123/fd/13', target: '/input/binding' }], outputReadonly: true, role: 'output-shim' };
+  const shimExpected = { ...expected, entrypoint: '/ogvcs-output-shim', fileMounts: [{ source: `/var/lib/ogvcs/state/temporary/alias.${'4'.repeat(32)}`, target: '/input/binding' }], outputReadonly: true, role: 'output-shim' };
   const shim = structuredClone(container);
   shim.Path = shimExpected.entrypoint;
   shim.Config.Entrypoint = [shimExpected.entrypoint];
@@ -886,7 +1077,7 @@ test('pre-start inspection binds every role mount and effective isolation contro
   };
   const hostileEffectiveMountMutations = [
     ['bind type', (value) => { value.Mounts[0].Type = 'volume'; }],
-    ['bind source', (value) => { value.Mounts[0].Source = '/proc/123/fd/99'; }],
+    ['bind source', (value) => { value.Mounts[0].Source = '/var/lib/ogvcs/state/temporary/alias.substitution'; }],
     ['bind destination', (value) => { value.Mounts[0].Destination = '/input/substitution'; }],
     ['bind writable', (value) => { value.Mounts[0].RW = true; }],
     ['bind propagation empty', (value) => { value.Mounts[0].Propagation = ''; }],

@@ -15,11 +15,15 @@ import {
   link,
 } from 'node:fs/promises';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
+import { types } from 'node:util';
 import { canonicalJson, isDigest, isId, sha256 } from './reference-contract.mjs';
 
 const STATE_SCHEMA = 'ogvcs.untrusted-sandbox/reference-state/v1';
 const NONTERMINAL = new Set(['acquiring', 'queued', 'running', 'staged', 'validating', 'committing']);
 const MAXIMUM_STATE_FILES = 100_000;
+const PINNED_ALIAS_COPY_BYTES = 64 * 1024;
+const pinnedAliases = new WeakMap();
+const abortedPinnedFileOperations = new WeakSet();
 
 const randomSuffix = () => randomBytes(16).toString('hex');
 const withinRoot = (root, candidate) => candidate.startsWith(`${root}${sep}`);
@@ -166,30 +170,90 @@ const fileDigest = async (path, maximumBytes = Number.MAX_SAFE_INTEGER) => {
   return Object.freeze({ bytes, digest: hash.digest('hex') });
 };
 
-export const digestOpenFile = async (handle, maximumBytes = Number.MAX_SAFE_INTEGER) => {
+const pinnedFileOperationAborted = () => {
+  const error = new Error('pinned file operation aborted');
+  abortedPinnedFileOperations.add(error);
+  return error;
+};
+
+const continuationCheck = (callback) => {
+  if (callback === null) return () => {};
+  if (typeof callback !== 'function' || types.isProxy(callback)) throw new TypeError('pinned file continuation is invalid');
+  return () => { if (callback() !== true) throw pinnedFileOperationAborted(); };
+};
+
+export const isPinnedFileOperationAborted = (error) => {
+  try { return abortedPinnedFileOperations.has(error); } catch { return false; }
+};
+
+export const digestOpenFile = async (handle, maximumBytes = Number.MAX_SAFE_INTEGER, { continueRead = null } = {}) => {
+  if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 0) throw new TypeError('open immutable file digest bound is invalid');
+  const requireContinuation = continuationCheck(continueRead);
+  requireContinuation();
   const details = await handle.stat();
+  requireContinuation();
   if (!details.isFile() || details.size > maximumBytes) throw new Error('open immutable file exceeds its bound');
   const hash = createHash('sha256');
   const buffer = Buffer.allocUnsafe(64 * 1024);
   let position = 0;
   while (position < details.size) {
+    requireContinuation();
     const value = await handle.read(buffer, 0, Math.min(buffer.length, details.size - position), position);
+    requireContinuation();
     if (value.bytesRead === 0) throw new Error('open immutable file ended early');
     hash.update(buffer.subarray(0, value.bytesRead));
     position += value.bytesRead;
   }
+  requireContinuation();
+  const extra = await handle.read(buffer, 0, 1, position);
+  requireContinuation();
+  const after = await handle.stat();
+  requireContinuation();
+  if (extra.bytesRead !== 0 || !exactPinnedIdentity(details, after)) throw new Error('open immutable file changed during digest');
   return Object.freeze({ bytes: position, digest: hash.digest('hex') });
 };
 
-export const openPinnedImmutableFile = async (path, expectedDigest, maximumBytes, { executable = false } = {}) => {
+const exactPinnedIdentity = (left, right) => left.dev === right.dev
+  && left.ino === right.ino
+  && left.mode === right.mode
+  && left.nlink === right.nlink
+  && left.size === right.size
+  && left.uid === right.uid;
+
+export const validateStatePinnedAliasForAdapter = (handle, path, heldDetails, pathDetails, { executable = false } = {}) => {
+  try {
+    const alias = pinnedAliases.get(handle);
+    const expectedMode = executable ? 0o555n : 0o444n;
+    return alias !== undefined
+      && alias.executable === executable
+      && alias.path === path
+      && alias.mode === expectedMode
+      && heldDetails.isFile()
+      && pathDetails.isFile()
+      && !pathDetails.isSymbolicLink()
+      && (heldDetails.mode & 0o777n) === expectedMode
+      && (pathDetails.mode & 0o777n) === expectedMode
+      && exactPinnedIdentity(heldDetails, pathDetails)
+      && heldDetails.dev === alias.dev
+      && heldDetails.ino === alias.ino
+      && heldDetails.nlink === 1n
+      && heldDetails.size === alias.size
+      && heldDetails.uid === alias.uid;
+  } catch { return false; }
+};
+
+export const openPinnedImmutableFile = async (path, expectedDigest, maximumBytes, { continueRead = null, executable = false } = {}) => {
   if (!isDigest(expectedDigest) || !Number.isSafeInteger(maximumBytes) || maximumBytes < 1) throw new TypeError('immutable file request is invalid');
+  const requireContinuation = continuationCheck(continueRead);
+  requireContinuation();
   const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
   try {
     const details = await handle.stat();
+    requireContinuation();
     const owner = typeof process.geteuid === 'function' ? process.geteuid() : details.uid;
     const expectedMode = executable ? 0o555 : 0o444;
     if (!details.isFile() || (details.mode & 0o777) !== expectedMode || ![0, owner].includes(details.uid)) throw new Error('immutable file ownership or mode differs');
-    const value = await digestOpenFile(handle, maximumBytes);
+    const value = await digestOpenFile(handle, maximumBytes, { continueRead });
     if (value.digest !== expectedDigest) throw new Error('immutable file digest differs');
     return Object.freeze({ ...value, handle });
   } catch (error) {
@@ -207,6 +271,7 @@ const iterableFor = (source) => {
 export class ReferenceStateStore {
   #root;
   #release;
+  #aliases = new Set();
   #serial = Promise.resolve();
   #closed = false;
 
@@ -247,8 +312,10 @@ export class ReferenceStateStore {
   async close() {
     if (this.#closed) return;
     await this.#serial;
+    const aliases = await Promise.allSettled([...this.#aliases].map((handle) => this.removePinnedAlias(handle)));
     this.#closed = true;
     await this.#release();
+    if (aliases.some((result) => result.status === 'rejected')) throw new Error('pinned alias cleanup failed');
   }
 
   async readJob(jobId) {
@@ -300,6 +367,7 @@ export class ReferenceStateStore {
     const entries = await readdir(temporary);
     if (entries.length > MAXIMUM_STATE_FILES) throw new Error('reference temporary ceiling exceeded');
     for (const entry of entries) await rm(join(temporary, entry), { recursive: true, force: true });
+    await syncDirectory(temporary);
   }
 
   async stageInput({ expectedDigest, maximumBytes, source }) {
@@ -381,11 +449,173 @@ export class ReferenceStateStore {
   async createEphemeralPinnedFile(prefix, bytes) {
     if (!isId(prefix) || !Buffer.isBuffer(bytes) || Object.getPrototypeOf(bytes) !== Buffer.prototype || bytes.length < 1 || bytes.length > 1024 * 1024) throw new TypeError('ephemeral pinned file is invalid');
     const path = this.path('temporary', `${prefix}.${randomSuffix()}`);
-    const writer = await open(path, 'wx', 0o444);
-    try { await writer.writeFile(bytes); await writer.sync(); } finally { await writer.close(); }
-    const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
-    await unlink(path);
-    return handle;
+    const writer = await open(path, 'wx', 0o600);
+    try { await writer.writeFile(bytes); await writer.chmod(0o444); await writer.sync(); } catch (error) { await writer.close().catch(() => {}); await unlink(path).catch(() => {}); throw error; }
+    await writer.close();
+    let handle;
+    try {
+      handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+      await unlink(path);
+      return handle;
+    } catch (error) {
+      await handle?.close().catch(() => {});
+      await unlink(path).catch(() => {});
+      throw error;
+    }
+  }
+
+  async materializePinnedAlias(sourceHandle, expectedDigest, maximumBytes, { continueCopy, executable = false } = {}) {
+    if (!isDigest(expectedDigest)
+      || !Number.isSafeInteger(maximumBytes)
+      || maximumBytes < 1
+      || typeof executable !== 'boolean'
+      || typeof continueCopy !== 'function'
+      || types.isProxy(continueCopy)) throw new TypeError('pinned alias request is invalid');
+    const requireAdmission = continuationCheck(continueCopy);
+    requireAdmission();
+    const expectedMode = executable ? 0o555n : 0o444n;
+    const owner = typeof process.geteuid === 'function' ? BigInt(process.geteuid()) : null;
+    let sourceBefore;
+    try { sourceBefore = await sourceHandle.stat({ bigint: true }); } catch { throw new Error('pinned alias source is invalid'); }
+    if (!sourceBefore.isFile()
+      || sourceBefore.size < 0n
+      || sourceBefore.size > BigInt(maximumBytes)
+      || sourceBefore.size > BigInt(Number.MAX_SAFE_INTEGER)
+      || (sourceBefore.mode & 0o777n) !== expectedMode
+      || (owner !== null && sourceBefore.uid !== 0n && sourceBefore.uid !== owner)) throw new Error('pinned alias source is invalid');
+
+    requireAdmission();
+    const temporary = this.path('temporary');
+    const path = join(temporary, `alias.${randomSuffix()}`);
+    const writer = await open(path, 'wx', 0o600);
+    const hash = createHash('sha256');
+    const buffer = Buffer.allocUnsafe(PINNED_ALIAS_COPY_BYTES);
+    const bytes = Number(sourceBefore.size);
+    let position = 0;
+    try {
+      while (position < bytes) {
+        requireAdmission();
+        const length = Math.min(buffer.length, bytes - position);
+        const value = await sourceHandle.read(buffer, 0, length, position);
+        requireAdmission();
+        if (value.bytesRead === 0) throw new Error('pinned alias source ended early');
+        const chunk = buffer.subarray(0, value.bytesRead);
+        hash.update(chunk);
+        requireAdmission();
+        const written = await writer.write(chunk, 0, chunk.length, position);
+        requireAdmission();
+        if (written.bytesWritten !== chunk.length) throw new Error('pinned alias write ended early');
+        position += chunk.length;
+      }
+      requireAdmission();
+      const extra = await sourceHandle.read(buffer, 0, 1, position);
+      requireAdmission();
+      const sourceAfter = await sourceHandle.stat({ bigint: true });
+      if (extra.bytesRead !== 0 || !exactPinnedIdentity(sourceBefore, sourceAfter)) throw new Error('pinned alias source changed');
+      const digest = hash.digest('hex');
+      if (digest !== expectedDigest) throw new Error('pinned alias source digest differs');
+      requireAdmission();
+      await writer.chmod(Number(expectedMode));
+      requireAdmission();
+      await writer.sync();
+      requireAdmission();
+      const writtenDetails = await writer.stat({ bigint: true });
+      if (!writtenDetails.isFile() || writtenDetails.size !== sourceBefore.size || (writtenDetails.mode & 0o777n) !== expectedMode) throw new Error('pinned alias materialization differs');
+    } catch (error) {
+      await writer.close().catch(() => {});
+      await unlink(path).catch(() => {});
+      await syncDirectory(temporary).catch(() => {});
+      throw error;
+    }
+    try {
+      requireAdmission();
+      await writer.close();
+      requireAdmission();
+      await syncDirectory(temporary);
+      requireAdmission();
+    } catch (error) {
+      await writer.close().catch(() => {});
+      await unlink(path).catch(() => {});
+      await syncDirectory(temporary).catch(() => {});
+      throw error;
+    }
+
+    let handle;
+    try {
+      handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+      const [heldDetails, pathDetails] = await Promise.all([handle.stat({ bigint: true }), lstat(path, { bigint: true })]);
+      if (!exactPinnedIdentity(heldDetails, pathDetails)
+        || heldDetails.nlink !== 1n
+        || heldDetails.size !== sourceBefore.size
+        || (heldDetails.mode & 0o777n) !== expectedMode) throw new Error('pinned alias identity differs');
+      const value = await digestOpenFile(handle, maximumBytes, { continueRead: continueCopy });
+      if (value.bytes !== bytes || value.digest !== expectedDigest) throw new Error('pinned alias bytes differ');
+      requireAdmission();
+      pinnedAliases.set(handle, Object.freeze({
+        dev: heldDetails.dev,
+        executable,
+        ino: heldDetails.ino,
+        mode: expectedMode,
+        owner: this,
+        path,
+        size: heldDetails.size,
+        uid: heldDetails.uid,
+      }));
+      this.#aliases.add(handle);
+      return Object.freeze({ bytes, digest: expectedDigest, handle });
+    } catch (error) {
+      await handle?.close().catch(() => {});
+      await unlink(path).catch(() => {});
+      await syncDirectory(temporary).catch(() => {});
+      throw error;
+    }
+  }
+
+  async verifyPinnedAlias(handle, expectedDigest, maximumBytes, { continueRead = null, executable = false } = {}) {
+    if (!isDigest(expectedDigest) || !Number.isSafeInteger(maximumBytes) || maximumBytes < 1 || typeof executable !== 'boolean') throw new TypeError('pinned alias verification is invalid');
+    const requireContinuation = continuationCheck(continueRead);
+    requireContinuation();
+    const alias = pinnedAliases.get(handle);
+    if (alias?.owner !== this || alias.executable !== executable || !this.#aliases.has(handle)) throw new Error('pinned alias authority differs');
+    let heldDetails; let pathDetails;
+    try { [heldDetails, pathDetails] = await Promise.all([handle.stat({ bigint: true }), lstat(alias.path, { bigint: true })]); } catch { throw new Error('pinned alias identity differs'); }
+    requireContinuation();
+    if (!validateStatePinnedAliasForAdapter(handle, alias.path, heldDetails, pathDetails, { executable })) throw new Error('pinned alias identity differs');
+    const value = await digestOpenFile(handle, maximumBytes, { continueRead });
+    if (value.digest !== expectedDigest) throw new Error('pinned alias digest differs');
+    requireContinuation();
+    try { [heldDetails, pathDetails] = await Promise.all([handle.stat({ bigint: true }), lstat(alias.path, { bigint: true })]); } catch { throw new Error('pinned alias identity differs'); }
+    requireContinuation();
+    if (!validateStatePinnedAliasForAdapter(handle, alias.path, heldDetails, pathDetails, { executable })) throw new Error('pinned alias identity differs');
+    return value;
+  }
+
+  async removePinnedAlias(handle) {
+    const alias = pinnedAliases.get(handle);
+    if (alias?.owner !== this || !this.#aliases.has(handle)) throw new Error('pinned alias authority differs');
+    const temporary = this.path('temporary');
+    let failure = null;
+    try {
+      const [heldDetails, pathDetails] = await Promise.all([handle.stat({ bigint: true }), lstat(alias.path, { bigint: true })]);
+      const ownedIdentity = heldDetails.isFile()
+        && pathDetails.isFile()
+        && !pathDetails.isSymbolicLink()
+        && heldDetails.dev === alias.dev
+        && heldDetails.ino === alias.ino
+        && pathDetails.dev === alias.dev
+        && pathDetails.ino === alias.ino;
+      if (!ownedIdentity) throw new Error('pinned alias cleanup identity differs');
+      if (!validateStatePinnedAliasForAdapter(handle, alias.path, heldDetails, pathDetails, { executable: alias.executable })) failure = new Error('pinned alias cleanup failed');
+      await unlink(alias.path);
+      await syncDirectory(temporary);
+    } catch {
+      failure = new Error('pinned alias cleanup failed');
+      await syncDirectory(temporary).catch(() => {});
+    }
+    pinnedAliases.delete(handle);
+    this.#aliases.delete(handle);
+    try { await handle.close(); } catch { failure ??= new Error('pinned alias cleanup failed'); }
+    if (failure) throw failure;
   }
 
   async commitOutput(jobId, temporary) {

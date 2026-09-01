@@ -17,7 +17,7 @@ import {
 } from './reference-contract.mjs';
 import { parseOutputFrame } from './output-frame.mjs';
 import {
-  digestOpenFile,
+  isPinnedFileOperationAborted,
   openPinnedImmutableFile,
   ReferenceStateStore,
 } from './reference-state.mjs';
@@ -423,18 +423,63 @@ export class ReferenceSandboxService {
       const current = await this.#currentManifest(entry);
       if (!current || !validateJobManifestBinding(job, current) || await this.#revoked(current)) return await this.#finalize({ base, code: 'SANDBOX_REVOKED', securityEvents: ['AUTHORITY_CHANGED_BEFORE_LAUNCH'], startedAtUnixMs });
       if (!await this.#adapter.verifyRuntimeImage(current.runtimeImage, current.runtimeContractSha256)) return await this.#finalize({ base, code: 'SANDBOX_UNAVAILABLE', securityEvents: ['RUNTIME_IMAGE_UNAVAILABLE'], startedAtUnixMs });
-      const [input, tool] = await Promise.all([
-        openPinnedImmutableFile(staged.path, job.inputDigest, acquisition.maximumBytes),
-        openPinnedImmutableFile(entry.toolPath, current.toolDigest, MAXIMUM_INPUT_BYTES, { executable: true }),
-      ]);
-      const jobHandle = await this.#state.createEphemeralPinnedFile('job', Buffer.from(canonicalJson(job), 'utf8'));
+      if (controller.signal.aborted || job.deadlineUnixMs <= this.#now()) return await this.#finalize({ base, code: controller.signal.aborted ? 'SANDBOX_CANCELLED' : 'SANDBOX_TIMEOUT', securityEvents: ['ALIAS_MATERIALIZATION_ABORTED'], startedAtUnixMs });
+      const continuePinnedFileOperation = () => !controller.signal.aborted && job.deadlineUnixMs > this.#now();
+      const finalizePinnedFileAbort = () => this.#finalize({ base, code: controller.signal.aborted ? 'SANDBOX_CANCELLED' : 'SANDBOX_TIMEOUT', securityEvents: ['PINNED_FILE_OPERATION_ABORTED'], startedAtUnixMs });
+      let input;
+      try { input = await openPinnedImmutableFile(staged.path, job.inputDigest, acquisition.maximumBytes, { continueRead: continuePinnedFileOperation }); } catch (error) {
+        if (isPinnedFileOperationAborted(error)) return await finalizePinnedFileAbort();
+        throw error;
+      }
+      let tool;
+      try { tool = await openPinnedImmutableFile(entry.toolPath, current.toolDigest, MAXIMUM_INPUT_BYTES, { continueRead: continuePinnedFileOperation, executable: true }); } catch (error) {
+        await input.handle.close().catch(() => {});
+        if (isPinnedFileOperationAborted(error)) return await finalizePinnedFileAbort();
+        throw error;
+      }
+      const jobBytes = Buffer.from(canonicalJson(job), 'utf8');
+      const jobDigest = sha256(jobBytes);
+      let jobSourceHandle;
+      try { jobSourceHandle = await this.#state.createEphemeralPinnedFile('job', jobBytes); } catch (error) { await Promise.allSettled([input.handle.close(), tool.handle.close()]); throw error; }
+      const aliases = [];
+      const materializeAlias = async (handle, digest, maximumBytes, options = {}) => {
+        try { return await this.#state.materializePinnedAlias(handle, digest, maximumBytes, { ...options, continueCopy: continuePinnedFileOperation }); } catch (error) {
+          if (isPinnedFileOperationAborted(error)) return null;
+          throw error;
+        }
+      };
       try {
+        const inputAlias = await materializeAlias(input.handle, job.inputDigest, acquisition.maximumBytes);
+        if (!inputAlias) return await finalizePinnedFileAbort();
+        aliases.push(inputAlias);
+        if (controller.signal.aborted || job.deadlineUnixMs <= this.#now()) return await this.#finalize({ base, code: controller.signal.aborted ? 'SANDBOX_CANCELLED' : 'SANDBOX_TIMEOUT', securityEvents: ['ALIAS_MATERIALIZATION_ABORTED'], startedAtUnixMs });
+        const jobAlias = await materializeAlias(jobSourceHandle, jobDigest, 1024 * 1024);
+        if (!jobAlias) return await finalizePinnedFileAbort();
+        aliases.push(jobAlias);
+        if (controller.signal.aborted || job.deadlineUnixMs <= this.#now()) return await this.#finalize({ base, code: controller.signal.aborted ? 'SANDBOX_CANCELLED' : 'SANDBOX_TIMEOUT', securityEvents: ['ALIAS_MATERIALIZATION_ABORTED'], startedAtUnixMs });
+        const toolAlias = await materializeAlias(tool.handle, current.toolDigest, MAXIMUM_INPUT_BYTES, { executable: true });
+        if (!toolAlias) return await finalizePinnedFileAbort();
+        aliases.push(toolAlias);
+        if (controller.signal.aborted || job.deadlineUnixMs <= this.#now()) return await this.#finalize({ base, code: controller.signal.aborted ? 'SANDBOX_CANCELLED' : 'SANDBOX_TIMEOUT', securityEvents: ['ALIAS_MATERIALIZATION_ABORTED'], startedAtUnixMs });
         await this.#state.writeJob({ ...base, stagedBytes: staged.bytes, startedAtUnixMs, state: 'running' });
-        const run = await this.#adapter.runTool({ runtimeImage: current.runtimeImage, policy: current.resourcePolicy, inputHandle: input.handle, jobHandle, jobId: job.jobId, toolHandle: tool.handle, signal: controller.signal });
+        const run = await this.#adapter.runTool({ runtimeImage: current.runtimeImage, policy: current.resourcePolicy, inputHandle: inputAlias.handle, jobHandle: jobAlias.handle, jobId: job.jobId, toolHandle: toolAlias.handle, signal: controller.signal });
         volume = run.volume;
-        const inputAfter = await digestOpenFile(input.handle, acquisition.maximumBytes);
-        const toolAfter = await digestOpenFile(tool.handle, MAXIMUM_INPUT_BYTES);
-        if (inputAfter.digest !== job.inputDigest || toolAfter.digest !== current.toolDigest) { securityEvents.push('PINNED_BYTES_CHANGED'); if (volume) await this.#adapter.discardVolume(volume); volume = null; return await this.#finalize({ base, code: 'SANDBOX_VALIDATION_FAILED', securityEvents, startedAtUnixMs }); }
+        let aliasesValid = true;
+        let verificationAborted = false;
+        const verification = await Promise.allSettled([
+          this.#state.verifyPinnedAlias(inputAlias.handle, job.inputDigest, acquisition.maximumBytes, { continueRead: continuePinnedFileOperation }),
+          this.#state.verifyPinnedAlias(jobAlias.handle, jobDigest, 1024 * 1024, { continueRead: continuePinnedFileOperation }),
+          this.#state.verifyPinnedAlias(toolAlias.handle, current.toolDigest, MAXIMUM_INPUT_BYTES, { continueRead: continuePinnedFileOperation, executable: true }),
+        ]);
+        if (verification.some((result) => result.status === 'rejected')) {
+          verificationAborted = verification.some((result) => result.status === 'rejected' && isPinnedFileOperationAborted(result.reason));
+          aliasesValid = false;
+        } else {
+          const [inputAfter, jobAfter, toolAfter] = verification.map((result) => result.value);
+          aliasesValid = inputAfter.digest === job.inputDigest && jobAfter.digest === jobDigest && toolAfter.digest === current.toolDigest;
+        }
+        if (verificationAborted) { if (volume) await this.#adapter.discardVolume(volume); volume = null; return await finalizePinnedFileAbort(); }
+        if (!aliasesValid) { securityEvents.push('PINNED_BYTES_CHANGED'); if (volume) await this.#adapter.discardVolume(volume); volume = null; return await this.#finalize({ base, code: 'SANDBOX_VALIDATION_FAILED', securityEvents, startedAtUnixMs }); }
         if (run.kind !== 'success') {
           if (volume) await this.#adapter.discardVolume(volume);
           volume = null;
@@ -447,26 +492,59 @@ export class ReferenceSandboxService {
           return await this.#finalize({ base, code: codes[run.kind] ?? 'SANDBOX_UNAVAILABLE', securityEvents, startedAtUnixMs });
         }
       } finally {
-        await Promise.all([input.handle.close(), tool.handle.close(), jobHandle.close()]);
+        const settled = await Promise.allSettled([
+          ...aliases.map((alias) => this.#state.removePinnedAlias(alias.handle)),
+          input.handle.close(),
+          tool.handle.close(),
+          jobSourceHandle.close(),
+        ]);
+        if (settled.some((result) => result.status === 'rejected')) { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
       }
       this.#fault('after-worker');
       await this.#state.writeJob({ ...base, stagedBytes: staged.bytes, startedAtUnixMs, state: 'validating' });
       const channelSecret = randomBytes(32);
       const bindingDigest = channelSecret.toString('hex');
-      const bindingHandle = await this.#state.createEphemeralPinnedFile('frame-binding', Buffer.from(bindingDigest, 'ascii'));
+      const bindingBytes = Buffer.from(bindingDigest, 'ascii');
+      const bindingAliasDigest = sha256(bindingBytes);
+      let bindingSourceHandle = null;
+      let bindingAlias = null;
+      let aliasSettlementFailed = false;
+      let output;
       const framePath = this.#state.path('temporary', `frame.${job.jobId}.${randomBytes(12).toString('hex')}`);
       const maximumFrameBytes = current.resourcePolicy.outputBytes + current.resourcePolicy.fanout * (1 + 12 + 32 + 4096) + 53;
       try {
-        const collected = await this.#adapter.collectOutput({ runtimeImage: current.runtimeImage, policy: current.resourcePolicy, volume, bindingHandle, framePath, jobId: job.jobId, maximumFrameBytes });
-        volume = null;
-        if (collected.kind !== 'success') return await this.#finalize({ base, code: collected.kind === 'output-limit' ? 'SANDBOX_OUTPUT_LIMIT' : 'SANDBOX_VALIDATION_FAILED', securityEvents: ['TRUSTED_OUTPUT_SHIM_REJECTED'], startedAtUnixMs });
-      } finally {
-        channelSecret.fill(0);
-        await bindingHandle.close();
-      }
-      outputTemporary = await this.#state.createOutputTemporary(job.jobId);
-      let output;
-      try {
+        try {
+          bindingSourceHandle = await this.#state.createEphemeralPinnedFile('frame-binding', bindingBytes);
+          if (controller.signal.aborted || job.deadlineUnixMs <= this.#now()) {
+            await this.#adapter.discardVolume(volume); volume = null;
+            return await this.#finalize({ base, code: controller.signal.aborted ? 'SANDBOX_CANCELLED' : 'SANDBOX_TIMEOUT', securityEvents: ['ALIAS_MATERIALIZATION_ABORTED'], startedAtUnixMs });
+          }
+          bindingAlias = await materializeAlias(bindingSourceHandle, bindingAliasDigest, 1024 * 1024);
+          if (!bindingAlias) {
+            await this.#adapter.discardVolume(volume); volume = null;
+            return await finalizePinnedFileAbort();
+          }
+          if (controller.signal.aborted || job.deadlineUnixMs <= this.#now()) {
+            await this.#adapter.discardVolume(volume); volume = null;
+            return await this.#finalize({ base, code: controller.signal.aborted ? 'SANDBOX_CANCELLED' : 'SANDBOX_TIMEOUT', securityEvents: ['ALIAS_MATERIALIZATION_ABORTED'], startedAtUnixMs });
+          }
+          const collected = await this.#adapter.collectOutput({ runtimeImage: current.runtimeImage, policy: current.resourcePolicy, volume, bindingHandle: bindingAlias.handle, framePath, jobId: job.jobId, maximumFrameBytes });
+          volume = null;
+          let bindingValid = true;
+          let bindingVerificationAborted = false;
+          try { bindingValid = (await this.#state.verifyPinnedAlias(bindingAlias.handle, bindingAliasDigest, 1024 * 1024, { continueRead: continuePinnedFileOperation })).digest === bindingAliasDigest; } catch (error) { bindingVerificationAborted = isPinnedFileOperationAborted(error); bindingValid = false; }
+          if (bindingVerificationAborted) return await finalizePinnedFileAbort();
+          if (!bindingValid) return await this.#finalize({ base, code: 'SANDBOX_VALIDATION_FAILED', securityEvents: ['PINNED_BYTES_CHANGED'], startedAtUnixMs });
+          if (collected.kind !== 'success') return await this.#finalize({ base, code: collected.kind === 'output-limit' ? 'SANDBOX_OUTPUT_LIMIT' : 'SANDBOX_VALIDATION_FAILED', securityEvents: ['TRUSTED_OUTPUT_SHIM_REJECTED'], startedAtUnixMs });
+        } finally {
+          channelSecret.fill(0);
+          const settled = await Promise.allSettled([
+            bindingAlias ? this.#state.removePinnedAlias(bindingAlias.handle) : Promise.resolve(),
+            bindingSourceHandle ? bindingSourceHandle.close() : Promise.resolve(),
+          ]);
+          if (settled.some((result) => result.status === 'rejected')) { aliasSettlementFailed = true; this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
+        }
+        outputTemporary = await this.#state.createOutputTemporary(job.jobId);
         try {
           output = await parseOutputFrame({
             bindingDigest,
@@ -482,7 +560,7 @@ export class ReferenceSandboxService {
           return await this.#finalize({ base, code: 'SANDBOX_VALIDATION_FAILED', outputTemporary, securityEvents, startedAtUnixMs });
         }
       } finally {
-        await rm(framePath, { force: true });
+        try { await rm(framePath, { force: true }); } catch (error) { if (!aliasSettlementFailed) throw error; }
       }
       this.#fault('after-validation');
       await this.#state.writeJob({ ...base, stagedBytes: staged.bytes, startedAtUnixMs, state: 'committing' });

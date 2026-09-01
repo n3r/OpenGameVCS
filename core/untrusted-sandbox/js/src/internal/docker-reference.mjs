@@ -1,10 +1,11 @@
 import { randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { fstatSync } from 'node:fs';
-import { lstat, open, readFile, realpath } from 'node:fs/promises';
+import { lstat, open, readFile, readlink, realpath } from 'node:fs/promises';
 import { isAbsolute } from 'node:path';
 import { types } from 'node:util';
 import { LINUX_RUNTIME_CONTRACT_SHA256, canonicalJson, isDigest, sha256 } from './reference-contract.mjs';
+import { validateStatePinnedAliasForAdapter } from './reference-state.mjs';
 
 const SAFE_COMMAND_ENVIRONMENT = Object.freeze({ LANG: 'C', LC_ALL: 'C', PATH: '/usr/bin:/bin' });
 const COMMAND_OUTPUT_MAXIMUM = 256 * 1024;
@@ -33,16 +34,37 @@ const adapters = new WeakSet();
 const containerName = () => `ogvcs-sandbox-${randomBytes(12).toString('hex')}`;
 const volumeName = () => `ogvcs-sandbox-${randomBytes(12).toString('hex')}`;
 
-const regularPinnedFileSource = (handle) => {
+const statePinnedFileSource = async (handle, { executable = false } = {}) => {
   try {
     if (handle === null || typeof handle !== 'object' || types.isProxy(handle)) throw new TypeError('invalid handle');
     const descriptor = handle.fd;
-    if (!Number.isSafeInteger(descriptor) || descriptor < 0 || !fstatSync(descriptor).isFile()) throw new TypeError('invalid descriptor');
-    // A regular file cannot contain descendant mounts. This makes
-    // bind-recursive=writable equivalent to a non-recursive bind here while
-    // avoiding Moby's recursive-readonly mount_setattr path.
-    return `/proc/${process.pid}/fd/${descriptor}`;
-  } catch { throw new Error('held mount source is not a regular pinned file'); }
+    if (!Number.isSafeInteger(descriptor) || descriptor < 0) throw new TypeError('invalid descriptor');
+    const heldDetails = fstatSync(descriptor, { bigint: true });
+    const descriptorPath = `/proc/self/fd/${descriptor}`;
+    const path = await readlink(descriptorPath);
+    if (!isAbsolute(path)
+      || path.length > 4096
+      || path.endsWith(' (deleted)')
+      || /^\/(?:dev|proc|sys)(?:\/|$)/u.test(path)
+      || /[,\0\r\n]/u.test(path)
+      || await realpath(path) !== path) throw new TypeError('invalid alias path');
+    const pathDetails = await lstat(path, { bigint: true });
+    const owner = typeof process.geteuid === 'function' ? BigInt(process.geteuid()) : pathDetails.uid;
+    if (!heldDetails.isFile()
+      || !pathDetails.isFile()
+      || pathDetails.isSymbolicLink()
+      || (pathDetails.mode & 0o777n) !== (executable ? 0o555n : 0o444n)
+      || (pathDetails.uid !== 0n && pathDetails.uid !== owner)
+      || !validateStatePinnedAliasForAdapter(handle, path, heldDetails, pathDetails, { executable })) throw new TypeError('invalid alias identity');
+    return Object.freeze({ executable, handle, source: path });
+  } catch { throw new Error('held mount source is not a state-pinned immutable alias'); }
+};
+
+const revalidateStatePinnedFileSources = async (sources) => {
+  for (const expected of sources) {
+    const current = await statePinnedFileSource(expected.handle, { executable: expected.executable });
+    if (current.source !== expected.source) throw new Error('held mount alias identity changed');
+  }
 };
 
 const appendBounded = (chunks, chunk, state, maximum) => {
@@ -568,7 +590,12 @@ export class DockerReferenceAdapter {
 
   async runTool({ runtimeImage, policy, inputHandle, jobHandle, jobId, toolHandle, signal }) {
     if (this.#poisoned) throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED');
-    const [inputSource, jobSource, toolSource] = [inputHandle, jobHandle, toolHandle].map(regularPinnedFileSource);
+    const pinnedSources = await Promise.all([
+      statePinnedFileSource(inputHandle),
+      statePinnedFileSource(jobHandle),
+      statePinnedFileSource(toolHandle, { executable: true }),
+    ]);
+    const [inputSource, jobSource, toolSource] = pinnedSources.map((value) => value.source);
     const volume = await this.#createOutputVolume(policy, jobId);
     const name = containerName();
     const fileMounts = [
@@ -589,12 +616,27 @@ export class DockerReferenceAdapter {
     try {
       id = await this.#createContainer(name, args, { entrypoint: '/tool/program', fileMounts, jobId, outputReadonly: false, policy, role: 'parser', runtimeContractSha256: LINUX_RUNTIME_CONTRACT_SHA256, runtimeImage, volume: volume.name, volumeMountpoint: volume.mountpoint });
     } catch (error) {
-      if (!await this.#cleanupVolume(volume.name).catch(() => false)) { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
+      const [volumeGone, aliasesValid] = await Promise.all([
+        this.#cleanupVolume(volume.name).catch(() => false),
+        revalidateStatePinnedFileSources(pinnedSources).then(() => true, () => false),
+      ]);
+      if (!volumeGone || !aliasesValid) { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
       throw error;
     }
     if (!id) {
-      if (!await this.#cleanupVolume(volume.name)) { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
+      const [volumeGone, aliasesValid] = await Promise.all([
+        this.#cleanupVolume(volume.name),
+        revalidateStatePinnedFileSources(pinnedSources).then(() => true, () => false),
+      ]);
+      if (!volumeGone || !aliasesValid) { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
       return Object.freeze({ kind: 'unavailable', volume: null });
+    }
+    try {
+      await revalidateStatePinnedFileSources(pinnedSources);
+    } catch {
+      await this.#settle(id, name, volume).catch(() => null);
+      this.#poisoned = true;
+      throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED');
     }
     const deadline = Math.min(policy.elapsedMilliseconds, 60_000);
     const value = await execute({ binary: this.#binary, args: ['start', '--attach', id], maximumStdout: 64 * 1024, maximumStderr: 64 * 1024, timeoutMilliseconds: deadline, signal });
@@ -608,14 +650,16 @@ export class DockerReferenceAdapter {
       if (disposition.poison) this.#poisoned = true;
     }
     const containerGone = await this.#cleanupContainer(id, name);
-    if (!containerGone) { await this.#cleanupVolume(volume.name); this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
+    const aliasesValid = await revalidateStatePinnedFileSources(pinnedSources).then(() => true, () => false);
+    if (!containerGone || !aliasesValid) { await this.#cleanupVolume(volume.name); this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
     const kind = postNonzeroKind ?? (value.kind === 'timeout' ? 'timeout' : value.kind === 'aborted' ? 'cancelled' : value.kind === 'overflow' ? 'output-limit' : value.kind !== 'exit' || value.code !== 0 || value.stdoutBytes !== 0 || value.stderr.length !== 0 ? 'failed' : 'success');
     return Object.freeze(kind === 'failed' ? { failureClass, kind, volume } : { kind, volume });
   }
 
   async collectOutput({ runtimeImage, policy, volume, bindingHandle, framePath, jobId, maximumFrameBytes }) {
     if (this.#poisoned) throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED');
-    const bindingSource = regularPinnedFileSource(bindingHandle);
+    const pinnedSource = await statePinnedFileSource(bindingHandle);
+    const bindingSource = pinnedSource.source;
     const name = containerName();
     const fileMounts = [{ source: bindingSource, target: '/input/binding' }];
     const args = [
@@ -629,15 +673,31 @@ export class DockerReferenceAdapter {
     try {
       id = await this.#createContainer(name, args, { entrypoint: '/ogvcs-output-shim', fileMounts, jobId, outputReadonly: true, policy, role: 'output-shim', runtimeContractSha256: LINUX_RUNTIME_CONTRACT_SHA256, runtimeImage, volume: volume.name, volumeMountpoint: volume.mountpoint });
     } catch (error) {
-      if (!await this.#cleanupVolume(volume.name).catch(() => false)) { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
+      const [volumeGone, aliasValid] = await Promise.all([
+        this.#cleanupVolume(volume.name).catch(() => false),
+        revalidateStatePinnedFileSources([pinnedSource]).then(() => true, () => false),
+      ]);
+      if (!volumeGone || !aliasValid) { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
       throw error;
     }
     if (!id) {
-      if (!await this.#cleanupVolume(volume.name)) { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
+      const [volumeGone, aliasValid] = await Promise.all([
+        this.#cleanupVolume(volume.name),
+        revalidateStatePinnedFileSources([pinnedSource]).then(() => true, () => false),
+      ]);
+      if (!volumeGone || !aliasValid) { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
       return Object.freeze({ kind: 'failed', frameBytes: 0 });
+    }
+    try {
+      await revalidateStatePinnedFileSources([pinnedSource]);
+    } catch {
+      await this.#settle(id, name, volume).catch(() => null);
+      this.#poisoned = true;
+      throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED');
     }
     const value = await execute({ binary: this.#binary, args: ['start', '--attach', id], stdoutPath: framePath, maximumStdout: maximumFrameBytes, maximumStderr: 64 * 1024, timeoutMilliseconds: Math.min(policy.elapsedMilliseconds, 60_000) });
     await this.#settle(id, name, volume);
+    try { await revalidateStatePinnedFileSources([pinnedSource]); } catch { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
     return Object.freeze({ kind: value.kind === 'overflow' ? 'output-limit' : value.kind !== 'exit' || value.code !== 0 || value.stderr.length !== 0 ? 'failed' : 'success', frameBytes: value.stdoutBytes });
   }
 
@@ -649,8 +709,8 @@ export class DockerReferenceAdapter {
 export const isDockerReferenceAdapter = (value) => adapters.has(value);
 
 export const executeDockerForTesting = execute;
-export const isRegularPinnedFileHandleForTesting = (handle) => {
-  try { regularPinnedFileSource(handle); return true; } catch { return false; }
+export const isRegularPinnedFileHandleForTesting = async (handle, options = {}) => {
+  try { await statePinnedFileSource(handle, options); return true; } catch { return false; }
 };
 export const postNonzeroFailureDispositionForTesting = postNonzeroFailureDisposition;
 export const workerFailureClassForTesting = workerFailureClass;
