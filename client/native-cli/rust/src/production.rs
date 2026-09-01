@@ -2933,7 +2933,7 @@ fn rename_repository_paths(root: &Path, source: &str, destination: &str) -> Resu
     #[cfg(windows)]
     {
         super::windows_security::rename_confined_noreplace(root, source, destination)
-            .map_err(|_| unsafe_path())
+            .map_err(|error| unsafe_path_io_error("repository-move", &error))
     }
 }
 
@@ -2950,7 +2950,7 @@ fn rename_repository_to_trash(root: &Path, source: &str, trash: &str) -> Result<
             source,
             &format!(".ogvcs/trash-v1/{trash}"),
         )
-        .map_err(|_| unsafe_path())
+        .map_err(|error| unsafe_path_io_error("repository-delete", &error))
     }
 }
 
@@ -2967,7 +2967,7 @@ fn rename_trash_to_repository(root: &Path, trash: &str, destination: &str) -> Re
             &format!(".ogvcs/trash-v1/{trash}"),
             destination,
         )
-        .map_err(|_| unsafe_path())
+        .map_err(|error| unsafe_path_io_error("repository-revert", &error))
     }
 }
 
@@ -3174,6 +3174,14 @@ fn unsafe_path() -> CliError {
         "A local path is missing, escapes the workspace, or crosses a link/reparse point.",
         "Remove the unsafe namespace object and retry with an OGVCS-004-valid repository path.",
     )
+}
+
+#[cfg(windows)]
+fn unsafe_path_io_error(operation: &'static str, error: &io::Error) -> CliError {
+    unsafe_path().with_data(json!({
+        "ioErrorCode": error.raw_os_error(),
+        "operation": operation
+    }))
 }
 
 fn recovery_conflict() -> CliError {

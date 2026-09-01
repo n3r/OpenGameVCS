@@ -272,7 +272,7 @@ fn validate_kind(file: &File, directory: bool) -> io::Result<()> {
 /// objects until `SetFileInformationByHandle` resolves the relative target
 /// against the pinned destination parent.
 pub fn rename_confined_noreplace(root: &Path, source: &str, destination: &str) -> io::Result<()> {
-    let root_handle = open_private_directory(root)?;
+    let root_handle = open_private_directory_for_sync(root)?;
     let root_final = final_path(&root_handle)?;
     let source_components: Vec<_> = source.split('/').collect();
     let destination_components: Vec<_> = destination.split('/').collect();
@@ -296,7 +296,7 @@ pub fn rename_confined_noreplace(root: &Path, source: &str, destination: &str) -
     let source_path = joined_relative(root, &source_components);
     let source_handle = open_reparse_handle_with_access(
         &source_path,
-        DELETE | FILE_READ_ATTRIBUTES | READ_CONTROL | GENERIC_READ,
+        DELETE | FILE_READ_ATTRIBUTES | READ_CONTROL | GENERIC_READ | GENERIC_WRITE,
     )?;
     validate_kind(&source_handle, false)?;
     ensure_confined_final_path(&root_final, &final_path(&source_handle)?)?;
@@ -339,9 +339,14 @@ fn open_confined_ancestors(
         let access = FILE_READ_ATTRIBUTES
             | READ_CONTROL
             | GENERIC_READ
+            | GENERIC_WRITE
             | FILE_LIST_DIRECTORY
             | if destination_access { FILE_ADD_FILE } else { 0 };
-        let handle = open_reparse_handle_with_access(&current, access)?;
+        let handle = open_reparse_handle_with_access_and_share(
+            &current,
+            access,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+        )?;
         validate_kind(&handle, true)?;
         ensure_confined_final_path(root_final, &final_path(&handle)?)?;
         handles.push(handle);
@@ -762,6 +767,12 @@ mod tests {
         assert!(fs::remove_file(&lock_path).is_err());
         drop(lock);
         fs::remove_file(&lock_path).unwrap();
+
+        let source = root.join("rename-source");
+        drop(create_new_private_file(&source).unwrap());
+        rename_confined_noreplace(&root, "rename-source", "rename-destination").unwrap();
+        assert!(!source.exists());
+        fs::remove_file(root.join("rename-destination")).unwrap();
         fs::remove_dir(&root).unwrap();
     }
 }
