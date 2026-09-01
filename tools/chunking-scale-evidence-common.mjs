@@ -399,10 +399,21 @@ export function sha256Bytes(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
+export function scalePublicationDirectorySyncOpenFlag(platform = process.platform) {
+  // libuv opens Windows directories with FILE_FLAG_BACKUP_SEMANTICS. Its
+  // read-only flag supplies only FILE_GENERIC_READ, while FlushFileBuffers
+  // requires write access and otherwise surfaces EPERM. A read/write handle
+  // supplies that authority without changing directory contents. POSIX keeps
+  // the conventional read-only directory descriptor.
+  return platform === 'win32' ? 'r+' : 'r';
+}
+
 export async function syncScalePublicationDirectory(directory) {
   let handle;
   try {
-    handle = await open(directory, 'r');
+    handle = await open(directory, scalePublicationDirectorySyncOpenFlag());
+    const info = await handle.stat();
+    if (!info.isDirectory()) fail('publication directory durability target is not a directory');
     await handle.sync();
   } catch {
     fail('publication directory durability cannot be proven');

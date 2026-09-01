@@ -25,6 +25,7 @@ import {
   loadScaleReport,
   parseScaleReportText,
   scaleEvidenceSourceInventory,
+  scalePublicationDirectorySyncOpenFlag,
   sha256Bytes,
 } from './chunking-scale-evidence-common.mjs';
 import {
@@ -210,6 +211,13 @@ test('source-root containment is exact across POSIX, drive-letter, and UNC paths
   assert.equal(isScaleEvidencePathWithinRoot('D:\\a\\repo', 'E:\\a\\repo\\report.mjs', win32), false);
   assert.equal(isScaleEvidencePathWithinRoot('\\\\host\\share\\repo', '\\\\host\\share\\repo\\tools\\report.mjs', win32), true);
   assert.equal(isScaleEvidencePathWithinRoot('\\\\host\\share\\repo', '\\\\host\\share\\other\\report.mjs', win32), false);
+});
+
+test('directory durability requests write authority only on Windows', () => {
+  assert.equal(scalePublicationDirectorySyncOpenFlag('win32'), 'r+');
+  for (const platform of ['aix', 'darwin', 'freebsd', 'linux', 'openbsd', 'sunos']) {
+    assert.equal(scalePublicationDirectorySyncOpenFlag(platform), 'r', platform);
+  }
 });
 
 test('tiny projections publish as two content-addressed bundles and compare only through verified brands', { timeout: 120_000 }, async (t) => {

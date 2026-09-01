@@ -17,6 +17,7 @@ import {
   retainedScalePublication,
   scaleEvidenceSourceSetSha256,
   sha256Bytes,
+  syncScalePublicationDirectory,
 } from './chunking-scale-evidence-common.mjs';
 import { verifyChunkingScaleEvidenceBundle } from './verify-chunking-scale-evidence-bundle.mjs';
 
@@ -126,16 +127,6 @@ async function writeSynced(path, bytes) {
   }
 }
 
-async function syncDirectory(path) {
-  let handle;
-  try {
-    handle = await open(path, 'r');
-    await handle.sync();
-  } finally {
-    await handle?.close().catch(() => {});
-  }
-}
-
 export async function writeChunkingScaleEvidenceBundle(directory, built, optionsForTest = undefined) {
   if (typeof directory !== 'string' || directory.length === 0 || directory.includes('\0')) fail('bundle destination is invalid');
   if (built?.schemaVersion !== SCALE_EVIDENCE_SCHEMA_VERSION || built.manifest?.implementation !== built.implementation
@@ -159,15 +150,15 @@ export async function writeChunkingScaleEvidenceBundle(directory, built, options
     await writeSynced(join(stage, 'projection.json'), Buffer.from(built.projectionText));
     await writeSynced(join(stage, 'report.json'), Buffer.from(built.reportText));
     await writeSynced(join(stage, 'manifest.json'), Buffer.from(built.manifestText));
-    await syncDirectory(stage);
+    await syncScalePublicationDirectory(stage);
     await rename(stage, directory);
     committed = true;
     if (optionsForTest?.failAfterPublish === true) throw new Error('injected bundle parent-sync failure');
-    await syncDirectory(parent);
+    await syncScalePublicationDirectory(parent);
     return deepFreeze({ directory, bundleDigest: built.manifest.bundleDigest });
   } catch (error) {
     await rm(committed ? directory : stage, { recursive: true, force: true }).catch(() => {});
-    await syncDirectory(parent).catch(() => {});
+    await syncScalePublicationDirectory(parent).catch(() => {});
     throw error;
   }
 }
@@ -188,10 +179,10 @@ export async function writeRetainedChunkingScalePublication(path, publication, o
     await writeSynced(path, Buffer.from(`${canonicalJson(publication)}\n`));
     created = true;
     if (optionsForTest?.failAfterPublish === true) throw new Error('injected retained-publication parent-sync failure');
-    await syncDirectory(parent);
+    await syncScalePublicationDirectory(parent);
   } catch (error) {
     if (created) await rm(path, { force: true }).catch(() => {});
-    await syncDirectory(parent).catch(() => {});
+    await syncScalePublicationDirectory(parent).catch(() => {});
     throw error;
   }
 }
