@@ -104,15 +104,20 @@ Policies deploy in monitor/dry-run mode against captured authorized test request
 ## Completion evidence
 
 - Implementation changes: candidate 0.2 OIDC/bootstrap, policy/security
-  mutation, trusted checkpoint/rate-source, and same-transaction authorization
-  boundaries are implemented in the current development branch.
-- Test and benchmark results: 29 bounded security/production vectors are
-  executable; the independent contract mutation gate and offline packed
-  consumer are present. Hosted three-OS and latency evidence remain open.
+  mutation, trusted checkpoint/rate-source, streamed aggregate authorization,
+  and a private repository-metadata lifecycle bridge are implemented. The
+  bridge consumes the opaque current receipt and commits identity consumption
+  plus lifecycle evidence in one caller-owned serializable transaction.
+- Test and benchmark results: 30 bounded contract vectors, 60 JavaScript
+  runtime tests, independent mutation/package gates, and bounded hosted
+  three-OS evidence are present. Local PostgreSQL 16 evidence covers exact
+  100,000-resource identity authorization and the reconciled hostile lifecycle
+  bridge; the final combined hosted scale/latency campaign remains open.
 - Security/reliability review: caller-selected checkpoints, rate identities,
   transaction identities, policy preview, device-flow outage retry, and
   ambiguous decision commits fail closed.
 - Documentation/runbooks: package/contract READMEs and the identity/policy
   operations runbook describe adapter ownership and recovery procedures.
-- Rollout result: not yet rolled out; production adapters, public route binding,
-  hosted evidence and dependency integration remain completion gates.
+- Rollout result: not yet rolled out. Studio OIDC/KMS providers, external audit
+  checkpoint/root authority, public route binding, production SLO/fault proof,
+  and an end-to-end rollout remain completion gates.

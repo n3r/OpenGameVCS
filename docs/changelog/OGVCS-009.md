@@ -51,6 +51,35 @@
   This is an internal authorization brand, not a public OGVCS-010/disaster-
   recovery receipt.
 
+## 2026-09-01 same-transaction repository lifecycle bridge
+
+- Added a private repository-metadata participant that verifies the current
+  aggregate receipt, consumes its exact one-use identity commitment, applies
+  the sealed object-lifecycle plan, and records the cross-schema evidence in
+  one caller-owned serializable PostgreSQL transaction. Every caught bridge
+  failure poisons the transaction so a caller cannot commit surrounding
+  metadata after an ambiguous authorization result.
+- Added append-only metadata migration v10 with exact identity plan,
+  consumption, operation, lifecycle-plan, object-transfer, repository,
+  authority-epoch, and commit-sequence bindings. Late child insertion,
+  substitution, stale authority, expiry, revocation, HMAC tampering, replay,
+  rollback, and context mismatch fail closed.
+- Reconciled the bridge to identity manifest
+  `f2793333fc2f02634a54caff7137e94cb8a8cab32ae301bb190f06efb769f401`.
+  The authenticated lifecycle-bridge manifest is
+  `db379ccdd81cfe94fec08ddda2ae5031c9ab5b7750007cf1e096cf1e4299a3bc`
+  with artifact set
+  `e2cf52e055a4e85e54ea502a38fee17536a743ff288d4bfb85b246cc43170863`.
+- Fresh PostgreSQL 16 hostile bridge, identity-bound metadata, and full metadata
+  reports passed locally, together with Rust 1.82 default/feature tests and
+  Clippy, 60 identity runtime tests, and metadata/identity/sandbox package
+  checks from a clean `npm ci`. This bridge revision does not yet add retained
+  hosted or final exact-100,000 cross-service evidence.
+- The bridge remains an internal prerequisite. Metadata `networkRoutes` stays
+  empty, no OGVCS-010/disaster-recovery receipt is exposed, and per-child value
+  equivalence still relies on the trusted runtime feeding the relationally
+  sealed child rows rather than a final exact-scale relational anti-join.
+
 ## 2026-09-01 Rust path-contract convergence prerequisite
 
 - Added a Rust OGVCS-004 pure path binding generated from and pinned to the
