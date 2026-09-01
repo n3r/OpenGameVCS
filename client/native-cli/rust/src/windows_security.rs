@@ -8,15 +8,15 @@
 use std::ffi::c_void;
 use std::fs::File;
 use std::io;
-use std::mem::{size_of, zeroed};
+use std::mem::{align_of, size_of, zeroed};
 use std::os::windows::ffi::OsStrExt;
 use std::os::windows::io::{AsRawHandle, FromRawHandle};
 use std::path::Path;
 use std::ptr::{null, null_mut};
 
 use windows_sys::Win32::Foundation::{
-    CloseHandle, LocalFree, ERROR_INSUFFICIENT_BUFFER, GENERIC_READ, GENERIC_WRITE, HANDLE,
-    INVALID_HANDLE_VALUE, PSID,
+    CloseHandle, LocalFree, RtlNtStatusToDosError, ERROR_INSUFFICIENT_BUFFER, GENERIC_READ,
+    GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE, NTSTATUS, PSID, STATUS_PENDING,
 };
 use windows_sys::Win32::Security::Authorization::{GetSecurityInfo, SE_FILE_OBJECT};
 use windows_sys::Win32::Security::{
@@ -30,7 +30,7 @@ use windows_sys::Win32::Security::{
     TOKEN_QUERY, TOKEN_USER,
 };
 use windows_sys::Win32::Storage::FileSystem::{
-    CreateDirectoryW, CreateFileW, FileDispositionInfo, FileRenameInfo, GetFileInformationByHandle,
+    CreateDirectoryW, CreateFileW, FileDispositionInfo, GetFileInformationByHandle,
     GetFinalPathNameByHandleW, SetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION, CREATE_NEW,
     DELETE, FILE_ADD_FILE, FILE_ALL_ACCESS, FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_REPARSE_POINT,
     FILE_DISPOSITION_INFO, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
@@ -44,6 +44,39 @@ use windows_sys::Win32::System::SystemServices::{
     SECURITY_DESCRIPTOR_REVISION,
 };
 use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+use windows_sys::Win32::System::IO::IO_STATUS_BLOCK;
+
+const FILE_RENAME_INFORMATION_CLASS: i32 = 10;
+
+#[cfg(target_pointer_width = "64")]
+const _: () = {
+    assert!(align_of::<FILE_RENAME_INFO>() == 8);
+    assert!(size_of::<FILE_RENAME_INFO>() == 24);
+    assert!(std::mem::offset_of!(FILE_RENAME_INFO, RootDirectory) == 8);
+    assert!(std::mem::offset_of!(FILE_RENAME_INFO, FileNameLength) == 16);
+    assert!(std::mem::offset_of!(FILE_RENAME_INFO, FileName) == 20);
+};
+
+#[cfg(target_pointer_width = "32")]
+const _: () = {
+    assert!(align_of::<FILE_RENAME_INFO>() == 4);
+    assert!(size_of::<FILE_RENAME_INFO>() == 16);
+    assert!(std::mem::offset_of!(FILE_RENAME_INFO, RootDirectory) == 4);
+    assert!(std::mem::offset_of!(FILE_RENAME_INFO, FileNameLength) == 8);
+    assert!(std::mem::offset_of!(FILE_RENAME_INFO, FileName) == 12);
+};
+
+#[link(name = "ntdll")]
+extern "system" {
+    #[link_name = "NtSetInformationFile"]
+    fn nt_set_information_file(
+        file_handle: HANDLE,
+        io_status_block: *mut IO_STATUS_BLOCK,
+        file_information: *const c_void,
+        length: u32,
+        file_information_class: i32,
+    ) -> NTSTATUS;
+}
 
 struct OwnedHandle(HANDLE);
 
@@ -269,9 +302,18 @@ fn validate_kind(file: &File, directory: bool) -> io::Result<()> {
 /// Atomically renames a regular file without replacing an existing target.
 /// The source file and every source/destination ancestor are opened without
 /// following their final reparse points; live handles pin the validated
-/// objects until `SetFileInformationByHandle` resolves the relative target
-/// against the pinned destination parent.
+/// objects until `NtSetInformationFile` resolves the relative target against
+/// the pinned destination parent.
 pub fn rename_confined_noreplace(root: &Path, source: &str, destination: &str) -> io::Result<()> {
+    rename_confined_noreplace_with_hook(root, source, destination, || {})
+}
+
+fn rename_confined_noreplace_with_hook(
+    root: &Path,
+    source: &str,
+    destination: &str,
+    before_publish: impl FnOnce(),
+) -> io::Result<()> {
     let root_handle = open_private_directory_for_sync(root)?;
     let root_final = final_path(&root_handle)?;
     let source_components: Vec<_> = source.split('/').collect();
@@ -318,6 +360,7 @@ pub fn rename_confined_noreplace(root: &Path, source: &str, destination: &str) -
             "invalid destination name",
         ));
     }
+    before_publish();
     set_rename_noreplace(&source_handle, destination_parent, &destination_name)?;
     validate_kind(&source_handle, false)?;
     ensure_confined_final_path(&root_final, &final_path(&source_handle)?)?;
@@ -412,40 +455,78 @@ fn set_rename_noreplace(
     destination_parent: &File,
     destination_name: &[u16],
 ) -> io::Result<()> {
-    let header = std::mem::offset_of!(FILE_RENAME_INFO, FileName);
-    let byte_len = header
-        .checked_add(std::mem::size_of_val(destination_name))
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "rename buffer overflow"))?;
-    let word = size_of::<usize>();
-    let mut storage = vec![0usize; (byte_len + word - 1) / word];
+    let (mut storage, byte_len) = rename_information(destination_parent, destination_name)?;
     let information = storage.as_mut_ptr().cast::<FILE_RENAME_INFO>();
-    // SAFETY: the aligned buffer is large enough for the fixed header and the
-    // exact un-terminated UTF-16 destination name.
+    let mut io_status: IO_STATUS_BLOCK = unsafe { zeroed() };
+    // SAFETY: source is open with DELETE access; information is an aligned,
+    // correctly sized FILE_RENAME_INFORMATION-compatible buffer whose target
+    // is resolved relative to the pinned destination directory handle.
+    let status = unsafe {
+        nt_set_information_file(
+            source.as_raw_handle() as HANDLE,
+            &mut io_status,
+            information.cast::<c_void>(),
+            byte_len,
+            FILE_RENAME_INFORMATION_CLASS,
+        )
+    };
+    // Every handle used here was opened synchronously: CreateFileW calls in
+    // this module deliberately omit FILE_FLAG_OVERLAPPED. STATUS_PENDING is
+    // therefore impossible for a conforming local filesystem and fails closed
+    // instead of being mistaken for completed publication.
+    let completion = unsafe { io_status.Anonymous.Status };
+    let failure = if status == STATUS_PENDING || completion == STATUS_PENDING {
+        Some(STATUS_PENDING)
+    } else if status < 0 {
+        Some(status)
+    } else if completion < 0 {
+        Some(completion)
+    } else {
+        None
+    };
+    if let Some(failure) = failure {
+        // SAFETY: every failing NTSTATUS may be translated to its stable Win32
+        // error without revealing a path or other caller-controlled value.
+        let win32 = unsafe { RtlNtStatusToDosError(failure) };
+        Err(io::Error::from_raw_os_error(win32 as i32))
+    } else {
+        Ok(())
+    }
+}
+
+fn rename_information(
+    destination_parent: &File,
+    destination_name: &[u16],
+) -> io::Result<(Vec<usize>, u32)> {
+    let header = std::mem::offset_of!(FILE_RENAME_INFO, FileName);
+    let file_name_bytes = u32::try_from(std::mem::size_of_val(destination_name))
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "rename name overflow"))?;
+    let byte_len = header
+        .checked_add(file_name_bytes as usize)
+        .and_then(|length| length.checked_add(size_of::<u16>()))
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "rename buffer overflow"))?;
+    let byte_len = u32::try_from(byte_len)
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "rename buffer overflow"))?;
+    let word = size_of::<usize>();
+    let mut storage = vec![0usize; (byte_len as usize + word - 1) / word];
+    let information = storage.as_mut_ptr().cast::<FILE_RENAME_INFO>();
+    // SAFETY: the aligned buffer is large enough for the fixed header, the
+    // exact UTF-16 destination name, and its trailing NUL backing unit.
     unsafe {
         (*information).Anonymous = FILE_RENAME_INFO_0 { ReplaceIfExists: 0 };
         (*information).RootDirectory = destination_parent.as_raw_handle() as HANDLE;
-        (*information).FileNameLength = std::mem::size_of_val(destination_name) as u32;
+        (*information).FileNameLength = file_name_bytes;
         std::ptr::copy_nonoverlapping(
             destination_name.as_ptr(),
             (*information).FileName.as_mut_ptr(),
             destination_name.len(),
         );
+        *(*information)
+            .FileName
+            .as_mut_ptr()
+            .add(destination_name.len()) = 0;
     }
-    // SAFETY: source is open with DELETE access and information points at the
-    // correctly sized FILE_RENAME_INFO buffer. ReplaceIfExists is false.
-    if unsafe {
-        SetFileInformationByHandle(
-            source.as_raw_handle() as HANDLE,
-            FileRenameInfo,
-            information.cast::<c_void>(),
-            byte_len as u32,
-        )
-    } == 0
-    {
-        Err(io::Error::last_os_error())
-    } else {
-        Ok(())
-    }
+    Ok((storage, byte_len))
 }
 
 fn with_private_security_attributes<T>(
@@ -715,6 +796,7 @@ impl WellKnownSid {
 mod tests {
     use super::*;
     use std::fs;
+    use std::io::Write;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
@@ -773,6 +855,57 @@ mod tests {
         rename_confined_noreplace(&root, "rename-source", "rename-destination").unwrap();
         assert!(!source.exists());
         fs::remove_file(root.join("rename-destination")).unwrap();
+
+        let parent = root.join("pinned-parent");
+        create_new_private_directory(&parent).unwrap();
+        let root_handle = open_private_directory_for_sync(&root).unwrap();
+        let root_final = final_path(&root_handle).unwrap();
+        let pinned = open_confined_ancestors(&root, &root_final, &["pinned-parent"], true).unwrap();
+        assert!(fs::rename(&parent, root.join("detached-parent")).is_err());
+        assert!(fs::rename(&root, root.with_extension("detached")).is_err());
+        drop(pinned);
+        drop(root_handle);
+        fs::remove_dir(&parent).unwrap();
+
+        let collision_source = root.join("collision-source");
+        let mut source_file = create_new_private_file(&collision_source).unwrap();
+        source_file.write_all(b"source").unwrap();
+        source_file.sync_all().unwrap();
+        drop(source_file);
+        let collision_destination = root.join("collision-destination");
+        let error = rename_confined_noreplace_with_hook(
+            &root,
+            "collision-source",
+            "collision-destination",
+            || {
+                let mut destination_file = create_new_private_file(&collision_destination).unwrap();
+                destination_file.write_all(b"destination").unwrap();
+                destination_file.sync_all().unwrap();
+            },
+        )
+        .unwrap_err();
+        assert!(matches!(error.raw_os_error(), Some(80 | 183)));
+        assert_eq!(fs::read(&collision_source).unwrap(), b"source");
+        assert_eq!(fs::read(&collision_destination).unwrap(), b"destination");
+        fs::remove_file(&collision_source).unwrap();
+        fs::remove_file(&collision_destination).unwrap();
+
+        let directory = open_private_directory_for_sync(&root).unwrap();
+        let name: Vec<u16> = "buffer-check".encode_utf16().collect();
+        let (mut storage, byte_len) = rename_information(&directory, &name).unwrap();
+        let information = storage.as_mut_ptr().cast::<FILE_RENAME_INFO>();
+        let expected = std::mem::offset_of!(FILE_RENAME_INFO, FileName)
+            + std::mem::size_of_val(name.as_slice())
+            + size_of::<u16>();
+        assert_eq!(byte_len as usize, expected);
+        // SAFETY: rename_information returned a buffer with the tested exact
+        // FILE_RENAME_INFO layout and trailing UTF-16 unit.
+        unsafe {
+            assert_eq!((*information).Anonymous.ReplaceIfExists, 0);
+            assert_eq!((*information).FileNameLength as usize, name.len() * 2);
+            assert_eq!(*(*information).FileName.as_ptr().add(name.len()), 0);
+        }
+        drop(directory);
         fs::remove_dir(&root).unwrap();
     }
 }
