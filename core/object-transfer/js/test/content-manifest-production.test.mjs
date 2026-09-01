@@ -26,6 +26,10 @@ const nowMs = 1_800_000_030_000;
 const tenantId = '00000000-0000-4000-8000-000000000001';
 const repositoryId = '00000000-0000-4000-8000-000000000002';
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
+const authorizationClosureSha256 = (objectIds) => sha256(Buffer.concat([
+  Buffer.from('OGVCS-OBJECT-TRANSFER-AUTHORIZATION-CLOSURE-V1\0'),
+  canonicalBytes({ objectIds: [...objectIds].sort(), requestRoot: null }),
+]));
 
 function deterministicBytes(length) {
   const bytes = Buffer.alloc(length);
@@ -46,6 +50,8 @@ const allObjectIds = [
   ...generated.chunks.map(({ objectId }) => objectId),
   generated.manifest.objectId,
 ];
+const substitutedObjectId = new ObjectRef(1, new Uint8Array(32).fill(0x7f)).toString();
+assert.equal(allObjectIds.includes(substitutedObjectId), false);
 const baseClaims = Object.freeze({
   schemaVersion: 'ogvcs.authorization/transfer-grant-claims/v1',
   issuer: 'auth.example',
@@ -74,9 +80,10 @@ const context = Object.freeze({
   keyGeneration: 7,
 });
 
-function grant(nonce = 'content-manifest-production', objectIds = allObjectIds) {
+function grant(nonce = 'content-manifest-production', objectIds = allObjectIds, overrides = {}) {
   return signConformanceGrant({
     ...baseClaims,
+    ...overrides,
     nonce,
     objectIds,
     operation: 'upload',
@@ -176,6 +183,7 @@ async function harness(options = {}) {
     dependencyAuthorizations: [],
     lookups: 0,
     mappings: 0,
+    proofDisclosures: 0,
   };
   const controls = {
     commitMode: options.commitMode ?? 'normal',
@@ -370,6 +378,7 @@ async function harness(options = {}) {
         length: command.length,
         state: command.targetState,
         generation: command.targetGeneration,
+        authorizationClosureSha256: command.authorizationClosureSha256,
         authorityBindingSha256: command.authorityBindingSha256,
         tenantScopeSha256: command.tenantScopeSha256,
         subjectDigestSha256: command.subjectDigestSha256,
@@ -404,14 +413,17 @@ async function harness(options = {}) {
     lookupCommittedCurrent: async (mapping, lookup, authority) => {
       statistics.lookups += 1;
       assert.equal(authority.authorityBindingSha256, lookup.authorityBindingSha256);
+      assert.equal(authority.authorizationClosureSha256, lookup.authorizationClosureSha256);
       if (controls.lookupOverride !== null) return controls.lookupOverride(mapping, lookup);
       const proof = committed.get(lookup.opaqueKey);
-      if (!proof || proof.finalizeSemanticFingerprint !== lookup.finalizeSemanticFingerprint) return null;
+      if (!proof || proof.finalizeSemanticFingerprint !== lookup.finalizeSemanticFingerprint
+          || proof.authorizationClosureSha256 !== lookup.authorizationClosureSha256) return null;
       const current = records.get(lookup.opaqueKey);
       const backend = await serviceValue.backend.verify(lookup.opaqueKey);
       if (!current || current.state !== 'available' || current.generation !== proof.generation
           || current.backendReceiptSha256 !== proof.backendReceiptSha256
           || backend.receiptSha256 !== proof.backendReceiptSha256) return null;
+      statistics.proofDisclosures += 1;
       return structuredClone(proof);
     },
     mapGrantAuthority: async (request) => {
@@ -420,6 +432,10 @@ async function harness(options = {}) {
       assert.equal(request.grantRepository, baseClaims.repository);
       assert.equal(request.grantRequestRoot, null);
       assert.ok(request.grantObjectIds.includes(generated.manifest.objectId));
+      assert.equal(
+        request.authorizationClosureSha256,
+        authorizationClosureSha256(request.grantObjectIds),
+      );
       return {
         schemaVersion: 'ogvcs.object-transfer/repository-metadata-authority/v1',
         grantTenant: request.grantTenant,
@@ -567,6 +583,47 @@ test('repository-metadata candidate verifies stored manifest and every exact chu
   assert.equal(value.statistics.commits, 1);
   assert.equal(value.statistics.aborts, 0);
   assert.ok(value.statistics.currentReads.length >= 3 + generated.chunks.length * 3);
+
+  const equivalentGrant = grant(
+    'content-manifest-fresh-equivalent-grant',
+    [...allObjectIds].reverse(),
+    { issuedAt: baseClaims.issuedAt + 1, expiresAt: baseClaims.expiresAt - 1 },
+  );
+  const replayed = await finalize(
+    value.service,
+    value.manifest,
+    equivalentGrant,
+    'manifest-fresh-equivalent-replay',
+  );
+  assert.equal(replayed.result.state, 'available');
+  assert.equal(replayed.result.generation, 2);
+  assert.equal(value.statistics.commits, 1);
+  const disclosuresBeforeMismatchedClosures = value.statistics.proofDisclosures;
+  assert.ok(disclosuresBeforeMismatchedClosures > 0);
+
+  const mismatchedClosures = [
+    allObjectIds.filter((objectId) => objectId !== generated.chunks[0].objectId),
+    allObjectIds.map((objectId) => (
+      objectId === generated.chunks[0].objectId ? substitutedObjectId : objectId
+    )),
+  ];
+  for (const [index, objectIds] of mismatchedClosures.entries()) {
+    const mismatchedGrant = grant(`content-manifest-mismatched-closure-${index}`, objectIds, {
+      issuedAt: baseClaims.issuedAt + index + 2,
+      expiresAt: baseClaims.expiresAt - index - 2,
+    });
+    await assert.rejects(
+      () => finalize(
+        value.service,
+        value.manifest,
+        mismatchedGrant,
+        `manifest-mismatched-closure-${index}`,
+      ),
+      { code: 'TRANSFER_LIFECYCLE_STALE' },
+    );
+    assert.equal(value.statistics.proofDisclosures, disclosuresBeforeMismatchedClosures);
+    assert.equal(value.statistics.commits, 1);
+  }
 });
 
 test('settled commit response loss recovers after restart only from the exact current committed proof', async () => {
@@ -846,11 +903,16 @@ test('candidate authority and transaction handles are instance-bound snapshots a
     grantRepository: baseClaims.repository,
     grantObjectIds: allObjectIds,
     grantRequestRoot: null,
+    authorizationClosureSha256: authorizationClosureSha256(allObjectIds),
     subjectDigestSha256: 'c'.repeat(64),
     authorityBindingSha256: 'a'.repeat(64),
     tenantScopeSha256: 'b'.repeat(64),
     grantBindingSha256: 'd'.repeat(64),
   };
+  await assert.rejects(() => first.mapGrantAuthority({
+    ...authorityRequest,
+    authorizationClosureSha256: '1'.repeat(64),
+  }), { code: 'TRANSFER_INPUT_INVALID' });
   const authority = await first.mapGrantAuthority(authorityRequest);
   mappingRecord.tenantId = '00000000-0000-4000-8000-000000000099';
   assert.equal(requestWasFrozen, true);
@@ -861,6 +923,7 @@ test('candidate authority and transaction handles are instance-bound snapshots a
     opaqueKey: 'e'.repeat(64),
     objectId: generated.manifest.objectId,
     length: generated.manifest.bytes.length,
+    authorizationClosureSha256: authorizationClosureSha256(allObjectIds),
     authorityBindingSha256: 'a'.repeat(64),
     tenantScopeSha256: 'b'.repeat(64),
     subjectDigestSha256: 'c'.repeat(64),
@@ -876,6 +939,10 @@ test('candidate authority and transaction handles are instance-bound snapshots a
   await assert.rejects(() => first.lookupCommittedCurrent(authority.handle, {
     ...lookup,
     authorityBindingSha256: '1'.repeat(64),
+  }), { code: 'TRANSFER_AUTHORIZATION_DENIED' });
+  await assert.rejects(() => first.lookupCommittedCurrent(authority.handle, {
+    ...lookup,
+    authorizationClosureSha256: '1'.repeat(64),
   }), { code: 'TRANSFER_AUTHORIZATION_DENIED' });
   const transaction = await first.beginAvailability(authority.handle, lookup);
   await assert.rejects(() => second.readCurrent(transaction, {

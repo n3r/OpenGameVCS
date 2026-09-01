@@ -27,6 +27,14 @@ generation, immutable production statement, verification digest, and original
 finalize semantic fingerprint. Lifecycle state `available` without that proof
 fails closed.
 
+The stable replay field is `authorizationClosureSha256`, exactly
+`SHA-256("OGVCS-OBJECT-TRANSFER-AUTHORIZATION-CLOSURE-V1\0" ||
+canonicalBytes({objectIds: sortedUniqueExplicitObjectIds, requestRoot: null}))`.
+It is derived inside the service from verified claims and crosses the authority
+request, lookup, commit command, and immutable proof. Nonce and grant times are
+excluded so a fresh equivalent grant can authenticate a settled commit;
+narrower and substituted sets are rejected before proof disclosure.
+
 Adapter dispatch and mutable transactions remain behind WeakMap brands.
 Capabilities, registry inputs, requests, mappings, lifecycle records, commands,
 and proofs are snapshotted; port/authority/transaction cross-instance and

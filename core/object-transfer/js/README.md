@@ -70,8 +70,11 @@ availability only from `commitProductionManifest()`'s commit callback. The port
 snapshots passive records, hides mutable adapter capabilities behind package
 brands, requires an atomic repository-metadata transaction, and authenticates
 settled-commit replay with the exact production statement, finalize fingerprint,
-authority, backend receipt, and current generation. A merely `available` row is
-not recovery proof.
+authority, backend receipt, current generation, and `authorizationClosureSha256`.
+That stable closure binds the sorted exact explicit ObjectID set and a null
+request root. It deliberately excludes grant nonce and times so a fresh
+equivalent grant can authenticate replay, while a narrower or substituted set
+cannot. A merely `available` row is not recovery proof.
 
 This candidate authorizes dependencies only from the signed explicit grant
 object set: at most 4,096 unique objects including the manifest. Its advertised

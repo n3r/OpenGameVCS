@@ -33,6 +33,7 @@ const CAPABILITY_KEYS = [
   'storageAuthority',
 ].sort().join('\0');
 const AUTHORITY_REQUEST_KEYS = [
+  'authorizationClosureSha256',
   'authorityBindingSha256',
   'grantBindingSha256',
   'grantObjectIds',
@@ -51,6 +52,7 @@ const AUTHORITY_MAPPING_KEYS = [
   'tenantId',
 ].sort().join('\0');
 const LOOKUP_KEYS = [
+  'authorizationClosureSha256',
   'authorityBindingSha256',
   'backendReceiptSha256',
   'finalizeSemanticFingerprint',
@@ -103,6 +105,7 @@ const PRODUCTION_STATEMENT_KEYS = [
 ].sort().join('\0');
 const COMMITTED_KEYS = [
   'applicationId',
+  'authorizationClosureSha256',
   'authorityBindingSha256',
   'backendReceiptSha256',
   'dependencyGenerationSetSha256',
@@ -124,6 +127,7 @@ const COMMITTED_KEYS = [
   'verificationReceiptSha256',
 ].sort().join('\0');
 const COMMIT_COMMAND_KEYS = [
+  'authorizationClosureSha256',
   'authorityBindingSha256',
   'backendReceiptSha256',
   'expectedGeneration',
@@ -283,6 +287,13 @@ function passive(
 
 function sha(value) { return typeof value === 'string' && SHA.test(value); }
 
+function authorizationClosureSha256(objectIds, requestRoot) {
+  return sha256(Buffer.concat([
+    Buffer.from('OGVCS-OBJECT-TRANSFER-AUTHORIZATION-CLOSURE-V1\0'),
+    canonicalBytes({ objectIds: [...objectIds].sort(), requestRoot }),
+  ]));
+}
+
 function validateAuthorityRequest(input) {
   const value = passive(input, 1024 * 1024);
   if (!exactKeys(value, AUTHORITY_REQUEST_KEYS)
@@ -294,10 +305,15 @@ function validateAuthorityRequest(input) {
       || value.grantObjectIds.length > 4096 || value.grantRequestRoot !== null
       || new Set(value.grantObjectIds).size !== value.grantObjectIds.length
       || !sha(value.subjectDigestSha256) || !sha(value.authorityBindingSha256)
+      || !sha(value.authorizationClosureSha256)
       || !sha(value.tenantScopeSha256) || !sha(value.grantBindingSha256)) {
     invalid('content-manifest grant authority binding is invalid');
   }
   for (const objectId of value.grantObjectIds) canonicalObjectId(objectId, invalid);
+  if (value.authorizationClosureSha256
+      !== authorizationClosureSha256(value.grantObjectIds, value.grantRequestRoot)) {
+    invalid('content-manifest grant authority binding is invalid');
+  }
   return value;
 }
 
@@ -322,6 +338,7 @@ function validateLookup(input) {
   if (!exactKeys(value, LOOKUP_KEYS)
       || value.schemaVersion !== 'ogvcs.object-transfer/content-manifest-availability-lookup/v1'
       || !sha(value.opaqueKey) || !sha(value.authorityBindingSha256)
+      || !sha(value.authorizationClosureSha256)
       || !sha(value.tenantScopeSha256) || !sha(value.subjectDigestSha256)
       || !sha(value.backendReceiptSha256) || !sha(value.finalizeSemanticFingerprint)
       || !Number.isSafeInteger(value.length) || value.length < 0 || value.length > 67_108_864) {
@@ -496,6 +513,7 @@ function validateCommitted(input, mapping, lookup) {
       || value.tenantId !== mapping.tenantId || value.repositoryId !== mapping.repositoryId
       || value.opaqueKey !== lookup.opaqueKey || value.objectId !== lookup.objectId
       || value.length !== lookup.length || value.authorityBindingSha256 !== lookup.authorityBindingSha256
+      || value.authorizationClosureSha256 !== lookup.authorizationClosureSha256
       || value.tenantScopeSha256 !== lookup.tenantScopeSha256
       || value.subjectDigestSha256 !== lookup.subjectDigestSha256
       || value.backendReceiptSha256 !== lookup.backendReceiptSha256
@@ -528,6 +546,7 @@ function validateCommitCommand(input, bound) {
       || value.opaqueKey !== bound.request.opaqueKey || value.objectId !== bound.request.objectId
       || value.length !== bound.request.length
       || value.authorityBindingSha256 !== bound.request.authorityBindingSha256
+      || value.authorizationClosureSha256 !== bound.request.authorizationClosureSha256
       || value.tenantScopeSha256 !== bound.request.tenantScopeSha256
       || value.subjectDigestSha256 !== bound.request.subjectDigestSha256
       || value.backendReceiptSha256 !== bound.request.backendReceiptSha256
@@ -557,6 +576,7 @@ function validateCommittedAgainstCommand(committed, command) {
       || committed.objectId !== command.objectId
       || committed.length !== command.length
       || committed.authorityBindingSha256 !== command.authorityBindingSha256
+      || committed.authorizationClosureSha256 !== command.authorizationClosureSha256
       || committed.tenantScopeSha256 !== command.tenantScopeSha256
       || committed.subjectDigestSha256 !== command.subjectDigestSha256
       || committed.backendReceiptSha256 !== command.backendReceiptSha256
@@ -574,6 +594,7 @@ function validateCommittedAgainstCommand(committed, command) {
 
 function bindLookupToAuthority(request, authority) {
   if (request.authorityBindingSha256 !== authority.request.authorityBindingSha256
+      || request.authorizationClosureSha256 !== authority.request.authorizationClosureSha256
       || request.tenantScopeSha256 !== authority.request.tenantScopeSha256
       || request.subjectDigestSha256 !== authority.request.subjectDigestSha256
       || !authority.request.grantObjectIds.includes(request.objectId)) {

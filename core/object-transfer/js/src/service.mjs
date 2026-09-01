@@ -1055,6 +1055,16 @@ export class ObjectTransferService {
     ]));
   }
 
+  #productionAuthorizationClosure(claims) {
+    return sha256(Buffer.concat([
+      Buffer.from('OGVCS-OBJECT-TRANSFER-AUTHORIZATION-CLOSURE-V1\0'),
+      canonicalBytes({
+        objectIds: [...claims.objectIds].sort(),
+        requestRoot: claims.requestRoot,
+      }),
+    ]));
+  }
+
   async #productionAuthority(binding) {
     if (this.#contentManifestProduction === null) {
       transferError(
@@ -1073,9 +1083,10 @@ export class ObjectTransferService {
       schemaVersion: 'ogvcs.object-transfer/content-manifest-grant-authority/v1',
       grantTenant: binding.claims.tenant,
       grantRepository: binding.claims.repository,
-      grantObjectIds: [...binding.claims.objectIds],
+      grantObjectIds: [...binding.claims.objectIds].sort(),
       grantRequestRoot: binding.claims.requestRoot,
       subjectDigestSha256: this.#productionSubjectDigest(binding.claims),
+      authorizationClosureSha256: this.#productionAuthorizationClosure(binding.claims),
       authorityBindingSha256: binding.authorityBindingSha256,
       tenantScopeSha256: binding.tenantScopeSha256,
       grantBindingSha256: binding.grantBindingSha256,
@@ -1089,6 +1100,7 @@ export class ObjectTransferService {
       objectId: session.objectId,
       length: session.declaredLength,
       authorityBindingSha256: session.authorityBindingSha256,
+      authorizationClosureSha256: this.#productionAuthorizationClosure(binding.claims),
       tenantScopeSha256: session.tenantScopeSha256,
       subjectDigestSha256: this.#productionSubjectDigest(binding.claims),
       backendReceiptSha256,
@@ -1434,6 +1446,7 @@ export class ObjectTransferService {
             targetState: 'available',
             targetGeneration: manifestCurrent.generation + 1,
             authorityBindingSha256: session.authorityBindingSha256,
+            authorizationClosureSha256: this.#productionAuthorizationClosure(binding.claims),
             tenantScopeSha256: session.tenantScopeSha256,
             subjectDigestSha256: this.#productionSubjectDigest(binding.claims),
             backendReceiptSha256: verified.receiptSha256,

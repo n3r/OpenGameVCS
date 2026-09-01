@@ -67,8 +67,11 @@ codes, transition assignments, and public/wire route ownership are unchanged.
   before the adapter may atomically record kind-2 availability.
 - Immediate commit and response-loss replay proofs bind the exact manifest,
   opaque key, authority/subject/tenant scope, backend receipt, generation,
-  immutable production statement, verification digest, and original finalize
-  semantic fingerprint. An `available` row alone is never accepted.
+  immutable production statement, verification digest, original finalize
+  semantic fingerprint, and `authorizationClosureSha256` for the sorted exact
+  explicit ObjectID set plus null request root. The closure excludes nonce and
+  times so a fresh equivalent grant can recover; narrower or substituted sets
+  cannot authenticate the proof. An `available` row alone is never accepted.
 - Dependency reads are limited to the exact signed explicit grant set: at most
   4,096 unique objects including the manifest. The candidate advertises
   `requestRootDependencyClosure=false`; it streams the sorted dependency
