@@ -77,11 +77,16 @@ pub use ports::{
     MetadataTransaction, ObjectValidationPort, ProductionObjectValidator,
 };
 #[cfg(feature = "legacy-test-adapter")]
+pub use postgres::AtomicSubmitFaultForTest;
+#[cfg(feature = "legacy-test-adapter")]
 pub use postgres::PostgresLifecyclePlanWriter;
 pub use postgres::{
     AggregateLifecycleApplicationReceipt, AggregateLifecycleApplyRequest,
     IdentityBoundPostgresMetadataStore, IdentityMetadataAuthorizedView, PostgresMetadataStore,
-    PostgresMetadataTransaction,
+    PostgresMetadataTransaction, PreallocatedCreationSubmitFinalizeRequest,
+    PreallocatedCreationSubmitIntent, PreallocatedCreationSubmitIntentRequest,
+    PreallocatedCreationSubmitOutcome, PreallocatedCreationSubmitPreflight,
+    PreallocatedCreationSubmitPreflightRequest, PreallocatedCreationSubmitReconciliation,
 };
 pub use service::{
     network_transport_descriptors, AdmittedMetadataRoute, MetadataNegotiationKeyProvider,

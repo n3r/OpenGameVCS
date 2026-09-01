@@ -14,14 +14,16 @@ use ogvcs_identity_policy_audit_postgres::{
     AGGREGATE_SUBMIT_CONSUME_PUBLICATION_CAPABILITY, AGGREGATE_SUBMIT_PERMISSION,
     MAXIMUM_AGGREGATE_RESOURCES,
 };
-use ogvcs_object_model::{ObjectKind, ObjectRef};
+use ogvcs_object_model::{encode_canonical, Cbor, ObjectKind, ObjectRef};
 use ogvcs_repository_metadata::{
     aggregate_plan_digest, run_migrations as run_metadata_migrations, AggregateChunkCommitment,
-    AggregateLifecycleApplyRequest, AggregatePlanChunk, AggregatePublicationPlan, DomainErrorCode,
-    IdempotencyReservation, IdentityBoundPostgresMetadataStore, LifecycleHealth,
-    LifecycleObjectBinding, LifecycleState, MigrationRunOptions as MetadataMigrationRunOptions,
-    PostgresMetadataStore, RepositoryId, TenantId, AUTHORIZATION_MANIFEST_SHA256,
-    LIFECYCLE_CONTRACT_SHA256,
+    AggregateLifecycleApplyRequest, AggregatePlanChunk, AggregatePublicationPlan,
+    AtomicSubmitFaultForTest, DomainErrorCode, IdempotencyReservation,
+    IdentityBoundPostgresMetadataStore, LifecycleHealth, LifecycleObjectBinding, LifecycleState,
+    MigrationRunOptions as MetadataMigrationRunOptions, PostgresMetadataStore,
+    PreallocatedCreationSubmitFinalizeRequest, PreallocatedCreationSubmitIntentRequest,
+    PreallocatedCreationSubmitPreflightRequest, PreallocatedCreationSubmitReconciliation,
+    RepositoryId, TenantId, AUTHORIZATION_MANIFEST_SHA256, LIFECYCLE_CONTRACT_SHA256,
 };
 use postgres::{types::Json, Client, NoTls};
 use serde::Serialize;
@@ -35,6 +37,436 @@ const CREDENTIAL_DOMAIN: &[u8] = b"OGVCS-IDENTITY-CREDENTIAL-V1\0";
 const SUBJECT_DOMAIN: &[u8] = b"OGVCS-IDENTITY-SUBJECT-V1\0";
 const REFERENCE: &str = "main";
 static TEST_LOCK: Mutex<()> = Mutex::new(());
+
+#[test]
+fn private_preallocated_creation_submit_is_atomic_replayable_and_reconcilable() {
+    let _guard = TEST_LOCK.lock().unwrap();
+    let Ok(database_url) = std::env::var("OGVCS_METADATA_AGGREGATE_DATABASE_URL") else {
+        return;
+    };
+    reset_database(&database_url);
+    let fixture = seed(&database_url);
+    seed_atomic_candidate(&database_url, &fixture);
+    let provider = key_provider([0x5a; 32]);
+    let participant = PostgresAggregateAuthorizationParticipant::new(provider.clone());
+    prepare_identity_authority(&database_url, &fixture, &participant);
+    let bundle = prepare_bundle(
+        &database_url,
+        &fixture,
+        &participant,
+        9_000,
+        3,
+        public_uuid(0x91),
+        "atomic-submit",
+        300,
+    );
+    let lifecycle_plan = persist_lifecycle_plan(
+        &database_url,
+        &fixture,
+        &bundle,
+        public_uuid(0x92),
+        "atomic-submit-plan",
+        None,
+    );
+    assert_zero_operation_intent_rejected(&database_url, &fixture, lifecycle_plan);
+    let mut store = production_store(&database_url, provider);
+    let intent = store
+        .create_preallocated_creation_submit_intent(PreallocatedCreationSubmitIntentRequest {
+            authorization: &bundle.receipt,
+            lifecycle_plan_id: lifecycle_plan,
+            expected_head: fixture.old_head,
+            expected_generation: 1,
+        })
+        .unwrap();
+    assert_eq!(intent.operation_count(), 1);
+    assert_eq!(
+        intent.candidate_change_set_digest(),
+        &fixture.candidate_change_set.digest
+    );
+    let preflight = store
+        .preflight_preallocated_creation_submit(PreallocatedCreationSubmitPreflightRequest {
+            intent_id: *intent.intent_id(),
+            authorization: &bundle.receipt,
+        })
+        .unwrap();
+    assert!(preflight.branch_matches());
+
+    let unknown = store
+        .reconcile_preallocated_creation_submit(PreallocatedCreationSubmitFinalizeRequest {
+            intent_id: *intent.intent_id(),
+            authorization: &bundle.receipt,
+            consumption_id: "atomic.consume.one",
+        })
+        .unwrap();
+    assert!(matches!(
+        unknown,
+        PreallocatedCreationSubmitReconciliation::UnknownRecovering { .. }
+    ));
+    assert!(!store
+        .caught_bridge_error_commits_for_test(AggregateLifecycleApplyRequest {
+            authorization: &bundle.receipt,
+            lifecycle_plan_id: lifecycle_plan,
+            consumption_id: "invalid/slash",
+        })
+        .unwrap());
+
+    for fault in [
+        AtomicSubmitFaultForTest::BeforeBridge,
+        AtomicSubmitFaultForTest::AfterBridge,
+        AtomicSubmitFaultForTest::AfterFileIdConsumption,
+        AtomicSubmitFaultForTest::AfterSnapshotMarker,
+        AtomicSubmitFaultForTest::AfterBranchCas,
+        AtomicSubmitFaultForTest::AfterAudit,
+        AtomicSubmitFaultForTest::AfterOutbox,
+        AtomicSubmitFaultForTest::AfterOutcome,
+    ] {
+        let error = store
+            .finalize_preallocated_creation_submit_with_fault_for_test(
+                PreallocatedCreationSubmitFinalizeRequest {
+                    intent_id: *intent.intent_id(),
+                    authorization: &bundle.receipt,
+                    consumption_id: "atomic.consume.one",
+                },
+                fault,
+            )
+            .unwrap_err();
+        assert_eq!(error.code, DomainErrorCode::MetadataNotFoundOrDenied);
+        assert_atomic_submit_not_visible(&database_url, &fixture, &bundle, lifecycle_plan);
+    }
+
+    assert_eq!(
+        store
+            .finalize_preallocated_creation_submit_with_lost_response_for_test(
+                PreallocatedCreationSubmitFinalizeRequest {
+                    intent_id: *intent.intent_id(),
+                    authorization: &bundle.receipt,
+                    consumption_id: "atomic.consume.one",
+                },
+            )
+            .unwrap_err()
+            .code,
+        DomainErrorCode::TransactionRetryExhausted
+    );
+    let replay = store
+        .finalize_preallocated_creation_submit(PreallocatedCreationSubmitFinalizeRequest {
+            intent_id: *intent.intent_id(),
+            authorization: &bundle.receipt,
+            consumption_id: "atomic.consume.one",
+        })
+        .unwrap();
+    assert!(replay.replayed());
+    assert_eq!(replay.new_head(), fixture.publication);
+    assert_eq!(replay.branch_generation(), 2);
+    assert_eq!(
+        identity_consumptions(&database_url, bundle.receipt.plan_id()),
+        1
+    );
+    assert_eq!(lifecycle_applications(&database_url, lifecycle_plan), 1);
+
+    assert_eq!(
+        store
+            .finalize_preallocated_creation_submit(PreallocatedCreationSubmitFinalizeRequest {
+                intent_id: *intent.intent_id(),
+                authorization: &bundle.receipt,
+                consumption_id: "atomic.consume.different",
+            })
+            .unwrap_err()
+            .code,
+        DomainErrorCode::MetadataNotFoundOrDenied
+    );
+
+    revoke_credential(&database_url, &fixture);
+    for error in [
+        store
+            .finalize_preallocated_creation_submit(PreallocatedCreationSubmitFinalizeRequest {
+                intent_id: *intent.intent_id(),
+                authorization: &bundle.receipt,
+                consumption_id: "atomic.consume.one",
+            })
+            .unwrap_err(),
+        store
+            .reconcile_preallocated_creation_submit(PreallocatedCreationSubmitFinalizeRequest {
+                intent_id: *intent.intent_id(),
+                authorization: &bundle.receipt,
+                consumption_id: "atomic.consume.one",
+            })
+            .unwrap_err(),
+    ] {
+        assert_eq!(error.code, DomainErrorCode::MetadataNotFoundOrDenied);
+    }
+    assert_eq!(
+        identity_consumptions(&database_url, bundle.receipt.plan_id()),
+        1
+    );
+    assert_eq!(lifecycle_applications(&database_url, lifecycle_plan), 1);
+    assert_atomic_submit_visible(&database_url, &fixture, replay.outbox_event_id(), 1);
+}
+
+#[test]
+fn private_submit_accepts_exactly_1000_operations_and_rejects_1001_before_sealing() {
+    let _guard = TEST_LOCK.lock().unwrap();
+    let Ok(database_url) = std::env::var("OGVCS_METADATA_AGGREGATE_DATABASE_URL") else {
+        return;
+    };
+
+    reset_database(&database_url);
+    let fixture = seed(&database_url);
+    seed_atomic_candidate(&database_url, &fixture);
+    seed_additional_atomic_candidate_operations(&database_url, &fixture, 1_000);
+    let provider = key_provider([0x5a; 32]);
+    let participant = PostgresAggregateAuthorizationParticipant::new(provider.clone());
+    prepare_identity_authority(&database_url, &fixture, &participant);
+    let bundle = prepare_bundle(
+        &database_url,
+        &fixture,
+        &participant,
+        9_300,
+        2,
+        public_uuid(0x97),
+        "atomic-exact-1000",
+        300,
+    );
+    let lifecycle_plan = persist_lifecycle_plan(
+        &database_url,
+        &fixture,
+        &bundle,
+        public_uuid(0x98),
+        "atomic-exact-1000-plan",
+        None,
+    );
+    let mut store = production_store(&database_url, provider);
+    let started = Instant::now();
+    let intent = store
+        .create_preallocated_creation_submit_intent(PreallocatedCreationSubmitIntentRequest {
+            authorization: &bundle.receipt,
+            lifecycle_plan_id: lifecycle_plan,
+            expected_head: fixture.old_head,
+            expected_generation: 1,
+        })
+        .unwrap();
+    assert_eq!(intent.operation_count(), 1_000);
+    let outcome = store
+        .finalize_preallocated_creation_submit(PreallocatedCreationSubmitFinalizeRequest {
+            intent_id: *intent.intent_id(),
+            authorization: &bundle.receipt,
+            consumption_id: "atomic.consume.exact-1000",
+        })
+        .unwrap();
+    let mut client = Client::connect(&database_url, NoTls).unwrap();
+    let counts = client
+        .query_one(
+            "SELECT
+                 (SELECT count(*) FROM ogvcs_metadata.submit_intent_operations
+                  WHERE intent_id = $1),
+                 (SELECT count(*) FROM ogvcs_metadata.submit_file_id_consumptions
+                  WHERE intent_id = $1)",
+            &[&Uuid::from_bytes(*intent.intent_id())],
+        )
+        .unwrap();
+    assert_eq!(counts.get::<_, i64>(0), 1_000);
+    assert_eq!(counts.get::<_, i64>(1), 1_000);
+    assert_eq!(
+        identity_consumptions(&database_url, bundle.receipt.plan_id()),
+        1
+    );
+    assert_eq!(lifecycle_applications(&database_url, lifecycle_plan), 1);
+    eprintln!(
+        "private atomic submit exact 1000: elapsed_ms={} operation_rows=1000 consumption_rows=1000",
+        started.elapsed().as_millis()
+    );
+    assert_atomic_submit_visible(&database_url, &fixture, outcome.outbox_event_id(), 1_000);
+
+    reset_database(&database_url);
+    let fixture = seed(&database_url);
+    seed_atomic_candidate(&database_url, &fixture);
+    seed_additional_atomic_candidate_operations(&database_url, &fixture, 1_001);
+    let provider = key_provider([0x5a; 32]);
+    let participant = PostgresAggregateAuthorizationParticipant::new(provider.clone());
+    prepare_identity_authority(&database_url, &fixture, &participant);
+    let bundle = prepare_bundle(
+        &database_url,
+        &fixture,
+        &participant,
+        9_400,
+        2,
+        public_uuid(0x99),
+        "atomic-overflow-1001",
+        300,
+    );
+    let lifecycle_plan = persist_lifecycle_plan(
+        &database_url,
+        &fixture,
+        &bundle,
+        public_uuid(0x9a),
+        "atomic-overflow-1001-plan",
+        None,
+    );
+    let mut store = production_store(&database_url, provider);
+    assert_eq!(
+        store
+            .create_preallocated_creation_submit_intent(PreallocatedCreationSubmitIntentRequest {
+                authorization: &bundle.receipt,
+                lifecycle_plan_id: lifecycle_plan,
+                expected_head: fixture.old_head,
+                expected_generation: 1,
+            },)
+            .unwrap_err()
+            .code,
+        DomainErrorCode::MetadataNotFoundOrDenied
+    );
+    let persisted = Client::connect(&database_url, NoTls)
+        .unwrap()
+        .query_one(
+            "SELECT
+                 (SELECT count(*) FROM ogvcs_metadata.submit_intents),
+                 (SELECT count(*) FROM ogvcs_metadata.submit_intent_operations),
+                 (SELECT count(*) FROM ogvcs_identity.aggregate_plan_consumptions),
+                 (SELECT count(*) FROM ogvcs_metadata.lifecycle_applications)",
+            &[],
+        )
+        .unwrap();
+    assert_eq!(persisted.get::<_, i64>(0), 0);
+    assert_eq!(persisted.get::<_, i64>(1), 0);
+    assert_eq!(persisted.get::<_, i64>(2), 0);
+    assert_eq!(persisted.get::<_, i64>(3), 0);
+}
+
+#[test]
+fn concurrent_private_submit_has_one_consumption_and_one_branch_advance() {
+    let _guard = TEST_LOCK.lock().unwrap();
+    let Ok(database_url) = std::env::var("OGVCS_METADATA_AGGREGATE_DATABASE_URL") else {
+        return;
+    };
+    reset_database(&database_url);
+    let fixture = seed(&database_url);
+    seed_atomic_candidate(&database_url, &fixture);
+    let provider = key_provider([0x5a; 32]);
+    let participant = PostgresAggregateAuthorizationParticipant::new(provider.clone());
+    prepare_identity_authority(&database_url, &fixture, &participant);
+    let bundle = prepare_bundle(
+        &database_url,
+        &fixture,
+        &participant,
+        9_100,
+        2,
+        public_uuid(0x93),
+        "atomic-concurrent",
+        300,
+    );
+    let lifecycle_plan = persist_lifecycle_plan(
+        &database_url,
+        &fixture,
+        &bundle,
+        public_uuid(0x94),
+        "atomic-concurrent-plan",
+        None,
+    );
+    let mut creator = production_store(&database_url, provider.clone());
+    let intent = creator
+        .create_preallocated_creation_submit_intent(PreallocatedCreationSubmitIntentRequest {
+            authorization: &bundle.receipt,
+            lifecycle_plan_id: lifecycle_plan,
+            expected_head: fixture.old_head,
+            expected_generation: 1,
+        })
+        .unwrap();
+    let barrier = Arc::new(Barrier::new(2));
+    let mut workers = Vec::new();
+    for receipt in [bundle.receipt.clone(), bundle.receipt.clone()] {
+        let database_url = database_url.clone();
+        let provider = provider.clone();
+        let barrier = barrier.clone();
+        let intent_id = *intent.intent_id();
+        workers.push(thread::spawn(move || {
+            let mut store = production_store(&database_url, provider);
+            barrier.wait();
+            store.finalize_preallocated_creation_submit(PreallocatedCreationSubmitFinalizeRequest {
+                intent_id,
+                authorization: &receipt,
+                consumption_id: "atomic.consume.concurrent",
+            })
+        }));
+    }
+    let results = workers
+        .into_iter()
+        .map(|worker| worker.join().unwrap())
+        .collect::<Vec<_>>();
+    assert!(results.iter().any(Result::is_ok));
+    assert!(results.iter().all(|result| {
+        result.is_ok()
+            || result.as_ref().unwrap_err().code == DomainErrorCode::TransactionRetryExhausted
+            || result.as_ref().unwrap_err().code == DomainErrorCode::MetadataNotFoundOrDenied
+    }));
+    let mut replay_store = production_store(&database_url, provider);
+    let replay = replay_store
+        .finalize_preallocated_creation_submit(PreallocatedCreationSubmitFinalizeRequest {
+            intent_id: *intent.intent_id(),
+            authorization: &bundle.receipt,
+            consumption_id: "atomic.consume.concurrent",
+        })
+        .unwrap();
+    assert!(replay.replayed());
+    assert_eq!(
+        identity_consumptions(&database_url, bundle.receipt.plan_id()),
+        1
+    );
+    assert_eq!(lifecycle_applications(&database_url, lifecycle_plan), 1);
+    assert_atomic_submit_visible(&database_url, &fixture, replay.outbox_event_id(), 1);
+}
+
+#[test]
+fn private_submit_rechecks_revocation_after_preflight_without_partial_visibility() {
+    let _guard = TEST_LOCK.lock().unwrap();
+    let Ok(database_url) = std::env::var("OGVCS_METADATA_AGGREGATE_DATABASE_URL") else {
+        return;
+    };
+    reset_database(&database_url);
+    let fixture = seed(&database_url);
+    seed_atomic_candidate(&database_url, &fixture);
+    let provider = key_provider([0x5a; 32]);
+    let participant = PostgresAggregateAuthorizationParticipant::new(provider.clone());
+    prepare_identity_authority(&database_url, &fixture, &participant);
+    let bundle = prepare_bundle(
+        &database_url,
+        &fixture,
+        &participant,
+        9_200,
+        2,
+        public_uuid(0x95),
+        "atomic-revoked",
+        300,
+    );
+    let lifecycle_plan = persist_lifecycle_plan(
+        &database_url,
+        &fixture,
+        &bundle,
+        public_uuid(0x96),
+        "atomic-revoked-plan",
+        None,
+    );
+    let mut store = production_store(&database_url, provider);
+    let intent = store
+        .create_preallocated_creation_submit_intent(PreallocatedCreationSubmitIntentRequest {
+            authorization: &bundle.receipt,
+            lifecycle_plan_id: lifecycle_plan,
+            expected_head: fixture.old_head,
+            expected_generation: 1,
+        })
+        .unwrap();
+    revoke_credential(&database_url, &fixture);
+    assert_eq!(
+        store
+            .finalize_preallocated_creation_submit(PreallocatedCreationSubmitFinalizeRequest {
+                intent_id: *intent.intent_id(),
+                authorization: &bundle.receipt,
+                consumption_id: "atomic.consume.revoked",
+            })
+            .unwrap_err()
+            .code,
+        DomainErrorCode::MetadataNotFoundOrDenied
+    );
+    assert_atomic_submit_not_visible(&database_url, &fixture, &bundle, lifecycle_plan);
+}
 
 #[test]
 fn aggregate_receipt_and_lifecycle_apply_are_one_serializable_transaction() {
@@ -565,6 +997,9 @@ struct Fixture {
     tenant: String,
     repository: String,
     publication: ObjectRef,
+    old_head: ObjectRef,
+    candidate_change_set: ObjectRef,
+    candidate_file_id: [u8; 16],
 }
 
 struct PreparedBundle {
@@ -614,6 +1049,15 @@ fn seed(database_url: &str) -> Fixture {
         kind: ObjectKind::Snapshot,
         digest: [0x55; 32],
     };
+    let old_head = ObjectRef {
+        kind: ObjectKind::Snapshot,
+        digest: [0x54; 32],
+    };
+    let candidate_change_set = ObjectRef {
+        kind: ObjectKind::ChangeSet,
+        digest: [0x56; 32],
+    };
+    let candidate_file_id = [0x57; 16];
     let subject_digest: [u8; 32] = digest_parts(&[SUBJECT_DOMAIN, b"bridge.publisher"])
         .try_into()
         .unwrap();
@@ -735,7 +1179,193 @@ fn seed(database_url: &str) -> Fixture {
         tenant,
         repository,
         publication,
+        old_head,
+        candidate_change_set,
+        candidate_file_id,
     }
+}
+
+fn seed_atomic_candidate(database_url: &str, fixture: &Fixture) {
+    let tree_digest = [0x58; 32];
+    let snapshot_bytes = encode_canonical(&Cbor::Map(vec![(
+        Cbor::UInt(19),
+        fixture.candidate_change_set.to_cbor(),
+    )]))
+    .unwrap();
+    let mut client = Client::connect(database_url, NoTls).unwrap();
+    let mut transaction = client.transaction().unwrap();
+    for (kind, digest, bytes) in [
+        (3_i16, tree_digest.as_slice(), &[0xa0_u8][..]),
+        (
+            4_i16,
+            fixture.candidate_change_set.digest.as_slice(),
+            &[0xa0_u8][..],
+        ),
+        (7_i16, fixture.old_head.digest.as_slice(), &[0xa0_u8][..]),
+        (
+            7_i16,
+            fixture.publication.digest.as_slice(),
+            snapshot_bytes.as_slice(),
+        ),
+    ] {
+        transaction
+            .execute(
+                "INSERT INTO ogvcs_metadata.metadata_objects
+                 (repository_id, object_kind, digest_algorithm, object_digest,
+                  canonical_bytes, validation_contract)
+                 VALUES ($1, $2, 1, $3, $4, 'ogvcs.repository-format@1')",
+                &[
+                    &Uuid::from_bytes(*fixture.repository_id.as_bytes()),
+                    &kind,
+                    &digest,
+                    &bytes,
+                ],
+            )
+            .unwrap();
+    }
+    for (digest, sequence) in [
+        (fixture.old_head.digest, Some(1_i64)),
+        (fixture.publication.digest, None),
+    ] {
+        transaction
+            .execute(
+                "INSERT INTO ogvcs_metadata.snapshots
+                 (repository_id, snapshot_digest, root_tree_digest, published_commit_sequence)
+                 VALUES ($1, $2, $3, $4)",
+                &[
+                    &Uuid::from_bytes(*fixture.repository_id.as_bytes()),
+                    &&digest[..],
+                    &&tree_digest[..],
+                    &sequence,
+                ],
+            )
+            .unwrap();
+    }
+    transaction
+        .execute(
+            "INSERT INTO ogvcs_metadata.object_edges
+             (repository_id, source_kind, source_digest, ordinal,
+              target_kind, target_digest)
+             VALUES ($1, 7, $2, 0, 4, $3)",
+            &[
+                &Uuid::from_bytes(*fixture.repository_id.as_bytes()),
+                &&fixture.publication.digest[..],
+                &&fixture.candidate_change_set.digest[..],
+            ],
+        )
+        .unwrap();
+    transaction
+        .execute(
+            "UPDATE ogvcs_metadata.repository_commit_sequences
+             SET applied_sequence = 1 WHERE repository_id = $1",
+            &[&Uuid::from_bytes(*fixture.repository_id.as_bytes())],
+        )
+        .unwrap();
+    transaction
+        .execute(
+            "INSERT INTO ogvcs_metadata.references
+             (repository_id, reference_kind, reference_name, target_snapshot_digest,
+              generation, commit_sequence)
+             VALUES ($1, 'branch', 'main', $2, 1, 1)",
+            &[
+                &Uuid::from_bytes(*fixture.repository_id.as_bytes()),
+                &&fixture.old_head.digest[..],
+            ],
+        )
+        .unwrap();
+    transaction
+        .execute(
+            "INSERT INTO ogvcs_metadata.file_id_registry
+             (repository_id, file_id, state, origin, owner_kind, owner_id,
+              first_change_set_digest, first_operation)
+             VALUES ($1, $2, 'active', 'create', 'draft', 'draft.atomic-candidate', $3, 0)",
+            &[
+                &Uuid::from_bytes(*fixture.repository_id.as_bytes()),
+                &&fixture.candidate_file_id[..],
+                &&fixture.candidate_change_set.digest[..],
+            ],
+        )
+        .unwrap();
+    transaction
+        .execute(
+            "INSERT INTO ogvcs_metadata.file_path_history
+             (repository_id, snapshot_digest, operation_ordinal, file_id,
+              repository_path_utf8, operation_kind)
+             VALUES ($1, $2, 0, $3, $4, 'create')",
+            &[
+                &Uuid::from_bytes(*fixture.repository_id.as_bytes()),
+                &&fixture.publication.digest[..],
+                &&fixture.candidate_file_id[..],
+                &&b"Game/Atomic.asset"[..],
+            ],
+        )
+        .unwrap();
+    transaction.commit().unwrap();
+}
+
+fn seed_additional_atomic_candidate_operations(
+    database_url: &str,
+    fixture: &Fixture,
+    total_operations: i32,
+) {
+    assert!((2..=1_001).contains(&total_operations));
+    let mut client = Client::connect(database_url, NoTls).unwrap();
+    let mut transaction = client.transaction().unwrap();
+    transaction
+        .execute(
+            "WITH operation AS (
+                 SELECT ordinal,
+                        decode(repeat('59', 12), 'hex') || int4send(ordinal) AS file_id,
+                        format('draft.atomic-generated-%s', ordinal) AS owner_id,
+                        convert_to(format('Game/Generated-%s.asset', ordinal), 'UTF8') AS path
+                 FROM generate_series(1, $1 - 1) AS ordinal
+             )
+             INSERT INTO ogvcs_metadata.file_id_registry
+             (repository_id, file_id, state, origin, owner_kind, owner_id,
+              first_change_set_digest, first_operation)
+             SELECT $2, file_id, 'active', 'create', 'draft', owner_id, $3, ordinal
+             FROM operation ORDER BY ordinal",
+            &[
+                &total_operations,
+                &Uuid::from_bytes(*fixture.repository_id.as_bytes()),
+                &&fixture.candidate_change_set.digest[..],
+            ],
+        )
+        .unwrap();
+    transaction
+        .execute(
+            "WITH operation AS (
+                 SELECT ordinal,
+                        decode(repeat('59', 12), 'hex') || int4send(ordinal) AS file_id,
+                        convert_to(format('Game/Generated-%s.asset', ordinal), 'UTF8') AS path
+                 FROM generate_series(1, $1 - 1) AS ordinal
+             )
+             INSERT INTO ogvcs_metadata.file_path_history
+             (repository_id, snapshot_digest, operation_ordinal, file_id,
+              repository_path_utf8, operation_kind)
+             SELECT $2, $3, ordinal, file_id, path, 'create'
+             FROM operation ORDER BY ordinal",
+            &[
+                &total_operations,
+                &Uuid::from_bytes(*fixture.repository_id.as_bytes()),
+                &&fixture.publication.digest[..],
+            ],
+        )
+        .unwrap();
+    transaction.commit().unwrap();
+}
+
+fn revoke_credential(database_url: &str, fixture: &Fixture) {
+    Client::connect(database_url, NoTls)
+        .unwrap()
+        .execute(
+            "UPDATE ogvcs_identity.credentials
+             SET state = 'revoked', revoked_at = clock_timestamp()
+             WHERE tenant_id = $1 AND credential_id = 'bridge-credential'
+               AND credential_generation = 1",
+            &[&fixture.tenant],
+        )
+        .unwrap();
 }
 
 fn policy_at(tenant: &str, repository: &str, generation: u64) -> PolicyDocument {
@@ -1280,6 +1910,182 @@ fn lifecycle_applications(database_url: &str, plan_id: [u8; 16]) -> i64 {
         )
         .unwrap()
         .get(0)
+}
+
+fn assert_zero_operation_intent_rejected(
+    database_url: &str,
+    fixture: &Fixture,
+    lifecycle_plan: [u8; 16],
+) {
+    let mut client = Client::connect(database_url, NoTls).unwrap();
+    let error = client
+        .execute(
+            "INSERT INTO ogvcs_metadata.submit_intents
+             (intent_id, tenant_id, repository_id, lifecycle_plan_id,
+              reference_name, expected_head_digest, expected_generation,
+              candidate_snapshot_digest, candidate_change_set_digest,
+              lifecycle_plan_digest, authenticated_scope_digest,
+              idempotency_operation, idempotency_key,
+              lifecycle_semantic_fingerprint, submit_fingerprint,
+              operation_count, operation_set_digest, intent_digest, expires_at)
+             SELECT $1, plan.tenant_id, plan.repository_id, plan.plan_id,
+                    plan.authorization_reference, $3, 1,
+                    plan.publication_digest, $4, seal.plan_digest,
+                    plan.idempotency_scope_digest, plan.idempotency_operation,
+                    plan.idempotency_key, plan.semantic_fingerprint,
+                    decode(repeat('f1', 32), 'hex'), 0,
+                    decode(repeat('f2', 32), 'hex'), decode(repeat('f3', 32), 'hex'),
+                    plan.expires_at
+             FROM ogvcs_metadata.lifecycle_publication_plans AS plan
+             JOIN ogvcs_metadata.lifecycle_publication_plan_seals AS seal USING (plan_id)
+             WHERE plan.plan_id = $2",
+            &[
+                &Uuid::from_bytes(public_uuid(0x9f)),
+                &Uuid::from_bytes(lifecycle_plan),
+                &&fixture.old_head.digest[..],
+                &&fixture.candidate_change_set.digest[..],
+            ],
+        )
+        .unwrap_err();
+    assert_eq!(error.code().unwrap().code(), "23514");
+    let count: i64 = client
+        .query_one("SELECT count(*) FROM ogvcs_metadata.submit_intents", &[])
+        .unwrap()
+        .get(0);
+    assert_eq!(count, 0);
+}
+
+fn assert_atomic_submit_not_visible(
+    database_url: &str,
+    fixture: &Fixture,
+    bundle: &PreparedBundle,
+    lifecycle_plan: [u8; 16],
+) {
+    assert_eq!(
+        identity_consumptions(database_url, bundle.receipt.plan_id()),
+        0
+    );
+    assert_eq!(lifecycle_applications(database_url, lifecycle_plan), 0);
+    let mut client = Client::connect(database_url, NoTls).unwrap();
+    let row = client
+        .query_one(
+            "SELECT reference.target_snapshot_digest, reference.generation,
+                    snapshot.published_commit_sequence, registry.owner_kind::text,
+                    registry.owner_id,
+                    (SELECT count(*) FROM ogvcs_metadata.submit_final_outcomes),
+                    (SELECT count(*) FROM ogvcs_metadata.submit_file_id_consumptions)
+             FROM ogvcs_metadata.references AS reference
+             JOIN ogvcs_metadata.snapshots AS snapshot
+               ON snapshot.repository_id = reference.repository_id
+              AND snapshot.snapshot_digest = $3
+             JOIN ogvcs_metadata.file_id_registry AS registry
+               ON registry.repository_id = reference.repository_id
+              AND registry.file_id = $4
+             WHERE reference.repository_id = $1 AND reference.reference_kind = 'branch'
+               AND reference.reference_name = $2",
+            &[
+                &Uuid::from_bytes(*fixture.repository_id.as_bytes()),
+                &REFERENCE,
+                &&fixture.publication.digest[..],
+                &&fixture.candidate_file_id[..],
+            ],
+        )
+        .unwrap();
+    assert_eq!(row.get::<_, Vec<u8>>(0), fixture.old_head.digest);
+    assert_eq!(row.get::<_, i64>(1), 1);
+    assert_eq!(row.get::<_, Option<i64>>(2), None);
+    assert_eq!(row.get::<_, String>(3), "draft");
+    assert_eq!(row.get::<_, String>(4), "draft.atomic-candidate");
+    assert_eq!(row.get::<_, i64>(5), 0);
+    assert_eq!(row.get::<_, i64>(6), 0);
+}
+
+fn assert_atomic_submit_visible(
+    database_url: &str,
+    fixture: &Fixture,
+    outbox_event_id: &[u8; 16],
+    operation_count: i64,
+) {
+    let mut client = Client::connect(database_url, NoTls).unwrap();
+    let row = client
+        .query_one(
+            "SELECT reference.target_snapshot_digest, reference.generation,
+                    snapshot.published_commit_sequence, registry.owner_kind::text,
+                    registry.owner_id,
+                    (SELECT count(*) FROM ogvcs_metadata.submit_final_outcomes),
+                    (SELECT count(*) FROM ogvcs_metadata.submit_file_id_consumptions)
+             FROM ogvcs_metadata.references AS reference
+             JOIN ogvcs_metadata.snapshots AS snapshot
+               ON snapshot.repository_id = reference.repository_id
+              AND snapshot.snapshot_digest = $3
+             JOIN ogvcs_metadata.file_id_registry AS registry
+               ON registry.repository_id = reference.repository_id
+              AND registry.file_id = $4
+             WHERE reference.repository_id = $1 AND reference.reference_kind = 'branch'
+               AND reference.reference_name = $2",
+            &[
+                &Uuid::from_bytes(*fixture.repository_id.as_bytes()),
+                &REFERENCE,
+                &&fixture.publication.digest[..],
+                &&fixture.candidate_file_id[..],
+            ],
+        )
+        .unwrap();
+    assert_eq!(row.get::<_, Vec<u8>>(0), fixture.publication.digest);
+    assert_eq!(row.get::<_, i64>(1), 2);
+    assert!(row.get::<_, Option<i64>>(2).is_some());
+    assert_eq!(row.get::<_, String>(3), "published");
+    assert_eq!(row.get::<_, String>(4), hex(&fixture.publication.digest));
+    assert_eq!(row.get::<_, i64>(5), 1);
+    assert_eq!(row.get::<_, i64>(6), operation_count);
+
+    let lease_id = Uuid::from_bytes(public_uuid(0xa8));
+    assert_eq!(
+        client
+            .execute(
+                "UPDATE ogvcs_metadata.outbox_events
+                 SET lease_id = $2, leased_by = 'atomic-submit-test-consumer',
+                     lease_expires_at = clock_timestamp() + interval '1 minute',
+                     delivery_attempts = delivery_attempts + 1
+                 WHERE event_id = $1 AND acknowledged_at IS NULL AND lease_id IS NULL",
+                &[&Uuid::from_bytes(*outbox_event_id), &lease_id],
+            )
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        client
+            .execute(
+                "UPDATE ogvcs_metadata.outbox_events
+                 SET acknowledged_at = clock_timestamp(), lease_id = NULL,
+                     leased_by = NULL, lease_expires_at = NULL
+                 WHERE event_id = $1 AND lease_id = $2",
+                &[&Uuid::from_bytes(*outbox_event_id), &lease_id],
+            )
+            .unwrap(),
+        1
+    );
+    let hostile = client.execute(
+        "UPDATE ogvcs_metadata.outbox_events
+         SET safe_payload = '{\"class\":\"tampered\"}'::jsonb WHERE event_id = $1",
+        &[&Uuid::from_bytes(*outbox_event_id)],
+    );
+    assert_eq!(hostile.unwrap_err().code().unwrap().code(), "55000");
+    let prior_owner_tamper = client.execute(
+        "UPDATE ogvcs_metadata.submit_file_id_consumptions
+         SET prior_owner_id = 'forged-prior-owner'",
+        &[],
+    );
+    assert_eq!(
+        prior_owner_tamper.unwrap_err().code().unwrap().code(),
+        "55000"
+    );
+    let late_append = client.execute(
+        "INSERT INTO ogvcs_metadata.submit_file_id_consumptions
+         SELECT * FROM ogvcs_metadata.submit_file_id_consumptions LIMIT 1",
+        &[],
+    );
+    assert_eq!(late_append.unwrap_err().code().unwrap().code(), "55000");
 }
 
 fn assert_application_counts(database_url: &str, application_id: [u8; 16], count: i64) {

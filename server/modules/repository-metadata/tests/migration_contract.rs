@@ -18,7 +18,7 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
     );
     assert_eq!(manifest["database"], "postgresql-15-or-newer");
     let entries = manifest["entries"].as_array().unwrap();
-    assert_eq!(entries.len(), 30);
+    assert_eq!(entries.len(), 33);
     let expected = [
         (1, "expand"),
         (1, "migrate"),
@@ -50,6 +50,9 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
         (10, "expand"),
         (10, "migrate"),
         (10, "contract"),
+        (11, "expand"),
+        (11, "migrate"),
+        (11, "contract"),
     ];
     for (entry, (version, phase)) in entries.iter().zip(expected) {
         assert_eq!(entry["version"], version);
@@ -73,6 +76,32 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
     assert_eq!(entries[23]["requiresCompatibilityFence"], true);
     assert_eq!(entries[26]["requiresCompatibilityFence"], true);
     assert_eq!(entries[29]["requiresCompatibilityFence"], true);
+    assert_eq!(entries[32]["requiresCompatibilityFence"], true);
+}
+
+#[test]
+fn version_eleven_is_private_nonzero_first_consumption_submit_evidence() {
+    let expand = fs::read_to_string(migration_root().join("000011_expand.sql")).unwrap();
+    for evidence in [
+        "CREATE TABLE ogvcs_metadata.submit_intents",
+        "operation_count BETWEEN 1 AND 1000",
+        "operation_kind IN ('create', 'copy', 'import')",
+        "CREATE TABLE ogvcs_metadata.submit_file_id_consumptions",
+        "UNIQUE (repository_id, file_id)",
+        "candidate_change_set_digest",
+        "consumption.prior_owner_kind = operation.prior_owner_kind",
+        "consumption.prior_owner_id = operation.prior_owner_id",
+        "submit operation set is sealed",
+        "submit FileID evidence is sealed",
+        "submit_outcome_complete_v11",
+        "DEFERRABLE INITIALLY DEFERRED",
+    ] {
+        assert!(expand.contains(evidence), "missing {evidence}");
+    }
+    assert!(!expand.contains("NEW.operation_count = 0 OR"));
+    assert!(!std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../spec/atomic-submit")
+        .exists());
 }
 
 #[test]
