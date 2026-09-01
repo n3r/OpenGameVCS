@@ -31,7 +31,17 @@ const PATH_CONTRACT_VERSION = '1.0.0';
 const HARD_EXIT_CODE = 86;
 const MAX_COMMAND_OUTPUT_BYTES = 16 * 1024 * 1024;
 const MAX_SIGNAL_OUTPUT_BYTES = 64 * 1024;
+const MAX_PLAIN_LOG_LINE_BYTES = 384;
 const SIGNAL_TIMEOUT_MS = 20_000;
+const HUMAN_AUTH_FAILURE = [
+  'error[AUTHENTICATION_REQUIRED]: Authentication is required in noninteractive mode.',
+  'Next step: Configure a supported credential provider before rerunning this command.',
+].join('\n') + '\n';
+const HUMAN_CONFIG_SUCCESS = 'ok[CONFIG_RESOLVED]: The effective nonsecret configuration was resolved.\n';
+const HUMAN_ROUTE_FAILURE = [
+  'error[PUBLIC_ROUTE_UNAVAILABLE]: An owning public service route is not available in this build.',
+  'Next step: Install an adapter for the published OGVCS service contract before retrying.',
+].join('\n') + '\n';
 const SAFE_RUNTIME_INHERITED_KEYS = Object.freeze([
   'COMSPEC',
   'LANG',
@@ -144,6 +154,24 @@ function assertNoPathDisclosure(result, paths, code) {
     check(
       !output.includes(path.replaceAll('\\', '/').toLowerCase()),
       `${code}_PATH_DISCLOSURE`,
+    );
+  }
+}
+
+function assertPlainLog(text, expectedLines, code) {
+  check(text.endsWith('\n'), `${code}_FINAL_NEWLINE`);
+  check(!text.includes('\r') && !text.includes('\u001b'), `${code}_TERMINAL_CONTROL`);
+  const lines = text.slice(0, -1).split('\n');
+  check(lines.length === expectedLines, `${code}_LINE_COUNT`);
+  for (const line of lines) {
+    check(line.length > 0, `${code}_EMPTY_LINE`);
+    check(Buffer.byteLength(line, 'utf8') <= MAX_PLAIN_LOG_LINE_BYTES, `${code}_LINE_LIMIT`);
+    check(
+      [...line].every((character) => {
+        const point = character.codePointAt(0);
+        return point >= 0x20 && point !== 0x7f;
+      }),
+      `${code}_TERMINAL_CONTROL`,
     );
   }
 }
@@ -455,6 +483,85 @@ async function main() {
     ]);
     const runtimeEnvironment = freshRuntimeEnvironment(environmentPaths);
 
+    const terminalEnvironments = [
+      {},
+      { TERM: 'dumb', NO_COLOR: '1' },
+      {
+        TERM: 'xterm-256color',
+        COLORTERM: 'truecolor',
+        CLICOLOR: '1',
+        CLICOLOR_FORCE: '1',
+        FORCE_COLOR: '3',
+      },
+      {
+        TERM: 'xterm-256color',
+        NO_COLOR: '1',
+        CLICOLOR_FORCE: '1',
+        FORCE_COLOR: '3',
+      },
+    ];
+    let canonicalHumanFailure;
+    let canonicalHumanSuccess;
+    let canonicalMachineFailure;
+    for (const [index, terminalEnvironment] of terminalEnvironments.entries()) {
+      const environment = { ...runtimeEnvironment, ...terminalEnvironment };
+      const humanFailure = runRaw(
+        installedBinary,
+        ['--format', 'human', '--non-interactive', 'auth', 'check'],
+        { cwd: runtimeRoot, env: environment },
+      );
+      check(humanFailure.status === 6 && humanFailure.signal === null, 'PLAIN_AUTH_STATUS');
+      check(humanFailure.stdout.length === 0, 'PLAIN_AUTH_STDOUT');
+      check(humanFailure.stderr === HUMAN_AUTH_FAILURE, 'PLAIN_AUTH_TEXT');
+      assertPlainLog(humanFailure.stderr, 2, 'PLAIN_AUTH');
+
+      const humanSuccess = runRaw(
+        installedBinary,
+        ['--format', 'human', 'config', 'show'],
+        { cwd: runtimeRoot, env: environment },
+      );
+      check(humanSuccess.status === 0 && humanSuccess.signal === null, 'PLAIN_CONFIG_STATUS');
+      check(humanSuccess.stderr.length === 0, 'PLAIN_CONFIG_STDERR');
+      check(humanSuccess.stdout === HUMAN_CONFIG_SUCCESS, 'PLAIN_CONFIG_TEXT');
+      assertPlainLog(humanSuccess.stdout, 1, 'PLAIN_CONFIG');
+
+      const machineFailure = runRaw(
+        installedBinary,
+        ['--format', 'json', '--non-interactive', 'auth', 'check'],
+        { cwd: runtimeRoot, env: environment },
+      );
+      const machineFailureValue = parseMachineResult(
+        machineFailure,
+        6,
+        'PLAIN_MACHINE_AUTH',
+      );
+      check(machineFailureValue.code === 'AUTHENTICATION_REQUIRED', 'PLAIN_MACHINE_AUTH_CODE');
+      if (index === 0) {
+        canonicalHumanFailure = humanFailure;
+        canonicalHumanSuccess = humanSuccess;
+        canonicalMachineFailure = machineFailure;
+      } else {
+        check(
+          humanFailure.status === canonicalHumanFailure.status
+            && humanFailure.stdout === canonicalHumanFailure.stdout
+            && humanFailure.stderr === canonicalHumanFailure.stderr,
+          'PLAIN_AUTH_ENVIRONMENT_DRIFT',
+        );
+        check(
+          humanSuccess.status === canonicalHumanSuccess.status
+            && humanSuccess.stdout === canonicalHumanSuccess.stdout
+            && humanSuccess.stderr === canonicalHumanSuccess.stderr,
+          'PLAIN_CONFIG_ENVIRONMENT_DRIFT',
+        );
+        check(
+          machineFailure.status === canonicalMachineFailure.status
+            && machineFailure.stdout === canonicalMachineFailure.stdout
+            && machineFailure.stderr === canonicalMachineFailure.stderr,
+          'MACHINE_AUTH_ENVIRONMENT_DRIFT',
+        );
+      }
+    }
+
     const installed = (
       commandArguments,
       expectedStatus,
@@ -626,6 +733,46 @@ async function main() {
     check(remote.value.data?.mutationStarted === false, 'REMOTE_MUTATION_STARTED');
     for (const forbidden of [remoteRoot, locator, secret]) {
       check(!remote.raw.stdout.includes(forbidden) && !remote.raw.stderr.includes(forbidden), 'REMOTE_DETAIL_LEAK');
+    }
+    const remoteHuman = runRaw(
+      installedBinary,
+      [
+        '--format',
+        'human',
+        '--non-interactive',
+        'workspace',
+        'create',
+        '--root',
+        remoteRoot,
+        '--repository',
+        locator,
+        '--branch',
+        'main',
+        '--credential-env',
+        'OGVCS_TOKEN_HERMETIC',
+      ],
+      {
+        cwd: runtimeRoot,
+        env: {
+          ...runtimeEnvironment,
+          TERM: 'xterm-256color',
+          NO_COLOR: '1',
+          CLICOLOR_FORCE: '1',
+          FORCE_COLOR: '3',
+          OGVCS_TOKEN_HERMETIC: secret,
+        },
+      },
+    );
+    check(remoteHuman.status === 7 && remoteHuman.signal === null, 'PLAIN_REMOTE_STATUS');
+    check(remoteHuman.stdout.length === 0, 'PLAIN_REMOTE_STDOUT');
+    check(remoteHuman.stderr === HUMAN_ROUTE_FAILURE, 'PLAIN_REMOTE_TEXT');
+    assertPlainLog(remoteHuman.stderr, 2, 'PLAIN_REMOTE');
+    assertNoPathDisclosure(remoteHuman, [temporary, REPOSITORY_ROOT, CLI_ROOT, remoteRoot], 'PLAIN_REMOTE');
+    for (const forbidden of [locator, secret]) {
+      check(
+        !remoteHuman.stdout.includes(forbidden) && !remoteHuman.stderr.includes(forbidden),
+        'PLAIN_REMOTE_DETAIL_LEAK',
+      );
     }
     await access(join(remoteRoot, '.ogvcs')).then(
       () => { throw new GateError('REMOTE_PARTIAL_WORKSPACE'); },

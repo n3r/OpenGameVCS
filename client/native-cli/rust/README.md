@@ -190,6 +190,41 @@ commit; this source tree does not substitute a prior run as candidate evidence.
 This gate does not add a public route or authentication carrier, selective-sync
 semantics, signing, installation packaging, or an OGVCS-011 completion claim.
 
+## Plain-log and accessibility boundary
+
+After cancellation signal-handler installation, ordinary command output is
+deliberately terminal-agnostic text. A successful human command writes one
+labeled `ok[CODE]: message` line to stdout. A failed human command writes one
+labeled `error[CODE]: message` line followed by one `Next step: action` line to
+stderr, in that order; stdout remains empty. This ordinary result path emits no
+ANSI escape, cursor-control, hyperlink, spinner, or color sequence and does not
+branch on `TERM`, `NO_COLOR`, `COLORTERM`, `CLICOLOR`, or force-color hints.
+The current implementation ceiling is 384 UTF-8 bytes per human line, derived
+from the authenticated result-field bounds and labels, and the process tests
+exercise output through pipes with no interactive input.
+
+For ordinary outcomes after signal installation, JSON output remains one
+newline-terminated result object on stdout with empty stderr for both success
+and failure. Hostile terminal environments must produce byte-identical JSON
+and plain output. The exercised public-route failure keeps canary paths,
+repository locators, and credential values out of both human and machine
+failures, while credential values remain absent from every exercised result.
+Nonsecret endpoints and digest identities intentionally present in ordinary
+machine successes are not claimed as redacted. The Rust integration and
+installed-artifact gates enforce these properties without a color or
+terminal-detection dependency.
+
+Signal-handler installation failure is a separate startup-fatal path before
+format resolution. It emits a fixed, bounded, color-free two-line error and
+next step on stderr, exits unavailable, and does not produce the machine JSON
+envelope even when JSON was requested. This tranche does not relabel that path
+as an ordinary command outcome or claim machine-stream uniformity for it.
+
+This is bounded source and process evidence for OGVCS-011-AC-05. It is not a
+screen-reader user study, a signed-binary usability certification, or hosted
+three-OS evidence for this exact candidate; those remain release evidence
+requirements while OGVCS-011 stays Todo.
+
 The exact watcher/status limit proofs are opt-in bounded release tests:
 
 ```sh

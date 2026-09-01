@@ -116,7 +116,15 @@ Ship developer-preview binaries with explicit server compatibility range. Destru
   OGVCS-006 allocation/lost-response reconciliation remains owned by its absent
   public adapter and is not performed by `stage_add`.
 - Documentation/runbooks: `spec/cli-workspace/v1/README.md`, the Rust crate
-  README, and `docs/reviews/OGVCS-011-local-foundation-boundary-review.md`.
+  README, `docs/reviews/OGVCS-011-local-foundation-boundary-review.md`, and the
+  bounded `docs/reviews/OGVCS-011-accessibility-source-review.md`. The latter
+  records color-independent labeled human output, stable error-before-next-step
+  order, plain non-TTY log bounds, terminal-environment invariance, machine
+  stream/byte invariance for ordinary post-signal-install command outcomes, and
+  human-failure redaction. The separate signal-handler-install fatal path
+  remains bounded plain stderr but has no machine envelope. This remains source
+  and local process evidence rather than a screen-reader study or
+  exact-candidate hosted three-OS certification.
 - Rollout result: not rolled out. OGVCS-011 remains Todo because the owning
   OGVCS-006/008/009 public routes, branded/verified receipt integration, and
   complete remote and later-feature journeys are absent.
