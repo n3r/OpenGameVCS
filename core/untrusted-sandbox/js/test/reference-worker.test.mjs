@@ -444,11 +444,14 @@ test('pre-start inspection binds every role mount and effective isolation contro
   const effectiveMounts = expected.fileMounts.map((mount) => ({ Destination: mount.target, Propagation: 'rprivate', RW: false, Source: mount.source, Type: 'bind' }));
   effectiveMounts.push({ Destination: '/output', Driver: 'local', Name: expected.volume, Propagation: '', RW: true, Source: expected.volumeMountpoint, Type: 'volume' });
   const container = {
-    Args: [], Config: { Cmd: null, Domainname: '', Entrypoint: ['/tool/program'], Env: null, ExposedPorts: null, Healthcheck: null, Hostname: 'ogvcs-worker', Image: expected.runtimeImage, Labels: { 'org.opengamevcs.sandbox.job': expected.jobId, 'org.opengamevcs.sandbox.role': expected.role, 'org.opengamevcs.sandbox.runtime': 'linux-reference-v1', 'org.opengamevcs.sandbox.runtime-contract-sha256': LINUX_RUNTIME_CONTRACT_SHA256 }, NetworkDisabled: false, OpenStdin: false, StdinOnce: false, StopTimeout: 1, Tty: false, User: '65532:65532', Volumes: null, WorkingDir: '/scratch' },
+    Args: [], Config: { Cmd: null, Domainname: '', Entrypoint: ['/tool/program'], Env: null, ExposedPorts: null, Healthcheck: null, Hostname: 'ogvcs-worker', Image: expected.runtimeImage, Labels: { 'org.opengamevcs.sandbox.job': expected.jobId, 'org.opengamevcs.sandbox.role': expected.role, 'org.opengamevcs.sandbox.runtime': 'linux-reference-v1', 'org.opengamevcs.sandbox.runtime-contract-sha256': LINUX_RUNTIME_CONTRACT_SHA256 }, OpenStdin: false, StdinOnce: false, StopTimeout: 1, Tty: false, User: '65532:65532', Volumes: null, WorkingDir: '/scratch' },
     HostConfig: { AutoRemove: false, Binds: null, CapAdd: null, CapDrop: ['ALL'], CgroupnsMode: 'private', CpuPeriod: 0, CpuQuota: 0, CpuShares: 0, DeviceCgroupRules: null, DeviceRequests: null, Devices: null, Dns: null, DnsOptions: null, DnsSearch: null, ExtraHosts: null, GroupAdd: null, Init: null, IpcMode: 'none', Links: null, LogConfig: { Config: {}, Type: 'none' }, MaskedPaths: ['/proc/acpi', '/proc/asound', '/proc/interrupts', '/proc/kcore', '/proc/keys', '/proc/latency_stats', '/proc/sched_debug', '/proc/scsi', '/proc/timer_list', '/proc/timer_stats', '/sys/firmware'], Memory: policy.memoryBytes, MemoryReservation: 0, MemorySwap: policy.memoryBytes, Mounts: hostMounts, NanoCpus: 1_000_000_000, NetworkMode: 'none', OomKillDisable: false, PidMode: '', PidsLimit: policy.processes, PortBindings: {}, Privileged: false, PublishAllPorts: false, ReadonlyPaths: ['/proc/bus', '/proc/fs', '/proc/irq', '/proc/sys', '/proc/sysrq-trigger'], ReadonlyRootfs: true, RestartPolicy: { MaximumRetryCount: 0, Name: 'no' }, Runtime: 'runc', SecurityOpt: ['no-new-privileges=true', `seccomp=${seccomp}`], Sysctls: null, Tmpfs: { '/scratch': `rw,nosuid,nodev,noexec,size=${policy.scratchBytes},uid=65532,gid=65532,mode=0700` }, UsernsMode: '', UTSMode: '', Ulimits: [{ Hard: 1, Name: 'cpu', Soft: 1 }, { Hard: policy.outputBytes, Name: 'fsize', Soft: policy.outputBytes }, { Hard: 64, Name: 'nofile', Soft: 64 }], VolumesFrom: null },
     Id: expected.id, Mounts: effectiveMounts, Name: `/${expected.name}`, NetworkSettings: { Networks: { none: {} } }, Path: '/tool/program', State: { Paused: false, Pid: 0, Restarting: false, Running: false, Status: 'created' },
   };
   assert.equal(validateCreatedContainerInspect(container, expected), true);
+  const legacyExplicitNetworkDisabled = structuredClone(container);
+  legacyExplicitNetworkDisabled.Config.NetworkDisabled = false;
+  assert.equal(validateCreatedContainerInspect(legacyExplicitNetworkDisabled, expected), true);
   const detached = structuredClone(container); detached.NetworkSettings.Networks = {};
   assert.equal(validateCreatedContainerInspect(detached, expected), true);
   for (const mutate of [
@@ -506,6 +509,26 @@ test('pre-start inspection binds every role mount and effective isolation contro
   }
   const runtimeMismatch = structuredClone(container); runtimeMismatch.HostConfig.Runtime = 'io.containerd.alt.v2';
   assert.equal(createdContainerInspectMismatch(runtimeMismatch, expected), 'host-runtime');
+  for (const [field, hostile] of [
+    ['OpenStdin', true],
+    ['StdinOnce', true],
+    ['Tty', true],
+    ['StopTimeout', 0],
+    ['StopTimeout', 2],
+    ['StopTimeout', null],
+    ['StopTimeout', '1'],
+    ['NetworkDisabled', true],
+    ['NetworkDisabled', null],
+    ['NetworkDisabled', 0],
+    ['NetworkDisabled', 'false'],
+  ]) {
+    const hostileIo = structuredClone(container); hostileIo.Config[field] = hostile;
+    assert.equal(createdContainerInspectMismatch(hostileIo, expected), 'config-io', `${field}=${String(hostile)}`);
+  }
+  for (const field of ['OpenStdin', 'StdinOnce', 'StopTimeout', 'Tty']) {
+    const omittedIo = structuredClone(container); delete omittedIo.Config[field];
+    assert.equal(createdContainerInspectMismatch(omittedIo, expected), 'config-io', `omitted ${field}`);
+  }
   for (const pidMode of ['private', 'host', `container:${'a'.repeat(64)}`]) {
     const sharedOrInvalidPid = structuredClone(container); sharedOrInvalidPid.HostConfig.PidMode = pidMode;
     assert.equal(createdContainerInspectMismatch(sharedOrInvalidPid, expected), 'host-namespaces', pidMode);

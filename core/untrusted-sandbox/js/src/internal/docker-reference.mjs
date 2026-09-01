@@ -216,7 +216,9 @@ export const createdContainerInspectMismatch = (container, expected) => {
       ['config-image', config?.Image === expected.runtimeImage],
       ['config-process', config?.Hostname === 'ogvcs-worker' && config?.Domainname === '' && config?.User === '65532:65532' && Array.isArray(config?.Entrypoint) && config.Entrypoint.length === 1 && config.Entrypoint[0] === expected.entrypoint && config.WorkingDir === '/scratch'],
       ['config-content', emptyCollection(config?.Cmd) && emptyCollection(config?.Env) && emptyCollection(config?.Volumes) && emptyCollection(config?.ExposedPorts) && config?.Healthcheck == null],
-      ['config-io', config?.OpenStdin === false && config?.StdinOnce === false && config?.Tty === false && config?.NetworkDisabled === false && config?.StopTimeout === 1],
+      // NetworkDisabled is a deprecated omitempty field. Current Moby omits
+      // its false value; older inspect projections can still return false.
+      ['config-io', config?.OpenStdin === false && config?.StdinOnce === false && config?.Tty === false && (!Object.hasOwn(config, 'NetworkDisabled') || config.NetworkDisabled === false) && config?.StopTimeout === 1],
       ['config-labels', canonicalJson(labels) === canonicalJson(expectedLabels)],
       ['host-network', host?.NetworkMode === 'none' && emptyCollection(host?.PortBindings) && emptyCollection(host?.Links) && emptyCollection(host?.Dns) && emptyCollection(host?.DnsOptions) && emptyCollection(host?.DnsSearch) && emptyCollection(host?.ExtraHosts)],
       ['host-runtime', host?.Runtime === OCI_RUNTIME],
