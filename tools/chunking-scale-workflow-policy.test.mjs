@@ -6,6 +6,7 @@ const boundedPath = new URL('../.github/workflows/chunking-manifest-bounded.yml'
 const scalePath = new URL('../.github/workflows/chunking-manifest-scale.yml', import.meta.url);
 const javascriptRunnerPath = new URL('../core/chunking-manifest/js/scripts/run-scale.mjs', import.meta.url);
 const rustRunnerPath = new URL('../core/chunking-manifest/rust/examples/run_scale.rs', import.meta.url);
+const comparisonAdapterPath = new URL('./compare-chunking-scale.mjs', import.meta.url);
 const packagePath = new URL('../package.json', import.meta.url);
 
 test('exact 100-GiB work is isolated from ordinary and bounded checks', async () => {
@@ -33,10 +34,19 @@ test('exact 100-GiB work is isolated from ordinary and bounded checks', async ()
   assert.match(javascriptRunner, /const LOGICAL_BYTES = 100 \* 1024 \* 1024 \* 1024;/u);
   assert.match(javascriptRunner, /const REPETITIONS = LOGICAL_BYTES \/ PATTERN_BYTES;/u);
   assert.match(javascriptRunner, /PATTERN_SHA256 = 'b4798e6f4c78cbeb0b69d6a83b60dfb1bb68196f8c7913dec1bf1bc6fa3921a4'/u);
+  assert.match(javascriptRunner, /const PROCESS_WRITE_BYTES_MAXIMUM = 512 \* 1024 \* 1024;/u);
+  assert.match(javascriptRunner, /const processWriteBytes = Number\(values\.get\('wchar'\)\);/u);
+  assert.ok(javascriptRunner.indexOf('await rm(scratchRoot, { recursive: true });') < javascriptRunner.indexOf('const ioEnded = await processIo();'));
+  assert.match(javascriptRunner, /processWriteBytes > PROCESS_WRITE_BYTES_MAXIMUM/u);
   assert.doesNotMatch(javascriptRunner, /process\.argv/u);
   assert.match(rustRunner, /const LOGICAL_BYTES: u64 = 100 \* 1024 \* 1024 \* 1024;/u);
   assert.match(rustRunner, /const REPETITIONS: u64 = LOGICAL_BYTES \/ PATTERN_BYTES as u64;/u);
   assert.match(rustRunner, /PATTERN_SHA256: &str = "b4798e6f4c78cbeb0b69d6a83b60dfb1bb68196f8c7913dec1bf1bc6fa3921a4"/u);
+  assert.match(rustRunner, /const PROCESS_WRITE_BYTES_MAXIMUM: u64 = 512 \* 1024 \* 1024;/u);
+  assert.match(rustRunner, /process_write_bytes: field\("wchar:"\)/u);
+  const rustIoEnd = rustRunner.indexOf('let io_ended = process_io();');
+  assert.ok(rustIoEnd > 0 && rustRunner.lastIndexOf('fs::remove_dir_all(&scratch_root.0)', rustIoEnd) > 0);
+  assert.match(rustRunner, /process_write_bytes > PROCESS_WRITE_BYTES_MAXIMUM/u);
   assert.match(rustRunner, /"x86_64" => "x64"/u);
   assert.match(rustRunner, /"aarch64" => "arm64"/u);
   assert.match(rustRunner, /\.finish_to_manifest\(&mut manifest_sink\)/u);
@@ -71,4 +81,25 @@ test('release-only workflow runs both implementations independently before compa
     .map((match) => match[1])
     .filter((reference) => !/^[0-9a-f]{40}$/u.test(reference));
   assert.deepEqual(mutableOfficialActions, []);
+});
+
+test('the protected raw-report command publishes current-source-bound retained JSON before comparison', async () => {
+  const [scale, adapter, manifest] = await Promise.all([
+    readFile(scalePath, 'utf8'),
+    readFile(comparisonAdapterPath, 'utf8'),
+    readFile(packagePath, 'utf8').then(JSON.parse),
+  ]);
+  assert.doesNotMatch(scale, /chunking-scale-evidence-bundle|verify-chunking-scale-evidence-bundle|--javascript-bundle|--rust-bundle/u);
+  assert.match(scale, /node tools\/compare-chunking-scale\.mjs\s+--javascript artifacts\/javascript-scale\.json\s+--rust artifacts\/rust-scale\.json\s+--output artifacts\/scale-comparison\.json/u);
+  assert.match(scale, /path: artifacts\/\*\.json/u);
+  assert.match(adapter, /loadScaleReport\(options\.javascript, 'javascript'\)/u);
+  assert.match(adapter, /buildChunkingScaleEvidenceBundle/u);
+  assert.match(adapter, /writeChunkingScaleEvidenceBundle/u);
+  assert.match(adapter, /verifyChunkingScaleEvidenceBundle/u);
+  assert.match(adapter, /writeRetainedChunkingScalePublication/u);
+  assert.match(adapter, /verifyRetainedChunkingScalePublication/u);
+  assert.match(adapter, /\.publication\.json/u);
+  assert.match(adapter, /writeChunkingScaleEvidenceValidation/u);
+  assert.match(manifest.scripts['test:chunking:report'], /chunking-scale-evidence\.test\.mjs/u);
+  assert.doesNotMatch(manifest.scripts['test:chunking:report'], /scripts\/run-scale\.mjs|--example run_scale/u);
 });

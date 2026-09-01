@@ -7,7 +7,13 @@ import { join, resolve } from 'node:path';
 import test from 'node:test';
 import { gunzipSync } from 'node:zlib';
 
-import { deterministicGzip, materialize, PORTABLE_GZIP_ENCODER } from './chunking-selection-benchmark-common.mjs';
+import {
+  PORTABLE_GZIP_ENCODER,
+  buildSelectionReportFromWorkloads,
+  deterministicGzip,
+  loadSelectionAuthority,
+  materialize,
+} from './chunking-selection-benchmark-common.mjs';
 import { buildChunkingSelectionReport } from './chunking-selection-benchmark-report.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -81,6 +87,7 @@ test('cli writes the report file', { timeout: 120_000 }, async (t) => {
 });
 
 test('every behavioral threshold can fail the report and forces overallStatus failed', { timeout: 120_000 }, async () => {
+  const authority = await loadSelectionAuthority();
   const baseline = await buildChunkingSelectionReport();
   const scenarios = [
     { thresholdId: 'source-like-retains-material-reuse' },
@@ -114,7 +121,16 @@ test('every behavioral threshold can fail the report and forces overallStatus fa
     if (mutateWorkloads === undefined) {
       entry.value = entry.operator === 'minimum' ? current.actual + 1 : current.actual - 1;
     }
-    const mutated = await buildChunkingSelectionReport({ mutateWorkloads, thresholdFile });
+    const workloads = structuredClone(baseline.workloads);
+    const mutated = await buildSelectionReportFromWorkloads({
+      workloads: mutateWorkloads?.(workloads) ?? workloads,
+      contract: authority.contract,
+      thresholdFile,
+      workloadDefinitionsDigest: authority.workloadDefinitionsDigest,
+      packageJson: authority.packageJson,
+      generatedAt: baseline.generatedAt,
+      host: baseline.host,
+    });
     assert.equal(mutated.overallStatus, 'failed', thresholdId);
     assert.equal(mutated.summary.thresholdFailureCount >= 1, true, thresholdId);
     assert.equal(mutated.thresholdEvaluations.find((row) => row.thresholdId === thresholdId)?.status, 'failed', thresholdId);

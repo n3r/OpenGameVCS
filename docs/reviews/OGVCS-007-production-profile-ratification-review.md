@@ -274,20 +274,25 @@ These tests do not change the profile tuple and do not require a large campaign:
    while the profile remains candidate/conformance-only.
 2. Publish and authenticate the bounded seven-class OGVCS-005 report. Perform an
    independent review of its measurements and the production trust boundary.
-3. Deploy/read-test the exact profile verifier before enabling any writer.
-4. Accept ADR-0016 without changing its tuple; update the data-only profile
-   lifecycle and add exactly one OGVCS-007 `chunking` registry entry with
-   production-write eligibility.
-5. Regenerate the OGVCS-002 vector authority and synchronize both packaged
-   registries. Then refresh repository pins in OGVCS-006 metadata, OGVCS-041
-   protocol, and OGVCS-005 benchmark authorities in dependency order. Re-run
-   ordinary packed/offline and three-OS comparisons after each generated
-   boundary.
-6. Roll out the writer behind a reversible production-write switch. Rollback
-   disables new writes but retains the registry assignment, verifier, vectors,
-   and readers permanently.
-7. Run the separate 100 GiB resource campaign only at the agreed final/major-
-   release gate before OGVCS-007 can be considered Done.
+3. With production writes still disabled, integrate and live-test the OGVCS-008
+   PostgreSQL/request-root acceptor so repository availability can occur only
+   after the private OGVCS-007 receipt is consumed in the owning transaction.
+4. Land the OGVCS-007-owned exact-scale corpus/task/profile/threshold authority
+   and independently verified JavaScript/Rust bundle tooling. That authority
+   pins and consumes the completed OGVCS-005 public manifest without amending
+   it; a future OGVCS-005 contract expansion would require separate PRD/change
+   control rather than being smuggled into this tranche.
+5. Run the separate 100-GiB campaign as the final acceptance gate on that same
+   source revision. Both independently content-verified OGVCS-007 bundles, both
+   self-contained retained publications and validation records, and the
+   branded cross-language comparison must pass before any lifecycle mutation.
+6. Only then may maintainers accept ADR-0016 without changing its tuple, add the
+   single ratified production-write-eligible OGVCS-007 registry row, regenerate
+   every downstream authority in dependency order, and repeat the ordinary
+   packed/offline and three-OS gates.
+7. Deploy/read-test the regenerated authority everywhere, then enable the writer
+   behind a reversible production-write switch. Rollback disables new writes
+   but retains the registry assignment, verifier, vectors, and readers.
 
 ## Review commands and outcomes
 

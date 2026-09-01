@@ -23,10 +23,22 @@ const LCG_MULTIPLIER: u32 = 1_664_525;
 const LCG_INCREMENT: u32 = 1_013_904_223;
 const PATTERN_SHA256: &str = "b4798e6f4c78cbeb0b69d6a83b60dfb1bb68196f8c7913dec1bf1bc6fa3921a4";
 const WALL_TIME_MILLISECONDS_MAXIMUM: u64 = 18_000_000;
+const CPU_TIME_MICROSECONDS_MAXIMUM: u64 = 36_000_000_000;
+const PROCESS_WRITE_BYTES_MAXIMUM: u64 = 512 * 1024 * 1024;
 const PEAK_RSS_BYTES_MAXIMUM: u64 = 512 * 1024 * 1024;
 const LEDGER_MEMORY_BYTES_MAXIMUM: u64 = 1024 * 1024;
 const LEDGER_SCRATCH_BYTES_MAXIMUM: u64 = 64 * 1024 * 1024;
 const TRANSCRIPT_DOMAIN: &[u8] = b"OGVCS-CHUNK-SCALE-BOUNDARY-TRANSCRIPT-V1\0";
+const IO_SOURCE: &str = "linux:/proc/self/io:read_bytes+write_bytes";
+const PROCESS_WRITE_SOURCE: &str = "linux:/proc/self/io:wchar";
+const RESOURCE_SCOPE: &str =
+    "source-pattern-generation-through-scratch-cleanup-before-report-publication";
+
+struct ProcessIo {
+    process_write_bytes: u64,
+    read_bytes: u64,
+    write_bytes: u64,
+}
 
 struct ScaleStats {
     transcript: Sha256Writer,
@@ -203,6 +215,34 @@ fn peak_rss_bytes() -> u64 {
         .unwrap_or_else(|| fail("Linux VmHWM overflowed"))
 }
 
+fn cpu_runtime_microseconds() -> u64 {
+    let value = fs::read_to_string("/proc/self/schedstat")
+        .unwrap_or_else(|_| fail("Linux process CPU counter is unavailable"));
+    let nanoseconds = value
+        .split_whitespace()
+        .next()
+        .and_then(|field| field.parse::<u64>().ok())
+        .unwrap_or_else(|| fail("Linux process CPU counter is invalid"));
+    nanoseconds / 1_000
+}
+
+fn process_io() -> ProcessIo {
+    let value = fs::read_to_string("/proc/self/io")
+        .unwrap_or_else(|_| fail("Linux process I/O counters are unavailable"));
+    let field = |name: &str| {
+        value
+            .lines()
+            .find_map(|line| line.strip_prefix(name))
+            .and_then(|value| value.trim().parse::<u64>().ok())
+            .unwrap_or_else(|| fail("Linux process I/O counters are invalid"))
+    };
+    ProcessIo {
+        process_write_bytes: field("wchar:"),
+        read_bytes: field("read_bytes:"),
+        write_bytes: field("write_bytes:"),
+    }
+}
+
 fn runtime_version() -> String {
     env::var("OGVCS_RUST_VERSION").unwrap_or_else(|_| "1.82.0".to_owned())
 }
@@ -223,6 +263,8 @@ fn main() {
     let source_revision = source_revision();
     let report_path = report_path();
     let scratch_root = ScratchCleanup(scratch_root());
+    let cpu_started = cpu_runtime_microseconds();
+    let io_started = process_io();
     let started = Instant::now();
     let pattern = source_pattern();
     if hex(&sha256(&pattern)) != PATTERN_SHA256 {
@@ -296,8 +338,25 @@ fn main() {
     let scratch_artifacts_after = fs::read_dir(&scratch_root.0)
         .unwrap_or_else(|_| fail("scratch directory disappeared"))
         .count() as u64;
+    fs::remove_dir_all(&scratch_root.0).unwrap_or_else(|_| fail("scratch cleanup failed"));
     let wall_time_milliseconds = u64::try_from(started.elapsed().as_millis())
         .unwrap_or_else(|_| fail("wall time overflowed"));
+    let cpu_microseconds = cpu_runtime_microseconds()
+        .checked_sub(cpu_started)
+        .unwrap_or_else(|| fail("Linux process CPU counter moved backwards"));
+    let io_ended = process_io();
+    let disk_read_bytes = io_ended
+        .read_bytes
+        .checked_sub(io_started.read_bytes)
+        .unwrap_or_else(|| fail("Linux process I/O read counter moved backwards"));
+    let disk_write_bytes = io_ended
+        .write_bytes
+        .checked_sub(io_started.write_bytes)
+        .unwrap_or_else(|| fail("Linux process I/O write counter moved backwards"));
+    let process_write_bytes = io_ended
+        .process_write_bytes
+        .checked_sub(io_started.process_write_bytes)
+        .unwrap_or_else(|| fail("Linux process logical write counter moved backwards"));
     let peak_rss_bytes = peak_rss_bytes();
     let throughput_bytes_per_second = LOGICAL_BYTES
         .saturating_mul(1000)
@@ -342,6 +401,12 @@ fn main() {
     if peak_rss_bytes > PEAK_RSS_BYTES_MAXIMUM {
         violations.push("peak RSS");
     }
+    if cpu_microseconds == 0 || cpu_microseconds > CPU_TIME_MICROSECONDS_MAXIMUM {
+        violations.push("CPU time");
+    }
+    if process_write_bytes > PROCESS_WRITE_BYTES_MAXIMUM {
+        violations.push("process I/O counters");
+    }
     if wall_time_milliseconds > WALL_TIME_MILLISECONDS_MAXIMUM {
         violations.push("wall time");
     }
@@ -351,8 +416,6 @@ fn main() {
             violations.join(", ")
         ));
     }
-    fs::remove_dir_all(&scratch_root.0).unwrap_or_else(|_| fail("scratch cleanup failed"));
-
     let report = json!({
         "schemaVersion": "ogvcs.chunking-manifest/scale-report/v1",
         "implementation": "rust",
@@ -390,6 +453,14 @@ fn main() {
         },
         "resources": {
             "wallTimeMilliseconds": wall_time_milliseconds,
+            "cpuMicroseconds": cpu_microseconds,
+            "cpuSource": "linux:/proc/self/schedstat:runtime-nanoseconds",
+            "diskReadBytes": disk_read_bytes,
+            "diskWriteBytes": disk_write_bytes,
+            "ioSource": IO_SOURCE,
+            "processWriteBytes": process_write_bytes,
+            "processWriteSource": PROCESS_WRITE_SOURCE,
+            "measurementScope": RESOURCE_SCOPE,
             "throughputBytesPerSecond": throughput_bytes_per_second,
             "peakRssBytes": peak_rss_bytes,
             "maxRssSource": "linux:/proc/self/status:VmHWM-kib",
@@ -403,9 +474,12 @@ fn main() {
         },
         "bounds": {
             "wallTimeMillisecondsMaximum": WALL_TIME_MILLISECONDS_MAXIMUM,
+            "cpuTimeMicrosecondsMaximum": CPU_TIME_MICROSECONDS_MAXIMUM,
+            "processWriteBytesMaximum": PROCESS_WRITE_BYTES_MAXIMUM,
             "peakRssBytesMaximum": PEAK_RSS_BYTES_MAXIMUM,
             "ledgerMemoryBytesMaximum": LEDGER_MEMORY_BYTES_MAXIMUM,
             "ledgerScratchBytesMaximum": LEDGER_SCRATCH_BYTES_MAXIMUM,
+            "manifestBytesMaximum": MANIFEST_BYTES_MAXIMUM,
             "temporaryWholeFileAllowed": false,
         },
         "overallStatus": "passed",

@@ -36,20 +36,35 @@ revision satisfies every gate below.
 4. The independently verified bounded packet remains green with seven samples,
    seven summaries, five OGVCS-005 threshold evaluations, seven successful
    retained captures, exact process-peak provenance, and
-   `exactScaleExecuted: false`.
+   `exactScaleExecuted: false`. Re-run both the OGVCS-005 base verifier and the
+   OGVCS-007 bounded-product verifier against that separate OGVCS-005 bundle.
 5. OGVCS-007-AC-03 is run as the final acceptance gate on the same source
    revision: the 100-GiB fixture completes within the declared CPU and memory
    bounds, with observed whole-process peak memory and no temporary whole-file
-   duplication. The public OGVCS-005 verifier and the independent OGVCS-007
-   verifier must both accept the retained result. This campaign is not a PR
-   check and is not replaced by the bounded packet. Dispatch
+   duplication. The independent OGVCS-007 verifier must accept each exact-scale
+   implementation bundle, then the branded comparator must accept those two
+   verified inputs. The OGVCS-005 verifier does not accept this distinct schema.
+   This campaign is not a PR check and is not replaced by the bounded packet. Dispatch
    `.github/workflows/chunking-manifest-scale.yml` only with the explicit
    confirmation or a reviewed `ogvcs-007-scale-*` release tag. Retain the two
-   source-revision-bound implementation reports and the comparator output that
-   binds their hashes and proves identical result projections. A prepared or
+   implementation reports carrying the same workflow-supplied source
+   revision, both self-contained flat publication records, both independent
+   validation records, and the comparator output that binds their hashes and
+   proves identical result projections. A prepared or
    locally syntax-checked harness is not evidence that this gate passed.
 6. Maintainers explicitly accept the immutable ADR-0016 tuple and its measured
    poor-reuse results for compressed and encrypted/random content.
+
+The protected workflow retains its reviewed raw-report command surface. Its
+comparison adapter validates both reports, publishes and verifies both
+current-source-bound bundle directories, writes self-contained flat
+publication and validation JSON records matched by the existing upload glob,
+and compares only the resulting verified brands. The flat record embeds the
+exact manifest, projection, and report bytes, so the publisher environment and
+source-set projection survive artifact retention even if the floating Node 24
+patch later changes. This wiring has only bounded hostile dry-run proof; it has
+not been dispatched at 100 GiB. A bundle's `sourceRevision` remains explicitly
+`workflow-supplied-not-git-bound` and is not producer-origin authentication.
 
 ## Exact authority mutation
 

@@ -111,6 +111,29 @@ trigger, and neither the ordinary package scripts nor the bounded workflow
 execute either 100-GiB runner. Preparing and testing this harness does not close
 AC-03, ratify the profile, or authorize production writes.
 
+The pre-scale evidence-authority candidate now adds an OGVCS-007-owned
+`chunking-exact-scale` corpus, `chunking-exact-scale-verify` task,
+`chunking-exact-scale-release` profile, and release threshold. It also provides
+separate JavaScript and Rust bundle publishers, an independent OGVCS-007
+verifier, and a comparator that accepts only verifier-branded inputs. Tiny
+synthetic hostile tests exercise those paths without invoking either 100-GiB
+runner. The existing protected workflow's literal raw-report comparison flags
+now publish and verify both bundles, emit self-contained flat publication and
+validation JSON records covered by its existing artifact glob, and compare the
+verified brands. This wiring is prepared but has not been dispatched, so it is
+not completion evidence. The bundles provide
+content-addressed, current-source verification, not producer-origin
+authentication; their revision field is explicitly workflow-supplied and not
+yet Git-bound.
+
+The new contract pins the unchanged completed OGVCS-005 manifest and the
+current chunking manifest. It deliberately does not change OGVCS-005-owned
+schemas, tasks, profiles, thresholds, runtime, or completion evidence. The
+existing 2026-08-31 bounded packet therefore remains byte-valid for its exact
+predecessor but is not exact-scale evidence. No repository-metadata/identity
+predecessor wave is created by this candidate. No checked-in evidence was
+generated and no exact-scale runner was executed.
+
 ## Open gates and lifecycle disposition
 
 Two acceptance facts keep the PRD and ADR open:

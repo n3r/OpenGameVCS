@@ -42,7 +42,7 @@
     "test:path:ci-report": "node --test tools/path-filesystem-conformance-report.test.mjs tools/compare-path-filesystem-reports.test.mjs tools/path-filesystem-trace-audit.test.mjs tools/path-filesystem-workflow-policy.test.mjs",
     "test:chunking:js": "npm run test --workspace @opengamevcs/chunking-manifest",
     "test:chunking:spec": "npm run test --workspace @opengamevcs/chunking-manifest-contract-v1",
-    "test:chunking:report": "node --test tools/chunking-selection-benchmark-report.test.mjs tools/chunking-selection-retained-evidence.test.mjs tools/compare-chunking-scale.test.mjs tools/chunking-scale-workflow-policy.test.mjs",
+    "test:chunking:report": "node --test --test-concurrency=1 spec/chunking-scale-evidence/v1/test/validate-spec.test.mjs tools/chunking-selection-benchmark-report.test.mjs tools/chunking-selection-reconstruction.test.mjs tools/chunking-selection-retained-evidence.test.mjs tools/chunking-scale-evidence.test.mjs tools/compare-chunking-scale.test.mjs tools/chunking-scale-workflow-policy.test.mjs",
     "test:selective": "npm run test:selective:spec && node --test tools/selective-sync-kernel-policy.test.mjs tools/selective-sync-kernel-packed.test.mjs",
     "test:selective:spec": "npm run test --workspace @opengamevcs/selective-sync-kernel-contract-v1",
     "test:selective:rust": "node core/selective-sync/rust/scripts/sync-contract.mjs --check && cargo +1.82.0 fmt --manifest-path core/selective-sync/rust/Cargo.toml -- --check && cargo +1.82.0 test --manifest-path core/selective-sync/rust/Cargo.toml --locked --offline && cargo +1.82.0 clippy --manifest-path core/selective-sync/rust/Cargo.toml --locked --offline --all-targets -- -D warnings",
