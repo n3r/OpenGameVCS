@@ -287,7 +287,7 @@
       "version": 11,
       "phase": "expand",
       "path": "000011_expand.sql",
-      "sha256": "44cb9356b661cd3c320150c4729b43d0f789779b253addff2f9cfb6fbc8759cd",
+      "sha256": "ba12a576e2a186e75becb51773e9f9c4322c41f37e115546c31eb29776463f3f",
       "restartable": true,
       "minimumApplicationVersion": "0.1.0",
       "maximumApplicationVersion": "0.1.x"

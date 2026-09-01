@@ -1495,7 +1495,7 @@ fn prove_v7_to_v8_upgrade_and_bounds(database_url: &str) {
     )
     .unwrap();
     assert_eq!(report.already_applied, 21);
-    assert_eq!(report.applied, 9);
+    assert_eq!(report.applied, 12);
     let upgraded: (bool, bool, i64) = client
         .query_one(
             "SELECT authorization_resources IS NULL,

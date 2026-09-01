@@ -721,6 +721,11 @@ for (const evidence of [
   'lifecycle_outbox_aggregate_sealed_v10',
 ]) assert(expandV10.includes(evidence), `version 10 aggregate bridge evidence missing: ${evidence}`);
 const expandV11 = await readFile(resolve(migrations, '000011_expand.sql'), 'utf8');
+for (const predecessor of [
+  '69cd3b10a60be43f8aeb2214f18df50124f143a242e1a46f72afac10067d976e',
+  '1d9691bbf721c888f52981d71bf9727a76c1f2825837bc8ba2f98bb5d00150f5',
+  '8526bcffb01289747a7e6de61adcedb0b81788b80738d75850635d2f441b4974',
+]) assert(expandV11.includes(predecessor), `version 11 predecessor pin missing: ${predecessor}`);
 for (const evidence of [
   'submit_intents',
   'operation_count BETWEEN 1 AND 1000',
@@ -734,6 +739,7 @@ for (const evidence of [
   'consumption.prior_owner_id = operation.prior_owner_id',
   'submit_outcome_complete_v11',
 ]) assert(expandV11.includes(evidence), `version 11 private atomic-submit evidence missing: ${evidence}`);
+assert(expandV11.includes('repository metadata v11 predecessor authority mismatch'), 'version 11 predecessor fence missing');
 assert(!expandV11.includes('NEW.operation_count = 0 OR'), 'version 11 admits an unproved zero-operation submit');
 
 const atomicSubmitAdapter = await readFile(resolve(root, 'src/postgres/atomic_submit.rs'), 'utf8');

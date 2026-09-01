@@ -82,6 +82,16 @@ fn migration_manifest_is_ordered_checksummed_and_transactional() {
 #[test]
 fn version_eleven_is_private_nonzero_first_consumption_submit_evidence() {
     let expand = fs::read_to_string(migration_root().join("000011_expand.sql")).unwrap();
+    for predecessor in [
+        "69cd3b10a60be43f8aeb2214f18df50124f143a242e1a46f72afac10067d976e",
+        "1d9691bbf721c888f52981d71bf9727a76c1f2825837bc8ba2f98bb5d00150f5",
+        "8526bcffb01289747a7e6de61adcedb0b81788b80738d75850635d2f441b4974",
+    ] {
+        assert!(
+            expand.contains(predecessor),
+            "missing v10 predecessor pin {predecessor}"
+        );
+    }
     for evidence in [
         "CREATE TABLE ogvcs_metadata.submit_intents",
         "operation_count BETWEEN 1 AND 1000",
@@ -94,6 +104,7 @@ fn version_eleven_is_private_nonzero_first_consumption_submit_evidence() {
         "submit operation set is sealed",
         "submit FileID evidence is sealed",
         "submit_outcome_complete_v11",
+        "repository metadata v11 predecessor authority mismatch",
         "DEFERRABLE INITIALLY DEFERRED",
     ] {
         assert!(expand.contains(evidence), "missing {evidence}");
