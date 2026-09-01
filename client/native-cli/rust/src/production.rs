@@ -1117,7 +1117,7 @@ pub fn preview_verified_diagnostics(
 ) -> Result<VerifiedDiagnosticPreview, CliError> {
     let root = validated_root(root)?;
     let metadata = read_ready_metadata(&root)?;
-    let staging = read_staging_state(&root)?;
+    let staging = read_validated_staging_state(&root, &metadata.binding)?;
     let endpoint_scheme = if endpoint.starts_with("https://") {
         "https"
     } else if endpoint.starts_with("http://") {
@@ -1390,7 +1390,7 @@ fn publish_verified_workspace(
 pub fn open_verified_workspace(root: &Path) -> Result<VerifiedWorkspaceReport, CliError> {
     let root = validated_root(root)?;
     let metadata = read_ready_metadata(&root)?;
-    let staging = read_staging_state(&root)?;
+    let staging = read_validated_staging_state(&root, &metadata.binding)?;
     if staging
         .intents
         .iter()
@@ -1449,7 +1449,10 @@ pub fn configure_verified_workspace(
     let root = validated_root(&request.root)?;
     let _lock = MutationLock::acquire(&root)?;
     let current = read_ready_metadata(&root)?;
-    if !read_staging_state(&root)?.intents.is_empty() {
+    if !read_validated_staging_state(&root, &current.binding)?
+        .intents
+        .is_empty()
+    {
         return Err(workspace_error(
             "WORKSPACE_HAS_STAGED_INTENTS",
             "A workspace with staged intents cannot change its verified binding.",
@@ -1597,7 +1600,7 @@ pub fn remove_verified_workspace_with_progress(
         return Ok(removed);
     }
     let metadata = read_ready_metadata(&root)?;
-    let staging = read_staging_state(&root)?;
+    let staging = read_validated_staging_state(&root, &metadata.binding)?;
     if !staging.intents.is_empty() {
         return Err(workspace_error(
             "WORKSPACE_HAS_STAGED_INTENTS",
@@ -2277,7 +2280,7 @@ pub fn revert_staged_intent(
         cancellation,
         progress,
     )?;
-    let mut staging = read_staging_state(&root)?;
+    let mut staging = read_validated_staging_state(&root, &metadata.binding)?;
     let index = staging
         .intents
         .iter()
@@ -2324,14 +2327,11 @@ pub fn revert_staged_intent(
 pub fn list_staged_intents(root: &Path) -> Result<Vec<IntentReport>, CliError> {
     let root = validated_root(root)?;
     let metadata = read_ready_metadata(&root)?;
-    let staging = read_staging_state(&root)?;
+    let staging = read_validated_staging_state(&root, &metadata.binding)?;
     staging
         .intents
         .iter()
-        .map(|intent| {
-            validate_intent(intent, &metadata.binding)?;
-            Ok(intent_report(intent))
-        })
+        .map(|intent| Ok(intent_report(intent)))
         .collect()
 }
 
@@ -2360,7 +2360,7 @@ fn prepare_staging(
     let root = validated_root(root)?;
     let lock = MutationLock::acquire(&root)?;
     let metadata = read_ready_metadata(&root)?;
-    let staging = read_staging_state(&root)?;
+    let staging = read_validated_staging_state(&root, &metadata.binding)?;
     if staging
         .intents
         .iter()
@@ -2393,6 +2393,7 @@ fn prepare_staging(
 struct ValidatedRepositoryPath {
     canonical: String,
     repository_key: String,
+    platform_key: String,
 }
 
 fn validated_repository_path(
@@ -2412,6 +2413,7 @@ fn validated_repository_path(
     Ok(ValidatedRepositoryPath {
         canonical: keys.path().canonical().to_owned(),
         repository_key: keys.repository_key().as_str().to_owned(),
+        platform_key: keys.platform_key().to_owned(),
     })
 }
 
@@ -2424,7 +2426,7 @@ fn apply_prepared_intent(
 ) -> Result<IntentReport, CliError> {
     let metadata = read_ready_metadata(root)?;
     validate_intent(&intent, &metadata.binding)?;
-    let mut staging = read_staging_state(root)?;
+    let mut staging = read_validated_staging_state(root, &metadata.binding)?;
     if staging.intents.len() >= MAX_STAGED_INTENTS {
         return Err(workspace_error(
             "STAGING_LIMIT_EXCEEDED",
@@ -2432,7 +2434,7 @@ fn apply_prepared_intent(
             "Publish or revert existing intents before staging more paths.",
         ));
     }
-    reject_staging_collision(&staging, &intent)?;
+    reject_staging_collision(&staging, &intent, &metadata.binding)?;
     staging.intents.push(intent);
     staging.generation = checked_generation(staging.generation)?;
     write_staging_state(root, &staging)?;
@@ -2499,7 +2501,7 @@ fn reverse_intent(root: &Path, intent: &StagedIntent) -> Result<(), CliError> {
 
 fn recover_staging(root: &Path) -> Result<(), CliError> {
     let metadata = read_ready_metadata(root)?;
-    let mut staging = read_staging_state(root)?;
+    let mut staging = read_validated_staging_state(root, &metadata.binding)?;
     let mut changed = false;
     let mut remove = Vec::new();
     for (index, intent) in staging.intents.iter_mut().enumerate() {
@@ -2608,6 +2610,15 @@ fn read_staging_state(root: &Path) -> Result<StagingState, CliError> {
     Ok(state)
 }
 
+fn read_validated_staging_state(
+    root: &Path,
+    binding: &VerifiedBinding,
+) -> Result<StagingState, CliError> {
+    let state = read_staging_state(root)?;
+    validate_staging_state(&state, binding)?;
+    Ok(state)
+}
+
 fn write_staging_state(root: &Path, state: &StagingState) -> Result<(), CliError> {
     if state.intents.len() > MAX_STAGED_INTENTS {
         return Err(metadata_invalid());
@@ -2615,7 +2626,10 @@ fn write_staging_state(root: &Path, state: &StagingState) -> Result<(), CliError
     super::write_json_atomic(&checked_control(root)?.join("staging-v1.json"), state)
 }
 
-fn validate_intent(intent: &StagedIntent, binding: &VerifiedBinding) -> Result<(), CliError> {
+fn validate_intent(
+    intent: &StagedIntent,
+    binding: &VerifiedBinding,
+) -> Result<[Option<ValidatedRepositoryPath>; 2], CliError> {
     if !valid_intent_id(&intent.intent_id)
         || FileId::from_str(&intent.file_id).is_err()
         || intent.created_at_unix_ms == 0
@@ -2626,15 +2640,16 @@ fn validate_intent(intent: &StagedIntent, binding: &VerifiedBinding) -> Result<(
     {
         return Err(metadata_invalid());
     }
-    for path in [
+    let source = validated_stored_intent_path(
         intent.source_path.as_deref(),
+        intent.source_repository_key.as_deref(),
+        binding,
+    )?;
+    let destination = validated_stored_intent_path(
         intent.destination_path.as_deref(),
-    ]
-    .into_iter()
-    .flatten()
-    {
-        let _ = validated_repository_path(binding, path)?;
-    }
+        intent.destination_repository_key.as_deref(),
+        binding,
+    )?;
     match intent.kind {
         IntentKind::Add
             if intent.source_path.is_none()
@@ -2670,30 +2685,83 @@ fn validate_intent(intent: &StagedIntent, binding: &VerifiedBinding) -> Result<(
                 && intent.allocation_expires_at_unix_ms.is_none() => {}
         _ => return Err(metadata_invalid()),
     }
+    Ok([source, destination])
+}
+
+fn validated_stored_intent_path(
+    path: Option<&str>,
+    persisted_repository_key: Option<&str>,
+    binding: &VerifiedBinding,
+) -> Result<Option<ValidatedRepositoryPath>, CliError> {
+    match (path, persisted_repository_key) {
+        (None, None) => Ok(None),
+        (Some(path), Some(persisted_repository_key)) => {
+            let validated =
+                validated_repository_path(binding, path).map_err(|_| metadata_invalid())?;
+            if validated.repository_key != persisted_repository_key {
+                return Err(metadata_invalid());
+            }
+            Ok(Some(validated))
+        }
+        _ => Err(metadata_invalid()),
+    }
+}
+
+fn validate_staging_state(state: &StagingState, binding: &VerifiedBinding) -> Result<(), CliError> {
+    let mut intent_ids = BTreeSet::new();
+    let mut repository_keys = BTreeSet::new();
+    let mut platform_keys = BTreeSet::new();
+    for intent in &state.intents {
+        if !intent_ids.insert(intent.intent_id.as_str()) {
+            return Err(metadata_invalid());
+        }
+        for path in validate_intent(intent, binding)?.into_iter().flatten() {
+            if !repository_keys.insert(path.repository_key)
+                || !platform_keys.insert(path.platform_key)
+            {
+                return Err(metadata_invalid());
+            }
+        }
+    }
     Ok(())
 }
 
 fn reject_staging_collision(
     state: &StagingState,
     candidate: &StagedIntent,
+    binding: &VerifiedBinding,
 ) -> Result<(), CliError> {
-    let keys: BTreeSet<_> = candidate
-        .source_repository_key
+    validate_staging_state(state, binding)?;
+    let mut candidate_repository_keys = BTreeSet::new();
+    let mut candidate_platform_keys = BTreeSet::new();
+    let collision = || {
+        workspace_error(
+            "STAGED_PATH_CONFLICT",
+            "A staged intent already owns the same intent identifier or repository/platform path identity.",
+            "Revert the existing intent before staging a conflicting path.",
+        )
+    };
+    if state
+        .intents
         .iter()
-        .chain(candidate.destination_repository_key.iter())
-        .collect();
-    for intent in &state.intents {
-        if intent
-            .source_repository_key
-            .iter()
-            .chain(intent.destination_repository_key.iter())
-            .any(|key| keys.contains(key))
+        .any(|intent| intent.intent_id == candidate.intent_id)
+    {
+        return Err(collision());
+    }
+    for path in validate_intent(candidate, binding)?.into_iter().flatten() {
+        if !candidate_repository_keys.insert(path.repository_key)
+            || !candidate_platform_keys.insert(path.platform_key)
         {
-            return Err(workspace_error(
-                "STAGED_PATH_CONFLICT",
-                "A staged intent already owns the same repository path identity.",
-                "Revert the existing intent before staging a conflicting path.",
-            ));
+            return Err(collision());
+        }
+    }
+    for intent in &state.intents {
+        for path in validate_intent(intent, binding)?.into_iter().flatten() {
+            if candidate_repository_keys.contains(&path.repository_key)
+                || candidate_platform_keys.contains(&path.platform_key)
+            {
+                return Err(collision());
+            }
         }
     }
     Ok(())

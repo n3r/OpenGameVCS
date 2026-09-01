@@ -53,7 +53,14 @@ The private workspace-index candidate adds:
   continuous, resumable, open, and not reconciliation-required; degraded is
   non-continuous, closed, and reconciliation-required;
 - deterministic status classification, repository/local ignore precedence,
-  fully validated Applied staging candidates, and owner-keyed HMAC v2 paging
+  structurally validated Applied staging candidates whose persisted path keys
+  are re-derived and whose intent IDs and repository/platform path identities
+  are checked for load-time and candidate-admission uniqueness, whose unordered
+  watcher identity-reset or incompatible incoming/outgoing-lineage
+  intersections fail closed without a FileID/prior, and whose locally
+  immutable source FileID and current
+  source absence are checked before a Move/Delete identity is lent; and
+  owner-keyed HMAC v2 paging
   cursors retaining the exact watcher payload/cursor as authenticated
   predecessor audit bindings and binding the watcher authority plus event
   transcript, generation, staging generation/digest, repository settings, path
@@ -87,9 +94,10 @@ they remain authenticated predecessor audit bindings. Cursor-only
 idle advances are rebound on the next returned page and do not force an
 unbounded restart. The active generation remains
 byte-compatible with the `0.1.0-rc.1` generation format; the additive rc.2
-retention controls and rc.3 reconciliation/cursor semantics are private local
-metadata. The stable `cursor-hmac-key-v1.bin` name versions key storage; rc.3
-uses `status-cursor/v2` plus a v2 domain and rejects v1 cursors. Mixed old/new processes are unsupported during
+retention controls, rc.3 reconciliation/cursor semantics, and rc.4 bounded
+state-matrix/staging validation are private local metadata. The stable
+`cursor-hmac-key-v1.bin` name versions key storage; rc.4 retains
+`status-cursor/v2` plus its v2 domain and rejects v1 cursors. Mixed old/new processes are unsupported during
 compaction: restart cooperating clients before enabling it, and rebuild the
 private index before downgrading. Owner-HMACs and kernel locks fail closed for
 cross-workspace/repository records, but they do not solve the documented

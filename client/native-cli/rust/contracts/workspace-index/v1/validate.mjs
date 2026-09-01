@@ -7,11 +7,13 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)));
 const RUST = resolve(ROOT, '../../../src/production/workspace_index.rs');
+const PRODUCTION_RUST = resolve(ROOT, '../../../src/production.rs');
 const RETENTION_RUST = resolve(ROOT, '../../../src/production/workspace_index/retention.rs');
 const contract = JSON.parse(await readFile(resolve(ROOT, 'contract.json'), 'utf8'));
 const vector = JSON.parse(await readFile(resolve(ROOT, 'vectors/status-cursor-hmac.json'), 'utf8'));
 const retentionVector = JSON.parse(await readFile(resolve(ROOT, 'vectors/retention-hmac.json'), 'utf8'));
 const source = await readFile(RUST, 'utf8');
+const productionSource = await readFile(PRODUCTION_RUST, 'utf8');
 const retentionSource = await readFile(RETENTION_RUST, 'utf8');
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest();
 
@@ -165,6 +167,70 @@ assert(source.includes('fn idle_final_cursor_advance_is_bound_to_returned_page()
 assert(source.includes('assert_eq!(authority.fences, 4)'), 'idle cursor pagination progress regression missing');
 assert(source.includes('fn page_cursor_rejects_watcher_authority_change_with_unchanged_transcript()'), 'watcher authority cursor regression missing');
 assert(source.includes('fn page_cursor_rejects_earlier_staging_snapshot_between_pages()'), 'staging cursor regression missing');
+assert(contract.watcher.samePathCoalescing === 'creation-and-rename-destination-history-survives-later-modify-delete-post-delete-create-resets-rename-lineage-conflict-is-sticky', 'same-path coalescing contract drift');
+assert(contract.watcher.renameLineage === 'later-modify-preserves-destination-prior-path-and-source-baseline-file-id-later-delete-preserves-source-deletion-post-delete-create-clears-prior-path-and-source-file-id', 'rename lineage contract drift');
+assert(contract.watcher.renameOntoBaselineDestination === 'conflicted-without-file-id-and-reconciliation-required-for-regular-equal-content-or-absent-destination', 'baseline-destination rename contract drift');
+assert(contract.watcher.transientCollapse === 'only-finally-absent-unstaged-untracked-created-or-rename-destination-then-deleted', 'transient collapse contract drift');
+const mergeEventBody = bodyAfter('fn merge_event_candidate(');
+assert(mergeEventBody.includes('WorkspaceWatchEventKind::Created | WorkspaceWatchEventKind::Renamed'), 'rename destination must retain creation history');
+assert(mergeEventBody.includes('candidate.event_kind != Some(WorkspaceWatchEventKind::Conflict)'), 'conflict must remain sticky during same-path coalescing');
+assert(mergeEventBody.includes('event.kind == WorkspaceWatchEventKind::Created && candidate.saw_deleted'), 'post-delete create must establish a new identity');
+assert(mergeEventBody.includes('candidate.prior_path = None'), 'post-delete create must clear stale rename lineage');
+const classifyCandidateBody = bodyAfter('fn classify_status_candidate(');
+assert(classifyCandidateBody.includes('candidate.prior_path.is_some()'), 'classification must retain rename lineage');
+assert(classifyCandidateBody.includes('map(|prior| lookup.find(prior, binding))'), 'rename lineage must look up the immutable source FileID');
+assert(classifyCandidateBody.includes('&& !has_staged_intent'), 'staged intent must not qualify for transient collapse');
+assert(classifyCandidateBody.includes('if baseline.is_some()'), 'baseline-destination rename must fail closed');
+assert(classifyCandidateBody.includes('candidate.prior_path.is_some() || candidate.rename_identity_reset'), 'watcher-only baseline-destination rename and identity-reset intersections must fail closed');
+assert(classifyCandidateBody.includes('rename-destination-baseline-identity-ambiguous'), 'baseline-destination rename reason missing');
+assert(source.includes('fn same_path_watcher_transition_matrix_preserves_net_state_and_identity()'), 'same-path transition matrix regression missing');
+assert(source.includes('label: "rename-delete-create"'), 'post-delete create identity-reset regression missing');
+assert(source.includes('fn rename_onto_baseline_destination_fails_closed_without_guessing_identity()'), 'baseline-destination rename regression missing');
+assert(source.includes('fn staged_and_watcher_overlap_matrix_never_collapses_applied_intent()'), 'staged/watcher overlap matrix regression missing');
+assert(source.includes('MovedThenDeletedCreated'), 'staged move identity-reset regression missing');
+assert(source.includes('candidate.rename_identity_reset |= candidate.prior_path.is_some()'), 'watcher rename reset must remain distinguishable from an ordinary baseline replacement');
+assert(source.includes('destination_candidate.rename_identity_reset = true'), 'staged move reset must remain distinguishable from an ordinary baseline replacement');
+assert(source.includes('fn staged_move_reset_has_no_cross_journal_order_and_is_always_ambiguous()'), 'cross-journal causal-order regression missing');
+assert(source.includes('fn staged_move_reset_is_ambiguous_before_or_after_stage_with_or_without_baseline_destination()'), 'staged move reset ordering/baseline matrix missing');
+assert(source.includes('fn staged_add_move_and_delete_identity_reset_intersections_fail_closed()'), 'all staged identity-reset roles regression missing');
+assert(source.includes('fn incompatible_staged_and_watcher_lineage_fails_closed_for_every_intent_kind()'), 'staged/watcher lineage matrix missing');
+assert(source.includes('fn outgoing_watcher_rename_from_every_staged_role_fails_closed()'), 'outgoing staged/watcher lineage matrix missing');
+assert(source.includes('fn applied_move_or_delete_with_reoccupied_source_never_lends_staged_identity()'), 'staged source reoccupation regression missing');
+assert(source.includes('fn locally_provable_staged_file_id_and_baseline_identity_conflicts_reconcile()'), 'staged immutable-source identity regression missing');
+for (const needle of [
+  'staged-watcher-identity-reset-order-ambiguous',
+  'staged-watcher-lineage-incompatible',
+  'staged-source-file-id-mismatch',
+  'staged-source-reoccupation-identity-ambiguous',
+  'staged-add-baseline-identity-incompatible',
+]) assert(classifyCandidateBody.includes(needle) || source.includes(needle), `staged fail-closed reason missing: ${needle}`);
+assert(source.includes('fn overlapping_applied_intents_fail_before_staging_or_filesystem_mutation()'), 'staged collision matrix regression missing');
+assert(source.includes('fn duplicate_candidate_intent_id_is_rejected_before_journal_or_filesystem_mutation()'), 'candidate intent-ID admission regression missing');
+assert(source.includes('fn persisted_staging_path_identities_are_rederived_and_unique_before_mutation()'), 'persisted staging identity regression missing');
+assert(contract.stagingStatus.admittedState === 'structurally-valid-applied-intents-with-rederived-path-identities-only', 'staged admitted-state contract drift');
+assert(contract.stagingStatus.watcherOverlap === 'compatible-applied-add-move-delete-overlap-remains-visible-while-unordered-identity-reset-or-incompatible-lineage-fails-closed', 'staged watcher-overlap contract drift');
+assert(contract.stagingStatus.watcherOrdering === 'staging-records-bind-no-watcher-cursor-or-sequence-so-delete-create-reset-intersections-are-conflicted-without-file-id-or-prior-path', 'staged/watcher ordering contract drift');
+assert(contract.stagingStatus.lineageCompatibility === 'only-the-exact-same-staged-move-source-destination-watcher-edge-is-compatible-other-incoming-or-outgoing-staged-path-lineage-conflicts-the-complete-intent-and-watcher-destination', 'staged lineage-compatibility contract drift');
+assert(contract.stagingStatus.sourceIdentity === 'immutable-source-baseline-file-id-must-match-staged-move-delete-file-id-and-applied-source-must-be-absent-before-staged-identity-is-lent', 'staged source-identity contract drift');
+assert(contract.stagingStatus.addBaselineIdentity === 'applied-add-on-an-immutable-baseline-path-is-conflicted-without-file-id', 'staged Add baseline contract drift');
+assert(contract.stagingStatus.futureOrderingNonclaim === 'definitive-post-stage-reset-semantics-require-durable-staging-to-watcher-order-binding', 'staged ordering nonclaim drift');
+assert(contract.stagingStatus.persistedPathIdentity === 'rederive-and-match-repository-key-and-reject-duplicate-intent-id-or-repository-or-platform-path-identity-on-every-load', 'persisted staging identity contract drift');
+assert(contract.stagingStatus.overlappingIntentPaths === 'reject-candidate-intent-id-or-repository-or-platform-path-identity-overlap-before-staging-publication-or-filesystem-mutation', 'staged admission-overlap contract drift');
+for (const needle of [
+  'fn read_validated_staging_state(',
+  'validate_staging_state(&state, binding)?',
+  'validated.repository_key != persisted_repository_key',
+  'intent.intent_id == candidate.intent_id',
+  'candidate_platform_keys.contains(&path.platform_key)',
+]) assert(productionSource.includes(needle), `persisted staging validation omits: ${needle}`);
+for (const needle of [
+  'fn reconcile_staged_watcher_rename_edges(',
+  'for record in records',
+  'role == StagedPathRole::MoveSource',
+  'intent.destination_path.as_deref() == Some(event.repository_path.as_str())',
+  'conflict_paths.extend(intent.source_path.as_deref())',
+  'conflict_paths.extend(intent.destination_path.as_deref())',
+]) assert(source.includes(needle), `outgoing staged/watcher lineage reconciliation omits: ${needle}`);
 
 const prepareBody = bodyAfter('fn prepare_reconciliation(');
 assert(prepareBody.indexOf('append_untracked_findings(') < prepareBody.indexOf('self.reconciliation_prepared = true'), 'scan must complete before watcher drain admission');

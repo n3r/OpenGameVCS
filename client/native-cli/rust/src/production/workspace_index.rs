@@ -44,12 +44,12 @@ pub const WORKSPACE_INDEX_SCHEMA: &str = "ogvcs.workspace-index/active/v1";
 pub const WORKSPACE_INDEX_REPORT_SCHEMA: &str = "ogvcs.workspace-index/report/v1";
 pub const WORKSPACE_STATUS_SCHEMA: &str = "ogvcs.workspace-index/status-page/v1";
 pub const BASELINE_RECEIPT_SCHEMA: &str = "ogvcs.workspace-index/baseline-receipt/v1";
-pub const WORKSPACE_INDEX_CONTRACT_VERSION: &str = "0.1.0-rc.3";
+pub const WORKSPACE_INDEX_CONTRACT_VERSION: &str = "0.1.0-rc.4";
 const WORKSPACE_INDEX_GENERATION_FORMAT_VERSION: &str = "0.1.0-rc.1";
 pub const WORKSPACE_INDEX_CONTRACT_SHA256: &str =
-    "8b2f8281a34b1805760eb4c674bb9a5068b791a8486316beb8e9b237eed213f8";
+    "eb85176f27598b2d0d0d78abba15c29100256423e44b2f1a65e70f2492ba8f06";
 pub const WORKSPACE_INDEX_CONTRACT_ARTIFACT_SET_SHA256: &str =
-    "fcbb718537a382ecedc6a7e39ec409669d1d10e54aeb70b4b209e41cc83fb3f2";
+    "5c679b27f3813280f6b7c3c66046b733df624bda5cbddc50a821d9fc7e334049";
 pub const MAX_BASELINE_ENTRIES: u64 = 10_000_000;
 pub const MAX_BASELINE_CHUNK_ITEMS: usize = 1_000;
 pub const MAX_BASELINE_CHUNK_BYTES: usize = 1024 * 1024;
@@ -2757,6 +2757,14 @@ fn persist_degraded_state(
     sync_directory(index)
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum StagedPathRole {
+    AddDestination,
+    MoveSource,
+    MoveDestination,
+    DeleteSource,
+}
+
 #[derive(Clone)]
 struct StatusCandidate {
     path: String,
@@ -2765,6 +2773,11 @@ struct StatusCandidate {
     event_kind: Option<WorkspaceWatchEventKind>,
     saw_created: bool,
     saw_deleted: bool,
+    identity_reset_after_delete: bool,
+    rename_identity_reset: bool,
+    staged_role: Option<StagedPathRole>,
+    staged_source_path: Option<String>,
+    staged_conflict_reason: Option<&'static str>,
     staged_file_id: Option<String>,
 }
 
@@ -2822,8 +2835,8 @@ fn read_validated_staging_snapshot(
     binding: &VerifiedBinding,
 ) -> Result<ValidatedStagingSnapshot, CliError> {
     let state = super::read_staging_state(root)?;
+    super::validate_staging_state(&state, binding)?;
     for intent in &state.intents {
-        super::validate_intent(intent, binding)?;
         if intent.state != super::IntentState::Applied {
             return Err(index_recovery_required());
         }
@@ -2992,13 +3005,19 @@ fn workspace_status_page_fenced(
     let mut candidates: BTreeMap<(String, String), StatusCandidate> = BTreeMap::new();
     read_findings(&index, &seal.payload, &metadata.binding, &mut candidates)?;
     let records = validate_watch_records(&index, &seal.payload, &watcher.payload)?;
-    for record in records {
+    for record in &records {
         merge_event_candidate(&metadata.binding, &mut candidates, &record.core.event)?;
     }
     if candidates.len() > MAX_STATUS_CANDIDATES {
         return Err(index_invalid());
     }
     merge_staged_candidates(&metadata.binding, &mut candidates, &staging.state)?;
+    reconcile_staged_watcher_rename_edges(
+        &metadata.binding,
+        &mut candidates,
+        &staging.state,
+        &records,
+    )?;
     if candidates.len() > MAX_STATUS_CANDIDATES {
         return Err(index_invalid());
     }
@@ -3010,9 +3029,9 @@ fn workspace_status_page_fenced(
     for (sort_key, candidate) in candidates {
         let classified =
             classify_status_candidate(&root, &metadata.binding, &ignores, &mut lookup, candidate)?;
-        if classified.requires_reconciliation {
+        if let Some(reconciliation_reason) = classified.reconciliation_reason {
             complete = false;
-            reason = "deleted-path-descendants-unproven".to_owned();
+            reason = reconciliation_reason.to_owned();
         }
         let Some(item) = classified.item else {
             continue;
@@ -3229,6 +3248,11 @@ fn read_findings(
                 event_kind: None,
                 saw_created: false,
                 saw_deleted: false,
+                identity_reset_after_delete: false,
+                rename_identity_reset: false,
+                staged_role: None,
+                staged_source_path: None,
+                staged_conflict_reason: None,
                 staged_file_id: None,
             },
             MAX_STATUS_CANDIDATES,
@@ -3258,10 +3282,25 @@ fn merge_event_candidate(
             event_kind: None,
             saw_created: false,
             saw_deleted: false,
+            identity_reset_after_delete: false,
+            rename_identity_reset: false,
+            staged_role: None,
+            staged_source_path: None,
+            staged_conflict_reason: None,
             staged_file_id: None,
         },
         MAX_STATUS_CANDIDATES,
     )?;
+    // A create after an observed deletion establishes a new identity at this
+    // path. Do not let an earlier rename lend it the source path or FileID.
+    if event.kind == WorkspaceWatchEventKind::Created && candidate.saw_deleted {
+        candidate.rename_identity_reset |= candidate.prior_path.is_some();
+        candidate.prior_path = None;
+        candidate.identity_reset_after_delete = true;
+    } else if event.kind == WorkspaceWatchEventKind::Renamed {
+        candidate.identity_reset_after_delete = false;
+        candidate.rename_identity_reset = false;
+    }
     candidate.prior_path = event
         .prior_repository_path
         .clone()
@@ -3274,8 +3313,13 @@ fn merge_event_candidate(
         WorkspaceWatchEventKind::Modified => WorkspaceStatus::Modified,
         WorkspaceWatchEventKind::Deleted => WorkspaceStatus::Deleted,
     };
-    candidate.event_kind = Some(event.kind);
-    candidate.saw_created |= event.kind == WorkspaceWatchEventKind::Created;
+    if candidate.event_kind != Some(WorkspaceWatchEventKind::Conflict) {
+        candidate.event_kind = Some(event.kind);
+    }
+    candidate.saw_created |= matches!(
+        event.kind,
+        WorkspaceWatchEventKind::Created | WorkspaceWatchEventKind::Renamed
+    );
     candidate.saw_deleted |= event.kind == WorkspaceWatchEventKind::Deleted;
     if let Some(prior) = &event.prior_repository_path {
         let prior_key = status_sort_key(prior, binding)?;
@@ -3289,6 +3333,11 @@ fn merge_event_candidate(
                 event_kind: Some(WorkspaceWatchEventKind::Deleted),
                 saw_created: false,
                 saw_deleted: true,
+                identity_reset_after_delete: false,
+                rename_identity_reset: false,
+                staged_role: None,
+                staged_source_path: None,
+                staged_conflict_reason: None,
                 staged_file_id: None,
             },
             MAX_STATUS_CANDIDATES,
@@ -3303,20 +3352,50 @@ fn merge_staged_candidates(
     staging: &super::StagingState,
 ) -> Result<(), CliError> {
     for intent in &staging.intents {
-        let (event, bound_paths): (WorkspaceWatchEvent, Vec<&str>) = match intent.kind {
+        match intent.kind {
             super::IntentKind::Add => {
                 let destination = intent
                     .destination_path
                     .as_deref()
                     .ok_or_else(index_invalid)?;
-                (
-                    WorkspaceWatchEvent {
-                        kind: WorkspaceWatchEventKind::Created,
-                        repository_path: destination.to_owned(),
-                        prior_repository_path: None,
+                let key = status_sort_key(destination, binding)?;
+                let candidate = bounded_status_candidate(
+                    candidates,
+                    key,
+                    StatusCandidate {
+                        path: destination.to_owned(),
+                        prior_path: None,
+                        hint: WorkspaceStatus::Untracked,
+                        event_kind: Some(WorkspaceWatchEventKind::Created),
+                        saw_created: true,
+                        saw_deleted: false,
+                        identity_reset_after_delete: false,
+                        rename_identity_reset: false,
+                        staged_role: None,
+                        staged_source_path: None,
+                        staged_conflict_reason: None,
+                        staged_file_id: None,
                     },
-                    vec![destination],
-                )
+                    MAX_STATUS_CANDIDATES,
+                )?;
+                candidate.saw_created = true;
+                candidate.staged_role = Some(StagedPathRole::AddDestination);
+                candidate.staged_file_id = Some(intent.file_id.clone());
+                if candidate.identity_reset_after_delete {
+                    mark_staged_candidate_conflict(
+                        candidate,
+                        "staged-watcher-identity-reset-order-ambiguous",
+                    );
+                } else if candidate.prior_path.is_some() {
+                    mark_staged_candidate_conflict(
+                        candidate,
+                        "staged-watcher-lineage-incompatible",
+                    );
+                }
+                if candidate.event_kind.is_none() {
+                    candidate.event_kind = Some(WorkspaceWatchEventKind::Created);
+                    candidate.hint = WorkspaceStatus::Untracked;
+                }
             }
             super::IntentKind::Move => {
                 let source = intent.source_path.as_deref().ok_or_else(index_invalid)?;
@@ -3324,40 +3403,224 @@ fn merge_staged_candidates(
                     .destination_path
                     .as_deref()
                     .ok_or_else(index_invalid)?;
-                (
-                    WorkspaceWatchEvent {
-                        kind: WorkspaceWatchEventKind::Renamed,
-                        repository_path: destination.to_owned(),
-                        prior_repository_path: Some(source.to_owned()),
+                let source_conflict = merge_staged_deletion_candidate(
+                    binding,
+                    candidates,
+                    source,
+                    &intent.file_id,
+                    StagedPathRole::MoveSource,
+                )?;
+                let destination_key = status_sort_key(destination, binding)?;
+                let destination_existed = candidates.contains_key(&destination_key);
+                let destination_candidate = bounded_status_candidate(
+                    candidates,
+                    destination_key,
+                    StatusCandidate {
+                        path: destination.to_owned(),
+                        prior_path: Some(source.to_owned()),
+                        hint: WorkspaceStatus::MovedRenamedHint,
+                        event_kind: Some(WorkspaceWatchEventKind::Renamed),
+                        saw_created: true,
+                        saw_deleted: false,
+                        identity_reset_after_delete: false,
+                        rename_identity_reset: false,
+                        staged_role: None,
+                        staged_source_path: None,
+                        staged_conflict_reason: None,
+                        staged_file_id: None,
                     },
-                    vec![source, destination],
-                )
+                    MAX_STATUS_CANDIDATES,
+                )?;
+                destination_candidate.saw_created = true;
+                destination_candidate.staged_role = Some(StagedPathRole::MoveDestination);
+                destination_candidate.staged_source_path = Some(source.to_owned());
+                destination_candidate.staged_file_id = Some(intent.file_id.clone());
+                if let Some(reason) = source_conflict {
+                    mark_staged_candidate_conflict(destination_candidate, reason);
+                } else if destination_candidate.identity_reset_after_delete {
+                    // The staging record carries no watcher cursor/sequence, so
+                    // the durable transcript cannot prove whether the reset or
+                    // the Applied Move established the current identity.
+                    destination_candidate.rename_identity_reset = true;
+                    mark_staged_candidate_conflict(
+                        destination_candidate,
+                        "staged-watcher-identity-reset-order-ambiguous",
+                    );
+                } else if destination_existed
+                    && destination_candidate
+                        .prior_path
+                        .as_deref()
+                        .is_some_and(|prior| prior != source)
+                {
+                    mark_staged_candidate_conflict(
+                        destination_candidate,
+                        "staged-watcher-lineage-incompatible",
+                    );
+                } else {
+                    destination_candidate.prior_path = Some(source.to_owned());
+                    if destination_candidate.event_kind.is_none() {
+                        destination_candidate.event_kind = Some(WorkspaceWatchEventKind::Renamed);
+                        destination_candidate.hint = WorkspaceStatus::MovedRenamedHint;
+                    }
+                }
             }
             super::IntentKind::Delete => {
                 let source = intent.source_path.as_deref().ok_or_else(index_invalid)?;
-                (
-                    WorkspaceWatchEvent {
-                        kind: WorkspaceWatchEventKind::Deleted,
-                        repository_path: source.to_owned(),
-                        prior_repository_path: None,
-                    },
-                    vec![source],
-                )
+                merge_staged_deletion_candidate(
+                    binding,
+                    candidates,
+                    source,
+                    &intent.file_id,
+                    StagedPathRole::DeleteSource,
+                )?;
             }
-        };
-        merge_event_candidate(binding, candidates, &event)?;
-        for path in bound_paths {
-            let key = status_sort_key(path, binding)?;
-            let candidate = candidates.get_mut(&key).ok_or_else(index_invalid)?;
-            candidate.staged_file_id = Some(intent.file_id.clone());
         }
     }
     Ok(())
 }
 
+fn reconcile_staged_watcher_rename_edges(
+    binding: &VerifiedBinding,
+    candidates: &mut BTreeMap<(String, String), StatusCandidate>,
+    staging: &super::StagingState,
+    records: &[WatchRecord],
+) -> Result<(), CliError> {
+    let mut staged_paths = BTreeMap::new();
+    for (intent_index, intent) in staging.intents.iter().enumerate() {
+        let paths = match intent.kind {
+            super::IntentKind::Add => [
+                None,
+                Some((
+                    intent
+                        .destination_path
+                        .as_deref()
+                        .ok_or_else(index_invalid)?,
+                    StagedPathRole::AddDestination,
+                )),
+            ],
+            super::IntentKind::Move => [
+                Some((
+                    intent.source_path.as_deref().ok_or_else(index_invalid)?,
+                    StagedPathRole::MoveSource,
+                )),
+                Some((
+                    intent
+                        .destination_path
+                        .as_deref()
+                        .ok_or_else(index_invalid)?,
+                    StagedPathRole::MoveDestination,
+                )),
+            ],
+            super::IntentKind::Delete => [
+                Some((
+                    intent.source_path.as_deref().ok_or_else(index_invalid)?,
+                    StagedPathRole::DeleteSource,
+                )),
+                None,
+            ],
+        };
+        for (path, role) in paths.into_iter().flatten() {
+            if staged_paths.insert(path, (intent_index, role)).is_some() {
+                return Err(index_invalid());
+            }
+        }
+    }
+
+    // Staging carries no watcher sequence. Retain every exact watcher rename
+    // edge until this comparison instead of inferring order from the final
+    // filesystem. The sole compatible edge is the watcher representation of
+    // the same staged Move source and destination. Every other rename out of a
+    // staged role has incompatible lineage, including an observed multi-hop or
+    // source-reoccupation chain, so suppress identity on the complete staged
+    // intent and the incompatible watcher destination.
+    let mut conflict_paths = BTreeSet::new();
+    for record in records {
+        let event = &record.core.event;
+        if event.kind != WorkspaceWatchEventKind::Renamed {
+            continue;
+        }
+        let source = event
+            .prior_repository_path
+            .as_deref()
+            .ok_or_else(index_invalid)?;
+        let Some(&(intent_index, role)) = staged_paths.get(source) else {
+            continue;
+        };
+        let intent = staging
+            .intents
+            .get(intent_index)
+            .ok_or_else(index_invalid)?;
+        let compatible = role == StagedPathRole::MoveSource
+            && intent.kind == super::IntentKind::Move
+            && intent.destination_path.as_deref() == Some(event.repository_path.as_str());
+        if compatible {
+            continue;
+        }
+        conflict_paths.insert(event.repository_path.as_str());
+        conflict_paths.extend(intent.source_path.as_deref());
+        conflict_paths.extend(intent.destination_path.as_deref());
+    }
+    for path in conflict_paths {
+        let key = status_sort_key(path, binding)?;
+        let candidate = candidates.get_mut(&key).ok_or_else(index_invalid)?;
+        mark_staged_candidate_conflict(candidate, "staged-watcher-lineage-incompatible");
+    }
+    Ok(())
+}
+
+fn merge_staged_deletion_candidate(
+    binding: &VerifiedBinding,
+    candidates: &mut BTreeMap<(String, String), StatusCandidate>,
+    source: &str,
+    file_id: &str,
+    role: StagedPathRole,
+) -> Result<Option<&'static str>, CliError> {
+    let key = status_sort_key(source, binding)?;
+    let candidate = bounded_status_candidate(
+        candidates,
+        key,
+        StatusCandidate {
+            path: source.to_owned(),
+            prior_path: None,
+            hint: WorkspaceStatus::Deleted,
+            event_kind: Some(WorkspaceWatchEventKind::Deleted),
+            saw_created: false,
+            saw_deleted: true,
+            identity_reset_after_delete: false,
+            rename_identity_reset: false,
+            staged_role: None,
+            staged_source_path: None,
+            staged_conflict_reason: None,
+            staged_file_id: None,
+        },
+        MAX_STATUS_CANDIDATES,
+    )?;
+    candidate.saw_deleted = true;
+    candidate.staged_role = Some(role);
+    candidate.staged_source_path = Some(source.to_owned());
+    candidate.staged_file_id = Some(file_id.to_owned());
+    if candidate.identity_reset_after_delete {
+        mark_staged_candidate_conflict(candidate, "staged-watcher-identity-reset-order-ambiguous");
+    } else if candidate.prior_path.is_some() {
+        mark_staged_candidate_conflict(candidate, "staged-watcher-lineage-incompatible");
+    }
+    if candidate.event_kind.is_none() {
+        candidate.event_kind = Some(WorkspaceWatchEventKind::Deleted);
+        candidate.hint = WorkspaceStatus::Deleted;
+    }
+    Ok(candidate.staged_conflict_reason)
+}
+
+fn mark_staged_candidate_conflict(candidate: &mut StatusCandidate, reason: &'static str) {
+    if candidate.staged_conflict_reason.is_none() {
+        candidate.staged_conflict_reason = Some(reason);
+    }
+    candidate.prior_path = None;
+}
+
 struct ClassifiedStatus {
     item: Option<WorkspaceStatusItem>,
-    requires_reconciliation: bool,
+    reconciliation_reason: Option<&'static str>,
 }
 
 fn classify_status_candidate(
@@ -3368,16 +3631,102 @@ fn classify_status_candidate(
     candidate: StatusCandidate,
 ) -> Result<ClassifiedStatus, CliError> {
     let baseline = lookup.find(&candidate.path, binding)?;
-    if candidate.event_kind == Some(WorkspaceWatchEventKind::Conflict) {
+    let has_staged_intent = candidate.staged_role.is_some();
+    if let Some(reason) = candidate.staged_conflict_reason {
+        return Ok(staged_reconciliation_conflict(candidate, reason));
+    }
+    if candidate.staged_role == Some(StagedPathRole::AddDestination) && baseline.is_some() {
+        return Ok(staged_reconciliation_conflict(
+            candidate,
+            "staged-add-baseline-identity-incompatible",
+        ));
+    }
+    let staged_source_baseline_file_id = match candidate.staged_role {
+        Some(StagedPathRole::MoveSource | StagedPathRole::DeleteSource) => {
+            baseline.as_ref().map(|entry| entry.file_id.clone())
+        }
+        Some(StagedPathRole::MoveDestination) => candidate
+            .staged_source_path
+            .as_deref()
+            .map(|source| lookup.find(source, binding))
+            .transpose()?
+            .flatten()
+            .map(|entry| entry.file_id),
+        _ => None,
+    };
+    if candidate
+        .staged_file_id
+        .as_ref()
+        .zip(staged_source_baseline_file_id.as_ref())
+        .is_some_and(|(staged, baseline)| staged != baseline)
+    {
+        return Ok(staged_reconciliation_conflict(
+            candidate,
+            "staged-source-file-id-mismatch",
+        ));
+    }
+    if candidate.staged_role == Some(StagedPathRole::MoveDestination) {
+        let source = candidate
+            .staged_source_path
+            .as_deref()
+            .ok_or_else(index_invalid)?;
+        if !matches!(probe_regular_file(root, source)?, FileProbe::Absent) {
+            return Ok(staged_reconciliation_conflict(
+                candidate,
+                "staged-source-reoccupation-identity-ambiguous",
+            ));
+        }
+    }
+    let probe = probe_regular_file(root, &candidate.path)?;
+    if matches!(
+        candidate.staged_role,
+        Some(StagedPathRole::MoveSource | StagedPathRole::DeleteSource)
+    ) && !matches!(&probe, FileProbe::Absent)
+    {
+        return Ok(staged_reconciliation_conflict(
+            candidate,
+            "staged-source-reoccupation-identity-ambiguous",
+        ));
+    }
+    let prior_file_id = candidate
+        .prior_path
+        .as_deref()
+        .map(|prior| lookup.find(prior, binding))
+        .transpose()?
+        .flatten()
+        .map(|entry| entry.file_id);
+    let lineage_file_id = candidate.staged_file_id.clone().or(prior_file_id);
+    if baseline.is_some() && (candidate.prior_path.is_some() || candidate.rename_identity_reset) {
+        // The status vocabulary has one identity slot per path. A rename onto
+        // an independently baselined destination would otherwise either lend
+        // the move the destination FileID, omit an equal-content replacement,
+        // or recast an absent destination as a move. Preserve the path/prior
+        // evidence but publish no guessed identity and require reconciliation.
         return Ok(ClassifiedStatus {
             item: Some(status_item(
                 candidate,
                 WorkspaceStatus::Conflicted,
-                baseline.as_ref(),
+                None,
                 None,
                 false,
             )),
-            requires_reconciliation: false,
+            reconciliation_reason: Some("rename-destination-baseline-identity-ambiguous"),
+        });
+    }
+    if candidate.event_kind == Some(WorkspaceWatchEventKind::Conflict) {
+        let file_id = baseline
+            .as_ref()
+            .map(|entry| entry.file_id.clone())
+            .or(lineage_file_id);
+        return Ok(ClassifiedStatus {
+            item: Some(status_item(
+                candidate,
+                WorkspaceStatus::Conflicted,
+                file_id,
+                None,
+                false,
+            )),
+            reconciliation_reason: None,
         });
     }
     if let Some(entry) = baseline.as_ref() {
@@ -3390,88 +3739,96 @@ fn classify_status_candidate(
             executable: entry.executable,
             materialization: entry.materialization,
         };
-        let probe = probe_regular_file(root, &candidate.path)?;
-        let content_verified = matches!(probe, FileProbe::Regular { .. });
+        let content_verified = matches!(&probe, FileProbe::Regular { .. });
         let (_, status) = classify_baseline_observation(&baseline_entry, probe);
-        let status =
-            if candidate.event_kind == Some(WorkspaceWatchEventKind::Renamed) && status.is_some() {
-                Some(WorkspaceStatus::MovedRenamedHint)
-            } else {
-                status
-            };
         return Ok(ClassifiedStatus {
             item: status.map(|status| {
-                status_item(candidate, status, baseline.as_ref(), None, content_verified)
+                status_item(
+                    candidate,
+                    status,
+                    Some(entry.file_id.clone()),
+                    None,
+                    content_verified,
+                )
             }),
-            requires_reconciliation: false,
+            reconciliation_reason: None,
         });
     }
-    let probe = probe_regular_file(root, &candidate.path)?;
-    let content_verified = matches!(probe, FileProbe::Regular { .. });
+    let content_verified = matches!(&probe, FileProbe::Regular { .. });
     let (ignored, explanation) = ignored_by(&candidate.path, ignores);
     let status = match probe {
-        FileProbe::Absent if candidate.saw_created && candidate.saw_deleted => {
+        FileProbe::Absent
+            if candidate.saw_created && candidate.saw_deleted && !has_staged_intent =>
+        {
             return Ok(ClassifiedStatus {
                 item: None,
-                requires_reconciliation: false,
+                reconciliation_reason: None,
             });
         }
-        FileProbe::Absent if candidate.event_kind == Some(WorkspaceWatchEventKind::Deleted) => {
-            let requires_reconciliation = candidate.staged_file_id.is_none();
+        FileProbe::Absent if candidate.saw_deleted => {
             return Ok(ClassifiedStatus {
                 item: Some(status_item(
                     candidate,
                     WorkspaceStatus::Deleted,
-                    None,
+                    lineage_file_id,
                     None,
                     false,
                 )),
-                requires_reconciliation,
+                reconciliation_reason: (!has_staged_intent)
+                    .then_some("deleted-path-descendants-unproven"),
             });
         }
         FileProbe::Absent => {
             return Ok(ClassifiedStatus {
                 item: None,
-                requires_reconciliation: false,
+                reconciliation_reason: None,
             });
         }
         FileProbe::Inaccessible => WorkspaceStatus::InaccessibleError,
         FileProbe::Other => WorkspaceStatus::TypeModeChanged,
         FileProbe::Regular { .. } if ignored => WorkspaceStatus::Ignored,
-        FileProbe::Regular { .. }
-            if candidate.event_kind == Some(WorkspaceWatchEventKind::Renamed) =>
-        {
+        FileProbe::Regular { .. } if candidate.prior_path.is_some() => {
             WorkspaceStatus::MovedRenamedHint
         }
-        FileProbe::Regular { .. }
-            if candidate.event_kind == Some(WorkspaceWatchEventKind::Created) =>
-        {
-            WorkspaceStatus::Added
-        }
+        FileProbe::Regular { .. } if candidate.saw_created => WorkspaceStatus::Added,
         FileProbe::Regular { .. } => candidate.hint.max(WorkspaceStatus::Untracked),
     };
     Ok(ClassifiedStatus {
         item: Some(status_item(
             candidate,
             status,
-            None,
+            lineage_file_id,
             explanation,
             content_verified,
         )),
-        requires_reconciliation: false,
+        reconciliation_reason: None,
     })
+}
+
+fn staged_reconciliation_conflict(
+    mut candidate: StatusCandidate,
+    reason: &'static str,
+) -> ClassifiedStatus {
+    candidate.prior_path = None;
+    ClassifiedStatus {
+        item: Some(status_item(
+            candidate,
+            WorkspaceStatus::Conflicted,
+            None,
+            None,
+            false,
+        )),
+        reconciliation_reason: Some(reason),
+    }
 }
 
 fn status_item(
     candidate: StatusCandidate,
     status: WorkspaceStatus,
-    baseline: Option<&IndexEntryDisk>,
+    file_id: Option<String>,
     ignore: Option<IgnoreExplanation>,
     content_verified: bool,
 ) -> WorkspaceStatusItem {
-    let file_id = baseline
-        .map(|entry| entry.file_id.clone())
-        .or_else(|| candidate.staged_file_id.clone());
     WorkspaceStatusItem {
         repository_path: candidate.path,
         status,
@@ -4192,6 +4549,7 @@ mod tests {
         chunk_items: usize,
         entered: Option<Arc<Barrier>>,
         release: Option<Arc<Barrier>>,
+        resolved_file_id_override: Option<String>,
     }
 
     impl TestRoutes {
@@ -4203,7 +4561,13 @@ mod tests {
                 chunk_items: 17,
                 entered: None,
                 release: None,
+                resolved_file_id_override: None,
             }
+        }
+
+        fn with_resolved_file_id(mut self, file_id: &str) -> Self {
+            self.resolved_file_id_override = Some(file_id.to_owned());
+            self
         }
     }
 
@@ -4278,11 +4642,26 @@ mod tests {
         fn resolve_file_id(
             &mut self,
             _: &AuthenticationSession,
-            _: &VerifiedBinding,
-            _: &str,
+            binding: &VerifiedBinding,
+            repository_path_key: &str,
             _: &dyn Cancellation,
         ) -> Result<String, CliError> {
-            Ok("fid:00000000000000000000000000000002".to_owned())
+            if let Some(file_id) = &self.resolved_file_id_override {
+                return Ok(file_id.clone());
+            }
+            Ok(self
+                .entries
+                .iter()
+                .find(|entry| {
+                    path_collision_keys(
+                        &entry.repository_path,
+                        &binding.path_profile,
+                        &binding.case_mode,
+                    )
+                    .is_ok_and(|keys| keys.repository_key().as_str() == repository_path_key)
+                })
+                .map(|entry| entry.file_id.clone())
+                .unwrap_or_else(|| "fid:00000000000000000000000000000002".to_owned()))
         }
 
         fn stream_workspace_baseline(
@@ -4693,6 +5072,65 @@ mod tests {
         request: &WorkspaceStatusPageRequest,
     ) -> Result<WorkspaceStatusPage, CliError> {
         workspace_status_page_fenced(request, &mut TestWatcher::default())
+    }
+
+    fn test_stage_add(
+        root: &Path,
+        routes: &mut TestRoutes,
+        repository_path: &str,
+    ) -> Result<(), CliError> {
+        super::super::stage_add(
+            &super::super::StageAddRequest {
+                root: root.to_path_buf(),
+                repository_path: repository_path.to_owned(),
+                authentication: request(root).authentication,
+            },
+            &TestProvider,
+            routes,
+            &NeverCancelled,
+            &mut DiscardProgress,
+        )
+        .map(|_| ())
+    }
+
+    fn test_stage_move(
+        root: &Path,
+        routes: &mut TestRoutes,
+        source: &str,
+        destination: &str,
+    ) -> Result<(), CliError> {
+        super::super::stage_move(
+            &super::super::StageMoveRequest {
+                root: root.to_path_buf(),
+                source_repository_path: source.to_owned(),
+                destination_repository_path: destination.to_owned(),
+                authentication: request(root).authentication,
+            },
+            &TestProvider,
+            routes,
+            &NeverCancelled,
+            &mut DiscardProgress,
+        )
+        .map(|_| ())
+    }
+
+    fn test_stage_delete(
+        root: &Path,
+        routes: &mut TestRoutes,
+        repository_path: &str,
+    ) -> Result<(), CliError> {
+        super::super::stage_delete(
+            &super::super::StageDeleteRequest {
+                root: root.to_path_buf(),
+                repository_path: repository_path.to_owned(),
+                authentication: request(root).authentication,
+            },
+            &TestProvider,
+            routes,
+            &NeverCancelled,
+            &mut DiscardProgress,
+        )
+        .map(|_| ())
     }
 
     fn acquire_test_read_lease(root: &Path) -> retention::GenerationReadLease {
@@ -5267,6 +5705,11 @@ mod tests {
                 event_kind: None,
                 saw_created: false,
                 saw_deleted: false,
+                identity_reset_after_delete: false,
+                rename_identity_reset: false,
+                staged_role: None,
+                staged_source_path: None,
+                staged_conflict_reason: None,
                 staged_file_id: None,
             };
             let mut candidates = BTreeMap::new();
@@ -6166,6 +6609,1826 @@ mod tests {
         }
         let (_, _, _, _, watcher, _) = load_active(&root.0, false).unwrap();
         assert_eq!(watcher.payload.event_count, 0);
+    }
+
+    #[test]
+    fn same_path_watcher_transition_matrix_preserves_net_state_and_identity() {
+        #[derive(Clone, Copy)]
+        enum Mutation {
+            Write(&'static str, &'static [u8]),
+            Delete(&'static str),
+            Rename(&'static str, &'static str),
+        }
+
+        #[derive(Clone, Copy)]
+        struct Event {
+            kind: WorkspaceWatchEventKind,
+            path: &'static str,
+            prior_path: Option<&'static str>,
+        }
+
+        #[derive(Clone, Copy)]
+        struct Expected {
+            path: &'static str,
+            status: WorkspaceStatus,
+            prior_path: Option<&'static str>,
+            file_id: Option<&'static str>,
+            content_verified: bool,
+        }
+
+        struct Case {
+            label: &'static str,
+            baseline: Option<(&'static str, &'static [u8])>,
+            mutations: &'static [Mutation],
+            events: &'static [Event],
+            expected: &'static [Expected],
+        }
+
+        const FILE_ID: &str = "fid:00000000000000000000000000000001";
+        let cases = [
+            Case {
+                label: "create-modify",
+                baseline: None,
+                mutations: &[
+                    Mutation::Write("Loose/value.bin", b"first"),
+                    Mutation::Write("Loose/value.bin", b"second"),
+                ],
+                events: &[
+                    Event {
+                        kind: WorkspaceWatchEventKind::Created,
+                        path: "Loose/value.bin",
+                        prior_path: None,
+                    },
+                    Event {
+                        kind: WorkspaceWatchEventKind::Modified,
+                        path: "Loose/value.bin",
+                        prior_path: None,
+                    },
+                ],
+                expected: &[Expected {
+                    path: "Loose/value.bin",
+                    status: WorkspaceStatus::Added,
+                    prior_path: None,
+                    file_id: None,
+                    content_verified: true,
+                }],
+            },
+            Case {
+                label: "create-delete",
+                baseline: None,
+                mutations: &[
+                    Mutation::Write("Loose/transient.bin", b"transient"),
+                    Mutation::Delete("Loose/transient.bin"),
+                ],
+                events: &[
+                    Event {
+                        kind: WorkspaceWatchEventKind::Created,
+                        path: "Loose/transient.bin",
+                        prior_path: None,
+                    },
+                    Event {
+                        kind: WorkspaceWatchEventKind::Deleted,
+                        path: "Loose/transient.bin",
+                        prior_path: None,
+                    },
+                ],
+                expected: &[],
+            },
+            Case {
+                label: "delete-create",
+                baseline: Some(("Tracked/value.bin", b"baseline")),
+                mutations: &[
+                    Mutation::Delete("Tracked/value.bin"),
+                    Mutation::Write("Tracked/value.bin", b"replacement"),
+                ],
+                events: &[
+                    Event {
+                        kind: WorkspaceWatchEventKind::Deleted,
+                        path: "Tracked/value.bin",
+                        prior_path: None,
+                    },
+                    Event {
+                        kind: WorkspaceWatchEventKind::Created,
+                        path: "Tracked/value.bin",
+                        prior_path: None,
+                    },
+                ],
+                expected: &[Expected {
+                    path: "Tracked/value.bin",
+                    status: WorkspaceStatus::Modified,
+                    prior_path: None,
+                    file_id: Some(FILE_ID),
+                    content_verified: true,
+                }],
+            },
+            Case {
+                label: "modify-delete",
+                baseline: Some(("Tracked/value.bin", b"baseline")),
+                mutations: &[
+                    Mutation::Write("Tracked/value.bin", b"modified"),
+                    Mutation::Delete("Tracked/value.bin"),
+                ],
+                events: &[
+                    Event {
+                        kind: WorkspaceWatchEventKind::Modified,
+                        path: "Tracked/value.bin",
+                        prior_path: None,
+                    },
+                    Event {
+                        kind: WorkspaceWatchEventKind::Deleted,
+                        path: "Tracked/value.bin",
+                        prior_path: None,
+                    },
+                ],
+                expected: &[Expected {
+                    path: "Tracked/value.bin",
+                    status: WorkspaceStatus::Deleted,
+                    prior_path: None,
+                    file_id: Some(FILE_ID),
+                    content_verified: false,
+                }],
+            },
+            Case {
+                label: "conflict-modify",
+                baseline: Some(("Tracked/value.bin", b"baseline")),
+                mutations: &[Mutation::Write("Tracked/value.bin", b"modified")],
+                events: &[
+                    Event {
+                        kind: WorkspaceWatchEventKind::Conflict,
+                        path: "Tracked/value.bin",
+                        prior_path: None,
+                    },
+                    Event {
+                        kind: WorkspaceWatchEventKind::Modified,
+                        path: "Tracked/value.bin",
+                        prior_path: None,
+                    },
+                ],
+                expected: &[Expected {
+                    path: "Tracked/value.bin",
+                    status: WorkspaceStatus::Conflicted,
+                    prior_path: None,
+                    file_id: Some(FILE_ID),
+                    content_verified: false,
+                }],
+            },
+            Case {
+                label: "rename-modify",
+                baseline: Some(("Tracked/source.bin", b"baseline")),
+                mutations: &[
+                    Mutation::Rename("Tracked/source.bin", "Moved/destination.bin"),
+                    Mutation::Write("Moved/destination.bin", b"modified"),
+                ],
+                events: &[
+                    Event {
+                        kind: WorkspaceWatchEventKind::Renamed,
+                        path: "Moved/destination.bin",
+                        prior_path: Some("Tracked/source.bin"),
+                    },
+                    Event {
+                        kind: WorkspaceWatchEventKind::Modified,
+                        path: "Moved/destination.bin",
+                        prior_path: None,
+                    },
+                ],
+                expected: &[
+                    Expected {
+                        path: "Moved/destination.bin",
+                        status: WorkspaceStatus::MovedRenamedHint,
+                        prior_path: Some("Tracked/source.bin"),
+                        file_id: Some(FILE_ID),
+                        content_verified: true,
+                    },
+                    Expected {
+                        path: "Tracked/source.bin",
+                        status: WorkspaceStatus::Deleted,
+                        prior_path: None,
+                        file_id: Some(FILE_ID),
+                        content_verified: false,
+                    },
+                ],
+            },
+            Case {
+                label: "rename-delete",
+                baseline: Some(("Tracked/source.bin", b"baseline")),
+                mutations: &[
+                    Mutation::Rename("Tracked/source.bin", "Moved/transient.bin"),
+                    Mutation::Delete("Moved/transient.bin"),
+                ],
+                events: &[
+                    Event {
+                        kind: WorkspaceWatchEventKind::Renamed,
+                        path: "Moved/transient.bin",
+                        prior_path: Some("Tracked/source.bin"),
+                    },
+                    Event {
+                        kind: WorkspaceWatchEventKind::Deleted,
+                        path: "Moved/transient.bin",
+                        prior_path: None,
+                    },
+                ],
+                expected: &[Expected {
+                    path: "Tracked/source.bin",
+                    status: WorkspaceStatus::Deleted,
+                    prior_path: None,
+                    file_id: Some(FILE_ID),
+                    content_verified: false,
+                }],
+            },
+            Case {
+                label: "rename-delete-create",
+                baseline: Some(("Tracked/source.bin", b"baseline")),
+                mutations: &[
+                    Mutation::Rename("Tracked/source.bin", "Moved/reoccupied.bin"),
+                    Mutation::Delete("Moved/reoccupied.bin"),
+                    Mutation::Write("Moved/reoccupied.bin", b"new identity"),
+                ],
+                events: &[
+                    Event {
+                        kind: WorkspaceWatchEventKind::Renamed,
+                        path: "Moved/reoccupied.bin",
+                        prior_path: Some("Tracked/source.bin"),
+                    },
+                    Event {
+                        kind: WorkspaceWatchEventKind::Deleted,
+                        path: "Moved/reoccupied.bin",
+                        prior_path: None,
+                    },
+                    Event {
+                        kind: WorkspaceWatchEventKind::Created,
+                        path: "Moved/reoccupied.bin",
+                        prior_path: None,
+                    },
+                ],
+                expected: &[
+                    Expected {
+                        path: "Moved/reoccupied.bin",
+                        status: WorkspaceStatus::Added,
+                        prior_path: None,
+                        file_id: None,
+                        content_verified: true,
+                    },
+                    Expected {
+                        path: "Tracked/source.bin",
+                        status: WorkspaceStatus::Deleted,
+                        prior_path: None,
+                        file_id: Some(FILE_ID),
+                        content_verified: false,
+                    },
+                ],
+            },
+        ];
+
+        for case in cases {
+            let root = TestRoot::new(&format!("watch-matrix-{}", case.label));
+            root.write("Anchor/clean.bin", b"anchor");
+            let mut entries = vec![baseline_entry(
+                999,
+                "Anchor/clean.bin",
+                b"anchor",
+                BaselineMaterialization::Full,
+            )];
+            if let Some((path, bytes)) = case.baseline {
+                root.write(path, bytes);
+                entries.push(baseline_entry(
+                    0,
+                    path,
+                    bytes,
+                    BaselineMaterialization::Full,
+                ));
+            }
+            initialize_workspace(&root.0);
+            build(
+                &root.0,
+                &mut TestRoutes::new(entries),
+                &mut TestWatcher::default(),
+            );
+
+            for mutation in case.mutations {
+                match mutation {
+                    Mutation::Write(path, bytes) => root.write(path, bytes),
+                    Mutation::Delete(path) => fs::remove_file(joined_path(&root.0, path)).unwrap(),
+                    Mutation::Rename(source, destination) => {
+                        let destination = joined_path(&root.0, destination);
+                        fs::create_dir_all(destination.parent().unwrap()).unwrap();
+                        fs::rename(joined_path(&root.0, source), destination).unwrap();
+                    }
+                }
+            }
+            record_workspace_change_batch(
+                &root.0,
+                &WorkspaceWatchBatch {
+                    session_id: "session.1".to_owned(),
+                    prior_cursor: "cursor.1".to_owned(),
+                    cursor: "cursor.2".to_owned(),
+                    events: case
+                        .events
+                        .iter()
+                        .map(|event| WorkspaceWatchEvent {
+                            kind: event.kind,
+                            repository_path: event.path.to_owned(),
+                            prior_repository_path: event.prior_path.map(str::to_owned),
+                        })
+                        .collect(),
+                },
+            )
+            .unwrap();
+
+            let page = test_status_page(&status_request(&root.0, 100)).unwrap();
+            assert!(page.complete, "case={}", case.label);
+            assert!(!page.reconciliation_required, "case={}", case.label);
+            assert_eq!(
+                page.authoritative_clean,
+                case.expected.is_empty(),
+                "case={}",
+                case.label
+            );
+            assert_eq!(
+                page.candidate_count,
+                case.expected.len() as u64,
+                "case={}",
+                case.label
+            );
+            assert_eq!(page.items.len(), case.expected.len(), "case={}", case.label);
+            for expected in case.expected {
+                let item = page
+                    .items
+                    .iter()
+                    .find(|item| item.repository_path == expected.path)
+                    .unwrap_or_else(|| panic!("missing {} for case={}", expected.path, case.label));
+                assert_eq!(item.status, expected.status, "case={}", case.label);
+                assert_eq!(
+                    item.prior_repository_path.as_deref(),
+                    expected.prior_path,
+                    "case={}",
+                    case.label
+                );
+                assert_eq!(
+                    item.file_id.as_deref(),
+                    expected.file_id,
+                    "case={}",
+                    case.label
+                );
+                assert_eq!(
+                    item.content_verified, expected.content_verified,
+                    "case={}",
+                    case.label
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn rename_onto_baseline_destination_fails_closed_without_guessing_identity() {
+        for (label, source_bytes, destination_bytes, final_absent, reset_after_delete) in [
+            (
+                "changed-content",
+                b"source".as_slice(),
+                b"destination".as_slice(),
+                false,
+                false,
+            ),
+            (
+                "equal-content",
+                b"same".as_slice(),
+                b"same".as_slice(),
+                false,
+                false,
+            ),
+            (
+                "absent-destination",
+                b"source".as_slice(),
+                b"destination".as_slice(),
+                true,
+                false,
+            ),
+            (
+                "post-delete-create",
+                b"source".as_slice(),
+                b"destination".as_slice(),
+                false,
+                true,
+            ),
+        ] {
+            let root = TestRoot::new(&format!("rename-over-baseline-{label}"));
+            root.write("Tracked/source.bin", source_bytes);
+            root.write("Tracked/destination.bin", destination_bytes);
+            initialize_workspace(&root.0);
+            build(
+                &root.0,
+                &mut TestRoutes::new(vec![
+                    baseline_entry(
+                        0,
+                        "Tracked/source.bin",
+                        source_bytes,
+                        BaselineMaterialization::Full,
+                    ),
+                    baseline_entry(
+                        1,
+                        "Tracked/destination.bin",
+                        destination_bytes,
+                        BaselineMaterialization::Full,
+                    ),
+                ]),
+                &mut TestWatcher::default(),
+            );
+
+            fs::remove_file(joined_path(&root.0, "Tracked/destination.bin")).unwrap();
+            fs::rename(
+                joined_path(&root.0, "Tracked/source.bin"),
+                joined_path(&root.0, "Tracked/destination.bin"),
+            )
+            .unwrap();
+            if final_absent {
+                fs::remove_file(joined_path(&root.0, "Tracked/destination.bin")).unwrap();
+            }
+            if reset_after_delete {
+                fs::remove_file(joined_path(&root.0, "Tracked/destination.bin")).unwrap();
+                root.write("Tracked/destination.bin", b"new-identity");
+            }
+            let mut events = vec![WorkspaceWatchEvent {
+                kind: WorkspaceWatchEventKind::Renamed,
+                repository_path: "Tracked/destination.bin".to_owned(),
+                prior_repository_path: Some("Tracked/source.bin".to_owned()),
+            }];
+            if reset_after_delete {
+                events.extend([
+                    WorkspaceWatchEvent {
+                        kind: WorkspaceWatchEventKind::Deleted,
+                        repository_path: "Tracked/destination.bin".to_owned(),
+                        prior_repository_path: None,
+                    },
+                    WorkspaceWatchEvent {
+                        kind: WorkspaceWatchEventKind::Created,
+                        repository_path: "Tracked/destination.bin".to_owned(),
+                        prior_repository_path: None,
+                    },
+                ]);
+            }
+            record_workspace_change_batch(
+                &root.0,
+                &WorkspaceWatchBatch {
+                    session_id: "session.1".to_owned(),
+                    prior_cursor: "cursor.1".to_owned(),
+                    cursor: "cursor.2".to_owned(),
+                    events,
+                },
+            )
+            .unwrap();
+
+            let page = test_status_page(&status_request(&root.0, 100)).unwrap();
+            assert!(!page.complete, "case={label}");
+            assert!(!page.authoritative_clean, "case={label}");
+            assert!(page.reconciliation_required, "case={label}");
+            assert_eq!(
+                page.reason, "rename-destination-baseline-identity-ambiguous",
+                "case={label}"
+            );
+            assert_eq!(page.candidate_count, 2, "case={label}");
+            let destination = page
+                .items
+                .iter()
+                .find(|item| item.repository_path == "Tracked/destination.bin")
+                .unwrap();
+            assert_eq!(
+                destination.status,
+                WorkspaceStatus::Conflicted,
+                "case={label}"
+            );
+            assert_eq!(
+                destination.prior_repository_path.as_deref(),
+                (!reset_after_delete).then_some("Tracked/source.bin"),
+                "case={label}"
+            );
+            assert_eq!(destination.file_id, None, "case={label}");
+            assert!(!destination.content_verified, "case={label}");
+            let source = page
+                .items
+                .iter()
+                .find(|item| item.repository_path == "Tracked/source.bin")
+                .unwrap();
+            assert_eq!(source.status, WorkspaceStatus::Deleted, "case={label}");
+            assert_eq!(
+                source.file_id.as_deref(),
+                Some("fid:00000000000000000000000000000001"),
+                "case={label}"
+            );
+        }
+
+        let root = TestRoot::new("staged-move-reset-over-baseline");
+        root.write("Tracked/source.bin", b"source");
+        root.write("Tracked/destination.bin", b"destination");
+        initialize_workspace(&root.0);
+        let mut routes = TestRoutes::new(vec![
+            baseline_entry(
+                1,
+                "Tracked/source.bin",
+                b"source",
+                BaselineMaterialization::Full,
+            ),
+            baseline_entry(
+                0,
+                "Tracked/destination.bin",
+                b"destination",
+                BaselineMaterialization::Full,
+            ),
+        ]);
+        build(&root.0, &mut routes, &mut TestWatcher::default());
+        fs::remove_file(joined_path(&root.0, "Tracked/destination.bin")).unwrap();
+        test_stage_move(
+            &root.0,
+            &mut routes,
+            "Tracked/source.bin",
+            "Tracked/destination.bin",
+        )
+        .unwrap();
+        fs::remove_file(joined_path(&root.0, "Tracked/destination.bin")).unwrap();
+        root.write("Tracked/destination.bin", b"new-identity-after-stage");
+        record_workspace_change_batch(
+            &root.0,
+            &WorkspaceWatchBatch {
+                session_id: "session.1".to_owned(),
+                prior_cursor: "cursor.1".to_owned(),
+                cursor: "cursor.2".to_owned(),
+                events: vec![
+                    WorkspaceWatchEvent {
+                        kind: WorkspaceWatchEventKind::Renamed,
+                        repository_path: "Tracked/destination.bin".to_owned(),
+                        prior_repository_path: Some("Tracked/source.bin".to_owned()),
+                    },
+                    WorkspaceWatchEvent {
+                        kind: WorkspaceWatchEventKind::Deleted,
+                        repository_path: "Tracked/destination.bin".to_owned(),
+                        prior_repository_path: None,
+                    },
+                    WorkspaceWatchEvent {
+                        kind: WorkspaceWatchEventKind::Created,
+                        repository_path: "Tracked/destination.bin".to_owned(),
+                        prior_repository_path: None,
+                    },
+                ],
+            },
+        )
+        .unwrap();
+
+        let page = test_status_page(&status_request(&root.0, 100)).unwrap();
+        assert!(!page.complete);
+        assert!(page.reconciliation_required);
+        assert_eq!(page.reason, "staged-watcher-identity-reset-order-ambiguous");
+        let destination = page
+            .items
+            .iter()
+            .find(|item| item.repository_path == "Tracked/destination.bin")
+            .unwrap();
+        assert_eq!(destination.status, WorkspaceStatus::Conflicted);
+        assert_eq!(destination.prior_repository_path, None);
+        assert_eq!(destination.file_id, None);
+        assert!(!destination.content_verified);
+        let source = page
+            .items
+            .iter()
+            .find(|item| item.repository_path == "Tracked/source.bin")
+            .unwrap();
+        assert_eq!(source.status, WorkspaceStatus::Deleted);
+        assert_eq!(
+            source.file_id.as_deref(),
+            Some("fid:00000000000000000000000000000002")
+        );
+    }
+
+    #[test]
+    fn staged_move_reset_has_no_cross_journal_order_and_is_always_ambiguous() {
+        let binding = binding();
+        let source =
+            super::super::validated_repository_path(&binding, "Tracked/source.bin").unwrap();
+        let destination =
+            super::super::validated_repository_path(&binding, "Moved/source.bin").unwrap();
+        let state = super::super::StagingState {
+            schema: super::super::STAGING_SCHEMA.to_owned(),
+            format_version: 1,
+            generation: 2,
+            intents: vec![super::super::StagedIntent {
+                intent_id: format!("wsi1.{}", "a".repeat(64)),
+                kind: super::super::IntentKind::Move,
+                state: super::super::IntentState::Applied,
+                file_id: "fid:00000000000000000000000000000002".to_owned(),
+                allocation_receipt: None,
+                allocation_idempotency_key_sha256: None,
+                allocation_expires_at_unix_ms: None,
+                source_path: Some(source.canonical),
+                destination_path: Some(destination.canonical),
+                source_repository_key: Some(source.repository_key),
+                destination_repository_key: Some(destination.repository_key),
+                trash_name: None,
+                created_at_unix_ms: 1,
+            }],
+        };
+        super::super::validate_staging_state(&state, &binding).unwrap();
+        let encoded_state = serde_json::to_value(&state).unwrap();
+        let events = [
+            WorkspaceWatchEvent {
+                kind: WorkspaceWatchEventKind::Deleted,
+                repository_path: "Moved/source.bin".to_owned(),
+                prior_repository_path: None,
+            },
+            WorkspaceWatchEvent {
+                kind: WorkspaceWatchEventKind::Created,
+                repository_path: "Moved/source.bin".to_owned(),
+                prior_repository_path: None,
+            },
+        ];
+
+        // Staging v1 has no watcher cursor/sequence binding. The same durable
+        // objects therefore represent both causal schedules; neither side may
+        // silently win merely because candidate merging happens in one order.
+        for conceptual_order in ["reset-before-move", "move-before-reset"] {
+            let state: super::super::StagingState =
+                serde_json::from_value(encoded_state.clone()).unwrap();
+            let mut candidates = BTreeMap::new();
+            for event in &events {
+                merge_event_candidate(&binding, &mut candidates, event).unwrap();
+            }
+            merge_staged_candidates(&binding, &mut candidates, &state).unwrap();
+            let key = status_sort_key("Moved/source.bin", &binding).unwrap();
+            let candidate = candidates.get(&key).unwrap();
+            assert_eq!(
+                candidate.staged_conflict_reason,
+                Some("staged-watcher-identity-reset-order-ambiguous"),
+                "conceptual_order={conceptual_order}"
+            );
+            assert_eq!(candidate.prior_path, None);
+        }
+    }
+
+    #[test]
+    fn staged_move_reset_is_ambiguous_before_or_after_stage_with_or_without_baseline_destination() {
+        #[derive(Clone, Copy, Debug)]
+        enum Order {
+            ResetBeforeMove,
+            MoveBeforeReset,
+        }
+
+        for baseline_destination in [false, true] {
+            for order in [Order::ResetBeforeMove, Order::MoveBeforeReset] {
+                let root = TestRoot::new(&format!(
+                    "staged-move-reset-order-{baseline_destination}-{order:?}"
+                ));
+                root.write("Tracked/source.bin", b"source");
+                let mut entries = vec![baseline_entry(
+                    1,
+                    "Tracked/source.bin",
+                    b"source",
+                    BaselineMaterialization::Full,
+                )];
+                if baseline_destination {
+                    root.write("Tracked/destination.bin", b"destination");
+                    entries.push(baseline_entry(
+                        2,
+                        "Tracked/destination.bin",
+                        b"destination",
+                        BaselineMaterialization::Full,
+                    ));
+                }
+                initialize_workspace(&root.0);
+                let mut routes = TestRoutes::new(entries);
+                build(&root.0, &mut routes, &mut TestWatcher::default());
+
+                match order {
+                    Order::ResetBeforeMove => {
+                        let mut events = Vec::new();
+                        if baseline_destination {
+                            fs::remove_file(joined_path(&root.0, "Tracked/destination.bin"))
+                                .unwrap();
+                            events.push(WorkspaceWatchEvent {
+                                kind: WorkspaceWatchEventKind::Deleted,
+                                repository_path: "Tracked/destination.bin".to_owned(),
+                                prior_repository_path: None,
+                            });
+                        } else {
+                            root.write("Tracked/destination.bin", b"first-transient");
+                            events.push(WorkspaceWatchEvent {
+                                kind: WorkspaceWatchEventKind::Created,
+                                repository_path: "Tracked/destination.bin".to_owned(),
+                                prior_repository_path: None,
+                            });
+                            fs::remove_file(joined_path(&root.0, "Tracked/destination.bin"))
+                                .unwrap();
+                            events.push(WorkspaceWatchEvent {
+                                kind: WorkspaceWatchEventKind::Deleted,
+                                repository_path: "Tracked/destination.bin".to_owned(),
+                                prior_repository_path: None,
+                            });
+                        }
+                        root.write("Tracked/destination.bin", b"second-transient");
+                        events.push(WorkspaceWatchEvent {
+                            kind: WorkspaceWatchEventKind::Created,
+                            repository_path: "Tracked/destination.bin".to_owned(),
+                            prior_repository_path: None,
+                        });
+                        fs::remove_file(joined_path(&root.0, "Tracked/destination.bin")).unwrap();
+                        events.push(WorkspaceWatchEvent {
+                            kind: WorkspaceWatchEventKind::Deleted,
+                            repository_path: "Tracked/destination.bin".to_owned(),
+                            prior_repository_path: None,
+                        });
+                        record_workspace_change_batch(
+                            &root.0,
+                            &WorkspaceWatchBatch {
+                                session_id: "session.1".to_owned(),
+                                prior_cursor: "cursor.1".to_owned(),
+                                cursor: "cursor.2".to_owned(),
+                                events,
+                            },
+                        )
+                        .unwrap();
+                        test_stage_move(
+                            &root.0,
+                            &mut routes,
+                            "Tracked/source.bin",
+                            "Tracked/destination.bin",
+                        )
+                        .unwrap();
+                    }
+                    Order::MoveBeforeReset => {
+                        if baseline_destination {
+                            fs::remove_file(joined_path(&root.0, "Tracked/destination.bin"))
+                                .unwrap();
+                        }
+                        test_stage_move(
+                            &root.0,
+                            &mut routes,
+                            "Tracked/source.bin",
+                            "Tracked/destination.bin",
+                        )
+                        .unwrap();
+                        fs::remove_file(joined_path(&root.0, "Tracked/destination.bin")).unwrap();
+                        root.write("Tracked/destination.bin", b"replacement");
+                        record_workspace_change_batch(
+                            &root.0,
+                            &WorkspaceWatchBatch {
+                                session_id: "session.1".to_owned(),
+                                prior_cursor: "cursor.1".to_owned(),
+                                cursor: "cursor.2".to_owned(),
+                                events: vec![
+                                    WorkspaceWatchEvent {
+                                        kind: WorkspaceWatchEventKind::Renamed,
+                                        repository_path: "Tracked/destination.bin".to_owned(),
+                                        prior_repository_path: Some(
+                                            "Tracked/source.bin".to_owned(),
+                                        ),
+                                    },
+                                    WorkspaceWatchEvent {
+                                        kind: WorkspaceWatchEventKind::Deleted,
+                                        repository_path: "Tracked/destination.bin".to_owned(),
+                                        prior_repository_path: None,
+                                    },
+                                    WorkspaceWatchEvent {
+                                        kind: WorkspaceWatchEventKind::Created,
+                                        repository_path: "Tracked/destination.bin".to_owned(),
+                                        prior_repository_path: None,
+                                    },
+                                ],
+                            },
+                        )
+                        .unwrap();
+                    }
+                }
+
+                let page = test_status_page(&status_request(&root.0, 100)).unwrap();
+                assert!(
+                    !page.complete,
+                    "baseline={baseline_destination} order={order:?}"
+                );
+                assert!(page.reconciliation_required);
+                assert_eq!(
+                    page.reason, "staged-watcher-identity-reset-order-ambiguous",
+                    "baseline={baseline_destination} order={order:?}"
+                );
+                let destination = page
+                    .items
+                    .iter()
+                    .find(|item| item.repository_path == "Tracked/destination.bin")
+                    .unwrap();
+                assert_eq!(destination.status, WorkspaceStatus::Conflicted);
+                assert_eq!(destination.prior_repository_path, None);
+                assert_eq!(destination.file_id, None);
+                let source = page
+                    .items
+                    .iter()
+                    .find(|item| item.repository_path == "Tracked/source.bin")
+                    .unwrap();
+                assert_eq!(source.status, WorkspaceStatus::Deleted);
+                assert_eq!(
+                    source.file_id.as_deref(),
+                    Some("fid:00000000000000000000000000000002")
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn staged_add_move_and_delete_identity_reset_intersections_fail_closed() {
+        {
+            let root = TestRoot::new("staged-add-reset-ambiguous");
+            root.write("Anchor/clean.bin", b"anchor");
+            root.write("Loose/add.bin", b"add");
+            initialize_workspace(&root.0);
+            let mut routes = TestRoutes::new(vec![baseline_entry(
+                9,
+                "Anchor/clean.bin",
+                b"anchor",
+                BaselineMaterialization::Full,
+            )]);
+            build(&root.0, &mut routes, &mut TestWatcher::default());
+            test_stage_add(&root.0, &mut routes, "Loose/add.bin").unwrap();
+            fs::remove_file(joined_path(&root.0, "Loose/add.bin")).unwrap();
+            root.write("Loose/add.bin", b"replacement");
+            record_workspace_change_batch(
+                &root.0,
+                &WorkspaceWatchBatch {
+                    session_id: "session.1".to_owned(),
+                    prior_cursor: "cursor.1".to_owned(),
+                    cursor: "cursor.2".to_owned(),
+                    events: vec![
+                        WorkspaceWatchEvent {
+                            kind: WorkspaceWatchEventKind::Deleted,
+                            repository_path: "Loose/add.bin".to_owned(),
+                            prior_repository_path: None,
+                        },
+                        WorkspaceWatchEvent {
+                            kind: WorkspaceWatchEventKind::Created,
+                            repository_path: "Loose/add.bin".to_owned(),
+                            prior_repository_path: None,
+                        },
+                    ],
+                },
+            )
+            .unwrap();
+            let page = test_status_page(&status_request(&root.0, 100)).unwrap();
+            assert_eq!(page.reason, "staged-watcher-identity-reset-order-ambiguous");
+            let item = &page.items[0];
+            assert_eq!(item.status, WorkspaceStatus::Conflicted);
+            assert_eq!(item.file_id, None);
+            assert_eq!(item.prior_repository_path, None);
+        }
+
+        {
+            let root = TestRoot::new("staged-move-source-reset-ambiguous");
+            root.write("Tracked/source.bin", b"source");
+            fs::create_dir(root.0.join("Moved")).unwrap();
+            initialize_workspace(&root.0);
+            let mut routes = TestRoutes::new(vec![baseline_entry(
+                1,
+                "Tracked/source.bin",
+                b"source",
+                BaselineMaterialization::Full,
+            )]);
+            build(&root.0, &mut routes, &mut TestWatcher::default());
+            test_stage_move(
+                &root.0,
+                &mut routes,
+                "Tracked/source.bin",
+                "Moved/source.bin",
+            )
+            .unwrap();
+            root.write("Tracked/source.bin", b"reoccupied");
+            record_workspace_change_batch(
+                &root.0,
+                &WorkspaceWatchBatch {
+                    session_id: "session.1".to_owned(),
+                    prior_cursor: "cursor.1".to_owned(),
+                    cursor: "cursor.2".to_owned(),
+                    events: vec![
+                        WorkspaceWatchEvent {
+                            kind: WorkspaceWatchEventKind::Renamed,
+                            repository_path: "Moved/source.bin".to_owned(),
+                            prior_repository_path: Some("Tracked/source.bin".to_owned()),
+                        },
+                        WorkspaceWatchEvent {
+                            kind: WorkspaceWatchEventKind::Created,
+                            repository_path: "Tracked/source.bin".to_owned(),
+                            prior_repository_path: None,
+                        },
+                    ],
+                },
+            )
+            .unwrap();
+            let page = test_status_page(&status_request(&root.0, 100)).unwrap();
+            assert_eq!(page.reason, "staged-watcher-identity-reset-order-ambiguous");
+            assert_eq!(page.items.len(), 2);
+            for item in &page.items {
+                assert_eq!(item.status, WorkspaceStatus::Conflicted);
+                assert_eq!(item.file_id, None);
+                assert_eq!(item.prior_repository_path, None);
+            }
+        }
+
+        {
+            let root = TestRoot::new("staged-delete-source-reset-ambiguous");
+            root.write("Tracked/source.bin", b"source");
+            initialize_workspace(&root.0);
+            let mut routes = TestRoutes::new(vec![baseline_entry(
+                1,
+                "Tracked/source.bin",
+                b"source",
+                BaselineMaterialization::Full,
+            )]);
+            build(&root.0, &mut routes, &mut TestWatcher::default());
+            test_stage_delete(&root.0, &mut routes, "Tracked/source.bin").unwrap();
+            root.write("Tracked/source.bin", b"reoccupied");
+            record_workspace_change_batch(
+                &root.0,
+                &WorkspaceWatchBatch {
+                    session_id: "session.1".to_owned(),
+                    prior_cursor: "cursor.1".to_owned(),
+                    cursor: "cursor.2".to_owned(),
+                    events: vec![
+                        WorkspaceWatchEvent {
+                            kind: WorkspaceWatchEventKind::Deleted,
+                            repository_path: "Tracked/source.bin".to_owned(),
+                            prior_repository_path: None,
+                        },
+                        WorkspaceWatchEvent {
+                            kind: WorkspaceWatchEventKind::Created,
+                            repository_path: "Tracked/source.bin".to_owned(),
+                            prior_repository_path: None,
+                        },
+                    ],
+                },
+            )
+            .unwrap();
+            let page = test_status_page(&status_request(&root.0, 100)).unwrap();
+            assert_eq!(page.reason, "staged-watcher-identity-reset-order-ambiguous");
+            let item = &page.items[0];
+            assert_eq!(item.status, WorkspaceStatus::Conflicted);
+            assert_eq!(item.file_id, None);
+            assert_eq!(item.prior_repository_path, None);
+        }
+    }
+
+    #[test]
+    fn incompatible_staged_and_watcher_lineage_fails_closed_for_every_intent_kind() {
+        #[derive(Clone, Copy, Debug)]
+        enum Case {
+            AddDestination,
+            MoveDestination,
+            MoveSource,
+            DeleteSource,
+        }
+
+        for case in [
+            Case::AddDestination,
+            Case::MoveDestination,
+            Case::MoveSource,
+            Case::DeleteSource,
+        ] {
+            let root = TestRoot::new(&format!("staged-watcher-lineage-{case:?}"));
+            root.write("Tracked/source.bin", b"source");
+            root.write("Tracked/other.bin", b"other");
+            fs::create_dir(root.0.join("Moved")).unwrap();
+            initialize_workspace(&root.0);
+            let mut routes = TestRoutes::new(vec![
+                baseline_entry(
+                    1,
+                    "Tracked/source.bin",
+                    b"source",
+                    BaselineMaterialization::Full,
+                ),
+                baseline_entry(
+                    2,
+                    "Tracked/other.bin",
+                    b"other",
+                    BaselineMaterialization::Full,
+                ),
+            ]);
+            build(&root.0, &mut routes, &mut TestWatcher::default());
+
+            let (path, prior) = match case {
+                Case::AddDestination => {
+                    root.write("Loose/add.bin", b"add");
+                    test_stage_add(&root.0, &mut routes, "Loose/add.bin").unwrap();
+                    fs::remove_file(joined_path(&root.0, "Loose/add.bin")).unwrap();
+                    fs::rename(
+                        joined_path(&root.0, "Tracked/other.bin"),
+                        joined_path(&root.0, "Loose/add.bin"),
+                    )
+                    .unwrap();
+                    ("Loose/add.bin", "Tracked/other.bin")
+                }
+                Case::MoveDestination => {
+                    test_stage_move(
+                        &root.0,
+                        &mut routes,
+                        "Tracked/source.bin",
+                        "Moved/source.bin",
+                    )
+                    .unwrap();
+                    fs::remove_file(joined_path(&root.0, "Moved/source.bin")).unwrap();
+                    fs::rename(
+                        joined_path(&root.0, "Tracked/other.bin"),
+                        joined_path(&root.0, "Moved/source.bin"),
+                    )
+                    .unwrap();
+                    ("Moved/source.bin", "Tracked/other.bin")
+                }
+                Case::MoveSource => {
+                    test_stage_move(
+                        &root.0,
+                        &mut routes,
+                        "Tracked/source.bin",
+                        "Moved/source.bin",
+                    )
+                    .unwrap();
+                    fs::rename(
+                        joined_path(&root.0, "Tracked/other.bin"),
+                        joined_path(&root.0, "Tracked/source.bin"),
+                    )
+                    .unwrap();
+                    ("Tracked/source.bin", "Tracked/other.bin")
+                }
+                Case::DeleteSource => {
+                    test_stage_delete(&root.0, &mut routes, "Tracked/source.bin").unwrap();
+                    fs::rename(
+                        joined_path(&root.0, "Tracked/other.bin"),
+                        joined_path(&root.0, "Tracked/source.bin"),
+                    )
+                    .unwrap();
+                    ("Tracked/source.bin", "Tracked/other.bin")
+                }
+            };
+            record_workspace_change_batch(
+                &root.0,
+                &WorkspaceWatchBatch {
+                    session_id: "session.1".to_owned(),
+                    prior_cursor: "cursor.1".to_owned(),
+                    cursor: "cursor.2".to_owned(),
+                    events: vec![WorkspaceWatchEvent {
+                        kind: WorkspaceWatchEventKind::Renamed,
+                        repository_path: path.to_owned(),
+                        prior_repository_path: Some(prior.to_owned()),
+                    }],
+                },
+            )
+            .unwrap();
+            let page = test_status_page(&status_request(&root.0, 100)).unwrap();
+            assert!(!page.complete, "case={case:?}");
+            assert_eq!(page.reason, "staged-watcher-lineage-incompatible");
+            let item = page
+                .items
+                .iter()
+                .find(|item| item.repository_path == path)
+                .unwrap();
+            assert_eq!(item.status, WorkspaceStatus::Conflicted);
+            assert_eq!(item.file_id, None);
+            assert_eq!(item.prior_repository_path, None);
+        }
+    }
+
+    #[test]
+    fn outgoing_watcher_rename_from_every_staged_role_fails_closed() {
+        #[derive(Clone, Copy, Debug)]
+        enum Case {
+            AddDestination,
+            MoveSource,
+            MoveDestination,
+            DeleteSource,
+        }
+
+        for case in [
+            Case::AddDestination,
+            Case::MoveSource,
+            Case::MoveDestination,
+            Case::DeleteSource,
+        ] {
+            let root = TestRoot::new(&format!("staged-watcher-outgoing-lineage-{case:?}"));
+            root.write("Tracked/source.bin", b"source");
+            fs::create_dir(root.0.join("Moved")).unwrap();
+            fs::create_dir(root.0.join("Watcher")).unwrap();
+            initialize_workspace(&root.0);
+            let mut routes = TestRoutes::new(vec![baseline_entry(
+                1,
+                "Tracked/source.bin",
+                b"source",
+                BaselineMaterialization::Full,
+            )]);
+            build(&root.0, &mut routes, &mut TestWatcher::default());
+
+            let (rename_source, expected_paths, source_was_reoccupied) = match case {
+                Case::AddDestination => {
+                    root.write("Loose/add.bin", b"add");
+                    test_stage_add(&root.0, &mut routes, "Loose/add.bin").unwrap();
+                    (
+                        "Loose/add.bin",
+                        vec!["Loose/add.bin", "Watcher/out.bin"],
+                        false,
+                    )
+                }
+                Case::MoveSource => {
+                    test_stage_move(
+                        &root.0,
+                        &mut routes,
+                        "Tracked/source.bin",
+                        "Moved/source.bin",
+                    )
+                    .unwrap();
+                    root.write("Tracked/source.bin", b"reoccupied");
+                    (
+                        "Tracked/source.bin",
+                        vec!["Tracked/source.bin", "Moved/source.bin", "Watcher/out.bin"],
+                        true,
+                    )
+                }
+                Case::MoveDestination => {
+                    test_stage_move(
+                        &root.0,
+                        &mut routes,
+                        "Tracked/source.bin",
+                        "Moved/source.bin",
+                    )
+                    .unwrap();
+                    (
+                        "Moved/source.bin",
+                        vec!["Tracked/source.bin", "Moved/source.bin", "Watcher/out.bin"],
+                        false,
+                    )
+                }
+                Case::DeleteSource => {
+                    test_stage_delete(&root.0, &mut routes, "Tracked/source.bin").unwrap();
+                    root.write("Tracked/source.bin", b"reoccupied");
+                    (
+                        "Tracked/source.bin",
+                        vec!["Tracked/source.bin", "Watcher/out.bin"],
+                        true,
+                    )
+                }
+            };
+            fs::rename(
+                joined_path(&root.0, rename_source),
+                joined_path(&root.0, "Watcher/out.bin"),
+            )
+            .unwrap();
+            let mut events = Vec::new();
+            if source_was_reoccupied {
+                events.push(WorkspaceWatchEvent {
+                    kind: WorkspaceWatchEventKind::Created,
+                    repository_path: rename_source.to_owned(),
+                    prior_repository_path: None,
+                });
+            }
+            events.push(WorkspaceWatchEvent {
+                kind: WorkspaceWatchEventKind::Renamed,
+                repository_path: "Watcher/out.bin".to_owned(),
+                prior_repository_path: Some(rename_source.to_owned()),
+            });
+            record_workspace_change_batch(
+                &root.0,
+                &WorkspaceWatchBatch {
+                    session_id: "session.1".to_owned(),
+                    prior_cursor: "cursor.1".to_owned(),
+                    cursor: "cursor.2".to_owned(),
+                    events,
+                },
+            )
+            .unwrap();
+
+            let page = test_status_page(&status_request(&root.0, 100)).unwrap();
+            assert!(!page.complete, "case={case:?}");
+            assert!(page.reconciliation_required, "case={case:?}");
+            assert_eq!(
+                page.reason, "staged-watcher-lineage-incompatible",
+                "case={case:?}"
+            );
+            assert_eq!(
+                page.candidate_count,
+                expected_paths.len() as u64,
+                "case={case:?}"
+            );
+            for path in expected_paths {
+                let item = page
+                    .items
+                    .iter()
+                    .find(|item| item.repository_path == path)
+                    .unwrap_or_else(|| panic!("missing {path} for case={case:?}"));
+                assert_eq!(item.status, WorkspaceStatus::Conflicted, "path={path}");
+                assert_eq!(item.file_id, None, "path={path}");
+                assert_eq!(item.prior_repository_path, None, "path={path}");
+                assert!(!item.content_verified, "path={path}");
+            }
+        }
+    }
+
+    #[test]
+    fn applied_move_or_delete_with_reoccupied_source_never_lends_staged_identity() {
+        for kind in [
+            super::super::IntentKind::Move,
+            super::super::IntentKind::Delete,
+        ] {
+            let root = TestRoot::new(&format!("staged-source-reoccupied-{kind:?}"));
+            root.write("Tracked/source.bin", b"source");
+            fs::create_dir(root.0.join("Moved")).unwrap();
+            initialize_workspace(&root.0);
+            let mut routes = TestRoutes::new(vec![baseline_entry(
+                1,
+                "Tracked/source.bin",
+                b"source",
+                BaselineMaterialization::Full,
+            )]);
+            build(&root.0, &mut routes, &mut TestWatcher::default());
+            match kind {
+                super::super::IntentKind::Move => test_stage_move(
+                    &root.0,
+                    &mut routes,
+                    "Tracked/source.bin",
+                    "Moved/source.bin",
+                )
+                .unwrap(),
+                super::super::IntentKind::Delete => {
+                    test_stage_delete(&root.0, &mut routes, "Tracked/source.bin").unwrap()
+                }
+                super::super::IntentKind::Add => unreachable!(),
+            }
+            root.write("Tracked/source.bin", b"reoccupied-without-bound-order");
+
+            let page = test_status_page(&status_request(&root.0, 100)).unwrap();
+            assert!(!page.complete, "kind={kind:?}");
+            assert_eq!(
+                page.reason, "staged-source-reoccupation-identity-ambiguous",
+                "kind={kind:?}"
+            );
+            for item in &page.items {
+                assert_eq!(item.status, WorkspaceStatus::Conflicted);
+                assert_eq!(item.file_id, None);
+                assert_eq!(item.prior_repository_path, None);
+            }
+        }
+    }
+
+    #[test]
+    fn locally_provable_staged_file_id_and_baseline_identity_conflicts_reconcile() {
+        for kind in [
+            super::super::IntentKind::Move,
+            super::super::IntentKind::Delete,
+        ] {
+            let root = TestRoot::new(&format!("staged-source-file-id-mismatch-{kind:?}"));
+            root.write("Tracked/source.bin", b"source");
+            fs::create_dir(root.0.join("Moved")).unwrap();
+            initialize_workspace(&root.0);
+            let mut routes = TestRoutes::new(vec![baseline_entry(
+                0,
+                "Tracked/source.bin",
+                b"source",
+                BaselineMaterialization::Full,
+            )])
+            .with_resolved_file_id("fid:00000000000000000000000000000002");
+            build(&root.0, &mut routes, &mut TestWatcher::default());
+            match kind {
+                super::super::IntentKind::Move => test_stage_move(
+                    &root.0,
+                    &mut routes,
+                    "Tracked/source.bin",
+                    "Moved/source.bin",
+                )
+                .unwrap(),
+                super::super::IntentKind::Delete => {
+                    test_stage_delete(&root.0, &mut routes, "Tracked/source.bin").unwrap()
+                }
+                super::super::IntentKind::Add => unreachable!(),
+            }
+            let page = test_status_page(&status_request(&root.0, 100)).unwrap();
+            assert!(!page.complete, "kind={kind:?}");
+            assert_eq!(page.reason, "staged-source-file-id-mismatch");
+            for item in &page.items {
+                assert_eq!(item.status, WorkspaceStatus::Conflicted);
+                assert_eq!(item.file_id, None);
+                assert_eq!(item.prior_repository_path, None);
+            }
+        }
+
+        let root = TestRoot::new("staged-add-baseline-identity-incompatible");
+        root.write("Tracked/add.bin", b"baseline");
+        initialize_workspace(&root.0);
+        let mut routes = TestRoutes::new(vec![baseline_entry(
+            0,
+            "Tracked/add.bin",
+            b"baseline",
+            BaselineMaterialization::Full,
+        )]);
+        build(&root.0, &mut routes, &mut TestWatcher::default());
+        test_stage_add(&root.0, &mut routes, "Tracked/add.bin").unwrap();
+        let page = test_status_page(&status_request(&root.0, 100)).unwrap();
+        assert!(!page.complete);
+        assert_eq!(page.reason, "staged-add-baseline-identity-incompatible");
+        let item = &page.items[0];
+        assert_eq!(item.status, WorkspaceStatus::Conflicted);
+        assert_eq!(item.file_id, None);
+        assert_eq!(item.prior_repository_path, None);
+    }
+
+    #[test]
+    fn overlapping_applied_intents_fail_before_staging_or_filesystem_mutation() {
+        #[derive(Clone, Copy, Debug)]
+        enum Case {
+            AddThenMoveSource,
+            MoveThenDeleteDestination,
+            DeleteThenMoveIntoSource,
+        }
+
+        for case in [
+            Case::AddThenMoveSource,
+            Case::MoveThenDeleteDestination,
+            Case::DeleteThenMoveIntoSource,
+        ] {
+            let root = TestRoot::new(&format!("staging-overlap-{case:?}"));
+            root.write("Tracked/source.bin", b"source");
+            root.write("Tracked/other.bin", b"other");
+            fs::create_dir(root.0.join("Moved")).unwrap();
+            initialize_workspace(&root.0);
+            let mut routes = TestRoutes::new(vec![
+                baseline_entry(
+                    1,
+                    "Tracked/source.bin",
+                    b"source",
+                    BaselineMaterialization::Full,
+                ),
+                baseline_entry(
+                    2,
+                    "Tracked/other.bin",
+                    b"other",
+                    BaselineMaterialization::Full,
+                ),
+            ]);
+            build(&root.0, &mut routes, &mut TestWatcher::default());
+
+            let error = match case {
+                Case::AddThenMoveSource => {
+                    root.write("Loose/add.bin", b"add");
+                    test_stage_add(&root.0, &mut routes, "Loose/add.bin").unwrap();
+                    let before = read_validated_staging_snapshot(&root.0, &binding()).unwrap();
+                    let error =
+                        test_stage_move(&root.0, &mut routes, "Loose/add.bin", "Moved/add.bin")
+                            .unwrap_err();
+                    let after = read_validated_staging_snapshot(&root.0, &binding()).unwrap();
+                    assert_eq!(after.state.generation, before.state.generation);
+                    assert_eq!(after.state_sha256, before.state_sha256);
+                    assert!(joined_path(&root.0, "Loose/add.bin").is_file());
+                    assert!(!joined_path(&root.0, "Moved/add.bin").exists());
+                    error
+                }
+                Case::MoveThenDeleteDestination => {
+                    test_stage_move(
+                        &root.0,
+                        &mut routes,
+                        "Tracked/source.bin",
+                        "Moved/source.bin",
+                    )
+                    .unwrap();
+                    let before = read_validated_staging_snapshot(&root.0, &binding()).unwrap();
+                    let error =
+                        test_stage_delete(&root.0, &mut routes, "Moved/source.bin").unwrap_err();
+                    let after = read_validated_staging_snapshot(&root.0, &binding()).unwrap();
+                    assert_eq!(after.state.generation, before.state.generation);
+                    assert_eq!(after.state_sha256, before.state_sha256);
+                    assert!(!joined_path(&root.0, "Tracked/source.bin").exists());
+                    assert!(joined_path(&root.0, "Moved/source.bin").is_file());
+                    error
+                }
+                Case::DeleteThenMoveIntoSource => {
+                    test_stage_delete(&root.0, &mut routes, "Tracked/source.bin").unwrap();
+                    let before = read_validated_staging_snapshot(&root.0, &binding()).unwrap();
+                    let error = test_stage_move(
+                        &root.0,
+                        &mut routes,
+                        "Tracked/other.bin",
+                        "Tracked/source.bin",
+                    )
+                    .unwrap_err();
+                    let after = read_validated_staging_snapshot(&root.0, &binding()).unwrap();
+                    assert_eq!(after.state.generation, before.state.generation);
+                    assert_eq!(after.state_sha256, before.state_sha256);
+                    assert!(!joined_path(&root.0, "Tracked/source.bin").exists());
+                    assert!(joined_path(&root.0, "Tracked/other.bin").is_file());
+                    error
+                }
+            };
+
+            assert_eq!(error.code, "STAGED_PATH_CONFLICT", "case={case:?}");
+            assert_eq!(super::super::list_staged_intents(&root.0).unwrap().len(), 1);
+            let page = test_status_page(&status_request(&root.0, 100)).unwrap();
+            assert!(page.complete, "case={case:?}");
+            assert!(!page.reconciliation_required, "case={case:?}");
+            match case {
+                Case::AddThenMoveSource => {
+                    assert_eq!(page.items.len(), 1);
+                    let item = &page.items[0];
+                    assert_eq!(item.repository_path, "Loose/add.bin");
+                    assert_eq!(item.status, WorkspaceStatus::Added);
+                    assert_eq!(
+                        item.file_id.as_deref(),
+                        Some("fid:00000000000000000000000000000001")
+                    );
+                }
+                Case::MoveThenDeleteDestination => {
+                    assert_eq!(page.items.len(), 2);
+                    let destination = page
+                        .items
+                        .iter()
+                        .find(|item| item.repository_path == "Moved/source.bin")
+                        .unwrap();
+                    assert_eq!(destination.status, WorkspaceStatus::MovedRenamedHint);
+                    assert_eq!(
+                        destination.prior_repository_path.as_deref(),
+                        Some("Tracked/source.bin")
+                    );
+                    assert_eq!(
+                        destination.file_id.as_deref(),
+                        Some("fid:00000000000000000000000000000002")
+                    );
+                }
+                Case::DeleteThenMoveIntoSource => {
+                    assert_eq!(page.items.len(), 1);
+                    let item = &page.items[0];
+                    assert_eq!(item.repository_path, "Tracked/source.bin");
+                    assert_eq!(item.status, WorkspaceStatus::Deleted);
+                    assert_eq!(
+                        item.file_id.as_deref(),
+                        Some("fid:00000000000000000000000000000002")
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn duplicate_candidate_intent_id_is_rejected_before_journal_or_filesystem_mutation() {
+        let root = TestRoot::new("staging-duplicate-candidate-intent-id");
+        root.write("Anchor/clean.bin", b"anchor");
+        root.write("Loose/first.bin", b"first");
+        root.write("Tracked/source.bin", b"source");
+        fs::create_dir(root.0.join("Moved")).unwrap();
+        initialize_workspace(&root.0);
+        let mut routes = TestRoutes::new(vec![
+            baseline_entry(
+                0,
+                "Anchor/clean.bin",
+                b"anchor",
+                BaselineMaterialization::Full,
+            ),
+            baseline_entry(
+                1,
+                "Tracked/source.bin",
+                b"source",
+                BaselineMaterialization::Full,
+            ),
+        ]);
+        build(&root.0, &mut routes, &mut TestWatcher::default());
+        test_stage_add(&root.0, &mut routes, "Loose/first.bin").unwrap();
+        let before = read_validated_staging_snapshot(&root.0, &binding()).unwrap();
+        let source =
+            super::super::validated_repository_path(&binding(), "Tracked/source.bin").unwrap();
+        let destination =
+            super::super::validated_repository_path(&binding(), "Moved/source.bin").unwrap();
+        let candidate = super::super::StagedIntent {
+            intent_id: before.state.intents[0].intent_id.clone(),
+            kind: super::super::IntentKind::Move,
+            state: super::super::IntentState::Prepared,
+            file_id: "fid:00000000000000000000000000000002".to_owned(),
+            allocation_receipt: None,
+            allocation_idempotency_key_sha256: None,
+            allocation_expires_at_unix_ms: None,
+            source_path: Some(source.canonical),
+            destination_path: Some(destination.canonical),
+            source_repository_key: Some(source.repository_key),
+            destination_repository_key: Some(destination.repository_key),
+            trash_name: None,
+            created_at_unix_ms: now_unix_ms().unwrap(),
+        };
+
+        let error = super::super::apply_prepared_intent(
+            &root.0,
+            candidate,
+            &NeverCancelled,
+            &mut DiscardProgress,
+            None,
+        )
+        .unwrap_err();
+        assert_eq!(error.code, "STAGED_PATH_CONFLICT");
+        let after = read_validated_staging_snapshot(&root.0, &binding()).unwrap();
+        assert_eq!(after.state.generation, before.state.generation);
+        assert_eq!(after.state_sha256, before.state_sha256);
+        assert!(joined_path(&root.0, "Tracked/source.bin").is_file());
+        assert!(!joined_path(&root.0, "Moved/source.bin").exists());
+    }
+
+    #[test]
+    fn persisted_staging_path_identities_are_rederived_and_unique_before_mutation() {
+        {
+            let root = TestRoot::new("staging-persisted-repository-key-corrupt");
+            root.write("Anchor/clean.bin", b"anchor");
+            root.write("Loose/add.bin", b"add");
+            fs::create_dir(root.0.join("Moved")).unwrap();
+            initialize_workspace(&root.0);
+            let mut routes = TestRoutes::new(vec![baseline_entry(
+                0,
+                "Anchor/clean.bin",
+                b"anchor",
+                BaselineMaterialization::Full,
+            )]);
+            build(&root.0, &mut routes, &mut TestWatcher::default());
+            test_stage_add(&root.0, &mut routes, "Loose/add.bin").unwrap();
+            let mut staging = super::super::read_staging_state(&root.0).unwrap();
+            staging.intents[0].destination_repository_key = Some("forged-key".to_owned());
+            super::super::write_staging_state(&root.0, &staging).unwrap();
+            let staging_path = root.0.join(".ogvcs/staging-v1.json");
+            let before = fs::read(&staging_path).unwrap();
+
+            let error = test_stage_move(&root.0, &mut routes, "Loose/add.bin", "Moved/add.bin")
+                .unwrap_err();
+            assert_eq!(error.code, "WORKSPACE_METADATA_INVALID");
+            assert_eq!(fs::read(&staging_path).unwrap(), before);
+            assert!(joined_path(&root.0, "Loose/add.bin").is_file());
+            assert!(!joined_path(&root.0, "Moved/add.bin").exists());
+            assert_eq!(
+                test_status_page(&status_request(&root.0, 100))
+                    .unwrap_err()
+                    .code,
+                "WORKSPACE_METADATA_INVALID"
+            );
+        }
+
+        {
+            let root = TestRoot::new("staging-persisted-duplicate-identity");
+            root.write("Anchor/clean.bin", b"anchor");
+            root.write("Loose/first.bin", b"first");
+            initialize_workspace(&root.0);
+            let mut routes = TestRoutes::new(vec![baseline_entry(
+                0,
+                "Anchor/clean.bin",
+                b"anchor",
+                BaselineMaterialization::Full,
+            )]);
+            build(&root.0, &mut routes, &mut TestWatcher::default());
+            test_stage_add(&root.0, &mut routes, "Loose/first.bin").unwrap();
+            let mut staging = super::super::read_staging_state(&root.0).unwrap();
+            let mut duplicate: super::super::StagedIntent =
+                serde_json::from_value(serde_json::to_value(&staging.intents[0]).unwrap()).unwrap();
+            duplicate.intent_id = format!("wsi1.{}", "f".repeat(64));
+            duplicate.file_id = "fid:ffffffffffffffffffffffffffffffff".to_owned();
+            staging.intents.push(duplicate);
+            super::super::write_staging_state(&root.0, &staging).unwrap();
+
+            assert_eq!(
+                super::super::list_staged_intents(&root.0).unwrap_err().code,
+                "WORKSPACE_METADATA_INVALID"
+            );
+            assert!(joined_path(&root.0, "Loose/first.bin").is_file());
+        }
+
+        {
+            let root = TestRoot::new("staging-platform-identity-collision");
+            root.write("Anchor/clean.bin", b"anchor");
+            root.write("Loose/seed.bin", b"seed");
+            initialize_workspace(&root.0);
+            let mut routes = TestRoutes::new(vec![baseline_entry(
+                0,
+                "Anchor/clean.bin",
+                b"anchor",
+                BaselineMaterialization::Full,
+            )]);
+            build(&root.0, &mut routes, &mut TestWatcher::default());
+            test_stage_add(&root.0, &mut routes, "Loose/seed.bin").unwrap();
+            let mut staging = super::super::read_staging_state(&root.0).unwrap();
+            let mut platform_binding = binding();
+            platform_binding.case_mode = "case-sensitive".to_owned();
+            let first =
+                super::super::validated_repository_path(&platform_binding, "Loose/Case.bin")
+                    .unwrap();
+            staging.intents[0].destination_path = Some(first.canonical);
+            staging.intents[0].destination_repository_key = Some(first.repository_key.clone());
+            let mut candidate: super::super::StagedIntent =
+                serde_json::from_value(serde_json::to_value(&staging.intents[0]).unwrap()).unwrap();
+            candidate.intent_id = format!("wsi1.{}", "e".repeat(64));
+            candidate.file_id = "fid:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee".to_owned();
+            let second =
+                super::super::validated_repository_path(&platform_binding, "Loose/case.bin")
+                    .unwrap();
+            assert_ne!(first.repository_key, second.repository_key);
+            assert_eq!(first.platform_key, second.platform_key);
+            candidate.destination_path = Some(second.canonical);
+            candidate.destination_repository_key = Some(second.repository_key);
+
+            assert_eq!(
+                super::super::reject_staging_collision(&staging, &candidate, &platform_binding,)
+                    .unwrap_err()
+                    .code,
+                "STAGED_PATH_CONFLICT"
+            );
+        }
+    }
+
+    #[test]
+    fn staged_and_watcher_overlap_matrix_never_collapses_applied_intent() {
+        #[derive(Clone, Copy, Debug)]
+        enum Case {
+            AddedThenModified,
+            AddedThenDeleted,
+            MovedThenModified,
+            MovedThenDeletedCreated,
+            DeletedAndObserved,
+        }
+
+        for case in [
+            Case::AddedThenModified,
+            Case::AddedThenDeleted,
+            Case::MovedThenModified,
+            Case::MovedThenDeletedCreated,
+            Case::DeletedAndObserved,
+        ] {
+            let root = TestRoot::new(&format!("staging-watcher-overlap-{case:?}"));
+            root.write("Tracked/source.bin", b"source");
+            fs::create_dir(root.0.join("Moved")).unwrap();
+            initialize_workspace(&root.0);
+            let mut routes = TestRoutes::new(vec![baseline_entry(
+                1,
+                "Tracked/source.bin",
+                b"source",
+                BaselineMaterialization::Full,
+            )]);
+            build(&root.0, &mut routes, &mut TestWatcher::default());
+
+            let events = match case {
+                Case::AddedThenModified | Case::AddedThenDeleted => {
+                    root.write("Loose/add.bin", b"add");
+                    test_stage_add(&root.0, &mut routes, "Loose/add.bin").unwrap();
+                    if matches!(case, Case::AddedThenModified) {
+                        root.write("Loose/add.bin", b"modified-after-stage");
+                        vec![WorkspaceWatchEvent {
+                            kind: WorkspaceWatchEventKind::Modified,
+                            repository_path: "Loose/add.bin".to_owned(),
+                            prior_repository_path: None,
+                        }]
+                    } else {
+                        fs::remove_file(joined_path(&root.0, "Loose/add.bin")).unwrap();
+                        vec![WorkspaceWatchEvent {
+                            kind: WorkspaceWatchEventKind::Deleted,
+                            repository_path: "Loose/add.bin".to_owned(),
+                            prior_repository_path: None,
+                        }]
+                    }
+                }
+                Case::MovedThenModified | Case::MovedThenDeletedCreated => {
+                    test_stage_move(
+                        &root.0,
+                        &mut routes,
+                        "Tracked/source.bin",
+                        "Moved/source.bin",
+                    )
+                    .unwrap();
+                    if matches!(case, Case::MovedThenModified) {
+                        root.write("Moved/source.bin", b"modified-after-stage");
+                        vec![
+                            WorkspaceWatchEvent {
+                                kind: WorkspaceWatchEventKind::Renamed,
+                                repository_path: "Moved/source.bin".to_owned(),
+                                prior_repository_path: Some("Tracked/source.bin".to_owned()),
+                            },
+                            WorkspaceWatchEvent {
+                                kind: WorkspaceWatchEventKind::Modified,
+                                repository_path: "Moved/source.bin".to_owned(),
+                                prior_repository_path: None,
+                            },
+                        ]
+                    } else {
+                        fs::remove_file(joined_path(&root.0, "Moved/source.bin")).unwrap();
+                        root.write("Moved/source.bin", b"new-identity-after-stage");
+                        vec![
+                            WorkspaceWatchEvent {
+                                kind: WorkspaceWatchEventKind::Renamed,
+                                repository_path: "Moved/source.bin".to_owned(),
+                                prior_repository_path: Some("Tracked/source.bin".to_owned()),
+                            },
+                            WorkspaceWatchEvent {
+                                kind: WorkspaceWatchEventKind::Deleted,
+                                repository_path: "Moved/source.bin".to_owned(),
+                                prior_repository_path: None,
+                            },
+                            WorkspaceWatchEvent {
+                                kind: WorkspaceWatchEventKind::Created,
+                                repository_path: "Moved/source.bin".to_owned(),
+                                prior_repository_path: None,
+                            },
+                        ]
+                    }
+                }
+                Case::DeletedAndObserved => {
+                    test_stage_delete(&root.0, &mut routes, "Tracked/source.bin").unwrap();
+                    vec![WorkspaceWatchEvent {
+                        kind: WorkspaceWatchEventKind::Deleted,
+                        repository_path: "Tracked/source.bin".to_owned(),
+                        prior_repository_path: None,
+                    }]
+                }
+            };
+            record_workspace_change_batch(
+                &root.0,
+                &WorkspaceWatchBatch {
+                    session_id: "session.1".to_owned(),
+                    prior_cursor: "cursor.1".to_owned(),
+                    cursor: "cursor.2".to_owned(),
+                    events,
+                },
+            )
+            .unwrap();
+
+            let page = test_status_page(&status_request(&root.0, 100)).unwrap();
+            let identity_ambiguous = matches!(case, Case::MovedThenDeletedCreated);
+            assert_eq!(page.complete, !identity_ambiguous, "case={case:?}");
+            assert!(!page.authoritative_clean, "case={case:?}");
+            assert_eq!(
+                page.reconciliation_required, identity_ambiguous,
+                "case={case:?}"
+            );
+            if identity_ambiguous {
+                assert_eq!(
+                    page.reason, "staged-watcher-identity-reset-order-ambiguous",
+                    "case={case:?}"
+                );
+            }
+            match case {
+                Case::AddedThenModified => {
+                    assert_eq!(page.items.len(), 1);
+                    let item = &page.items[0];
+                    assert_eq!(item.repository_path, "Loose/add.bin");
+                    assert_eq!(item.status, WorkspaceStatus::Added);
+                    assert!(item.content_verified);
+                    assert_eq!(
+                        item.file_id.as_deref(),
+                        Some("fid:00000000000000000000000000000001")
+                    );
+                }
+                Case::AddedThenDeleted => {
+                    assert_eq!(page.items.len(), 1);
+                    let item = &page.items[0];
+                    assert_eq!(item.repository_path, "Loose/add.bin");
+                    assert_eq!(item.status, WorkspaceStatus::Deleted);
+                    assert!(!item.content_verified);
+                    assert_eq!(
+                        item.file_id.as_deref(),
+                        Some("fid:00000000000000000000000000000001")
+                    );
+                }
+                Case::MovedThenModified => {
+                    assert_eq!(page.items.len(), 2);
+                    let destination = page
+                        .items
+                        .iter()
+                        .find(|item| item.repository_path == "Moved/source.bin")
+                        .unwrap();
+                    assert_eq!(destination.status, WorkspaceStatus::MovedRenamedHint);
+                    assert_eq!(
+                        destination.prior_repository_path.as_deref(),
+                        Some("Tracked/source.bin")
+                    );
+                    assert_eq!(
+                        destination.file_id.as_deref(),
+                        Some("fid:00000000000000000000000000000002")
+                    );
+                    assert!(destination.content_verified);
+                }
+                Case::MovedThenDeletedCreated => {
+                    assert_eq!(page.items.len(), 2);
+                    let destination = page
+                        .items
+                        .iter()
+                        .find(|item| item.repository_path == "Moved/source.bin")
+                        .unwrap();
+                    assert_eq!(destination.status, WorkspaceStatus::Conflicted);
+                    assert_eq!(destination.prior_repository_path, None);
+                    assert_eq!(destination.file_id, None);
+                    assert!(!destination.content_verified);
+                    let source = page
+                        .items
+                        .iter()
+                        .find(|item| item.repository_path == "Tracked/source.bin")
+                        .unwrap();
+                    assert_eq!(source.status, WorkspaceStatus::Deleted);
+                    assert_eq!(
+                        source.file_id.as_deref(),
+                        Some("fid:00000000000000000000000000000002")
+                    );
+                }
+                Case::DeletedAndObserved => {
+                    assert_eq!(page.items.len(), 1);
+                    let item = &page.items[0];
+                    assert_eq!(item.repository_path, "Tracked/source.bin");
+                    assert_eq!(item.status, WorkspaceStatus::Deleted);
+                    assert_eq!(
+                        item.file_id.as_deref(),
+                        Some("fid:00000000000000000000000000000002")
+                    );
+                    assert!(!item.content_verified);
+                }
+            }
+        }
     }
 
     #[test]

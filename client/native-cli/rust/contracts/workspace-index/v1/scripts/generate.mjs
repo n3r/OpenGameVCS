@@ -11,7 +11,7 @@ if (process.argv.length > 3 || (process.argv.length === 3 && !CHECK)) {
   throw new Error('usage: node scripts/generate.mjs [--check]');
 }
 
-const CONTRACT_VERSION = '0.1.0-rc.3';
+const CONTRACT_VERSION = '0.1.0-rc.4';
 const ARTIFACTS = [
   'README.md',
   'contract.json',

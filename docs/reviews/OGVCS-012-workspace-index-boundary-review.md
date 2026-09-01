@@ -1,8 +1,8 @@
 # OGVCS-012 durable workspace-index candidate boundary review
 
-- **Integrated candidate source:** `cf87f43deee43a20911ab14dbaa0836913319123`
+- **Candidate base before this tranche:** `32ca99c7d35c4ffc949b1c21b76719a949e47a33`
 - **Private candidate contract:** `client/native-cli/rust/contracts/workspace-index/v1`
-  version `0.1.0-rc.3` (generation bytes remain `0.1.0-rc.1`)
+  version `0.1.0-rc.4` (generation bytes remain `0.1.0-rc.1`)
 - **Verdict:** useful fail-closed native implementation slice; OGVCS-012
   remains Todo.
 
@@ -45,6 +45,21 @@ unsupported watchers, corrupt state, and an unmatched absent delete all force
 reconciliation. A same-path transient untracked create/delete is the narrow
 case that can collapse to no finding.
 
+The bounded same-path coalescer now retains creation and rename-destination
+history after later modifications or deletions, and conflict state is sticky.
+Consequently create→modify remains Added, rename→modify retains the prior path
+and source-baseline FileID, and rename→delete suppresses only the transient
+destination while retaining the source deletion. In the ordered watcher
+journal, a later create at that deleted destination establishes a new Added
+identity without the stale prior path or source FileID. Conflict remains
+sticky. A rename onto a path
+that already has a distinct immutable baseline identity is Conflicted without
+a guessed FileID and requires reconciliation for regular changed/equal-content
+and absent destinations alike. An Applied staged intent is never eligible for
+transient collapse, so a watcher deletion after staged Add or Move remains
+visible. These are portable classifier semantics; they do not mint native
+watcher continuity.
+
 Status hashes every event-touched regular file and never treats timestamps as
 content equality. The private fenced path asks the existing session for an
 opening barrier before releasing the mutation lock/read-lease publication,
@@ -75,6 +90,26 @@ repository/local exact/subtree ignores, and pages at most 1,000 items. It
 validates the exact staging snapshot before early clean; Applied Add, Move, and
 Delete intents seed destinations/sources, prior path, and staged FileID without
 waiting for watcher delivery. Prepared or Reverting staging requires recovery.
+Watcher events and those three Applied intent kinds may overlap without losing
+intent visibility when the observations are compatible. Staging records bind
+no watcher cursor or sequence, so a watcher delete→create reset intersecting an
+Applied Add, Move source, Move destination, or Delete source is causally
+unordered. It is Conflicted with no FileID or prior path and requires
+reconciliation; a staged Move's source deletion remains visible when only its
+destination is ambiguous. Only the exact same staged Move source→destination
+watcher edge is compatible. A different prior into a staged path, or rename-out
+from any staged role, conflicts the complete staged intent plus the incompatible
+watcher destination without lending identity. Before a Move/Delete FileID is lent, an immutable source baseline
+must match it and the applied source must be absent; a staged Add cannot claim
+an immutable baseline path. Persisted paths are structurally validated, their
+repository keys are re-derived and matched under the pinned binding, and
+intent IDs plus repository/platform path identities must be unique on every
+load. A candidate that reuses an intent ID or shares either path identity with
+an existing Applied intent is rejected again before staging-state publication
+or filesystem mutation. Definitive post-stage reset semantics require a future
+durable staging-to-watcher ordering binding. Broader FileID semantics and
+repository-lifetime uniqueness remain unproved where no immutable local source
+baseline supplies the answer.
 The v2 opaque paging cursor is HMAC-SHA256 authenticated by an owner-private
 local key. It retains the exact watcher payload digest/cursor as authenticated
 predecessor audit bindings and binds the watcher
@@ -179,7 +214,18 @@ The default focused Rust suite covers:
 - subscribe/scan/final-barrier ordering with deterministic mutations on both
   sides of the scan; and
 - Applied Add/Move/Delete staging visibility without watcher delivery, with no
-  plaintext staging details in the cursor.
+  plaintext staging details in the cursor; and
+- table-driven create→modify, create→delete, delete→create, modify→delete,
+  conflict→modify, rename→modify, rename→delete, and rename→delete→create
+  transitions, plus Applied Add/Move/Delete watcher overlap, all four staged
+  path-role delete→create intersections, causally identical Move reset inputs
+  with and without a baseline destination, incompatible incoming and outgoing
+  watcher lineage across every staged role,
+  directly observable Move/Delete source reoccupation, immutable-source
+  FileID mismatch and staged-Add/baseline ambiguity, exact staged-path and
+  candidate-intent-ID collision rejection before mutation, persisted-key
+  corruption, duplicate loaded identities, and a repository-distinct/platform-
+  colliding pair.
 
 Two explicit bounded release tests produced this local candidate evidence:
 
@@ -188,11 +234,12 @@ Two explicit bounded release tests produced this local candidate evidence:
 | 1,000 changed files | 1,000 modified items, every content verified, 210 ms | one local debug test run; not p95 |
 | 100,000 watcher events | 100 chunks × 1,000, full-chain verification, event 100,001 rejected before append, 11.619 s | one local debug test run; not a million-path benchmark |
 
-The current local Rust 1.82 default run passed 59 library tests (with the two
-exact tests explicitly ignored), 2 binary-contract tests, 2 contract-vector
-tests, and 12 production-foundation integration tests. Rustfmt, all-target
-clippy with warnings denied, the packed-crate gate, and the installed-artifact
-hermetic gate passed. Registered workflow
+The current isolated source passed 72 Rust 1.82 library tests with the two
+exact bounded-release tests explicitly ignored, 2 binary unit tests, 3 CLI
+contract tests, 2 contract-vector tests, and 12 production-foundation
+integration tests. Rustfmt, all-target Clippy with warnings denied, the
+packed-crate gate, and the installed-artifact hermetic gate passed locally.
+Registered workflow
 [run 33513695931](https://github.com/n3r/OpenGameVCS/actions/runs/33513695931)
 previously repeated the pre-oracle Node 24 contract/spec checks, Rust 1.82
 format/default-test/Clippy gates, packed-crate check, and installed-artifact
@@ -201,12 +248,12 @@ Windows. The retained
 [machine record](../evidence/OGVCS-012/github-actions-run-33513695931.json)
 binds the source and all three jobs. This is cross-platform evidence for the
 private fence implementation, not native watcher authority or exact-scale
-evidence. The existing CLI contract gate passed 3 Node tests, the roadmap
-validator passed 8 tests, and the new private-contract generator/validator
+evidence. The CLI workspace/spec gate passed 6 Node tests, the roadmap
+validator passed 8 tests, and the private-contract generator/validator
 passed on Node 24.
 
 The private contract manifest authenticates six artifacts with artifact-set
-SHA-256 `fcbb718537a382ecedc6a7e39ec409669d1d10e54aeb70b4b209e41cc83fb3f2`.
+SHA-256 `5c679b27f3813280f6b7c3c66046b733df624bda5cbddc50a821d9fc7e334049`.
 Node 24 independently recomputes the cursor and retention HMAC vectors. Rust
 pins an independently calculated retention HMAC-SHA256 known answer, exercises
 wrong-key/domain/payload rejection, uses the production cursor encoder, and
@@ -219,7 +266,8 @@ pins the manifest artifact set.
 | Public baseline/status/compaction route | `UnavailablePublicRoutes` fails before index publication; compaction is private local API only | Publish and authenticate the owning baseline/status adapter and CLI/JSON contract, with bounded operations |
 | Native watcher authority | No production constructor can mint continuity; portable watcher is always degraded | Implement and prove USN, FSEvents, and inotify adapters including resume/overflow/unclean shutdown |
 | Million-path SLO | No exact one-million warm p95 result | Pass the reference p95 target without a full walk/hash on every supported OS profile |
-| Full status state machine | Core vocabulary and hostile cases exist, not every OGVCS-004 operation/fault | Pass the complete add/move/delete/revert, rename-cycle, case-only rename, locked-open, ignore transition, and watcher matrix |
+| Full status state machine | The bounded same-path and staged-overlap tranche is covered, including exact incompatible outgoing edges, directly observable source reoccupation, and immutable-source FileID mismatch; broader multi-hop rename/reoccupation, case-only rename, and FileID semantics or repository-lifetime uniqueness without local immutable authority remain outside this tranche | Pass rename-cycle, broader multi-hop and case-only rename/reoccupation, remaining FileID semantic binding and uniqueness, directory/file replacement, locked-open, ignore transition, native-fault, and remaining revert combinations |
+| Staging/watcher causal order | Staging binds no watcher cursor or sequence, so every covered non-commutative reset/lineage intersection fails closed | Durably bind each staging transition to watcher ordering before assigning definitive post-stage reset semantics |
 | Repair equivalence | A bounded test-only independent full scan matches every page after healthy repair and reconstructible watcher/event rebuild; corrupt sealed baseline/history/control authority fails closed without changing the captured workspace bytes, node types, modification times, read-only states, or portable modes | Add a safe public discard/reseed operation for non-reconstructible private authority and retain the complete cross-OS corruption/fault matrix |
 | Product operations | No public explain, repair, compaction, telemetry, rollout, or downgrade surface | Integrate bounded public commands and operational evidence |
 
@@ -243,7 +291,9 @@ cargo +1.82.0 fmt --manifest-path client/native-cli/rust/Cargo.toml -- --check
 cargo +1.82.0 test --manifest-path client/native-cli/rust/Cargo.toml --locked --offline
 cargo +1.82.0 clippy --manifest-path client/native-cli/rust/Cargo.toml --locked --offline --all-targets -- -D warnings
 cargo +1.82.0 check --manifest-path client/native-cli/rust/Cargo.toml --locked --offline --target x86_64-pc-windows-gnu
-client/native-cli/rust/scripts/test-packed.sh
+cd client/native-cli/rust
+./scripts/test-packed.sh
+node scripts/test-hermetic.mjs
 ```
 
 The exact ignored-test commands are in `client/native-cli/rust/README.md`.

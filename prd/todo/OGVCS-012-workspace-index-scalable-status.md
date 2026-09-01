@@ -117,9 +117,33 @@ evidence sufficient to move this PRD out of Todo.
   preflight authenticates existing reader leases before transition
   publication, and distinct status candidates are rejected at the exact
   in-memory bound before map insertion while preserving existing duplicate-key
-  precedence. Its private candidate contract is
+  precedence. Same-path coalescing now preserves creation, conflict, and rename
+  lineage across later events; watcher-only transient destinations collapse
+  only when no Applied staged intent owns them, and watcher rename destinations inherit
+  a source-baseline FileID when one exists and the destination has no distinct
+  baseline identity. A rename onto such a baselined destination is Conflicted
+  without a guessed FileID and requires reconciliation for changed,
+  equal-content, and absent outcomes. A post-deletion create at a rename
+  destination clears stale lineage and is Added without the source FileID;
+  conflict remains sticky. Staging records bind no watcher cursor or sequence,
+  so every Applied Add/Move/Delete path-role intersection with delete→create
+  reset is instead Conflicted without FileID/prior and requires reconciliation.
+  Only the exact same staged Move source→destination watcher edge is compatible;
+  differing incoming lineage or rename-out from any staged role conflicts the
+  complete staged intent and watcher destination. Move/Delete staged
+  FileIDs are lent only after any immutable source-baseline ID matches and the
+  source is observed absent; staged Add on a baseline path conflicts. Persisted
+  staging paths are structurally validated,
+  their repository keys are re-derived and matched, and duplicate intent IDs or
+  repository/platform path identities fail on every load. Candidate intent-ID
+  or path-identity overlap fails again before another staging or filesystem
+  mutation. Definitive post-stage reset semantics require a future durable
+  watcher-order binding. This does not establish FileID semantics or
+  repository-lifetime uniqueness where no immutable local source baseline is
+  authoritative. Its
+  private candidate contract is
   `client/native-cli/rust/contracts/workspace-index/v1` version
-  `0.1.0-rc.3`, while committed generation bytes remain readable as
+  `0.1.0-rc.4`, while committed generation bytes remain readable as
   `0.1.0-rc.1`.
 - **Test and benchmark results:** Rust 1.82 focused tests cover crash boundaries,
   a synced journal tail without state publication, withheld final-barrier
@@ -141,8 +165,22 @@ evidence sufficient to move this PRD out of Todo.
   expiry, current/predecessor retention, malformed/unknown controls before
   intent, deterministic mutation races, one-call paging leases, and idempotent
   recovery at epoch, lease, intent, unlink, directory-sync, state, and intent-
-  removal boundaries. The default suite passed from the exact integrated
-  source on hosted Linux, macOS, and Windows in
+  removal boundaries. Table-driven local tests additionally cover
+  create→modify, create→delete, delete→create, modify→delete,
+  conflict→modify, rename→modify/delete, rename→delete→create identity reset,
+  baseline-destination rename ambiguity for changed/equal/absent outcomes,
+  Applied Add/Move/Delete watcher overlap, all staged path-role identity resets,
+  incompatible incoming/outgoing watcher lineage for every staged role, direct source reoccupation, immutable-source
+  FileID mismatch, and staged-Add/baseline ambiguity,
+  healthy staged repository/platform collisions, persisted-key corruption, and
+  duplicate loaded identities plus duplicate candidate intent-ID admission that
+  fail before workspace mutation. This isolated source passed 72
+  Rust 1.82 library tests with 2 exact bounded-release tests ignored, 2 binary
+  unit tests, 3 CLI contract tests, 2 contract-vector tests, and 12
+  production-foundation tests; Rustfmt, warning-denied Clippy, packed-crate,
+  installed-artifact hermetic, Node 24 contract/spec, and roadmap gates also
+  passed locally. The prior default suite passed
+  from its exact integrated source on hosted Linux, macOS, and Windows in
   [run 33513695931](https://github.com/n3r/OpenGameVCS/actions/runs/33513695931);
   the [retained record](../../docs/evidence/OGVCS-012/README.md) binds all three
   jobs. A local
@@ -184,10 +222,16 @@ evidence sufficient to move this PRD out of Todo.
   the private continuity proof; every production-callable implementation is
   degraded.
 - The exact one-million-path warm p95 target, three-OS watcher matrix, complete
-  OGVCS-004 operation/fault matrix, rename cycles, locked-open files, and repair
+  OGVCS-004 operation/fault matrix, rename cycles, multi-hop rename/source
+  reoccupation, case-only rename, FileID semantic binding and repository-
+  lifetime uniqueness beyond locally immutable sources,
+  directory/file replacement, locked-open files, and repair
   equivalence for a safe public discard/reseed of non-reconstructible sealed
   authority remain unproven. The bounded test-only oracle is not that public
   recovery operation and has no exact-candidate hosted cross-OS record.
+- Staging records have no watcher cursor/sequence binding. The covered
+  non-commutative intersections fail closed; definitive post-stage identity
+  reset semantics remain unimplemented.
 - Telemetry, support-facing explain/repair/compaction commands, rollout
   comparison, and downgrade behavior are not wired into a public product
   surface.

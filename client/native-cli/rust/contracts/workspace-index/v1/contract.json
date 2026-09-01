@@ -1,6 +1,6 @@
 {
   "schema": "ogvcs.workspace-index/private-contract/v1",
-  "contractVersion": "0.1.0-rc.3",
+  "contractVersion": "0.1.0-rc.4",
   "visibility": "private-local-candidate",
   "onDiskRoot": ".ogvcs/workspace-index-v1",
   "limits": {
@@ -121,7 +121,11 @@
     "stateCoherence": "authoritative-exactly-continuity-plus-resume-plus-open-session-plus-no-reconciliation-otherwise-degraded-requires-no-continuity-plus-closed-session-plus-reconciliation",
     "statusFenceUnavailable": "retain-historical-cursor-close-session-and-require-reconciliation",
     "concurrentStatusReader": "final-native-barrier-rejects-every-event-transcript-authority-generation-or-staging-change",
-    "unmatchedAbsentDelete": "dirty-and-reconciliation-required-unless-same-path-created-then-deleted",
+    "samePathCoalescing": "creation-and-rename-destination-history-survives-later-modify-delete-post-delete-create-resets-rename-lineage-conflict-is-sticky",
+    "renameLineage": "later-modify-preserves-destination-prior-path-and-source-baseline-file-id-later-delete-preserves-source-deletion-post-delete-create-clears-prior-path-and-source-file-id",
+    "renameOntoBaselineDestination": "conflicted-without-file-id-and-reconciliation-required-for-regular-equal-content-or-absent-destination",
+    "transientCollapse": "only-finally-absent-unstaged-untracked-created-or-rename-destination-then-deleted",
+    "unmatchedAbsentDelete": "dirty-and-reconciliation-required-unless-same-path-created-or-rename-destination-then-deleted",
     "productionContinuityAuthority": "built-in-native-adapter-only",
     "portableAdapter": "always-reconciliation-required",
     "hostAdapterLabels": [
@@ -158,13 +162,21 @@
     ]
   },
   "stagingStatus": {
-    "admittedState": "fully-validated-applied-intents-only",
+    "admittedState": "structurally-valid-applied-intents-with-rederived-path-identities-only",
     "earlyClean": "requires-empty-staging-snapshot",
     "candidateSeeds": [
       "add-destination-and-staged-file-id",
       "move-source-destination-prior-path-and-staged-file-id",
       "delete-source-and-staged-file-id"
     ],
+    "watcherOverlap": "compatible-applied-add-move-delete-overlap-remains-visible-while-unordered-identity-reset-or-incompatible-lineage-fails-closed",
+    "watcherOrdering": "staging-records-bind-no-watcher-cursor-or-sequence-so-delete-create-reset-intersections-are-conflicted-without-file-id-or-prior-path",
+    "lineageCompatibility": "only-the-exact-same-staged-move-source-destination-watcher-edge-is-compatible-other-incoming-or-outgoing-staged-path-lineage-conflicts-the-complete-intent-and-watcher-destination",
+    "sourceIdentity": "immutable-source-baseline-file-id-must-match-staged-move-delete-file-id-and-applied-source-must-be-absent-before-staged-identity-is-lent",
+    "addBaselineIdentity": "applied-add-on-an-immutable-baseline-path-is-conflicted-without-file-id",
+    "futureOrderingNonclaim": "definitive-post-stage-reset-semantics-require-durable-staging-to-watcher-order-binding",
+    "persistedPathIdentity": "rederive-and-match-repository-key-and-reject-duplicate-intent-id-or-repository-or-platform-path-identity-on-every-load",
+    "overlappingIntentPaths": "reject-candidate-intent-id-or-repository-or-platform-path-identity-overlap-before-staging-publication-or-filesystem-mutation",
     "cursorDisclosure": "generation-and-full-state-sha256-only-no-intent-plaintext"
   },
   "statusValues": [
