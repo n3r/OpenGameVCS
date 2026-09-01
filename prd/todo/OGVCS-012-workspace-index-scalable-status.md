@@ -179,11 +179,12 @@ evidence sufficient to move this PRD out of Todo.
   unit tests, 3 CLI contract tests, 2 contract-vector tests, and 12
   production-foundation tests; Rustfmt, warning-denied Clippy, packed-crate,
   installed-artifact hermetic, Node 24 contract/spec, and roadmap gates also
-  passed locally. The prior default suite passed
-  from its exact integrated source on hosted Linux, macOS, and Windows in
-  [run 33513695931](https://github.com/n3r/OpenGameVCS/actions/runs/33513695931);
-  the [retained record](../../docs/evidence/OGVCS-012/README.md) binds all three
-  jobs. A local
+  passed locally. The exact rc.4 integrated source `a0c7bfd` then passed the
+  default native, packed-crate, and installed-artifact hermetic gates on hosted
+  Linux, macOS, and Windows in
+  [run 33538231831](https://github.com/n3r/OpenGameVCS/actions/runs/33538231831);
+  the [retained record](../../docs/evidence/OGVCS-012/github-actions-run-33538231831.json)
+  binds all three jobs and actual Node 24 patch versions. A local
   exact 1,000 changed-file candidate run classified and content-verified every
   item in 210 ms. A local exact 100,000-event run used 100 chunks of 1,000,
   completed in 11.619 s, rejected event 100,001 before append, verified the
@@ -228,7 +229,8 @@ evidence sufficient to move this PRD out of Todo.
   directory/file replacement, locked-open files, and repair
   equivalence for a safe public discard/reseed of non-reconstructible sealed
   authority remain unproven. The bounded test-only oracle is not that public
-  recovery operation and has no exact-candidate hosted cross-OS record.
+  recovery operation; the exact-candidate hosted record covers only the
+  registered default suite, not native watcher/fault or scale campaigns.
 - Staging records have no watcher cursor/sequence binding. The covered
   non-commutative intersections fail closed; definitive post-stage identity
   reset semantics remain unimplemented.

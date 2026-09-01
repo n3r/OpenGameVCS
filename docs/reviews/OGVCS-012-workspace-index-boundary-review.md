@@ -240,17 +240,18 @@ contract tests, 2 contract-vector tests, and 12 production-foundation
 integration tests. Rustfmt, all-target Clippy with warnings denied, the
 packed-crate gate, and the installed-artifact hermetic gate passed locally.
 Registered workflow
-[run 33513695931](https://github.com/n3r/OpenGameVCS/actions/runs/33513695931)
-previously repeated the pre-oracle Node 24 contract/spec checks, Rust 1.82
+[run 33538231831](https://github.com/n3r/OpenGameVCS/actions/runs/33538231831)
+repeated the Node 24 contract/spec checks, Rust 1.82
 format/default-test/Clippy gates, packed-crate check, and installed-artifact
-hermetic check from its exact integrated source on hosted Linux, macOS, and
-Windows. The retained
-[machine record](../evidence/OGVCS-012/github-actions-run-33513695931.json)
-binds the source and all three jobs. This is cross-platform evidence for the
-private fence implementation, not native watcher authority or exact-scale
-evidence. The CLI workspace/spec gate passed 6 Node tests, the roadmap
-validator passed 8 tests, and the private-contract generator/validator
-passed on Node 24.
+hermetic check from exact integrated rc.4 source `a0c7bfd` on hosted Linux,
+macOS, and Windows. The retained
+[machine record](../evidence/OGVCS-012/github-actions-run-33538231831.json)
+binds the source, successful steps, and actual Node 24.19.0 Linux/Windows and
+24.18.0 macOS patch versions. This is cross-platform evidence for the bounded
+private fence, repair-equivalence, and state-matrix implementation, not native
+watcher authority or exact-scale evidence. The CLI workspace/spec gate passed
+6 Node tests, the roadmap validator passed 8 tests, and the private-contract
+generator/validator passed on Node 24.
 
 The private contract manifest authenticates six artifacts with artifact-set
 SHA-256 `5c679b27f3813280f6b7c3c66046b733df624bda5cbddc50a821d9fc7e334049`.

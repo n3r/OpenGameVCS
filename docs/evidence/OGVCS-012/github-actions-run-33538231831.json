@@ -1,0 +1,76 @@
+{
+  "schemaVersion": "ogvcs.cli-workspace/hosted-evidence/v1",
+  "status": "workspace-index-rc4-state-matrix-hosted-passed",
+  "hostedExactScaleExecuted": false,
+  "integrationRevision": "a0c7bfdad33aca6e512069c5324c022cad5f35a8",
+  "workflow": {
+    "name": "Native CLI local candidate",
+    "path": ".github/workflows/native-cli-local-candidate.yml",
+    "runId": 33538231831,
+    "runAttempt": 1,
+    "event": "push",
+    "headBranch": "r1-foundation-integration",
+    "createdAt": "2026-09-01T17:31:02Z",
+    "completedAt": "2026-09-01T17:37:52Z",
+    "url": "https://github.com/n3r/OpenGameVCS/actions/runs/33538231831"
+  },
+  "jobs": [
+    {
+      "id": 99957709374,
+      "name": "Verified local foundation (Linux)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T17:31:07Z",
+      "completedAt": "2026-09-01T17:33:38Z",
+      "nodeVersion": "24.19.0",
+      "contractAndSpec": "success",
+      "rustDefaultTests": "success",
+      "clippyWarningsDenied": "success",
+      "packedCrate": "success",
+      "installedArtifactHermetic": "success"
+    },
+    {
+      "id": 99957709323,
+      "name": "Verified local foundation (macOS)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T17:31:08Z",
+      "completedAt": "2026-09-01T17:33:50Z",
+      "nodeVersion": "24.18.0",
+      "contractAndSpec": "success",
+      "rustDefaultTests": "success",
+      "clippyWarningsDenied": "success",
+      "packedCrate": "success",
+      "installedArtifactHermetic": "success"
+    },
+    {
+      "id": 99957709048,
+      "name": "Verified local foundation (Windows)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T17:31:06Z",
+      "completedAt": "2026-09-01T17:37:51Z",
+      "nodeVersion": "24.19.0",
+      "contractAndSpec": "success",
+      "rustDefaultTests": "success",
+      "clippyWarningsDenied": "success",
+      "packedCrate": "success",
+      "installedArtifactHermetic": "success"
+    }
+  ],
+  "boundary": {
+    "nodeVersionSelector": 24,
+    "rustVersion": "1.82.0",
+    "privateStatusFenceDefaultTestsExecuted": true,
+    "privateStateMatrixDefaultTestsExecuted": true,
+    "privateRepairEquivalenceDefaultTestsExecuted": true,
+    "productionNativeWatcherAuthorityExercised": false,
+    "publicStatusRouteExercised": false,
+    "exactScaleTestsExecuted": false
+  },
+  "remainingGates": [
+    "production USN, FSEvents, and inotify watcher authority",
+    "public baseline, status, repair, and compaction surfaces",
+    "remaining operation and native-fault matrix",
+    "safe public repair or reseed operation",
+    "exact million-path SLO",
+    "telemetry, rollout, and final acceptance"
+  ]
+}

@@ -89,11 +89,16 @@ bounded-release tests ignored, 2 binary unit tests, 3 CLI contract tests, 2
 contract-vector tests, and 12 production-foundation tests. Rustfmt, all-target
 Clippy with warnings denied, packed-crate tests, and the installed-artifact
 hermetic gate passed. Node 24 passed the rc.4 generator/validator, the 6-test
-CLI workspace/spec gate, and the 8-test roadmap gate. This is local source
-evidence, not hosted cross-OS evidence.
+CLI workspace/spec gate, and the 8-test roadmap gate. After integration at
+`a0c7bfd`, registered
+[run 33538231831](https://github.com/n3r/OpenGameVCS/actions/runs/33538231831)
+repeated the default native, packed, and hermetic gates successfully on hosted
+Linux, macOS, and Windows. The retained
+[machine record](../evidence/OGVCS-012/github-actions-run-33538231831.json)
+binds all three jobs and the actual Node 24 patch versions.
 
 This source review does **not** establish USN/FSEvents/inotify authority,
-hosted three-OS execution of this exact candidate, the complete OGVCS-004
+the complete OGVCS-004
 operation/fault matrix, rename cycles, case-only rename, directory/file
 replacement, multi-hop rename/source reoccupation, FileID semantic binding and
 repository-lifetime uniqueness beyond immutable local sources, durable staged-
