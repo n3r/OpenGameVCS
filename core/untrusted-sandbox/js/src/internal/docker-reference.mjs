@@ -162,9 +162,12 @@ const exactHostMounts = (source, expected) => {
     if (!mount || mount.Type !== 'bind' || mount.Source !== file.source || mount.ReadOnly !== true || !['', 'default'].includes(mount.Consistency ?? '') || mount.BindOptions?.Propagation !== 'rprivate' || mount.BindOptions?.NonRecursive !== true || (mount.BindOptions?.CreateMountpoint ?? false) !== false || (mount.BindOptions?.ReadOnlyNonRecursive ?? false) !== false || (mount.BindOptions?.ReadOnlyForceRecursive ?? false) !== false) return false;
   }
   const output = byTarget.get('/output');
+  const outputReadOnly = expected.outputReadonly
+    ? output?.ReadOnly === true
+    : output != null && (!Object.hasOwn(output, 'ReadOnly') || output.ReadOnly === false);
   return output?.Type === 'volume'
     && output.Source === expected.volume
-    && output.ReadOnly === expected.outputReadonly
+    && outputReadOnly
     && ['', 'default'].includes(output.Consistency ?? '')
     && output.VolumeOptions?.NoCopy === true
     && (output.VolumeOptions?.Subpath ?? '') === ''

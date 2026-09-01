@@ -440,7 +440,7 @@ test('pre-start inspection binds every role mount and effective isolation contro
     runtimeContractSha256: LINUX_RUNTIME_CONTRACT_SHA256, runtimeImage: `sha256:${RUNTIME_DIGEST}`, seccompCanonical: seccomp, volume: 'ogvcs-sandbox-volume', volumeMountpoint: '/var/lib/docker/volumes/fixture/_data',
   };
   const hostMounts = expected.fileMounts.map((mount) => ({ BindOptions: { NonRecursive: true, Propagation: 'rprivate' }, ReadOnly: true, Source: mount.source, Target: mount.target, Type: 'bind' }));
-  hostMounts.push({ ReadOnly: false, Source: expected.volume, Target: '/output', Type: 'volume', VolumeOptions: { DriverConfig: null, Labels: null, NoCopy: true } });
+  hostMounts.push({ Source: expected.volume, Target: '/output', Type: 'volume', VolumeOptions: { NoCopy: true } });
   const effectiveMounts = expected.fileMounts.map((mount) => ({ Destination: mount.target, Propagation: 'rprivate', RW: false, Source: mount.source, Type: 'bind' }));
   effectiveMounts.push({ Destination: '/output', Driver: 'local', Name: expected.volume, Propagation: '', RW: true, Source: expected.volumeMountpoint, Type: 'volume' });
   const container = {
@@ -452,6 +452,14 @@ test('pre-start inspection binds every role mount and effective isolation contro
   const legacyExplicitNetworkDisabled = structuredClone(container);
   legacyExplicitNetworkDisabled.Config.NetworkDisabled = false;
   assert.equal(validateCreatedContainerInspect(legacyExplicitNetworkDisabled, expected), true);
+  const legacyExplicitWritableMount = structuredClone(container);
+  Object.assign(legacyExplicitWritableMount.HostConfig.Mounts.at(-1), { Consistency: '', ReadOnly: false });
+  Object.assign(legacyExplicitWritableMount.HostConfig.Mounts.at(-1).VolumeOptions, { DriverConfig: null, Labels: null, Subpath: '' });
+  for (const mount of legacyExplicitWritableMount.HostConfig.Mounts.slice(0, -1)) {
+    mount.Consistency = 'default';
+    Object.assign(mount.BindOptions, { CreateMountpoint: false, ReadOnlyForceRecursive: false, ReadOnlyNonRecursive: false });
+  }
+  assert.equal(validateCreatedContainerInspect(legacyExplicitWritableMount, expected), true);
   const detached = structuredClone(container); detached.NetworkSettings.Networks = {};
   assert.equal(validateCreatedContainerInspect(detached, expected), true);
   for (const mutate of [
@@ -481,16 +489,24 @@ test('pre-start inspection binds every role mount and effective isolation contro
     (value) => { value.HostConfig.NanoCpus = 0; },
     (value) => { value.HostConfig.Ulimits[0].Hard += 1; },
     (value) => { value.HostConfig.Tmpfs['/scratch'] = 'rw'; },
+    (value) => { value.HostConfig.Mounts[0].Type = 'volume'; },
+    (value) => { value.HostConfig.Mounts[0].Target = '/input/substitution'; },
     (value) => { value.HostConfig.Mounts[0].Source = '/tmp/substitution'; },
     (value) => { value.HostConfig.Mounts[0].ReadOnly = false; },
+    (value) => { value.HostConfig.Mounts[0].Consistency = 'cached'; },
     (value) => { value.HostConfig.Mounts[0].BindOptions.Propagation = 'rshared'; },
     (value) => { value.HostConfig.Mounts[0].BindOptions.NonRecursive = false; },
     (value) => { value.HostConfig.Mounts[0].BindOptions.CreateMountpoint = true; },
     (value) => { value.HostConfig.Mounts[0].BindOptions.ReadOnlyNonRecursive = true; },
+    (value) => { value.HostConfig.Mounts[0].BindOptions.ReadOnlyForceRecursive = true; },
     (value) => { value.Mounts[0].Propagation = 'rshared'; },
+    (value) => { value.HostConfig.Mounts.at(-1).Type = 'bind'; },
+    (value) => { value.HostConfig.Mounts.at(-1).Target = '/output/substitution'; },
     (value) => { value.HostConfig.Mounts.at(-1).Source = 'ogvcs-sandbox-substitution'; },
     (value) => { value.HostConfig.Mounts.at(-1).ReadOnly = true; },
+    (value) => { value.HostConfig.Mounts.at(-1).Consistency = 'cached'; },
     (value) => { value.HostConfig.Mounts.at(-1).VolumeOptions.NoCopy = false; },
+    (value) => { delete value.HostConfig.Mounts.at(-1).VolumeOptions; },
     (value) => { value.HostConfig.Mounts.at(-1).VolumeOptions.Labels = { extra: 'x' }; },
     (value) => { value.HostConfig.Mounts.at(-1).VolumeOptions.DriverConfig = { Name: 'other', Options: {} }; },
     (value) => { value.HostConfig.Mounts.at(-1).VolumeOptions.Subpath = 'nested'; },
@@ -509,6 +525,10 @@ test('pre-start inspection binds every role mount and effective isolation contro
   }
   const runtimeMismatch = structuredClone(container); runtimeMismatch.HostConfig.Runtime = 'io.containerd.alt.v2';
   assert.equal(createdContainerInspectMismatch(runtimeMismatch, expected), 'host-runtime');
+  for (const hostile of [true, null, 0, 'false']) {
+    const hostileWritableMount = structuredClone(container); hostileWritableMount.HostConfig.Mounts.at(-1).ReadOnly = hostile;
+    assert.equal(createdContainerInspectMismatch(hostileWritableMount, expected), 'host-mounts', `output ReadOnly=${String(hostile)}`);
+  }
   for (const [field, hostile] of [
     ['OpenStdin', true],
     ['StdinOnce', true],
@@ -538,9 +558,15 @@ test('pre-start inspection binds every role mount and effective isolation contro
   shim.Path = shimExpected.entrypoint;
   shim.Config.Entrypoint = [shimExpected.entrypoint];
   shim.Config.Labels['org.opengamevcs.sandbox.role'] = shimExpected.role;
-  shim.HostConfig.Mounts = [{ BindOptions: { NonRecursive: true, Propagation: 'rprivate' }, ReadOnly: true, Source: shimExpected.fileMounts[0].source, Target: shimExpected.fileMounts[0].target, Type: 'bind' }, { ReadOnly: true, Source: expected.volume, Target: '/output', Type: 'volume', VolumeOptions: { DriverConfig: null, Labels: null, NoCopy: true } }];
+  shim.HostConfig.Mounts = [{ BindOptions: { NonRecursive: true, Propagation: 'rprivate' }, ReadOnly: true, Source: shimExpected.fileMounts[0].source, Target: shimExpected.fileMounts[0].target, Type: 'bind' }, { ReadOnly: true, Source: expected.volume, Target: '/output', Type: 'volume', VolumeOptions: { NoCopy: true } }];
   shim.Mounts = [{ Destination: shimExpected.fileMounts[0].target, Propagation: 'rprivate', RW: false, Source: shimExpected.fileMounts[0].source, Type: 'bind' }, { Destination: '/output', Driver: 'local', Name: expected.volume, Propagation: '', RW: false, Source: expected.volumeMountpoint, Type: 'volume' }];
   assert.equal(validateCreatedContainerInspect(shim, shimExpected), true);
+  for (const hostile of [undefined, false, null, 1, 'true']) {
+    const hostileShimMount = structuredClone(shim);
+    if (hostile === undefined) delete hostileShimMount.HostConfig.Mounts.at(-1).ReadOnly;
+    else hostileShimMount.HostConfig.Mounts.at(-1).ReadOnly = hostile;
+    assert.equal(createdContainerInspectMismatch(hostileShimMount, shimExpected), 'host-mounts', `shim ReadOnly=${String(hostile)}`);
+  }
   const volume = { Driver: 'local', Labels: { 'org.opengamevcs.sandbox': 'reference-v1', 'org.opengamevcs.sandbox.job': expected.jobId, 'org.opengamevcs.sandbox.role': 'output-volume' }, Mountpoint: '/var/lib/docker/volumes/fixture/_data', Name: expected.volume, Options: { device: 'tmpfs', o: 'size=1,uid=65532,gid=65532,mode=0700,nosuid,nodev,noexec', type: 'tmpfs' }, Scope: 'local' };
   assert.equal(validateOutputVolumeInspect(volume, expected.volume, volume.Options.o, expected.jobId), true);
   assert.equal(validateOutputVolumeInspect({ ...volume, Driver: 'bind' }, expected.volume, volume.Options.o, expected.jobId), false);
