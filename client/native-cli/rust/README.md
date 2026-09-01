@@ -21,7 +21,7 @@ Implemented surface:
   console cancellation, and explicit redacted diagnostics;
 - owner/mode/ACL/link/reparse checks on Unix, macOS, and Windows; atomic
   no-replace handle-relative mutation on Linux/macOS and a Windows
-  `SetFileInformationByHandle` adapter.
+  `NtSetInformationFile(FileRenameInformation)` adapter.
 
 The first-party binary installs `UnavailablePublicRoutes`, so commands that
 need OGVCS-006/008/009 fail with `PUBLIC_ROUTE_UNAVAILABLE` before local
@@ -47,6 +47,17 @@ open remains an explicit residual. If that reopen cannot prove the created
 identity, the command fails closed and deliberately leaves uncertain cleanup
 to recovery instead of deleting a possibly substituted directory. Hosted
 Windows runtime evidence is tracked separately.
+
+Windows file and directory flush handles are opened synchronously (without
+`FILE_FLAG_OVERLAPPED`) with `GENERIC_WRITE`; file contents and both pinned
+mutation parents are passed through `FlushFileBuffers`. Confined rename uses
+the source handle plus a pinned destination-directory `RootDirectory` handle,
+an explicitly NUL-backed `FILE_RENAME_INFORMATION` buffer, and
+`ReplaceIfExists=false`. The native rename call is documented from Windows
+2000, while this crate's handle-bound cleanup also uses
+`SetFileInformationByHandle`, documented from Windows Vista. The product PRD
+still defines the supported floor as current supported Windows rather than a
+specific legacy release; this candidate does not broaden that policy.
 
 The authenticated companion schemas/vectors live in
 [`spec/cli-workspace/v1`](../../../spec/cli-workspace/v1). The original v1
