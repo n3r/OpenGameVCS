@@ -42,17 +42,32 @@ The private workspace-index candidate adds:
 - deterministic status classification, repository/local ignore precedence,
   and owner-keyed HMAC paging cursors bound to the generation, repository
   settings, path profile/case mode, both ignore digests, filter, and full last
-  path key; and
+  path key;
+- per-call authenticated reader leases created, synced, and kernel-locked
+  before the mutation lock is released, so compaction cannot remove the
+  generation used to construct that page;
+- a private, bounded physical compactor that advances a durable logical epoch,
+  reclaims only authenticated abandoned leases, removes at most eight sealed
+  generations per call, and always retains the current generation plus its
+  authenticated numeric predecessor; and
 - authenticated rebuild/repair that publishes a new generation without
   modifying local work files.
 
 No production-callable adapter can currently mint a native watcher continuity
 proof: the only public checkpoint constructor is degraded. The first-party
 binary also has no authenticated workspace-baseline route, so authoritative
-clean status is not publicly available. Old committed generations are retained
-because reader-safe leases/GC do not exist yet. Exact one-million-path p95 and
-three-OS native watcher evidence are also absent. OGVCS-012 therefore remains
-Todo.
+clean status is not publicly available. Compaction likewise has no public CLI
+route. A lease covers only one status call/page: after that call returns, its
+cursor remains authenticated but a later page may fail stale if its generation
+has been reclaimed. The active generation remains byte-compatible with the
+`0.1.0-rc.1` generation format; the additive `0.1.0-rc.2` retention controls
+are private local metadata. Mixed old/new processes are unsupported during
+compaction: restart cooperating clients before enabling it, and rebuild the
+private index before downgrading. Owner-HMACs and kernel locks fail closed for
+cross-workspace/repository records, but they do not solve the documented
+same-authority lock-namespace replacement or Unix unlink-by-handle residual.
+Exact one-million-path p95, telemetry, the full fault matrix, and three-OS
+native watcher evidence are also absent. OGVCS-012 therefore remains Todo.
 
 The first-party binary installs `UnavailablePublicRoutes`, so commands that
 need OGVCS-006/008/009 fail with `PUBLIC_ROUTE_UNAVAILABLE` before local

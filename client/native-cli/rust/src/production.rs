@@ -28,17 +28,20 @@ use std::sync::Arc;
 mod workspace_index;
 
 pub use workspace_index::{
-    rebuild_workspace_index, record_workspace_change_batch, recover_workspace_index,
-    repair_workspace_index, verify_workspace_index, workspace_status_page, BaselineMaterialization,
-    IgnoreAction, IgnorePatternKind, IgnoreSource, UnavailableWorkspaceWatcher,
-    WorkspaceBaselineEntry, WorkspaceBaselineReceipt, WorkspaceBaselineSink, WorkspaceIgnoreRule,
-    WorkspaceIndexBuildRequest, WorkspaceIndexReport, WorkspaceStatus, WorkspaceStatusFilter,
+    compact_workspace_index, rebuild_workspace_index, record_workspace_change_batch,
+    recover_workspace_index, repair_workspace_index, verify_workspace_index, workspace_status_page,
+    BaselineMaterialization, IgnoreAction, IgnorePatternKind, IgnoreSource,
+    UnavailableWorkspaceWatcher, WorkspaceBaselineEntry, WorkspaceBaselineReceipt,
+    WorkspaceBaselineSink, WorkspaceIgnoreRule, WorkspaceIndexBuildRequest,
+    WorkspaceIndexCompactionReport, WorkspaceIndexReport, WorkspaceStatus, WorkspaceStatusFilter,
     WorkspaceStatusItem, WorkspaceStatusPage, WorkspaceStatusPageRequest, WorkspaceWatchBatch,
     WorkspaceWatchEvent, WorkspaceWatchEventKind, WorkspaceWatchEventSink,
     WorkspaceWatcherAuthority, WorkspaceWatcherCheckpoint, WorkspaceWatcherStart,
-    BASELINE_RECEIPT_SCHEMA, MAX_BASELINE_CHUNK_BYTES, MAX_BASELINE_CHUNK_ITEMS,
-    MAX_BASELINE_ENTRIES, MAX_IGNORE_RULES, MAX_STATUS_PAGE_ITEMS, MAX_WATCH_CHUNK_BYTES,
-    MAX_WATCH_CHUNK_ITEMS, MAX_WATCH_EVENTS, WORKSPACE_INDEX_CONTRACT_ARTIFACT_SET_SHA256,
+    BASELINE_RECEIPT_SCHEMA, BASE_RETAINED_GENERATIONS, MAX_AUTHENTICATED_GENERATIONS,
+    MAX_BASELINE_CHUNK_BYTES, MAX_BASELINE_CHUNK_ITEMS, MAX_BASELINE_ENTRIES,
+    MAX_COMPACTION_GENERATIONS_PER_RUN, MAX_IGNORE_RULES, MAX_READER_LEASES, MAX_STATUS_PAGE_ITEMS,
+    MAX_WATCH_CHUNK_BYTES, MAX_WATCH_CHUNK_ITEMS, MAX_WATCH_EVENTS,
+    WORKSPACE_INDEX_COMPACTION_REPORT_SCHEMA, WORKSPACE_INDEX_CONTRACT_ARTIFACT_SET_SHA256,
     WORKSPACE_INDEX_CONTRACT_SHA256, WORKSPACE_INDEX_CONTRACT_VERSION,
     WORKSPACE_INDEX_REPORT_SCHEMA, WORKSPACE_INDEX_SCHEMA, WORKSPACE_STATUS_SCHEMA,
 };

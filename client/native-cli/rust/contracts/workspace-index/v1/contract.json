@@ -1,6 +1,6 @@
 {
   "schema": "ogvcs.workspace-index/private-contract/v1",
-  "contractVersion": "0.1.0-rc.1",
+  "contractVersion": "0.1.0-rc.2",
   "visibility": "private-local-candidate",
   "onDiskRoot": ".ogvcs/workspace-index-v1",
   "limits": {
@@ -11,7 +11,12 @@
     "watchChunkItems": 1000,
     "watchChunkBytes": 1048576,
     "statusPageItems": 1000,
-    "ignoreRules": 2000
+    "ignoreRules": 2000,
+    "authenticatedGenerations": 128,
+    "readerLeases": 128,
+    "baseRetainedGenerations": 2,
+    "compactionGenerationsPerRun": 8,
+    "leaseExpiryEpochs": 2
   },
   "generation": {
     "artifacts": [
@@ -31,6 +36,8 @@
       "fsync-generation-directory",
       "atomically-publish-active-pointer",
       "fsync-generation-directory",
+      "atomically-publish-authenticated-retention-history",
+      "fsync-generation-directory",
       "remove-transition",
       "fsync-generation-directory"
     ],
@@ -41,8 +48,37 @@
       "active-generation-id-generation-and-payload-digest-unchanged",
       "watcher-payload-digest-count-bytes-tail-and-event-file-length-unchanged"
     ],
-    "readerSnapshot": "exactly-one-sealed-active-generation",
-    "retention": "retain-all-committed-generations-until-reader-safe-gc-authority"
+    "readerSnapshot": "exactly-one-sealed-active-generation-held-by-owner-authenticated-kernel-locked-page-lease",
+    "generationFormatVersion": "0.1.0-rc.1",
+    "retention": "current-plus-authenticated-numeric-predecessor-plus-locked-or-unexpired-reader-generations"
+  },
+  "retention": {
+    "visibility": "private-local-api-only",
+    "clock": "owner-hmac-authenticated-u64-logical-epoch-atomically-advanced-under-mutation-lock",
+    "wallClockDeletionAuthority": false,
+    "readerLivenessAuthority": "shared-os-file-lock-held-for-one-status-page-call-unix-whole-file-flock-windows-byte-range-lockfileex",
+    "crashedReaderReclamation": "unlocked-record-after-two-logical-epochs",
+    "activeReaderExpiryRule": "locked-reader-always-pins-even-after-epoch-expiry",
+    "leaseBindings": [
+      "lease-id",
+      "generation-id-and-number",
+      "generation-authority-sha256",
+      "generation-seal-sha256",
+      "workspace-id-digest",
+      "repository-id",
+      "issued-epoch",
+      "expiry-epoch"
+    ],
+    "leaseAuthentication": "hmac-sha256(owner-only-cursor-key,reader-lease-domain||compact-payload-json-utf8)",
+    "historyAuthority": "hmac-authenticated-ordered-active-publication-history",
+    "rc1Migration": "bounded-full-namespace-artifact-hash-and-journal-validation-before-history-hmac-publication",
+    "predecessor": "numeric-current-minus-one-record-from-authenticated-history-only",
+    "compactionIntent": "hmac-authenticated-fsync-before-any-lease-or-generation-unlink",
+    "compactionRecovery": "idempotent-partial-artifact-removal-then-state-publication-then-intent-removal",
+    "unknownOrMalformedControl": "fail-before-intent-or-deletion",
+    "paginationLeaseLifetime": "one-call-only-next-page-reacquires-and-may-fail-stale",
+    "workspaceContentDeletion": false,
+    "mixedVersionConcurrentReaders": "unsupported-private-candidate-restart-required"
   },
   "currentBindings": [
     "workspace-id-digest",
@@ -115,8 +151,13 @@
     "timestampOnlyClean": false,
     "indexRootOrArtifactLinkTraversal": false,
     "repairMayModifyWorkspaceFiles": false,
+    "compactionMayModifyWorkspaceFiles": false,
+    "compactionMayDeleteCurrentPredecessorOrPinnedGeneration": false,
     "corruptOrGappedJournalMayReportClean": false,
     "uncleanOrUnsupportedWatcherMayReportClean": false
+  },
+  "privateCandidateClaims": {
+    "readerSafeGenerationGcImplemented": true
   },
   "publicClaims": {
     "publicStatusCliAvailable": false,

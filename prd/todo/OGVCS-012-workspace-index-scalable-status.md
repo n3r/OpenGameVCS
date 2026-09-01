@@ -103,16 +103,28 @@ evidence sufficient to move this PRD out of Todo.
 - **Implementation changes:** the Rust local CLI has a bounded authenticated
   baseline sink, sealed create-new generations, fixed-width collision-safe
   lookup, strict hash-chained watcher journal, deterministic status paging,
-  HMAC cursor, ignore evaluation, recovery, verification, and non-destructive
-  repair. Its private candidate contract is
+  HMAC cursor, per-page authenticated/kernel-locked reader leases, a durable
+  logical epoch, bounded physical generation compaction, ignore evaluation,
+  recovery, verification, and non-destructive repair. Compaction preserves the
+  current generation, its authenticated numeric predecessor, and every locked
+  or unexpired reader generation; it deletes no workspace content. Its private
+  candidate contract is
   `client/native-cli/rust/contracts/workspace-index/v1` version
+  `0.1.0-rc.2`, while committed generation bytes remain readable as
   `0.1.0-rc.1`.
 - **Test and benchmark results:** Rust 1.82 focused tests cover crash boundaries,
   a synced journal tail without state publication, concurrent transition/status
   races, active/settings/profile/case/cursor staleness, digest collisions,
   case collisions/order, symlink/reparse rejection, timestamp-preserving edits,
   same-length index corruption, deleted-directory uncertainty, transient
-  untracked create/delete, and repair preserving workspace files. A local
+  untracked create/delete, and repair preserving workspace files. Retention
+  tests cover the independent HMAC known answer and hostile variants,
+  cross-workspace/repository leases, exact 127/128/129 lease admission,
+  prepublication history capacity, locked-reader pinning, abandoned-reader
+  expiry, current/predecessor retention, malformed/unknown controls before
+  intent, deterministic mutation races, one-call paging leases, and idempotent
+  recovery at epoch, lease, intent, unlink, directory-sync, state, and intent-
+  removal boundaries. A local
   exact 1,000 changed-file candidate run classified and content-verified every
   item in 210 ms. A local exact 100,000-event run used 100 chunks of 1,000,
   completed in 11.619 s, rejected event 100,001 before append, verified the
@@ -123,12 +135,20 @@ evidence sufficient to move this PRD out of Todo.
   check. Lookup digest hits never substitute a different full path. A portable
   or safe third-party watcher implementation cannot mint native continuity.
   Cursor MACs bind both repository and local ignore digests in addition to the
-  exact generation/settings/filter/path key.
+  exact generation/settings/filter/path key. A status lease is created,
+  synced, authenticated, and shared-locked before releasing the mutation lock;
+  compaction authenticates the complete bounded control/lease/generation
+  namespace before publishing intent. Forged, malformed, cross-boundary, or
+  overflowing metadata fails before deletion. Owner HMACs and kernel locks do
+  not solve malicious same-authority lock-namespace replacement or promise
+  Unix unlink-by-open-handle semantics.
 - **Documentation/runbooks:** the Rust README and
   `docs/reviews/OGVCS-012-workspace-index-boundary-review.md` describe the
   runnable gates and exact residuals.
 - **Rollout result:** none. The first-party CLI still installs unavailable
-  public routes, and optimized status has not been enabled.
+  public routes, and optimized status/compaction has not been enabled. Mixed
+  old/new processes are unsupported for the private candidate; restart before
+  compaction, and rebuild the private index before downgrade.
 
 ### Candidate residuals blocking completion
 
@@ -137,10 +157,9 @@ evidence sufficient to move this PRD out of Todo.
 - No built-in Windows USN, macOS FSEvents, or Linux inotify authority can issue
   the private continuity proof; every production-callable implementation is
   degraded.
-- There is no reader lease/epoch and therefore no safe bounded retention or
-  physical compaction of old immutable generations.
 - The exact one-million-path warm p95 target, three-OS watcher matrix, complete
   OGVCS-004 operation/fault matrix, rename cycles, locked-open files, and repair
   parity against an independently authoritative scan remain unproven.
-- Telemetry, support-facing explain/repair commands, rollout comparison, and
-  downgrade behavior are not wired into a public product surface.
+- Telemetry, support-facing explain/repair/compaction commands, rollout
+  comparison, and downgrade behavior are not wired into a public product
+  surface.

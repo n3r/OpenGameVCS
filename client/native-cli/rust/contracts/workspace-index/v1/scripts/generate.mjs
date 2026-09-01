@@ -11,12 +11,13 @@ if (process.argv.length > 3 || (process.argv.length === 3 && !CHECK)) {
   throw new Error('usage: node scripts/generate.mjs [--check]');
 }
 
-const CONTRACT_VERSION = '0.1.0-rc.1';
+const CONTRACT_VERSION = '0.1.0-rc.2';
 const ARTIFACTS = [
   'README.md',
   'contract.json',
   'scripts/generate.mjs',
   'validate.mjs',
+  'vectors/retention-hmac.json',
   'vectors/status-cursor-hmac.json',
 ].sort();
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -31,7 +32,7 @@ const manifest = {
   schema: 'ogvcs.workspace-index/private-contract-manifest/v1',
   contractVersion: CONTRACT_VERSION,
   artifactSetSha256: sha256(canonicalBytes(records)),
-  counts: { artifacts: records.length, vectors: 1 },
+  counts: { artifacts: records.length, vectors: 2 },
   artifacts: records,
 };
 const expected = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, 'utf8');

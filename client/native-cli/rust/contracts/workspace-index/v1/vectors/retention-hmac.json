@@ -1,0 +1,7 @@
+{
+  "schema": "ogvcs.workspace-index/retention-hmac-vector/v1",
+  "keyHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "domainUtf8Nul": "ogvcs.workspace-index/reader-lease-hmac/v1",
+  "messageUtf8": "known-answer",
+  "expectedMacSha256": "78717d62d38c4c9794e4120459b955a2df0d034dc5d296b70ef2ea3b946f70eb"
+}

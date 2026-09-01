@@ -27,6 +27,14 @@ use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
+mod retention;
+
+pub use retention::{
+    compact_workspace_index, WorkspaceIndexCompactionReport, BASE_RETAINED_GENERATIONS,
+    MAX_AUTHENTICATED_GENERATIONS, MAX_COMPACTION_GENERATIONS_PER_RUN, MAX_READER_LEASES,
+    WORKSPACE_INDEX_COMPACTION_REPORT_SCHEMA,
+};
+
 #[cfg(not(windows))]
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 #[cfg(windows)]
@@ -36,11 +44,12 @@ pub const WORKSPACE_INDEX_SCHEMA: &str = "ogvcs.workspace-index/active/v1";
 pub const WORKSPACE_INDEX_REPORT_SCHEMA: &str = "ogvcs.workspace-index/report/v1";
 pub const WORKSPACE_STATUS_SCHEMA: &str = "ogvcs.workspace-index/status-page/v1";
 pub const BASELINE_RECEIPT_SCHEMA: &str = "ogvcs.workspace-index/baseline-receipt/v1";
-pub const WORKSPACE_INDEX_CONTRACT_VERSION: &str = "0.1.0-rc.1";
+pub const WORKSPACE_INDEX_CONTRACT_VERSION: &str = "0.1.0-rc.2";
+const WORKSPACE_INDEX_GENERATION_FORMAT_VERSION: &str = "0.1.0-rc.1";
 pub const WORKSPACE_INDEX_CONTRACT_SHA256: &str =
-    "a1524e204284a6ff86334bb4dedce07691986fce969faeacfd7de280e557a0c4";
+    "5d2ed804e47862b5387bc09d07bd95cf6464f5f228452314bba3b48008216eb5";
 pub const WORKSPACE_INDEX_CONTRACT_ARTIFACT_SET_SHA256: &str =
-    "1e97e24e7c61d2b873d42f18ccdb8fb637495412f2face2b6c41dd59d2e253a9";
+    "edc1657f17204135bc8e25c39134275f4ac5cda2c2c8b253148b630befd48831";
 pub const MAX_BASELINE_ENTRIES: u64 = 10_000_000;
 pub const MAX_BASELINE_CHUNK_ITEMS: usize = 1_000;
 pub const MAX_BASELINE_CHUNK_BYTES: usize = 1024 * 1024;
@@ -809,7 +818,13 @@ impl GenerationWriter {
         if index.join("transition.json").exists() {
             return Err(index_recovery_required());
         }
+        if retention::compaction_pending(&index)? {
+            return Err(index_recovery_required());
+        }
         let prior_active = read_optional_active(&index)?;
+        if let Some(active) = &prior_active {
+            retention::ensure_generation_capacity(&index, &metadata, active)?;
+        }
         let generation = prior_active.as_ref().map_or(Ok(1), |active| {
             active
                 .payload
@@ -1895,7 +1910,7 @@ impl GenerationWriter {
 
         let active_payload = ActivePayload {
             schema: WORKSPACE_INDEX_SCHEMA.to_owned(),
-            contract_version: WORKSPACE_INDEX_CONTRACT_VERSION.to_owned(),
+            contract_version: WORKSPACE_INDEX_GENERATION_FORMAT_VERSION.to_owned(),
             generation_id: self.generation_id.clone(),
             generation: self.generation,
             generation_seal_sha256: seal.payload_sha256.clone(),
@@ -1919,6 +1934,7 @@ impl GenerationWriter {
             self.abandoned_for_test = true;
             return Err(injected_crash());
         }
+        retention::observe_active_generation(&self.index, &self.metadata, &active)?;
         fs::remove_file(&self.transition_path).map_err(|_| index_write_unavailable())?;
         sync_directory(&self.index)?;
         self.committed = true;
@@ -2038,7 +2054,7 @@ fn read_optional_active(index: &Path) -> Result<Option<ActiveManifest>, CliError
 fn validate_active_shape(active: &ActiveManifest) -> Result<(), CliError> {
     let payload = &active.payload;
     if payload.schema != WORKSPACE_INDEX_SCHEMA
-        || payload.contract_version != WORKSPACE_INDEX_CONTRACT_VERSION
+        || payload.contract_version != WORKSPACE_INDEX_GENERATION_FORMAT_VERSION
         || !valid_generation_id(&payload.generation_id)
         || payload.generation == 0
         || !valid_digest(&payload.generation_seal_sha256)
@@ -2067,7 +2083,9 @@ fn load_active(
 > {
     let metadata = read_ready_metadata(root)?;
     let index = existing_index_directory(root)?;
-    if !allow_transition && index.join("transition.json").exists() {
+    if !allow_transition
+        && (index.join("transition.json").exists() || retention::compaction_pending(&index)?)
+    {
         return Err(index_recovery_required());
     }
     let active = read_optional_active(&index)?.ok_or_else(index_invalid)?;
@@ -2577,8 +2595,13 @@ pub fn workspace_status_page(
     // therefore declare a concurrently changed workspace clean.  Status is
     // deliberately unavailable until recovery removes the transition or the
     // new sealed generation becomes active.
-    let (index, metadata, active, seal, watcher, ignores) = load_active(&root, false)?;
-    status_after_load_hook();
+    let (index, metadata, active, seal, watcher, ignores, _lease) = {
+        let _lock = MutationLock::acquire(&root)?;
+        let (index, metadata, active, seal, watcher, ignores) = load_active(&root, false)?;
+        let lease = retention::acquire_generation_read_lease(&index, &metadata, &active)?;
+        (index, metadata, active, seal, watcher, ignores, lease)
+    };
+    status_after_load_hook(&index);
     let cursor_key = read_cursor_key(&index)?;
     let filter_sha256 = json_digest(&request.filter)?;
     let after_key = request
@@ -3010,12 +3033,17 @@ pub fn recover_workspace_index(root: &Path) -> Result<Option<WorkspaceIndexRepor
     let root = validated_root(root)?;
     let _lock = MutationLock::acquire(&root)?;
     let index = checked_index_directory(&root)?;
+    if existing_transition(&root)? && retention::compaction_pending(&index)? {
+        return Err(index_invalid());
+    }
     recover_transition_at(&index)?;
     let Some(active) = read_optional_active(&index)? else {
         return Ok(None);
     };
     let metadata = read_ready_metadata(&root)?;
     validate_active_binding(&active, &metadata)?;
+    retention::recover_compaction_at(&index, &metadata, &active)?;
+    retention::observe_active_generation(&index, &metadata, &active)?;
     let seal: GenerationSeal = read_json_private(
         &index.join(format!("seal-{}.v1", active.payload.generation_id)),
         MAX_CONTROL_BYTES,
@@ -3234,19 +3262,35 @@ thread_local! {
 }
 
 #[cfg(test)]
-static STATUS_AFTER_LOAD_HOOK: std::sync::Mutex<
-    Option<(
-        std::sync::Arc<std::sync::Barrier>,
-        std::sync::Arc<std::sync::Barrier>,
-    )>,
-> = std::sync::Mutex::new(None);
+struct StatusAfterLoadHook {
+    index: PathBuf,
+    entered: std::sync::Arc<std::sync::Barrier>,
+    release: std::sync::Arc<std::sync::Barrier>,
+}
 
-fn status_after_load_hook() {
+#[cfg(test)]
+static STATUS_AFTER_LOAD_HOOK: std::sync::Mutex<Option<StatusAfterLoadHook>> =
+    std::sync::Mutex::new(None);
+
+fn status_after_load_hook(index: &Path) {
     #[cfg(test)]
-    if let Some((entered, release)) = STATUS_AFTER_LOAD_HOOK.lock().unwrap().take() {
-        entered.wait();
-        release.wait();
+    if let Some(hook) = {
+        let mut hook = STATUS_AFTER_LOAD_HOOK.lock().unwrap();
+        if hook
+            .as_ref()
+            .is_some_and(|expected| expected.index == index)
+        {
+            hook.take()
+        } else {
+            None
+        }
+    } {
+        hook.entered.wait();
+        hook.release.wait();
     }
+
+    #[cfg(not(test))]
+    let _ = index;
 }
 
 fn crash_now(point: CrashPoint) -> bool {
@@ -3431,6 +3475,8 @@ mod tests {
         const VALIDATOR: &[u8] = include_bytes!("../../contracts/workspace-index/v1/validate.mjs");
         const VECTOR: &[u8] =
             include_bytes!("../../contracts/workspace-index/v1/vectors/status-cursor-hmac.json");
+        const RETENTION_VECTOR: &[u8] =
+            include_bytes!("../../contracts/workspace-index/v1/vectors/retention-hmac.json");
         const MANIFEST: &[u8] = include_bytes!("../../contracts/workspace-index/v1/manifest.json");
 
         let manifest: ContractManifest = serde_json::from_slice(MANIFEST).unwrap();
@@ -3439,15 +3485,16 @@ mod tests {
             "ogvcs.workspace-index/private-contract-manifest/v1"
         );
         assert_eq!(manifest.contract_version, WORKSPACE_INDEX_CONTRACT_VERSION);
-        assert_eq!(manifest.counts.artifacts, 5);
-        assert_eq!(manifest.counts.vectors, 1);
-        assert_eq!(manifest.artifacts.len(), 5);
+        assert_eq!(manifest.counts.artifacts, 6);
+        assert_eq!(manifest.counts.vectors, 2);
+        assert_eq!(manifest.artifacts.len(), 6);
         for artifact in &manifest.artifacts {
             let bytes: &[u8] = match artifact.path.as_str() {
                 "README.md" => README,
                 "contract.json" => CONTRACT,
                 "scripts/generate.mjs" => GENERATOR,
                 "validate.mjs" => VALIDATOR,
+                "vectors/retention-hmac.json" => RETENTION_VECTOR,
                 "vectors/status-cursor-hmac.json" => VECTOR,
                 path => panic!("unexpected contract artifact: {path}"),
             };
@@ -3467,6 +3514,10 @@ mod tests {
         assert_eq!(
             contract["contractVersion"],
             WORKSPACE_INDEX_CONTRACT_VERSION
+        );
+        assert_eq!(
+            contract["privateCandidateClaims"]["readerSafeGenerationGcImplemented"],
+            true
         );
         assert!(contract["publicClaims"]
             .as_object()
@@ -3706,6 +3757,41 @@ mod tests {
         }
     }
 
+    struct BlockingWatcher {
+        entered: Arc<Barrier>,
+        release: Arc<Barrier>,
+    }
+
+    impl WorkspaceWatcherAuthority for BlockingWatcher {
+        fn begin_reconciliation(
+            &mut self,
+            _: &Path,
+            _: &VerifiedBinding,
+        ) -> Result<WorkspaceWatcherStart, CliError> {
+            Ok(WorkspaceWatcherStart {
+                adapter: host_adapter().to_owned(),
+                session_id: "blocking.session".to_owned(),
+                resume_cursor: None,
+            })
+        }
+
+        fn finish_reconciliation(
+            &mut self,
+            start: &WorkspaceWatcherStart,
+            _: &mut dyn WorkspaceWatchEventSink,
+        ) -> Result<WorkspaceWatcherCheckpoint, CliError> {
+            self.entered.wait();
+            self.release.wait();
+            Ok(WorkspaceWatcherCheckpoint {
+                adapter: start.adapter.clone(),
+                session_id: start.session_id.clone(),
+                cursor: "blocking.cursor".to_owned(),
+                continuity_proven: true,
+                resume_supported: true,
+            })
+        }
+    }
+
     fn host_adapter() -> &'static str {
         #[cfg(target_os = "linux")]
         {
@@ -3823,6 +3909,31 @@ mod tests {
             limit,
             filter: WorkspaceStatusFilter::default(),
         }
+    }
+
+    fn acquire_test_read_lease(root: &Path) -> retention::GenerationReadLease {
+        let _lock = MutationLock::acquire(root).unwrap();
+        let (index, metadata, active, _, _, _) = load_active(root, false).unwrap();
+        retention::acquire_generation_read_lease(&index, &metadata, &active).unwrap()
+    }
+
+    fn build_one_file_generation(root: &TestRoot) -> WorkspaceIndexReport {
+        let bytes = b"stable local content";
+        root.write("Assets/lease.bin", bytes);
+        let mut routes = TestRoutes::new(vec![baseline_entry(
+            900,
+            "Assets/lease.bin",
+            bytes,
+            BaselineMaterialization::Full,
+        )]);
+        build(&root.0, &mut routes, &mut TestWatcher::default())
+    }
+
+    fn generation_artifacts_exist(root: &Path, generation_id: &str) -> bool {
+        let index = root.join(".ogvcs/workspace-index-v1");
+        artifact_names(generation_id)
+            .iter()
+            .all(|name| index.join(name).is_file())
     }
 
     #[test]
@@ -4297,7 +4408,7 @@ mod tests {
         entered.wait();
         root.write("Game/value.bin", b"changed");
         let during = workspace_status_page(&status_request(&root.0, 100)).unwrap_err();
-        assert_eq!(during.code, "WORKSPACE_INDEX_RECOVERY_REQUIRED");
+        assert_eq!(during.code, "WORKSPACE_BUSY");
         release.wait();
         let second = worker.join().unwrap();
         let after = workspace_status_page(&status_request(&root.0, 100)).unwrap();
@@ -4323,8 +4434,12 @@ mod tests {
 
         let status_entered = Arc::new(Barrier::new(2));
         let status_release = Arc::new(Barrier::new(2));
-        *STATUS_AFTER_LOAD_HOOK.lock().unwrap() =
-            Some((status_entered.clone(), status_release.clone()));
+        let expected_index = existing_index_directory(&root.0).unwrap();
+        *STATUS_AFTER_LOAD_HOOK.lock().unwrap() = Some(StatusAfterLoadHook {
+            index: expected_index,
+            entered: status_entered.clone(),
+            release: status_release.clone(),
+        });
         let status_root = root.0.clone();
         let status_worker =
             thread::spawn(move || workspace_status_page(&status_request(&status_root, 100)));
@@ -4568,15 +4683,511 @@ mod tests {
             repair_workspace_index(&root.0, &mut TestWatcher::default(), &NeverCancelled).unwrap();
         assert_eq!(repaired.queued_event_count, 0);
         assert_eq!(fs::read(root.0.join("Game/a.bin")).unwrap(), before);
-        // Prior immutable generations are intentionally retained until a
-        // reader-safe GC/lease authority exists. This is a documented
-        // OGVCS-012 completion blocker, not a physical compaction claim.
+        // Repair does not implicitly compact. Retention is an explicit bounded
+        // operation so callers can observe and recover every deletion intent.
         assert!(prior_events.is_file());
         assert!(
             workspace_status_page(&status_request(&root.0, 100))
                 .unwrap()
                 .authoritative_clean
         );
+    }
+
+    #[test]
+    fn active_reader_lease_pins_old_generation_until_drop_then_compacts() {
+        let root = TestRoot::new("reader-pin");
+        initialize_workspace(&root.0);
+        let first = build_one_file_generation(&root);
+        let index = existing_index_directory(&root.0).unwrap();
+        let first_active = read_optional_active(&index).unwrap().unwrap();
+        assert_eq!(first.generation, 1);
+        let lease = acquire_test_read_lease(&root.0);
+
+        build_one_file_generation(&root);
+        build_one_file_generation(&root);
+        let pinned = compact_workspace_index(&root.0).unwrap();
+        assert_eq!(pinned.removed_generations, 0);
+        assert_eq!(pinned.pinned_generations, 3);
+        assert!(generation_artifacts_exist(
+            &root.0,
+            &first_active.payload.generation_id
+        ));
+
+        drop(lease);
+        let compacted = compact_workspace_index(&root.0).unwrap();
+        assert_eq!(compacted.removed_generations, 1);
+        assert_eq!(compacted.removed_artifacts, 7);
+        assert_eq!(compacted.retained_generations, 2);
+        assert!(!generation_artifacts_exist(
+            &root.0,
+            &first_active.payload.generation_id
+        ));
+        assert_eq!(
+            fs::read(root.0.join("Assets/lease.bin")).unwrap(),
+            b"stable local content"
+        );
+        verify_workspace_index(&root.0).unwrap();
+    }
+
+    #[test]
+    fn abandoned_reader_lease_expires_on_logical_epoch_and_is_reclaimed() {
+        let root = TestRoot::new("reader-expiry");
+        initialize_workspace(&root.0);
+        build_one_file_generation(&root);
+        let index = existing_index_directory(&root.0).unwrap();
+        let first_active = read_optional_active(&index).unwrap().unwrap();
+        acquire_test_read_lease(&root.0).abandon_for_test();
+        build_one_file_generation(&root);
+        build_one_file_generation(&root);
+
+        let report = compact_workspace_index(&root.0).unwrap();
+        assert_eq!(report.reclaimed_leases, 1);
+        assert_eq!(report.removed_generations, 1);
+        assert!(!generation_artifacts_exist(
+            &root.0,
+            &first_active.payload.generation_id
+        ));
+        let lease_directory = index.join("reader-leases-v1");
+        assert_eq!(fs::read_dir(lease_directory).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn owner_authenticated_cross_workspace_or_repository_lease_fails_before_delete() {
+        for (workspace_digest, repository_id) in [
+            ("8".repeat(64), binding().repository_id_hex),
+            (digest_text("different-workspace"), "f".repeat(32)),
+        ] {
+            let root = TestRoot::new("cross-binding-lease");
+            initialize_workspace(&root.0);
+            build_one_file_generation(&root);
+            let index = existing_index_directory(&root.0).unwrap();
+            let first_active = read_optional_active(&index).unwrap().unwrap();
+            let lease = acquire_test_read_lease(&root.0);
+            let lease_path = lease.path_for_test().to_path_buf();
+            lease.abandon_for_test();
+            retention::rewrite_lease_binding_for_test(
+                &index,
+                &lease_path,
+                &workspace_digest,
+                &repository_id,
+            );
+            build_one_file_generation(&root);
+            build_one_file_generation(&root);
+
+            assert_eq!(
+                compact_workspace_index(&root.0).unwrap_err().code,
+                "WORKSPACE_INDEX_INVALID"
+            );
+            assert!(generation_artifacts_exist(
+                &root.0,
+                &first_active.payload.generation_id
+            ));
+            assert!(!index.join("compaction-v1.json").exists());
+        }
+    }
+
+    #[test]
+    fn forged_lease_mac_and_unknown_root_control_fail_before_compaction_intent() {
+        for case in ["forged-lease-mac", "unknown-root-control"] {
+            let root = TestRoot::new(case);
+            initialize_workspace(&root.0);
+            build_one_file_generation(&root);
+            let index = existing_index_directory(&root.0).unwrap();
+            let first_active = read_optional_active(&index).unwrap().unwrap();
+            if case == "forged-lease-mac" {
+                let lease = acquire_test_read_lease(&root.0);
+                let lease_path = lease.path_for_test().to_path_buf();
+                lease.abandon_for_test();
+                let mut value: serde_json::Value =
+                    serde_json::from_slice(&fs::read(&lease_path).unwrap()).unwrap();
+                value["macSha256"] = serde_json::Value::String("0".repeat(64));
+                let mut file = OpenOptions::new()
+                    .write(true)
+                    .truncate(true)
+                    .open(&lease_path)
+                    .unwrap();
+                serde_json::to_writer(&mut file, &value).unwrap();
+                file.write_all(b"\n").unwrap();
+                file.sync_all().unwrap();
+            }
+            build_one_file_generation(&root);
+            build_one_file_generation(&root);
+            if case == "unknown-root-control" {
+                let path = index.join("retention-unknown.json");
+                let mut file = crate::create_private_file(&path, true).unwrap();
+                file.write_all(b"{}\n").unwrap();
+                file.sync_all().unwrap();
+                sync_directory(&index).unwrap();
+            }
+            assert_eq!(
+                compact_workspace_index(&root.0).unwrap_err().code,
+                "WORKSPACE_INDEX_INVALID"
+            );
+            assert!(!index.join("compaction-v1.json").exists());
+            assert!(generation_artifacts_exist(
+                &root.0,
+                &first_active.payload.generation_id
+            ));
+        }
+    }
+
+    #[test]
+    fn malformed_retention_control_fails_before_epoch_or_intent_publication() {
+        let root = TestRoot::new("malformed-retention-control");
+        initialize_workspace(&root.0);
+        build_one_file_generation(&root);
+        build_one_file_generation(&root);
+        build_one_file_generation(&root);
+        let index = existing_index_directory(&root.0).unwrap();
+        let first_generation_id = {
+            let state: serde_json::Value =
+                serde_json::from_slice(&fs::read(index.join("retention-v1.json")).unwrap())
+                    .unwrap();
+            state["payload"]["generations"][0]["generationId"]
+                .as_str()
+                .unwrap()
+                .to_owned()
+        };
+        let state_path = index.join("retention-v1.json");
+        let mut state: serde_json::Value =
+            serde_json::from_slice(&fs::read(&state_path).unwrap()).unwrap();
+        let epoch = state["payload"]["epoch"].as_u64().unwrap();
+        state["macSha256"] = serde_json::Value::String("f".repeat(64));
+        let mut file = OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .open(&state_path)
+            .unwrap();
+        serde_json::to_writer(&mut file, &state).unwrap();
+        file.write_all(b"\n").unwrap();
+        file.sync_all().unwrap();
+        assert_eq!(
+            compact_workspace_index(&root.0).unwrap_err().code,
+            "WORKSPACE_INDEX_INVALID"
+        );
+        let after: serde_json::Value =
+            serde_json::from_slice(&fs::read(&state_path).unwrap()).unwrap();
+        assert_eq!(after["payload"]["epoch"].as_u64().unwrap(), epoch);
+        assert!(!index.join("compaction-v1.json").exists());
+        assert!(generation_artifacts_exist(&root.0, &first_generation_id));
+    }
+
+    #[test]
+    fn reader_lease_admission_is_exactly_bounded_at_127_128_and_129() {
+        let root = TestRoot::new("lease-limit");
+        initialize_workspace(&root.0);
+        build_one_file_generation(&root);
+        let _lock = MutationLock::acquire(&root.0).unwrap();
+        let (index, metadata, active, _, _, _) = load_active(&root.0, false).unwrap();
+        let mut leases = Vec::new();
+        for _ in 0..127 {
+            leases.push(
+                retention::acquire_generation_read_lease(&index, &metadata, &active).unwrap(),
+            );
+        }
+        assert_eq!(
+            fs::read_dir(index.join("reader-leases-v1"))
+                .unwrap()
+                .count(),
+            127
+        );
+        leases.push(retention::acquire_generation_read_lease(&index, &metadata, &active).unwrap());
+        assert_eq!(leases.len(), MAX_READER_LEASES);
+        assert_eq!(
+            retention::acquire_generation_read_lease(&index, &metadata, &active)
+                .err()
+                .unwrap()
+                .code,
+            "WORKSPACE_INDEX_READER_LEASE_LIMIT"
+        );
+        assert_eq!(
+            fs::read_dir(index.join("reader-leases-v1"))
+                .unwrap()
+                .count(),
+            128
+        );
+        drop(leases);
+        assert_eq!(
+            fs::read_dir(index.join("reader-leases-v1"))
+                .unwrap()
+                .count(),
+            0
+        );
+    }
+
+    #[test]
+    fn status_page_releases_lease_and_next_page_cursor_may_fail_stale() {
+        let root = TestRoot::new("page-lease-lifetime");
+        root.write("Game/a.bin", b"changed-a");
+        root.write("Game/b.bin", b"changed-b");
+        initialize_workspace(&root.0);
+        let entries = vec![
+            baseline_entry(1, "Game/a.bin", b"a", BaselineMaterialization::Full),
+            baseline_entry(2, "Game/b.bin", b"b", BaselineMaterialization::Full),
+        ];
+        build(
+            &root.0,
+            &mut TestRoutes::new(entries.clone()),
+            &mut TestWatcher::default(),
+        );
+        let first = workspace_status_page(&status_request(&root.0, 1)).unwrap();
+        let cursor = first.next_cursor.unwrap();
+        let index = existing_index_directory(&root.0).unwrap();
+        assert_eq!(
+            fs::read_dir(index.join("reader-leases-v1"))
+                .unwrap()
+                .count(),
+            0
+        );
+
+        build(
+            &root.0,
+            &mut TestRoutes::new(entries),
+            &mut TestWatcher::default(),
+        );
+        let mut next = status_request(&root.0, 1);
+        next.cursor = Some(cursor);
+        assert_eq!(
+            workspace_status_page(&next).unwrap_err().code,
+            "WORKSPACE_STATUS_CURSOR_STALE"
+        );
+        assert_eq!(
+            fs::read_dir(index.join("reader-leases-v1"))
+                .unwrap()
+                .count(),
+            0
+        );
+    }
+
+    #[test]
+    fn generation_history_capacity_is_reserved_before_next_transition() {
+        let root = TestRoot::new("generation-history-limit");
+        initialize_workspace(&root.0);
+        for expected in 1..=MAX_AUTHENTICATED_GENERATIONS {
+            assert_eq!(build_one_file_generation(&root).generation, expected as u64);
+        }
+        let index = existing_index_directory(&root.0).unwrap();
+        let before = read_optional_active(&index).unwrap().unwrap();
+        let mut routes = TestRoutes::new(vec![baseline_entry(
+            900,
+            "Assets/lease.bin",
+            b"stable local content",
+            BaselineMaterialization::Full,
+        )]);
+        let error = rebuild_workspace_index(
+            &request(&root.0),
+            &TestProvider,
+            &mut routes,
+            &mut TestWatcher::default(),
+            &NeverCancelled,
+            &mut DiscardProgress,
+        )
+        .unwrap_err();
+        assert_eq!(error.code, "WORKSPACE_INDEX_GENERATION_HISTORY_LIMIT");
+        assert_eq!(read_optional_active(&index).unwrap().unwrap(), before);
+        assert!(!index.join("transition.json").exists());
+
+        let compacted = compact_workspace_index(&root.0).unwrap();
+        assert_eq!(
+            compacted.removed_generations,
+            MAX_COMPACTION_GENERATIONS_PER_RUN as u64
+        );
+        assert!(compacted.more_pending);
+        assert_eq!(
+            build_one_file_generation(&root).generation,
+            MAX_AUTHENTICATED_GENERATIONS as u64 + 1
+        );
+    }
+
+    #[test]
+    fn every_compaction_crash_boundary_recovers_without_false_clean_or_content_delete() {
+        use retention::RetentionCrashPoint;
+
+        for point in [
+            RetentionCrashPoint::EpochPublished,
+            RetentionCrashPoint::IntentPublished,
+            RetentionCrashPoint::LeaseDirectorySynced,
+            RetentionCrashPoint::GenerationRemoved,
+            RetentionCrashPoint::GenerationDirectorySynced,
+            RetentionCrashPoint::StatePublished,
+            RetentionCrashPoint::IntentRemoved,
+        ] {
+            let root = TestRoot::new(&format!("compaction-crash-{point:?}"));
+            initialize_workspace(&root.0);
+            build_one_file_generation(&root);
+            acquire_test_read_lease(&root.0).abandon_for_test();
+            build_one_file_generation(&root);
+            build_one_file_generation(&root);
+            let index = existing_index_directory(&root.0).unwrap();
+            let current = read_optional_active(&index).unwrap().unwrap();
+            let key_before = fs::read(root.0.join("Assets/lease.bin")).unwrap();
+
+            retention::set_retention_crash_point(point);
+            assert_eq!(
+                compact_workspace_index(&root.0).unwrap_err().code,
+                "WORKSPACE_INDEX_COMPACTION_INJECTED_CRASH"
+            );
+            for _ in 0..2 {
+                let recovered = recover_workspace_index(&root.0).unwrap().unwrap();
+                assert_eq!(recovered.generation, current.payload.generation);
+            }
+            compact_workspace_index(&root.0).unwrap();
+            let after = read_optional_active(&index).unwrap().unwrap();
+            assert_eq!(after, current);
+            assert_eq!(
+                fs::read(root.0.join("Assets/lease.bin")).unwrap(),
+                key_before
+            );
+            assert!(!index.join("compaction-v1.json").exists());
+            verify_workspace_index(&root.0).unwrap();
+        }
+    }
+
+    #[test]
+    fn post_state_compaction_recovery_rejects_a_reappearing_candidate_artifact() {
+        let root = TestRoot::new("post-state-reappearing-candidate");
+        initialize_workspace(&root.0);
+        build_one_file_generation(&root);
+        let index = existing_index_directory(&root.0).unwrap();
+        let candidate_id = read_optional_active(&index)
+            .unwrap()
+            .unwrap()
+            .payload
+            .generation_id;
+        build_one_file_generation(&root);
+        let current = build_one_file_generation(&root);
+        let content_before = fs::read(root.0.join("Assets/lease.bin")).unwrap();
+
+        retention::set_retention_crash_point(retention::RetentionCrashPoint::StatePublished);
+        assert_eq!(
+            compact_workspace_index(&root.0).unwrap_err().code,
+            "WORKSPACE_INDEX_COMPACTION_INJECTED_CRASH"
+        );
+        let name = format!("entries-{candidate_id}.v1");
+        let mut unexpected = create_artifact(&index, &name).unwrap();
+        unexpected.write_all(b"unexpected").unwrap();
+        unexpected.sync_all().unwrap();
+        drop(unexpected);
+        sync_directory(&index).unwrap();
+
+        assert_eq!(
+            recover_workspace_index(&root.0).unwrap_err().code,
+            "WORKSPACE_INDEX_INVALID"
+        );
+        assert!(index.join(name).exists());
+        assert_eq!(
+            read_optional_active(&index)
+                .unwrap()
+                .unwrap()
+                .payload
+                .generation,
+            current.generation
+        );
+        assert_eq!(
+            fs::read(root.0.join("Assets/lease.bin")).unwrap(),
+            content_before
+        );
+    }
+
+    #[test]
+    fn lease_publication_crash_is_reclaimable_without_reading_deleted_generation() {
+        let root = TestRoot::new("lease-publication-crash");
+        initialize_workspace(&root.0);
+        build_one_file_generation(&root);
+        retention::set_retention_crash_point(retention::RetentionCrashPoint::LeasePublished);
+        assert_eq!(
+            workspace_status_page(&status_request(&root.0, 10))
+                .unwrap_err()
+                .code,
+            "WORKSPACE_INDEX_COMPACTION_INJECTED_CRASH"
+        );
+        build_one_file_generation(&root);
+        build_one_file_generation(&root);
+        let report = compact_workspace_index(&root.0).unwrap();
+        assert_eq!(report.reclaimed_leases, 1);
+        verify_workspace_index(&root.0).unwrap();
+    }
+
+    #[test]
+    fn aborted_transition_keeps_authenticated_numeric_predecessor() {
+        let root = TestRoot::new("aborted-transition-predecessor");
+        initialize_workspace(&root.0);
+        build_one_file_generation(&root);
+        build_one_file_generation(&root);
+        build_one_file_generation(&root);
+        let index = existing_index_directory(&root.0).unwrap();
+        let state: serde_json::Value =
+            read_json_private(&index.join("retention-v1.json"), MAX_CONTROL_BYTES).unwrap();
+        let generations = state["payload"]["generations"].as_array().unwrap();
+        let predecessor_id = generations[generations.len() - 2]["generationId"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        let oldest_id = generations[0]["generationId"].as_str().unwrap().to_owned();
+
+        set_crash_point(CrashPoint::TransitionPublished);
+        let mut routes = TestRoutes::new(vec![baseline_entry(
+            900,
+            "Assets/lease.bin",
+            b"stable local content",
+            BaselineMaterialization::Full,
+        )]);
+        assert_eq!(
+            rebuild_workspace_index(
+                &request(&root.0),
+                &TestProvider,
+                &mut routes,
+                &mut TestWatcher::default(),
+                &NeverCancelled,
+                &mut DiscardProgress,
+            )
+            .unwrap_err()
+            .code,
+            "WORKSPACE_INDEX_INJECTED_CRASH"
+        );
+        recover_workspace_index(&root.0).unwrap().unwrap();
+        let report = compact_workspace_index(&root.0).unwrap();
+        assert_eq!(report.removed_generations, 1);
+        assert!(generation_artifacts_exist(&root.0, &predecessor_id));
+        assert!(!generation_artifacts_exist(&root.0, &oldest_id));
+    }
+
+    #[test]
+    fn repair_and_compaction_serialize_deterministically_on_mutation_lock() {
+        let root = TestRoot::new("repair-compaction-race");
+        initialize_workspace(&root.0);
+        build_one_file_generation(&root);
+        build_one_file_generation(&root);
+        build_one_file_generation(&root);
+        let entered = Arc::new(Barrier::new(2));
+        let release = Arc::new(Barrier::new(2));
+        let repair_root = root.0.clone();
+        let repair_entered = Arc::clone(&entered);
+        let repair_release = Arc::clone(&release);
+        let repair = thread::spawn(move || {
+            repair_workspace_index(
+                &repair_root,
+                &mut BlockingWatcher {
+                    entered: repair_entered,
+                    release: repair_release,
+                },
+                &NeverCancelled,
+            )
+        });
+        entered.wait();
+        assert_eq!(
+            compact_workspace_index(&root.0).unwrap_err().code,
+            "WORKSPACE_BUSY"
+        );
+        release.wait();
+        assert_eq!(repair.join().unwrap().unwrap().generation, 4);
+        assert!(
+            compact_workspace_index(&root.0)
+                .unwrap()
+                .removed_generations
+                > 0
+        );
+        verify_workspace_index(&root.0).unwrap();
     }
 
     #[test]

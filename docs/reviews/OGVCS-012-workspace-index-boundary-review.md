@@ -1,8 +1,8 @@
 # OGVCS-012 durable workspace-index candidate boundary review
 
-- **Reviewed integration baseline:** `d660ebc92bbbca56c11769f2c5e4d98fa35faca1`
+- **Reviewed integration baseline:** `c973c4d468498664b2a7746ecaaf5a642be051ab`
 - **Private candidate contract:** `client/native-cli/rust/contracts/workspace-index/v1`
-  version `0.1.0-rc.1`
+  version `0.1.0-rc.2` (generation bytes remain `0.1.0-rc.1`)
 - **Verdict:** useful fail-closed native implementation slice; OGVCS-012
   remains Todo.
 
@@ -44,6 +44,31 @@ items. The opaque paging cursor is HMAC-SHA256 authenticated by an owner-private
 local key and binds the exact generation/active digest, settings, profile/mode,
 both ignore digests, filter, and last full path/platform key.
 
+Each status page now acquires an owner-HMAC-authenticated reader lease while
+the mutation lock is still held, syncs the lease, and acquires its shared OS
+file lock (whole-file `flock` on Unix and a `LockFileEx` byte range on Windows)
+before releasing the mutation lock or reading generation artifacts. The lease
+stays live through final active/watcher revalidation and page construction. It
+covers that call only: a later page must reacquire, and an otherwise authentic
+cursor may fail stale after its generation is safely reclaimed.
+
+A private compaction API advances an authenticated u64 logical epoch under the
+same mutation lock. Locked readers always pin; an unlocked crashed lease is
+reclaimable after two epochs. Before any unlink, compaction authenticates the
+bounded control, lease, history, and generation namespace, retains the current
+generation plus its authenticated numeric predecessor and every reader pin,
+then fsyncs an authenticated intent. A run removes at most eight generations.
+Recovery is idempotent across partial lease cleanup, partial generation
+cleanup, state publication, and intent removal, and can reach only old-or-
+compacted local-index state. Workspace content is outside every deletion path.
+
+The retention/control schemas are additive. A bounded first-use migration
+authenticates complete legacy `0.1.0-rc.1` generation artifacts and watcher
+chains before publishing history; the active generation encoding itself is
+unchanged. Mixed old/new processes are unsupported for this unpublished local
+candidate: cooperating clients must be restarted before compaction, and a
+downgrade rebuilds only the private index.
+
 ## Adversarial and bounded evidence
 
 The default focused Rust suite covers:
@@ -57,6 +82,16 @@ The default focused Rust suite covers:
 - digest collision substitution, path order/case collision, current
   profile/case/settings/generation binding, and HMAC cursor tamper/staleness;
 - index-root/generation-artifact symlink or reparse rejection;
+- reader-lease HMAC known-answer, wrong-key/domain/payload rejection,
+  cross-workspace/repository rejection, exact 127/128/129 admission, locked
+  reader pinning, logical-epoch abandoned-reader reclamation, and one-page
+  cursor staleness;
+- authenticated history max-capacity preflight before publication, current
+  plus numeric-predecessor retention, malformed/unknown control rejection
+  before intent, and deterministic status/repair/compaction serialization;
+- every retention crash boundary: epoch, abandoned lease publication, intent,
+  stale-lease directory sync, first generation unlink, generation directory
+  sync, state publication, and intent removal;
 - timestamp-preserving same-size file edits and same-length sealed-artifact
   corruption; and
 - deleted tracked directory uncertainty, transient untracked deletion, and
@@ -69,35 +104,42 @@ Two explicit bounded release tests produced this local candidate evidence:
 | 1,000 changed files | 1,000 modified items, every content verified, 210 ms | one local debug test run; not p95 |
 | 100,000 watcher events | 100 chunks × 1,000, full-chain verification, event 100,001 rejected before append, 11.619 s | one local debug test run; not a million-path benchmark |
 
-The final default Rust run passed 28 library tests (with the two exact tests
+The final default Rust run passed 42 library tests (with the two exact tests
 explicitly ignored), 2 binary-contract tests, 2 contract-vector tests, and 11
 production-foundation integration tests. Rustfmt and all-target clippy with
-warnings denied passed on Rust 1.82; the crate also cross-checked for
-`x86_64-pc-windows-gnu`. The offline packed crate repeated the same default
-test set with the unpublished object-model and path crates. The existing CLI
-contract gate passed 3 Node tests, the roadmap validator passed 8 tests, and
-the new private-contract generator/validator passed on Node 24.
+warnings denied passed on Rust 1.82. This host lacks the
+`x86_64-pc-windows-gnu` Rust standard-library target, so the exact candidate's
+cross-target check remains to be rerun; no hosted Windows result is claimed.
+The offline packed crate repeated the same default test set with the
+unpublished object-model and path crates. The existing CLI contract gate
+passed 3 Node tests, the roadmap validator passed 8 tests, and the new private-
+contract generator/validator passed on Node 24.
 
-The private contract manifest authenticates five artifacts with artifact-set
-SHA-256 `1e97e24e7c61d2b873d42f18ccdb8fb637495412f2face2b6c41dd59d2e253a9`.
-Node 24 independently recomputes the cursor HMAC vector; the Rust test uses the
-same production encoder primitive and pins the manifest artifact set.
+The private contract manifest authenticates six artifacts with artifact-set
+SHA-256 `edc1657f17204135bc8e25c39134275f4ac5cda2c2c8b253148b630befd48831`.
+Node 24 independently recomputes the cursor and retention HMAC vectors. Rust
+pins an independently calculated retention HMAC-SHA256 known answer, exercises
+wrong-key/domain/payload rejection, uses the production cursor encoder, and
+pins the manifest artifact set.
 
 ## Exact nonclaims and completion blockers
 
 | Residual | Candidate behavior | Completion condition |
 | --- | --- | --- |
-| Public baseline/status route | `UnavailablePublicRoutes` fails before index publication | Publish and authenticate the owning baseline/status adapter and CLI/JSON contract |
+| Public baseline/status/compaction route | `UnavailablePublicRoutes` fails before index publication; compaction is private local API only | Publish and authenticate the owning baseline/status adapter and CLI/JSON contract, with bounded operations |
 | Native watcher authority | No production constructor can mint continuity; portable watcher is always degraded | Implement and prove USN, FSEvents, and inotify adapters including resume/overflow/unclean shutdown |
-| Generation retention | Old committed artifacts are intentionally retained | Add reader leases/epochs and crash-safe bounded generation GC; prove no active reader loses its generation |
 | Million-path SLO | No exact one-million warm p95 result | Pass the reference p95 target without a full walk/hash on every supported OS profile |
 | Full status state machine | Core vocabulary and hostile cases exist, not every OGVCS-004 operation/fault | Pass the complete add/move/delete/revert, rename-cycle, case-only rename, locked-open, ignore transition, and watcher matrix |
 | Repair equivalence | Rebuild preserves local files and publishes a sealed generation | Compare against an independent authenticated full scan across corruption/fault fixtures |
-| Product operations | No public explain, repair, telemetry, rollout, or downgrade surface | Integrate bounded public commands and operational evidence |
+| Product operations | No public explain, repair, compaction, telemetry, rollout, or downgrade surface | Integrate bounded public commands and operational evidence |
 
-Retaining old generations is not physical compaction. The candidate must not
-be described as scalable-status completion, public watcher authority, hosted
-three-OS evidence, or OGVCS-012 Done.
+The private reader-safe compactor closes the earlier unbounded-retention
+residual, but does not establish public product integration. Owner HMACs and
+kernel locks do not solve the existing malicious same-authority replacement of
+the lock namespace; on Unix they also cannot promise impossible unlink-by-open-
+handle semantics. The candidate must not be described as public scalable-
+status completion, public watcher authority, full fault-matrix evidence,
+telemetry/operations completion, hosted three-OS evidence, or OGVCS-012 Done.
 
 ## Reproduction
 
