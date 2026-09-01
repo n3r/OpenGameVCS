@@ -290,19 +290,21 @@ const emptyCollection = (value) => value == null
   || (Array.isArray(value) && value.length === 0)
   || (typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0);
 
-const exactSecurityOptions = (source, seccompCanonical, appArmorProfile) => {
-  if (!Array.isArray(source)
-    || ![2, 3].includes(source.length)
-    || new Set(source).size !== source.length
-    || source.filter((value) => value === 'no-new-privileges=true').length !== 1) return false;
-  const encoded = source.find((value) => typeof value === 'string' && value.startsWith('seccomp='));
-  if (!encoded) return false;
-  const appArmor = source.find((value) => typeof value === 'string' && value.startsWith('apparmor='));
-  if (source.some((value) => value !== 'no-new-privileges=true' && value !== encoded && value !== appArmor)
-    || (appArmor !== undefined && appArmor !== 'apparmor=docker-default')
+const securityOptionsMismatch = (source, seccompCanonical, appArmorProfile) => {
+  if (!Array.isArray(source) || ![2, 3].includes(source.length) || new Set(source).size !== source.length) return 'host-security-options-shape';
+  if (source.filter((value) => value === 'no-new-privileges=true').length !== 1) return 'host-security-nnp';
+  const seccomp = source.filter((value) => typeof value === 'string' && value.startsWith('seccomp='));
+  if (seccomp.length !== 1) return 'host-security-seccomp';
+  try {
+    if (canonicalJson(JSON.parse(seccomp[0].slice('seccomp='.length))) !== seccompCanonical) return 'host-security-seccomp';
+  } catch { return 'host-security-seccomp'; }
+  const appArmor = source.filter((value) => typeof value === 'string' && value.startsWith('apparmor='));
+  if (appArmor.length > 1
+    || source.some((value) => value !== 'no-new-privileges=true' && value !== seccomp[0] && value !== appArmor[0])) return 'host-security-options-shape';
+  if ((appArmor.length === 1 && appArmor[0] !== 'apparmor=docker-default')
     || ![undefined, '', 'docker-default'].includes(appArmorProfile)
-    || (appArmor !== undefined && appArmorProfile !== 'docker-default')) return false;
-  try { return canonicalJson(JSON.parse(encoded.slice('seccomp='.length))) === seccompCanonical; } catch { return false; }
+    || (appArmor.length === 1 && appArmorProfile !== 'docker-default')) return 'host-security-apparmor';
+  return null;
 };
 
 const exactUlimits = (source, policy) => {
@@ -390,6 +392,7 @@ const containerInspectMismatch = (container, expected, expectedState) => {
     const tmpfs = `rw,nosuid,nodev,noexec,size=${expected.policy.scratchBytes},uid=65532,gid=65532,mode=0700`;
     const networks = container?.NetworkSettings?.Networks;
     const networkNames = networks && typeof networks === 'object' && !Array.isArray(networks) ? Object.keys(networks).sort() : null;
+    const securityMismatch = securityOptionsMismatch(host?.SecurityOpt, expected.seccompCanonical, container?.AppArmorProfile);
     const stateMatches = expectedState === 'running'
       ? state?.Status === 'running'
         && state?.Running === true
@@ -421,7 +424,10 @@ const containerInspectMismatch = (container, expected, expectedState) => {
       ['host-runtime', host?.Runtime === OCI_RUNTIME],
       ['host-root', host?.ReadonlyRootfs === true && containsRequiredPaths(host?.MaskedPaths, REQUIRED_MASKED_PATHS) && containsRequiredPaths(host?.ReadonlyPaths, REQUIRED_READONLY_PATHS)],
       ['host-capabilities', canonicalJson(host?.CapDrop) === '["ALL"]' && emptyCollection(host?.CapAdd) && emptyCollection(host?.GroupAdd)],
-      ['host-security', exactSecurityOptions(host?.SecurityOpt, expected.seccompCanonical, container?.AppArmorProfile) && host?.Privileged === false && host?.OomKillDisable === false && (host?.Init == null || host.Init === false)],
+      [securityMismatch ?? 'host-security', securityMismatch === null],
+      ['host-security-privileged', host?.Privileged === false],
+      ['host-security-oom', host?.OomKillDisable === false],
+      ['host-security-init', host?.Init == null || host.Init === false],
       // Moby represents its private PID namespace with an empty PidMode and
       // rejects the otherwise intuitive literal `private` as invalid.
       ['host-namespaces', host?.CgroupnsMode === 'private' && host?.PidMode === '' && host?.IpcMode === 'none' && (host?.UTSMode ?? '') === '' && (host?.UsernsMode ?? '') === ''],

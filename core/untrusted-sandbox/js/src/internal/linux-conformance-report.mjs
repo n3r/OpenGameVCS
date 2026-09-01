@@ -26,7 +26,7 @@ const RESULT_DIAGNOSTICS = Object.freeze([
   'VALIDATED_EMPTY_OUTPUT',
   ...PRESTART_IMAGE_DIAGNOSTICS,
   ...[
-    'anchor-running', 'config-content', 'config-image', 'config-io', 'config-labels', 'config-process', 'effective-mounts', 'host-capabilities', 'host-devices', 'host-lifecycle', 'host-logging', 'host-mounts', 'host-namespaces', 'host-network', 'host-resources', 'host-root', 'host-runtime', 'host-security', 'host-tmpfs', 'host-ulimits', 'identity', 'inspect-response', 'inspect-shape', 'network-attachment', 'output-volume', 'state',
+    'anchor-running', 'config-content', 'config-image', 'config-io', 'config-labels', 'config-process', 'effective-mounts', 'host-capabilities', 'host-devices', 'host-lifecycle', 'host-logging', 'host-mounts', 'host-namespaces', 'host-network', 'host-resources', 'host-root', 'host-runtime', 'host-security', 'host-security-apparmor', 'host-security-init', 'host-security-nnp', 'host-security-oom', 'host-security-options-shape', 'host-security-privileged', 'host-security-seccomp', 'host-tmpfs', 'host-ulimits', 'identity', 'inspect-response', 'inspect-shape', 'network-attachment', 'output-volume', 'state',
   ].map((value) => `PRESTART_INSPECT_${value.replaceAll('-', '_').toUpperCase()}`),
   ...['ACTIVATION_CONTROL', 'CONTROL', 'ENTRYPOINT', 'INPUT_READ', 'NONZERO', 'OUTPUT_WRITE', 'STDERR', 'STDOUT', 'TOOL_EXITED'].map((value) => `WORKER_FAILED:${value}`),
 ]);

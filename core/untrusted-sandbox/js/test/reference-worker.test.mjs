@@ -1531,14 +1531,19 @@ test('pre-start inspection binds every role mount and effective isolation contro
   runningAnchor.HostConfig.SecurityOpt.unshift('apparmor=docker-default');
   runningAnchor.State = { Dead: false, Error: '', ExitCode: 0, OOMKilled: false, Paused: false, Pid: 2468, Restarting: false, Running: true, Status: 'running' };
   assert.equal(validateRunningContainerInspect(runningAnchor, anchorExpected), true);
-  for (const mutate of [
-    (value) => { value.AppArmorProfile = 'unconfined'; },
-    (value) => { value.HostConfig.SecurityOpt[0] = 'apparmor=unconfined'; },
-    (value) => { value.HostConfig.SecurityOpt.push('apparmor=docker-default'); },
-    (value) => { value.HostConfig.SecurityOpt.push('label=SECRET=/home/runner/private'); },
+  for (const [expectedMismatch, mutate] of [
+    ['host-security-apparmor', (value) => { value.AppArmorProfile = 'unconfined'; }],
+    ['host-security-apparmor', (value) => { value.HostConfig.SecurityOpt[0] = 'apparmor=unconfined'; }],
+    ['host-security-options-shape', (value) => { value.HostConfig.SecurityOpt.push('apparmor=docker-default'); }],
+    ['host-security-options-shape', (value) => { value.HostConfig.SecurityOpt.push('label=SECRET=/home/runner/private'); }],
+    ['host-security-nnp', (value) => { value.HostConfig.SecurityOpt[1] = 'no-new-privileges=false'; }],
+    ['host-security-seccomp', (value) => { value.HostConfig.SecurityOpt[2] = 'seccomp={"defaultAction":"SCMP_ACT_ALLOW"}'; }],
+    ['host-security-privileged', (value) => { value.HostConfig.Privileged = true; }],
+    ['host-security-oom', (value) => { value.HostConfig.OomKillDisable = true; }],
+    ['host-security-init', (value) => { value.HostConfig.Init = true; }],
   ]) {
     const candidate = structuredClone(runningAnchor); mutate(candidate);
-    assert.equal(runningContainerInspectMismatch(candidate, anchorExpected), 'host-security');
+    assert.equal(runningContainerInspectMismatch(candidate, anchorExpected), expectedMismatch);
   }
   assert.equal(runningContainerInspectMismatch(anchor, anchorExpected), 'state');
   assert.equal(createdContainerInspectMismatch(runningAnchor, anchorExpected), 'state');
