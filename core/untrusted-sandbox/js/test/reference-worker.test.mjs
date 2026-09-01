@@ -13,6 +13,7 @@ import {
   validateCreatedContainerInspect,
   validateOutputVolumeInspect,
   validateRuntimeImageInspect,
+  workerFailureClassForTesting,
 } from '../src/internal/docker-reference.mjs';
 import { LINUX_RUNTIME_CONTRACT_SHA256, canonicalJson, parseAndVerifyToolManifest, sha256, snapshotTrustedManifestKeys } from '../src/internal/reference-contract.mjs';
 import { authenticatedResultDiagnostic, ReferenceSandboxService } from '../src/internal/reference-service.mjs';
@@ -121,7 +122,7 @@ const authenticatedEvidenceBytes = (source, evidenceHmacKey) => {
 };
 
 class FakeContainerAdapter {
-  constructor({ collectKind = null, gate = null, inspectMismatch = null, runKind = null, tamper = null } = {}) { this.seccompDigest = SECCOMP_DIGEST; this.collectKind = collectKind; this.gate = gate; this.inspectMismatch = inspectMismatch; this.runKind = runKind; this.tamper = tamper; this.runs = 0; this.collections = 0; this.discards = 0; this.parserSawBinding = false; this.modes = []; }
+  constructor({ collectKind = null, failureClass = null, gate = null, inspectMismatch = null, runKind = null, tamper = null } = {}) { this.seccompDigest = SECCOMP_DIGEST; this.collectKind = collectKind; this.failureClass = failureClass; this.gate = gate; this.inspectMismatch = inspectMismatch; this.runKind = runKind; this.tamper = tamper; this.runs = 0; this.collections = 0; this.discards = 0; this.parserSawBinding = false; this.modes = []; }
   async verifyRuntimeImage(image, contract) { return image === `sha256:${RUNTIME_DIGEST}` && contract === LINUX_RUNTIME_CONTRACT_SHA256; }
   async runTool({ inputHandle, jobHandle, toolHandle, signal }) {
     this.runs += 1;
@@ -131,7 +132,7 @@ class FakeContainerAdapter {
     const command = (await readHandle(inputHandle)).toString('utf8');
     if (this.gate && !signal.aborted) await Promise.race([this.gate.promise, new Promise((resolve) => signal.addEventListener('abort', resolve, { once: true }))]);
     if (signal.aborted) return Object.freeze({ kind: 'cancelled', volume: `volume.${this.runs}` });
-    if (this.runKind) return Object.freeze({ kind: this.runKind, volume: `volume.${this.runs}` });
+    if (this.runKind) return Object.freeze(this.runKind === 'failed' ? { failureClass: this.failureClass, kind: this.runKind, volume: `volume.${this.runs}` } : { kind: this.runKind, volume: `volume.${this.runs}` });
     if (command === 'timeout') return Object.freeze({ kind: 'timeout', volume: `volume.${this.runs}` });
     const path = command === 'converter' ? 'preview/result' : 'import/result';
     return Object.freeze({ kind: 'success', volume: Object.freeze({ files: Object.freeze([{ content: Buffer.from(command), path }]) }) });
@@ -146,6 +147,16 @@ class FakeContainerAdapter {
 }
 
 const deferred = () => { let resolve; const promise = new Promise((done) => { resolve = done; }); return { promise, resolve }; };
+
+const workerExecuteResult = (overrides = {}) => Object.freeze({
+  code: 1,
+  kind: 'exit',
+  signal: null,
+  stderr: Buffer.alloc(0),
+  stdout: Buffer.alloc(0),
+  stdoutBytes: 0,
+  ...overrides,
+});
 
 const makeManifest = ({ privateKey, publicKey, toolDigest, nowUnixMs, resourcePolicy = null }) => {
   const policy = resourcePolicy ?? Object.freeze({ cpuMilliseconds: 1_000, elapsedMilliseconds: 10_000, fanout: 16, memoryBytes: 64 * 1024 * 1024, outputBytes: 1024 * 1024, processes: 4, profileId: 'linux-reference-v1', scratchBytes: 2 * 1024 * 1024 });
@@ -227,11 +238,45 @@ referenceStateTest('signed manifest, credential-free held-FD mounts, frame chann
   });
 });
 
+test('worker failure subclasses derive only from an exact bounded execute result', () => {
+  for (const [source, expected] of [
+    [workerExecuteResult({ code: 63 }), 'INPUT_READ'],
+    [workerExecuteResult({ code: 64 }), 'OUTPUT_WRITE'],
+    [workerExecuteResult({ code: 126, stderr: Buffer.from('bounded') }), 'ENTRYPOINT'],
+    [workerExecuteResult({ code: 127, stdout: Buffer.from('bounded'), stdoutBytes: 7 }), 'ENTRYPOINT'],
+    [workerExecuteResult({ code: 1 }), 'NONZERO'],
+    [workerExecuteResult({ code: 255 }), 'NONZERO'],
+    [workerExecuteResult({ code: 0, stdout: Buffer.from('bounded'), stdoutBytes: 7 }), 'STDOUT'],
+    [workerExecuteResult({ code: 0, stderr: Buffer.from('bounded') }), 'STDERR'],
+    [workerExecuteResult({ code: 0 }), 'CONTROL'],
+    [workerExecuteResult({ code: 0, stderr: Buffer.from('raw /home/runner/private'), stdout: Buffer.from('id=container-secret'), stdoutBytes: 19 }), 'CONTROL'],
+    [workerExecuteResult({ code: 918273 }), 'CONTROL'],
+    [workerExecuteResult({ code: 63, signal: 'SIGKILL' }), 'CONTROL'],
+    [workerExecuteResult({ code: 63, stdout: Buffer.from('x') }), 'CONTROL'],
+    [workerExecuteResult({ kind: 'timeout' }), 'CONTROL'],
+    [Object.freeze({ kind: 'spawn-failed' }), 'CONTROL'],
+    [{ ...workerExecuteResult({ code: 63 }) }, 'CONTROL'],
+    [Object.freeze({ ...workerExecuteResult({ code: 63 }), rawPath: '/home/runner/private' }), 'CONTROL'],
+    [new Proxy(workerExecuteResult({ code: 63 }), {}), 'CONTROL'],
+  ]) assert.equal(workerFailureClassForTesting(source), expected);
+
+  const accessor = {
+    kind: 'exit', signal: null, stderr: Buffer.alloc(0), stdout: Buffer.alloc(0), stdoutBytes: 0,
+  };
+  Object.defineProperty(accessor, 'code', { enumerable: true, get() { throw new Error('SECRET=/home/runner/private'); } });
+  assert.equal(workerFailureClassForTesting(Object.freeze(accessor)), 'CONTROL');
+});
+
 referenceStateTest('post-start diagnostics require exact authenticated provenance and expose only closed stages', async () => {
+  const workerCases = Object.freeze(['CONTROL', 'ENTRYPOINT', 'INPUT_READ', 'NONZERO', 'OUTPUT_WRITE', 'STDERR', 'STDOUT'].map((failureClass) => Object.freeze({
+    adapter: new FakeContainerAdapter({ failureClass, runKind: 'failed' }),
+    diagnostic: `WORKER_FAILED:${failureClass}`,
+    events: Object.freeze(['WORKER_FAILED', `WORKER_FAILURE_${failureClass}`]),
+  })));
   const cases = Object.freeze([
-    Object.freeze({ adapter: new FakeContainerAdapter({ runKind: 'failed' }), event: 'WORKER_FAILED' }),
-    Object.freeze({ adapter: new FakeContainerAdapter({ collectKind: 'failed' }), event: 'TRUSTED_OUTPUT_SHIM_REJECTED' }),
-    Object.freeze({ adapter: new FakeContainerAdapter({ tamper: 'terminal' }), event: 'OUTPUT_FRAME_INVALID' }),
+    ...workerCases,
+    Object.freeze({ adapter: new FakeContainerAdapter({ collectKind: 'failed' }), diagnostic: 'TRUSTED_OUTPUT_SHIM_REJECTED', events: Object.freeze(['TRUSTED_OUTPUT_SHIM_REJECTED']) }),
+    Object.freeze({ adapter: new FakeContainerAdapter({ tamper: 'terminal' }), diagnostic: 'OUTPUT_FRAME_INVALID', events: Object.freeze(['OUTPUT_FRAME_INVALID']) }),
   ]);
   for (const entry of cases) {
     await withFixture(async (fixture) => {
@@ -239,25 +284,28 @@ referenceStateTest('post-start diagnostics require exact authenticated provenanc
       assert.equal(result.code, 'SANDBOX_VALIDATION_FAILED');
       const evidenceBytes = await readFile(join(fixture.root, 'state/evidence', `${result.provenanceDigest}.json`));
       const request = { evidenceBytes, evidenceHmacKey: fixture.evidenceHmacKey, evidenceKeyId: fixture.evidenceKeyId, result };
-      assert.equal(authenticatedResultDiagnostic(request), entry.event);
+      assert.equal(authenticatedResultDiagnostic(request), entry.diagnostic);
       assert.equal(authenticatedResultDiagnostic({ ...request, evidenceHmacKey: Buffer.alloc(32, 0x11) }), 'none');
       assert.equal(authenticatedResultDiagnostic({ ...request, evidenceKeyId: 'test.evidence.substitution' }), 'none');
       assert.equal(authenticatedResultDiagnostic({ ...request, result: { ...result, code: 'VALIDATED', status: 'validated' } }), 'none');
       assert.equal(authenticatedResultDiagnostic({ ...request, result: { ...result, status: 'validated' } }), 'none');
       assert.equal(authenticatedResultDiagnostic({ ...request, result: { ...result, outputDigest: '7'.repeat(64) } }), 'none');
       assert.equal(authenticatedResultDiagnostic({ ...request, result: { ...result, cleanupReceiptDigest: '8'.repeat(64) } }), 'none');
+      assert.equal(authenticatedResultDiagnostic({ ...request, result: { ...result, jobId: 'job.substitution' } }), 'none');
+      assert.equal(authenticatedResultDiagnostic({ ...request, result: { ...result, raw: '/home/runner/private' } }), 'none');
+      assert.equal(authenticatedResultDiagnostic({ ...request, result: new Proxy(result, { get() { throw new Error('SECRET=/home/runner/private'); } }) }), 'none');
       assert.equal(authenticatedResultDiagnostic(new Proxy(request, { get() { throw new Error('SECRET=/home/runner/private'); } })), 'none');
 
       const provenance = JSON.parse(evidenceBytes.toString('utf8'));
-      const substitutedEvent = entry.event === 'WORKER_FAILED' ? 'OUTPUT_FRAME_INVALID' : 'WORKER_FAILED';
-      const tampered = Buffer.from(`${canonicalJson({ ...provenance, securityEvents: [substitutedEvent] })}\n`, 'utf8');
+      assert.deepEqual(provenance.securityEvents, entry.events);
+      const tampered = Buffer.from(`${canonicalJson({ ...provenance, securityEvents: ['OUTPUT_FRAME_INVALID', 'WORKER_FAILED'] })}\n`, 'utf8');
       assert.equal(authenticatedResultDiagnostic({ ...request, evidenceBytes: tampered, result: { ...result, provenanceDigest: sha256(tampered) } }), 'none');
       const nonCanonical = Buffer.from(`${JSON.stringify(provenance, null, 2)}\n`, 'utf8');
       assert.equal(authenticatedResultDiagnostic({ ...request, evidenceBytes: nonCanonical, result: { ...result, provenanceDigest: sha256(nonCanonical) } }), 'none');
 
       for (const securityEvents of [
-        [entry.event, entry.event],
-        [entry.event, 'SECRET=/home/runner/private'],
+        [...entry.events, ...entry.events],
+        [...entry.events, 'SECRET=/home/runner/private'],
         ['SECRET=/home/runner/private'],
       ]) {
         const hostileBytes = authenticatedEvidenceBytes({ ...provenance, securityEvents }, fixture.evidenceHmacKey);
@@ -267,6 +315,61 @@ referenceStateTest('post-start diagnostics require exact authenticated provenanc
         assert.equal(diagnostic.includes('/home/runner'), false);
       }
     }, { adapter: entry.adapter });
+  }
+});
+
+referenceStateTest('authenticated worker detail rejects mixed, duplicate, unknown, raw, identifier, and exit-code variants', async () => {
+  await withFixture(async (fixture) => {
+    const result = await fixture.service.run(fixture.jobFor(), fixture.acquisition);
+    const evidenceBytes = await readFile(join(fixture.root, 'state/evidence', `${result.provenanceDigest}.json`));
+    const provenance = JSON.parse(evidenceBytes.toString('utf8'));
+    const request = { evidenceBytes, evidenceHmacKey: fixture.evidenceHmacKey, evidenceKeyId: fixture.evidenceKeyId, result };
+    assert.equal(authenticatedResultDiagnostic(request), 'WORKER_FAILED:INPUT_READ');
+    for (const securityEvents of [
+      ['WORKER_FAILED'],
+      ['WORKER_FAILURE_INPUT_READ'],
+      ['WORKER_FAILURE_INPUT_READ', 'WORKER_FAILED'],
+      ['WORKER_FAILED', 'WORKER_FAILURE_INPUT_READ', 'WORKER_FAILURE_INPUT_READ'],
+      ['WORKER_FAILED', 'WORKER_FAILURE_UNKNOWN'],
+      ['WORKER_FAILED', 'WORKER_FAILURE_CODE_63'],
+      ['WORKER_FAILED', 'WORKER_FAILURE_RAW_/home/runner/private'],
+      ['WORKER_FAILED', 'WORKER_FAILURE_CONTAINER_246810'],
+      ['WORKER_FAILED', 'OUTPUT_FRAME_INVALID'],
+      ['WORKER_FAILED', 'WORKER_FAILURE_CONTROL', 'TRUSTED_OUTPUT_SHIM_REJECTED'],
+    ]) {
+      const hostileBytes = authenticatedEvidenceBytes({ ...provenance, securityEvents }, fixture.evidenceHmacKey);
+      const diagnostic = authenticatedResultDiagnostic({ ...request, evidenceBytes: hostileBytes, result: { ...result, provenanceDigest: sha256(hostileBytes) } });
+      assert.equal(diagnostic, 'none');
+      assert.equal(diagnostic.includes('SECRET'), false);
+      assert.equal(diagnostic.includes('/home/runner'), false);
+      assert.equal(diagnostic.includes('246810'), false);
+      assert.equal(diagnostic.includes('63'), false);
+    }
+  }, { adapter: new FakeContainerAdapter({ failureClass: 'INPUT_READ', runKind: 'failed' }) });
+});
+
+referenceStateTest('hostile adapter failure details are dropped rather than persisted or reflected', async () => {
+  for (const failureClass of [
+    'WORKER_FAILURE_INPUT_READ',
+    'INPUT_READ:/home/runner/private',
+    'CODE_63',
+    'container.246810',
+    63,
+    new String('INPUT_READ'),
+    new Proxy(Object.freeze({ value: 'INPUT_READ' }), {}),
+  ]) {
+    await withFixture(async (fixture) => {
+      const result = await fixture.service.run(fixture.jobFor(), fixture.acquisition);
+      assert.equal(result.code, 'SANDBOX_VALIDATION_FAILED');
+      const evidenceBytes = await readFile(join(fixture.root, 'state/evidence', `${result.provenanceDigest}.json`));
+      const provenance = JSON.parse(evidenceBytes.toString('utf8'));
+      assert.deepEqual(provenance.securityEvents, ['WORKER_FAILED']);
+      const diagnostic = authenticatedResultDiagnostic({ evidenceBytes, evidenceHmacKey: fixture.evidenceHmacKey, evidenceKeyId: fixture.evidenceKeyId, result });
+      assert.equal(diagnostic, 'none');
+      assert.equal(evidenceBytes.includes(Buffer.from('/home/runner')), false);
+      assert.equal(evidenceBytes.includes(Buffer.from('container.246810')), false);
+      assert.equal(evidenceBytes.includes(Buffer.from('CODE_63')), false);
+    }, { adapter: new FakeContainerAdapter({ failureClass, runKind: 'failed' }) });
   }
 });
 
