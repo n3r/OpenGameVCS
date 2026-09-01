@@ -8,9 +8,80 @@ import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const workspace = resolve(root, '../../..');
 const migrations = resolve(root, '../../migrations/repository-metadata');
+const identityMigrations = resolve(root, '../../migrations/identity-policy-audit');
+const lifecycleContractRoot = resolve(root, 'contracts/lifecycle-bridge/v1');
 
 function assert(condition, message) { if (!condition) throw new Error(message); }
 function digest(bytes) { return createHash('sha256').update(bytes).digest('hex'); }
+function decodeExactHex(value, byteLength, label) {
+  assert(
+    typeof value === 'string'
+      && new RegExp(`^[0-9a-f]{${byteLength * 2}}$`, 'u').test(value),
+    `${label} is not exact lowercase hexadecimal`,
+  );
+  return Buffer.from(value, 'hex');
+}
+function decodeExactUuid(value, label) {
+  assert(
+    typeof value === 'string'
+      && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(value),
+    `${label} is not a canonical lowercase UUID`,
+  );
+  return Buffer.from(value.replaceAll('-', ''), 'hex');
+}
+function encodeUnsigned(value, width, label) {
+  let integer;
+  try { integer = BigInt(value); } catch { throw new Error(`${label} is not an unsigned integer`); }
+  assert(integer >= 0n && integer < (1n << BigInt(width * 8)), `${label} exceeds u${width * 8}`);
+  const encoded = Buffer.alloc(width);
+  for (let offset = width - 1; offset >= 0; offset -= 1) {
+    encoded[offset] = Number(integer & 0xffn);
+    integer >>= 8n;
+  }
+  return encoded;
+}
+function requiredFrame(value) {
+  return Buffer.concat([encodeUnsigned(value.length, 8, 'field byte length'), value]);
+}
+function vectorFieldValue(input, descriptor) {
+  const value = input[descriptor.binding];
+  if (descriptor.component === 'unix-seconds') return value?.unixSeconds;
+  if (descriptor.component === 'nanoseconds') return value?.nanoseconds;
+  return value;
+}
+function encodedVectorValue(input, descriptor) {
+  const label = descriptor.component
+    ? `${descriptor.binding}.${descriptor.component}`
+    : descriptor.binding;
+  const value = vectorFieldValue(input, descriptor);
+  switch (descriptor.type) {
+    case 'utf8':
+      assert(typeof value === 'string', `${label} is not a string`);
+      return Buffer.from(value, 'utf8');
+    case 'optional-utf8':
+      assert(value === null || typeof value === 'string', `${label} is not an optional string`);
+      return value === null
+        ? Buffer.from([0])
+        : Buffer.concat([Buffer.from([1]), requiredFrame(Buffer.from(value, 'utf8'))]);
+    case 'sha256-raw': return decodeExactHex(value, 32, label);
+    case 'sha256-hex-utf8':
+      decodeExactHex(value, 32, label);
+      return Buffer.from(value, 'utf8');
+    case 'uuid-raw': return decodeExactUuid(value, label);
+    case 'u64-be': return encodeUnsigned(value, 8, label);
+    case 'u32-be': return encodeUnsigned(value, 4, label);
+    case 'u16-be': return encodeUnsigned(value, 2, label);
+    default: throw new Error(`unknown lifecycle operation field type: ${descriptor.type}`);
+  }
+}
+function operationDigest(contract, input) {
+  const fields = contract.operationDigest.orderedFields.map((descriptor) => {
+    const encoded = encodedVectorValue(input, descriptor);
+    return descriptor.type === 'optional-utf8' ? encoded : requiredFrame(encoded);
+  });
+  const domain = Buffer.from(contract.operationDigest.domainUtf8, 'utf8');
+  return digest(Buffer.concat([domain, Buffer.from([0]), ...fields]));
+}
 
 const cargo = await readFile(resolve(root, 'Cargo.toml'), 'utf8');
 assert(cargo.includes('name = "ogvcs-repository-metadata"'), 'Cargo package name differs');
@@ -30,6 +101,7 @@ const rustFiles = [
   'ports.rs',
   'postgres.rs',
   'service.rs',
+  'postgres/aggregate_bridge.rs',
   'types.rs',
 ];
 for (const file of rustFiles) {
@@ -39,12 +111,467 @@ for (const file of rustFiles) {
 
 const manifest = JSON.parse(await readFile(resolve(migrations, 'manifest.json')));
 assert(manifest.schemaVersion === 'ogvcs.repository-metadata/migration-manifest/v1', 'migration manifest schema differs');
-assert(JSON.stringify(manifest.entries.map(({ version, phase }) => [version, phase])) === '[[1,"expand"],[1,"migrate"],[1,"contract"],[2,"expand"],[2,"migrate"],[2,"contract"],[3,"expand"],[3,"migrate"],[3,"contract"],[4,"expand"],[4,"migrate"],[4,"contract"],[5,"expand"],[5,"migrate"],[5,"contract"],[6,"expand"],[6,"migrate"],[6,"contract"],[7,"expand"],[7,"migrate"],[7,"contract"],[8,"expand"],[8,"migrate"],[8,"contract"],[9,"expand"],[9,"migrate"],[9,"contract"]]', 'migration phases are not ordered');
+assert(JSON.stringify(manifest.entries.map(({ version, phase }) => [version, phase])) === '[[1,"expand"],[1,"migrate"],[1,"contract"],[2,"expand"],[2,"migrate"],[2,"contract"],[3,"expand"],[3,"migrate"],[3,"contract"],[4,"expand"],[4,"migrate"],[4,"contract"],[5,"expand"],[5,"migrate"],[5,"contract"],[6,"expand"],[6,"migrate"],[6,"contract"],[7,"expand"],[7,"migrate"],[7,"contract"],[8,"expand"],[8,"migrate"],[8,"contract"],[9,"expand"],[9,"migrate"],[9,"contract"],[10,"expand"],[10,"migrate"],[10,"contract"]]', 'migration phases are not ordered');
 for (const entry of manifest.entries) {
   const bytes = await readFile(resolve(migrations, entry.path));
   const sql = bytes.toString('utf8');
   assert(digest(bytes) === entry.sha256, `migration checksum differs: ${entry.path}`);
   assert(sql.startsWith('BEGIN;\n') && sql.endsWith('COMMIT;\n'), `migration is not transaction framed: ${entry.path}`);
+}
+
+const lifecycleManifestBytes = await readFile(resolve(lifecycleContractRoot, 'manifest.json'));
+const lifecycleManifest = JSON.parse(lifecycleManifestBytes);
+const lifecycleSource = await readFile(resolve(root, 'src/lifecycle.rs'), 'utf8');
+assert(
+  lifecycleManifest.schemaVersion === 'ogvcs.repository-metadata/lifecycle-authorization-bridge-manifest/v1',
+  'lifecycle bridge manifest schema differs',
+);
+assert(lifecycleManifest.contractVersion === '0.1.0-rc.6', 'lifecycle bridge version differs');
+assert(
+  lifecycleSource.includes(`"${digest(lifecycleManifestBytes)}"`),
+  'Rust lifecycle contract manifest digest is stale',
+);
+const expectedLifecycleArtifactPaths = [
+  'contract.json',
+  'vectors/operation-digest.json',
+];
+assert(
+  JSON.stringify(lifecycleManifest.artifacts.map(({ path }) => path))
+    === JSON.stringify(expectedLifecycleArtifactPaths),
+  'lifecycle bridge artifact inventory differs',
+);
+const lifecycleArtifacts = [];
+for (const artifact of lifecycleManifest.artifacts) {
+  const artifactBytes = await readFile(resolve(lifecycleContractRoot, artifact.path));
+  assert(artifactBytes.length === artifact.bytes, `lifecycle artifact size differs: ${artifact.path}`);
+  assert(digest(artifactBytes) === artifact.sha256, `lifecycle artifact digest differs: ${artifact.path}`);
+  lifecycleArtifacts.push(Buffer.from(`${artifact.path}\0${artifact.sha256}\0${artifact.bytes}\n`));
+}
+const lifecycleArtifactSet = digest(Buffer.concat(lifecycleArtifacts));
+assert(
+  lifecycleArtifactSet === lifecycleManifest.artifactSetSha256,
+  'lifecycle bridge artifact-set digest differs',
+);
+assert(
+  lifecycleSource.includes(`"${lifecycleArtifactSet}"`),
+  'Rust lifecycle artifact-set digest is stale',
+);
+const lifecycleContract = JSON.parse(
+  await readFile(resolve(lifecycleContractRoot, 'contract.json'), 'utf8'),
+);
+assert(
+  lifecycleContract.contractVersion === lifecycleManifest.contractVersion,
+  'lifecycle artifact/manifest versions differ',
+);
+assert(lifecycleContract.publicClaims.ogvcs009Complete === false, 'OGVCS-009 completion is claimed');
+assert(
+  lifecycleContract.publicClaims.ogvcs010DisasterRecoveryReceipt === false,
+  'OGVCS-010 disaster-recovery receipt is claimed',
+);
+assert(
+  lifecycleContract.publicClaims.trustedRootProofAuthorityExternal === false,
+  'trusted external root-proof authority is claimed',
+);
+assert(
+  lifecycleContract.dependencies.objectTransferManifestSha256
+    === lifecycleSource.match(/pub const OBJECT_TRANSFER_MANIFEST_SHA256: &str =\s*\n?\s*"([0-9a-f]{64})"/u)?.[1],
+  'lifecycle artifact object-transfer manifest pin differs from Rust',
+);
+assert(
+  lifecycleContract.dependencies.objectTransferArtifactSetSha256
+    === lifecycleSource.match(/pub const OBJECT_TRANSFER_ARTIFACT_SET_SHA256: &str =\s*\n?\s*"([0-9a-f]{64})"/u)?.[1],
+  'lifecycle artifact object-transfer artifact-set pin differs from Rust',
+);
+const identityPolicyManifestBytes = await readFile(
+  resolve(workspace, 'spec/identity-policy-audit/v1/manifest.json'),
+);
+const identityPolicyManifest = JSON.parse(identityPolicyManifestBytes);
+assert(
+  digest(identityPolicyManifestBytes) === lifecycleContract.dependencies.identityPolicyManifestSha256,
+  'lifecycle artifact identity-policy manifest pin differs',
+);
+assert(
+  identityPolicyManifest.artifactSetSha256
+    === lifecycleContract.dependencies.identityPolicyArtifactSetSha256,
+  'lifecycle artifact identity-policy artifact-set pin differs',
+);
+const authorizationManifestBytes = await readFile(
+  resolve(workspace, 'spec/authorization/v1/manifest.json'),
+);
+assert(
+  digest(authorizationManifestBytes)
+    === lifecycleContract.dependencies.authorizationManifestSha256,
+  'lifecycle artifact authorization manifest pin differs',
+);
+assert(
+  lifecycleSource.includes(
+    `pub const AUTHORIZATION_MANIFEST_SHA256: &str =\n    "${lifecycleContract.dependencies.authorizationManifestSha256}";`,
+  ),
+  'Rust authorization manifest pin differs from lifecycle artifact',
+);
+const identityMigrationManifestBytes = await readFile(resolve(identityMigrations, 'manifest.json'));
+const identityMigrationManifest = JSON.parse(identityMigrationManifestBytes);
+assert(
+  digest(identityMigrationManifestBytes)
+    === lifecycleContract.dependencies.identityMigrationManifestSha256,
+  'lifecycle artifact identity migration manifest pin differs',
+);
+assert(
+  identityMigrationManifest.schemaVersion
+    === 'ogvcs.identity-policy/postgres-migration-manifest/v1',
+  'identity migration manifest schema differs',
+);
+assert(lifecycleContract.dependencies.identityMigration === 3, 'identity migration version differs');
+const identityMigrationV3 = identityMigrationManifest.entries.filter(({ version }) => version === 3);
+assert(
+  JSON.stringify(identityMigrationV3.map(({ phase, sha256 }) => [phase, sha256]))
+    === JSON.stringify([
+      ['expand', lifecycleContract.dependencies.identityMigrationV3.expandSha256],
+      ['migrate', lifecycleContract.dependencies.identityMigrationV3.migrateSha256],
+      ['contract', lifecycleContract.dependencies.identityMigrationV3.contractSha256],
+    ]),
+  'identity migration v3 phase pins differ',
+);
+for (const phase of identityMigrationV3) {
+  assert(
+    digest(await readFile(resolve(identityMigrations, phase.path))) === phase.sha256,
+    `identity migration v3 SQL differs: ${phase.path}`,
+  );
+}
+const identityAggregateSource = await readFile(
+  resolve(root, '../identity-policy-audit/src/aggregate.rs'),
+  'utf8',
+);
+assert(
+  identityAggregateSource.includes(
+    `pub const AGGREGATE_AUTHORIZATION_RECEIPT_SCHEMA: &str =\n    "${lifecycleContract.dependencies.aggregateAuthorizationReceipt}";`,
+  ),
+  'identity aggregate receipt schema dependency differs',
+);
+const expectedOperationDigestSemantics = {
+  algorithm: 'sha-256',
+  domainUtf8: 'OGVCS-LIFECYCLE-AUTHORIZED-OPERATION-V1',
+  domainHex: '4f475643532d4c4946454359434c452d415554484f52495a45442d4f5045524154494f4e2d5631',
+  formula: 'SHA-256(domain-utf8 || 0x00 || ordered-framed-fields)',
+  requiredFieldFraming: 'u64-be(value-byte-length) || value-bytes',
+  optionalFieldFraming: '0x00 when absent; 0x01 || u64-be(value-byte-length) || value-bytes when present',
+  stringEncoding: 'utf-8 exact validated bytes',
+  digestEncoding: 'raw 32 bytes unless type is sha256-hex-utf8',
+  uuidEncoding: 'raw RFC-4122 network-order 16 bytes',
+  integerEncoding: 'unsigned fixed-width big-endian',
+  timestampEncoding: 'Unix seconds as u64-be followed by nanoseconds as u32-be',
+};
+for (const [field, value] of Object.entries(expectedOperationDigestSemantics)) {
+  assert(lifecycleContract.operationDigest[field] === value, `operation digest ${field} differs`);
+}
+const expectedOperationTypeEncodings = {
+  utf8: 'the exact UTF-8 bytes of the JSON string',
+  'optional-utf8': 'the optional-field tag followed, when present, by the required framing of the exact UTF-8 bytes',
+  'sha256-raw': "exactly 32 bytes decoded from the JSON value's 64 lowercase hexadecimal characters",
+  'sha256-hex-utf8': 'the exact 64 lowercase ASCII hexadecimal characters encoded as UTF-8; do not hex-decode',
+  'uuid-raw': 'exactly 16 RFC-4122 network-order bytes decoded from the canonical lowercase hyphenated UUID',
+  'u64-be': 'exactly 8 bytes containing the unsigned integer in big-endian order',
+  'u32-be': 'exactly 4 bytes containing the unsigned integer in big-endian order',
+  'u16-be': 'exactly 2 bytes containing the unsigned integer in big-endian order',
+};
+assert(
+  JSON.stringify(lifecycleContract.operationDigest.typeEncodings)
+    === JSON.stringify(expectedOperationTypeEncodings),
+  'operation digest type encodings differ',
+);
+assert(
+  Buffer.from(lifecycleContract.operationDigest.domainUtf8, 'utf8').toString('hex')
+    === lifecycleContract.operationDigest.domainHex,
+  'operation digest domain UTF-8 and raw bytes differ',
+);
+const operationVector = JSON.parse(
+  await readFile(resolve(lifecycleContractRoot, 'vectors/operation-digest.json'), 'utf8'),
+);
+assert(
+  operationVector.schemaVersion
+    === 'ogvcs.repository-metadata/lifecycle-authorization-bridge-operation-vector/v1',
+  'operation digest vector schema differs',
+);
+const recomputedOperationDigest = operationDigest(lifecycleContract, operationVector.input);
+assert(
+  recomputedOperationDigest === operationVector.expectedOperationDigestSha256,
+  'operation digest golden vector differs',
+);
+const tamperedOperationInput = structuredClone(operationVector.input);
+tamperedOperationInput['consumption-id'] = `${tamperedOperationInput['consumption-id']}.tampered`;
+assert(
+  operationDigest(lifecycleContract, tamperedOperationInput)
+    !== operationVector.expectedOperationDigestSha256,
+  'operation digest vector does not detect tampering',
+);
+const aggregateBridge = await readFile(resolve(root, 'src/postgres/aggregate_bridge.rs'), 'utf8');
+const requiredBridgeBindings = [
+  'identity-receipt-schema-version',
+  'identity-plan-id',
+  'identity-decision-digest',
+  'lifecycle-plan-id',
+  'lifecycle-plan-digest',
+  'identity-plan-nonce',
+  'identity-tenant-id',
+  'identity-repository-id',
+  'metadata-tenant-id',
+  'metadata-repository-id',
+  'subject-digest',
+  'authenticated-scope-digest',
+  'credential-generation',
+  'authority-epoch',
+  'security-epoch',
+  'policy-generation',
+  'policy-digest',
+  'settings-generation',
+  'settings-descriptor-digest',
+  'path-profile',
+  'case-mode',
+  'permission',
+  'capability',
+  'reference',
+  'snapshot',
+  'publication-object-kind',
+  'publication-object-digest',
+  'candidate-digest',
+  'authority-contract-digest',
+  'reason-digest',
+  'identity-resource-count',
+  'resource-set-digest',
+  'resource-digest-projection-digest',
+  'lifecycle-object-count',
+  'lifecycle-chunk-count',
+  'lifecycle-encoded-bytes',
+  'lifecycle-expiry',
+  'object-transfer-manifest-digest',
+  'object-transfer-artifact-set-digest',
+  'lifecycle-contract-manifest-digest',
+  'lifecycle-contract-artifact-set-digest',
+  'idempotency-operation',
+  'idempotency-key',
+  'idempotency-scope-digest',
+  'semantic-fingerprint',
+  'identity-issued-at',
+  'identity-expires-at',
+  'signer-key-generation',
+  'signer-key-reference',
+  'signer-key-fingerprint',
+  'consumption-id',
+  'operation-digest',
+];
+assert(
+  new Set(requiredBridgeBindings).size === requiredBridgeBindings.length,
+  'static required-binding registry contains a duplicate',
+);
+assert(
+  new Set(lifecycleContract.requiredBindings).size === lifecycleContract.requiredBindings.length,
+  'lifecycle contract required-binding registry contains a duplicate',
+);
+const expectedOrderedBridgeFields = [
+  ['identity-receipt-schema-version', 'utf8'],
+  ['identity-plan-id', 'utf8'],
+  ['identity-decision-digest', 'sha256-raw'],
+  ['identity-tenant-id', 'utf8'],
+  ['identity-repository-id', 'utf8'],
+  ['metadata-tenant-id', 'uuid-raw'],
+  ['metadata-repository-id', 'uuid-raw'],
+  ['lifecycle-plan-id', 'uuid-raw'],
+  ['lifecycle-plan-digest', 'sha256-raw'],
+  ['identity-resource-count', 'u64-be'],
+  ['lifecycle-object-count', 'u64-be'],
+  ['lifecycle-chunk-count', 'u64-be'],
+  ['lifecycle-encoded-bytes', 'u64-be'],
+  ['lifecycle-expiry', 'u64-be', 'unix-seconds'],
+  ['lifecycle-expiry', 'u32-be', 'nanoseconds'],
+  ['publication-object-kind', 'u16-be'],
+  ['publication-object-digest', 'sha256-raw'],
+  ['candidate-digest', 'sha256-raw'],
+  ['authority-contract-digest', 'sha256-raw'],
+  ['object-transfer-manifest-digest', 'sha256-hex-utf8'],
+  ['object-transfer-artifact-set-digest', 'sha256-hex-utf8'],
+  ['lifecycle-contract-manifest-digest', 'sha256-hex-utf8'],
+  ['lifecycle-contract-artifact-set-digest', 'sha256-hex-utf8'],
+  ['subject-digest', 'sha256-raw'],
+  ['authenticated-scope-digest', 'sha256-raw'],
+  ['credential-generation', 'u64-be'],
+  ['authority-epoch', 'u64-be'],
+  ['security-epoch', 'u64-be'],
+  ['policy-generation', 'u64-be'],
+  ['policy-digest', 'sha256-raw'],
+  ['settings-generation', 'u64-be'],
+  ['settings-descriptor-digest', 'sha256-raw'],
+  ['path-profile', 'utf8'],
+  ['case-mode', 'utf8'],
+  ['permission', 'utf8'],
+  ['capability', 'utf8'],
+  ['reference', 'optional-utf8'],
+  ['snapshot', 'optional-utf8'],
+  ['reason-digest', 'sha256-raw'],
+  ['resource-set-digest', 'sha256-raw'],
+  ['resource-digest-projection-digest', 'sha256-raw'],
+  ['identity-plan-nonce', 'sha256-raw'],
+  ['idempotency-operation', 'utf8'],
+  ['idempotency-key', 'utf8'],
+  ['idempotency-scope-digest', 'sha256-raw'],
+  ['semantic-fingerprint', 'sha256-raw'],
+  ['consumption-id', 'utf8'],
+  ['identity-issued-at', 'u64-be'],
+  ['identity-expires-at', 'u64-be'],
+  ['signer-key-generation', 'u64-be'],
+  ['signer-key-reference', 'utf8'],
+  ['signer-key-fingerprint', 'sha256-raw'],
+];
+const actualOrderedBridgeFields = lifecycleContract.operationDigest.orderedFields.map(
+  ({ binding, type, component }) => component ? [binding, type, component] : [binding, type],
+);
+assert(
+  JSON.stringify(actualOrderedBridgeFields) === JSON.stringify(expectedOrderedBridgeFields),
+  'lifecycle bridge ordered typed digest fields differ',
+);
+const orderedBindingSet = new Set(
+  lifecycleContract.operationDigest.orderedFields.map(({ binding }) => binding),
+);
+assert(
+  requiredBridgeBindings.every((binding) => binding === 'operation-digest' || orderedBindingSet.has(binding))
+    && [...orderedBindingSet].every((binding) => requiredBridgeBindings.includes(binding)),
+  'lifecycle bridge required/ordered binding registries differ',
+);
+assert(
+  JSON.stringify(lifecycleContract.requiredBindings) === JSON.stringify(requiredBridgeBindings),
+  'lifecycle bridge required-binding registry differs',
+);
+const bindingNeedles = {
+  'identity-receipt-schema-version': 'AggregateAuthorizationReceipt::schema_version()',
+  'identity-plan-id': 'receipt.plan_id().as_bytes()',
+  'identity-decision-digest': '&facts.decision_digest',
+  'lifecycle-plan-id': 'plan.plan_id.as_bytes()',
+  'lifecycle-plan-digest': '&plan.plan_digest',
+  'identity-plan-nonce': '&facts.plan_nonce',
+  'identity-tenant-id': 'receipt.tenant().as_bytes()',
+  'identity-repository-id': 'receipt.repository().as_bytes()',
+  'metadata-tenant-id': 'plan.tenant_id.as_bytes()',
+  'metadata-repository-id': 'plan.repository_id.as_bytes()',
+  'subject-digest': '&facts.subject_digest',
+  'authenticated-scope-digest': '&facts.scope_digest',
+  'credential-generation': 'receipt.credential_generation()',
+  'authority-epoch': 'receipt.authority_epoch()',
+  'security-epoch': 'receipt.security_epoch()',
+  'policy-generation': 'receipt.policy_generation()',
+  'policy-digest': '&facts.policy_digest',
+  'settings-generation': 'receipt.settings_generation()',
+  'settings-descriptor-digest': '&facts.settings_digest',
+  'path-profile': 'receipt.path_profile().as_bytes()',
+  'case-mode': 'receipt.case_mode().as_bytes()',
+  permission: 'receipt.permission().as_bytes()',
+  capability: 'receipt.capability().as_bytes()',
+  reference: 'receipt.reference().map(str::as_bytes)',
+  snapshot: 'receipt.snapshot().map(str::as_bytes)',
+  'publication-object-kind': 'plan.publication.kind.code()',
+  'publication-object-digest': '&plan.publication.digest',
+  'candidate-digest': '&plan.candidate_digest',
+  'authority-contract-digest': '&plan.authority_contract_digest',
+  'reason-digest': '&facts.reason_digest',
+  'identity-resource-count': 'BridgeOperationField::U64(identity_resource_count)',
+  'resource-set-digest': '&facts.resource_set_digest',
+  'resource-digest-projection-digest': '&facts.projection_digest',
+  'lifecycle-object-count': 'u64::from(plan.object_count)',
+  'lifecycle-chunk-count': 'u64::from(plan.chunk_count)',
+  'lifecycle-encoded-bytes': 'BridgeOperationField::U64(plan.encoded_bytes)',
+  'lifecycle-expiry': 'lifecycle_expiry.subsec_nanos()',
+  'object-transfer-manifest-digest': 'OBJECT_TRANSFER_MANIFEST_SHA256.as_bytes()',
+  'object-transfer-artifact-set-digest': 'OBJECT_TRANSFER_ARTIFACT_SET_SHA256.as_bytes()',
+  'lifecycle-contract-manifest-digest': 'LIFECYCLE_CONTRACT_SHA256.as_bytes()',
+  'lifecycle-contract-artifact-set-digest': 'LIFECYCLE_CONTRACT_ARTIFACT_SET_SHA256.as_bytes()',
+  'idempotency-operation': 'plan.idempotency_operation.as_bytes()',
+  'idempotency-key': 'plan.idempotency_key.as_bytes()',
+  'idempotency-scope-digest': '&plan.idempotency_scope_digest',
+  'semantic-fingerprint': '&plan.semantic_fingerprint',
+  'identity-issued-at': 'receipt.issued_at()',
+  'identity-expires-at': 'receipt.expires_at()',
+  'signer-key-generation': 'receipt.signer_key_generation()',
+  'signer-key-reference': 'receipt.signer_key_reference().as_bytes()',
+  'signer-key-fingerprint': '&facts.signer_fingerprint',
+  'consumption-id': 'consumption_id.as_bytes()',
+  'operation-digest': 'BRIDGE_OPERATION_DOMAIN',
+};
+const operationDigestStart = aggregateBridge.indexOf('fn bridge_operation_digest(');
+const operationDigestEnd = aggregateBridge.indexOf('\nenum BridgeOperationField', operationDigestStart);
+assert(
+  operationDigestStart >= 0 && operationDigestEnd > operationDigestStart,
+  'bridge operation digest function boundary is missing',
+);
+const operationDigestBody = aggregateBridge.slice(operationDigestStart, operationDigestEnd);
+for (const binding of requiredBridgeBindings) {
+  if (binding === 'operation-digest') continue;
+  assert(
+    operationDigestBody.includes(bindingNeedles[binding]),
+    `lifecycle bridge operation digest omits ${binding}`,
+  );
+}
+const orderedBindingNeedles = {
+  ...bindingNeedles,
+  'lifecycle-expiry:unix-seconds': 'lifecycle_expiry.as_secs()',
+  'lifecycle-expiry:nanoseconds': 'lifecycle_expiry.subsec_nanos()',
+};
+let orderedSourceOffset = 0;
+for (const descriptor of lifecycleContract.operationDigest.orderedFields) {
+  const key = descriptor.component
+    ? `${descriptor.binding}:${descriptor.component}`
+    : descriptor.binding;
+  const needle = orderedBindingNeedles[key];
+  assert(typeof needle === 'string', `source needle is missing for ordered binding ${key}`);
+  const nextOffset = operationDigestBody.indexOf(needle, orderedSourceOffset);
+  assert(nextOffset >= 0, `ordered bridge source field differs: ${key}`);
+  orderedSourceOffset = nextOffset + needle.length;
+}
+const operationEncoderStart = aggregateBridge.indexOf('fn bridge_operation_digest_from_fields(');
+const operationEncoderEnd = aggregateBridge.indexOf('\nfn apply_authorized_plan(', operationEncoderStart);
+assert(
+  operationEncoderStart >= 0 && operationEncoderEnd > operationEncoderStart,
+  'shared bridge operation encoder boundary is missing',
+);
+const operationEncoderBody = aggregateBridge.slice(operationEncoderStart, operationEncoderEnd);
+for (const needle of [
+  'BridgeOperationField::Required(value) => bridge_field',
+  'BridgeOperationField::Optional(value) => bridge_optional_field',
+  'BridgeOperationField::U64(value) => bridge_field(&mut bytes, &value.to_be_bytes())',
+  'BridgeOperationField::U32(value) => bridge_field(&mut bytes, &value.to_be_bytes())',
+  'BridgeOperationField::U16(value) => bridge_field(&mut bytes, &value.to_be_bytes())',
+  'domain_digest(BRIDGE_OPERATION_DOMAIN, &bytes)',
+]) assert(operationEncoderBody.includes(needle), `shared operation encoder differs: ${needle}`);
+const expectedValidatedEqualities = [
+  { left: 'identity-resource-count', right: 'lifecycle-object-count' },
+  { left: 'authenticated-scope-digest', right: 'idempotency-scope-digest' },
+];
+assert(
+  JSON.stringify(lifecycleContract.validatedEqualities) === JSON.stringify(expectedValidatedEqualities),
+  'lifecycle bridge validated-equality registry differs',
+);
+for (const equality of lifecycleContract.validatedEqualities) {
+  assert(
+    requiredBridgeBindings.includes(equality.left) && requiredBridgeBindings.includes(equality.right),
+    `lifecycle bridge equality has a dangling binding: ${equality.left}/${equality.right}`,
+  );
+}
+const receiptValidationStart = aggregateBridge.indexOf('fn validate_receipt_and_current_settings(');
+const receiptValidationEnd = aggregateBridge.indexOf('\nfn bridge_operation_digest(', receiptValidationStart);
+assert(
+  receiptValidationStart >= 0 && receiptValidationEnd > receiptValidationStart,
+  'bridge receipt validation function boundary is missing',
+);
+const receiptValidationBody = aggregateBridge.slice(receiptValidationStart, receiptValidationEnd);
+for (const needle of [
+  'receipt.resource_count() != plan.object_count as usize',
+  'scope_digest != plan.idempotency_scope_digest',
+  'plan.authority_contract_digest != expected_authority_contract',
+]) assert(receiptValidationBody.includes(needle), `bridge validated equality is missing: ${needle}`);
+assert(lifecycleContract.evidence.aggregateDecisionRows === 1, 'aggregate decision cardinality differs');
+assert(lifecycleContract.evidence.aggregateApplicationRows === 1, 'aggregate application cardinality differs');
+assert(lifecycleContract.evidence.aggregateOutboxEvents === 1, 'aggregate outbox cardinality differs');
+for (const field of ['perResourceFactRows', 'perResourceReachabilityRows', 'perResourceOutboxRows']) {
+  const binding = lifecycleContract.evidence[field];
+  assert(binding === 'lifecycle-object-count', `${field} cardinality differs`);
+  assert(requiredBridgeBindings.includes(binding), `${field} has a dangling binding reference`);
 }
 
 const errors = JSON.parse(await readFile(resolve(workspace, 'spec/repository-metadata/v1/registries/domain-errors.json'))).entries;
@@ -176,6 +703,22 @@ for (const evidence of [
 ]) assert(expandV9.includes(evidence), `version 9 lifecycle evidence missing: ${evidence}`);
 assert(expandV9.includes("(health = 'not-applicable')\n           = (health_generation IS NULL AND health_observation_digest IS NULL)"), 'version 9 lifecycle health axis differs');
 assert(!expandV9.includes('FOR item_row IN'), 'version 9 aggregate validation contains a per-item SQL loop');
+const expandV10 = await readFile(resolve(migrations, '000010_expand.sql'), 'utf8');
+for (const evidence of [
+  'lifecycle_aggregate_authorization_evidence',
+  'aggregate_plan_consumptions',
+  'NEW.context_digest = evidence.operation_digest',
+  'identity_plan.signer_key_reference = evidence.signer_key_reference',
+  'EXTRACT(EPOCH FROM identity_plan.issued_at)',
+  'EXTRACT(EPOCH FROM identity_plan.expires_at)',
+  'resource_digest_projection_digest',
+  'lifecycle_expires_at',
+  'aggregate_event) = 1',
+  'reject_sealed_aggregate_child_insert_v10',
+  'lifecycle_transaction_facts_aggregate_sealed_v10',
+  'lifecycle_reachability_aggregate_sealed_v10',
+  'lifecycle_outbox_aggregate_sealed_v10',
+]) assert(expandV10.includes(evidence), `version 10 aggregate bridge evidence missing: ${evidence}`);
 
 const lifecycleAdapter = await readFile(resolve(root, 'src/postgres/lifecycle.rs'), 'utf8');
 assert(lifecycleAdapter.includes('FROM unnest('), 'version 9 chunk writer is not set based');
