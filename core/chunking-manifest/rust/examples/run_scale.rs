@@ -1,7 +1,16 @@
-use std::{cell::RefCell, env, fs, io::Write, path::PathBuf, rc::Rc, time::Instant};
+use std::{
+    cell::RefCell,
+    env, fs,
+    fs::{File, OpenOptions},
+    io::{self, Write},
+    path::{Path, PathBuf},
+    rc::Rc,
+    time::Instant,
+};
 
 use ogvcs_chunking_manifest::{
-    ChunkError, Chunker, LedgerOptions, PROFILE, SCALAR_WORKING_MINIMUM,
+    ChunkError, Chunker, LedgerOptions, MANIFEST_BYTES_MAXIMUM, MANIFEST_EMIT_BYTES_MAXIMUM,
+    PROFILE, SCALAR_WORKING_MINIMUM,
 };
 use ogvcs_object_model::{sha256, Sha256Writer};
 use serde_json::json;
@@ -32,6 +41,91 @@ struct ScratchCleanup(PathBuf);
 impl Drop for ScratchCleanup {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
+struct ManifestFileSink {
+    file: Option<File>,
+    path: PathBuf,
+    bytes: u64,
+    maximum_write_bytes: usize,
+}
+
+impl ManifestFileSink {
+    fn new(root: &Path) -> io::Result<Self> {
+        let path = root.join("manifest.cbor.partial");
+        let mut options = OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        Ok(Self {
+            file: Some(options.open(&path)?),
+            path,
+            bytes: 0,
+            maximum_write_bytes: 0,
+        })
+    }
+
+    fn sync_and_remove(&mut self) -> io::Result<()> {
+        let file = self
+            .file
+            .as_mut()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "manifest sink already removed"))?;
+        file.flush()?;
+        file.sync_all()?;
+        if file.metadata()?.len() != self.bytes {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "manifest sink length mismatch",
+            ));
+        }
+        self.file.take();
+        fs::remove_file(&self.path)?;
+        File::open(
+            self.path
+                .parent()
+                .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "manifest parent missing"))?,
+        )?
+        .sync_all()
+    }
+}
+
+impl Write for ManifestFileSink {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        if bytes.len() as u64 > MANIFEST_BYTES_MAXIMUM.saturating_sub(self.bytes) {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "manifest sink bound exceeded",
+            ));
+        }
+        self.maximum_write_bytes = self.maximum_write_bytes.max(bytes.len());
+        let written = self
+            .file
+            .as_mut()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "manifest sink removed"))?
+            .write(bytes)?;
+        self.bytes = self
+            .bytes
+            .checked_add(written as u64)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "manifest byte overflow"))?;
+        Ok(written)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.file
+            .as_mut()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "manifest sink removed"))?
+            .flush()
+    }
+}
+
+impl Drop for ManifestFileSink {
+    fn drop(&mut self) {
+        self.file.take();
+        let _ = fs::remove_file(&self.path);
     }
 }
 
@@ -186,7 +280,19 @@ fn main() {
             eprintln!("[rust-scale] {} GiB / 100 GiB", (repetition + 1) / 128);
         }
     }
-    let result = chunker.finish().unwrap_or_else(|error| fail(error.code()));
+    let mut manifest_sink = ManifestFileSink::new(&scratch_root.0)
+        .unwrap_or_else(|_| fail("manifest sink unavailable"));
+    let result = chunker
+        .finish_to_manifest(&mut manifest_sink)
+        .unwrap_or_else(|error| fail(error.code()));
+    if manifest_sink.bytes != result.manifest_bytes
+        || manifest_sink.maximum_write_bytes > MANIFEST_EMIT_BYTES_MAXIMUM
+    {
+        fail("manifest sink bounds failed");
+    }
+    manifest_sink
+        .sync_and_remove()
+        .unwrap_or_else(|_| fail("manifest sink cleanup failed"));
     let scratch_artifacts_after = fs::read_dir(&scratch_root.0)
         .unwrap_or_else(|_| fail("scratch directory disappeared"))
         .count() as u64;
@@ -197,10 +303,10 @@ fn main() {
         .saturating_mul(1000)
         .checked_div(wall_time_milliseconds.max(1))
         .unwrap_or(0);
-    let manifest_sha256 = sha256(&result.manifest.bytes);
-    let manifest_bytes = result.manifest.bytes.len();
+    let manifest_sha256 = result.manifest_sha256;
+    let manifest_bytes = result.manifest_bytes;
     let whole_file_sha256 = hex(&result.whole_file_digest);
-    let manifest_object_id = result.manifest.object_id.clone();
+    let manifest_object_id = result.manifest_object_id.clone();
     let ledger = result.ledger;
     let mut stats = stats.borrow_mut();
     let transcript = std::mem::take(&mut stats.transcript).finish();
@@ -214,7 +320,11 @@ fn main() {
     if result.logical_length != LOGICAL_BYTES || total_chunk_bytes != LOGICAL_BYTES {
         violations.push("logical byte accounting");
     }
-    if result.class != "cdc-1m" || chunk_count == 0 || ledger.records != chunk_count {
+    if result.class != "cdc-1m"
+        || chunk_count == 0
+        || result.part_count != chunk_count
+        || ledger.records != chunk_count
+    {
         violations.push("chunk accounting");
     }
     if minimum_chunk_bytes < 1 || maximum_chunk_bytes > 2_097_152 {
@@ -318,4 +428,50 @@ fn main() {
         .write_all(report_bytes.as_bytes())
         .and_then(|()| output.sync_all())
         .unwrap_or_else(|_| fail("report write failed"));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn manifest_file_sink_is_create_new_bounded_synced_and_drop_cleaned() {
+        let root = ScratchCleanup(scratch_root());
+        let mut sink = ManifestFileSink::new(&root.0).unwrap();
+        sink.write_all(&[0x5a; 63]).unwrap();
+        assert_eq!(sink.bytes, 63);
+        assert_eq!(sink.maximum_write_bytes, 63);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                fs::metadata(&sink.path).unwrap().permissions().mode() & 0o777,
+                0o600
+            );
+        }
+        sink.sync_and_remove().unwrap();
+        assert_eq!(fs::read_dir(&root.0).unwrap().count(), 0);
+
+        let collision = root.0.join("manifest.cbor.partial");
+        OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&collision)
+            .unwrap();
+        assert!(ManifestFileSink::new(&root.0).is_err());
+        fs::remove_file(collision).unwrap();
+
+        {
+            let mut partial = ManifestFileSink::new(&root.0).unwrap();
+            partial.write_all(&[0xa7]).unwrap();
+        }
+        assert_eq!(fs::read_dir(&root.0).unwrap().count(), 0);
+
+        {
+            let mut bounded = ManifestFileSink::new(&root.0).unwrap();
+            bounded.bytes = MANIFEST_BYTES_MAXIMUM;
+            assert!(bounded.write(&[0]).is_err());
+        }
+        assert_eq!(fs::read_dir(&root.0).unwrap().count(), 0);
+    }
 }
