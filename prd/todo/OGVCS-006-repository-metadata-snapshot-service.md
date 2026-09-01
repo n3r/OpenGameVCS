@@ -108,8 +108,25 @@ Ship behind a developer-preview API version. Apply expand/migrate/contract schem
   contract tests cover route-first closure, the distinct OGVCS-041 registry
   identities, receipt failure precedence/currentness, exact problem tuples,
   optional extensions, protocol/body/extension bounds, and RFC 8785 UTF-16 key
-  ordering against a Node golden. This tranche does not add new million-entry,
-  100-CAS, or scale-campaign evidence.
+  ordering against a Node golden. In addition, exact source
+  [`2a56e3a`](https://github.com/n3r/OpenGameVCS/commit/2a56e3a7ee6c15cebf535c84b025a289abb079a9)
+  passed all four jobs in hosted [run
+  33516919674](https://github.com/n3r/OpenGameVCS/actions/runs/33516919674):
+  PostgreSQL 15 and its thirteen-boundary hard-restart proof, macOS, and
+  Windows. Its bounded live matrix excludes unreachable corrupt/foreign rows
+  and 1,001 unrelated FileID/import rows from exact-Snapshot candidate
+  acquisition while reachable contract, identity, positional, and missing-row
+  faults reject and roll back. The source, run/job conclusions, and
+  GitHub-reported artifact sizes/digests are retained in the
+  [OGVCS-006 evidence packet](../../docs/evidence/OGVCS-006/README.md).
+  Authenticated acquisition extracted both hosted artifacts: the 13-case plus
+  summary restart JSONL parses and hashes as recorded, while the hosted
+  service report is byte-identical to the retained deterministic 15-row
+  report. The transient ZIP bytes were not retained, so their GitHub-reported
+  archive digests were not independently rehashed. `exactScaleExecuted`
+  remains `false`: this evidence does not execute the OGVCS-006-AC-04
+  million-entry case, an exact 100,000-object candidate campaign, or any new
+  scale campaign.
 - Security/reliability review: negotiation verification is explicitly not an
   OGVCS-009 authorization brand. The first sealed PostgreSQL dispatcher now
   accepts only negotiation-verified `repository.get-settings` and

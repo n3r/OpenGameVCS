@@ -4,6 +4,56 @@ This packet preserves bounded hosted evidence for the internal PostgreSQL
 metadata adapter. It is not completion evidence for OGVCS-006 and does not
 change the PRD's **In development** status.
 
+## Root-scoped publication-candidate acquisition hosted update
+
+- Source: [`2a56e3a7ee6c15cebf535c84b025a289abb079a9`](https://github.com/n3r/OpenGameVCS/commit/2a56e3a7ee6c15cebf535c84b025a289abb079a9)
+- Workflow: [run 33516919674](https://github.com/n3r/OpenGameVCS/actions/runs/33516919674), completed successfully on 2026-09-01
+- Machine record: [`github-actions-run-33516919674.json`](github-actions-run-33516919674.json)
+
+The exact hosted source passed all four locked jobs: PostgreSQL 15 on Linux,
+the separate thirteen-boundary PostgreSQL 15 hard-restart proof, macOS, and
+Windows. The live PostgreSQL harness proves that publication-candidate reads
+start from the exact Snapshot root and exclude unreachable corrupt or
+foreign-contract metadata plus 1,001 unrelated FileID/import rows. Reachable
+contract, identity, positional-substitution, and missing-row faults still
+reject and roll back without partial reference, sequence, idempotency, or
+outbox state. The portable Rust suite proves the exact 1,000-item batch plus
+one-item remainder and its hostile header/payload boundaries on all three
+host operating systems.
+
+GitHub reports two non-expired archives for the run:
+
+- `repository-metadata-postgres-Linux` (artifact `9804105079`): 586 archive
+  bytes, digest
+  `sha256:95b1a6460d397e7ac315c3c3f445092ede24fd37c66cb14425e59aa6e61bc34e`;
+- `repository-metadata-atomic-submit-restart-PG15` (artifact `9804046666`):
+  1,457 archive bytes, digest
+  `sha256:2607afffc049b54c6a9b3de6905f14c81516955e95232c750ea63f46a36820bc`.
+
+Those archive sizes and SHA-256 values are bound from the public GitHub Actions
+artifact metadata. On 2026-09-01, authenticated `gh run download` acquisition
+successfully extracted both artifacts. The CLI did not retain the downloaded
+ZIP bytes, so the GitHub-reported archive digests were not independently
+rehashed. The extracted thirteen-case-plus-summary hard-restart JSONL is 10,094
+bytes with SHA-256
+`0121ae6b7b106f360cfae39fa51bf199b4ee9b03b74be8f96fee413f33c0370e`;
+all fourteen lines parse as JSON, the thirteen cases report `passed`, and the
+summary reports `caseCount: 13`. The extracted hosted service report is 1,001
+bytes with SHA-256
+`e8dae7794e0c71205c94f610fb7a99a8c6a1c8caea2ae57cf0f8a787f9747f40`.
+It is byte-identical to the exact source's unchanged deterministic 15-row
+report retained as
+[`repository-metadata-service-report-2026-09-01.jsonl`](repository-metadata-service-report-2026-09-01.jsonl)
+(the same size and SHA-256). This proves direct hosted-report content equality;
+it does not independently authenticate the transient ZIP representation.
+
+This is bounded private-adapter evidence, not an exact-scale campaign. The
+million-entry pagination case required by OGVCS-006-AC-04 and the exact
+100,000-object publication-candidate campaign were not run;
+`exactScaleExecuted` remains `false`. No public route, request-root authority,
+production mapping writer, or object-store composition is claimed. OGVCS-006
+remains **In development**.
+
 ## V13 aggregate identity-to-lifecycle mapping update
 
 - Integrated and hosted source: [`aa13161cca228d5f92154928508f9f866225d9f5`](https://github.com/n3r/OpenGameVCS/commit/aa13161cca228d5f92154928508f9f866225d9f5)
