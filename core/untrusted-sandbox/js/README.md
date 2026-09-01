@@ -19,9 +19,17 @@ unavailable.
 The broker accepts only exact signed Ed25519 tool/runtime manifests. A job binds
 the immutable input, tool, runtime, manifest, resource policy, options, actor,
 purpose, deadline, and idempotency key. The source adapter and its narrow
-read-only credential stay in the broker process. The parser receives only three
-read-only held-file-descriptor mounts (input, canonical job, executable tool),
-an empty declared image configuration, and a private bounded output volume.
+read-only credential stay in the broker process. The state authority makes
+bounded positional copies from verified handles into random, immutable named
+aliases, fsyncs each alias and its owner-only temporary directory, and gives the
+container adapter handles only. The adapter derives each ordinary host path
+from its held descriptor, revalidates the registered path/inode/mode before
+start and after settlement, and rejects procfs magic links, deleted names,
+symlinks, or substitutions. Names remain present until the corresponding
+container has settled and are then unlinked and directory-synced; startup
+recovery removes crash leftovers. The parser receives only three read-only
+mounts (input, canonical job, executable tool), an empty declared image
+configuration, and a private bounded output volume.
 
 Each parser container is created before it is started and is run as uid/gid
 65532 with no network, a read-only root, all capabilities dropped,
