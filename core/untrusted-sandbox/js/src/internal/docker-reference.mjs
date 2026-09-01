@@ -1,18 +1,29 @@
-import { randomBytes } from 'node:crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { fstatSync } from 'node:fs';
 import { lstat, open, readFile, readlink, realpath } from 'node:fs/promises';
-import { isAbsolute } from 'node:path';
+import { isAbsolute, resolve, sep } from 'node:path';
 import { types } from 'node:util';
-import { LINUX_RUNTIME_CONTRACT_SHA256, canonicalJson, isDigest, sha256 } from './reference-contract.mjs';
+import { LINUX_RUNTIME_CONTRACT_SHA256, REFERENCE_LIMITS, canonicalJson, isDigest, isId, sha256 } from './reference-contract.mjs';
 import { validateStatePinnedAliasForAdapter } from './reference-state.mjs';
 
 const SAFE_COMMAND_ENVIRONMENT = Object.freeze({ LANG: 'C', LC_ALL: 'C', PATH: '/usr/bin:/bin' });
 const COMMAND_OUTPUT_MAXIMUM = 256 * 1024;
 const CONTROL_TIMEOUT_MILLISECONDS = 10_000;
 const OCI_RUNTIME = 'runc';
+const BRAND_LABEL = 'org.opengamevcs.sandbox';
+const AUTHORITY_LABEL = 'org.opengamevcs.sandbox.authority';
+const BINDING_LABEL = 'org.opengamevcs.sandbox.binding-hmac-sha256';
 const ROLE_LABEL = 'org.opengamevcs.sandbox.role';
 const JOB_LABEL = 'org.opengamevcs.sandbox.job';
+const RESOURCE_BINDING_SCHEMA = 'ogvcs.untrusted-sandbox/daemon-resource-binding/v1';
+const RECONCILIATION_REPORT_SCHEMA = 'ogvcs.untrusted-sandbox/daemon-reconciliation/v1';
+const MAXIMUM_RECONCILIATION_RESOURCES = 16;
+const MAXIMUM_RECONCILIATION_INSPECT_BYTES = 8 * 1024 * 1024;
+const CONTAINER_ROLES = Object.freeze(['output-shim', 'parser', 'volume-anchor']);
+const RECONCILIATION_JOB_KEYS = Object.freeze(['jobId', 'resourcePolicy', 'runtimeContractSha256', 'runtimeImage']);
+const RECONCILIATION_REQUEST_KEYS = Object.freeze(['authority', 'interruptedJobs', 'stateRoot']);
+const RESOURCE_POLICY_KEYS = Object.freeze(['cpuMilliseconds', 'elapsedMilliseconds', 'fanout', 'memoryBytes', 'outputBytes', 'processes', 'profileId', 'scratchBytes']);
 const REQUIRED_MASKED_PATHS = Object.freeze(['/proc/acpi', '/proc/asound', '/proc/interrupts', '/proc/kcore', '/proc/keys', '/proc/latency_stats', '/proc/sched_debug', '/proc/scsi', '/proc/timer_list', '/proc/timer_stats', '/sys/firmware']);
 const REQUIRED_READONLY_PATHS = Object.freeze(['/proc/bus', '/proc/fs', '/proc/irq', '/proc/sys', '/proc/sysrq-trigger']);
 const RUNTIME_IMAGE_MISMATCHES = Object.freeze([
@@ -37,6 +48,104 @@ const settledOutputVolumes = new WeakMap();
 
 const containerName = () => `ogvcs-sandbox-${randomBytes(12).toString('hex')}`;
 const volumeName = () => `ogvcs-sandbox-${randomBytes(12).toString('hex')}`;
+
+const exactDataRecord = (source, keys) => {
+  if (source === null || typeof source !== 'object' || Array.isArray(source) || types.isProxy(source)) return null;
+  try {
+    const prototype = Object.getPrototypeOf(source);
+    const descriptors = Object.getOwnPropertyDescriptors(source);
+    if ((prototype !== Object.prototype && prototype !== null)
+      || Reflect.ownKeys(descriptors).length !== keys.length
+      || Object.keys(descriptors).sort().join('\0') !== keys.join('\0')
+      || Object.values(descriptors).some((descriptor) => !descriptor.enumerable || !Object.hasOwn(descriptor, 'value') || Object.hasOwn(descriptor, 'get') || Object.hasOwn(descriptor, 'set'))) return null;
+    return Object.freeze(Object.fromEntries(keys.map((key) => [key, descriptors[key].value])));
+  } catch { return null; }
+};
+
+const snapshotDataArray = (source, maximumLength) => {
+  if (!Array.isArray(source) || types.isProxy(source) || Object.getPrototypeOf(source) !== Array.prototype || source.length > maximumLength) return null;
+  try {
+    const descriptors = Object.getOwnPropertyDescriptors(source);
+    if (Reflect.ownKeys(descriptors).length !== source.length + 1
+      || descriptors.length?.value !== source.length
+      || descriptors.length.enumerable !== false
+      || !Object.hasOwn(descriptors.length, 'value')
+      || Object.hasOwn(descriptors.length, 'get')
+      || Object.hasOwn(descriptors.length, 'set')) return null;
+    const values = [];
+    for (let index = 0; index < source.length; index += 1) {
+      const descriptor = descriptors[String(index)];
+      if (!descriptor?.enumerable || !Object.hasOwn(descriptor, 'value') || Object.hasOwn(descriptor, 'get') || Object.hasOwn(descriptor, 'set')) return null;
+      values.push(descriptor.value);
+    }
+    return Object.freeze(values);
+  } catch { return null; }
+};
+
+const daemonAuthorityIdFor = (key) => sha256(Buffer.concat([Buffer.from('OGVCS-SANDBOX-DAEMON-AUTHORITY-V1\0', 'utf8'), key]));
+
+const snapshotResourcePolicy = (source) => {
+  const policy = exactDataRecord(source, RESOURCE_POLICY_KEYS);
+  if (!policy || policy.profileId !== 'linux-reference-v1') return null;
+  for (const [key, maximum] of Object.entries(REFERENCE_LIMITS)) {
+    if (!Number.isSafeInteger(policy[key]) || policy[key] < 1 || policy[key] > maximum) return null;
+  }
+  if (policy.cpuMilliseconds < 1_000 || policy.cpuMilliseconds % 1_000 !== 0) return null;
+  return Object.freeze({ ...policy });
+};
+
+const resourceMac = (key, payload) => createHmac('sha256', key)
+  .update('OGVCS-SANDBOX-DAEMON-RESOURCE-V1\0', 'utf8')
+  .update(canonicalJson(payload), 'utf8')
+  .digest('hex');
+
+const macMatches = (key, payload, supplied) => {
+  try {
+    if (!isDigest(supplied)) return false;
+    const expected = Buffer.from(resourceMac(key, payload), 'hex');
+    const actual = Buffer.from(supplied, 'hex');
+    return actual.length === expected.length && timingSafeEqual(actual, expected);
+  } catch { return false; }
+};
+
+const sortedFileMounts = (source) => Object.freeze(source
+  .map((mount) => Object.freeze({ source: mount.source, target: mount.target }))
+  .sort((left, right) => left.target.localeCompare(right.target)));
+
+const containerBindingPayload = (expected) => Object.freeze({
+  authorityId: expected.authorityId,
+  entrypoint: expected.entrypoint,
+  fileMounts: sortedFileMounts(expected.fileMounts),
+  jobId: expected.jobId,
+  kind: 'container',
+  name: expected.name,
+  outputReadonly: expected.outputReadonly,
+  policy: Object.freeze({ ...expected.policy }),
+  role: expected.role,
+  runtimeContractSha256: expected.runtimeContractSha256,
+  runtimeImage: expected.runtimeImage,
+  schemaVersion: RESOURCE_BINDING_SCHEMA,
+  volume: expected.volume,
+});
+
+const volumeBindingPayload = ({ authorityId, jobId, name, options }) => Object.freeze({
+  authorityId,
+  jobId,
+  kind: 'volume',
+  name,
+  options,
+  role: 'output-volume',
+  schemaVersion: RESOURCE_BINDING_SCHEMA,
+});
+
+const resourceFingerprint = (kind, identifier) => sha256(Buffer.from(`OGVCS-SANDBOX-DAEMON-RESOURCE-FINGERPRINT-V1\0${kind}\0${identifier}`, 'utf8'));
+
+const reconciliationReport = (status, diagnosticCodes = [], resourceFingerprints = []) => Object.freeze({
+  diagnosticCodes: Object.freeze([...new Set(diagnosticCodes)].sort()),
+  resourceFingerprints: Object.freeze([...new Set(resourceFingerprints)].sort()),
+  schemaVersion: RECONCILIATION_REPORT_SCHEMA,
+  status,
+});
 
 const statePinnedFileSource = async (handle, { executable = false } = {}) => {
   try {
@@ -139,10 +248,13 @@ const safeExecutable = async (source) => {
   return path;
 };
 
-const hardeningArguments = ({ jobId, name, policy, role, seccompPath }) => [
+const hardeningArguments = ({ bindingMac, authorityId, jobId, name, policy, role, seccompPath }) => [
   '--name', name,
   '--pull=never',
   `--runtime=${OCI_RUNTIME}`,
+  `--label=${BRAND_LABEL}=reference-v1`,
+  `--label=${AUTHORITY_LABEL}=${authorityId}`,
+  `--label=${BINDING_LABEL}=${bindingMac}`,
   `--label=${JOB_LABEL}=${jobId}`,
   `--label=${ROLE_LABEL}=${role}`,
   '--network=none',
@@ -388,6 +500,11 @@ const containerInspectMismatch = (container, expected, expectedState) => {
       [ROLE_LABEL]: expected.role,
       'org.opengamevcs.sandbox.runtime': 'linux-reference-v1',
       'org.opengamevcs.sandbox.runtime-contract-sha256': expected.runtimeContractSha256,
+      ...(expected.authorityId ? {
+        [AUTHORITY_LABEL]: expected.authorityId,
+        [BINDING_LABEL]: expected.bindingMac,
+        [BRAND_LABEL]: 'reference-v1',
+      } : {}),
     };
     const tmpfs = `rw,nosuid,nodev,noexec,size=${expected.policy.scratchBytes},uid=65532,gid=65532,mode=0700`;
     const networks = container?.NetworkSettings?.Networks;
@@ -405,11 +522,25 @@ const containerInspectMismatch = (container, expected, expectedState) => {
         && Number.isSafeInteger(state?.Pid)
         && state.Pid > 0
       : expectedState === 'created'
-        && state?.Status === 'created'
-        && state?.Running === false
-        && state?.Paused === false
-        && state?.Restarting === false
-        && state?.Pid === 0;
+        ? state?.Status === 'created'
+          && state?.Running === false
+          && state?.Paused === false
+          && state?.Restarting === false
+          && state?.Pid === 0
+        : expectedState === 'orphan'
+          && ['created', 'exited', 'running'].includes(state?.Status)
+          && typeof state?.Running === 'boolean'
+          && state.Running === (state.Status === 'running')
+          && state?.Paused === false
+          && state?.Restarting === false
+          && state?.Dead === false
+          && typeof state?.OOMKilled === 'boolean'
+          && typeof state?.Error === 'string'
+          && Number.isSafeInteger(state?.ExitCode)
+          && state.ExitCode >= 0
+          && state.ExitCode <= 255
+          && Number.isSafeInteger(state?.Pid)
+          && (state.Status === 'running' ? state.Pid > 0 && state.OOMKilled === false && state.Error === '' && state.ExitCode === 0 : state.Pid === 0);
     const checks = [
       ['identity', container?.Id === expected.id && container?.Name === `/${expected.name}` && container?.Path === expected.entrypoint && emptyCollection(container?.Args)],
       ['state', stateMatches],
@@ -452,14 +583,134 @@ export const createdContainerInspectMismatch = (container, expected) => containe
 export const validateCreatedContainerInspect = (container, expected) => createdContainerInspectMismatch(container, expected) === null;
 export const runningContainerInspectMismatch = (container, expected) => containerInspectMismatch(container, expected, 'running');
 export const validateRunningContainerInspect = (container, expected) => runningContainerInspectMismatch(container, expected) === null;
+const orphanContainerInspectMismatch = (container, expected) => containerInspectMismatch(container, expected, 'orphan');
 
-export const validateOutputVolumeInspect = (volume, name, options, jobId) => volume?.Name === name
+export const validateOutputVolumeInspect = (volume, name, options, jobId, authority = null) => volume?.Name === name
   && volume?.Driver === 'local'
   && volume?.Scope === 'local'
   && typeof volume?.Mountpoint === 'string'
   && volume.Mountpoint.length > 0
-  && canonicalJson(volume?.Labels) === canonicalJson({ [JOB_LABEL]: jobId, [ROLE_LABEL]: 'output-volume', 'org.opengamevcs.sandbox': 'reference-v1' })
+  && canonicalJson(volume?.Labels) === canonicalJson({
+    [JOB_LABEL]: jobId,
+    [ROLE_LABEL]: 'output-volume',
+    [BRAND_LABEL]: 'reference-v1',
+    ...(authority ? { [AUTHORITY_LABEL]: authority.authorityId, [BINDING_LABEL]: authority.bindingMac } : {}),
+  })
   && canonicalJson(volume?.Options) === canonicalJson({ device: 'tmpfs', o: options, type: 'tmpfs' });
+
+const successfulBoundedControl = (value, maximumStdout) => value?.kind === 'exit'
+  && value.code === 0
+  && value.signal === null
+  && Buffer.isBuffer(value.stderr)
+  && value.stderr.length === 0
+  && Buffer.isBuffer(value.stdout)
+  && Number.isSafeInteger(value.stdoutBytes)
+  && value.stdoutBytes === value.stdout.length
+  && value.stdoutBytes <= maximumStdout;
+
+const parseDiscovery = (value, kind, maximumStdout) => {
+  if (!successfulBoundedControl(value, maximumStdout)) return null;
+  const text = value.stdout.toString('utf8');
+  if (!Buffer.from(text, 'utf8').equals(value.stdout) || text.includes('\r') || text.includes('\0')) return null;
+  if (text.length === 0) return Object.freeze([]);
+  if (!text.endsWith('\n')) return null;
+  const entries = text.slice(0, -1).split('\n');
+  const valid = kind === 'container'
+    ? entries.every((entry) => /^[0-9a-f]{64}$/u.test(entry))
+    : entries.every((entry) => /^ogvcs-sandbox-[0-9a-f]{24}$/u.test(entry));
+  if (!valid || entries.length > MAXIMUM_RECONCILIATION_RESOURCES || new Set(entries).size !== entries.length) return null;
+  return Object.freeze([...entries].sort());
+};
+
+const parseInspectBatch = (value, expectedCount) => {
+  if (!successfulBoundedControl(value, MAXIMUM_RECONCILIATION_INSPECT_BYTES)) return null;
+  try {
+    const text = value.stdout.toString('utf8');
+    if (!Buffer.from(text, 'utf8').equals(value.stdout)) return null;
+    const parsed = JSON.parse(text);
+    return Array.isArray(parsed) && parsed.length === expectedCount ? parsed : null;
+  } catch { return null; }
+};
+
+const expectedVolumeOptions = (policy) => `size=${policy.outputBytes},uid=65532,gid=65532,mode=0700,nosuid,nodev,noexec`;
+
+const safeAliasMounts = (hostMounts, role, stateRoot) => {
+  if (!Array.isArray(hostMounts)) return null;
+  const expectedTargets = role === 'parser'
+    ? ['/input/job', '/input/payload', '/tool/program']
+    : role === 'output-shim' ? ['/input/binding'] : [];
+  const mounts = hostMounts.filter((mount) => mount?.Type === 'bind').map((mount) => ({ source: mount?.Source, target: mount?.Target }));
+  if (mounts.length !== expectedTargets.length || mounts.map((mount) => mount.target).sort().join('\0') !== expectedTargets.join('\0')) return null;
+  const temporaryPrefix = `${resolve(stateRoot, 'temporary')}${sep}`;
+  for (const mount of mounts) {
+    if (typeof mount.source !== 'string'
+      || !isAbsolute(mount.source)
+      || resolve(mount.source) !== mount.source
+      || !mount.source.startsWith(temporaryPrefix)
+      || !/^alias\.[0-9a-f]{32}$/u.test(mount.source.slice(temporaryPrefix.length))) return null;
+  }
+  return sortedFileMounts(mounts);
+};
+
+const claimedJobId = (resource) => {
+  try {
+    const value = resource?.Config?.Labels?.[JOB_LABEL] ?? resource?.Labels?.[JOB_LABEL];
+    return typeof value === 'string' ? value : null;
+  } catch { return null; }
+};
+
+const orphanVolumeCandidate = ({ authority, descriptor, discoveredName, volume }) => {
+  try {
+    const labels = volume?.Labels;
+    const options = expectedVolumeOptions(descriptor.resourcePolicy);
+    const payload = volumeBindingPayload({ authorityId: authority.authorityId, jobId: descriptor.jobId, name: discoveredName, options });
+    const bindingMac = labels?.[BINDING_LABEL];
+    if (!macMatches(authority.hmacKey, payload, bindingMac)
+      || !validateOutputVolumeInspect(volume, discoveredName, options, descriptor.jobId, { authorityId: authority.authorityId, bindingMac })
+      || typeof volume.Mountpoint !== 'string'
+      || !isAbsolute(volume.Mountpoint)
+      || volume.Mountpoint.length > 4096
+      || /[\0\r\n]/u.test(volume.Mountpoint)) return null;
+    return Object.freeze({ jobId: descriptor.jobId, mountpoint: volume.Mountpoint, name: discoveredName });
+  } catch { return null; }
+};
+
+const orphanContainerCandidate = ({ authority, container, descriptor, discoveredId, stateRoot, volume }) => {
+  try {
+    const labels = container?.Config?.Labels;
+    const role = labels?.[ROLE_LABEL];
+    const name = typeof container?.Name === 'string' && container.Name.startsWith('/') ? container.Name.slice(1) : null;
+    if (!CONTAINER_ROLES.includes(role)
+      || !/^ogvcs-sandbox-[0-9a-f]{24}$/u.test(name)
+      || container?.Id !== discoveredId
+      || labels?.[JOB_LABEL] !== descriptor.jobId
+      || labels?.[AUTHORITY_LABEL] !== authority.authorityId
+      || labels?.[BRAND_LABEL] !== 'reference-v1') return null;
+    const fileMounts = safeAliasMounts(container?.HostConfig?.Mounts, role, stateRoot);
+    if (!fileMounts) return null;
+    const entrypoint = role === 'parser' ? '/tool/program' : role === 'output-shim' ? '/ogvcs-output-shim' : '/ogvcs-volume-anchor';
+    const expected = {
+      authorityId: authority.authorityId,
+      bindingMac: labels[BINDING_LABEL],
+      entrypoint,
+      fileMounts,
+      id: discoveredId,
+      jobId: descriptor.jobId,
+      name,
+      outputReadonly: role !== 'parser',
+      policy: descriptor.resourcePolicy,
+      role,
+      runtimeContractSha256: descriptor.runtimeContractSha256,
+      runtimeImage: descriptor.runtimeImage,
+      seccompCanonical: descriptor.seccompCanonical,
+      volume: volume.name,
+      volumeMountpoint: volume.mountpoint,
+    };
+    if (!macMatches(authority.hmacKey, containerBindingPayload(expected), expected.bindingMac)
+      || orphanContainerInspectMismatch(container, expected) !== null) return null;
+    return Object.freeze({ id: discoveredId, jobId: descriptor.jobId, name, role, volume: volume.name });
+  } catch { return null; }
+};
 
 const runtimeImageEvent = (mismatch) => RUNTIME_IMAGE_MISMATCHES.includes(mismatch)
   ? `PRESTART_IMAGE_${mismatch.replaceAll('-', '_').toUpperCase()}`
@@ -510,6 +761,7 @@ export class DockerReferenceAdapter {
   #seccompPath;
   #seccompDigest;
   #seccompCanonical;
+  #authority = null;
   #poisoned = false;
 
   static async open({ dockerBinary, seccompProfilePath, expectedSeccompSha256 }) {
@@ -536,6 +788,23 @@ export class DockerReferenceAdapter {
 
   get seccompDigest() { return this.#seccompDigest; }
 
+  #authenticatedContainerExpected(expected) {
+    if (this.#authority === null) throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED');
+    const authenticated = { ...expected, authorityId: this.#authority.authorityId };
+    return Object.freeze({ ...authenticated, bindingMac: resourceMac(this.#authority.hmacKey, containerBindingPayload(authenticated)) });
+  }
+
+  #authenticatedVolume(name, jobId, options) {
+    if (this.#authority === null) throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED');
+    const payload = volumeBindingPayload({ authorityId: this.#authority.authorityId, jobId, name, options });
+    return Object.freeze({ authorityId: this.#authority.authorityId, bindingMac: resourceMac(this.#authority.hmacKey, payload) });
+  }
+
+  releaseDaemonAuthority() {
+    this.#authority?.hmacKey.fill(0);
+    this.#authority = null;
+  }
+
   async #control(args, options = {}) {
     const testExecutor = adapterTestExecutors.get(this);
     const value = testExecutor
@@ -547,6 +816,155 @@ export class DockerReferenceAdapter {
   #testFault(name) {
     const faults = adapterTestFaults.get(this);
     if (faults?.has(name)) { faults.delete(name); throw new Error(`TEST_FAULT:${name}`); }
+  }
+
+  async #reconciliationControl(args, options) {
+    const timeoutMilliseconds = options.timeoutMilliseconds;
+    let timer;
+    const completion = this.#control(args, options).catch(() => null);
+    const deadline = new Promise((resolveDeadline) => {
+      timer = setTimeout(() => resolveDeadline(null), timeoutMilliseconds + 250);
+    });
+    try { return await Promise.race([completion, deadline]); } finally { clearTimeout(timer); }
+  }
+
+  async #discoverDaemonResources(authorityId) {
+    // This private tranche proves only the namespace derived from this state
+    // root's authority key. Brand-only legacy resources, missing authority
+    // labels, and other authorities are deliberately outside the absence
+    // proof and must never be treated as owned from these discovery filters.
+    const containerMaximum = MAXIMUM_RECONCILIATION_RESOURCES * 65;
+    const volumeMaximum = MAXIMUM_RECONCILIATION_RESOURCES * 39;
+    const filters = ['--filter', `label=${BRAND_LABEL}=reference-v1`, '--filter', `label=${AUTHORITY_LABEL}=${authorityId}`];
+    const [containerResult, volumeResult] = await Promise.all([
+      this.#reconciliationControl(['container', 'ls', '--all', '--quiet', '--no-trunc', ...filters], { maximumStderr: 64 * 1024, maximumStdout: containerMaximum, timeoutMilliseconds: 2_000 }),
+      this.#reconciliationControl(['volume', 'ls', '--quiet', ...filters], { maximumStderr: 64 * 1024, maximumStdout: volumeMaximum, timeoutMilliseconds: 2_000 }),
+    ]);
+    const containers = parseDiscovery(containerResult, 'container', containerMaximum);
+    const volumes = parseDiscovery(volumeResult, 'volume', volumeMaximum);
+    return containers && volumes && containers.length + volumes.length <= MAXIMUM_RECONCILIATION_RESOURCES
+      ? Object.freeze({ containers, volumes })
+      : null;
+  }
+
+  async #inspectDaemonResources(discovered) {
+    const [containerResult, volumeResult] = await Promise.all([
+      discovered.containers.length === 0
+        ? Promise.resolve(Object.freeze([]))
+        : this.#reconciliationControl(['container', 'inspect', ...discovered.containers], { maximumStderr: 64 * 1024, maximumStdout: MAXIMUM_RECONCILIATION_INSPECT_BYTES, timeoutMilliseconds: 5_000 }).then((value) => parseInspectBatch(value, discovered.containers.length)),
+      discovered.volumes.length === 0
+        ? Promise.resolve(Object.freeze([]))
+        : this.#reconciliationControl(['volume', 'inspect', ...discovered.volumes], { maximumStderr: 64 * 1024, maximumStdout: MAXIMUM_RECONCILIATION_INSPECT_BYTES, timeoutMilliseconds: 5_000 }).then((value) => parseInspectBatch(value, discovered.volumes.length)),
+    ]);
+    if (!containerResult || !volumeResult) return null;
+    const containers = new Map();
+    for (const container of containerResult) {
+      if (!discovered.containers.includes(container?.Id) || containers.has(container.Id)) return null;
+      containers.set(container.Id, container);
+    }
+    const volumes = new Map();
+    for (const volume of volumeResult) {
+      if (!discovered.volumes.includes(volume?.Name) || volumes.has(volume.Name)) return null;
+      volumes.set(volume.Name, volume);
+    }
+    return containers.size === discovered.containers.length && volumes.size === discovered.volumes.length
+      ? Object.freeze({ containers, volumes })
+      : null;
+  }
+
+  async reconcileDaemonOrphans(requestSource) {
+    if (this.#poisoned) throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED');
+    const request = exactDataRecord(requestSource, RECONCILIATION_REQUEST_KEYS);
+    const authority = request && exactDataRecord(request.authority, ['authorityId', 'hmacKey']);
+    const interruptedJobs = snapshotDataArray(request?.interruptedJobs, 64);
+    const stateRoot = request?.stateRoot;
+    if (!authority
+      || !isDigest(authority.authorityId)
+      || !Buffer.isBuffer(authority.hmacKey)
+      || Object.getPrototypeOf(authority.hmacKey) !== Buffer.prototype
+      || authority.hmacKey.length !== 32
+      || daemonAuthorityIdFor(authority.hmacKey) !== authority.authorityId
+      || typeof stateRoot !== 'string'
+      || !isAbsolute(stateRoot)
+      || resolve(stateRoot) !== stateRoot
+      || !interruptedJobs) throw new TypeError('daemon reconciliation request is invalid');
+    if (this.#authority !== null) {
+      if (this.#authority.authorityId !== authority.authorityId || !timingSafeEqual(this.#authority.hmacKey, authority.hmacKey)) {
+        this.#poisoned = true;
+        throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED');
+      }
+    } else this.#authority = Object.freeze({ authorityId: authority.authorityId, hmacKey: Buffer.from(authority.hmacKey) });
+
+    const jobs = new Map();
+    for (const source of interruptedJobs) {
+      const raw = exactDataRecord(source, RECONCILIATION_JOB_KEYS);
+      const resourcePolicy = raw && snapshotResourcePolicy(raw.resourcePolicy);
+      if (!raw
+        || !resourcePolicy
+        || !isId(raw.jobId)
+        || jobs.has(raw.jobId)
+        || !isDigest(raw.runtimeContractSha256)
+        || typeof raw.runtimeImage !== 'string'
+        || !/^sha256:[0-9a-f]{64}$/u.test(raw.runtimeImage)) throw new TypeError('daemon reconciliation job binding is invalid');
+      const descriptor = Object.freeze({ ...raw, resourcePolicy, seccompCanonical: this.#seccompCanonical });
+      jobs.set(descriptor.jobId, descriptor);
+    }
+
+    const discovered = await this.#discoverDaemonResources(authority.authorityId);
+    if (!discovered) {
+      this.#poisoned = true;
+      return reconciliationReport('quarantined', ['DISCOVERY_UNPROVABLE']);
+    }
+    if (discovered.containers.length === 0 && discovered.volumes.length === 0) return reconciliationReport('settled');
+    const inspected = await this.#inspectDaemonResources(discovered);
+    const allFingerprints = [
+      ...discovered.containers.map((id) => resourceFingerprint('container', id)),
+      ...discovered.volumes.map((name) => resourceFingerprint('volume', name)),
+    ];
+    if (!inspected) {
+      this.#poisoned = true;
+      return reconciliationReport('quarantined', ['INSPECT_UNPROVABLE'], allFingerprints);
+    }
+
+    const diagnosticCodes = new Set();
+    const volumesByName = new Map();
+    const volumesByJob = new Map();
+    for (const name of discovered.volumes) {
+      const raw = inspected.volumes.get(name);
+      const jobId = claimedJobId(raw);
+      const descriptor = jobs.get(jobId);
+      if (!descriptor) { diagnosticCodes.add('RESOURCE_JOB_UNBOUND'); continue; }
+      const candidate = orphanVolumeCandidate({ authority: this.#authority, descriptor, discoveredName: name, volume: raw });
+      if (!candidate) { diagnosticCodes.add('RESOURCE_AUTH_INVALID'); continue; }
+      if (volumesByJob.has(jobId)) { diagnosticCodes.add('RESOURCE_GRAPH_INVALID'); continue; }
+      volumesByName.set(name, candidate); volumesByJob.set(jobId, candidate);
+    }
+    const containersByJob = new Map();
+    for (const id of discovered.containers) {
+      const raw = inspected.containers.get(id);
+      const jobId = claimedJobId(raw);
+      const descriptor = jobs.get(jobId);
+      if (!descriptor) { diagnosticCodes.add('RESOURCE_JOB_UNBOUND'); continue; }
+      const referencedVolumeName = raw?.HostConfig?.Mounts?.find((mount) => mount?.Type === 'volume' && mount?.Target === '/output')?.Source;
+      const volume = volumesByJob.get(jobId);
+      if (volumesByName.has(referencedVolumeName) && volumesByName.get(referencedVolumeName).jobId !== jobId) { diagnosticCodes.add('RESOURCE_GRAPH_INVALID'); continue; }
+      if (!volume) { diagnosticCodes.add('RESOURCE_GRAPH_INVALID'); continue; }
+      const candidate = orphanContainerCandidate({ authority: this.#authority, container: raw, descriptor, discoveredId: id, stateRoot, volume });
+      if (!candidate) { diagnosticCodes.add('RESOURCE_AUTH_INVALID'); continue; }
+      const entries = containersByJob.get(jobId) ?? [];
+      entries.push(candidate); containersByJob.set(jobId, entries);
+    }
+    for (const [jobId, containers] of containersByJob) {
+      const roles = containers.map((container) => container.role);
+      const workerCount = roles.filter((role) => role !== 'volume-anchor').length;
+      if (new Set(roles).size !== roles.length
+        || workerCount > 1
+        || (workerCount === 1 && !roles.includes('volume-anchor'))
+        || containers.some((container) => container.volume !== volumesByJob.get(jobId)?.name)) diagnosticCodes.add('RESOURCE_GRAPH_INVALID');
+    }
+    if (diagnosticCodes.size === 0) diagnosticCodes.add('AUTHENTICATED_ORPHANS_REQUIRE_SETTLEMENT');
+    this.#poisoned = true;
+    return reconciliationReport('quarantined', [...diagnosticCodes], allFingerprints);
   }
 
   async #probeHost() {
@@ -578,7 +996,8 @@ export class DockerReferenceAdapter {
   async #createOutputVolume(policy, jobId) {
     const name = volumeName();
     const options = `size=${policy.outputBytes},uid=65532,gid=65532,mode=0700,nosuid,nodev,noexec`;
-    const value = await this.#control(['volume', 'create', '--driver=local', '--opt=type=tmpfs', '--opt=device=tmpfs', `--opt=o=${options}`, '--label=org.opengamevcs.sandbox=reference-v1', `--label=${JOB_LABEL}=${jobId}`, `--label=${ROLE_LABEL}=output-volume`, name]);
+    const authenticated = this.#authenticatedVolume(name, jobId, options);
+    const value = await this.#control(['volume', 'create', '--driver=local', '--opt=type=tmpfs', '--opt=device=tmpfs', `--opt=o=${options}`, `--label=${BRAND_LABEL}=reference-v1`, `--label=${AUTHORITY_LABEL}=${authenticated.authorityId}`, `--label=${BINDING_LABEL}=${authenticated.bindingMac}`, `--label=${JOB_LABEL}=${jobId}`, `--label=${ROLE_LABEL}=output-volume`, name]);
     if (value.kind !== 'exit') {
       await this.#cleanupVolume(name).catch(() => false);
       this.#poisoned = true;
@@ -591,7 +1010,7 @@ export class DockerReferenceAdapter {
     const inspected = await this.#control(['volume', 'inspect', name]);
     let volumes;
     try { volumes = inspected.kind === 'exit' && inspected.code === 0 ? JSON.parse(inspected.stdout.toString('utf8')) : null; } catch { volumes = null; }
-    if (!Array.isArray(volumes) || volumes.length !== 1 || !validateOutputVolumeInspect(volumes[0], name, options, jobId)) {
+    if (!Array.isArray(volumes) || volumes.length !== 1 || !validateOutputVolumeInspect(volumes[0], name, options, jobId, authenticated)) {
       if (!await this.#cleanupVolume(name)) { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
       throw new Error('SANDBOX_INSPECT_MISMATCH:output-volume');
     }
@@ -605,10 +1024,11 @@ export class DockerReferenceAdapter {
     try {
       this.#testFault('before-anchor-create');
       name = containerName();
-      const expected = {
+      const expected = this.#authenticatedContainerExpected({
         entrypoint: '/ogvcs-volume-anchor',
         fileMounts: [],
         jobId,
+        name,
         outputReadonly: true,
         policy,
         role: 'volume-anchor',
@@ -616,9 +1036,9 @@ export class DockerReferenceAdapter {
         runtimeImage,
         volume: volume.name,
         volumeMountpoint: volume.mountpoint,
-      };
+      });
       const args = [
-        ...hardeningArguments({ jobId, name, policy, role: 'volume-anchor', seccompPath: this.#seccompPath }),
+        ...hardeningArguments({ authorityId: expected.authorityId, bindingMac: expected.bindingMac, jobId, name, policy, role: 'volume-anchor', seccompPath: this.#seccompPath }),
         '--mount', `type=volume,src=${volume.name},dst=/output,readonly,volume-nocopy`,
         '--entrypoint=/ogvcs-volume-anchor',
         runtimeImage,
@@ -759,8 +1179,9 @@ export class DockerReferenceAdapter {
         { source: jobSource, target: '/input/job' },
         { source: toolSource, target: '/tool/program' },
       ];
+      const expected = this.#authenticatedContainerExpected({ entrypoint: '/tool/program', fileMounts, jobId, name, outputReadonly: false, policy, role: 'parser', runtimeContractSha256: LINUX_RUNTIME_CONTRACT_SHA256, runtimeImage, volume: volume.name, volumeMountpoint: volume.mountpoint });
       const args = [
-        ...hardeningArguments({ jobId, name, policy, role: 'parser', seccompPath: this.#seccompPath }),
+        ...hardeningArguments({ authorityId: expected.authorityId, bindingMac: expected.bindingMac, jobId, name, policy, role: 'parser', seccompPath: this.#seccompPath }),
         '--mount', mountFile(inputSource, '/input/payload'),
         '--mount', mountFile(jobSource, '/input/job'),
         '--mount', mountFile(toolSource, '/tool/program'),
@@ -768,7 +1189,7 @@ export class DockerReferenceAdapter {
         '--entrypoint=/tool/program',
         runtimeImage,
       ];
-      id = await this.#createContainer(name, args, { entrypoint: '/tool/program', fileMounts, jobId, outputReadonly: false, policy, role: 'parser', runtimeContractSha256: LINUX_RUNTIME_CONTRACT_SHA256, runtimeImage, volume: volume.name, volumeMountpoint: volume.mountpoint });
+      id = await this.#createContainer(name, args, expected);
       if (!id) {
         const [volumeGone, aliasesValid] = await Promise.all([
           this.#cleanupAnchoredOutputVolume(volume),
@@ -833,14 +1254,15 @@ export class DockerReferenceAdapter {
       this.#testFault('before-collector-create');
       name = containerName();
       const fileMounts = [{ source: bindingSource, target: '/input/binding' }];
+      const expected = this.#authenticatedContainerExpected({ entrypoint: '/ogvcs-output-shim', fileMounts, jobId, name, outputReadonly: true, policy, role: 'output-shim', runtimeContractSha256: LINUX_RUNTIME_CONTRACT_SHA256, runtimeImage, volume: volume.name, volumeMountpoint: volume.mountpoint });
       const args = [
-        ...hardeningArguments({ jobId, name, policy, role: 'output-shim', seccompPath: this.#seccompPath }),
+        ...hardeningArguments({ authorityId: expected.authorityId, bindingMac: expected.bindingMac, jobId, name, policy, role: 'output-shim', seccompPath: this.#seccompPath }),
         '--mount', mountFile(bindingSource, '/input/binding'),
         '--mount', `type=volume,src=${volume.name},dst=/output,readonly,volume-nocopy`,
         '--entrypoint=/ogvcs-output-shim',
         runtimeImage,
       ];
-      id = await this.#createContainer(name, args, { entrypoint: '/ogvcs-output-shim', fileMounts, jobId, outputReadonly: true, policy, role: 'output-shim', runtimeContractSha256: LINUX_RUNTIME_CONTRACT_SHA256, runtimeImage, volume: volume.name, volumeMountpoint: volume.mountpoint });
+      id = await this.#createContainer(name, args, expected);
       if (!id) {
         const [volumeGone, aliasValid] = await Promise.all([
           this.#cleanupAnchoredOutputVolume(volume),

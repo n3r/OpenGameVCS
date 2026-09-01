@@ -19,8 +19,12 @@ import { types } from 'node:util';
 import { canonicalJson, isDigest, isId, sha256 } from './reference-contract.mjs';
 
 const STATE_SCHEMA = 'ogvcs.untrusted-sandbox/reference-state/v1';
+const DAEMON_AUTHORITY_SCHEMA = 'ogvcs.untrusted-sandbox/daemon-authority/v1';
+const DAEMON_QUARANTINE_SCHEMA = 'ogvcs.untrusted-sandbox/daemon-quarantine/v1';
 const NONTERMINAL = new Set(['acquiring', 'queued', 'running', 'staged', 'validating', 'committing']);
 const MAXIMUM_STATE_FILES = 100_000;
+const MAXIMUM_INTERRUPTED_JOBS = 64;
+const MAXIMUM_DAEMON_AUTHORITY_BYTES = 512;
 const PINNED_ALIAS_COPY_BYTES = 64 * 1024;
 const pinnedAliases = new WeakMap();
 const abortedPinnedFileOperations = new WeakSet();
@@ -59,18 +63,76 @@ const atomicBytes = async (path, bytes, mode = 0o600) => {
 
 const atomicJson = async (path, value) => atomicBytes(path, Buffer.from(`${canonicalJson(value)}\n`, 'utf8'));
 
+const parseCanonicalJson = (bytes) => {
+  const text = bytes.toString('utf8');
+  if (!Buffer.from(text, 'utf8').equals(bytes) || !text.endsWith('\n')) throw new Error('state record encoding differs');
+  const value = JSON.parse(text.slice(0, -1));
+  if (`${canonicalJson(value)}\n` !== text) throw new Error('state record is not canonical');
+  return value;
+};
+
 const readJson = async (path) => {
   try {
     const bytes = await readFile(path);
-    const text = bytes.toString('utf8');
-    if (!Buffer.from(text, 'utf8').equals(bytes) || !text.endsWith('\n')) throw new Error('state record encoding differs');
-    const value = JSON.parse(text.slice(0, -1));
-    if (`${canonicalJson(value)}\n` !== text) throw new Error('state record is not canonical');
-    return value;
+    return parseCanonicalJson(bytes);
   } catch (error) {
     if (error?.code === 'ENOENT') return null;
     throw error;
   }
+};
+
+const exactOwnRecord = (source, keys) => {
+  if (source === null || typeof source !== 'object' || Array.isArray(source) || types.isProxy(source)) return null;
+  try {
+    const prototype = Object.getPrototypeOf(source);
+    if ((prototype !== Object.prototype && prototype !== null) || Object.keys(source).sort().join('\0') !== keys.join('\0')) return null;
+    const descriptors = Object.getOwnPropertyDescriptors(source);
+    if (Object.values(descriptors).some((descriptor) => !descriptor.enumerable || !Object.hasOwn(descriptor, 'value') || Object.hasOwn(descriptor, 'get') || Object.hasOwn(descriptor, 'set'))) return null;
+    return Object.freeze(Object.fromEntries(keys.map((key) => [key, descriptors[key].value])));
+  } catch { return null; }
+};
+
+const authorityIdFor = (key) => createHash('sha256')
+  .update('OGVCS-SANDBOX-DAEMON-AUTHORITY-V1\0', 'utf8')
+  .update(key)
+  .digest('hex');
+
+const exactAuthorityFileIdentity = (left, right) => left.dev === right.dev
+  && left.ino === right.ino
+  && left.mode === right.mode
+  && left.nlink === right.nlink
+  && left.size === right.size
+  && left.uid === right.uid
+  && left.gid === right.gid
+  && left.mtimeNs === right.mtimeNs
+  && left.ctimeNs === right.ctimeNs;
+
+const readPinnedDaemonAuthority = async (handle) => {
+  try {
+    const before = await handle.stat({ bigint: true });
+    const owner = typeof process.geteuid === 'function' ? BigInt(process.geteuid()) : null;
+    if (!before.isFile()
+      || before.nlink !== 1n
+      || (before.mode & 0o7777n) !== 0o600n
+      || (owner !== null && before.uid !== owner)
+      || before.size < 1n
+      || before.size > BigInt(MAXIMUM_DAEMON_AUTHORITY_BYTES)) throw new Error('daemon authority state is invalid');
+    const expectedBytes = Number(before.size);
+    const bytes = Buffer.alloc(expectedBytes + 1);
+    try {
+      let position = 0;
+      while (position < bytes.length) {
+        const value = await handle.read(bytes, position, bytes.length - position, position);
+        if (value.bytesRead === 0) break;
+        position += value.bytesRead;
+      }
+      if (position !== expectedBytes) throw new Error('daemon authority state is invalid');
+      const record = parseCanonicalJson(bytes.subarray(0, expectedBytes));
+      const after = await handle.stat({ bigint: true });
+      if (!exactAuthorityFileIdentity(before, after)) throw new Error('daemon authority state is invalid');
+      return record;
+    } finally { bytes.fill(0); }
+  } catch { throw new Error('daemon authority state is invalid'); }
 };
 
 const validateRoot = async (source) => {
@@ -338,13 +400,87 @@ export class ReferenceStateStore {
     await atomicJson(this.path('idempotency', `${sha256(Buffer.from(idempotencyKey, 'utf8'))}.json`), value);
   }
 
-  async recoverInterrupted(nowUnixMs) {
+  async daemonAuthority() {
+    const path = this.path('.daemon-authority.json');
+    if (!Number.isSafeInteger(constants.O_NOFOLLOW) || !Number.isSafeInteger(constants.O_NONBLOCK)) throw new Error('daemon authority state is invalid');
+    const openPinned = () => open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    let handle;
+    try { handle = await openPinned(); } catch (error) {
+      if (error?.code !== 'ENOENT') throw new Error('daemon authority state is invalid');
+      const key = randomBytes(32);
+      try {
+        const record = Object.freeze({
+          authorityId: authorityIdFor(key),
+          hmacKeyHex: key.toString('hex'),
+          schemaVersion: DAEMON_AUTHORITY_SCHEMA,
+        });
+        await atomicJson(path, record);
+      } finally { key.fill(0); }
+      try { handle = await openPinned(); } catch { throw new Error('daemon authority state is invalid'); }
+    }
+    let record;
+    try {
+      record = await readPinnedDaemonAuthority(handle);
+      await handle.close();
+      handle = null;
+    } catch {
+      await handle?.close().catch(() => {});
+      throw new Error('daemon authority state is invalid');
+    }
+    const value = exactOwnRecord(record, ['authorityId', 'hmacKeyHex', 'schemaVersion']);
+    if (value?.schemaVersion !== DAEMON_AUTHORITY_SCHEMA
+      || !isDigest(value.authorityId)
+      || !isDigest(value.hmacKeyHex)) throw new Error('daemon authority state is invalid');
+    const hmacKey = Buffer.from(value.hmacKeyHex, 'hex');
+    if (hmacKey.length !== 32 || authorityIdFor(hmacKey) !== value.authorityId) {
+      hmacKey.fill(0);
+      throw new Error('daemon authority state is invalid');
+    }
+    return Object.freeze({ authorityId: value.authorityId, hmacKey });
+  }
+
+  async interruptedJobs() {
     const entries = (await readdir(this.path('jobs'), { withFileTypes: true })).filter((entry) => entry.isFile() && entry.name.endsWith('.json'));
     if (entries.length > MAXIMUM_STATE_FILES) throw new Error('reference state job ceiling exceeded');
-    const recovered = [];
+    const interrupted = [];
     for (const entry of entries) {
       const record = await readJson(this.path('jobs', entry.name));
       if (!record || !NONTERMINAL.has(record.state)) continue;
+      if (!isId(record.jobId) || entry.name !== `${record.jobId}.json`) throw new Error('interrupted job state is invalid');
+      interrupted.push(Object.freeze({ ...record }));
+      if (interrupted.length > MAXIMUM_INTERRUPTED_JOBS) throw new Error('interrupted job ceiling exceeded');
+    }
+    interrupted.sort((left, right) => left.jobId.localeCompare(right.jobId));
+    return Object.freeze(interrupted);
+  }
+
+  async writeDaemonQuarantine({ diagnosticCodes, resourceFingerprints }, observedAtUnixMs) {
+    if (!Number.isSafeInteger(observedAtUnixMs)
+      || observedAtUnixMs < 0
+      || !Array.isArray(diagnosticCodes)
+      || diagnosticCodes.length < 1
+      || diagnosticCodes.length > 64
+      || new Set(diagnosticCodes).size !== diagnosticCodes.length
+      || diagnosticCodes.some((code) => !/^[A-Z][A-Z0-9_]{0,63}$/u.test(code))
+      || !Array.isArray(resourceFingerprints)
+      || resourceFingerprints.length > 128
+      || new Set(resourceFingerprints).size !== resourceFingerprints.length
+      || resourceFingerprints.some((fingerprint) => !isDigest(fingerprint))) throw new TypeError('daemon quarantine record is invalid');
+    const record = Object.freeze({
+      diagnosticCodes: Object.freeze([...diagnosticCodes].sort()),
+      observedAtUnixMs,
+      resourceFingerprints: Object.freeze([...resourceFingerprints].sort()),
+      schemaVersion: DAEMON_QUARANTINE_SCHEMA,
+    });
+    const label = sha256(Buffer.from(`${canonicalJson(record)}\n`, 'utf8'));
+    await atomicJson(this.path('quarantine', `daemon.${label}.json`), record);
+    return label;
+  }
+
+  async recoverInterrupted(nowUnixMs) {
+    const entries = await this.interruptedJobs();
+    const recovered = [];
+    for (const record of entries) {
       const result = {
         cleanupReceiptDigest: null,
         code: 'SANDBOX_UNAVAILABLE',

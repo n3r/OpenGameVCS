@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash, createHmac, generateKeyPairSync, sign } from 'node:crypto';
 import { chmodSync, readdirSync, statSync, writeFileSync } from 'node:fs';
-import { chmod, mkdtemp, mkdir, open, readFile, readdir, readlink, rename, rm, stat, symlink, unlink, writeFile } from 'node:fs/promises';
+import { chmod, link, mkdtemp, mkdir, open, readFile, readdir, readlink, rename, rm, stat, symlink, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -414,8 +414,16 @@ const authenticatedEvidenceBytes = (source, evidenceHmacKey) => {
 };
 
 class FakeContainerAdapter {
-  constructor({ collectError = null, collectGate = null, collectKind = null, emptyOutput = false, failureClass = null, gate = null, inspectMismatch = null, runKind = null, tamper = null } = {}) { this.seccompDigest = SECCOMP_DIGEST; this.collectError = collectError; this.collectGate = collectGate; this.collectKind = collectKind; this.emptyOutput = emptyOutput; this.failureClass = failureClass; this.gate = gate; this.inspectMismatch = inspectMismatch; this.runKind = runKind; this.tamper = tamper; this.runs = 0; this.collections = 0; this.collectSettlements = 0; this.discardCalls = 0; this.discards = 0; this.parserSawBinding = false; this.modes = []; this.nameLinks = []; this.settledVolumes = new Set(); }
+  constructor({ collectError = null, collectGate = null, collectKind = null, emptyOutput = false, failureClass = null, gate = null, inspectMismatch = null, reconcileProbe = null, reconciliationReport = null, runKind = null, tamper = null } = {}) { this.seccompDigest = SECCOMP_DIGEST; this.collectError = collectError; this.collectGate = collectGate; this.collectKind = collectKind; this.emptyOutput = emptyOutput; this.failureClass = failureClass; this.gate = gate; this.inspectMismatch = inspectMismatch; this.reconcileProbe = reconcileProbe; this.reconciliationReport = reconciliationReport; this.runKind = runKind; this.tamper = tamper; this.runs = 0; this.collections = 0; this.collectSettlements = 0; this.discardCalls = 0; this.discards = 0; this.reconciliationCalls = 0; this.releaseAuthorityCalls = 0; this.parserSawBinding = false; this.modes = []; this.nameLinks = []; this.settledVolumes = new Set(); }
   async verifyRuntimeImage(image, contract) { return image === `sha256:${RUNTIME_DIGEST}` && contract === LINUX_RUNTIME_CONTRACT_SHA256; }
+  async reconcileDaemonOrphans(request) {
+    this.reconciliationCalls += 1;
+    const { authority } = request;
+    this.daemonAuthorityId = authority.authorityId;
+    await this.reconcileProbe?.(request);
+    return this.reconciliationReport ?? Object.freeze({ diagnosticCodes: Object.freeze([]), resourceFingerprints: Object.freeze([]), schemaVersion: 'ogvcs.untrusted-sandbox/daemon-reconciliation/v1', status: 'settled' });
+  }
+  releaseDaemonAuthority() { this.releaseAuthorityCalls += 1; this.daemonAuthorityId = null; }
   async runTool({ inputHandle, jobHandle, toolHandle, signal }) {
     this.runs += 1;
     if (this.inspectMismatch) throw new Error(`SANDBOX_INSPECT_MISMATCH:${this.inspectMismatch}`);
@@ -495,6 +503,8 @@ const dockerCreateExpected = (args, volumeMountpoint) => {
   const outputBytes = Number(equal('--ulimit=fsize=')?.split(':')[0]);
   const scratch = equal('--tmpfs=/scratch:')?.split(',').find((value) => value.startsWith('size='))?.slice('size='.length);
   return Object.freeze({
+    authorityId: labels['org.opengamevcs.sandbox.authority'],
+    bindingMac: labels['org.opengamevcs.sandbox.binding-hmac-sha256'],
     entrypoint: equal('--entrypoint='),
     fileMounts,
     jobId: labels['org.opengamevcs.sandbox.job'],
@@ -521,14 +531,17 @@ const dockerContainerInspect = (expected, id, stateKind = 'created') => {
   hostMounts.push({ ReadOnly: expected.outputReadonly, Source: expected.volume, Target: '/output', Type: 'volume', VolumeOptions: { NoCopy: true } });
   const effectiveMounts = expected.fileMounts.map((mount) => ({ Destination: mount.target, Mode: 'ro', Propagation: 'rprivate', RW: false, Source: mount.source, Type: 'bind' }));
   effectiveMounts.push({ Destination: '/output', Driver: 'local', Mode: 'z', Name: expected.volume, Propagation: '', RW: !expected.outputReadonly, Source: expected.volumeMountpoint, Type: 'volume' });
+  const activated = ['exited', 'running'].includes(stateKind);
   const state = stateKind === 'running'
     ? { Dead: false, Error: '', ExitCode: 0, OOMKilled: false, Paused: false, Pid: 2468, Restarting: false, Running: true, Status: 'running' }
-    : { Paused: false, Pid: 0, Restarting: false, Running: false, Status: 'created' };
+    : { Dead: false, Error: '', ExitCode: 0, OOMKilled: false, Paused: false, Pid: 0, Restarting: false, Running: false, Status: stateKind };
+  const labels = { 'org.opengamevcs.sandbox.job': expected.jobId, 'org.opengamevcs.sandbox.role': expected.role, 'org.opengamevcs.sandbox.runtime': 'linux-reference-v1', 'org.opengamevcs.sandbox.runtime-contract-sha256': expected.runtimeContractSha256 };
+  if (expected.authorityId) Object.assign(labels, { 'org.opengamevcs.sandbox': 'reference-v1', 'org.opengamevcs.sandbox.authority': expected.authorityId, 'org.opengamevcs.sandbox.binding-hmac-sha256': expected.bindingMac });
   return {
-    AppArmorProfile: stateKind === 'running' ? 'docker-default' : '',
+    AppArmorProfile: activated ? 'docker-default' : '',
     Args: [],
-    Config: { Cmd: null, Domainname: '', Entrypoint: [expected.entrypoint], Env: null, ExposedPorts: null, Healthcheck: null, Hostname: 'ogvcs-worker', Image: expected.runtimeImage, Labels: { 'org.opengamevcs.sandbox.job': expected.jobId, 'org.opengamevcs.sandbox.role': expected.role, 'org.opengamevcs.sandbox.runtime': 'linux-reference-v1', 'org.opengamevcs.sandbox.runtime-contract-sha256': expected.runtimeContractSha256 }, OpenStdin: false, StdinOnce: false, StopTimeout: 1, Tty: false, User: '65532:65532', Volumes: null, WorkingDir: '/scratch' },
-    HostConfig: { AutoRemove: false, Binds: null, CapAdd: null, CapDrop: ['ALL'], CgroupnsMode: 'private', CpuPeriod: 0, CpuQuota: 0, CpuShares: 0, DeviceCgroupRules: null, DeviceRequests: null, Devices: null, Dns: null, DnsOptions: null, DnsSearch: null, ExtraHosts: null, GroupAdd: null, Init: null, IpcMode: 'none', Links: null, LogConfig: { Config: {}, Type: 'none' }, MaskedPaths: ['/proc/acpi', '/proc/asound', '/proc/interrupts', '/proc/kcore', '/proc/keys', '/proc/latency_stats', '/proc/sched_debug', '/proc/scsi', '/proc/timer_list', '/proc/timer_stats', '/sys/firmware'], Memory: expected.policy.memoryBytes, MemoryReservation: 0, MemorySwap: expected.policy.memoryBytes, Mounts: hostMounts, NanoCpus: 1_000_000_000, NetworkMode: 'none', OomKillDisable: false, PidMode: '', PidsLimit: expected.policy.processes, PortBindings: {}, Privileged: false, PublishAllPorts: false, ReadonlyPaths: ['/proc/bus', '/proc/fs', '/proc/irq', '/proc/sys', '/proc/sysrq-trigger'], ReadonlyRootfs: true, RestartPolicy: { MaximumRetryCount: 0, Name: 'no' }, Runtime: 'runc', SecurityOpt: [...(stateKind === 'running' ? ['apparmor=docker-default'] : []), 'no-new-privileges=true', 'seccomp={}'], Sysctls: null, Tmpfs: { '/scratch': `rw,nosuid,nodev,noexec,size=${expected.policy.scratchBytes},uid=65532,gid=65532,mode=0700` }, UsernsMode: '', UTSMode: '', Ulimits: [{ Hard: expected.policy.cpuMilliseconds / 1_000, Name: 'cpu', Soft: expected.policy.cpuMilliseconds / 1_000 }, { Hard: expected.policy.outputBytes, Name: 'fsize', Soft: expected.policy.outputBytes }, { Hard: 64, Name: 'nofile', Soft: 64 }], VolumesFrom: null },
+    Config: { Cmd: null, Domainname: '', Entrypoint: [expected.entrypoint], Env: null, ExposedPorts: null, Healthcheck: null, Hostname: 'ogvcs-worker', Image: expected.runtimeImage, Labels: labels, OpenStdin: false, StdinOnce: false, StopTimeout: 1, Tty: false, User: '65532:65532', Volumes: null, WorkingDir: '/scratch' },
+    HostConfig: { AutoRemove: false, Binds: null, CapAdd: null, CapDrop: ['ALL'], CgroupnsMode: 'private', CpuPeriod: 0, CpuQuota: 0, CpuShares: 0, DeviceCgroupRules: null, DeviceRequests: null, Devices: null, Dns: null, DnsOptions: null, DnsSearch: null, ExtraHosts: null, GroupAdd: null, Init: null, IpcMode: 'none', Links: null, LogConfig: { Config: {}, Type: 'none' }, MaskedPaths: ['/proc/acpi', '/proc/asound', '/proc/interrupts', '/proc/kcore', '/proc/keys', '/proc/latency_stats', '/proc/sched_debug', '/proc/scsi', '/proc/timer_list', '/proc/timer_stats', '/sys/firmware'], Memory: expected.policy.memoryBytes, MemoryReservation: 0, MemorySwap: expected.policy.memoryBytes, Mounts: hostMounts, NanoCpus: 1_000_000_000, NetworkMode: 'none', OomKillDisable: false, PidMode: '', PidsLimit: expected.policy.processes, PortBindings: {}, Privileged: false, PublishAllPorts: false, ReadonlyPaths: ['/proc/bus', '/proc/fs', '/proc/irq', '/proc/sys', '/proc/sysrq-trigger'], ReadonlyRootfs: true, RestartPolicy: { MaximumRetryCount: 0, Name: 'no' }, Runtime: 'runc', SecurityOpt: [...(activated ? ['apparmor=docker-default'] : []), 'no-new-privileges=true', 'seccomp={}'], Sysctls: null, Tmpfs: { '/scratch': `rw,nosuid,nodev,noexec,size=${expected.policy.scratchBytes},uid=65532,gid=65532,mode=0700` }, UsernsMode: '', UTSMode: '', Ulimits: [{ Hard: expected.policy.cpuMilliseconds / 1_000, Name: 'cpu', Soft: expected.policy.cpuMilliseconds / 1_000 }, { Hard: expected.policy.outputBytes, Name: 'fsize', Soft: expected.policy.outputBytes }, { Hard: 64, Name: 'nofile', Soft: 64 }], VolumesFrom: null },
     Id: id,
     Mounts: effectiveMounts,
     Name: `/${expected.name}`,
@@ -544,14 +557,17 @@ const fakeDockerEngine = (failure = null) => {
   const findContainer = (query) => [...state.containers.values()].find((entry) => entry.id === query || entry.expected.name === query);
   const executeCommand = async (args) => {
     state.calls.push([...args]);
+    if (args[0] === 'container' && args[1] === 'ls') return dockerExit(0, [...state.containers.keys()].sort().map((id) => `${id}\n`).join(''));
+    if (args[0] === 'volume' && args[1] === 'ls') return dockerExit(0, state.volume ? `${state.volume.name}\n` : '');
     if (args[0] === 'volume' && args[1] === 'create') {
       const name = args.at(-1);
-      state.volume = { jobId: args.find((value) => value.startsWith('--label=org.opengamevcs.sandbox.job='))?.split('=').at(-1), mountpoint: `/var/lib/docker/volumes/${name}/_data`, name, options: args.find((value) => value.startsWith('--opt=o='))?.slice('--opt=o='.length) };
+      const labels = Object.fromEntries(args.filter((value) => value.startsWith('--label=')).map((value) => { const entry = value.slice('--label='.length); const index = entry.indexOf('='); return [entry.slice(0, index), entry.slice(index + 1)]; }));
+      state.volume = { jobId: labels['org.opengamevcs.sandbox.job'], labels, mountpoint: `/var/lib/docker/volumes/${name}/_data`, name, options: args.find((value) => value.startsWith('--opt=o='))?.slice('--opt=o='.length) };
       return failure === 'volume-create' ? dockerExit(1, '', 'SECRET=/host/volume') : dockerExit(0, `${name}\n`);
     }
     if (args[0] === 'volume' && args[1] === 'inspect') {
       if (!state.volume || state.volume.name !== args[2]) return dockerExit(1);
-      const volume = { Driver: failure === 'volume-inspect' ? 'hostile' : 'local', Labels: { 'org.opengamevcs.sandbox': 'reference-v1', 'org.opengamevcs.sandbox.job': state.volume.jobId, 'org.opengamevcs.sandbox.role': 'output-volume' }, Mountpoint: state.volume.mountpoint, Name: state.volume.name, Options: { device: 'tmpfs', o: state.volume.options, type: 'tmpfs' }, Scope: 'local' };
+      const volume = { Driver: failure === 'volume-inspect' ? 'hostile' : 'local', Labels: state.volume.labels, Mountpoint: state.volume.mountpoint, Name: state.volume.name, Options: { device: 'tmpfs', o: state.volume.options, type: 'tmpfs' }, Scope: 'local' };
       return dockerExit(0, JSON.stringify([volume]));
     }
     if (args[0] === 'volume' && args[1] === 'rm') { state.volume = null; return dockerExit(0); }
@@ -639,8 +655,13 @@ const withDockerAnchorFixture = async (failure, operation) => {
     const fault = typeof failure === 'string' && failure.startsWith('fault:') ? failure.slice('fault:'.length) : null;
     const engine = fakeDockerEngine(fault === null ? failure : null);
     const adapter = createDockerReferenceAdapterForTesting(engine.executeCommand, '{}', new Set(fault === null ? [] : [fault]));
+    const authority = await store.daemonAuthority();
+    try {
+      assert.equal((await adapter.reconcileDaemonOrphans({ authority, interruptedJobs: [], stateRoot: store.root })).status, 'settled');
+    } finally { authority.hmacKey.fill(0); }
     const policy = Object.freeze({ cpuMilliseconds: 1_000, elapsedMilliseconds: 5_000, memoryBytes: 64 * 1024 * 1024, outputBytes: 2 * 1024 * 1024, processes: 4, scratchBytes: 2 * 1024 * 1024 });
-    return await operation({ adapter, aliases, engine, policy, runtimeImage: `sha256:${RUNTIME_DIGEST}` });
+    try { return await operation({ adapter, aliases, engine, policy, runtimeImage: `sha256:${RUNTIME_DIGEST}` }); }
+    finally { adapter.releaseDaemonAuthority(); }
   } finally {
     await Promise.allSettled(Object.values(aliases).map((alias) => store.removePinnedAlias(alias.handle)));
     await Promise.allSettled(Object.values(sources).map((handle) => handle.close()));
@@ -753,6 +774,321 @@ linuxReferenceStateTest('collector create, inspect, start, discard, and tombston
   });
 });
 
+const DAEMON_POLICY = Object.freeze({ cpuMilliseconds: 1_000, elapsedMilliseconds: 5_000, fanout: 4, memoryBytes: 64 * 1024 * 1024, outputBytes: 2 * 1024 * 1024, processes: 4, profileId: 'linux-reference-v1', scratchBytes: 2 * 1024 * 1024 });
+const DAEMON_BINDING_SCHEMA = 'ogvcs.untrusted-sandbox/daemon-resource-binding/v1';
+const daemonContainerExpectations = new WeakMap();
+const daemonResourceMac = (key, payload) => createHmac('sha256', key)
+  .update('OGVCS-SANDBOX-DAEMON-RESOURCE-V1\0', 'utf8')
+  .update(canonicalJson(payload), 'utf8')
+  .digest('hex');
+const daemonVolumeFixture = ({ authority, jobId, name = `ogvcs-sandbox-${'1'.repeat(24)}`, policy = DAEMON_POLICY }) => {
+  const options = `size=${policy.outputBytes},uid=65532,gid=65532,mode=0700,nosuid,nodev,noexec`;
+  const bindingMac = daemonResourceMac(authority.hmacKey, { authorityId: authority.authorityId, jobId, kind: 'volume', name, options, role: 'output-volume', schemaVersion: DAEMON_BINDING_SCHEMA });
+  return {
+    Driver: 'local',
+    Labels: { 'org.opengamevcs.sandbox': 'reference-v1', 'org.opengamevcs.sandbox.authority': authority.authorityId, 'org.opengamevcs.sandbox.binding-hmac-sha256': bindingMac, 'org.opengamevcs.sandbox.job': jobId, 'org.opengamevcs.sandbox.role': 'output-volume' },
+    Mountpoint: `/var/lib/docker/volumes/${name}/_data`,
+    Name: name,
+    Options: { device: 'tmpfs', o: options, type: 'tmpfs' },
+    Scope: 'local',
+  };
+};
+const daemonContainerFixture = ({ authority, fileMounts, id, jobId, name, policy = DAEMON_POLICY, role, runtimeImage = `sha256:${RUNTIME_DIGEST}`, stateKind, volume }) => {
+  const sortedMounts = [...fileMounts].sort((left, right) => left.target.localeCompare(right.target));
+  const entrypoint = role === 'parser' ? '/tool/program' : role === 'output-shim' ? '/ogvcs-output-shim' : '/ogvcs-volume-anchor';
+  const expected = {
+    authorityId: authority.authorityId,
+    entrypoint,
+    fileMounts: sortedMounts,
+    id,
+    jobId,
+    name,
+    outputReadonly: role !== 'parser',
+    policy,
+    role,
+    runtimeContractSha256: LINUX_RUNTIME_CONTRACT_SHA256,
+    runtimeImage,
+    seccompCanonical: '{}',
+    volume: volume.Name,
+    volumeMountpoint: volume.Mountpoint,
+  };
+  expected.bindingMac = daemonResourceMac(authority.hmacKey, {
+    authorityId: authority.authorityId,
+    entrypoint,
+    fileMounts: sortedMounts,
+    jobId,
+    kind: 'container',
+    name,
+    outputReadonly: role !== 'parser',
+    policy: { ...policy },
+    role,
+    runtimeContractSha256: LINUX_RUNTIME_CONTRACT_SHA256,
+    runtimeImage,
+    schemaVersion: DAEMON_BINDING_SCHEMA,
+    volume: volume.Name,
+  });
+  const inspected = dockerContainerInspect(expected, id, stateKind);
+  daemonContainerExpectations.set(inspected, expected);
+  return inspected;
+};
+
+const daemonRecoveryEngine = ({ containers = [], inspectFailure = null, listFailure = null, volumes = [] }) => {
+  const state = { calls: [], containers: new Map(containers.map((container) => [container.Id, container])), controlOptions: [], destructiveCalls: [], volumes: new Map(volumes.map((volume) => [volume.Name, volume])) };
+  const labelsMatch = (labels, args) => args.filter((value, index) => args[index - 1] === '--filter' && value.startsWith('label=')).every((filter) => {
+    const pair = filter.slice('label='.length); const index = pair.indexOf('='); return labels?.[pair.slice(0, index)] === pair.slice(index + 1);
+  });
+  const listBytes = (entries) => entries.length === 0 ? '' : `${entries.sort().join('\n')}\n`;
+  const executeCommand = async (args, options) => {
+    state.calls.push([...args]); state.controlOptions.push({ args: [...args], options: { ...options } });
+    if (args[0] === 'container' && args[1] === 'ls') {
+      const ids = [...state.containers.values()].filter((container) => labelsMatch(container.Config.Labels, args)).map((container) => container.Id);
+      if (listFailure === 'overflow') return workerExecuteResult({ code: 0, kind: 'overflow', stdout: Buffer.alloc(0), stdoutBytes: 4096 });
+      if (listFailure === 'truncated') return dockerExit(0, ids.join('\n'));
+      if (listFailure === 'timeout') return workerExecuteResult({ code: null, kind: 'timeout' });
+      return dockerExit(0, listBytes(ids));
+    }
+    if (args[0] === 'volume' && args[1] === 'ls') {
+      const names = [...state.volumes.values()].filter((volume) => labelsMatch(volume.Labels, args)).map((volume) => volume.Name);
+      return dockerExit(0, listBytes(names));
+    }
+    if (args[0] === 'container' && args[1] === 'inspect') {
+      if (inspectFailure === 'overflow') return workerExecuteResult({ code: 0, kind: 'overflow', stdout: Buffer.alloc(0), stdoutBytes: 9 * 1024 * 1024 });
+      if (inspectFailure === 'timeout') return workerExecuteResult({ code: null, kind: 'timeout' });
+      if (inspectFailure === 'malformed') return dockerExit(0, '[{"Id":"SECRET=/home/runner/private"}]');
+      return dockerExit(0, JSON.stringify(args.slice(2).flatMap((id) => state.containers.has(id) ? [state.containers.get(id)] : [])));
+    }
+    if (args[0] === 'volume' && args[1] === 'inspect') return dockerExit(0, JSON.stringify(args.slice(2).flatMap((name) => state.volumes.has(name) ? [state.volumes.get(name)] : [])));
+    if (args[0] === 'kill' || args[0] === 'rm' || args[0] === 'volume' && args[1] === 'rm') {
+      state.destructiveCalls.push([...args]); return dockerExit(0);
+    }
+    return dockerExit(1);
+  };
+  return Object.freeze({ executeCommand, state });
+};
+
+const daemonDescriptor = (jobId) => Object.freeze({ jobId, resourcePolicy: DAEMON_POLICY, runtimeContractSha256: LINUX_RUNTIME_CONTRACT_SHA256, runtimeImage: `sha256:${RUNTIME_DIGEST}` });
+const daemonAliases = (stateRoot, role) => role === 'parser'
+  ? [{ source: join(stateRoot, 'temporary', `alias.${'1'.repeat(32)}`), target: '/input/payload' }, { source: join(stateRoot, 'temporary', `alias.${'2'.repeat(32)}`), target: '/input/job' }, { source: join(stateRoot, 'temporary', `alias.${'3'.repeat(32)}`), target: '/tool/program' }]
+  : role === 'output-shim' ? [{ source: join(stateRoot, 'temporary', `alias.${'4'.repeat(32)}`), target: '/input/binding' }] : [];
+
+const withDaemonRecoveryFixture = async (operation) => {
+  const root = await mkdtemp(join(tmpdir(), 'ogvcs-sandbox-daemon-recovery-')); await chmod(root, 0o700);
+  const store = await ReferenceStateStore.open(join(root, 'state'));
+  const authority = await store.daemonAuthority();
+  try { return await operation({ authority, stateRoot: store.root, store }); }
+  finally { authority.hmacKey.fill(0); await store.close().catch(() => {}); await rm(root, { recursive: true, force: true }); }
+};
+
+referenceStateTest('daemon authority is stable, private, and quarantine never retains raw authority or daemon identifiers', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ogvcs-sandbox-daemon-authority-')); await chmod(root, 0o700);
+  try {
+    let store = await ReferenceStateStore.open(root);
+    const first = await store.daemonAuthority(); const keyHex = first.hmacKey.toString('hex'); const authorityId = first.authorityId;
+    const authorityPath = join(root, '.daemon-authority.json');
+    assert.equal((await stat(authorityPath)).mode & 0o777, 0o600);
+    assert.deepEqual(Object.keys(JSON.parse(await readFile(authorityPath, 'utf8'))).sort(), ['authorityId', 'hmacKeyHex', 'schemaVersion']);
+    first.hmacKey.fill(0); await store.close();
+    store = await ReferenceStateStore.open(root);
+    const second = await store.daemonAuthority(); assert.equal(second.authorityId, authorityId); assert.equal(second.hmacKey.toString('hex'), keyHex);
+    const rawIdentifier = 'b'.repeat(64); const rawMac = 'c'.repeat(64);
+    await store.writeDaemonQuarantine({ diagnosticCodes: ['RESOURCE_AUTH_INVALID'], resourceFingerprints: [sha256(Buffer.from(rawIdentifier))] }, 1234);
+    const quarantine = await readFile(join(root, 'quarantine', (await readdir(join(root, 'quarantine')))[0]), 'utf8');
+    assert.equal(quarantine.includes(keyHex), false); assert.equal(quarantine.includes(rawIdentifier), false); assert.equal(quarantine.includes(rawMac), false); assert.equal(quarantine.includes('/home/runner'), false); assert.equal(quarantine.includes('/var/lib/docker'), false);
+    second.hmacKey.fill(0); await store.close();
+    const authorityRecord = JSON.parse(await readFile(authorityPath, 'utf8'));
+    await writeFile(authorityPath, `${canonicalJson({ ...authorityRecord, authorityId: '0'.repeat(64) })}\n`, { mode: 0o600 });
+    store = await ReferenceStateStore.open(root);
+    await assert.rejects(store.daemonAuthority(), /daemon authority state is invalid/u);
+    await store.close();
+    await writeFile(authorityPath, `${canonicalJson({ ...authorityRecord, hmacKeyHex: '0'.repeat(63) })}\n`, { mode: 0o600 });
+    store = await ReferenceStateStore.open(root);
+    await assert.rejects(store.daemonAuthority(), /daemon authority state is invalid/u);
+    await store.close();
+    await writeFile(authorityPath, `${canonicalJson(authorityRecord)}\n`, { mode: 0o600 }); await chmod(authorityPath, 0o644);
+    store = await ReferenceStateStore.open(root);
+    await assert.rejects(store.daemonAuthority(), /daemon authority state is invalid/u);
+    await store.close();
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+referenceStateTest('daemon authority reads stay pinned across symlink, hardlink, and post-open mutation attacks', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ogvcs-sandbox-daemon-authority-pinned-')); await chmod(root, 0o700);
+  const authorityPath = join(root, '.daemon-authority.json');
+  const otherPath = join(root, '.daemon-authority.other');
+  const linkedPath = join(root, '.daemon-authority.linked');
+  try {
+    let store = await ReferenceStateStore.open(root);
+    const authority = await store.daemonAuthority(); authority.hmacKey.fill(0); await store.close();
+    const original = await readFile(authorityPath);
+
+    await link(authorityPath, linkedPath);
+    store = await ReferenceStateStore.open(root);
+    await assert.rejects(store.daemonAuthority(), /daemon authority state is invalid/u);
+    await store.close(); await unlink(linkedPath);
+
+    await rename(authorityPath, otherPath); await symlink(otherPath, authorityPath);
+    store = await ReferenceStateStore.open(root);
+    await assert.rejects(store.daemonAuthority(), /daemon authority state is invalid/u);
+    await store.close(); await unlink(authorityPath); await rename(otherPath, authorityPath);
+
+    store = await ReferenceStateStore.open(root);
+    const probe = await open(authorityPath, 'r'); const prototype = Object.getPrototypeOf(probe); await probe.close();
+    const originalRead = Object.getOwnPropertyDescriptor(prototype, 'read');
+    let releaseRead; let observeRead;
+    const readObserved = new Promise((resolve) => { observeRead = resolve; });
+    const readReleased = new Promise((resolve) => { releaseRead = resolve; });
+    let intercepted = false;
+    Object.defineProperty(prototype, 'read', { ...originalRead, value: async function (...args) {
+      if (!intercepted) { intercepted = true; observeRead(); await readReleased; }
+      return Reflect.apply(originalRead.value, this, args);
+    } });
+    try {
+      const pending = store.daemonAuthority();
+      await readObserved;
+      const replacementKey = Buffer.alloc(32, 0x42);
+      const replacementId = createHash('sha256').update('OGVCS-SANDBOX-DAEMON-AUTHORITY-V1\0', 'utf8').update(replacementKey).digest('hex');
+      const replacement = JSON.parse(original.toString('utf8'));
+      await writeFile(authorityPath, `${canonicalJson({ ...replacement, authorityId: replacementId, hmacKeyHex: replacementKey.toString('hex') })}\n`, { mode: 0o600 });
+      replacementKey.fill(0);
+      await link(authorityPath, linkedPath);
+      releaseRead();
+      await assert.rejects(pending, /daemon authority state is invalid/u);
+    } finally {
+      releaseRead();
+      Object.defineProperty(prototype, 'read', originalRead);
+      await unlink(linkedPath).catch(() => {});
+      await writeFile(authorityPath, original, { mode: 0o600 }); await chmod(authorityPath, 0o600);
+      await store.close();
+    }
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+referenceStateTest('restart discovery authenticates every crash-boundary topology and quarantines without deleting before settlement approval', async () => {
+  await withDaemonRecoveryFixture(async ({ authority, stateRoot }) => {
+    const jobId = 'job.daemon.restart'; const descriptor = daemonDescriptor(jobId);
+    const volume = daemonVolumeFixture({ authority, jobId });
+    const anchor = (stateKind = 'running') => daemonContainerFixture({ authority, fileMounts: [], id: 'a'.repeat(64), jobId, name: `ogvcs-sandbox-${'a'.repeat(24)}`, role: 'volume-anchor', stateKind, volume });
+    const parser = (stateKind) => daemonContainerFixture({ authority, fileMounts: daemonAliases(stateRoot, 'parser'), id: 'b'.repeat(64), jobId, name: `ogvcs-sandbox-${'b'.repeat(24)}`, role: 'parser', stateKind, volume });
+    const collector = (stateKind) => daemonContainerFixture({ authority, fileMounts: daemonAliases(stateRoot, 'output-shim'), id: 'c'.repeat(64), jobId, name: `ogvcs-sandbox-${'c'.repeat(24)}`, role: 'output-shim', stateKind, volume });
+    const snapshots = [
+      ['before-volume-allocation', [], []],
+      ['after-volume-create', [], [volume]],
+      ['after-volume-inspect', [], [volume]],
+      ['after-anchor-create', [anchor('created')], [volume]],
+      ['after-anchor-start', [anchor()], [volume]],
+      ['after-anchor-transfer', [anchor()], [volume]],
+      ['after-parser-create', [anchor(), parser('created')], [volume]],
+      ['after-parser-start', [anchor(), parser('running')], [volume]],
+      ['after-parser-exit', [anchor(), parser('exited')], [volume]],
+      ['after-parser-cleanup', [anchor()], [volume]],
+      ['after-collector-create', [anchor(), collector('created')], [volume]],
+      ['after-collector-start', [anchor(), collector('running')], [volume]],
+      ['after-collector-exit', [anchor(), collector('exited')], [volume]],
+      ['after-collector-cleanup', [anchor()], [volume]],
+      ['after-anchor-cleanup', [], [volume]],
+      ['after-volume-cleanup', [], []],
+    ];
+    for (const [stage, containers, volumes] of snapshots) {
+      for (const container of containers) {
+        const expected = daemonContainerExpectations.get(container);
+        if (container.State.Status === 'created') assert.equal(createdContainerInspectMismatch(container, expected), null, `${stage}:created`);
+        if (container.State.Status === 'running') assert.equal(runningContainerInspectMismatch(container, expected), null, `${stage}:running`);
+      }
+      const engine = daemonRecoveryEngine({ containers, volumes });
+      const adapter = createDockerReferenceAdapterForTesting(engine.executeCommand);
+      const report = await adapter.reconcileDaemonOrphans({ authority, interruptedJobs: [descriptor], stateRoot });
+      assert.equal(report.status, containers.length + volumes.length === 0 ? 'settled' : 'quarantined', stage);
+      if (report.status === 'quarantined') assert.deepEqual(report.diagnosticCodes, ['AUTHENTICATED_ORPHANS_REQUIRE_SETTLEMENT'], stage);
+      assert.deepEqual(engine.state.destructiveCalls, [], stage);
+      assert.equal(engine.state.containers.size, containers.length, stage); assert.equal(engine.state.volumes.size, volumes.length, stage);
+      adapter.releaseDaemonAuthority();
+      if (stage === 'after-parser-start') {
+        const repeated = createDockerReferenceAdapterForTesting(engine.executeCommand);
+        assert.deepEqual(await repeated.reconcileDaemonOrphans({ authority, interruptedJobs: [descriptor], stateRoot }), report);
+        assert.deepEqual(engine.state.destructiveCalls, []);
+        repeated.releaseDaemonAuthority();
+      }
+    }
+  });
+});
+
+referenceStateTest('daemon discovery treats filters as hints and fails closed on forgery, graph ambiguity, unknown jobs, and incomplete lists', async () => {
+  await withDaemonRecoveryFixture(async ({ authority, stateRoot }) => {
+    const jobId = 'job.daemon.valid'; const descriptor = daemonDescriptor(jobId); const volume = daemonVolumeFixture({ authority, jobId });
+    const validAnchor = daemonContainerFixture({ authority, fileMounts: [], id: 'a'.repeat(64), jobId, name: `ogvcs-sandbox-${'a'.repeat(24)}`, role: 'volume-anchor', stateKind: 'running', volume });
+    const invalidAuthorityEngine = daemonRecoveryEngine({}); const invalidAuthorityAdapter = createDockerReferenceAdapterForTesting(invalidAuthorityEngine.executeCommand);
+    await assert.rejects(invalidAuthorityAdapter.reconcileDaemonOrphans({ authority: { authorityId: '0'.repeat(64), hmacKey: Buffer.from(authority.hmacKey) }, interruptedJobs: [descriptor], stateRoot }), /daemon reconciliation request is invalid/u);
+    assert.deepEqual(invalidAuthorityEngine.state.calls, []); assert.deepEqual(invalidAuthorityEngine.state.destructiveCalls, []);
+    const proxyEngine = daemonRecoveryEngine({}); const proxyAdapter = createDockerReferenceAdapterForTesting(proxyEngine.executeCommand); let proxyReads = 0;
+    const proxyDescriptor = new Proxy(descriptor, { get() { proxyReads += 1; throw new Error('proxy getter must not run'); } });
+    await assert.rejects(proxyAdapter.reconcileDaemonOrphans({ authority, interruptedJobs: [proxyDescriptor], stateRoot }), /daemon reconciliation job binding is invalid/u);
+    assert.equal(proxyReads, 0); assert.deepEqual(proxyEngine.state.calls, []); assert.deepEqual(proxyEngine.state.destructiveCalls, []); proxyAdapter.releaseDaemonAuthority();
+    const getterEngine = daemonRecoveryEngine({}); const getterAdapter = createDockerReferenceAdapterForTesting(getterEngine.executeCommand); let getterReads = 0;
+    const getterPolicy = { ...DAEMON_POLICY };
+    Object.defineProperty(getterPolicy, 'outputBytes', { enumerable: true, get() { getterReads += 1; throw new Error('policy getter must not run'); } });
+    await assert.rejects(getterAdapter.reconcileDaemonOrphans({ authority, interruptedJobs: [Object.freeze({ ...descriptor, resourcePolicy: getterPolicy })], stateRoot }), /daemon reconciliation job binding is invalid/u);
+    assert.equal(getterReads, 0); assert.deepEqual(getterEngine.state.calls, []); assert.deepEqual(getterEngine.state.destructiveCalls, []); getterAdapter.releaseDaemonAuthority();
+    const arrayEngine = daemonRecoveryEngine({}); const arrayAdapter = createDockerReferenceAdapterForTesting(arrayEngine.executeCommand); let arrayReads = 0; const getterJobs = [];
+    Object.defineProperty(getterJobs, '0', { enumerable: true, get() { arrayReads += 1; throw new Error('descriptor-array getter must not run'); } });
+    await assert.rejects(arrayAdapter.reconcileDaemonOrphans({ authority, interruptedJobs: getterJobs, stateRoot }), /daemon reconciliation request is invalid/u);
+    assert.equal(arrayReads, 0); assert.deepEqual(arrayEngine.state.calls, []); assert.deepEqual(arrayEngine.state.destructiveCalls, []); arrayAdapter.releaseDaemonAuthority();
+    const symbolEngine = daemonRecoveryEngine({}); const symbolAdapter = createDockerReferenceAdapterForTesting(symbolEngine.executeCommand);
+    await assert.rejects(symbolAdapter.reconcileDaemonOrphans({ authority, interruptedJobs: [Object.freeze({ ...descriptor, [Symbol('unexpected')]: true })], stateRoot }), /daemon reconciliation job binding is invalid/u);
+    assert.deepEqual(symbolEngine.state.calls, []); assert.deepEqual(symbolEngine.state.destructiveCalls, []); symbolAdapter.releaseDaemonAuthority();
+    const cases = [];
+    const forgedVolume = structuredClone(volume); forgedVolume.Name = `ogvcs-sandbox-${'2'.repeat(24)}`; forgedVolume.Mountpoint = `/var/lib/docker/volumes/${forgedVolume.Name}/_data`;
+    cases.push(['forged', [validAnchor], [volume, forgedVolume], 'RESOURCE_AUTH_INVALID', {}]);
+    const forgedContainer = structuredClone(validAnchor); forgedContainer.Config.Labels['org.opengamevcs.sandbox.binding-hmac-sha256'] = '0'.repeat(64);
+    cases.push(['forged-container-mac', [forgedContainer], [volume], 'RESOURCE_AUTH_INVALID', {}]);
+    const changedPolicy = Object.freeze({ ...DAEMON_POLICY, outputBytes: DAEMON_POLICY.outputBytes + 1 });
+    cases.push(['changed-signed-policy', [validAnchor], [volume], 'RESOURCE_AUTH_INVALID', { descriptors: [Object.freeze({ ...descriptor, resourcePolicy: changedPolicy })] }]);
+    const outsideAliasParser = daemonContainerFixture({ authority, fileMounts: [{ source: `/host/alias.${'1'.repeat(32)}`, target: '/input/payload' }, { source: `/host/alias.${'2'.repeat(32)}`, target: '/input/job' }, { source: `/host/alias.${'3'.repeat(32)}`, target: '/tool/program' }], id: '9'.repeat(64), jobId, name: `ogvcs-sandbox-${'9'.repeat(24)}`, role: 'parser', stateKind: 'created', volume });
+    cases.push(['alias-outside-state-root', [validAnchor, outsideAliasParser], [volume], 'RESOURCE_AUTH_INVALID', {}]);
+    const duplicate = daemonContainerFixture({ authority, fileMounts: [], id: 'd'.repeat(64), jobId, name: `ogvcs-sandbox-${'d'.repeat(24)}`, role: 'volume-anchor', stateKind: 'running', volume });
+    cases.push(['duplicate', [validAnchor, duplicate], [volume], 'RESOURCE_GRAPH_INVALID', {}]);
+    const unknownVolume = daemonVolumeFixture({ authority, jobId: 'job.daemon.unknown', name: `ogvcs-sandbox-${'3'.repeat(24)}` });
+    cases.push(['unknown', [], [unknownVolume], 'RESOURCE_JOB_UNBOUND', {}]);
+    cases.push(['mixed-valid-foreign', [validAnchor], [volume, unknownVolume], 'RESOURCE_JOB_UNBOUND', {}]);
+    const secondJobId = 'job.daemon.second'; const secondDescriptor = daemonDescriptor(secondJobId); const secondVolume = daemonVolumeFixture({ authority, jobId: secondJobId, name: `ogvcs-sandbox-${'4'.repeat(24)}` });
+    const crossBound = daemonContainerFixture({ authority, fileMounts: [], id: 'e'.repeat(64), jobId, name: `ogvcs-sandbox-${'e'.repeat(24)}`, role: 'volume-anchor', stateKind: 'running', volume: secondVolume });
+    cases.push(['cross-bound', [crossBound], [secondVolume], 'RESOURCE_GRAPH_INVALID', { descriptors: [descriptor, secondDescriptor] }]);
+    cases.push(['list-overflow', [validAnchor], [volume], 'DISCOVERY_UNPROVABLE', { listFailure: 'overflow' }]);
+    cases.push(['list-truncated', [validAnchor], [volume], 'DISCOVERY_UNPROVABLE', { listFailure: 'truncated' }]);
+    cases.push(['list-timeout', [validAnchor], [volume], 'DISCOVERY_UNPROVABLE', { listFailure: 'timeout' }]);
+    cases.push(['inspect-overflow', [validAnchor], [volume], 'INSPECT_UNPROVABLE', { inspectFailure: 'overflow' }]);
+    cases.push(['inspect-timeout', [validAnchor], [volume], 'INSPECT_UNPROVABLE', { inspectFailure: 'timeout' }]);
+    cases.push(['inspect-malformed', [validAnchor], [volume], 'INSPECT_UNPROVABLE', { inspectFailure: 'malformed' }]);
+    for (const [label, containers, volumes, diagnostic, options] of cases) {
+      const engine = daemonRecoveryEngine({ containers, inspectFailure: options.inspectFailure, listFailure: options.listFailure, volumes }); const adapter = createDockerReferenceAdapterForTesting(engine.executeCommand);
+      const report = await adapter.reconcileDaemonOrphans({ authority, interruptedJobs: options.descriptors ?? [descriptor], stateRoot });
+      assert.equal(report.status, 'quarantined', label); assert.equal(report.diagnosticCodes.includes(diagnostic), true, label);
+      assert.deepEqual(engine.state.destructiveCalls, [], label); assert.equal(engine.state.containers.size, containers.length, label); assert.equal(engine.state.volumes.size, volumes.length, label);
+      assert.equal(JSON.stringify(report).includes('SECRET='), false, label); assert.equal(JSON.stringify(report).includes('/home/runner'), false, label);
+      for (const call of engine.state.controlOptions) {
+        assert.equal(Number.isSafeInteger(call.options.timeoutMilliseconds), true, `${label}:${call.args.slice(0, 2).join(':')}:timeout`);
+        assert.equal(Number.isSafeInteger(call.options.maximumStdout), true, `${label}:${call.args.slice(0, 2).join(':')}:stdout`);
+      }
+      adapter.releaseDaemonAuthority();
+    }
+    const foreignAuthority = { authorityId: 'f'.repeat(64), hmacKey: Buffer.alloc(32, 0xf1) };
+    const foreignVolume = daemonVolumeFixture({ authority: foreignAuthority, jobId: 'job.foreign', name: `ogvcs-sandbox-${'5'.repeat(24)}` });
+    const foreignContainer = daemonContainerFixture({ authority: foreignAuthority, fileMounts: [], id: 'f'.repeat(64), jobId: 'job.foreign', name: `ogvcs-sandbox-${'f'.repeat(24)}`, role: 'volume-anchor', runtimeImage: `sha256:${RUNTIME_DIGEST}`, stateKind: 'running', volume: foreignVolume });
+    const wrongAuthorityVolume = structuredClone(volume); wrongAuthorityVolume.Name = `ogvcs-sandbox-${'6'.repeat(24)}`; wrongAuthorityVolume.Mountpoint = `/var/lib/docker/volumes/${wrongAuthorityVolume.Name}/_data`; wrongAuthorityVolume.Labels['org.opengamevcs.sandbox.authority'] = '0'.repeat(64);
+    const legacyVolume = structuredClone(volume); legacyVolume.Name = `ogvcs-sandbox-${'7'.repeat(24)}`; legacyVolume.Mountpoint = `/var/lib/docker/volumes/${legacyVolume.Name}/_data`; delete legacyVolume.Labels['org.opengamevcs.sandbox.authority']; delete legacyVolume.Labels['org.opengamevcs.sandbox.binding-hmac-sha256'];
+    const wrongAuthorityContainer = structuredClone(validAnchor); wrongAuthorityContainer.Id = '6'.repeat(64); wrongAuthorityContainer.Name = `/ogvcs-sandbox-${'6'.repeat(24)}`; wrongAuthorityContainer.Config.Labels['org.opengamevcs.sandbox.authority'] = '0'.repeat(64);
+    const legacyContainer = structuredClone(validAnchor); legacyContainer.Id = '7'.repeat(64); legacyContainer.Name = `/ogvcs-sandbox-${'7'.repeat(24)}`; delete legacyContainer.Config.Labels['org.opengamevcs.sandbox.authority']; delete legacyContainer.Config.Labels['org.opengamevcs.sandbox.binding-hmac-sha256'];
+    const foreignEngine = daemonRecoveryEngine({ containers: [foreignContainer, wrongAuthorityContainer, legacyContainer], volumes: [foreignVolume, wrongAuthorityVolume, legacyVolume] }); const foreignAdapter = createDockerReferenceAdapterForTesting(foreignEngine.executeCommand);
+    assert.equal((await foreignAdapter.reconcileDaemonOrphans({ authority, interruptedJobs: [descriptor], stateRoot })).status, 'settled');
+    assert.deepEqual([...foreignEngine.state.containers.keys()].sort(), [foreignContainer.Id, legacyContainer.Id, wrongAuthorityContainer.Id].sort());
+    assert.deepEqual([...foreignEngine.state.volumes.keys()].sort(), [foreignVolume.Name, legacyVolume.Name, wrongAuthorityVolume.Name].sort()); assert.deepEqual(foreignEngine.state.destructiveCalls, []);
+    for (const call of foreignEngine.state.calls.filter((args) => args[1] === 'ls')) {
+      assert.equal(call.includes(`label=org.opengamevcs.sandbox=reference-v1`), true);
+      assert.equal(call.includes(`label=org.opengamevcs.sandbox.authority=${authority.authorityId}`), true);
+    }
+    foreignAdapter.releaseDaemonAuthority(); foreignAuthority.hmacKey.fill(0);
+  });
+});
+
 const makeManifest = ({ privateKey, publicKey, toolDigest, nowUnixMs, resourcePolicy = null }) => {
   const policy = resourcePolicy ?? Object.freeze({ cpuMilliseconds: 1_000, elapsedMilliseconds: 10_000, fanout: 16, memoryBytes: 64 * 1024 * 1024, outputBytes: 1024 * 1024, processes: 4, profileId: 'linux-reference-v1', scratchBytes: 2 * 1024 * 1024 });
   const unsigned = Object.freeze({
@@ -802,6 +1138,7 @@ const withFixture = async (operation, { adapter = new FakeContainerAdapter(), fa
   const fixture = {
     acquisition,
     adapter,
+    configuration,
     evidenceHmacKey,
     evidenceKeyId,
     get acquisitions() { return acquisitions; },
@@ -1207,6 +1544,68 @@ referenceStateTest('state recovery denies interrupted work and output commit nev
     assert.equal(await readFile(join(root, 'outputs/stable/bundle/value'), 'utf8'), 'first');
     await store.close();
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+referenceStateTest('daemon reconciliation observes durable nonterminal state before local restart denial', async () => {
+  let observed = 0;
+  const adapter = new FakeContainerAdapter({ reconcileProbe: async ({ interruptedJobs, stateRoot }) => {
+    if (interruptedJobs.length === 0) return;
+    observed += 1;
+    assert.deepEqual(interruptedJobs.map((entry) => entry.jobId), ['job.restart-order']);
+    const record = JSON.parse(await readFile(join(stateRoot, 'jobs/job.restart-order.json'), 'utf8'));
+    assert.equal(record.state, 'running');
+    assert.equal(record.securityEvents.includes('WORKER_RESTART_RECOVERY'), false);
+  } });
+  await withFixture(async (fixture) => {
+    const result = await fixture.service.run(fixture.jobFor('restart-order'), fixture.acquisition);
+    assert.equal(result.code, 'VALIDATED');
+    const path = join(fixture.root, 'state/jobs/job.restart-order.json');
+    const record = JSON.parse(await readFile(path, 'utf8'));
+    await writeFile(path, `${canonicalJson({ ...record, state: 'running' })}\n`, { mode: 0o600 });
+    await fixture.restart();
+    assert.equal(observed, 1);
+    const recovered = JSON.parse(await readFile(path, 'utf8'));
+    assert.equal(recovered.state, 'denied'); assert.equal(recovered.result.code, 'SANDBOX_UNAVAILABLE');
+    assert.equal(recovered.securityEvents.at(-1), 'WORKER_RESTART_RECOVERY');
+  }, { adapter });
+});
+
+referenceStateTest('quarantined daemon report prevents local denial and persists only closed hashed diagnostics', async () => {
+  const fingerprint = sha256(Buffer.from('daemon-resource-id-never-persisted', 'utf8'));
+  const report = Object.freeze({ diagnosticCodes: Object.freeze(['RESOURCE_AUTH_INVALID']), resourceFingerprints: Object.freeze([fingerprint]), schemaVersion: 'ogvcs.untrusted-sandbox/daemon-reconciliation/v1', status: 'quarantined' });
+  const adapter = new FakeContainerAdapter();
+  await withFixture(async (fixture) => {
+    const result = await fixture.service.run(fixture.jobFor('quarantine-order'), fixture.acquisition);
+    assert.equal(result.code, 'VALIDATED');
+    const jobPath = join(fixture.root, 'state/jobs/job.quarantine-order.json');
+    const record = JSON.parse(await readFile(jobPath, 'utf8'));
+    await writeFile(jobPath, `${canonicalJson({ ...record, state: 'running' })}\n`, { mode: 0o600 });
+    adapter.reconciliationReport = report;
+    await assert.rejects(fixture.restart(), /daemon orphan reconciliation failed/u);
+    const stillInterrupted = JSON.parse(await readFile(jobPath, 'utf8'));
+    assert.equal(stillInterrupted.state, 'running'); assert.equal(stillInterrupted.securityEvents.includes('WORKER_RESTART_RECOVERY'), false);
+    const daemonEntries = (await readdir(join(fixture.root, 'state/quarantine'))).filter((name) => name.startsWith('daemon.'));
+    assert.equal(daemonEntries.length, 1);
+    const quarantine = await readFile(join(fixture.root, 'state/quarantine', daemonEntries[0]), 'utf8');
+    assert.equal(quarantine.includes('RESOURCE_AUTH_INVALID'), true); assert.equal(quarantine.includes(fingerprint), true);
+    assert.equal(quarantine.includes('daemon-resource-id-never-persisted'), false); assert.equal(quarantine.includes('SECRET='), false);
+  }, { adapter });
+});
+
+referenceStateTest('hostile daemon-authority paths fail before any adapter or destructive operation', async () => {
+  await withFixture(async (fixture) => {
+    await fixture.service.close();
+    const authorityPath = join(fixture.root, 'state/.daemon-authority.json');
+    const originalPath = join(fixture.root, 'state/.daemon-authority.original');
+    await rename(authorityPath, originalPath); await symlink(originalPath, authorityPath);
+    const adapter = new FakeContainerAdapter();
+    await assert.rejects(ReferenceSandboxService.open({ ...fixture.configuration, adapter }), /daemon authority state is invalid/u);
+    assert.equal(adapter.reconciliationCalls, 0);
+    assert.equal(adapter.releaseAuthorityCalls, 0);
+    assert.equal(adapter.runs, 0);
+    assert.equal(adapter.collections, 0);
+    assert.equal(adapter.discardCalls, 0);
+  });
 });
 
 referenceStateTest('fault after durable output rename rolls back publication and records one denied result', async () => {

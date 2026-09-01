@@ -29,6 +29,7 @@ const MAXIMUM_INPUT_BYTES = 256 * 1024 * 1024;
 const MAXIMUM_QUEUE_DEPTH = 64;
 const ACQUISITION_SETTLEMENT_MILLISECONDS = 1_000;
 const MAXIMUM_PROVENANCE_BYTES = 64 * 1024;
+const DAEMON_RECONCILIATION_SCHEMA = 'ogvcs.untrusted-sandbox/daemon-reconciliation/v1';
 const POSTSTART_SINGLETON_DIAGNOSTIC_EVENTS = Object.freeze([
   'OUTPUT_FRAME_INVALID',
   'TRUSTED_OUTPUT_SHIM_REJECTED',
@@ -192,6 +193,49 @@ const boundedAcquisition = async ({ operation, controller, deadlineMilliseconds 
 
 const resultFromStored = (record) => record?.result ? Object.freeze({ ...record.result }) : null;
 
+const reconciliationJobDescriptors = (records, catalog) => {
+  const descriptors = [];
+  for (const record of records) {
+    const entry = catalog.get(record.manifestDigest);
+    const manifest = entry?.manifest;
+    if (!manifest
+      || record.manifestGeneration !== manifest.generation
+      || record.resourcePolicyDigest !== manifest.resourcePolicyDigest
+      || record.runtimeDigest !== manifest.runtimeDigest
+      || record.toolDigest !== manifest.toolDigest) return null;
+    descriptors.push(Object.freeze({
+      jobId: record.jobId,
+      resourcePolicy: manifest.resourcePolicy,
+      runtimeContractSha256: manifest.runtimeContractSha256,
+      runtimeImage: manifest.runtimeImage,
+    }));
+  }
+  return Object.freeze(descriptors);
+};
+
+const snapshotReconciliationReport = (source) => {
+  const report = exactRecord(source, ['diagnosticCodes', 'resourceFingerprints', 'schemaVersion', 'status']);
+  if (!report
+    || report.schemaVersion !== DAEMON_RECONCILIATION_SCHEMA
+    || !['quarantined', 'settled'].includes(report.status)
+    || !Array.isArray(report.diagnosticCodes)
+    || report.diagnosticCodes.length > 64
+    || new Set(report.diagnosticCodes).size !== report.diagnosticCodes.length
+    || report.diagnosticCodes.some((code) => typeof code !== 'string' || !/^[A-Z][A-Z0-9_]{0,63}$/u.test(code))
+    || !Array.isArray(report.resourceFingerprints)
+    || report.resourceFingerprints.length > 128
+    || new Set(report.resourceFingerprints).size !== report.resourceFingerprints.length
+    || report.resourceFingerprints.some((fingerprint) => !isDigest(fingerprint))
+    || (report.status === 'settled' && (report.diagnosticCodes.length !== 0 || report.resourceFingerprints.length !== 0))
+    || (report.status === 'quarantined' && report.diagnosticCodes.length === 0)) return null;
+  return Object.freeze({
+    diagnosticCodes: Object.freeze([...report.diagnosticCodes]),
+    resourceFingerprints: Object.freeze([...report.resourceFingerprints]),
+    schemaVersion: report.schemaVersion,
+    status: report.status,
+  });
+};
+
 const safeErrorMessage = (error) => {
   try {
     if (error === null || typeof error !== 'object' || types.isProxy(error)) return null;
@@ -294,14 +338,44 @@ export class ReferenceSandboxService {
   #metrics = { cancelled: 0, denied: 0, resourceKills: 0, securityViolations: 0, validated: 0 };
 
   static async open({ adapter, stateRoot, manifestCatalog, trustedManifestKeys, acquisitionSources, evidenceHmacKey, evidenceHmacKeyId, clock = Date.now, faults = null }) {
-    if (!adapter || typeof adapter.verifyRuntimeImage !== 'function' || typeof adapter.runTool !== 'function' || typeof adapter.collectOutput !== 'function' || typeof adapter.discardVolume !== 'function' || !isDigest(adapter.seccompDigest) || typeof clock !== 'function' || types.isProxy(clock) || !Buffer.isBuffer(evidenceHmacKey) || Object.getPrototypeOf(evidenceHmacKey) !== Buffer.prototype || evidenceHmacKey.length !== 32 || !isId(evidenceHmacKeyId)) throw new TypeError('reference sandbox service configuration is invalid');
+    if (!adapter || typeof adapter.verifyRuntimeImage !== 'function' || typeof adapter.runTool !== 'function' || typeof adapter.collectOutput !== 'function' || typeof adapter.discardVolume !== 'function' || typeof adapter.reconcileDaemonOrphans !== 'function' || typeof adapter.releaseDaemonAuthority !== 'function' || !isDigest(adapter.seccompDigest) || typeof clock !== 'function' || types.isProxy(clock) || !Buffer.isBuffer(evidenceHmacKey) || Object.getPrototypeOf(evidenceHmacKey) !== Buffer.prototype || evidenceHmacKey.length !== 32 || !isId(evidenceHmacKeyId)) throw new TypeError('reference sandbox service configuration is invalid');
     const nowUnixMs = clock();
     if (!Number.isSafeInteger(nowUnixMs) || nowUnixMs < 0) throw new TypeError('reference sandbox clock is invalid');
     const trustedKeys = snapshotTrustedManifestKeys(trustedManifestKeys);
     const catalog = snapshotCatalog({ entries: manifestCatalog, trustedKeys, nowUnixMs });
     const sources = snapshotSources(acquisitionSources);
     const state = await ReferenceStateStore.open(stateRoot);
+    let authority = null;
+    let adapterAuthorityAttempted = false;
     try {
+      const interrupted = await state.interruptedJobs();
+      const reconciliationJobs = reconciliationJobDescriptors(interrupted, catalog);
+      if (!reconciliationJobs) {
+        await state.writeDaemonQuarantine({
+          diagnosticCodes: ['DURABLE_JOB_BINDING_INVALID'],
+          resourceFingerprints: interrupted.map((record) => sha256(Buffer.from(`OGVCS-SANDBOX-INTERRUPTED-JOB-V1\0${record.jobId}`, 'utf8'))),
+        }, nowUnixMs);
+        throw new Error('daemon orphan reconciliation failed');
+      }
+      authority = await state.daemonAuthority();
+      let report;
+      try {
+        adapterAuthorityAttempted = true;
+        report = snapshotReconciliationReport(await adapter.reconcileDaemonOrphans({ authority, interruptedJobs: reconciliationJobs, stateRoot: state.root }));
+      } catch {
+        report = null;
+      } finally {
+        authority.hmacKey.fill(0);
+        authority = null;
+      }
+      if (!report) {
+        await state.writeDaemonQuarantine({ diagnosticCodes: ['RECONCILIATION_CONTROL_UNPROVABLE'], resourceFingerprints: [] }, nowUnixMs);
+        throw new Error('daemon orphan reconciliation failed');
+      }
+      if (report.status === 'quarantined') {
+        await state.writeDaemonQuarantine(report, nowUnixMs);
+        throw new Error('daemon orphan reconciliation failed');
+      }
       await state.recoverInterrupted(nowUnixMs);
       await state.reconcileRevocations(nowUnixMs);
       for (const entry of catalog.values()) {
@@ -313,6 +387,8 @@ export class ReferenceSandboxService {
       services.add(service);
       return service;
     } catch (error) {
+      authority?.hmacKey.fill(0);
+      if (adapterAuthorityAttempted) try { adapter.releaseDaemonAuthority(); } catch {}
       await state.close().catch(() => {});
       throw error;
     }
@@ -719,7 +795,10 @@ export class ReferenceSandboxService {
     await this.#queue;
     this.#closed = true;
     this.#evidenceKey.fill(0);
+    let releaseFailed = false;
+    try { this.#adapter.releaseDaemonAuthority(); } catch { releaseFailed = true; }
     await this.#state.close();
+    if (releaseFailed) throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED');
   }
 }
 

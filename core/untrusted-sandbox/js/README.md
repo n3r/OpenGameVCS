@@ -81,6 +81,17 @@ of outputs invalidated by tool/runtime revocation. A final commit and revocation
 share the same serializer, so either publication wins and is then quarantined,
 or revocation wins and publication is denied.
 
+The state root also owns one private `0600` daemon-authority record. Its random
+256-bit HMAC key derives an opaque authority ID; the key is copied into the
+adapter only while the service is open and zeroed on release. Newly allocated
+containers and tmpfs volumes carry the authority ID plus a keyed binding over
+their random name, job, role, volume relationship, policy, runtime, and mount
+plan. Startup now performs bounded exact-authority list and inspect calls before
+it locally denies interrupted jobs. Unknown jobs, bad bindings, duplicate or
+cross-bound graphs, malformed/truncated/over-limit responses, and control
+timeouts produce only closed codes and hashed resource fingerprints in durable
+quarantine and prevent the service from accepting work.
+
 ## Evidence and nonclaims
 
 The Ubuntu hosted lane deterministically archives only the pinned trusted output
@@ -109,7 +120,13 @@ the `runc` runtime name does not attest or version-pin the daemon-configured
 runtime binary; that supply-chain proof remains a completion blocker. OGVCS-045
 remains Todo until the authenticated public contract, a green hosted proof,
 crash-boundary matrix, and all PRD acceptance evidence are frozen together.
-Crash recovery currently owns durable state aliases but does not authenticate
-and reconcile daemon-side anchor/container/volume orphans. Package labels are
-diagnostic metadata, not an ownership capability, so a global label-based sweep
-is intentionally absent pending a durable state-owned instance authority.
+The current restart tranche is detection-and-quarantine only: it does not yet
+delete even a fully authenticated daemon orphan. Automatic container/tmpfs
+settlement remains gated on explicit destructive-action approval. Discovery is
+also intentionally scoped to the current authority ID. Legacy resources with no
+authority label and resources owned by another authority are left untouched and
+are not part of its absence proof. An operator that requires exclusive ownership
+of a whole Docker daemon would additionally need a bounded brand-wide inventory
+that fails closed on every legacy, missing, or foreign authority resource; this
+candidate does not claim that stronger single-daemon guarantee. OGVCS-045 stays
+Todo.
