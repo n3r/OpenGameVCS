@@ -1,0 +1,283 @@
+{
+  "schemaVersion": "ogvcs.chunking/hosted-evidence/v1",
+  "status": "bounded-current-source-passed",
+  "exactScaleExecuted": false,
+  "sourceRevision": "b56e165eb3657288572ef16b0e5865a673877d4a",
+  "workflow": {
+    "name": "Chunking manifest bounded conformance",
+    "path": ".github/workflows/chunking-manifest-bounded.yml",
+    "runId": 33521316277,
+    "runAttempt": 1,
+    "event": "workflow_dispatch",
+    "headBranch": "r1-foundation-integration",
+    "status": "completed",
+    "conclusion": "success",
+    "createdAt": "2026-09-01T14:44:06Z",
+    "startedAt": "2026-09-01T14:44:06Z",
+    "completedAt": "2026-09-01T14:55:05Z",
+    "url": "https://github.com/n3r/OpenGameVCS/actions/runs/33521316277"
+  },
+  "toolchains": {
+    "nodeSelector": "24",
+    "nodeObserved": {
+      "Linux": "24.19.0",
+      "macOS": "24.18.0",
+      "Windows": "24.19.0",
+      "comparisonLinux": "24.19.0"
+    },
+    "rustSelector": "1.82.0",
+    "rustObserved": {
+      "Linux": "rustc 1.82.0 (f6e511eec 2024-10-15)",
+      "macOS": "rustc 1.82.0 (f6e511eec 2024-10-15)",
+      "Windows": "rustc 1.82.0 (f6e511eec 2024-10-15)"
+    }
+  },
+  "parallelMatrix": {
+    "firstBoundedJobStartedAt": "2026-09-01T14:46:14Z",
+    "lastBoundedJobStartedAt": "2026-09-01T14:51:17Z",
+    "boundedJobStartSpanSeconds": 303,
+    "boundedJobs": 6,
+    "scaleJobs": 0,
+    "note": "Linux and Windows legs started together; macOS runner availability delayed both macOS legs without changing their successful conclusions."
+  },
+  "jobs": [
+    {
+      "id": 99901724278,
+      "name": "JavaScript bounded (Linux)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T14:46:14Z",
+      "completedAt": "2026-09-01T14:49:53Z",
+      "durationSeconds": 219
+    },
+    {
+      "id": 99901724054,
+      "name": "JavaScript bounded (macOS)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T14:51:15Z",
+      "completedAt": "2026-09-01T14:54:46Z",
+      "durationSeconds": 211
+    },
+    {
+      "id": 99901723794,
+      "name": "JavaScript bounded (Windows)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T14:46:14Z",
+      "completedAt": "2026-09-01T14:50:58Z",
+      "durationSeconds": 284
+    },
+    {
+      "id": 99901724209,
+      "name": "Rust bounded (Linux)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T14:46:14Z",
+      "completedAt": "2026-09-01T14:48:03Z",
+      "durationSeconds": 109
+    },
+    {
+      "id": 99901724110,
+      "name": "Rust bounded (macOS)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T14:51:17Z",
+      "completedAt": "2026-09-01T14:53:08Z",
+      "durationSeconds": 111
+    },
+    {
+      "id": 99901724000,
+      "name": "Rust bounded (Windows)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T14:46:14Z",
+      "completedAt": "2026-09-01T14:48:27Z",
+      "durationSeconds": 133
+    },
+    {
+      "id": 99904789335,
+      "name": "Cross-language and cross-OS parity",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T14:54:50Z",
+      "completedAt": "2026-09-01T14:55:04Z",
+      "durationSeconds": 14
+    }
+  ],
+  "artifacts": [
+    {
+      "id": 9806025191,
+      "name": "chunking-javascript-Linux",
+      "archiveBytes": 4601,
+      "githubDigest": "sha256:e0e4b1dba3b8a607465cd5ebbd490ce0b360f0256afefc5ff3ff91cda30609a1",
+      "expiresAt": "2026-09-15T14:49:48Z",
+      "archiveDownloaded": true,
+      "localArchiveSha256Verified": false,
+      "extractedFile": "javascript.json",
+      "extractedFileBytes": 20035,
+      "extractedFileSha256": "234633c17aa3d281bed55498e451562a6418b556013c4b6f2ec033ccd195be4d",
+      "extractedContentValidated": true,
+      "artifactContentEquivalenceVerified": true
+    },
+    {
+      "id": 9806236546,
+      "name": "chunking-javascript-macOS",
+      "archiveBytes": 4601,
+      "githubDigest": "sha256:655204b652a7f4fe420cf51c0e9f6aa73326cb1388d3bcfabcbcfbe06322989f",
+      "expiresAt": "2026-09-15T14:54:41Z",
+      "archiveDownloaded": true,
+      "localArchiveSha256Verified": false,
+      "extractedFile": "javascript.json",
+      "extractedFileBytes": 20035,
+      "extractedFileSha256": "234633c17aa3d281bed55498e451562a6418b556013c4b6f2ec033ccd195be4d",
+      "extractedContentValidated": true,
+      "artifactContentEquivalenceVerified": true
+    },
+    {
+      "id": 9806074092,
+      "name": "chunking-javascript-Windows",
+      "archiveBytes": 4601,
+      "githubDigest": "sha256:5fb00d0250a8d8e09c22b8ce53d84df863e14f1f7c7517e43a4f4f17d06f4a70",
+      "expiresAt": "2026-09-15T14:50:54Z",
+      "archiveDownloaded": true,
+      "localArchiveSha256Verified": false,
+      "extractedFile": "javascript.json",
+      "extractedFileBytes": 20035,
+      "extractedFileSha256": "234633c17aa3d281bed55498e451562a6418b556013c4b6f2ec033ccd195be4d",
+      "extractedContentValidated": true,
+      "artifactContentEquivalenceVerified": true
+    },
+    {
+      "id": 9805949099,
+      "name": "chunking-rust-Linux",
+      "archiveBytes": 4587,
+      "githubDigest": "sha256:00ccd08ca13ba9d82ee5812264f060943049cc73786fb511afc1b14106314ad0",
+      "expiresAt": "2026-09-15T14:48:01Z",
+      "archiveDownloaded": true,
+      "localArchiveSha256Verified": false,
+      "extractedFile": "rust.json",
+      "extractedFileBytes": 20035,
+      "extractedFileSha256": "9bfafe15f25f2d5355172502f5790fb01fd5c272a409e2c2baddca267bfd4463",
+      "extractedContentValidated": true,
+      "artifactContentEquivalenceVerified": true
+    },
+    {
+      "id": 9806167625,
+      "name": "chunking-rust-macOS",
+      "archiveBytes": 4587,
+      "githubDigest": "sha256:c7fa6086f824055600e011ee674b868e11c95dca27b53844aa612b7310119546",
+      "expiresAt": "2026-09-15T14:53:02Z",
+      "archiveDownloaded": true,
+      "localArchiveSha256Verified": false,
+      "extractedFile": "rust.json",
+      "extractedFileBytes": 20035,
+      "extractedFileSha256": "9bfafe15f25f2d5355172502f5790fb01fd5c272a409e2c2baddca267bfd4463",
+      "extractedContentValidated": true,
+      "artifactContentEquivalenceVerified": true
+    },
+    {
+      "id": 9805964565,
+      "name": "chunking-rust-Windows",
+      "archiveBytes": 4587,
+      "githubDigest": "sha256:0a9e4aac1188b4b8eaebe3a6052787826964e91a1e88059c6f58abea2019c285",
+      "expiresAt": "2026-09-15T14:48:23Z",
+      "archiveDownloaded": true,
+      "localArchiveSha256Verified": false,
+      "extractedFile": "rust.json",
+      "extractedFileBytes": 20035,
+      "extractedFileSha256": "9bfafe15f25f2d5355172502f5790fb01fd5c272a409e2c2baddca267bfd4463",
+      "extractedContentValidated": true,
+      "artifactContentEquivalenceVerified": true
+    }
+  ],
+  "retainedReports": [
+    {
+      "language": "javascript",
+      "path": "bounded-conformance-33328072458/javascript.json",
+      "bytes": 20035,
+      "sha256": "234633c17aa3d281bed55498e451562a6418b556013c4b6f2ec033ccd195be4d",
+      "identicalAcross": ["Linux", "macOS", "Windows"],
+      "deduplicatedFromRunId": 33328072458,
+      "hostedArtifactByteEqualityVerified": true
+    },
+    {
+      "language": "rust",
+      "path": "bounded-conformance-33328072458/rust.json",
+      "bytes": 20035,
+      "sha256": "9bfafe15f25f2d5355172502f5790fb01fd5c272a409e2c2baddca267bfd4463",
+      "identicalAcross": ["Linux", "macOS", "Windows"],
+      "deduplicatedFromRunId": 33328072458,
+      "hostedArtifactByteEqualityVerified": true
+    }
+  ],
+  "sourceBindings": [
+    {
+      "path": ".github/workflows/chunking-manifest-bounded.yml",
+      "bytes": 6066,
+      "sha256": "4eeafd39884817e1e4921ce18cf46fbe807c460aebbc68dbe3412299adce70de"
+    },
+    {
+      "path": "core/chunking-manifest/js/scripts/bounded-report.mjs",
+      "bytes": 3918,
+      "sha256": "4d0076d1da59f462aa6bc8a457bdcbe286230bcc202c5aca74ea23cd526298dc"
+    },
+    {
+      "path": "core/chunking-manifest/js/scripts/compare-bounded-reports.mjs",
+      "bytes": 715,
+      "sha256": "c913a37f1328320363810fc8ecf0af3660da7e278c4a7513f6333d117f701629"
+    },
+    {
+      "path": "core/chunking-manifest/rust/examples/bounded_report.rs",
+      "bytes": 6884,
+      "sha256": "35d6844def2bd7d999642ebb33171328813becf097fe7bc5f06e47737c0797e8"
+    },
+    {
+      "path": "tools/chunking-scale-evidence-bundle.mjs",
+      "bytes": 9169,
+      "sha256": "75f5c5fa3903f1260d55c4559d5c9860f18414ce4d74d093ec57fe21ab456672"
+    },
+    {
+      "path": "tools/chunking-scale-evidence-common.mjs",
+      "bytes": 28280,
+      "sha256": "695bf0efabfd5e38448e3f79d77b810361521fe68329785ddcc73bdbd798995b"
+    },
+    {
+      "path": "tools/chunking-scale-evidence.test.mjs",
+      "bytes": 20030,
+      "sha256": "f042f09bf420d41ae8959f007be14aff05d5172baa93b59a1746d7ab2c74afb2"
+    }
+  ],
+  "logVerification": {
+    "javascriptReportSuite": {
+      "Linux": { "tests": 47, "passed": 47, "failed": 0, "skipped": 0 },
+      "macOS": { "tests": 47, "passed": 47, "failed": 0, "skipped": 0 },
+      "Windows": { "tests": 47, "passed": 46, "failed": 0, "skipped": 1, "skipReason": "POSIX-specific process-group kill assertion" }
+    },
+    "windowsDirectoryDurabilityRegression": "passed",
+    "rustTestGroupsPerPlatform": [6, 10, 4],
+    "rustFormatting": "passed",
+    "rustStrictClippy": "passed",
+    "rustOfflinePackages": "passed",
+    "comparisonOutput": "matched 9 bounded cases across 6 reports"
+  },
+  "comparison": {
+    "result": "matched 9 bounded cases across 6 reports",
+    "languages": 2,
+    "platforms": 3,
+    "cases": 9
+  },
+  "evidenceBasis": [
+    "authenticated GitHub run, job, artifact, commit, and log records bind the successful workflow to the exact source revision",
+    "authenticated gh run download extracted all six artifacts into an isolated temporary directory",
+    "all extracted artifacts parsed as JSON and the repository comparator independently matched nine bounded cases across six reports",
+    "all three JavaScript artifacts are byte-identical to each other and to the retained JavaScript report; all three Rust artifacts are byte-identical to each other and to the retained Rust report",
+    "the exact source commit and SHA-256 bindings identify the workflow, report producers, comparator, and Windows publication-durability change exercised by the run",
+    "the bounded workflow defines six bounded jobs and no exact-scale job"
+  ],
+  "nonClaims": [
+    "no OGVCS-007-AC-03 100-GiB execution",
+    "no 1-TiB or other exact-scale campaign",
+    "no profile ratification or production-write enablement",
+    "no OGVCS-008 production lifecycle adoption proof",
+    "no independently rehashed transient ZIP archive representation"
+  ],
+  "remainingGates": [
+    "OGVCS-008 service adoption of the package-owned production boundary before ContentManifestV1 lifecycle availability",
+    "authenticated registry, profile, release, repository-metadata, identity, and predecessor-pin lifecycle cut after all acceptance proof",
+    "final scheduled 100-GiB OGVCS-007 completion and release campaign"
+  ]
+}

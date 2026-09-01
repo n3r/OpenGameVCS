@@ -7,7 +7,7 @@
 **Depends on:** OGVCS-002, OGVCS-004, OGVCS-005, OGVCS-046
 **Blocks:** OGVCS-008, OGVCS-013, OGVCS-014, OGVCS-017, OGVCS-020, OGVCS-028, OGVCS-029, OGVCS-033
 **Source:** [OpenGameVCS proposal](../../GAME_DEV_VCS_ANALYSIS.md)  
-**Last updated:** 2026-08-31
+**Last updated:** 2026-09-01
 
 ## Outcome
 
@@ -109,7 +109,13 @@ Chunk algorithm is immutable per manifest version. New algorithms are read-befor
   [current bounded evidence packet](../../docs/evidence/OGVCS-007/README.md)
   and [requirement matrix](../../docs/reviews/OGVCS-007-r1-completion-audit.md#requirement-matrix)
   retain the completed non-scale results, including current-source
-  JavaScript/Rust replay on Linux, macOS, and Windows. AC-03 remains open.
+  JavaScript/Rust replay on Linux, macOS, and Windows. Authenticated bounded
+  [run 33521316277](https://github.com/n3r/OpenGameVCS/actions/runs/33521316277)
+  passed exact source revision `b56e165eb3657288572ef16b0e5865a673877d4a`;
+  its six downloaded reports independently match the retained deterministic
+  blobs and all nine comparator cases. The workflow selected Node 24 and
+  observed Node 24.19.0 on Linux/Windows, Node 24.18.0 on macOS, and Rust
+  1.82.0 on all three platforms. AC-03 remains open.
 - Security/reliability review: the
   [R1 completion audit](../../docs/reviews/OGVCS-007-r1-completion-audit.md)
   records hostile receipt, registry, publication, resource, and cancellation

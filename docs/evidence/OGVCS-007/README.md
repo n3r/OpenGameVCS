@@ -51,26 +51,32 @@ Both record the same 14-file packed implementation identity
 
 ## Current bounded hosted implementation proof
 
-[Workflow run 33476471118](https://github.com/n3r/OpenGameVCS/actions/runs/33476471118)
-passed source revision
-[`a26d302b734f07872b0f3f6e1b0036eaf1643b86`](https://github.com/n3r/OpenGameVCS/commit/a26d302b734f07872b0f3f6e1b0036eaf1643b86),
-which contains the production-boundary code commit `00ed027`, this bounded
-authenticated packet, and the bounded Rust manifest-streaming writer. JavaScript
-and Rust each passed on Linux, macOS, and Windows; all six matrix jobs started
-within one second, and the final job matched all nine bounded cases across all
-six reports. The Rust legs also passed the streaming writer unit, closure,
-golden-parity, exact-runner sink, formatting, strict Clippy, and offline package
-gates. The exact run, job, timing, and artifact identities are retained in
-[`github-actions-run-33476471118.json`](github-actions-run-33476471118.json).
+[Workflow run 33521316277](https://github.com/n3r/OpenGameVCS/actions/runs/33521316277)
+passed exact source revision
+[`b56e165eb3657288572ef16b0e5865a673877d4a`](https://github.com/n3r/OpenGameVCS/commit/b56e165eb3657288572ef16b0e5865a673877d4a).
+That source contains the production-boundary change audited at `00ed027` and
+integrated as `0b1a5fb`, the pre-existing bounded authenticated packet, the
+bounded Rust manifest-streaming writer, the pre-scale evidence authority, and
+the Windows publication-directory durability fix. JavaScript and Rust each
+passed on Linux, macOS, and Windows, and the final job matched all nine bounded
+cases across all six reports. The Windows
+JavaScript report suite specifically passed the directory-durability regression
+and all 46 portable tests; its one skip is the declared POSIX-only process-group
+assertion. The exact run, job, timing, observed Node 24/Rust 1.82 toolchains,
+source bindings, artifact identities, and log-derived results are retained in
+[`github-actions-run-33521316277.json`](github-actions-run-33521316277.json).
 
-The run record retains the archive and inner-report byte counts and SHA-256
-digests for all six artifacts. All three JavaScript reports are byte-identical,
-as are all three Rust reports. They are also byte-identical to the already
-retained deterministic report blobs under
-[`bounded-conformance-33328072458/`](bounded-conformance-33328072458/), so the
-new record reuses those two checked-in blobs instead of duplicating them. The
-hosted matrix was bounded, declares zero scale jobs, and did not run the
-100-GiB campaign.
+All six artifacts were downloaded through authenticated `gh run download` and
+their extracted report bytes were independently hashed and replayed through the
+repository comparator. All three JavaScript reports are byte-identical, as are
+all three Rust reports. They are also byte-identical to the already retained
+deterministic report blobs under
+[`bounded-conformance-33328072458/`](bounded-conformance-33328072458/), so this
+packet reuses those two checked-in blobs instead of duplicating them. The record
+also retains GitHub's six archive digests, while explicitly declining to claim
+an independent hash of the transient ZIP representations discarded by the
+download CLI. The hosted workflow was bounded, defines zero scale jobs, and did
+not run the 100-GiB campaign.
 
 ## What this evidence proves
 

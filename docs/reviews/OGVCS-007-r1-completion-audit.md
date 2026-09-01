@@ -3,7 +3,8 @@
 **Audit date:** 2026-09-01
 **Code candidate:** `00ed027b798f0114c3817678685b4df7f63d8741`
 **Bounded streaming addendum:** `a26d302b734f07872b0f3f6e1b0036eaf1643b86`
-**Hosted evidence revision:** `a26d302b734f07872b0f3f6e1b0036eaf1643b86`
+**Evidence-publication portability fix:** `b56e165eb3657288572ef16b0e5865a673877d4a`
+**Hosted evidence revision:** `b56e165eb3657288572ef16b0e5865a673877d4a`
 **Verdict:** not Done; bounded implementation is stageable, final-scale and
 production-adoption gates remain open
 
@@ -48,7 +49,7 @@ snapshot and is never shipped as production authority.
 | FR-06 | Pass | `compareManifest()` accepts a local known-chunk index and reports exact logical, unique, repeated, reused, newly required bytes and unique chunks without remote access; conflicting known lengths reject. |
 | FR-07 | Pass in bounded suites | Generated 22-code authority, malformed vectors, overflow/count/resource admission, corrupt/short/long/missing delivery, conflicting metadata/index cases, repeated ordered references, callback/iterator failures, cancellation, scratch exhaustion, and hostile receipt/registry tests execute public APIs. |
 | FR-08 | Pass in bounded scope | The [current authenticated packet](../evidence/OGVCS-007/README.md) retains source-like, structured, already-compressed, encrypted/random, insertion, replacement, and append results separately. |
-| NFR-01 | Pass | JavaScript/Rust reports match nine golden cases. Hosted run 33476471118 replayed the bounded Rust manifest-streaming candidate on Linux, macOS, and Windows, started all six bounded jobs within one second, and passed the aggregate six-report comparison. |
+| NFR-01 | Pass | JavaScript/Rust reports match nine golden cases. Hosted run 33521316277 replayed the current bounded source on Linux, macOS, and Windows, passed all six language/OS legs, and passed the aggregate six-report comparison. |
 | NFR-02 | Pending final gate | Bounded runs prove bounded admission and record observed child-process peaks, but only the deferred 100-GiB campaign can satisfy the required file-length-independent measured peak. |
 | NFR-03 | Pass | Report and independent verifier recompute `reused + newlyRequired = unique` and `unique + repeated = logical`; poor reuse is retained rather than hidden. |
 | AC-01 | Pass | Independent JavaScript and Rust implementations generated identical golden manifest bytes on the retained current-source six-leg matrix and passed the aggregate comparison. |
@@ -88,8 +89,10 @@ repository path.
   disabled/ratified simulations, and temporary-root cleanup: passed.
 - Generated authenticated-bundle test and current retained bundle replay:
   passed.
-- Hosted bounded run 33476471118: JavaScript and Rust passed on Linux, macOS,
-  and Windows; all six reports passed aggregate parity. The workflow contained
+- Hosted bounded run 33521316277 at exact revision `b56e165`: JavaScript and
+  Rust passed on Linux, macOS, and Windows; all six downloaded reports passed
+  independent aggregate parity and matched the retained blobs byte-for-byte.
+  The Windows directory-durability regression passed. The workflow contained
   zero scale jobs.
 - No 100-GiB, 1-TiB, or other exact-scale campaign was run.
 

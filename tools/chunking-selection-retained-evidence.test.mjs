@@ -24,7 +24,7 @@ import {
 import { verifyChunkingSelectionBenchmarkBundle } from './verify-chunking-selection-benchmark-bundle.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..');
-const HOSTED_RECORD_PATH = join(ROOT, 'docs/evidence/OGVCS-007/github-actions-run-33476471118.json');
+const HOSTED_RECORD_PATH = join(ROOT, 'docs/evidence/OGVCS-007/github-actions-run-33521316277.json');
 const CHECKED_IN_BUNDLE_PATH = join(ROOT, 'docs/evidence/OGVCS-007/bounded-selection-bundle-2026-08-31');
 const CHECKED_IN_VALIDATION_PATH = join(ROOT, 'docs/evidence/OGVCS-007/bounded-selection-bundle-validation-2026-08-31.json');
 const WORKER_FIXTURE_PATH = join(ROOT, 'tools/fixtures/chunking-selection-benchmark-worker-fixture.mjs');
@@ -414,16 +414,23 @@ test('retained six-leg hosted reports match their run record and comparator', as
   assert.equal(record.schemaVersion, 'ogvcs.chunking/hosted-evidence/v1');
   assert.equal(record.status, 'bounded-current-source-passed');
   assert.equal(record.exactScaleExecuted, false);
-  assert.equal(record.workflow.runId, 33476471118);
-  assert.equal(record.sourceRevision, 'a26d302b734f07872b0f3f6e1b0036eaf1643b86');
+  assert.equal(record.workflow.runId, 33521316277);
+  assert.equal(record.sourceRevision, 'b56e165eb3657288572ef16b0e5865a673877d4a');
+  assert.equal(record.workflow.conclusion, 'success');
   assert.equal(record.jobs.length, 7);
   assert.equal(record.jobs.every(({ conclusion }) => conclusion === 'success'), true);
   assert.equal(record.parallelMatrix.boundedJobs, 6);
   assert.equal(record.parallelMatrix.scaleJobs, 0);
-  assert.ok(record.parallelMatrix.startSpanSeconds <= 2);
+  assert.equal(record.parallelMatrix.boundedJobStartSpanSeconds, 303);
   assert.equal(record.artifacts.length, 6);
   assert.equal(record.remainingGates.some((gate) => gate.includes('OGVCS-008 service adoption')), true);
-  assert.equal(record.remainingGates.some((gate) => gate.includes('completion/release campaign')), true);
+  assert.equal(record.remainingGates.some((gate) => gate.includes('100-GiB')), true);
+  assert.deepEqual(record.toolchains.nodeObserved, {
+    Linux: '24.19.0',
+    macOS: '24.18.0',
+    Windows: '24.19.0',
+    comparisonLinux: '24.19.0',
+  });
 
   const expectedArtifactNames = [
     'chunking-javascript-Linux', 'chunking-javascript-macOS', 'chunking-javascript-Windows',
@@ -444,14 +451,23 @@ test('retained six-leg hosted reports match their run record and comparator', as
     reports.set(retained.language, path);
   }
 
+  for (const binding of record.sourceBindings) {
+    const bytes = await readFile(join(ROOT, binding.path));
+    assert.equal(bytes.length, binding.bytes);
+    assert.equal(sha256(bytes), binding.sha256);
+  }
+
   const reportPaths = [];
   for (const artifact of record.artifacts) {
-    const path = join(ROOT, 'docs/evidence/OGVCS-007', artifact.retainedReportPath);
-    const bytes = await readFile(path);
-    assert.equal(bytes.length, artifact.reportBytes);
-    assert.equal(sha256(bytes), artifact.reportSha256);
     const language = artifact.name.includes('javascript') ? 'javascript' : 'rust';
-    assert.equal(path, reports.get(language));
+    const path = reports.get(language);
+    const bytes = await readFile(path);
+    assert.equal(bytes.length, artifact.extractedFileBytes);
+    assert.equal(sha256(bytes), artifact.extractedFileSha256);
+    assert.equal(artifact.archiveDownloaded, true);
+    assert.equal(artifact.localArchiveSha256Verified, false);
+    assert.equal(artifact.extractedContentValidated, true);
+    assert.equal(artifact.artifactContentEquivalenceVerified, true);
     reportPaths.push(path);
   }
   const comparison = spawnSync(process.execPath, [
