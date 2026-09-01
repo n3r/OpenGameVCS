@@ -45,7 +45,7 @@ that external program prerequisite has occurred.
 
 | Area | Current boundary | PRD |
 |---|---|---|
-| Repository metadata | Versioned metadata contract and PostgreSQL adapter candidate; same-transaction identity binding and final hosted evidence remain under review | [OGVCS-006](prd/todo/OGVCS-006-repository-metadata-snapshot-service.md) |
+| Repository metadata | Authenticated OGVCS-041 envelope and PostgreSQL adapter candidate; public dispatch, aggregate coordinators, scale evidence, and hosted 0.3 verification remain deferred | [OGVCS-006](prd/todo/OGVCS-006-repository-metadata-snapshot-service.md) |
 | Workspace publication | Bounded, journaled staged-stream publication is complete with exact offline package identities and retained Linux/macOS/Windows evidence | [OGVCS-046](prd/done/OGVCS-046-bounded-staged-workspace-publication.md) |
 | Chunking and manifests | Candidate language-neutral contract plus JavaScript/Rust implementations; production profile ratification and final scale evidence remain open | [OGVCS-007](prd/todo/OGVCS-007-chunking-content-manifest-engine.md) |
 | Object transfer | Resumable-transfer candidate is integrated; content-manifest availability fails closed outside the OGVCS-007 receipt-gated transaction participant | [OGVCS-008](prd/todo/OGVCS-008-object-storage-transfer-service.md) |

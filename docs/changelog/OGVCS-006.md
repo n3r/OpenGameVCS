@@ -2,7 +2,7 @@
 
 **Status:** In development
 
-**Candidate contract:** `@opengamevcs/repository-metadata-contract-v1` 0.2.0
+**Candidate contract:** `@opengamevcs/repository-metadata-contract-v1` 0.3.0
 
 **Date:** 2026-09-01
 
@@ -22,6 +22,27 @@
   platform clock while the parser still proves the exact wire maximum.
 - The hosted packet remains bounded: it does not claim the production
   dispatcher, aggregate lifecycle bridge, or million-entry campaign.
+
+## Local OGVCS-041 envelope tranche
+
+- Added the authenticated OGVCS-041 request/response envelopes, distinct
+  artifact and negotiation registry identities, and exact static protocol
+  assignments for all 22 metadata operations. The production `networkRoutes`
+  inventory remains empty: every assigned method/path tuple closes as
+  `PROTOCOL_UNSUPPORTED` before body parsing, and no syntax-only request can
+  reach persistence.
+- Added MAC-first negotiation-receipt verification, exact JCS receipt and
+  semantic-idempotency commitments, bounded correlation handling, and typed
+  protocol failure envelopes. Negotiation alone cannot construct a success
+  response or confer OGVCS-009 authorization.
+- Regenerated the metadata, identity-policy, and untrusted-sandbox authority
+  chain and passed local Node 24, Rust 1.82, PostgreSQL 16, static, package,
+  and predecessor checks. This `0.3.0` tranche does not yet have a retained
+  hosted run; the hosted run above authenticates only the earlier `0.2.0`
+  source revision.
+- Per-array, member, key, and string limits are enforced during decoding. The
+  shared depth, node, and aggregate counters remain a post-decode check and are
+  an explicit pre-network residual while the route inventory is empty.
 
 ## Public service-contract boundary tranche
 
