@@ -102,6 +102,7 @@ const rustFiles = [
   'postgres.rs',
   'service.rs',
   'postgres/aggregate_bridge.rs',
+  'postgres/atomic_submit.rs',
   'types.rs',
 ];
 for (const file of rustFiles) {
@@ -111,7 +112,7 @@ for (const file of rustFiles) {
 
 const manifest = JSON.parse(await readFile(resolve(migrations, 'manifest.json')));
 assert(manifest.schemaVersion === 'ogvcs.repository-metadata/migration-manifest/v1', 'migration manifest schema differs');
-assert(JSON.stringify(manifest.entries.map(({ version, phase }) => [version, phase])) === '[[1,"expand"],[1,"migrate"],[1,"contract"],[2,"expand"],[2,"migrate"],[2,"contract"],[3,"expand"],[3,"migrate"],[3,"contract"],[4,"expand"],[4,"migrate"],[4,"contract"],[5,"expand"],[5,"migrate"],[5,"contract"],[6,"expand"],[6,"migrate"],[6,"contract"],[7,"expand"],[7,"migrate"],[7,"contract"],[8,"expand"],[8,"migrate"],[8,"contract"],[9,"expand"],[9,"migrate"],[9,"contract"],[10,"expand"],[10,"migrate"],[10,"contract"]]', 'migration phases are not ordered');
+assert(JSON.stringify(manifest.entries.map(({ version, phase }) => [version, phase])) === '[[1,"expand"],[1,"migrate"],[1,"contract"],[2,"expand"],[2,"migrate"],[2,"contract"],[3,"expand"],[3,"migrate"],[3,"contract"],[4,"expand"],[4,"migrate"],[4,"contract"],[5,"expand"],[5,"migrate"],[5,"contract"],[6,"expand"],[6,"migrate"],[6,"contract"],[7,"expand"],[7,"migrate"],[7,"contract"],[8,"expand"],[8,"migrate"],[8,"contract"],[9,"expand"],[9,"migrate"],[9,"contract"],[10,"expand"],[10,"migrate"],[10,"contract"],[11,"expand"],[11,"migrate"],[11,"contract"]]', 'migration phases are not ordered');
 for (const entry of manifest.entries) {
   const bytes = await readFile(resolve(migrations, entry.path));
   const sql = bytes.toString('utf8');
@@ -719,6 +720,29 @@ for (const evidence of [
   'lifecycle_reachability_aggregate_sealed_v10',
   'lifecycle_outbox_aggregate_sealed_v10',
 ]) assert(expandV10.includes(evidence), `version 10 aggregate bridge evidence missing: ${evidence}`);
+const expandV11 = await readFile(resolve(migrations, '000011_expand.sql'), 'utf8');
+for (const evidence of [
+  'submit_intents',
+  'operation_count BETWEEN 1 AND 1000',
+  "operation_kind IN ('create', 'copy', 'import')",
+  'candidate_change_set_digest',
+  'submit_file_id_consumptions',
+  'UNIQUE (repository_id, file_id)',
+  'submit operation set is sealed',
+  'submit FileID evidence is sealed',
+  'consumption.prior_owner_kind = operation.prior_owner_kind',
+  'consumption.prior_owner_id = operation.prior_owner_id',
+  'submit_outcome_complete_v11',
+]) assert(expandV11.includes(evidence), `version 11 private atomic-submit evidence missing: ${evidence}`);
+assert(!expandV11.includes('NEW.operation_count = 0 OR'), 'version 11 admits an unproved zero-operation submit');
+
+const atomicSubmitAdapter = await readFile(resolve(root, 'src/postgres/atomic_submit.rs'), 'utf8');
+assert(atomicSubmitAdapter.includes('finalize_preallocated_creation_submit'), 'private preallocated creation-submit finalize boundary missing');
+assert(atomicSubmitAdapter.includes('FOR UPDATE OF registry'), 'FileID rows are not locked for first consumption');
+assert(atomicSubmitAdapter.includes('ORDER BY operation.operation_ordinal'), 'FileID lock order is not deterministic');
+assert(atomicSubmitAdapter.includes('apply_aggregate_lifecycle_publication_in_transaction'), 'atomic submit does not use the caller-owned bridge');
+assert(atomicSubmitAdapter.includes('submit_file_id_consumptions'), 'atomic submit omits permanent FileID evidence');
+assert(!atomicSubmitAdapter.includes('spec/atomic-submit'), 'private candidate invents a public submit contract');
 
 const lifecycleAdapter = await readFile(resolve(root, 'src/postgres/lifecycle.rs'), 'utf8');
 assert(lifecycleAdapter.includes('FROM unnest('), 'version 9 chunk writer is not set based');

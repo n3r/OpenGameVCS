@@ -87,6 +87,44 @@ failure, including a deferred evidence failure, rolls back both consumption and
 metadata. The API returns one aggregate result and never returns resource
 identities or failure positions. GC and transfer effects remain dormant.
 
+Schema v11 adds the first private OGVCS-010 atomic-submit candidate. Its name
+and scope are intentionally narrow: `finalize_preallocated_creation_submit`
+accepts only one to 1,000 server-sealed create/copy/import FileID
+first-consumption operations. It does not accept modify/move/rename/delete or
+restore, and it is not a general submit/finalize protocol. The coordinator uses
+one caller-owned SERIALIZABLE transaction for current aggregate-receipt
+consumption, lifecycle application, deterministic branch and FileID locks,
+permanent ordered FileID first-consumption evidence, snapshot publication
+marker, branch CAS, internal audit evidence, one metadata outbox event,
+consistency token, final outcome, and reconciliation observation. Any bridge
+error aborts PostgreSQL transaction state even if internal code catches it;
+later failures roll every participant back. Exact durable replay revalidates
+the same receipt, plan, consumption ID, and operation digest before returning
+the stored outcome. A missing outcome returns only `unknown-recovering`; it
+does not invent a not-present or disaster-recovery acknowledgement.
+
+This v11 slice does not close OGVCS-010. There is no `spec/atomic-submit`
+package, route, public error carrier, authenticated submit audit class,
+production snapshot `PolicyResult`, lock/review/check proof registry, public
+submit outbox contract, or recovery-boundary receipt. Existing metadata
+object/profile enablement gaps remain. Outbox delivery lease/ack/release fields
+remain service-mutable after commit, while event identity and payload are
+immutable. GC and transfer-authority effects remain dormant. The bridge exact
+100,000-object proof is not rerun by this slice because repository-metadata and
+identity manifest pins are being regenerated separately; v11's FileID carrier
+is deliberately capped at 1,000 operations.
+
+The consumed aggregate receipt authenticates the lifecycle object's sealed
+resource projection, publication reference, and snapshot; it does not yet
+authenticate the candidate path/FileID operation set as a distinct current
+authorization resource set. That authorization seam remains an explicit
+blocker to exposing this coordinator as a general or public finalize boundary.
+Committed replay and reconciliation also require the original aggregate plan
+to remain current (including credential, authority/policy/key generations and
+expiry). They deny disclosure after that receipt becomes stale or revoked and
+do not yet implement fresh-scope reauthentication for durable idempotency or
+disaster recovery; the already committed outcome remains immutable.
+
 The language-neutral bridge contract is
 `contracts/lifecycle-bridge/v1/manifest.json`; the Rust
 `LIFECYCLE_CONTRACT_SHA256` is the SHA-256 of those exact manifest bytes, and
@@ -195,6 +233,9 @@ aggregate application to the exact identity plan, decision, one-use
 consumption, operation digest, current repository settings, signer facts,
 resource digests/count, lifecycle expiry/totals, and pinned lifecycle/transfer
 contracts. Existing v9 rows are not rewritten or inferred to be authorized.
+Schema v11 is likewise additive; it never backfills an intent, first
+consumption, outcome, or reconciliation fact from existing snapshots,
+references, FileID rows, or lifecycle applications.
 
 Production persistence deployment evidence, public API/HTTP bindings, external chunk-store
 composition, and hosted production-service evidence remain deferred. The

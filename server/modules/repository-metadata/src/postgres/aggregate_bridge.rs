@@ -259,12 +259,33 @@ impl<A, V> IdentityBoundPostgresMetadataStore<A, V> {
     }
 }
 
+/// Crate-private composition port for the branded atomic-submit coordinator.
+/// The caller owns the only commit. Every error explicitly aborts PostgreSQL
+/// transaction state so catching it cannot permit a partial commit.
+pub(crate) fn apply_aggregate_lifecycle_publication_in_transaction(
+    transaction: &mut Transaction<'_>,
+    participant: &PostgresAggregateAuthorizationParticipant,
+    request: &AggregateLifecycleApplyRequest<'_>,
+) -> Result<AggregateLifecycleApplicationReceipt> {
+    let result = bridge_transaction(
+        transaction,
+        participant,
+        request,
+        BridgeFaultInjection::default(),
+    );
+    if result.is_err() {
+        poison_caller_owned_transaction(transaction);
+    }
+    result
+}
+
 fn bridge_transaction(
     transaction: &mut Transaction<'_>,
     participant: &PostgresAggregateAuthorizationParticipant,
     request: &AggregateLifecycleApplyRequest<'_>,
     fault: BridgeFaultInjection,
 ) -> Result<AggregateLifecycleApplicationReceipt> {
+    require_serializable_transaction(transaction)?;
     if !valid_consumption_id(request.consumption_id) {
         return Err(denied());
     }
@@ -305,6 +326,22 @@ fn bridge_transaction(
         projection_scan.maximum_page_items,
         fault,
     )
+}
+
+fn require_serializable_transaction(transaction: &mut Transaction<'_>) -> Result<()> {
+    let isolation: String = transaction
+        .query_one("SHOW transaction_isolation", &[])
+        .map_err(database_error)?
+        .get(0);
+    if isolation == "serializable" {
+        Ok(())
+    } else {
+        Err(denied())
+    }
+}
+
+fn poison_caller_owned_transaction(transaction: &mut Transaction<'_>) {
+    let _ = transaction.batch_execute("SELECT 1 / 0");
 }
 
 fn load_bridge_plan(

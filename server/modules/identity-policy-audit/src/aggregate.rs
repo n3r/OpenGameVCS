@@ -674,6 +674,33 @@ impl PostgresAggregateAuthorizationParticipant {
         poison_on_error(transaction, result)
     }
 
+    /// Verifies that an opaque aggregate receipt is authentic and still bound
+    /// to the current credential, epoch, policy, repository settings, and
+    /// signing key without consuming it. This supports private, non-mutating
+    /// submit intent/preflight work; mutation still requires `consume_receipt`.
+    pub fn verify_receipt_current(
+        &self,
+        transaction: &mut Transaction<'_>,
+        receipt: &AggregateAuthorizationReceipt,
+    ) -> Result<()> {
+        let result = self.verify_receipt_current_inner(transaction, receipt);
+        poison_on_error(transaction, result)
+    }
+
+    /// Revalidates an exact already-consumed receipt without creating a second
+    /// consumption. This exists only for a durable idempotent outcome replay
+    /// inside the same PostgreSQL authority; it does not make a consumed plan
+    /// reusable for another operation.
+    pub fn revalidate_consumption(
+        &self,
+        transaction: &mut Transaction<'_>,
+        receipt: &AggregateAuthorizationReceipt,
+        request: &AggregateReceiptConsumptionRequest<'_>,
+    ) -> Result<AggregateReceiptConsumption> {
+        let result = self.revalidate_consumption_inner(transaction, receipt, request);
+        poison_on_error(transaction, result)
+    }
+
     fn bind_repository_contract_inner(
         &self,
         transaction: &mut Transaction<'_>,
@@ -1450,6 +1477,65 @@ impl PostgresAggregateAuthorizationParticipant {
             operation_digest: request.operation_digest.to_owned(),
             authorization: receipt.clone(),
         })
+    }
+
+    fn revalidate_consumption_inner(
+        &self,
+        transaction: &mut Transaction<'_>,
+        receipt: &AggregateAuthorizationReceipt,
+        request: &AggregateReceiptConsumptionRequest<'_>,
+    ) -> Result<AggregateReceiptConsumption> {
+        verify_schema_in_transaction(transaction)?;
+        if !valid_opaque(request.consumption_id) {
+            return Err(ParticipantError::new(ParticipantErrorCode::InputInvalid));
+        }
+        let operation_digest = decode_digest(request.operation_digest)?;
+        lock_plan_scope(transaction, receipt.plan_id())?;
+        let plan = load_plan(transaction, receipt.plan_id(), true)?;
+        verify_plan_currentness(transaction, &*self.keys, &plan)?;
+        self.verify_receipt(receipt, &plan)?;
+        if plan.state != "consumed" {
+            return Err(ParticipantError::new(ParticipantErrorCode::StateConflict));
+        }
+        let exact: bool = transaction
+            .query_one(
+                "SELECT EXISTS (
+                   SELECT 1 FROM ogvcs_identity.aggregate_plan_consumptions
+                   WHERE plan_id = $1 AND consumption_id = $2
+                     AND operation_digest = $3)",
+                &[
+                    &plan.plan_id,
+                    &request.consumption_id,
+                    &&operation_digest[..],
+                ],
+            )
+            .map_err(database_error)?
+            .get(0);
+        if !exact {
+            return Err(ParticipantError::new(ParticipantErrorCode::StateConflict));
+        }
+        Ok(AggregateReceiptConsumption {
+            plan_id: plan.plan_id,
+            consumption_id: request.consumption_id.to_owned(),
+            operation_digest: request.operation_digest.to_owned(),
+            authorization: receipt.clone(),
+        })
+    }
+
+    fn verify_receipt_current_inner(
+        &self,
+        transaction: &mut Transaction<'_>,
+        receipt: &AggregateAuthorizationReceipt,
+    ) -> Result<()> {
+        verify_schema_in_transaction(transaction)?;
+        lock_plan_scope(transaction, receipt.plan_id())?;
+        let plan = load_plan(transaction, receipt.plan_id(), true)?;
+        verify_plan_currentness(transaction, &*self.keys, &plan)?;
+        self.verify_receipt(receipt, &plan)?;
+        if plan.state != "authorized" {
+            return Err(ParticipantError::new(ParticipantErrorCode::StateConflict));
+        }
+        Ok(())
     }
 
     fn sign_handle(&self, handle: &AggregatePlanHandle) -> Result<[u8; 32]> {
