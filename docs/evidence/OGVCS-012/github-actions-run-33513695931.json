@@ -1,0 +1,71 @@
+{
+  "schemaVersion": "ogvcs.cli-workspace/hosted-evidence/v1",
+  "status": "workspace-index-status-fence-hosted-passed",
+  "hostedExactScaleExecuted": false,
+  "integrationRevision": "cf87f43deee43a20911ab14dbaa0836913319123",
+  "workflow": {
+    "name": "Native CLI local candidate",
+    "path": ".github/workflows/native-cli-local-candidate.yml",
+    "runId": 33513695931,
+    "runAttempt": 1,
+    "event": "push",
+    "headBranch": "r1-foundation-integration",
+    "createdAt": "2026-09-01T13:29:33Z",
+    "completedAt": "2026-09-01T13:35:30Z",
+    "url": "https://github.com/n3r/OpenGameVCS/actions/runs/33513695931"
+  },
+  "jobs": [
+    {
+      "id": 99875312338,
+      "name": "Verified local foundation (Linux)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T13:29:36Z",
+      "completedAt": "2026-09-01T13:31:56Z",
+      "contractAndSpec": "success",
+      "rustDefaultTests": "success",
+      "clippyWarningsDenied": "success",
+      "packedCrate": "success",
+      "installedArtifactHermetic": "success"
+    },
+    {
+      "id": 99875312577,
+      "name": "Verified local foundation (Windows)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T13:29:37Z",
+      "completedAt": "2026-09-01T13:35:30Z",
+      "contractAndSpec": "success",
+      "rustDefaultTests": "success",
+      "clippyWarningsDenied": "success",
+      "packedCrate": "success",
+      "installedArtifactHermetic": "success"
+    },
+    {
+      "id": 99875312651,
+      "name": "Verified local foundation (macOS)",
+      "conclusion": "success",
+      "startedAt": "2026-09-01T13:29:39Z",
+      "completedAt": "2026-09-01T13:31:57Z",
+      "contractAndSpec": "success",
+      "rustDefaultTests": "success",
+      "clippyWarningsDenied": "success",
+      "packedCrate": "success",
+      "installedArtifactHermetic": "success"
+    }
+  ],
+  "boundary": {
+    "nodeVersion": 24,
+    "rustVersion": "1.82.0",
+    "privateStatusFenceDefaultTestsExecuted": true,
+    "productionNativeWatcherAuthorityExercised": false,
+    "publicStatusRouteExercised": false,
+    "exactScaleTestsExecuted": false
+  },
+  "remainingGates": [
+    "production USN, FSEvents, and inotify watcher authority",
+    "public baseline, status, repair, and compaction surfaces",
+    "complete operation and fault matrix",
+    "independent repair equivalence",
+    "exact million-path SLO",
+    "telemetry, rollout, and final acceptance"
+  ]
+}

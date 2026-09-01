@@ -1,6 +1,6 @@
 # OGVCS-012 durable workspace-index candidate boundary review
 
-- **Reviewed integration baseline:** `70ef689187d7d7749e33348e472d9310b4bd0828`
+- **Integrated candidate source:** `cf87f43deee43a20911ab14dbaa0836913319123`
 - **Private candidate contract:** `client/native-cli/rust/contracts/workspace-index/v1`
   version `0.1.0-rc.3` (generation bytes remain `0.1.0-rc.1`)
 - **Verdict:** useful fail-closed native implementation slice; OGVCS-012
@@ -167,13 +167,17 @@ Two explicit bounded release tests produced this local candidate evidence:
 The final default Rust run passed 54 library tests (with the two exact tests
 explicitly ignored), 2 binary-contract tests, 2 contract-vector tests, and 12
 production-foundation integration tests. Rustfmt and all-target clippy with
-warnings denied passed on Rust 1.82. This host lacks the
-`x86_64-pc-windows-gnu` Rust standard-library target, so the exact candidate's
-cross-target check remains to be rerun; no hosted Windows result is claimed.
-The offline packed crate repeated the same default test set with the
-unpublished object-model and path crates. The existing CLI contract gate
-passed 3 Node tests, the roadmap validator passed 8 tests, and the new private-
-contract generator/validator passed on Node 24.
+warnings denied passed on Rust 1.82. Registered workflow
+[run 33513695931](https://github.com/n3r/OpenGameVCS/actions/runs/33513695931)
+then repeated the Node 24 contract/spec checks, Rust 1.82 format/default-test/
+Clippy gates, packed-crate check, and installed-artifact hermetic check from
+the exact integrated source on hosted Linux, macOS, and Windows. The retained
+[machine record](../evidence/OGVCS-012/github-actions-run-33513695931.json)
+binds the source and all three jobs. This is cross-platform evidence for the
+private fence implementation, not native watcher authority or exact-scale
+evidence. The existing CLI contract gate passed 3 Node tests, the roadmap
+validator passed 8 tests, and the new private-contract generator/validator
+passed on Node 24.
 
 The private contract manifest authenticates six artifacts with artifact-set
 SHA-256 `fcbb718537a382ecedc6a7e39ec409669d1d10e54aeb70b4b209e41cc83fb3f2`.
@@ -199,7 +203,7 @@ kernel locks do not solve the existing malicious same-authority replacement of
 the lock namespace; on Unix they also cannot promise impossible unlink-by-open-
 handle semantics. The candidate must not be described as public scalable-
 status completion, public watcher authority, full fault-matrix evidence,
-telemetry/operations completion, hosted three-OS evidence, or OGVCS-012 Done.
+telemetry/operations completion, exact-scale completion, or OGVCS-012 Done.
 
 ## Reproduction
 
