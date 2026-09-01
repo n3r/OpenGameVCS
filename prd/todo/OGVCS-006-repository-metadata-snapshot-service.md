@@ -7,7 +7,7 @@
 **Depends on:** OGVCS-002, OGVCS-003, OGVCS-004, OGVCS-005, OGVCS-041  
 **Blocks:** OGVCS-009, OGVCS-010, OGVCS-011, OGVCS-015, OGVCS-016, OGVCS-018, OGVCS-021, OGVCS-028  
 **Source:** [OpenGameVCS proposal](../../GAME_DEV_VCS_ANALYSIS.md)  
-**Last updated:** 2026-08-30
+**Last updated:** 2026-09-01
 
 ## Outcome
 
@@ -99,8 +99,26 @@ Ship behind a developer-preview API version. Apply expand/migrate/contract schem
 
 ## Completion evidence
 
-- Implementation changes:
-- Test and benchmark results:
-- Security/reliability review:
-- Documentation/runbooks:
-- Rollout result:
+- Implementation changes: the `0.3.0` candidate authenticates the exact
+  OGVCS-041 JSON `RequestEnvelope`/`ResponseEnvelope` assignment, receipt-HMAC
+  verification order, semantic idempotency projection, and all 22 static
+  operation tuples. `networkRoutes` is empty: no syntax-only operation is
+  represented as a production handler.
+- Test and benchmark results: language-neutral generation/validation and Rust
+  contract tests cover route-first closure, the distinct OGVCS-041 registry
+  identities, receipt failure precedence/currentness, exact problem tuples,
+  optional extensions, protocol/body/extension bounds, and RFC 8785 UTF-16 key
+  ordering against a Node golden. This tranche does not add new million-entry,
+  100-CAS, or scale-campaign evidence.
+- Security/reliability review: negotiation verification is explicitly not an
+  OGVCS-009 authorization brand; success-envelope construction remains private
+  to a future authorized dispatcher. Domain errors remain internal and cannot
+  impersonate ratified OGVCS-041 `ProblemDetails`.
+- Documentation/runbooks: the authenticated contract README records the empty
+  network inventory, coordinator ownership, stream-carrier gap, and the
+  post-allocation global JSON-counter residual. Downstream identity-policy and
+  untrusted-sandbox predecessor pins are regenerated with the candidate.
+- Rollout result: none. Repository create/list, object transfer, ordinary CAS,
+  tombstone/restore, submit publication, and all identity-bound reads remain
+  network-closed until their exact same-transaction authority/coordinator is
+  implemented and tested. OGVCS-006 remains in development.

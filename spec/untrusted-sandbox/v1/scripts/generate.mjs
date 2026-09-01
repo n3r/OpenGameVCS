@@ -10,7 +10,7 @@ const walk = async (directory) => (await Promise.all((await readdir(resolve(root
 const predecessors = Object.freeze([
   Object.freeze({ path: '../../authorization/v1/docs/sandbox-contract.md', sha256: '383ac42a7dbfdbe2e613a918e99df888184d2e1920cb6b589f309654e8117fc1' }),
   Object.freeze({ path: '../../authorization/v1/manifest.json', sha256: '3fb4dd4a89eb914f93a589b013bda8afcf4744c0d27171ee5849ca3b7bf62447' }),
-  Object.freeze({ path: '../../identity-policy-audit/v1/manifest.json', sha256: '3493c64064cc0d3eabd6556e7b83e71787d49ea5b220324a21b8cda3eaa44ab1' }),
+  Object.freeze({ path: '../../identity-policy-audit/v1/manifest.json', sha256: 'f2793333fc2f02634a54caff7137e94cb8a8cab32ae301bb190f06efb769f401' }),
   Object.freeze({ path: '../../path-filesystem/v1/manifest.json', sha256: '2f343e1dac238da527fbd36160419ec6fb53b780ac7e33c01e11acabbdd4782b' }),
 ]);
 export const verifySandboxPredecessors = async () => {

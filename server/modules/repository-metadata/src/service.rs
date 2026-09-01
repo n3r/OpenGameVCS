@@ -1,17 +1,20 @@
 //! Framework-neutral OGVCS-006 public service contract boundary.
 //!
-//! This module validates and classifies the complete candidate operation set,
-//! but deliberately assigns no HTTP route, status, or media type. Syntax
-//! admission is also not mutation authority: operations that publish a root,
-//! compare-and-swap a reference, tombstone a FileID, or restore a lifetime are
-//! branded coordinator-required and have no production dispatcher here.
+//! This module validates and classifies the complete candidate operation set
+//! and implements its framework-neutral OGVCS-041 route adapter. Syntax and
+//! route admission are not mutation authority: ordinary reference CAS, FileID
+//! tombstone/restore, internal outbox delivery, and submit publication remain
+//! behind their exact coordinator boundaries.
 
 use crate::{
-    AllocationReceipt, ConsistencyToken, CursorToken, DomainError, DomainErrorCode,
-    FileIdAllocation, HistoryIncompleteReason, HistoryPage, IdempotencyReservation,
-    IdempotencyStatus, MetadataHttpResponse, MetadataPermission, Page, PageState, ProjectId,
-    RepositoryId, TenantId,
+    AllocationReceipt, CaseMode, CommitSequence, ConsistencyToken, CursorToken, DomainError,
+    DomainErrorCode, FileIdAllocation, HistoryIncompleteReason, HistoryPage,
+    IdempotencyReservation, IdempotencyStatus, MetadataHttpResponse, MetadataPermission, Page,
+    PageState, ProjectId, ReferenceKind, ReferenceRecord, RepositoryId, RepositorySettings,
+    TenantId,
 };
+use base64::Engine as _;
+use hmac::{Hmac, Mac};
 use ogvcs_object_model::{FileId, ObjectKind, ObjectRef, Operation, ProfileRef, Registry};
 use serde::{
     de::{Error as _, MapAccess, SeqAccess, Visitor},
@@ -20,20 +23,39 @@ use serde::{
 use serde_json::{Map, Number, Value};
 use sha2::{Digest, Sha256};
 use std::{
-    collections::BTreeMap,
     fmt,
     io::{self, Write},
     str::FromStr,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
+use subtle::ConstantTimeEq;
 use unicode_normalization::UnicodeNormalization;
 use uuid::Uuid;
 
-pub const METADATA_SERVICE_CONTRACT_VERSION: &str = "0.2.0";
-pub const METADATA_SERVICE_REQUEST_SCHEMA: &str = "ogvcs.repository-metadata/operation-request/v1";
-pub const METADATA_SERVICE_RESPONSE_SCHEMA: &str = "ogvcs.repository-metadata/http-response/v1";
+pub const METADATA_SERVICE_CONTRACT_VERSION: &str = "0.3.0";
+pub const METADATA_SERVICE_REQUEST_SCHEMA: &str = "ogvcs.protocol/request-envelope/v1";
+pub const METADATA_SERVICE_RESPONSE_SCHEMA: &str = "ogvcs.protocol/response-envelope/v1";
+pub const METADATA_SERVICE_RESULT_BODY_SCHEMA: &str = "ogvcs.repository-metadata/result-body/v1";
 pub const METADATA_SERVICE_MANIFEST_SHA256: &str =
-    "19f0139ad22f8546d1c3c998e972ebc5c21b39d742a92b8fe3eefb8042d13d89";
+    "58e595947993900f530fa16a9181f3a064fd66d0363f5ae976017c162a57cdde";
+pub const OGVCS_041_MANIFEST_SHA256: &str = opengamevcs_protocol_v1::CONTRACT_MANIFEST_SHA256;
+pub const OGVCS_041_REGISTRY_SET_SHA256: &str =
+    "2a49361363cc16e743948fa3cc5e266cd1bc6e31b312cde15b5dab1ad7e5c5b0";
+pub const OGVCS_041_NEGOTIATION_REGISTRY_SET_SHA256: &str =
+    "2b1913f9451b9f99966a24942a262846f07662b17cbb41ad6eea6474c23b4352";
+pub const OGVCS_041_CONTROL_PROFILE_SHA256: &str =
+    "3934506ee6d21005dc4b9b91e924e33601de3ade5417e4393a8acb8178bb36f9";
+pub const OGVCS_041_REQUEST_ENVELOPE_SHA256: &str =
+    "740fc71a4ba1e480076b8b6d3fc8bb5b5374e86157976747795a139694bbadd9";
+pub const OGVCS_041_RESPONSE_ENVELOPE_SHA256: &str =
+    "47792190106b0742af4245c69eff3eb9d6e9555c557b16f23fae3d12d8790900";
+pub const OGVCS_041_PROBLEM_DETAILS_SHA256: &str =
+    "deba5763c47a54e23489d427eb094fa905fadfa81806a3e2da5f752501dfb6a1";
+pub const OGVCS_041_ERROR_REGISTRY_SHA256: &str =
+    "2801e26224536b8b9f2072324d25c6b472274ce45135bd65e6e9e11a643a922f";
+pub const METADATA_PROTOCOL_PROFILE: &str = opengamevcs_protocol_v1::PROTOCOL_VERSION;
+pub const METADATA_CONTROL_MEDIA_TYPE: &str = "application/json";
+pub const METADATA_RESPONSE_MEDIA_TYPE: &str = "application/json";
 pub const METADATA_SERVICE_OPERATION_COUNT: usize = 22;
 pub const PUBLIC_PAGE_ITEMS_MAXIMUM: u16 = 10_000;
 pub const PUBLIC_HISTORY_DEPTH_MAXIMUM: u64 = 100_000;
@@ -46,13 +68,18 @@ const JSON_DEPTH_MAXIMUM: usize = 64;
 const JSON_NODES_MAXIMUM: usize = 100_000;
 const JSON_OBJECT_MEMBERS_MAXIMUM: usize = 256;
 const JSON_COLLECTION_ITEMS_MAXIMUM: usize = 100_000;
+const PROTOCOL_JSON_VALUE_DEPTH_MAXIMUM: usize = 32;
+const PROTOCOL_JSON_VALUE_NODES_MAXIMUM: usize = 10_000;
+const PROTOCOL_JSON_ARRAY_ITEMS_MAXIMUM: usize = 4_096;
+const PROTOCOL_EXTENSION_VALUE_DEPTH_MAXIMUM: usize = 8;
+const PROTOCOL_EXTENSION_VALUE_NODES_MAXIMUM: usize = 1_000;
 const JSON_STRING_BYTES_MAXIMUM: usize = 65_536;
 const JSON_KEY_BYTES_MAXIMUM: usize = 256;
 const REFERENCE_NAME_BYTES_MAXIMUM: usize = 512;
 const PATH_SEGMENTS_MAXIMUM: usize = 256;
 const PATH_SEGMENT_BYTES_MAXIMUM: usize = 255;
 const PATH_BYTES_MAXIMUM: usize = 4_096;
-const IDEMPOTENCY_KEY_SCHEMA_BYTES_MAXIMUM: usize = 512;
+const IDEMPOTENCY_KEY_SCHEMA_BYTES_MAXIMUM: usize = 256;
 const PERSISTED_IDENTIFIER_BYTES_MAXIMUM: usize = 256;
 const SAFE_RESULT_BYTES_MAXIMUM: usize = 1_048_576;
 const JSON_SAFE_INTEGER_MAXIMUM: u64 = 9_007_199_254_740_991;
@@ -122,8 +149,406 @@ impl MetadataPayloadCarrier {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MetadataOperationExposure {
     IdentityBound,
+    AtomicCreateCoordinator,
+    ProjectAuthorityRequired,
+    VariantGated,
+    StreamCarrierRequired,
     AggregateCoordinatorRequired,
     InternalOnly,
+}
+
+impl MetadataOperationExposure {
+    /// No v0.3 operation may be handed to a network router. The authenticated
+    /// route assignments are frozen for interop, but an operation becomes
+    /// network-registered only with an end-to-end identity/coordinator
+    /// dispatcher that retains its authorization brand through the response.
+    pub const fn network_registered(self) -> bool {
+        false
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MetadataStreamBinding {
+    None,
+    BoundedPage,
+    CarrierUnassignedClosed,
+}
+
+impl MetadataStreamBinding {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::BoundedPage => "bounded-page",
+            Self::CarrierUnassignedClosed => "carrier-unassigned-closed",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct MetadataTransportDescriptor {
+    pub operation: MetadataOperation,
+    pub method: &'static str,
+    pub path: &'static str,
+    pub request_media_type: &'static str,
+    pub success_status: u16,
+    pub success_media_type: &'static str,
+    pub error_media_type: &'static str,
+    pub stream: MetadataStreamBinding,
+    pub exposure: MetadataOperationExposure,
+    pub network_registered: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MetadataTransportError {
+    Malformed,
+    LimitExceeded,
+    Unsupported,
+    AuthorizationDenied,
+    CompressionForbidden,
+    RedirectForbidden,
+    NegotiationReceiptInvalid,
+    NegotiationReceiptExpired,
+    DeadlineExceeded,
+}
+
+impl MetadataTransportError {
+    pub const fn protocol_code(self) -> &'static str {
+        match self {
+            Self::Malformed => "PROTOCOL_MALFORMED",
+            Self::LimitExceeded => "PROTOCOL_LIMIT_EXCEEDED",
+            Self::Unsupported => "PROTOCOL_UNSUPPORTED",
+            Self::AuthorizationDenied => "AUTHORIZATION_DENIED",
+            Self::CompressionForbidden => "COMPRESSION_FORBIDDEN",
+            Self::RedirectForbidden => "REDIRECT_FORBIDDEN",
+            Self::NegotiationReceiptInvalid => "NEGOTIATION_RECEIPT_INVALID",
+            Self::NegotiationReceiptExpired => "NEGOTIATION_RECEIPT_EXPIRED",
+            Self::DeadlineExceeded => "DEADLINE_EXCEEDED",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct MetadataTransportRequest<'a> {
+    pub method: &'a str,
+    pub path: &'a str,
+    pub request_media_type: &'a str,
+    pub accept: &'a str,
+    pub content_coding: &'a str,
+    pub redirect_hops: u8,
+    pub control: &'a [u8],
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AdmittedMetadataRoute {
+    descriptor: &'static MetadataTransportDescriptor,
+    request: MetadataOperationRequest,
+}
+
+/// Supplies active server negotiation keys without exposing them through the
+/// request or response model.
+pub trait MetadataNegotiationKeyProvider {
+    fn key(&self, key_id: &str) -> Option<&[u8]>;
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MetadataNegotiationPrincipal {
+    pub subject_digest: [u8; 32],
+    pub tenant_digest: [u8; 32],
+    pub authority_epoch: u64,
+    pub session_id: String,
+    pub now_unix_ms: u64,
+}
+
+/// Brand returned only after the receipt MAC, selected authority tuple,
+/// principal/session binding, and currentness have all been revalidated.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NegotiationVerifiedMetadataRoute {
+    admitted: AdmittedMetadataRoute,
+}
+
+/// Syntax-only request brand returned after OGVCS-041 negotiation receipt
+/// verification. This is deliberately not an OGVCS-009 authorization brand
+/// and cannot construct a success response.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NegotiationVerifiedMetadataRequest {
+    request: MetadataOperationRequest,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MetadataServerCorrelationId(String);
+
+impl MetadataServerCorrelationId {
+    /// Creates a bounded server-generated correlation ID for failures that
+    /// occur before a request correlation ID can be safely parsed. Callers
+    /// must not reflect unvalidated request bytes into this value.
+    pub fn new(value: String) -> BoundaryResult<Self> {
+        if (16..=128).contains(&value.len()) && ascii_token(&value) {
+            Ok(Self(value))
+        } else {
+            input_invalid()
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// Exact OGVCS-041 `ResponseEnvelope`. Metadata result values exist only as
+/// its `body`; unassigned metadata domain errors cannot be emitted as wire
+/// problems through this type.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MetadataResponseEnvelope {
+    schema_version: &'static str,
+    correlation_id: String,
+    success: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    body: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    problem: Option<MetadataProtocolProblem>,
+}
+
+/// Closed registered OGVCS-041 `ProblemDetails` subset used by this adapter.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MetadataProtocolProblem {
+    #[serde(rename = "type")]
+    problem_type: &'static str,
+    title: &'static str,
+    status: u16,
+    code: &'static str,
+    retryable: bool,
+    correlation_id: String,
+}
+
+impl AdmittedMetadataRoute {
+    pub const fn descriptor(&self) -> &'static MetadataTransportDescriptor {
+        self.descriptor
+    }
+
+    pub const fn request(&self) -> &MetadataOperationRequest {
+        &self.request
+    }
+
+    pub fn into_request(self) -> MetadataOperationRequest {
+        self.request
+    }
+
+    pub fn verify_negotiation<K: MetadataNegotiationKeyProvider>(
+        &self,
+        keys: &K,
+        principal: &MetadataNegotiationPrincipal,
+    ) -> std::result::Result<NegotiationVerifiedMetadataRoute, MetadataTransportError> {
+        self.request.verify_negotiation(keys, principal)?;
+        Ok(NegotiationVerifiedMetadataRoute {
+            admitted: self.clone(),
+        })
+    }
+
+    pub fn problem_response(&self, error: MetadataTransportError) -> MetadataResponseEnvelope {
+        MetadataResponseEnvelope {
+            schema_version: METADATA_SERVICE_RESPONSE_SCHEMA,
+            correlation_id: self.request.correlation_id().to_owned(),
+            success: false,
+            body: None,
+            problem: Some(MetadataProtocolProblem::registered(
+                error,
+                self.request.correlation_id(),
+            )),
+        }
+    }
+}
+
+impl NegotiationVerifiedMetadataRoute {
+    pub const fn descriptor(&self) -> &'static MetadataTransportDescriptor {
+        self.admitted.descriptor
+    }
+
+    pub const fn request(&self) -> &MetadataOperationRequest {
+        &self.admitted.request
+    }
+
+    pub fn into_request(self) -> MetadataOperationRequest {
+        self.admitted.request
+    }
+}
+
+impl NegotiationVerifiedMetadataRequest {
+    pub const fn request(&self) -> &MetadataOperationRequest {
+        &self.request
+    }
+
+    pub fn into_request(self) -> MetadataOperationRequest {
+        self.request
+    }
+}
+
+impl MetadataResponseEnvelope {
+    pub fn preparse_problem(
+        correlation_id: &MetadataServerCorrelationId,
+        error: MetadataTransportError,
+    ) -> BoundaryResult<Self> {
+        if matches!(
+            error,
+            MetadataTransportError::AuthorizationDenied
+                | MetadataTransportError::NegotiationReceiptInvalid
+                | MetadataTransportError::NegotiationReceiptExpired
+                | MetadataTransportError::DeadlineExceeded
+        ) {
+            return input_invalid();
+        }
+        Ok(Self {
+            schema_version: METADATA_SERVICE_RESPONSE_SCHEMA,
+            correlation_id: correlation_id.as_str().to_owned(),
+            success: false,
+            body: None,
+            problem: Some(MetadataProtocolProblem::registered(
+                error,
+                correlation_id.as_str(),
+            )),
+        })
+    }
+
+    #[cfg(test)]
+    fn success_for_authorized_dispatch(
+        correlation_id: &str,
+        result: MetadataHttpResponse,
+    ) -> BoundaryResult<Self> {
+        let body =
+            serde_json::to_value(result).map_err(|_| MetadataServiceBoundaryError::InputInvalid)?;
+        inspect_protocol_json_value(
+            &body,
+            PROTOCOL_JSON_VALUE_DEPTH_MAXIMUM,
+            PROTOCOL_JSON_VALUE_NODES_MAXIMUM,
+        )?;
+        Ok(Self {
+            schema_version: METADATA_SERVICE_RESPONSE_SCHEMA,
+            correlation_id: correlation_id.to_owned(),
+            success: true,
+            body: Some(body),
+            problem: None,
+        })
+    }
+
+    pub const fn schema_version(&self) -> &'static str {
+        self.schema_version
+    }
+
+    pub fn correlation_id(&self) -> &str {
+        &self.correlation_id
+    }
+
+    pub const fn success(&self) -> bool {
+        self.success
+    }
+
+    pub fn body(&self) -> Option<&Value> {
+        self.body.as_ref()
+    }
+
+    pub const fn problem(&self) -> Option<&MetadataProtocolProblem> {
+        self.problem.as_ref()
+    }
+}
+
+impl MetadataProtocolProblem {
+    fn registered(error: MetadataTransportError, correlation_id: &str) -> Self {
+        let (problem_type, title, status, retryable) = match error {
+            MetadataTransportError::Malformed => (
+                "https://errors.opengamevcs.dev/protocol/v1/protocol-malformed",
+                "Malformed protocol message",
+                400,
+                false,
+            ),
+            MetadataTransportError::LimitExceeded => (
+                "https://errors.opengamevcs.dev/protocol/v1/protocol-limit-exceeded",
+                "Protocol resource limit exceeded",
+                413,
+                true,
+            ),
+            MetadataTransportError::Unsupported => (
+                "https://errors.opengamevcs.dev/protocol/v1/protocol-unsupported",
+                "Protocol profile unsupported",
+                426,
+                false,
+            ),
+            MetadataTransportError::AuthorizationDenied => (
+                "https://errors.opengamevcs.dev/protocol/v1/authorization-denied",
+                "Operation not authorized",
+                403,
+                false,
+            ),
+            MetadataTransportError::CompressionForbidden => (
+                "https://errors.opengamevcs.dev/protocol/v1/compression-forbidden",
+                "Content coding forbidden",
+                415,
+                false,
+            ),
+            MetadataTransportError::RedirectForbidden => (
+                "https://errors.opengamevcs.dev/protocol/v1/redirect-forbidden",
+                "Redirect forbidden",
+                409,
+                false,
+            ),
+            MetadataTransportError::NegotiationReceiptInvalid => (
+                "https://errors.opengamevcs.dev/protocol/v1/negotiation-receipt-invalid",
+                "Negotiation receipt invalid",
+                401,
+                false,
+            ),
+            MetadataTransportError::NegotiationReceiptExpired => (
+                "https://errors.opengamevcs.dev/protocol/v1/negotiation-receipt-expired",
+                "Negotiation receipt expired",
+                401,
+                true,
+            ),
+            MetadataTransportError::DeadlineExceeded => (
+                "https://errors.opengamevcs.dev/protocol/v1/deadline-exceeded",
+                "Deadline exceeded",
+                504,
+                true,
+            ),
+        };
+        Self {
+            problem_type,
+            title,
+            status,
+            code: error.protocol_code(),
+            retryable,
+            correlation_id: correlation_id.to_owned(),
+        }
+    }
+
+    pub const fn status(&self) -> u16 {
+        self.status
+    }
+
+    pub const fn code(&self) -> &'static str {
+        self.code
+    }
+}
+
+const TRANSPORT_BASE_CAPABILITIES: &[&str] = &[
+    "ogvcs.control.https-json@1",
+    "ogvcs.protocol.schema@1",
+    "ogvcs.authorization@1",
+    "ogvcs.receipt.hmac-sha256@1",
+];
+const TRANSPORT_MUTATION_CAPABILITIES: &[&str] = &[
+    "ogvcs.control.https-json@1",
+    "ogvcs.protocol.schema@1",
+    "ogvcs.authorization@1",
+    "ogvcs.receipt.hmac-sha256@1",
+    "ogvcs.idempotency.semantic-jcs@1",
+];
+impl MetadataTransportDescriptor {
+    pub const fn required_capabilities(self) -> &'static [&'static str] {
+        match self.operation.descriptor().idempotency_required {
+            false => TRANSPORT_BASE_CAPABILITIES,
+            true => TRANSPORT_MUTATION_CAPABILITIES,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -362,6 +787,214 @@ pub const METADATA_OPERATION_DESCRIPTORS: [MetadataOperationDescriptor;
     ),
 ];
 
+macro_rules! transport {
+    ($operation:ident, $path:literal, $status:literal, $media:expr, $stream:ident, $exposure:ident) => {
+        MetadataTransportDescriptor {
+            operation: MetadataOperation::$operation,
+            method: "POST",
+            path: $path,
+            request_media_type: METADATA_CONTROL_MEDIA_TYPE,
+            success_status: $status,
+            success_media_type: $media,
+            error_media_type: METADATA_RESPONSE_MEDIA_TYPE,
+            stream: MetadataStreamBinding::$stream,
+            exposure: MetadataOperationExposure::$exposure,
+            network_registered: MetadataOperationExposure::$exposure.network_registered(),
+        }
+    };
+}
+
+pub const METADATA_TRANSPORT_DESCRIPTORS: [MetadataTransportDescriptor;
+    METADATA_SERVICE_OPERATION_COUNT] = [
+    transport!(
+        RepositoryCreate,
+        "/v1/repository-metadata/operations/repository.create",
+        201,
+        METADATA_RESPONSE_MEDIA_TYPE,
+        None,
+        AtomicCreateCoordinator
+    ),
+    transport!(
+        RepositoryGetSettings,
+        "/v1/repository-metadata/operations/repository.get-settings",
+        200,
+        METADATA_RESPONSE_MEDIA_TYPE,
+        None,
+        IdentityBound
+    ),
+    transport!(
+        RepositoryList,
+        "/v1/repository-metadata/operations/repository.list",
+        200,
+        METADATA_RESPONSE_MEDIA_TYPE,
+        BoundedPage,
+        ProjectAuthorityRequired
+    ),
+    transport!(
+        ObjectPut,
+        "/v1/repository-metadata/operations/object.put",
+        201,
+        METADATA_RESPONSE_MEDIA_TYPE,
+        CarrierUnassignedClosed,
+        StreamCarrierRequired
+    ),
+    transport!(
+        ObjectGet,
+        "/v1/repository-metadata/operations/object.get",
+        200,
+        METADATA_RESPONSE_MEDIA_TYPE,
+        CarrierUnassignedClosed,
+        StreamCarrierRequired
+    ),
+    transport!(
+        TreePage,
+        "/v1/repository-metadata/operations/tree.page",
+        200,
+        METADATA_RESPONSE_MEDIA_TYPE,
+        BoundedPage,
+        IdentityBound
+    ),
+    transport!(
+        ReferenceRead,
+        "/v1/repository-metadata/operations/reference.read",
+        200,
+        METADATA_RESPONSE_MEDIA_TYPE,
+        None,
+        IdentityBound
+    ),
+    transport!(
+        ReferenceList,
+        "/v1/repository-metadata/operations/reference.list",
+        200,
+        METADATA_RESPONSE_MEDIA_TYPE,
+        BoundedPage,
+        IdentityBound
+    ),
+    transport!(
+        ReferenceCompareAndSwap,
+        "/v1/repository-metadata/operations/reference.compare-and-swap",
+        200,
+        METADATA_RESPONSE_MEDIA_TYPE,
+        None,
+        AggregateCoordinatorRequired
+    ),
+    transport!(
+        HistoryAncestryPage,
+        "/v1/repository-metadata/operations/history.ancestry-page",
+        200,
+        METADATA_RESPONSE_MEDIA_TYPE,
+        BoundedPage,
+        IdentityBound
+    ),
+    transport!(
+        HistoryFileIdPage,
+        "/v1/repository-metadata/operations/history.file-id-page",
+        200,
+        METADATA_RESPONSE_MEDIA_TYPE,
+        BoundedPage,
+        IdentityBound
+    ),
+    transport!(
+        HistoryPathPage,
+        "/v1/repository-metadata/operations/history.path-page",
+        200,
+        METADATA_RESPONSE_MEDIA_TYPE,
+        BoundedPage,
+        IdentityBound
+    ),
+    transport!(
+        FileIdAllocate,
+        "/v1/repository-metadata/operations/file-id.allocate",
+        201,
+        METADATA_RESPONSE_MEDIA_TYPE,
+        None,
+        IdentityBound
+    ),
+    transport!(
+        FileIdRegister,
+        "/v1/repository-metadata/operations/file-id.register",
+        201,
+        METADATA_RESPONSE_MEDIA_TYPE,
+        None,
+        VariantGated
+    ),
+    transport!(
+        FileIdRegisterImport,
+        "/v1/repository-metadata/operations/file-id.register-import",
+        201,
+        METADATA_RESPONSE_MEDIA_TYPE,
+        None,
+        IdentityBound
+    ),
+    transport!(
+        FileIdTombstone,
+        "/v1/repository-metadata/operations/file-id.tombstone",
+        200,
+        METADATA_RESPONSE_MEDIA_TYPE,
+        None,
+        AggregateCoordinatorRequired
+    ),
+    transport!(
+        FileIdHistory,
+        "/v1/repository-metadata/operations/file-id.history",
+        200,
+        METADATA_RESPONSE_MEDIA_TYPE,
+        BoundedPage,
+        IdentityBound
+    ),
+    transport!(
+        IdempotencyStatus,
+        "/v1/repository-metadata/operations/idempotency.status",
+        200,
+        METADATA_RESPONSE_MEDIA_TYPE,
+        None,
+        IdentityBound
+    ),
+    transport!(
+        ConsistencyIssueToken,
+        "/v1/repository-metadata/operations/consistency.issue-token",
+        200,
+        METADATA_RESPONSE_MEDIA_TYPE,
+        None,
+        IdentityBound
+    ),
+    transport!(
+        OutboxClaim,
+        "/v1/repository-metadata/operations/outbox.claim",
+        200,
+        METADATA_RESPONSE_MEDIA_TYPE,
+        None,
+        InternalOnly
+    ),
+    transport!(
+        OutboxAcknowledge,
+        "/v1/repository-metadata/operations/outbox.acknowledge",
+        200,
+        METADATA_RESPONSE_MEDIA_TYPE,
+        None,
+        InternalOnly
+    ),
+    transport!(
+        OutboxRelease,
+        "/v1/repository-metadata/operations/outbox.release",
+        200,
+        METADATA_RESPONSE_MEDIA_TYPE,
+        None,
+        InternalOnly
+    ),
+];
+
+/// Returns the only descriptors a network adapter may register. The complete
+/// registry above remains available for authenticated assignment checks, but
+/// coordinator-owned, internal, and carrier-unassigned operations cannot leak
+/// into route installation through this boundary.
+pub fn network_transport_descriptors() -> impl Iterator<Item = &'static MetadataTransportDescriptor>
+{
+    METADATA_TRANSPORT_DESCRIPTORS
+        .iter()
+        .filter(|descriptor| descriptor.network_registered)
+}
+
 // The authenticated operation registry has eight fixed columns; keeping that
 // row shape visible makes assignment drift reviewable.
 #[allow(clippy::too_many_arguments)]
@@ -418,7 +1051,10 @@ impl MetadataOperation {
 
     pub const fn exposure(self) -> MetadataOperationExposure {
         match self {
-            Self::RepositoryCreate | Self::ReferenceCompareAndSwap | Self::FileIdTombstone => {
+            Self::RepositoryCreate => MetadataOperationExposure::AtomicCreateCoordinator,
+            Self::RepositoryList => MetadataOperationExposure::ProjectAuthorityRequired,
+            Self::ObjectPut | Self::ObjectGet => MetadataOperationExposure::StreamCarrierRequired,
+            Self::ReferenceCompareAndSwap | Self::FileIdTombstone => {
                 MetadataOperationExposure::AggregateCoordinatorRequired
             }
             // This operation is a tagged union containing the proof-bound
@@ -430,6 +1066,10 @@ impl MetadataOperation {
             }
             _ => MetadataOperationExposure::IdentityBound,
         }
+    }
+
+    pub const fn transport_descriptor(self) -> &'static MetadataTransportDescriptor {
+        &METADATA_TRANSPORT_DESCRIPTORS[self as usize]
     }
 
     const fn generic_json_result(self) -> bool {
@@ -477,7 +1117,11 @@ impl ServicePageRequest {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MetadataOperationRequest {
     operation: MetadataOperation,
+    correlation_id: String,
+    deadline_unix_ms: Option<u64>,
+    negotiation_receipt: Value,
     body: Value,
+    extensions: Value,
     idempotency_key: Option<String>,
     semantic_fingerprint: Option<[u8; 32]>,
     tenant_id: Option<TenantId>,
@@ -490,56 +1134,104 @@ pub struct MetadataOperationRequest {
 
 impl MetadataOperationRequest {
     pub fn parse(bytes: &[u8]) -> BoundaryResult<Self> {
+        Self::parse_for_operation(bytes, None)
+    }
+
+    fn parse_for_operation(
+        bytes: &[u8],
+        expected_operation: Option<MetadataOperation>,
+    ) -> BoundaryResult<Self> {
         if bytes.is_empty() {
             return Err(MetadataServiceBoundaryError::InputInvalid);
         }
         if bytes.len() > CONTROL_MESSAGE_BYTES_MAXIMUM {
             return Err(MetadataServiceBoundaryError::LimitExceeded);
         }
-        let StrictValue(mut value) = serde_json::from_slice(bytes)
-            .map_err(|_| MetadataServiceBoundaryError::InputInvalid)?;
+        let StrictValue(mut value) = serde_json::from_slice(bytes).map_err(|error| {
+            if error.to_string().contains("JSON resource limit exceeded") {
+                MetadataServiceBoundaryError::LimitExceeded
+            } else {
+                MetadataServiceBoundaryError::InputInvalid
+            }
+        })?;
         normalize_json_numbers(&mut value)?;
         inspect_json(&value)?;
         if canonical_json_bytes(&value)?.len() > CONTROL_MESSAGE_BYTES_MAXIMUM {
             return Err(MetadataServiceBoundaryError::LimitExceeded);
         }
         let envelope = object(&value)?;
-        exact_members(
+        closed_members(
             envelope,
-            &["schemaVersion", "operation", "body", "idempotencyKey"],
+            &[
+                "schemaVersion",
+                "operation",
+                "correlationId",
+                "deadlineUnixMs",
+                "negotiationReceipt",
+                "idempotency",
+                "body",
+                "extensions",
+            ],
+            &[
+                "schemaVersion",
+                "operation",
+                "correlationId",
+                "negotiationReceipt",
+                "body",
+            ],
         )?;
         if text(envelope, "schemaVersion", 1, 128)? != METADATA_SERVICE_REQUEST_SCHEMA {
             return Err(MetadataServiceBoundaryError::InputInvalid);
         }
-        let operation = MetadataOperation::from_name(text(envelope, "operation", 1, 128)?)
+        let operation = MetadataOperation::from_name(text(envelope, "operation", 1, 256)?)
             .ok_or(MetadataServiceBoundaryError::InputInvalid)?;
+        if expected_operation.is_some_and(|expected| operation != expected) {
+            return input_invalid();
+        }
+        let correlation_id = correlation_id(envelope, "correlationId")?.to_owned();
+        let deadline_unix_ms = envelope
+            .get("deadlineUnixMs")
+            .map(|value| value_uint(value, JSON_SAFE_INTEGER_MAXIMUM))
+            .transpose()?;
+        let negotiation_receipt = required(envelope, "negotiationReceipt")?.clone();
+        validate_negotiation_receipt_shape(&negotiation_receipt)?;
         let body = envelope
             .get("body")
             .cloned()
             .ok_or(MetadataServiceBoundaryError::InputInvalid)?;
+        inspect_protocol_json_value(
+            &body,
+            PROTOCOL_JSON_VALUE_DEPTH_MAXIMUM,
+            PROTOCOL_JSON_VALUE_NODES_MAXIMUM,
+        )?;
         let body_map = object(&body)?;
-        let idempotency = envelope
-            .get("idempotencyKey")
-            .ok_or(MetadataServiceBoundaryError::InputInvalid)?;
-        let idempotency_key = if operation.descriptor().idempotency_required {
-            let value = value_text(idempotency, 1, IDEMPOTENCY_KEY_SCHEMA_BYTES_MAXIMUM)?;
-            idempotency_window(value)?;
-            Some(value.to_owned())
-        } else if idempotency.is_null() {
-            None
-        } else {
-            return Err(MetadataServiceBoundaryError::InputInvalid);
-        };
+        let extensions = envelope
+            .get("extensions")
+            .cloned()
+            .unwrap_or_else(|| Value::Object(Map::new()));
+        validate_extensions(&extensions)?;
         let facts = validate_body(operation, body_map)?;
-        let semantic_fingerprint = idempotency_key
-            .as_ref()
-            .map(|_| semantic_fingerprint(operation, &body))
-            .transpose()?;
+        let semantic_fingerprint = semantic_fingerprint(operation, &body, &extensions)?;
+        let idempotency_key = match (
+            operation.descriptor().idempotency_required,
+            envelope.get("idempotency"),
+        ) {
+            (true, Some(descriptor)) => Some(validate_idempotency_descriptor(
+                descriptor,
+                semantic_fingerprint,
+            )?),
+            (true, None) | (false, Some(_)) => return input_invalid(),
+            (false, None) => None,
+        };
         Ok(Self {
             operation,
+            correlation_id,
+            deadline_unix_ms,
+            negotiation_receipt,
             body,
+            extensions,
+            semantic_fingerprint: idempotency_key.as_ref().map(|_| semantic_fingerprint),
             idempotency_key,
-            semantic_fingerprint,
             tenant_id: facts.tenant_id,
             repository_id: facts.repository_id,
             project_id: facts.project_id,
@@ -551,6 +1243,25 @@ impl MetadataOperationRequest {
 
     pub const fn operation(&self) -> MetadataOperation {
         self.operation
+    }
+
+    pub fn correlation_id(&self) -> &str {
+        &self.correlation_id
+    }
+
+    pub const fn deadline_unix_ms(&self) -> Option<u64> {
+        self.deadline_unix_ms
+    }
+
+    /// The receipt stays opaque here. Shape/selection validation is not MAC
+    /// verification; the production dispatcher must verify the current
+    /// OGVCS-041 receipt before any authorization or repository lookup.
+    pub fn negotiation_receipt(&self) -> &Value {
+        &self.negotiation_receipt
+    }
+
+    pub fn extensions(&self) -> &Value {
+        &self.extensions
     }
 
     pub fn body(&self) -> &Value {
@@ -587,6 +1298,49 @@ impl MetadataOperationRequest {
 
     pub const fn exposure(&self) -> MetadataOperationExposure {
         self.exposure
+    }
+
+    /// Verifies the request deadline and authenticated OGVCS-041 negotiation
+    /// receipt. The returned brand proves negotiation only; an exact OGVCS-009
+    /// authorized view is still mandatory before lookup, mutation, or success
+    /// response construction.
+    pub fn verify_negotiation<K: MetadataNegotiationKeyProvider>(
+        &self,
+        keys: &K,
+        principal: &MetadataNegotiationPrincipal,
+    ) -> std::result::Result<NegotiationVerifiedMetadataRequest, MetadataTransportError> {
+        if let Some(deadline) = self.deadline_unix_ms() {
+            if principal.now_unix_ms >= deadline {
+                return Err(MetadataTransportError::DeadlineExceeded);
+            }
+            if deadline - principal.now_unix_ms > 86_400_000 {
+                return Err(MetadataTransportError::LimitExceeded);
+            }
+        }
+        verify_negotiation_receipt(
+            self.negotiation_receipt(),
+            self.extensions(),
+            keys,
+            principal,
+        )?;
+        Ok(NegotiationVerifiedMetadataRequest {
+            request: self.clone(),
+        })
+    }
+
+    /// Builds an exact failure envelope after this request's correlation ID
+    /// has passed syntax admission. This method cannot build success.
+    pub fn problem_response(&self, error: MetadataTransportError) -> MetadataResponseEnvelope {
+        MetadataResponseEnvelope {
+            schema_version: METADATA_SERVICE_RESPONSE_SCHEMA,
+            correlation_id: self.correlation_id().to_owned(),
+            success: false,
+            body: None,
+            problem: Some(MetadataProtocolProblem::registered(
+                error,
+                self.correlation_id(),
+            )),
+        }
     }
 
     /// Converts the self-dating public key into the exact persistence
@@ -644,6 +1398,72 @@ impl MetadataOperationRequest {
             Err(MetadataServiceBoundaryError::OperationUnavailable)
         }
     }
+}
+
+impl MetadataTransportRequest<'_> {
+    /// Applies only the public OGVCS-041 transport and syntax boundary. The
+    /// returned request must still pass the production identity/coordinator
+    /// dispatcher; no authorization resource is accepted from this type.
+    pub fn admit(self) -> std::result::Result<AdmittedMetadataRoute, MetadataTransportError> {
+        // Resolve the static registry before touching the control body. This
+        // keeps known-but-unregistered operations from becoming a body-shape,
+        // identifier, or authorization oracle.
+        let descriptor = METADATA_TRANSPORT_DESCRIPTORS
+            .iter()
+            .find(|descriptor| descriptor.path == self.path)
+            .ok_or(MetadataTransportError::Malformed)?;
+        if self.method != descriptor.method {
+            return Err(MetadataTransportError::Malformed);
+        }
+        if !descriptor.network_registered {
+            return Err(MetadataTransportError::Unsupported);
+        }
+        validate_registered_transport_constraints(&self, descriptor)?;
+        let request =
+            MetadataOperationRequest::parse_for_operation(self.control, Some(descriptor.operation))
+                .map_err(|error| match error {
+                    MetadataServiceBoundaryError::InputInvalid => MetadataTransportError::Malformed,
+                    MetadataServiceBoundaryError::LimitExceeded => {
+                        MetadataTransportError::LimitExceeded
+                    }
+                    MetadataServiceBoundaryError::OperationUnavailable => {
+                        MetadataTransportError::AuthorizationDenied
+                    }
+                })?;
+        match (descriptor.exposure, request.exposure()) {
+            (
+                MetadataOperationExposure::IdentityBound,
+                MetadataOperationExposure::IdentityBound,
+            )
+            | (MetadataOperationExposure::VariantGated, MetadataOperationExposure::IdentityBound) =>
+                {}
+            _ => {
+                return Err(MetadataTransportError::AuthorizationDenied);
+            }
+        }
+        Ok(AdmittedMetadataRoute {
+            descriptor,
+            request,
+        })
+    }
+}
+
+fn validate_registered_transport_constraints(
+    request: &MetadataTransportRequest<'_>,
+    descriptor: &MetadataTransportDescriptor,
+) -> std::result::Result<(), MetadataTransportError> {
+    if request.content_coding != "identity" {
+        return Err(MetadataTransportError::CompressionForbidden);
+    }
+    if request.redirect_hops != 0 {
+        return Err(MetadataTransportError::RedirectForbidden);
+    }
+    if request.request_media_type != descriptor.request_media_type
+        || request.accept != descriptor.success_media_type
+    {
+        return Err(MetadataTransportError::Unsupported);
+    }
+    Ok(())
 }
 
 #[derive(Default)]
@@ -798,7 +1618,7 @@ fn validate_repository_create(body: &Map<String, Value>) -> BoundaryResult<BodyF
         tenant_id: Some(request_tenant_id),
         repository_id: Some(repository_id),
         project_id: Some(project_id),
-        exposure: Some(MetadataOperationExposure::AggregateCoordinatorRequired),
+        exposure: Some(MetadataOperationExposure::AtomicCreateCoordinator),
         ..BodyFacts::default()
     })
 }
@@ -1204,12 +2024,284 @@ fn path(body: &Map<String, Value>, key: &str, allow_empty: bool) -> BoundaryResu
     Ok(result)
 }
 
-fn semantic_fingerprint(operation: MetadataOperation, body: &Value) -> BoundaryResult<[u8; 32]> {
+fn validate_idempotency_descriptor(
+    value: &Value,
+    expected_fingerprint: [u8; 32],
+) -> BoundaryResult<String> {
+    let descriptor = object(value)?;
+    exact_members(
+        descriptor,
+        &[
+            "key",
+            "algorithm",
+            "projectionVersion",
+            "fingerprint",
+            "issuedAtUnixMs",
+            "expiresAtUnixMs",
+        ],
+    )?;
+    if text(descriptor, "algorithm", 1, 64)? != "OGVCS-SEMANTIC-JCS-SHA-256"
+        || text(descriptor, "projectionVersion", 1, 128)?
+            != "ogvcs.protocol/fingerprint-projection@1"
+    {
+        return input_invalid();
+    }
+    let key = text(descriptor, "key", 30, IDEMPOTENCY_KEY_SCHEMA_BYTES_MAXIMUM)?;
+    let (key_issued, key_expires) = idempotency_window(key)?;
+    let issued = uint(descriptor, "issuedAtUnixMs", JSON_SAFE_INTEGER_MAXIMUM)?;
+    let expires = uint(descriptor, "expiresAtUnixMs", JSON_SAFE_INTEGER_MAXIMUM)?;
+    if issued != key_issued || expires != key_expires {
+        return input_invalid();
+    }
+    if digest32(descriptor, "fingerprint")? != expected_fingerprint {
+        return input_invalid();
+    }
+    Ok(key.to_owned())
+}
+
+fn validate_extensions(value: &Value) -> BoundaryResult<()> {
+    let extensions = object(value)?;
+    if extensions.len() > 32 {
+        return Err(MetadataServiceBoundaryError::LimitExceeded);
+    }
+    for (key, value) in extensions {
+        if !extension_key(key) {
+            return input_invalid();
+        }
+        inspect_protocol_json_value(
+            value,
+            PROTOCOL_EXTENSION_VALUE_DEPTH_MAXIMUM,
+            PROTOCOL_EXTENSION_VALUE_NODES_MAXIMUM,
+        )?;
+    }
+    Ok(())
+}
+
+fn validate_negotiation_receipt_shape(value: &Value) -> BoundaryResult<()> {
+    if canonical_json_bytes(value)?.len() > 16_384 {
+        return Err(MetadataServiceBoundaryError::LimitExceeded);
+    }
+    let receipt = object(value)?;
+    exact_members(receipt, &["algorithm", "keyId", "claims", "mac"])?;
+    if text(receipt, "algorithm", 1, 32)? != "HMAC-SHA-256"
+        || !protocol_identifier(text(receipt, "keyId", 1, 256)?)
+        || !canonical_base64url(text(receipt, "mac", 43, 43)?, 32, 32)
+    {
+        return input_invalid();
+    }
+    let claims = object(required(receipt, "claims")?)?;
+    exact_members(
+        claims,
+        &[
+            "schemaVersion",
+            "selection",
+            "subjectDigest",
+            "tenantDigest",
+            "authorityEpoch",
+            "sessionId",
+            "clientNonce",
+            "serverNonce",
+            "issuedAtUnixMs",
+            "expiresAtUnixMs",
+        ],
+    )?;
+    if text(claims, "schemaVersion", 1, 128)? != "ogvcs.protocol/negotiation-receipt-claims/v1"
+        || !ascii_token(text(claims, "sessionId", 16, 256)?)
+        || !canonical_base64url(text(claims, "clientNonce", 22, 86)?, 16, 64)
+        || !canonical_base64url(text(claims, "serverNonce", 22, 86)?, 16, 64)
+    {
+        return input_invalid();
+    }
+    digest32(claims, "subjectDigest")?;
+    digest32(claims, "tenantDigest")?;
+    uint(claims, "authorityEpoch", JSON_SAFE_INTEGER_MAXIMUM)?;
+    uint(claims, "issuedAtUnixMs", JSON_SAFE_INTEGER_MAXIMUM)?;
+    uint(claims, "expiresAtUnixMs", JSON_SAFE_INTEGER_MAXIMUM)?;
+
+    let selection = object(required(claims, "selection")?)?;
+    exact_members(
+        selection,
+        &[
+            "schemaVersion",
+            "protocolVersion",
+            "messageSchemaVersion",
+            "repositoryFormat",
+            "authorizationContract",
+            "authorizationRegistrySha256",
+            "pathContract",
+            "pathProfile",
+            "pathRegistrySha256",
+            "eventVersion",
+            "transferProfile",
+            "extensions",
+            "protocolRegistrySetSha256",
+            "repositoryRegistrySha256",
+        ],
+    )?;
+    for field in [
+        "schemaVersion",
+        "protocolVersion",
+        "messageSchemaVersion",
+        "repositoryFormat",
+        "authorizationContract",
+        "pathContract",
+        "pathProfile",
+        "eventVersion",
+        "transferProfile",
+    ] {
+        text(selection, field, 1, 256)?;
+    }
+    for field in [
+        "authorizationRegistrySha256",
+        "pathRegistrySha256",
+        "protocolRegistrySetSha256",
+        "repositoryRegistrySha256",
+    ] {
+        digest32(selection, field)?;
+    }
+    let values = array(selection, "extensions", 128, 0)?;
+    let mut selected = Vec::with_capacity(values.len());
+    for value in values {
+        let value = value_text(value, 1, 256)?;
+        if !protocol_identifier(value) || selected.iter().any(|existing| existing == value) {
+            return input_invalid();
+        }
+        selected.push(value.to_owned());
+    }
+    Ok(())
+}
+
+fn verify_negotiation_receipt<K: MetadataNegotiationKeyProvider>(
+    value: &Value,
+    request_extensions: &Value,
+    keys: &K,
+    principal: &MetadataNegotiationPrincipal,
+) -> std::result::Result<(), MetadataTransportError> {
+    let invalid = || MetadataTransportError::NegotiationReceiptInvalid;
+    let receipt = value.as_object().ok_or_else(invalid)?;
+    let key_id = receipt
+        .get("keyId")
+        .and_then(Value::as_str)
+        .ok_or_else(invalid)?;
+    let key = keys
+        .key(key_id)
+        .filter(|key| key.len() >= 32)
+        .ok_or_else(invalid)?;
+    let claims = receipt.get("claims").ok_or_else(invalid)?;
+    let supplied_mac = receipt
+        .get("mac")
+        .and_then(Value::as_str)
+        .and_then(|value| {
+            base64::engine::general_purpose::URL_SAFE_NO_PAD
+                .decode(value)
+                .ok()
+        })
+        .filter(|value| value.len() == 32)
+        .ok_or_else(invalid)?;
+    let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(key).map_err(|_| invalid())?;
+    mac.update(b"OGVCS-PROTOCOL-NEGOTIATION-RECEIPT-V1\0");
+    mac.update(key_id.as_bytes());
+    mac.update(&[0]);
+    mac.update(&canonical_json_bytes(claims).map_err(|_| invalid())?);
+    let expected_mac = mac.finalize().into_bytes();
+    if !bool::from(expected_mac.as_slice().ct_eq(&supplied_mac)) {
+        return Err(invalid());
+    }
+
+    let claims = claims.as_object().ok_or_else(invalid)?;
+    let selection = claims
+        .get("selection")
+        .and_then(Value::as_object)
+        .ok_or_else(invalid)?;
+    let selected_extensions = validate_negotiation_selection(selection).map_err(|_| invalid())?;
+    let request_extensions = request_extensions.as_object().ok_or_else(invalid)?;
+    if request_extensions
+        .keys()
+        .any(|key| !selected_extensions.iter().any(|selected| selected == key))
+    {
+        return Err(invalid());
+    }
+    let issued =
+        uint(claims, "issuedAtUnixMs", JSON_SAFE_INTEGER_MAXIMUM).map_err(|_| invalid())?;
+    let expires =
+        uint(claims, "expiresAtUnixMs", JSON_SAFE_INTEGER_MAXIMUM).map_err(|_| invalid())?;
+    if expires <= issued || expires - issued > 300_000 {
+        return Err(invalid());
+    }
+    let subject = digest32(claims, "subjectDigest").map_err(|_| invalid())?;
+    let tenant = digest32(claims, "tenantDigest").map_err(|_| invalid())?;
+    let epoch = uint(claims, "authorityEpoch", JSON_SAFE_INTEGER_MAXIMUM).map_err(|_| invalid())?;
+    let session = claims
+        .get("sessionId")
+        .and_then(Value::as_str)
+        .ok_or_else(invalid)?;
+    if !bool::from(subject.ct_eq(&principal.subject_digest))
+        || !bool::from(tenant.ct_eq(&principal.tenant_digest))
+        || epoch != principal.authority_epoch
+        || session != principal.session_id
+    {
+        return Err(invalid());
+    }
+    if principal.now_unix_ms < issued || principal.now_unix_ms >= expires {
+        return Err(MetadataTransportError::NegotiationReceiptExpired);
+    }
+    Ok(())
+}
+
+fn validate_negotiation_selection(selection: &Map<String, Value>) -> BoundaryResult<Vec<String>> {
+    for (field, expected) in [
+        ("schemaVersion", "ogvcs.protocol/negotiation-selection/v1"),
+        ("protocolVersion", METADATA_PROTOCOL_PROFILE),
+        ("messageSchemaVersion", "ogvcs.protocol.schema@1"),
+        ("repositoryFormat", "ogvcs.repository-format@1"),
+        ("authorizationContract", "ogvcs.authorization@1"),
+        (
+            "authorizationRegistrySha256",
+            "293f9ab0be023a9ded33326d04a8314080bda56e7c70dd18d0cca38b70bed9cc",
+        ),
+        ("pathContract", "ogvcs.path-filesystem@1"),
+        ("pathProfile", "path.opengamevcs/portable@1"),
+        (
+            "pathRegistrySha256",
+            "bbabdd95d78cfe0dd9751ab67ccbd9dfa5565bf8c049468aea3129bec787bd42",
+        ),
+        ("eventVersion", "ogvcs.events.base@1"),
+        ("transferProfile", "ogvcs.transfer.range-resume-probe@1"),
+        (
+            "protocolRegistrySetSha256",
+            OGVCS_041_NEGOTIATION_REGISTRY_SET_SHA256,
+        ),
+        (
+            "repositoryRegistrySha256",
+            "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
+        ),
+    ] {
+        if text(selection, field, 1, 256)? != expected {
+            return input_invalid();
+        }
+    }
+    let values = array(selection, "extensions", 128, 0)?;
+    let mut selected = Vec::with_capacity(values.len());
+    for value in values {
+        let value = value_text(value, 1, 256)?;
+        if !protocol_identifier(value) || selected.iter().any(|existing| existing == value) {
+            return input_invalid();
+        }
+        selected.push(value.to_owned());
+    }
+    Ok(selected)
+}
+
+fn semantic_fingerprint(
+    operation: MetadataOperation,
+    body: &Value,
+    extensions: &Value,
+) -> BoundaryResult<[u8; 32]> {
     let projection = serde_json::json!({
         "schemaVersion": METADATA_SERVICE_REQUEST_SCHEMA,
         "operation": operation.name(),
         "body": body,
-        "extensions": {},
+        "extensions": extensions,
     });
     let canonical = canonical_json_bytes(&projection)?;
     if canonical.len() > CONTROL_MESSAGE_BYTES_MAXIMUM {
@@ -1271,6 +2363,92 @@ fn canonical_decimal(value: &str) -> BoundaryResult<u64> {
 }
 
 impl MetadataHttpResponse {
+    pub fn repository_settings(
+        settings: &RepositorySettings,
+        consistency: &ConsistencyToken,
+        observed: CommitSequence,
+    ) -> crate::Result<Self> {
+        let tenant_boundary = public_uuid_text(settings.tenant_boundary.as_bytes())?;
+        let body = serde_json::json!({
+            "schemaVersion": "ogvcs.repository-metadata/repository-settings-result/v1",
+            "settingsGeneration": 1,
+            "settings": {
+                "schemaVersion": "ogvcs.repository-metadata/repository-settings/v1",
+                "repositoryFormat": settings.repository_format,
+                "requiredFeatures": settings.required_features,
+                "caseMode": match settings.case_mode {
+                    CaseMode::CaseSensitive => "case-sensitive",
+                    CaseMode::CaseFolded => "case-folded",
+                },
+                "pathProfile": settings.path_profile,
+                "platformProfile": settings.platform_profile,
+                "contentPolicyProfile": settings.content_policy_profile,
+                "structuralLimits": settings.structural_limits,
+                "tenantBoundary": tenant_boundary,
+            },
+            "observedCommitSequence": observed.get().to_string(),
+            "consistencyToken": consistency.as_str(),
+        });
+        if response_json_bytes(&body)? > SAFE_RESULT_BYTES_MAXIMUM {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        Ok(Self::new(
+            MetadataOperation::RepositoryGetSettings,
+            "success",
+            "json",
+            body,
+        ))
+    }
+
+    pub fn reference_read(
+        reference: &ReferenceRecord,
+        consistency: &ConsistencyToken,
+        observed: CommitSequence,
+    ) -> crate::Result<Self> {
+        let body = serde_json::json!({
+            "schemaVersion": "ogvcs.repository-metadata/reference-read-result/v1",
+            "referenceKind": match reference.kind {
+                ReferenceKind::Branch => "branch",
+                ReferenceKind::Tag => "tag",
+            },
+            "referenceName": reference.name.as_str(),
+            "target": reference.target.to_string(),
+            "generation": reference.generation.to_string(),
+            "commitSequence": reference.commit_sequence.get().to_string(),
+            "observedCommitSequence": observed.get().to_string(),
+            "consistencyToken": consistency.as_str(),
+        });
+        if response_json_bytes(&body)? > SAFE_RESULT_BYTES_MAXIMUM {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        Ok(Self::new(
+            MetadataOperation::ReferenceRead,
+            "success",
+            "json",
+            body,
+        ))
+    }
+
+    pub fn consistency_token(
+        consistency: &ConsistencyToken,
+        minimum: CommitSequence,
+    ) -> crate::Result<Self> {
+        let body = serde_json::json!({
+            "schemaVersion": "ogvcs.repository-metadata/consistency-token-result/v1",
+            "minimumCommitSequence": minimum.get().to_string(),
+            "consistencyToken": consistency.as_str(),
+        });
+        if response_json_bytes(&body)? > SAFE_RESULT_BYTES_MAXIMUM {
+            return Err(DomainError::new(DomainErrorCode::ObjectInvalid));
+        }
+        Ok(Self::new(
+            MetadataOperation::ConsistencyIssueToken,
+            "success",
+            "json",
+            body,
+        ))
+    }
+
     pub fn success_json(operation: MetadataOperation, mut body: Value) -> crate::Result<Self> {
         normalize_json_numbers(&mut body)
             .map_err(|_| DomainError::new(DomainErrorCode::ObjectInvalid))?;
@@ -1412,31 +2590,6 @@ impl MetadataHttpResponse {
         ))
     }
 
-    pub fn domain_error(operation: MetadataOperation, error: &DomainError) -> Self {
-        let mut safe_parameters = Map::new();
-        match error.code {
-            DomainErrorCode::ConsistencyTokenUnsatisfied
-            | DomainErrorCode::TransactionRetryExhausted => {
-                if let Some(retry_after @ 0..=86_400_000) = error.retry_after_ms {
-                    safe_parameters.insert("retryAfterMs".to_owned(), retry_after.into());
-                }
-            }
-            _ => {}
-        }
-        Self::new(
-            operation,
-            "domain-error",
-            "domain-error",
-            serde_json::json!({
-                "schemaVersion": "ogvcs.repository-metadata/domain-error/v1",
-                "code": error.code.name(),
-                "numericCode": error.code as u16,
-                "retryable": error.code.retryable(),
-                "safeParameters": safe_parameters,
-            }),
-        )
-    }
-
     fn new(
         operation: MetadataOperation,
         outcome: &'static str,
@@ -1444,7 +2597,7 @@ impl MetadataHttpResponse {
         body: Value,
     ) -> Self {
         Self {
-            schema_version: METADATA_SERVICE_RESPONSE_SCHEMA,
+            schema_version: METADATA_SERVICE_RESULT_BODY_SCHEMA,
             operation: operation.name(),
             outcome,
             carrier,
@@ -1585,6 +2738,90 @@ fn exact_members(body: &Map<String, Value>, expected: &[&str]) -> BoundaryResult
     } else {
         Ok(())
     }
+}
+
+fn closed_members(
+    body: &Map<String, Value>,
+    allowed: &[&str],
+    required: &[&str],
+) -> BoundaryResult<()> {
+    if body.keys().any(|key| !allowed.contains(&key.as_str()))
+        || required.iter().any(|key| !body.contains_key(*key))
+    {
+        input_invalid()
+    } else {
+        Ok(())
+    }
+}
+
+fn correlation_id<'a>(body: &'a Map<String, Value>, key: &str) -> BoundaryResult<&'a str> {
+    let value = text(body, key, 16, 128)?;
+    if ascii_token(value) {
+        Ok(value)
+    } else {
+        input_invalid()
+    }
+}
+
+fn ascii_token(value: &str) -> bool {
+    value
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'~' | b'-'))
+}
+
+fn protocol_identifier(value: &str) -> bool {
+    let (identifier, version) = match value.split_once('@') {
+        Some((identifier, version)) => {
+            if version.is_empty()
+                || version.bytes().any(|byte| !byte.is_ascii_digit())
+                || version.contains('@')
+            {
+                return false;
+            }
+            (identifier, Some(version))
+        }
+        None => (value, None),
+    };
+    let mut bytes = identifier.bytes();
+    let valid = bytes
+        .next()
+        .is_some_and(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
+        && bytes.all(|byte| {
+            byte.is_ascii_lowercase()
+                || byte.is_ascii_digit()
+                || matches!(byte, b'.' | b'_' | b'/' | b'-')
+        });
+    valid && version.is_none_or(|value| !value.is_empty())
+}
+
+fn extension_key(value: &str) -> bool {
+    let Some((identifier, version)) = value.rsplit_once('@') else {
+        return false;
+    };
+    !identifier.is_empty()
+        && protocol_identifier(identifier)
+        && !version.is_empty()
+        && version.bytes().all(|byte| byte.is_ascii_digit())
+}
+
+fn canonical_base64url(
+    value: &str,
+    minimum_decoded_bytes: usize,
+    maximum_decoded_bytes: usize,
+) -> bool {
+    if value
+        .bytes()
+        .any(|byte| !(byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-')))
+    {
+        return false;
+    }
+    base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(value)
+        .ok()
+        .is_some_and(|decoded| {
+            (minimum_decoded_bytes..=maximum_decoded_bytes).contains(&decoded.len())
+                && base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(decoded) == value
+        })
 }
 
 fn value_text(value: &Value, minimum: usize, maximum: usize) -> BoundaryResult<&str> {
@@ -1807,8 +3044,46 @@ fn optional_cursor(body: &Map<String, Value>, key: &str) -> BoundaryResult<Optio
 }
 
 fn canonical_json_bytes(value: &Value) -> BoundaryResult<Vec<u8>> {
-    serde_json::to_vec(&canonical_json(value.clone()))
-        .map_err(|_| MetadataServiceBoundaryError::InputInvalid)
+    let mut output = Vec::new();
+    write_jcs(value, &mut output)?;
+    Ok(output)
+}
+
+fn write_jcs(value: &Value, output: &mut Vec<u8>) -> BoundaryResult<()> {
+    match value {
+        Value::Null => output.extend_from_slice(b"null"),
+        Value::Bool(false) => output.extend_from_slice(b"false"),
+        Value::Bool(true) => output.extend_from_slice(b"true"),
+        Value::Number(number) => output.extend_from_slice(number.to_string().as_bytes()),
+        Value::String(value) => serde_json::to_writer(output, value)
+            .map_err(|_| MetadataServiceBoundaryError::InputInvalid)?,
+        Value::Array(values) => {
+            output.push(b'[');
+            for (index, value) in values.iter().enumerate() {
+                if index != 0 {
+                    output.push(b',');
+                }
+                write_jcs(value, output)?;
+            }
+            output.push(b']');
+        }
+        Value::Object(values) => {
+            let mut entries: Vec<_> = values.iter().collect();
+            entries.sort_by(|(left, _), (right, _)| left.encode_utf16().cmp(right.encode_utf16()));
+            output.push(b'{');
+            for (index, (key, value)) in entries.into_iter().enumerate() {
+                if index != 0 {
+                    output.push(b',');
+                }
+                serde_json::to_writer(&mut *output, key)
+                    .map_err(|_| MetadataServiceBoundaryError::InputInvalid)?;
+                output.push(b':');
+                write_jcs(value, output)?;
+            }
+            output.push(b'}');
+        }
+    }
+    Ok(())
 }
 
 fn normalize_json_numbers(value: &mut Value) -> BoundaryResult<()> {
@@ -1891,23 +3166,83 @@ fn normalize_json_numbers_inner(
     }
 }
 
-fn canonical_json(value: Value) -> Value {
-    match value {
-        Value::Array(values) => Value::Array(values.into_iter().map(canonical_json).collect()),
-        Value::Object(values) => {
-            let values: BTreeMap<_, _> = values
-                .into_iter()
-                .map(|(key, value)| (key, canonical_json(value)))
-                .collect();
-            Value::Object(values.into_iter().collect())
-        }
-        value => value,
-    }
-}
-
 fn inspect_json(value: &Value) -> BoundaryResult<()> {
     let mut state = JsonInspection::default();
     inspect_json_inner(value, 0, &mut state)
+}
+
+fn inspect_protocol_json_value(
+    value: &Value,
+    maximum_depth: usize,
+    maximum_nodes: usize,
+) -> BoundaryResult<()> {
+    let mut nodes = 0_usize;
+    inspect_protocol_json_value_inner(value, 0, maximum_depth, maximum_nodes, &mut nodes)
+}
+
+fn inspect_protocol_json_value_inner(
+    value: &Value,
+    depth: usize,
+    maximum_depth: usize,
+    maximum_nodes: usize,
+    nodes: &mut usize,
+) -> BoundaryResult<()> {
+    *nodes = nodes.saturating_add(1);
+    if depth > maximum_depth || *nodes > maximum_nodes {
+        return Err(MetadataServiceBoundaryError::LimitExceeded);
+    }
+    match value {
+        Value::Number(value) => {
+            let safe_unsigned = value
+                .as_u64()
+                .is_some_and(|value| value <= JSON_SAFE_INTEGER_MAXIMUM);
+            let safe_signed = value.as_i64().is_some_and(|value| {
+                value >= -(JSON_SAFE_INTEGER_MAXIMUM as i64)
+                    && value <= JSON_SAFE_INTEGER_MAXIMUM as i64
+            });
+            if safe_unsigned || safe_signed {
+                Ok(())
+            } else {
+                Err(MetadataServiceBoundaryError::LimitExceeded)
+            }
+        }
+        Value::String(value) if value.len() > JSON_STRING_BYTES_MAXIMUM => {
+            Err(MetadataServiceBoundaryError::LimitExceeded)
+        }
+        Value::Array(values) => {
+            if values.len() > PROTOCOL_JSON_ARRAY_ITEMS_MAXIMUM {
+                return Err(MetadataServiceBoundaryError::LimitExceeded);
+            }
+            for value in values {
+                inspect_protocol_json_value_inner(
+                    value,
+                    depth + 1,
+                    maximum_depth,
+                    maximum_nodes,
+                    nodes,
+                )?;
+            }
+            Ok(())
+        }
+        Value::Object(values) => {
+            if values.len() > JSON_OBJECT_MEMBERS_MAXIMUM
+                || values.keys().any(|key| key.len() > JSON_KEY_BYTES_MAXIMUM)
+            {
+                return Err(MetadataServiceBoundaryError::LimitExceeded);
+            }
+            for value in values.values() {
+                inspect_protocol_json_value_inner(
+                    value,
+                    depth + 1,
+                    maximum_depth,
+                    maximum_nodes,
+                    nodes,
+                )?;
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    }
 }
 
 #[derive(Default)]
@@ -2017,10 +3352,19 @@ impl<'de> Visitor<'de> for StrictValueVisitor {
     where
         E: serde::de::Error,
     {
+        if value.len() > JSON_STRING_BYTES_MAXIMUM {
+            return Err(E::custom("JSON resource limit exceeded"));
+        }
         Ok(Value::String(value.to_owned()))
     }
 
-    fn visit_string<E>(self, value: String) -> std::result::Result<Self::Value, E> {
+    fn visit_string<E>(self, value: String) -> std::result::Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        if value.len() > JSON_STRING_BYTES_MAXIMUM {
+            return Err(E::custom("JSON resource limit exceeded"));
+        }
         Ok(Value::String(value))
     }
 
@@ -2045,6 +3389,9 @@ impl<'de> Visitor<'de> for StrictValueVisitor {
     {
         let mut values = Vec::new();
         while let Some(value) = sequence.next_element::<StrictValue>()? {
+            if values.len() >= PROTOCOL_JSON_ARRAY_ITEMS_MAXIMUM {
+                return Err(A::Error::custom("JSON resource limit exceeded"));
+            }
             values.push(value.0);
         }
         Ok(Value::Array(values))
@@ -2056,6 +3403,9 @@ impl<'de> Visitor<'de> for StrictValueVisitor {
     {
         let mut values = Map::new();
         while let Some(key) = map.next_key::<String>()? {
+            if values.len() >= JSON_OBJECT_MEMBERS_MAXIMUM || key.len() > JSON_KEY_BYTES_MAXIMUM {
+                return Err(A::Error::custom("JSON resource limit exceeded"));
+            }
             if values.contains_key(&key) {
                 return Err(A::Error::custom("duplicate JSON member"));
             }
@@ -2068,4 +3418,64 @@ impl<'de> Visitor<'de> for StrictValueVisitor {
 
 fn input_invalid<T>() -> BoundaryResult<T> {
     Err(MetadataServiceBoundaryError::InputInvalid)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn authorized_success_uses_the_exact_ogvcs_041_response_envelope() {
+        let result = MetadataHttpResponse::success_json(
+            MetadataOperation::RepositoryGetSettings,
+            serde_json::json!({"settingsGeneration": 1}),
+        )
+        .unwrap();
+        let response =
+            MetadataResponseEnvelope::success_for_authorized_dispatch("correlation-0001", result)
+                .unwrap();
+        let response = serde_json::to_value(response).unwrap();
+        assert_eq!(
+            response,
+            serde_json::json!({
+                "schemaVersion": "ogvcs.protocol/response-envelope/v1",
+                "correlationId": "correlation-0001",
+                "success": true,
+                "body": {
+                    "schemaVersion": "ogvcs.repository-metadata/result-body/v1",
+                    "operation": "repository.get-settings",
+                    "outcome": "success",
+                    "carrier": "json",
+                    "body": {"settingsGeneration": 1},
+                },
+            })
+        );
+    }
+
+    #[test]
+    fn registered_transport_profile_forbids_compression_and_redirects_independently() {
+        let descriptor = MetadataOperation::RepositoryGetSettings.transport_descriptor();
+        let compressed = MetadataTransportRequest {
+            method: descriptor.method,
+            path: descriptor.path,
+            request_media_type: descriptor.request_media_type,
+            accept: descriptor.success_media_type,
+            content_coding: "gzip",
+            redirect_hops: 0,
+            control: b"{}",
+        };
+        assert_eq!(
+            validate_registered_transport_constraints(&compressed, descriptor),
+            Err(MetadataTransportError::CompressionForbidden)
+        );
+        let redirected = MetadataTransportRequest {
+            content_coding: "identity",
+            redirect_hops: 1,
+            ..compressed
+        };
+        assert_eq!(
+            validate_registered_transport_constraints(&redirected, descriptor),
+            Err(MetadataTransportError::RedirectForbidden)
+        );
+    }
 }

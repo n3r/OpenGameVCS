@@ -720,8 +720,9 @@ pub enum IdempotencyStatus {
     },
 }
 
-/// Framework-neutral response envelope.  OGVCS-041 owns routes, media types,
-/// and transport status codes; this contract intentionally binds none of them.
+/// Internal metadata result body nested inside the exact OGVCS-041
+/// `ResponseEnvelope`. This type is never a public wire root and cannot assign
+/// a protocol `ProblemDetails` code.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MetadataHttpResponse {
