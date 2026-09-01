@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opengamevcs.dev/schemas/cli-workspace/verified-workspace-report/v2",
+  "title": "OGVCS redacted verified workspace report v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "state", "rootDigest", "workspaceIdDigest", "repositoryIdDigest", "branchDigest", "baseline", "bindingVerification", "capabilityReceiptSha256", "stagedIntents"],
+  "properties": {
+    "schema": { "const": "ogvcs.cli-workspace/verified-workspace-report/v2" },
+    "state": { "const": "ready" },
+    "rootDigest": { "$ref": "#/$defs/digest" },
+    "workspaceIdDigest": { "$ref": "#/$defs/digest" },
+    "repositoryIdDigest": { "$ref": "#/$defs/digest" },
+    "branchDigest": { "$ref": "#/$defs/digest" },
+    "baseline": { "type": "string", "pattern": "^ogvcs:v1:snapshot:sha256:[0-9a-f]{64}$", "maxLength": 256 },
+    "bindingVerification": { "const": "public-service-verified" },
+    "capabilityReceiptSha256": { "$ref": "#/$defs/digest" },
+    "stagedIntents": { "type": "integer", "minimum": 0, "maximum": 10000 }
+  },
+  "$defs": { "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" } }
+}

@@ -1,6 +1,6 @@
 {
   "schema": "ogvcs.cli-workspace/exit-classes/v1",
-  "contractVersion": "0.1.0-rc.1",
+  "contractVersion": "0.2.0-rc.2",
   "classes": [
     { "name": "success", "exitCode": 0 },
     { "name": "input", "exitCode": 2 },

@@ -1793,29 +1793,29 @@ fn run_resolved(
         }
         [first, second, rest @ ..] if first == "diagnostics" && second == "preview" => {
             let values = named_values(rest, &["root"])?;
-            let data = diagnostics_preview(
+            let data = production::preview_verified_diagnostics(
                 Path::new(required_value(&values, "root")?),
-                &config,
-                provider,
+                &config.endpoint.value,
+                &production::UnavailableSecureCredentialProvider,
             )?;
             (
                 "DIAGNOSTICS_PREVIEW",
                 "A redacted diagnostic preview was prepared without writing a bundle.",
-                data,
+                serde_json::to_value(data).map_err(|_| internal_error())?,
             )
         }
         [first, second, rest @ ..] if first == "diagnostics" && second == "create" => {
             let values = named_values(rest, &["root", "name"])?;
-            let data = create_diagnostics(
+            let data = production::create_verified_diagnostics(
                 Path::new(required_value(&values, "root")?),
                 required_value(&values, "name")?,
-                &config,
-                provider,
+                &config.endpoint.value,
+                &production::UnavailableSecureCredentialProvider,
             )?;
             (
                 "DIAGNOSTICS_CREATED",
                 "A redacted diagnostic artifact was created explicitly.",
-                data,
+                serde_json::to_value(data).map_err(|_| internal_error())?,
             )
         }
         _ => return Err(input_error()),

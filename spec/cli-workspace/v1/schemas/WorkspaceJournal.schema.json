@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opengamevcs.dev/schemas/cli-workspace/workspace-journal/v2",
+  "title": "OGVCS verified workspace transition journal v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "formatVersion", "operation", "state", "workspaceId", "rootDigest", "priorMetadataDigest", "desiredMetadataDigest"],
+  "properties": {
+    "schema": { "const": "ogvcs.cli-workspace/workspace-journal/v2" },
+    "formatVersion": { "const": 2 },
+    "operation": { "enum": ["create", "configure"] },
+    "state": { "enum": ["prepared", "complete"] },
+    "workspaceId": { "type": "string", "pattern": "^wsv2\\.[0-9a-f]{64}$" },
+    "rootDigest": { "$ref": "#/$defs/digest" },
+    "priorMetadataDigest": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
+    "desiredMetadataDigest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": { "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" } }
+}

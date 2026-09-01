@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opengamevcs.dev/schemas/cli-workspace/staging/v1",
+  "title": "OGVCS bounded local staging journal v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "formatVersion", "generation", "intents"],
+  "properties": {
+    "schema": { "const": "ogvcs.cli-workspace/staging/v1" },
+    "formatVersion": { "const": 1 },
+    "generation": { "type": "integer", "minimum": 0 },
+    "intents": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["intentId", "kind", "state", "fileId", "allocationReceipt", "allocationIdempotencyKeySha256", "allocationExpiresAtUnixMs", "sourcePath", "destinationPath", "sourceRepositoryKey", "destinationRepositoryKey", "trashName", "createdAtUnixMs"],
+        "properties": {
+          "intentId": { "type": "string", "pattern": "^wsi1\\.[0-9a-f]{64}$" },
+          "kind": { "enum": ["add", "move", "delete"] },
+          "state": { "enum": ["prepared", "applied", "reverting"] },
+          "fileId": { "type": "string", "pattern": "^fid:[0-9a-f]{32}$" },
+          "allocationReceipt": { "type": ["string", "null"], "pattern": "^far1\\.[A-Za-z0-9_-]{43}$", "maxLength": 48 },
+          "allocationIdempotencyKeySha256": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
+          "allocationExpiresAtUnixMs": { "type": ["integer", "null"], "minimum": 1 },
+          "sourcePath": { "type": ["string", "null"], "maxLength": 4096 },
+          "destinationPath": { "type": ["string", "null"], "maxLength": 4096 },
+          "sourceRepositoryKey": { "type": ["string", "null"], "maxLength": 8192 },
+          "destinationRepositoryKey": { "type": ["string", "null"], "maxLength": 8192 },
+          "trashName": { "type": ["string", "null"], "maxLength": 128 },
+          "createdAtUnixMs": { "type": "integer", "minimum": 1 }
+        },
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": { "const": "add" },
+              "allocationReceipt": { "type": "string" },
+              "allocationIdempotencyKeySha256": { "type": "string" },
+              "allocationExpiresAtUnixMs": { "type": "integer" },
+              "sourcePath": { "const": null },
+              "destinationPath": { "type": "string" },
+              "sourceRepositoryKey": { "const": null },
+              "destinationRepositoryKey": { "type": "string" },
+              "trashName": { "const": null }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": { "const": "move" },
+              "allocationReceipt": { "const": null },
+              "allocationIdempotencyKeySha256": { "const": null },
+              "allocationExpiresAtUnixMs": { "const": null },
+              "sourcePath": { "type": "string" },
+              "destinationPath": { "type": "string" },
+              "sourceRepositoryKey": { "type": "string" },
+              "destinationRepositoryKey": { "type": "string" },
+              "trashName": { "const": null }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": { "const": "delete" },
+              "allocationReceipt": { "const": null },
+              "allocationIdempotencyKeySha256": { "const": null },
+              "allocationExpiresAtUnixMs": { "const": null },
+              "sourcePath": { "type": "string" },
+              "destinationPath": { "const": null },
+              "sourceRepositoryKey": { "type": "string" },
+              "destinationRepositoryKey": { "const": null },
+              "trashName": { "type": "string" }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

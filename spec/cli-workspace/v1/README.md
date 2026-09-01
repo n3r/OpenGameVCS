@@ -1,80 +1,137 @@
-# OGVCS CLI/workspace contract v1 — local-only candidate
+# OGVCS CLI/workspace contract v1 — verified local foundation candidate
 
-**Contract version:** `0.1.0-rc.1`
-**Status:** candidate; not a completion claim for OGVCS-011.
+**Contract version:** `0.2.0-rc.2`
+**Status:** candidate; not a completion claim for OGVCS-011 and not remote E2E evidence.
 
-This contract freezes only the local foundation tranche implemented by
-`client/native-cli/rust`. It defines configuration precedence and source
-reporting, result envelopes/exit classes, private workspace metadata,
-recovery, noninteractive credential availability, and redacted diagnostics.
+This artifact set freezes the local OGVCS-011 tranche implemented by
+`client/native-cli/rust`: exact nonsecret configuration precedence, stable
+result/exit shapes, secret-safe credential-provider invocation, typed public
+service ports, verified workspace metadata and recovery, bounded local staged
+intent, progress/cancellation seams, signal handling, and redacted diagnostics.
 
-It has no OGVCS-006 route or capability binding, no OGVCS-008 lifecycle
-binding, no OGVCS-009 identity-session binding, and no OGVCS-041 negotiated
-message binding. Thus it **must not** be used as a network, repository
-discovery, sync, submit, status, lock, or working-tree-mutation contract.
+The first-party binary deliberately installs `UnavailablePublicRoutes`.
+OGVCS-006 repository discovery, OGVCS-008 lifecycle/FileID authority, and
+OGVCS-009 authentication do not yet publish the owning routes needed by this
+client, so real create/configure/staging commands fail with
+`PUBLIC_ROUTE_UNAVAILABLE` before local mutation. Executable contract tests use
+typed fakes that return existing predecessor facts; they are not a private
+database adapter or a remote-journey claim.
 
-## Stable result shape
+## Stable command results and configuration
 
-Every JSON result uses schema `ogvcs.cli-workspace/result/v1`, includes this
-contract version and the exact companion-manifest SHA-256, a boolean `ok`, one of the exit classes in
-[`registries/exit-classes.json`](registries/exit-classes.json), a stable code,
-and an object-valued `data` member. Failures also carry a safe human message
-and one actionable `nextStep`. Implementations must not expose underlying path,
-credential, identity, or server error text in either field.
+Every JSON result uses `ogvcs.cli-workspace/result/v1`, carries this contract
+version and the exact companion-manifest SHA-256, and returns one registered
+exit class, a stable code, an object-valued `data` member, safe text, and one
+actionable next step. Machine failures use stdout only; human failures use
+stderr and do not depend on color.
 
-## Configuration
-
-Each nonsecret field is resolved independently in this exact order:
+Each nonsecret configuration field resolves independently in this order:
 
 `flag > environment > workspace > user profile > system default`
 
-The candidate fields are `endpoint`, `profile`, and `output`. `endpoint` is a
-safe HTTP(S) endpoint without userinfo, query, or fragment; `profile` is a
-bounded label; and `output` is `human` or `json`. Configurations containing
-secret-like keys are rejected before a source report is produced. The report
-schema is [`schemas/ConfigResolution.schema.json`](schemas/ConfigResolution.schema.json).
+The bounded fields are `endpoint`, `profile`, and `output`. Secret-like config
+keys are rejected. Secrets are accepted only from an explicit headless
+environment provider or an OS credential-store interface, are borrowed only
+during synchronous authentication, are never `Clone`, `Debug`, or serializable,
+and are overwritten on drop. Noninteractive commands never prompt.
 
-## Workspace declaration and recovery
+## Verified workspace and capability boundary
 
-`workspace create` stores a schema-versioned `.ogvcs/workspace.json` only in a
-private owned root. It stages then atomically publishes the control directory;
-an interruption after publish leaves an initializing journal record, and
-`workspace open` returns `WORKSPACE_RECOVERY_REQUIRED` until `workspace
-recover` checks the matching record and marks it complete. The completed record
-is retained as part of the local atomicity proof. No operation makes a network
-request. The binary does not yet install a signal handler or expose progress;
-the cancellation points exercised by the vectors are a cooperative library
-seam. The on-disk and redacted command-report schemas are
-[`WorkspaceMetadata.schema.json`](schemas/WorkspaceMetadata.schema.json) and
-[`WorkspaceReport.schema.json`](schemas/WorkspaceReport.schema.json); the
-journal schema is
-[`InitializationRecord.schema.json`](schemas/InitializationRecord.schema.json).
-The root and namespace ancestors must not be concurrently replaced by a
-process with the same operating-system authority. Final links/reparse points
-are rejected, but this candidate does not claim directory-handle-relative
-protection against a continuously hostile same-authority process.
+The v2 workspace format stores a public-service binding only after the typed
+route supplies authentication, discovery, capability selection, binding
+validation, and later side-effect-free FileID fact presentation. It pins the exact OGVCS-003 authorization,
+OGVCS-004 path, OGVCS-002 repository, and OGVCS-041 protocol registry digests,
+the portable path profile, repository identity, snapshot baseline, subject
+digest, and authority/security epochs. Raw caller declarations cannot create a
+verified workspace. The stored 32-hex repository identity is the exact 16-byte
+form of the OGVCS-006 RFC 4122 UUID, not an independently invented identifier.
 
-Repository/branch/baseline/spec inputs must already be opaque lower-case
-32-byte digests; the candidate does not accept raw declarations. They are
-stored with `verification: "unverified-local-declaration"`, not as claims that
-the declarations identify an OGVCS server object or protocol.
+This client validates the selected facts and a receipt digest, then requires
+the route adapter to validate the binding. It does **not** possess a session
+key or locally MAC-verify the complete OGVCS-041 `NegotiationReceipt` claims in
+fixed MAC-first order. A future public adapter must provide a branded verified
+receipt or the complete claims/MAC verifier before the binding is production
+trusted. Until then, `public-service-verified` describes the typed adapter
+contract exercised by fakes, not independent remote proof.
 
-## Credential and diagnostic boundaries
+Creation and configuration use pending metadata plus a digest-bound journal.
+Every mutator requires a complete journal whose desired digest equals current
+metadata. Recovery commits a valid prepared transition or removes a validated
+stale pending file. Removal publishes a deterministic, root-bound record and
+tombstone; a crash before detach restores the ready command path, while a crash
+after detach is safely completed by retry/recovery. Hostile links/reparse
+points or mismatched records fail closed.
 
-The provider seam exposes only `available`, `unavailable`, or
-`headless-required`; it intentionally has no credential-value retrieval API.
-`--non-interactive` never prompts and returns `AUTHENTICATION_REQUIRED` if
-availability is not already supplied. Diagnostics are previewed before any
-write, require explicit creation, and contain only redacted digests and source
-classes—not paths, identities, endpoints, declaration inputs, or secrets.
+The original v1 unverified declaration schemas remain authenticated for
+compatibility with the earlier library vectors, but the first-party binary no
+longer creates them.
 
-## Contract validation
+## Workspace-confined staging
 
-`manifest.json` authenticates every shipped contract artifact. The Rust binding
-and its copied executable vectors are generated from that manifest and checked
-for drift. Run `npm test` from this directory, then run
-`node --test test/*.test.mjs` for semantic-mutation and packed-package proofs.
-The validator independently checks manifest bytes, validates example instances
-against each schema, and executes the six concrete reference vectors. Runtime
-execution and hostile recovery coverage also live in the Rust crate's bounded
-test suite; none of these checks contacts a server or runs a scale workload.
+Add/move/delete/revert validate OGVCS-004 canonical paths and collision keys,
+preserve server-issued FileIDs, write a bounded local intent journal, and
+report `uploadsStarted: false`, `submitStarted: false`, and remote durable state
+`unchanged`. They never upload or submit. Add is deliberately narrower than a
+FileID allocation journey: its port may only present a previously completed,
+idempotency-reconciled OGVCS-006 allocation. It must not invoke
+`file-id.allocate`. The typed handoff binds repository/path facts and carries
+the FileID, expiry, opaque `far1` receipt, and allocation idempotency-key digest.
+The private owner-checked journal retains the receipt for first registration;
+list/progress/result/diagnostic surfaces expose at most its digest. A lost
+handoff response publishes no local intent, while allocation ambiguity remains
+the predecessor adapter's responsibility.
+
+Linux uses pinned directory FDs plus `renameat2(RENAME_NOREPLACE)`; macOS uses
+pinned directory FDs plus `renameatx_np(RENAME_EXCL)`. Both sync source and
+destination parents. Windows uses a source handle opened with delete access,
+reparse-checked pinned ancestor/destination-parent handles, and
+`SetFileInformationByHandle` with replacement disabled. Windows compilation is
+checked locally; hosted Windows runtime evidence remains pending until an
+existing default-branch workflow can dispatch this branch.
+
+Workspace metadata requires owner-only Unix modes with macOS extended ACLs
+rejected. Windows requires the current owner, permits granting ACEs only for
+the owner, LocalSystem, and Administrators, rejects reparse/multi-link metadata
+objects, and requires a protected DACL so future inheritance cannot broaden
+access.
+
+The exclusive mutation file lock prevents races among cooperating CLI
+processes. A malicious process running as the same OS authority can still
+unlink/replace a lock namespace entry on Unix or exploit Windows delete-sharing
+semantics; this candidate does not claim a security boundary against that
+same-authority attacker.
+
+## Cancellation, diagnostics, and remaining scope
+
+Progress events report phase/items/bytes and optional resume tokens. SIGINT and
+SIGTERM on Unix and console cancellation on Windows set a process cancellation
+source. Cancellation before publication cleans temporary state; cancellation
+after a durable journal returns a recovery token. The irreversible part of
+removal ignores cooperative cancellation and uses the deterministic removal
+record for process/host-crash reconciliation.
+
+Diagnostics are preview-only until explicitly created. Verified diagnostic
+artifacts contain only digests, pinned public registry hashes, provider kind
+and availability, endpoint scheme, and counts—never local paths, locators,
+endpoints, subjects, profiles, or secret bytes.
+
+This tranche does not implement FileID allocation/reconciliation, sync, submit,
+status/index reconciliation, locks/edit intent, materialization, or any remote
+network route. OGVCS-011 remains Todo until the public predecessor routes,
+receipt verification, and hosted three-OS journey evidence are integrated.
+
+## Validation
+
+`manifest.json` authenticates every shipped contract artifact. The Rust
+binding and executable vectors are generated from it. The bounded gates are:
+
+```sh
+node scripts/generate.mjs --check
+node validate-spec.mjs
+node --test test/*.test.mjs
+node ../../../client/native-cli/rust/scripts/sync-contract.mjs --check
+cargo fmt --manifest-path ../../../client/native-cli/rust/Cargo.toml -- --check
+cargo test --manifest-path ../../../client/native-cli/rust/Cargo.toml --locked --offline
+cargo clippy --manifest-path ../../../client/native-cli/rust/Cargo.toml --locked --offline --all-targets -- -D warnings
+../../../client/native-cli/rust/scripts/test-packed.sh
+```

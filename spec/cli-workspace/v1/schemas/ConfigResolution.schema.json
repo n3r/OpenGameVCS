@@ -7,7 +7,7 @@
   "required": ["schema", "contractVersion", "endpoint", "profile", "output"],
   "properties": {
     "schema": { "const": "ogvcs.cli-workspace/config-resolution/v1" },
-    "contractVersion": { "const": "0.1.0-rc.1" },
+    "contractVersion": { "const": "0.2.0-rc.2" },
     "endpoint": { "$ref": "#/$defs/sourcedEndpoint" },
     "profile": { "$ref": "#/$defs/sourcedProfile" },
     "output": { "$ref": "#/$defs/sourcedOutput" }

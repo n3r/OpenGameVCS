@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::BTreeSet;
 use std::env;
+use std::fmt;
 use std::fs::{self, File, OpenOptions};
 use std::io;
 use std::path::{Path, PathBuf};
@@ -55,6 +56,7 @@ pub const PROTOCOL_REGISTRY_SET_SHA256: &str =
     "2b1913f9451b9f99966a24942a262846f07662b17cbb41ad6eea6474c23b4352";
 pub const REPOSITORY_REGISTRY_SHA256: &str =
     "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6";
+pub const FILE_ID_ALLOCATION_SCHEMA: &str = "ogvcs.repository-metadata/file-id-allocation/v1";
 pub const REQUIRED_PROTOCOL_FEATURES: &[&str] = &[
     "ogvcs.receipt.hmac-sha256@1",
     "ogvcs.stream.explicit-terminal@1",
@@ -143,6 +145,28 @@ pub trait SecureCredentialProvider {
         transport: &mut dyn AuthenticationTransport,
         cancellation: &dyn Cancellation,
     ) -> Result<AuthenticationSession, CliError>;
+}
+
+#[derive(Default)]
+pub struct UnavailableSecureCredentialProvider;
+
+impl SecureCredentialProvider for UnavailableSecureCredentialProvider {
+    fn kind(&self) -> &'static str {
+        "unavailable"
+    }
+
+    fn status(&self) -> CredentialStatus {
+        CredentialStatus::Unavailable
+    }
+
+    fn invoke(
+        &self,
+        _: &AuthenticationRequest,
+        _: &mut dyn AuthenticationTransport,
+        _: &dyn Cancellation,
+    ) -> Result<AuthenticationSession, CliError> {
+        Err(authentication_required())
+    }
 }
 
 /// Explicit headless provider. The secret is read from the named environment
@@ -322,6 +346,125 @@ pub struct CapabilitySelection {
     pub expires_at_unix_ms: u64,
 }
 
+/// OGVCS-006 allocation authority retained for the later first registration.
+///
+/// Debug output is always redacted, and the public type is neither cloneable
+/// nor serializable. It can only be transferred into the private,
+/// owner-checked staging journal for retention across process exits.
+#[derive(Eq, PartialEq)]
+pub struct FileIdAllocationReceipt(String);
+
+impl FileIdAllocationReceipt {
+    pub fn new(value: String) -> Result<Self, CliError> {
+        if valid_allocation_receipt(&value) {
+            Ok(Self(value))
+        } else {
+            Err(incompatible_service_facts())
+        }
+    }
+
+    /// Exposes the opaque receipt only to a future OGVCS-006 registration
+    /// adapter. It must never be included in human/JSON diagnostics.
+    pub fn expose_to_registration(&self) -> &str {
+        &self.0
+    }
+
+    fn zeroize(&mut self) {
+        zeroize_string(&mut self.0);
+    }
+
+    fn into_persisted(mut self) -> PersistedFileIdAllocationReceipt {
+        PersistedFileIdAllocationReceipt(std::mem::take(&mut self.0))
+    }
+}
+
+impl fmt::Debug for FileIdAllocationReceipt {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("FileIdAllocationReceipt(<redacted>)")
+    }
+}
+
+impl Drop for FileIdAllocationReceipt {
+    fn drop(&mut self) {
+        self.zeroize();
+    }
+}
+
+/// Serializable only through the private staging-state type. The public
+/// handoff receipt deliberately implements neither `Clone` nor `Serialize`.
+#[derive(Eq, PartialEq)]
+struct PersistedFileIdAllocationReceipt(String);
+
+impl PersistedFileIdAllocationReceipt {
+    fn expose_to_registration(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Debug for PersistedFileIdAllocationReceipt {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("PersistedFileIdAllocationReceipt(<redacted>)")
+    }
+}
+
+impl Serialize for PersistedFileIdAllocationReceipt {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for PersistedFileIdAllocationReceipt {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        if valid_allocation_receipt(&value) {
+            Ok(Self(value))
+        } else {
+            Err(serde::de::Error::custom(
+                "invalid OGVCS-006 FileID allocation receipt",
+            ))
+        }
+    }
+}
+
+impl Drop for PersistedFileIdAllocationReceipt {
+    fn drop(&mut self) {
+        zeroize_string(&mut self.0);
+    }
+}
+
+fn zeroize_string(value: &mut str) {
+    // SAFETY: the string is exclusively borrowed, and overwriting its existing
+    // UTF-8 bytes with zero does not change length/capacity or violate UTF-8.
+    for byte in unsafe { value.as_bytes_mut() } {
+        // SAFETY: every pointer is valid and exclusively borrowed.
+        unsafe { std::ptr::write_volatile(byte, 0) };
+    }
+    compiler_fence(Ordering::SeqCst);
+}
+
+/// A completed OGVCS-006 allocation presented by its owning predecessor.
+///
+/// This is a handoff envelope, not a newly assigned wire result. The exact
+/// idempotency key remains with the allocation owner; only its digest crosses
+/// this boundary so the private journal can bind the retained receipt without
+/// exposing or trying to recover the predecessor mutation itself.
+#[derive(Debug, Eq, PartialEq)]
+pub struct PresentedFileIdAllocation {
+    pub allocation_schema_version: String,
+    pub repository_id: String,
+    pub repository_path_key: String,
+    pub file_id: String,
+    pub allocation_receipt: FileIdAllocationReceipt,
+    pub allocation_idempotency_key_sha256: String,
+    pub expires_at_unix_ms: u64,
+}
+
 pub trait RepositoryPublicRoutes: AuthenticationTransport {
     fn authentication_transport(&mut self) -> &mut dyn AuthenticationTransport;
 
@@ -349,13 +492,18 @@ pub trait RepositoryPublicRoutes: AuthenticationTransport {
         cancellation: &dyn Cancellation,
     ) -> Result<(), CliError>;
 
-    fn reserve_file_id(
+    /// Presents a previously completed FileID allocation without mutation.
+    ///
+    /// Implementations MUST NOT call `file-id.allocate` from this method. The
+    /// owner of that idempotent mutation must reconcile request/lost-response
+    /// outcomes before handing this complete artifact to local staging.
+    fn present_preallocated_file_id(
         &mut self,
         session: &AuthenticationSession,
         binding: &VerifiedBinding,
         repository_path_key: &str,
         cancellation: &dyn Cancellation,
-    ) -> Result<String, CliError>;
+    ) -> Result<PresentedFileIdAllocation, CliError>;
 
     fn resolve_file_id(
         &mut self,
@@ -415,14 +563,20 @@ impl RepositoryPublicRoutes for UnavailablePublicRoutes {
         Err(route_unavailable("metadata.binding-validate"))
     }
 
-    fn reserve_file_id(
+    fn present_preallocated_file_id(
         &mut self,
         _: &AuthenticationSession,
         _: &VerifiedBinding,
         _: &str,
         _: &dyn Cancellation,
-    ) -> Result<String, CliError> {
-        Err(route_unavailable("metadata.file-id-allocate"))
+    ) -> Result<PresentedFileIdAllocation, CliError> {
+        Err(CliError::new(
+            ExitClass::Unavailable,
+            "FILE_ID_ALLOCATION_HANDOFF_UNAVAILABLE",
+            "No completed OGVCS-006 FileID allocation was presented to local staging.",
+            "Allocate and reconcile the FileID through its owning public adapter, then retry with the complete receipt-bearing handoff.",
+        )
+        .with_data(json!({"interface": "file-id-allocation-handoff/v1", "mutationStarted": false, "remoteDurableState": "unchanged-by-this-command"})))
     }
 
     fn resolve_file_id(
@@ -536,7 +690,7 @@ struct MutationLock {
 
 impl MutationLock {
     fn acquire(root: &Path) -> Result<Self, CliError> {
-        let path = checked_control(root)?.join("mutation-v2.lock");
+        let path = root.join(".ogvcs-mutation-v2.lock");
         let mut options = OpenOptions::new();
         options.read(true).write(true).create(true);
         #[cfg(not(windows))]
@@ -551,8 +705,6 @@ impl MutationLock {
         #[cfg(not(windows))]
         {
             use std::os::unix::fs::MetadataExt;
-            file.set_permissions(fs::Permissions::from_mode(0o600))
-                .map_err(|_| workspace_write_unavailable())?;
             let metadata = file.metadata().map_err(|_| workspace_write_unavailable())?;
             // SAFETY: geteuid has no preconditions.
             if !metadata.is_file()
@@ -561,6 +713,8 @@ impl MutationLock {
             {
                 return Err(unsafe_path());
             }
+            file.set_permissions(fs::Permissions::from_mode(0o600))
+                .map_err(|_| workspace_write_unavailable())?;
             super::ensure_no_extended_acl(&file)?;
             // SAFETY: file owns a valid descriptor and flock is process-safe.
             if unsafe {
@@ -751,8 +905,7 @@ fn validate_authentication_session(session: &AuthenticationSession) -> Result<()
 }
 
 fn validate_discovery(discovery: &RepositoryDiscovery) -> Result<(), CliError> {
-    if discovery.repository_id_hex.len() != 32
-        || !discovery.repository_id_hex.bytes().all(is_lower_hex)
+    if repository_uuid_from_hex(&discovery.repository_id_hex).is_none()
         || discovery.branch.is_empty()
         || discovery.branch.len() > 512
         || discovery.branch.contains('\0')
@@ -865,6 +1018,15 @@ struct WorkspaceJournal {
     desired_metadata_digest: String,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RemovalRecord {
+    schema: String,
+    format_version: u32,
+    root_digest: String,
+    workspace_id_digest: String,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VerifiedWorkspaceReport {
@@ -878,6 +1040,112 @@ pub struct VerifiedWorkspaceReport {
     pub binding_verification: &'static str,
     pub capability_receipt_sha256: String,
     pub staged_intents: usize,
+}
+
+pub const VERIFIED_DIAGNOSTIC_SCHEMA: &str = "ogvcs.cli-workspace/verified-diagnostic-preview/v2";
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VerifiedDiagnosticPreview {
+    pub schema: &'static str,
+    pub preview: bool,
+    pub written: bool,
+    pub workspace_state: &'static str,
+    pub workspace_root_digest: String,
+    pub workspace_id_digest: String,
+    pub repository_id_digest: String,
+    pub branch_digest: String,
+    pub staged_intents: usize,
+    pub credential_provider_kind: &'static str,
+    pub credential_status: CredentialStatus,
+    pub endpoint_scheme: &'static str,
+    pub authorization_registry_sha256: &'static str,
+    pub path_registry_sha256: &'static str,
+    pub protocol_registry_set_sha256: &'static str,
+    pub repository_registry_sha256: &'static str,
+    pub redaction_policy: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub artifact_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub artifact_digest: Option<String>,
+}
+
+pub fn preview_verified_diagnostics(
+    root: &Path,
+    endpoint: &str,
+    provider: &dyn SecureCredentialProvider,
+) -> Result<VerifiedDiagnosticPreview, CliError> {
+    let root = validated_root(root)?;
+    let metadata = read_ready_metadata(&root)?;
+    let staging = read_staging_state(&root)?;
+    let endpoint_scheme = if endpoint.starts_with("https://") {
+        "https"
+    } else if endpoint.starts_with("http://") {
+        "http"
+    } else {
+        return Err(input_error());
+    };
+    Ok(VerifiedDiagnosticPreview {
+        schema: VERIFIED_DIAGNOSTIC_SCHEMA,
+        preview: true,
+        written: false,
+        workspace_state: "ready",
+        workspace_root_digest: metadata.root_digest,
+        workspace_id_digest: digest_text(&metadata.workspace_id),
+        repository_id_digest: digest_text(&metadata.binding.repository_id_hex),
+        branch_digest: digest_text(&metadata.binding.branch),
+        staged_intents: staging.intents.len(),
+        credential_provider_kind: provider.kind(),
+        credential_status: provider.status(),
+        endpoint_scheme,
+        authorization_registry_sha256: AUTHORIZATION_REGISTRY_SHA256,
+        path_registry_sha256: PATH_REGISTRY_SHA256,
+        protocol_registry_set_sha256: PROTOCOL_REGISTRY_SET_SHA256,
+        repository_registry_sha256: REPOSITORY_REGISTRY_SHA256,
+        redaction_policy: "v2-no-paths-locators-identities-endpoints-or-secrets",
+        artifact_name: None,
+        artifact_digest: None,
+    })
+}
+
+pub fn create_verified_diagnostics(
+    root: &Path,
+    artifact_name: &str,
+    endpoint: &str,
+    provider: &dyn SecureCredentialProvider,
+) -> Result<VerifiedDiagnosticPreview, CliError> {
+    if artifact_name.is_empty()
+        || artifact_name.len() > 64
+        || artifact_name.starts_with('.')
+        || !artifact_name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+    {
+        return Err(input_error());
+    }
+    let root = validated_root(root)?;
+    let _lock = MutationLock::acquire(&root)?;
+    let mut artifact = preview_verified_diagnostics(&root, endpoint, provider)?;
+    artifact.preview = false;
+    artifact.written = true;
+    let bytes = serde_json::to_vec(&artifact).map_err(|_| internal_error())?;
+    let diagnostics = checked_control(&root)?.join("diagnostics-v2");
+    match fs::symlink_metadata(&diagnostics) {
+        Ok(metadata) if !is_link_or_reparse(&metadata) && metadata.is_dir() => {
+            super::ensure_private_directory(&diagnostics)?;
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            super::create_private_directory(&diagnostics)?;
+            sync_directory(&checked_control(&root)?)?;
+        }
+        _ => return Err(unsafe_path()),
+    }
+    let destination = diagnostics.join(artifact_name);
+    super::write_json_new(&destination, &artifact)?;
+    sync_directory(&diagnostics)?;
+    artifact.artifact_name = Some(artifact_name.to_owned());
+    artifact.artifact_digest = Some(digest_bytes(&bytes));
+    Ok(artifact)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -909,6 +1177,9 @@ pub fn create_verified_workspace(
         &request.authentication,
     )?;
     let root = validated_root(&request.root)?;
+    if removal_record_path(&root).exists() || removal_tombstone_path(&root).exists() {
+        return Err(recovery_required());
+    }
     if control_path(&root).exists() {
         return Err(workspace_error(
             "WORKSPACE_EXISTS",
@@ -960,7 +1231,18 @@ pub fn create_verified_workspace(
     routes.validate_binding(&session, &binding, cancellation)?;
     cancellation.check("before-local-publication")?;
     progress.emit(&ProgressEvent::phase(OperationPhase::Preflight, 3, Some(4)))?;
-    publish_verified_workspace(&root, binding, cancellation)?;
+    let _lock = MutationLock::acquire(&root)?;
+    if removal_record_path(&root).exists() || removal_tombstone_path(&root).exists() {
+        return Err(recovery_required());
+    }
+    if control_path(&root).exists() {
+        return Err(workspace_error(
+            "WORKSPACE_EXISTS",
+            "A workspace control directory already exists at this root.",
+            "Open, recover, or remove the existing workspace before creating another one.",
+        ));
+    }
+    publish_verified_workspace(&root, binding, cancellation, progress)?;
     progress.emit(&ProgressEvent::phase(OperationPhase::Complete, 4, Some(4)))?;
     open_verified_workspace(&root)
 }
@@ -1009,6 +1291,7 @@ fn publish_verified_workspace(
     root: &Path,
     binding: VerifiedBinding,
     cancellation: &dyn Cancellation,
+    progress: &mut dyn ProgressSink,
 ) -> Result<(), CliError> {
     let workspace_id = format!("wsv2.{}", random_hex(32)?);
     let root_digest = digest_path(root);
@@ -1050,6 +1333,10 @@ fn publish_verified_workspace(
     }
     fs::rename(&stage, control_path(root)).map_err(|_| workspace_write_unavailable())?;
     sync_directory(root)?;
+    progress.emit(&ProgressEvent {
+        resume_token: Some(digest_text("workspace-recover")),
+        ..ProgressEvent::phase(OperationPhase::Journal, 3, Some(4))
+    })?;
     if cancellation.is_cancelled() {
         return Err(cancelled_local(
             "after-control-publication",
@@ -1083,6 +1370,14 @@ pub fn recover_verified_workspace(
 ) -> Result<VerifiedWorkspaceReport, CliError> {
     let root = validated_root(root)?;
     let _lock = MutationLock::acquire(&root)?;
+    if let Some(removed) = reconcile_removal(&root)? {
+        return Err(workspace_error(
+            "WORKSPACE_REMOVED",
+            "An interrupted local workspace removal was completed safely.",
+            "Create a new verified workspace if this root should be used again.",
+        )
+        .with_data(serde_json::to_value(removed).map_err(|_| internal_error())?));
+    }
     progress.emit(&ProgressEvent::phase(OperationPhase::Recovery, 0, Some(2)))?;
     let metadata = read_verified_metadata(&root)?;
     validate_verified_metadata_common(&metadata, &root)?;
@@ -1237,6 +1532,15 @@ pub fn remove_verified_workspace(
     options: RemoveWorkspaceOptions,
     cancellation: &dyn Cancellation,
 ) -> Result<RemoveWorkspaceReport, CliError> {
+    remove_verified_workspace_with_progress(root, options, cancellation, &mut DiscardProgress)
+}
+
+pub fn remove_verified_workspace_with_progress(
+    root: &Path,
+    options: RemoveWorkspaceOptions,
+    cancellation: &dyn Cancellation,
+    progress: &mut dyn ProgressSink,
+) -> Result<RemoveWorkspaceReport, CliError> {
     if !options.confirmed {
         return Err(CliError::new(
             ExitClass::InteractionRequired,
@@ -1248,6 +1552,9 @@ pub fn remove_verified_workspace(
     }
     let root = validated_root(root)?;
     let _lock = MutationLock::acquire(&root)?;
+    if let Some(removed) = reconcile_removal(&root)? {
+        return Ok(removed);
+    }
     let metadata = read_ready_metadata(&root)?;
     let staging = read_staging_state(&root)?;
     if !staging.intents.is_empty() {
@@ -1258,25 +1565,113 @@ pub fn remove_verified_workspace(
         ));
     }
     cancellation.check("before-workspace-remove")?;
-    let control = control_path(&root);
-    let tombstone = root.join(format!(".ogvcs-removed-v2-{}", random_hex(16)?));
-    fs::rename(&control, &tombstone).map_err(|_| workspace_write_unavailable())?;
-    sync_directory(&root)?;
-    if cancellation.is_cancelled() {
-        return Err(cancelled_local(
-            "after-workspace-detach",
-            Some(digest_path(&tombstone)),
-        ));
-    }
-    validate_removal_tree(&tombstone, 64)?;
-    fs::remove_dir_all(&tombstone).map_err(|_| workspace_write_unavailable())?;
-    sync_directory(&root)?;
-    Ok(RemoveWorkspaceReport {
+    let removal = RemoveWorkspaceReport {
         root_digest: metadata.root_digest,
         workspace_id_digest: digest_text(&metadata.workspace_id),
         removed: true,
         remote_durable_state: "unchanged",
-    })
+    };
+    let record = RemovalRecord {
+        schema: "ogvcs.cli-workspace/removal-record/v2".to_owned(),
+        format_version: VERIFIED_WORKSPACE_FORMAT_VERSION,
+        root_digest: removal.root_digest.clone(),
+        workspace_id_digest: removal.workspace_id_digest.clone(),
+    };
+    super::write_json_new(&removal_record_path(&root), &record)?;
+    sync_directory(&root)?;
+    progress.emit(&ProgressEvent {
+        resume_token: Some(digest_text("workspace-recover")),
+        ..ProgressEvent::phase(OperationPhase::Journal, 0, Some(2))
+    })?;
+    let control = control_path(&root);
+    let tombstone = removal_tombstone_path(&root);
+    fs::rename(&control, &tombstone).map_err(|_| workspace_write_unavailable())?;
+    sync_directory(&root)?;
+    progress.emit(&ProgressEvent {
+        resume_token: Some(digest_text("workspace-recover")),
+        ..ProgressEvent::phase(OperationPhase::Mutation, 1, Some(2))
+    })?;
+    // Detachment is the irreversible commit point. Cancellation is deliberately
+    // ignored after it so the API never reports a resumable token for a control
+    // directory that `workspace recover` cannot open.
+    validate_removal_tree(&tombstone, 64)?;
+    fs::remove_dir_all(&tombstone).map_err(|_| workspace_write_unavailable())?;
+    fs::remove_file(removal_record_path(&root)).map_err(|_| workspace_write_unavailable())?;
+    sync_directory(&root)?;
+    progress.emit(&ProgressEvent::phase(OperationPhase::Complete, 2, Some(2)))?;
+    Ok(removal)
+}
+
+fn removal_record_path(root: &Path) -> PathBuf {
+    root.join(".ogvcs-remove-v2.json")
+}
+
+fn removal_tombstone_path(root: &Path) -> PathBuf {
+    root.join(".ogvcs-removed-v2")
+}
+
+fn reconcile_removal(root: &Path) -> Result<Option<RemoveWorkspaceReport>, CliError> {
+    let record_path = removal_record_path(root);
+    let tombstone = removal_tombstone_path(root);
+    let control = control_path(root);
+    let record_exists = safe_regular_presence(&record_path)?;
+    let tombstone_exists = safe_directory_presence(&tombstone)?;
+    let control_exists = safe_directory_presence(&control)?;
+    if !record_exists {
+        return if tombstone_exists {
+            Err(recovery_conflict())
+        } else {
+            Ok(None)
+        };
+    }
+    let record: RemovalRecord = read_json_private(&record_path, MAX_STATE_BYTES)?;
+    if record.schema != "ogvcs.cli-workspace/removal-record/v2"
+        || record.format_version != VERIFIED_WORKSPACE_FORMAT_VERSION
+        || record.root_digest != digest_path(root)
+        || !valid_digest(&record.workspace_id_digest)
+    {
+        return Err(metadata_invalid());
+    }
+    if control_exists && tombstone_exists {
+        return Err(recovery_conflict());
+    }
+    if control_exists {
+        let metadata = read_ready_metadata(root)?;
+        if digest_text(&metadata.workspace_id) != record.workspace_id_digest {
+            return Err(metadata_invalid());
+        }
+        fs::remove_file(&record_path).map_err(|_| workspace_write_unavailable())?;
+        sync_directory(root)?;
+        return Ok(None);
+    }
+    if tombstone_exists {
+        validate_removal_tree(&tombstone, 64)?;
+        fs::remove_dir_all(&tombstone).map_err(|_| workspace_write_unavailable())?;
+    }
+    fs::remove_file(&record_path).map_err(|_| workspace_write_unavailable())?;
+    sync_directory(root)?;
+    Ok(Some(RemoveWorkspaceReport {
+        root_digest: record.root_digest,
+        workspace_id_digest: record.workspace_id_digest,
+        removed: true,
+        remote_durable_state: "unchanged",
+    }))
+}
+
+fn safe_regular_presence(path: &Path) -> Result<bool, CliError> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if !is_link_or_reparse(&metadata) && metadata.is_file() => Ok(true),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+        _ => Err(recovery_conflict()),
+    }
+}
+
+fn safe_directory_presence(path: &Path) -> Result<bool, CliError> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if !is_link_or_reparse(&metadata) && metadata.is_dir() => Ok(true),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+        _ => Err(recovery_conflict()),
+    }
 }
 
 fn complete_pending_workspace(root: &Path) -> Result<(), CliError> {
@@ -1596,13 +1991,16 @@ enum IntentState {
     Reverting,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct StagedIntent {
     intent_id: String,
     kind: IntentKind,
     state: IntentState,
     file_id: String,
+    allocation_receipt: Option<PersistedFileIdAllocationReceipt>,
+    allocation_idempotency_key_sha256: Option<String>,
+    allocation_expires_at_unix_ms: Option<u64>,
     source_path: Option<String>,
     destination_path: Option<String>,
     source_repository_key: Option<String>,
@@ -1611,7 +2009,7 @@ struct StagedIntent {
     created_at_unix_ms: u64,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct StagingState {
     schema: String,
@@ -1638,6 +2036,8 @@ pub struct IntentReport {
     pub kind: IntentKind,
     pub state: &'static str,
     pub file_id_digest: String,
+    pub allocation_receipt_digest: Option<String>,
+    pub allocation_idempotency_key_digest: Option<String>,
     pub source_path_digest: Option<String>,
     pub destination_path_digest: Option<String>,
     pub uploads_started: bool,
@@ -1692,18 +2092,21 @@ pub fn stage_add(
     let path = validated_repository_path(&metadata.binding, &request.repository_path)?;
     let local = confined_existing_regular_file(&root, &path.canonical)?;
     let size = local.metadata().map_err(|_| unsafe_path())?.len();
-    let file_id = routes.reserve_file_id(
+    let allocation = routes.present_preallocated_file_id(
         &session,
         &metadata.binding,
         &path.repository_key,
         cancellation,
     )?;
-    validate_file_id(&file_id)?;
+    validate_presented_file_id_allocation(&allocation, &metadata.binding, &path.repository_key)?;
     let intent = StagedIntent {
         intent_id: new_intent_id()?,
         kind: IntentKind::Add,
         state: IntentState::Prepared,
-        file_id,
+        file_id: allocation.file_id,
+        allocation_receipt: Some(allocation.allocation_receipt.into_persisted()),
+        allocation_idempotency_key_sha256: Some(allocation.allocation_idempotency_key_sha256),
+        allocation_expires_at_unix_ms: Some(allocation.expires_at_unix_ms),
         source_path: None,
         destination_path: Some(path.canonical),
         source_repository_key: None,
@@ -1750,6 +2153,9 @@ pub fn stage_move(
         kind: IntentKind::Move,
         state: IntentState::Prepared,
         file_id,
+        allocation_receipt: None,
+        allocation_idempotency_key_sha256: None,
+        allocation_expires_at_unix_ms: None,
         source_path: Some(source.canonical),
         destination_path: Some(destination.canonical),
         source_repository_key: Some(source.repository_key),
@@ -1792,6 +2198,9 @@ pub fn stage_delete(
         kind: IntentKind::Delete,
         state: IntentState::Prepared,
         file_id,
+        allocation_receipt: None,
+        allocation_idempotency_key_sha256: None,
+        allocation_expires_at_unix_ms: None,
         source_path: Some(source.canonical),
         destination_path: None,
         source_repository_key: Some(source.repository_key),
@@ -2183,19 +2592,33 @@ fn validate_intent(intent: &StagedIntent, binding: &VerifiedBinding) -> Result<(
                 && intent.destination_path.is_some()
                 && intent.source_repository_key.is_none()
                 && intent.destination_repository_key.is_some()
-                && intent.trash_name.is_none() => {}
+                && intent.trash_name.is_none()
+                && intent.allocation_receipt.is_some()
+                && intent
+                    .allocation_idempotency_key_sha256
+                    .as_deref()
+                    .is_some_and(valid_digest)
+                && intent
+                    .allocation_expires_at_unix_ms
+                    .is_some_and(|expires_at| expires_at > 0) => {}
         IntentKind::Move
             if intent.source_path.is_some()
                 && intent.destination_path.is_some()
                 && intent.source_repository_key.is_some()
                 && intent.destination_repository_key.is_some()
-                && intent.trash_name.is_none() => {}
+                && intent.trash_name.is_none()
+                && intent.allocation_receipt.is_none()
+                && intent.allocation_idempotency_key_sha256.is_none()
+                && intent.allocation_expires_at_unix_ms.is_none() => {}
         IntentKind::Delete
             if intent.source_path.is_some()
                 && intent.destination_path.is_none()
                 && intent.source_repository_key.is_some()
                 && intent.destination_repository_key.is_none()
-                && intent.trash_name.is_some() => {}
+                && intent.trash_name.is_some()
+                && intent.allocation_receipt.is_none()
+                && intent.allocation_idempotency_key_sha256.is_none()
+                && intent.allocation_expires_at_unix_ms.is_none() => {}
         _ => return Err(metadata_invalid()),
     }
     Ok(())
@@ -2237,18 +2660,66 @@ fn intent_report(intent: &StagedIntent) -> IntentReport {
             IntentState::Reverting => "reverting",
         },
         file_id_digest: digest_text(&intent.file_id),
+        allocation_receipt_digest: intent
+            .allocation_receipt
+            .as_ref()
+            .map(|receipt| digest_text(receipt.expose_to_registration())),
+        allocation_idempotency_key_digest: intent.allocation_idempotency_key_sha256.clone(),
         source_path_digest: intent.source_path.as_deref().map(digest_text),
         destination_path_digest: intent.destination_path.as_deref().map(digest_text),
         uploads_started: false,
         submit_started: false,
-        remote_durable_state: "file-id-facts-only",
+        remote_durable_state: "unchanged",
     }
+}
+
+fn validate_presented_file_id_allocation(
+    allocation: &PresentedFileIdAllocation,
+    binding: &VerifiedBinding,
+    repository_path_key: &str,
+) -> Result<(), CliError> {
+    if allocation.allocation_schema_version != FILE_ID_ALLOCATION_SCHEMA
+        || repository_uuid_from_hex(&binding.repository_id_hex).as_deref()
+            != Some(allocation.repository_id.as_str())
+        || allocation.repository_path_key != repository_path_key
+        || !valid_digest(&allocation.allocation_idempotency_key_sha256)
+        || allocation.expires_at_unix_ms <= now_unix_ms()?
+    {
+        return Err(incompatible_service_facts());
+    }
+    validate_file_id(&allocation.file_id)
+}
+
+fn repository_uuid_from_hex(value: &str) -> Option<String> {
+    if value.len() != 32
+        || !value.bytes().all(is_lower_hex)
+        || !matches!(value.as_bytes()[12], b'1'..=b'8')
+        || !matches!(value.as_bytes()[16], b'8' | b'9' | b'a' | b'b')
+    {
+        return None;
+    }
+    Some(format!(
+        "{}-{}-{}-{}-{}",
+        &value[..8],
+        &value[8..12],
+        &value[12..16],
+        &value[16..20],
+        &value[20..]
+    ))
 }
 
 fn validate_file_id(value: &str) -> Result<(), CliError> {
     FileId::from_str(value)
         .map(|_| ())
         .map_err(|_| incompatible_service_facts())
+}
+
+fn valid_allocation_receipt(value: &str) -> bool {
+    value.len() == 48
+        && value.starts_with("far1.")
+        && value[5..]
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
 }
 
 fn new_intent_id() -> Result<String, CliError> {
@@ -2712,6 +3183,15 @@ mod secret_tests {
         let mut secret = SecretMaterial::new(b"redaction-secret-needle".to_vec()).unwrap();
         secret.zeroize();
         assert!(secret.expose_to_transport().iter().all(|byte| *byte == 0));
+    }
+
+    #[test]
+    fn allocation_receipt_debug_is_redacted_and_zeroization_overwrites_bytes() {
+        let needle = format!("far1.{}", "A".repeat(43));
+        let mut receipt = FileIdAllocationReceipt::new(needle.clone()).unwrap();
+        assert!(!format!("{receipt:?}").contains(&needle));
+        receipt.zeroize();
+        assert!(receipt.0.as_bytes().iter().all(|byte| *byte == 0));
     }
 
     #[cfg(any(target_os = "linux", target_os = "macos"))]

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opengamevcs.dev/schemas/cli-workspace/verified-diagnostic-preview/v2",
+  "title": "OGVCS redacted verified diagnostic preview v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "preview", "written", "workspaceState", "workspaceRootDigest", "workspaceIdDigest", "repositoryIdDigest", "branchDigest", "stagedIntents", "credentialProviderKind", "credentialStatus", "endpointScheme", "authorizationRegistrySha256", "pathRegistrySha256", "protocolRegistrySetSha256", "repositoryRegistrySha256", "redactionPolicy"],
+  "properties": {
+    "schema": { "const": "ogvcs.cli-workspace/verified-diagnostic-preview/v2" },
+    "preview": { "type": "boolean" },
+    "written": { "type": "boolean" },
+    "workspaceState": { "const": "ready" },
+    "workspaceRootDigest": { "$ref": "#/$defs/digest" },
+    "workspaceIdDigest": { "$ref": "#/$defs/digest" },
+    "repositoryIdDigest": { "$ref": "#/$defs/digest" },
+    "branchDigest": { "$ref": "#/$defs/digest" },
+    "stagedIntents": { "type": "integer", "minimum": 0, "maximum": 10000 },
+    "credentialProviderKind": { "enum": ["unavailable", "explicit-headless-environment", "os-credential-store"] },
+    "credentialStatus": { "enum": ["available", "unavailable", "headless-required"] },
+    "endpointScheme": { "enum": ["http", "https"] },
+    "authorizationRegistrySha256": { "const": "293f9ab0be023a9ded33326d04a8314080bda56e7c70dd18d0cca38b70bed9cc" },
+    "pathRegistrySha256": { "const": "bbabdd95d78cfe0dd9751ab67ccbd9dfa5565bf8c049468aea3129bec787bd42" },
+    "protocolRegistrySetSha256": { "const": "2b1913f9451b9f99966a24942a262846f07662b17cbb41ad6eea6474c23b4352" },
+    "repositoryRegistrySha256": { "const": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6" },
+    "redactionPolicy": { "const": "v2-no-paths-locators-identities-endpoints-or-secrets" },
+    "artifactName": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+    "artifactDigest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": { "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" } }
+}

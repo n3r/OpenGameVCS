@@ -7,7 +7,7 @@
   "required": ["schema", "contractVersion", "contractManifestSha256", "ok", "exitClass", "code", "message", "nextStep", "data"],
   "properties": {
     "schema": { "const": "ogvcs.cli-workspace/result/v1" },
-    "contractVersion": { "const": "0.1.0-rc.1" },
+    "contractVersion": { "const": "0.2.0-rc.2" },
     "contractManifestSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "ok": { "type": "boolean" },
     "exitClass": {

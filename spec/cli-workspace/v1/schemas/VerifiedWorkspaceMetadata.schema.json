@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opengamevcs.dev/schemas/cli-workspace/verified-workspace/v2",
+  "title": "OGVCS verified local workspace metadata v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "formatVersion", "state", "workspaceId", "rootDigest", "binding", "createdAtUnixMs", "updatedAtUnixMs"],
+  "properties": {
+    "schema": { "const": "ogvcs.cli-workspace/verified-workspace/v2" },
+    "formatVersion": { "const": 2 },
+    "state": { "enum": ["initializing", "ready"] },
+    "workspaceId": { "type": "string", "pattern": "^wsv2\\.[0-9a-f]{64}$" },
+    "rootDigest": { "$ref": "#/$defs/digest" },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repositoryIdHex", "branch", "baseline", "caseMode", "pathProfile", "repositorySettingsDigest", "negotiation", "subjectDigest", "authorityEpoch", "securityEpoch", "verification"],
+      "properties": {
+        "repositoryIdHex": { "type": "string", "pattern": "^[0-9a-f]{12}[1-8][0-9a-f]{3}[89ab][0-9a-f]{15}$" },
+        "branch": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "baseline": { "type": "string", "pattern": "^ogvcs:v1:snapshot:sha256:[0-9a-f]{64}$" },
+        "caseMode": { "enum": ["case-sensitive", "case-folded"] },
+        "pathProfile": { "const": "path.opengamevcs/portable@1" },
+        "repositorySettingsDigest": { "$ref": "#/$defs/digest" },
+        "negotiation": { "$ref": "CapabilitySelection.schema.json" },
+        "subjectDigest": { "$ref": "#/$defs/digest" },
+        "authorityEpoch": { "type": "integer", "minimum": 1 },
+        "securityEpoch": { "type": "integer", "minimum": 1 },
+        "verification": { "const": "public-service-verified" }
+      }
+    },
+    "createdAtUnixMs": { "type": "integer", "minimum": 1 },
+    "updatedAtUnixMs": { "type": "integer", "minimum": 1 }
+  },
+  "$defs": { "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" } }
+}

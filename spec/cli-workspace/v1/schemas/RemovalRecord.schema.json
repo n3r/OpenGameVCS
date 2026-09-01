@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opengamevcs.dev/schemas/cli-workspace/removal-record/v2",
+  "title": "OGVCS deterministic workspace removal record v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "formatVersion", "rootDigest", "workspaceIdDigest"],
+  "properties": {
+    "schema": { "const": "ogvcs.cli-workspace/removal-record/v2" },
+    "formatVersion": { "const": 2 },
+    "rootDigest": { "$ref": "#/$defs/digest" },
+    "workspaceIdDigest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": { "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" } }
+}

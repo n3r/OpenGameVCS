@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opengamevcs.dev/schemas/cli-workspace/capability-selection/v1",
+  "title": "OGVCS CLI pinned capability selection v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocolVersion", "messageSchemaVersion", "repositoryFormat", "authorizationContract", "authorizationRegistrySha256", "pathContract", "pathProfile", "pathRegistrySha256", "eventVersion", "transferProfile", "protocolRegistrySetSha256", "repositoryRegistrySha256", "requiredFeatures", "receiptSha256", "expiresAtUnixMs"],
+  "properties": {
+    "protocolVersion": { "const": "ogvcs.control.https-json@1" },
+    "messageSchemaVersion": { "const": "ogvcs.protocol.schema@1" },
+    "repositoryFormat": { "const": "ogvcs.repository-format@1" },
+    "authorizationContract": { "const": "ogvcs.authorization@1" },
+    "authorizationRegistrySha256": { "const": "293f9ab0be023a9ded33326d04a8314080bda56e7c70dd18d0cca38b70bed9cc" },
+    "pathContract": { "const": "ogvcs.path-filesystem@1" },
+    "pathProfile": { "const": "path.opengamevcs/portable@1" },
+    "pathRegistrySha256": { "const": "bbabdd95d78cfe0dd9751ab67ccbd9dfa5565bf8c049468aea3129bec787bd42" },
+    "eventVersion": { "const": "ogvcs.events.base@1" },
+    "transferProfile": { "const": "ogvcs.transfer.range-resume-probe@1" },
+    "protocolRegistrySetSha256": { "const": "2b1913f9451b9f99966a24942a262846f07662b17cbb41ad6eea6474c23b4352" },
+    "repositoryRegistrySha256": { "const": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6" },
+    "requiredFeatures": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": { "enum": ["ogvcs.receipt.hmac-sha256@1", "ogvcs.stream.explicit-terminal@1", "ogvcs.idempotency.semantic-jcs@1"] }
+    },
+    "receiptSha256": { "$ref": "#/$defs/digest" },
+    "expiresAtUnixMs": { "type": "integer", "minimum": 1 }
+  },
+  "$defs": { "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" } }
+}

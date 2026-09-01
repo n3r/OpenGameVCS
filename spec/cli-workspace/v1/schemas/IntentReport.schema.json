@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opengamevcs.dev/schemas/cli-workspace/intent-report/v1",
+  "title": "OGVCS redacted local staged intent report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["intentId", "kind", "state", "fileIdDigest", "allocationReceiptDigest", "allocationIdempotencyKeyDigest", "sourcePathDigest", "destinationPathDigest", "uploadsStarted", "submitStarted", "remoteDurableState"],
+  "properties": {
+    "intentId": { "type": "string", "pattern": "^wsi1\\.[0-9a-f]{64}$" },
+    "kind": { "enum": ["add", "move", "delete"] },
+    "state": { "enum": ["applied", "reverted"] },
+    "fileIdDigest": { "$ref": "#/$defs/digest" },
+    "allocationReceiptDigest": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
+    "allocationIdempotencyKeyDigest": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
+    "sourcePathDigest": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
+    "destinationPathDigest": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
+    "uploadsStarted": { "const": false },
+    "submitStarted": { "const": false },
+    "remoteDurableState": { "const": "unchanged" }
+  },
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "kind": { "const": "add" },
+        "allocationReceiptDigest": { "type": "string" },
+        "allocationIdempotencyKeyDigest": { "type": "string" }
+      }
+    },
+    {
+      "type": "object",
+      "properties": {
+        "kind": { "enum": ["move", "delete"] },
+        "allocationReceiptDigest": { "const": null },
+        "allocationIdempotencyKeyDigest": { "const": null }
+      }
+    }
+  ],
+  "$defs": { "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" } }
+}
