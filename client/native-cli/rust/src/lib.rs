@@ -1085,12 +1085,16 @@ fn valid_digest(value: &str) -> bool {
 
 fn create_private_directory(path: &Path) -> Result<(), CliError> {
     #[cfg(windows)]
-    windows_security::create_new_private_directory(path).map_err(|_| {
+    windows_security::create_new_private_directory(path).map_err(|error| {
         workspace_error(
             "WORKSPACE_CREATE_UNAVAILABLE",
             "Private workspace metadata could not be created with a protected DACL.",
             "Retry in an owned directory that permits private atomic creation.",
         )
+        .with_data(serde_json::json!({
+            "ioErrorCode": error.raw_os_error(),
+            "operation": "private-directory-create"
+        }))
     })?;
     #[cfg(not(windows))]
     {
@@ -1284,8 +1288,10 @@ fn write_json_new<T: Serialize>(path: &Path, value: &T) -> Result<(), CliError> 
 
 fn write_bytes_new(path: &Path, bytes: &[u8]) -> Result<(), CliError> {
     let mut file = create_private_file(path, true)?;
-    file.write_all(bytes).map_err(|_| write_workspace_error())?;
-    file.sync_all().map_err(|_| write_workspace_error())?;
+    file.write_all(bytes)
+        .map_err(|error| write_workspace_io_error("private-file-write", &error))?;
+    file.sync_all()
+        .map_err(|error| write_workspace_io_error("private-file-sync", &error))?;
     Ok(())
 }
 
@@ -1297,11 +1303,14 @@ fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<(), CliErro
         let bytes = serde_json::to_vec(value).map_err(|_| internal_error())?;
         let mut file = create_private_file(&temporary, true)?;
         file.write_all(&bytes)
-            .map_err(|_| write_workspace_error())?;
-        file.write_all(b"\n").map_err(|_| write_workspace_error())?;
-        file.sync_all().map_err(|_| write_workspace_error())?;
+            .map_err(|error| write_workspace_io_error("private-file-write", &error))?;
+        file.write_all(b"\n")
+            .map_err(|error| write_workspace_io_error("private-file-write", &error))?;
+        file.sync_all()
+            .map_err(|error| write_workspace_io_error("private-file-sync", &error))?;
         drop(file);
-        fs::rename(&temporary, path).map_err(|_| write_workspace_error())?;
+        fs::rename(&temporary, path)
+            .map_err(|error| write_workspace_io_error("metadata-rename", &error))?;
         sync_directory(parent)
     })();
     if result.is_err() {
@@ -1337,7 +1346,6 @@ fn write_workspace_error() -> CliError {
     )
 }
 
-#[cfg(windows)]
 fn write_workspace_io_error(operation: &'static str, error: &io::Error) -> CliError {
     write_workspace_error().with_data(serde_json::json!({
         "ioErrorCode": error.raw_os_error(),
@@ -1348,9 +1356,11 @@ fn write_workspace_io_error(operation: &'static str, error: &io::Error) -> CliEr
 fn sync_directory(path: &Path) -> Result<(), CliError> {
     #[cfg(windows)]
     {
-        windows_security::open_private_directory(path)
-            .and_then(|directory| directory.sync_all())
-            .map_err(|_| write_workspace_error())
+        let directory = windows_security::open_private_directory(path)
+            .map_err(|error| write_workspace_io_error("private-directory-open", &error))?;
+        directory
+            .sync_all()
+            .map_err(|error| write_workspace_io_error("private-directory-sync", &error))
     }
     #[cfg(not(windows))]
     {
