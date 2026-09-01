@@ -71,6 +71,20 @@ pub fn open_private_directory(path: &Path) -> io::Result<File> {
     open_private(path, true)
 }
 
+/// Opens and validates a private directory with the write access required by
+/// `FlushFileBuffers`. The handle deliberately denies delete sharing so the
+/// validated directory identity cannot be detached while it is being flushed.
+pub fn open_private_directory_for_sync(path: &Path) -> io::Result<File> {
+    let file = open_reparse_handle_with_access_and_share(
+        path,
+        FILE_READ_ATTRIBUTES | READ_CONTROL | GENERIC_READ | GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+    )?;
+    validate_owner_and_dacl(file.as_raw_handle() as HANDLE, true)?;
+    validate_kind(&file, true)?;
+    Ok(file)
+}
+
 pub fn open_private_regular_file(path: &Path) -> io::Result<File> {
     open_private(path, false)
 }
@@ -710,6 +724,10 @@ mod tests {
         ));
         create_new_private_directory(&root).unwrap();
         open_private_directory(&root).unwrap();
+        open_private_directory_for_sync(&root)
+            .unwrap()
+            .sync_all()
+            .unwrap();
 
         let path = root.join("metadata");
         let detached = root.join("detached");

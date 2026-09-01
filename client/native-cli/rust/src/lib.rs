@@ -1356,7 +1356,7 @@ fn write_workspace_io_error(operation: &'static str, error: &io::Error) -> CliEr
 fn sync_directory(path: &Path) -> Result<(), CliError> {
     #[cfg(windows)]
     {
-        let directory = windows_security::open_private_directory(path)
+        let directory = windows_security::open_private_directory_for_sync(path)
             .map_err(|error| write_workspace_io_error("private-directory-open", &error))?;
         directory
             .sync_all()
