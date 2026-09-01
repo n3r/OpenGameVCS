@@ -38,9 +38,13 @@ explicit residuals.
 
 The local mutation lock serializes cooperating CLI processes. It is not a
 security boundary against a malicious same-authority process that replaces the
-lock namespace entry; Windows delete-sharing and Unix unlink semantics remain
-an explicit residual. The Windows adapter is cross-compiled locally, while
-hosted Windows runtime evidence is tracked separately.
+lock namespace entry between commands or detaches the locked inode on Unix.
+Windows lock handles deny delete sharing while held. Windows files receive
+their owner and protected DACL atomically at `CREATE_NEW`; directories receive
+the same descriptor at `CreateDirectoryW`, followed by a no-follow validation
+open. The same-authority namespace interval between directory creation and that
+open remains an explicit residual. Hosted Windows runtime evidence is tracked
+separately.
 
 The authenticated companion schemas/vectors live in
 [`spec/cli-workspace/v1`](../../../spec/cli-workspace/v1). The original v1

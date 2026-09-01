@@ -6,7 +6,7 @@
 //! closed. Handles are opened without following a final reparse point.
 
 use std::ffi::c_void;
-use std::fs::{self, File};
+use std::fs::File;
 use std::io;
 use std::mem::{size_of, zeroed};
 use std::os::windows::ffi::OsStrExt;
@@ -18,29 +18,30 @@ use windows_sys::Win32::Foundation::{
     CloseHandle, LocalFree, ERROR_INSUFFICIENT_BUFFER, GENERIC_READ, GENERIC_WRITE, HANDLE,
     INVALID_HANDLE_VALUE, PSID,
 };
-use windows_sys::Win32::Security::Authorization::{
-    GetSecurityInfo, SetSecurityInfo, SE_FILE_OBJECT,
-};
+use windows_sys::Win32::Security::Authorization::{GetSecurityInfo, SE_FILE_OBJECT};
 use windows_sys::Win32::Security::{
     AclSizeInformation, AddAccessAllowedAceEx, CreateWellKnownSid, EqualSid, GetAce,
     GetAclInformation, GetLengthSid, GetSecurityDescriptorControl, GetTokenInformation,
-    InitializeAcl, TokenUser, WinBuiltinAdministratorsSid, WinLocalSystemSid, ACCESS_ALLOWED_ACE,
-    ACL, ACL_REVISION, ACL_SIZE_INFORMATION, CONTAINER_INHERIT_ACE, DACL_SECURITY_INFORMATION,
-    OBJECT_INHERIT_ACE, OWNER_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION,
-    SE_DACL_PROTECTED, TOKEN_QUERY, TOKEN_USER,
+    InitializeAcl, InitializeSecurityDescriptor, SetSecurityDescriptorControl,
+    SetSecurityDescriptorDacl, SetSecurityDescriptorOwner, TokenUser, WinBuiltinAdministratorsSid,
+    WinLocalSystemSid, ACCESS_ALLOWED_ACE, ACL, ACL_REVISION, ACL_SIZE_INFORMATION,
+    CONTAINER_INHERIT_ACE, DACL_SECURITY_INFORMATION, OBJECT_INHERIT_ACE,
+    OWNER_SECURITY_INFORMATION, SECURITY_ATTRIBUTES, SECURITY_DESCRIPTOR, SE_DACL_PROTECTED,
+    TOKEN_QUERY, TOKEN_USER,
 };
 use windows_sys::Win32::Storage::FileSystem::{
-    CreateFileW, FileRenameInfo, GetFileInformationByHandle, GetFinalPathNameByHandleW,
-    SetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION, CREATE_NEW, DELETE, FILE_ADD_FILE,
-    FILE_ALL_ACCESS, FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_REPARSE_POINT,
-    FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_LIST_DIRECTORY,
-    FILE_NAME_NORMALIZED, FILE_READ_ATTRIBUTES, FILE_RENAME_INFO, FILE_RENAME_INFO_0,
-    FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING, READ_CONTROL,
-    VOLUME_NAME_DOS, WRITE_DAC, WRITE_OWNER,
+    CreateDirectoryW, CreateFileW, FileDispositionInfo, FileRenameInfo, GetFileInformationByHandle,
+    GetFinalPathNameByHandleW, SetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION, CREATE_NEW,
+    DELETE, FILE_ADD_FILE, FILE_ALL_ACCESS, FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_REPARSE_POINT,
+    FILE_DISPOSITION_INFO, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
+    FILE_LIST_DIRECTORY, FILE_NAME_NORMALIZED, FILE_READ_ATTRIBUTES, FILE_RENAME_INFO,
+    FILE_RENAME_INFO_0, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
+    READ_CONTROL, VOLUME_NAME_DOS,
 };
 use windows_sys::Win32::System::SystemServices::{
     ACCESS_ALLOWED_ACE_TYPE, ACCESS_DENIED_ACE_TYPE, ACCESS_DENIED_CALLBACK_ACE_TYPE,
     ACCESS_DENIED_CALLBACK_OBJECT_ACE_TYPE, ACCESS_DENIED_OBJECT_ACE_TYPE,
+    SECURITY_DESCRIPTOR_REVISION,
 };
 use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 
@@ -82,38 +83,42 @@ fn open_private(path: &Path, directory: bool) -> io::Result<File> {
     Ok(file)
 }
 
-pub fn harden_new_private_directory(path: &Path) -> io::Result<()> {
-    let file = open_reparse_handle_with_access(
+pub fn create_new_private_directory(path: &Path) -> io::Result<()> {
+    let wide = wide_path(path)?;
+    with_private_security_attributes(true, |attributes| {
+        // SAFETY: the path and complete absolute security descriptor remain
+        // live throughout this atomic directory creation call.
+        if unsafe { CreateDirectoryW(wide.as_ptr(), attributes) } == 0 {
+            Err(io::Error::last_os_error())
+        } else {
+            Ok(())
+        }
+    })?;
+    let directory = open_reparse_handle_with_access_and_share(
         path,
-        FILE_READ_ATTRIBUTES | READ_CONTROL | WRITE_DAC | WRITE_OWNER | GENERIC_READ,
+        FILE_READ_ATTRIBUTES | READ_CONTROL | DELETE | GENERIC_READ,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
     )?;
-    harden_new_private_handle(&file, true)
+    validate_kind(&directory, true)?;
+    if let Err(error) = validate_owner_and_dacl(directory.as_raw_handle() as HANDLE, true) {
+        let _ = delete_exact_on_close(&directory);
+        return Err(error);
+    }
+    Ok(())
 }
 
 pub fn create_new_private_file(path: &Path) -> io::Result<File> {
-    let file = create_new_regular_file(path)?;
-    if let Err(error) = harden_new_private_handle(&file, false) {
-        drop(file);
-        let _ = fs::remove_file(path);
-        return Err(error);
-    }
-    Ok(file)
+    create_new_regular_file(path)
 }
 
 pub fn open_or_create_private_lock(path: &Path) -> io::Result<File> {
     match create_new_regular_file(path) {
-        Ok(file) => {
-            if let Err(error) = harden_new_private_handle(&file, false) {
-                drop(file);
-                let _ = fs::remove_file(path);
-                return Err(error);
-            }
-            Ok(file)
-        }
+        Ok(file) => Ok(file),
         Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
-            let file = open_reparse_handle_with_access(
+            let file = open_reparse_handle_with_access_and_share(
                 path,
                 FILE_READ_ATTRIBUTES | READ_CONTROL | GENERIC_READ | GENERIC_WRITE,
+                FILE_SHARE_READ | FILE_SHARE_WRITE,
             )?;
             validate_kind(&file, false)?;
             validate_owner_and_dacl(file.as_raw_handle() as HANDLE, true)?;
@@ -128,6 +133,18 @@ fn open_reparse_handle(path: &Path) -> io::Result<File> {
 }
 
 fn open_reparse_handle_with_access(path: &Path, access: u32) -> io::Result<File> {
+    open_reparse_handle_with_access_and_share(
+        path,
+        access,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+    )
+}
+
+fn open_reparse_handle_with_access_and_share(
+    path: &Path,
+    access: u32,
+    share: u32,
+) -> io::Result<File> {
     let wide = wide_path(path)?;
     // SAFETY: the UTF-16 path is terminated, all pointer arguments are valid,
     // and the returned handle is either rejected or transferred into File.
@@ -135,7 +152,7 @@ fn open_reparse_handle_with_access(path: &Path, access: u32) -> io::Result<File>
         CreateFileW(
             wide.as_ptr(),
             access,
-            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            share,
             null(),
             OPEN_EXISTING,
             FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
@@ -154,27 +171,54 @@ fn open_reparse_handle_with_access(path: &Path, access: u32) -> io::Result<File>
 
 fn create_new_regular_file(path: &Path) -> io::Result<File> {
     let wide = wide_path(path)?;
-    // SAFETY: the UTF-16 path is terminated, CREATE_NEW makes publication
-    // atomic, and the returned handle is either rejected or owned by File.
-    let handle = unsafe {
-        CreateFileW(
-            wide.as_ptr(),
-            GENERIC_READ | GENERIC_WRITE | READ_CONTROL | WRITE_DAC | WRITE_OWNER,
-            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-            null(),
-            CREATE_NEW,
-            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT,
-            0,
+    with_private_security_attributes(false, |attributes| {
+        // SAFETY: the UTF-16 path and complete absolute security descriptor
+        // remain live; CREATE_NEW makes file publication atomic.
+        let handle = unsafe {
+            CreateFileW(
+                wide.as_ptr(),
+                GENERIC_READ | GENERIC_WRITE | READ_CONTROL | DELETE,
+                FILE_SHARE_READ | FILE_SHARE_WRITE,
+                attributes,
+                CREATE_NEW,
+                FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT,
+                0,
+            )
+        };
+        if handle == INVALID_HANDLE_VALUE {
+            return Err(io::Error::last_os_error());
+        }
+        let owned = OwnedHandle(handle);
+        // SAFETY: ownership is transferred from OwnedHandle into File once.
+        let file = unsafe { File::from_raw_handle(owned.0 as _) };
+        std::mem::forget(owned);
+        if let Err(error) = validate_kind(&file, false)
+            .and_then(|_| validate_owner_and_dacl(file.as_raw_handle() as HANDLE, true))
+        {
+            let _ = delete_exact_on_close(&file);
+            return Err(error);
+        }
+        Ok(file)
+    })
+}
+
+fn delete_exact_on_close(file: &File) -> io::Result<()> {
+    let mut disposition = FILE_DISPOSITION_INFO { DeleteFile: 1 };
+    // SAFETY: the live handle was opened with DELETE access and disposition is
+    // the exact API structure; deletion is bound to this object, not a path.
+    if unsafe {
+        SetFileInformationByHandle(
+            file.as_raw_handle() as HANDLE,
+            FileDispositionInfo,
+            (&mut disposition as *mut FILE_DISPOSITION_INFO).cast::<c_void>(),
+            size_of::<FILE_DISPOSITION_INFO>() as u32,
         )
-    };
-    if handle == INVALID_HANDLE_VALUE {
-        return Err(io::Error::last_os_error());
+    } == 0
+    {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(())
     }
-    let owned = OwnedHandle(handle);
-    // SAFETY: ownership is transferred from OwnedHandle into File exactly once.
-    let file = unsafe { File::from_raw_handle(owned.0 as _) };
-    std::mem::forget(owned);
-    Ok(file)
 }
 
 fn wide_path(path: &Path) -> io::Result<Vec<u16>> {
@@ -355,7 +399,7 @@ fn set_rename_noreplace(
 ) -> io::Result<()> {
     let header = std::mem::offset_of!(FILE_RENAME_INFO, FileName);
     let byte_len = header
-        .checked_add(destination_name.len() * size_of::<u16>())
+        .checked_add(std::mem::size_of_val(destination_name))
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "rename buffer overflow"))?;
     let word = size_of::<usize>();
     let mut storage = vec![0usize; (byte_len + word - 1) / word];
@@ -365,7 +409,7 @@ fn set_rename_noreplace(
     unsafe {
         (*information).Anonymous = FILE_RENAME_INFO_0 { ReplaceIfExists: 0 };
         (*information).RootDirectory = destination_parent.as_raw_handle() as HANDLE;
-        (*information).FileNameLength = (destination_name.len() * size_of::<u16>()) as u32;
+        (*information).FileNameLength = std::mem::size_of_val(destination_name) as u32;
         std::ptr::copy_nonoverlapping(
             destination_name.as_ptr(),
             (*information).FileName.as_mut_ptr(),
@@ -389,13 +433,13 @@ fn set_rename_noreplace(
     }
 }
 
-fn harden_new_private_handle(file: &File, directory: bool) -> io::Result<()> {
-    validate_kind(file, directory)?;
-    let handle = file.as_raw_handle() as HANDLE;
+fn with_private_security_attributes<T>(
+    directory: bool,
+    action: impl FnOnce(*const SECURITY_ATTRIBUTES) -> io::Result<T>,
+) -> io::Result<T> {
     let token_user = current_token_user()?;
     let system = WellKnownSid::new(WinLocalSystemSid)?;
     let administrators = WellKnownSid::new(WinBuiltinAdministratorsSid)?;
-    validate_new_object_owner(handle, token_user.sid(), system.sid(), administrators.sid())?;
     let mut acl_storage = private_acl(
         token_user.sid(),
         system.sid(),
@@ -403,77 +447,28 @@ fn harden_new_private_handle(file: &File, directory: bool) -> io::Result<()> {
         directory,
     )?;
     let dacl = acl_storage.as_mut_ptr().cast::<ACL>();
-    // SAFETY: the create-new handle was opened with WRITE_OWNER and WRITE_DAC;
-    // the token SID and ACL storage remain live for the duration of the call.
-    let status = unsafe {
-        SetSecurityInfo(
-            handle,
-            SE_FILE_OBJECT,
-            OWNER_SECURITY_INFORMATION
-                | DACL_SECURITY_INFORMATION
-                | PROTECTED_DACL_SECURITY_INFORMATION,
-            token_user.sid(),
-            null_mut(),
-            dacl,
-            null(),
-        )
+    // SAFETY: SECURITY_DESCRIPTOR is a plain Windows structure initialized by
+    // the API before its setter functions are called.
+    let mut descriptor: SECURITY_DESCRIPTOR = unsafe { zeroed() };
+    let descriptor_pointer = (&mut descriptor as *mut SECURITY_DESCRIPTOR).cast::<c_void>();
+    // SAFETY: descriptor, owner SID, and ACL storage all remain live until the
+    // creation callback returns and Windows copies the descriptor.
+    if unsafe { InitializeSecurityDescriptor(descriptor_pointer, SECURITY_DESCRIPTOR_REVISION) }
+        == 0
+        || unsafe { SetSecurityDescriptorOwner(descriptor_pointer, token_user.sid(), 0) } == 0
+        || unsafe { SetSecurityDescriptorDacl(descriptor_pointer, 1, dacl, 0) } == 0
+        || unsafe {
+            SetSecurityDescriptorControl(descriptor_pointer, SE_DACL_PROTECTED, SE_DACL_PROTECTED)
+        } == 0
+    {
+        return Err(io::Error::last_os_error());
+    }
+    let attributes = SECURITY_ATTRIBUTES {
+        nLength: size_of::<SECURITY_ATTRIBUTES>() as u32,
+        lpSecurityDescriptor: descriptor_pointer,
+        bInheritHandle: 0,
     };
-    if status != 0 {
-        return Err(io::Error::from_raw_os_error(status as i32));
-    }
-    validate_owner_and_dacl(handle, true)
-}
-
-fn validate_new_object_owner(
-    handle: HANDLE,
-    token_user: PSID,
-    system: PSID,
-    administrators: PSID,
-) -> io::Result<()> {
-    let mut owner: PSID = null_mut();
-    let mut descriptor = null_mut();
-    // SAFETY: output pointers are valid and descriptor is released below.
-    let status = unsafe {
-        GetSecurityInfo(
-            handle,
-            SE_FILE_OBJECT,
-            OWNER_SECURITY_INFORMATION,
-            &mut owner,
-            null_mut(),
-            null_mut(),
-            null_mut(),
-            &mut descriptor,
-        )
-    };
-    if status != 0 || owner.is_null() || descriptor.is_null() {
-        if !descriptor.is_null() {
-            // SAFETY: descriptor came from GetSecurityInfo.
-            unsafe { LocalFree(descriptor) };
-        }
-        return if status == 0 {
-            Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                "new workspace object has no owner",
-            ))
-        } else {
-            Err(io::Error::from_raw_os_error(status as i32))
-        };
-    }
-    let _descriptor = LocalSecurityDescriptor(descriptor);
-    // Windows may assign the elevated token's Administrators default owner to
-    // a just-created object. Only the token SID and the two trusted operating
-    // system principals are eligible for normalization.
-    if unsafe {
-        EqualSid(owner, token_user) == 0
-            && EqualSid(owner, system) == 0
-            && EqualSid(owner, administrators) == 0
-    } {
-        return Err(io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            "new workspace object has an untrusted owner",
-        ));
-    }
-    Ok(())
+    action(&attributes)
 }
 
 fn private_acl(
@@ -698,5 +693,61 @@ impl WellKnownSid {
 
     fn sid(&self) -> PSID {
         self.words.as_ptr().cast_mut().cast::<c_void>()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn private_creation_is_protected_and_pinned_against_path_replacement() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "ogvcs011-windows-private-create-{}-{nonce}",
+            std::process::id()
+        ));
+        create_new_private_directory(&root).unwrap();
+        open_private_directory(&root).unwrap();
+
+        let path = root.join("metadata");
+        let detached = root.join("detached");
+        let file = create_new_private_file(&path).unwrap();
+        assert!(fs::rename(&path, &detached).is_err());
+        assert!(fs::remove_file(&path).is_err());
+        drop(file);
+        fs::remove_file(&path).unwrap();
+
+        let exact = root.join("exact-cleanup");
+        let file = create_new_private_file(&exact).unwrap();
+        delete_exact_on_close(&file).unwrap();
+        drop(file);
+        assert!(!exact.exists());
+
+        let exact_directory = root.join("exact-directory-cleanup");
+        create_new_private_directory(&exact_directory).unwrap();
+        let directory = open_reparse_handle_with_access_and_share(
+            &exact_directory,
+            FILE_READ_ATTRIBUTES | READ_CONTROL | DELETE | GENERIC_READ,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+        )
+        .unwrap();
+        delete_exact_on_close(&directory).unwrap();
+        drop(directory);
+        assert!(!exact_directory.exists());
+
+        let lock_path = root.join("mutation.lock");
+        drop(create_new_private_file(&lock_path).unwrap());
+        let lock = open_or_create_private_lock(&lock_path).unwrap();
+        assert!(fs::rename(&lock_path, &detached).is_err());
+        assert!(fs::remove_file(&lock_path).is_err());
+        drop(lock);
+        fs::remove_file(&lock_path).unwrap();
+        fs::remove_dir(&root).unwrap();
     }
 }
