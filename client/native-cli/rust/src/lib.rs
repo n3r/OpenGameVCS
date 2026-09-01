@@ -1100,7 +1100,7 @@ fn create_private_directory(path: &Path) -> Result<(), CliError> {
         )
     })?;
     #[cfg(windows)]
-    windows_security::protect_private_directory(path).map_err(|_| {
+    windows_security::harden_new_private_directory(path).map_err(|_| {
         workspace_error(
             "WORKSPACE_CREATE_UNAVAILABLE",
             "Private workspace metadata could not be protected from inherited access.",
@@ -1308,14 +1308,22 @@ fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<(), CliErro
 }
 
 fn create_private_file(path: &Path, create_new: bool) -> Result<File, CliError> {
-    let mut options = OpenOptions::new();
-    options.write(true).create_new(create_new);
-    #[cfg(not(windows))]
-    options.mode(0o600);
-    let file = options.open(path).map_err(|_| write_workspace_error())?;
     #[cfg(windows)]
-    windows_security::protect_private_file(&file).map_err(|_| write_workspace_error())?;
-    Ok(file)
+    {
+        if !create_new {
+            return Err(write_workspace_error());
+        }
+        return windows_security::create_new_private_file(path)
+            .map_err(|_| write_workspace_error());
+    }
+    #[cfg(not(windows))]
+    {
+        let mut options = OpenOptions::new();
+        options.write(true).create_new(create_new);
+        options.mode(0o600);
+        let file = options.open(path).map_err(|_| write_workspace_error())?;
+        Ok(file)
+    }
 }
 
 fn write_workspace_error() -> CliError {
