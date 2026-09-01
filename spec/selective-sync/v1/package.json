@@ -1,0 +1,30 @@
+{
+  "name": "@opengamevcs/selective-sync-kernel-contract-v1",
+  "version": "0.1.0-rc.1",
+  "description": "Language-neutral private candidate contract for bounded selective-sync path classification",
+  "type": "module",
+  "files": [
+    "contract.json",
+    "LICENSE",
+    "manifest.json",
+    "README.md",
+    "registries",
+    "schemas",
+    "scripts",
+    "source",
+    "test",
+    "validate-spec.mjs",
+    "vectors"
+  ],
+  "scripts": {
+    "check": "node scripts/generate.mjs --check && node validate-spec.mjs && node scripts/reference.mjs",
+    "test": "node scripts/generate.mjs --check && node validate-spec.mjs && node scripts/reference.mjs && node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@opengamevcs/path-contract-v1": "1.0.0"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "license": "MIT"
+}

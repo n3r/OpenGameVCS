@@ -51,6 +51,7 @@ that external program prerequisite has occurred.
 | Object transfer | Resumable-transfer candidate is integrated; content-manifest availability fails closed outside the OGVCS-007 receipt-gated transaction participant | [OGVCS-008](prd/todo/OGVCS-008-object-storage-transfer-service.md) |
 | Native CLI foundation | Manifest-bound verified local Rust candidate with cross-platform workspace safety, confined intent staging, recovery/cancellation, stable JSON, and redacted diagnostics; owning public routes, receipt-MAC verification, and remote journeys remain deferred | [OGVCS-011](prd/todo/OGVCS-011-native-cli-workspace-lifecycle.md) |
 | Identity and policy | Deny-overrides policy/audit plus JS/Rust same-transaction participant candidates are integrated; production stores, real OIDC, and endpoint/API binding remain open | [OGVCS-009](prd/todo/OGVCS-009-identity-path-authorization-audit.md) |
+| Selective sync | Private untrusted rc.1 selection-kernel contract plus independent bounded Node/Rust evaluators; tree filtering, planning, transfer/cache, filesystem apply, watcher/index integration, public CLI/routes, and million-path target remain open | [OGVCS-013](prd/todo/OGVCS-013-selective-sync-materialization.md) |
 
 The next integration milestone is one security-reviewed metadata, lifecycle,
 and authorization transaction boundary. That unlocks the public atomic-submit
@@ -125,6 +126,7 @@ cargo test --manifest-path core/object-model/rust/Cargo.toml --locked
 | `npm run test:path` | Test path and workspace filesystem behavior |
 | `npm run test:protocol` | Test the protocol reference runtime |
 | `npm run test:benchmark` | Test the benchmark and fault harness |
+| `npm run test:selective` | Test the private selective-sync kernel contract/reference and static nonclaims |
 
 Exact-scale tests are deliberately isolated in
 [`object-model-scale.yml`](.github/workflows/object-model-scale.yml). They are
