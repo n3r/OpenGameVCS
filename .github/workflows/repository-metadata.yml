@@ -1,144 +1,114 @@
-name: Repository metadata bounded conformance
+name: Chunking manifest exact 100-GiB scale (release only)
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/repository-metadata.yml'
-      - 'core/object-model/rust/**'
-      - 'server/migrations/identity-policy-audit/**'
-      - 'server/migrations/repository-metadata/**'
-      - 'server/modules/identity-policy-audit/**'
-      - 'server/modules/repository-metadata/**'
-      - 'spec/benchmark-fault/v1/**'
-      - 'spec/object-transfer/v1/**'
-      - 'spec/repository-metadata/v1/**'
-      - 'docs/changelog/OGVCS-006.md'
-      - 'tools/repository-metadata-workflow-policy.test.mjs'
-      - 'package.json'
-      - 'package-lock.json'
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/repository-metadata.yml'
-      - 'core/object-model/rust/**'
-      - 'server/migrations/identity-policy-audit/**'
-      - 'server/migrations/repository-metadata/**'
-      - 'server/modules/identity-policy-audit/**'
-      - 'server/modules/repository-metadata/**'
-      - 'spec/benchmark-fault/v1/**'
-      - 'spec/object-transfer/v1/**'
-      - 'spec/repository-metadata/v1/**'
-      - 'docs/changelog/OGVCS-006.md'
-      - 'tools/repository-metadata-workflow-policy.test.mjs'
-      - 'package.json'
-      - 'package-lock.json'
   workflow_dispatch:
+    inputs:
+      confirm_exact_scale:
+        description: "Run the billed two-implementation exact 100-GiB campaign"
+        required: true
+        type: boolean
+        default: false
+  push:
+    tags:
+      - "ogvcs-007-scale-*"
 
 permissions:
   contents: read
 
 concurrency:
-  group: repository-metadata-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: chunking-manifest-exact-scale-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  platform:
-    name: Locked bounded checks (${{ matrix.label }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { runner: macos-latest, label: macOS }
-          - { runner: windows-latest, label: Windows }
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
-          cache: npm
-      - uses: dtolnay/rust-toolchain@7d11e79e1714f6b6da93cac39ad8435666f5c337 # 1.82.0
-      - run: npm ci --ignore-scripts --no-audit --no-fund
-      - run: npm run test:metadata:spec
-      - run: npm run test:package --workspace @opengamevcs/repository-metadata-contract-v1
-      - run: node server/modules/repository-metadata/scripts/static-check.mjs
-      - run: node server/modules/repository-metadata/scripts/service-report.mjs --check
-      - run: cargo fetch --manifest-path server/modules/repository-metadata/Cargo.toml --locked
-      - run: cargo test --manifest-path server/modules/repository-metadata/Cargo.toml --locked --offline
-      - run: cargo test --manifest-path server/modules/repository-metadata/Cargo.toml --locked --offline --features legacy-test-adapter --test postgres_integration
-
-  linux-postgres:
-    name: Locked bounded checks and PostgreSQL 15
+  javascript-exact-scale:
+    if: ${{ github.event_name == 'push' || inputs.confirm_exact_scale == true }}
+    name: JavaScript exact 100-GiB evidence (Linux)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    services:
-      postgres:
-        # Official postgres:15.19-bookworm OCI index, resolved 2026-08-30.
-        image: postgres@sha256:5d1d70e254e3c5d7d76847a9deebb18478cd518df37abf6b278d4bdb1fe5d96c
-        env:
-          POSTGRES_DB: ogvcs_metadata_test_ci
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -d ogvcs_metadata_test_ci"
-          --health-interval 2s
-          --health-timeout 5s
-          --health-retries 30
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           cache: npm
-      - uses: dtolnay/rust-toolchain@7d11e79e1714f6b6da93cac39ad8435666f5c337 # 1.82.0
-        with:
-          components: clippy, rustfmt
       - run: npm ci --ignore-scripts --no-audit --no-fund
-      - run: npm run test:metadata:spec
-      - run: npm run test:package --workspace @opengamevcs/repository-metadata-contract-v1
-      - run: npm run test:metadata
-      - run: cargo fetch --manifest-path server/modules/repository-metadata/Cargo.toml --locked
-      - run: cargo fmt --manifest-path server/modules/repository-metadata/Cargo.toml -- --check
-      - run: cargo test --manifest-path server/modules/repository-metadata/Cargo.toml --locked --offline
-      - run: cargo clippy --manifest-path server/modules/repository-metadata/Cargo.toml --locked --offline --all-targets -- -D warnings
-      - run: cargo clippy --manifest-path server/modules/repository-metadata/Cargo.toml --locked --offline --all-targets --features legacy-test-adapter -- -D warnings
-      - name: Raise the disposable service connection ceiling
-        shell: bash
-        run: |
-          docker exec "${{ job.services.postgres.id }}" psql -U postgres -d ogvcs_metadata_test_ci -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET max_connections = 160"
-          docker restart "${{ job.services.postgres.id }}"
-          for attempt in {1..60}; do
-            if docker exec "${{ job.services.postgres.id }}" pg_isready -U postgres -d ogvcs_metadata_test_ci; then
-              exit 0
-            fi
-            sleep 1
-          done
-          exit 1
-      - name: Run bounded identity-bound PostgreSQL regressions
+      - run: mkdir -p artifacts
+      - name: Bind evidence to the checked-out commit
+        id: source
+        run: echo "revision=$(git rev-parse --verify HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Stream exactly 100 GiB through JavaScript
         env:
-          CARGO_NET_OFFLINE: 'true'
-          OGVCS_METADATA_IDENTITY_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/ogvcs_metadata_test_ci
-        run: cargo test --manifest-path server/modules/repository-metadata/Cargo.toml --locked --offline --test identity_binding_live -- --test-threads=1
-      - name: Run bounded same-transaction aggregate lifecycle regressions
-        env:
-          CARGO_NET_OFFLINE: 'true'
-          OGVCS_METADATA_AGGREGATE_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/ogvcs_metadata_test_ci
-        run: cargo test --manifest-path server/modules/repository-metadata/Cargo.toml --locked --offline --features legacy-test-adapter --test aggregate_bridge_postgres_live -- --test-threads=1
-      - name: Run the bounded live PostgreSQL report
-        shell: bash
-        env:
-          CARGO_NET_OFFLINE: 'true'
-          OGVCS_METADATA_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/ogvcs_metadata_test_ci
-        run: |
-          mkdir -p artifacts
-          node server/modules/repository-metadata/scripts/service-report.mjs | tee artifacts/repository-metadata-service-report.jsonl
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+          OGVCS_SOURCE_REVISION: ${{ steps.source.outputs.revision }}
+          OGVCS_SCALE_REPORT_PATH: ${{ github.workspace }}/artifacts/javascript-scale.json
+        run: node core/chunking-manifest/js/scripts/run-scale.mjs
+      - name: Upload JavaScript exact-scale evidence
         if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: repository-metadata-postgres-Linux
-          path: artifacts/repository-metadata-service-report.jsonl
+          name: chunking-scale-javascript-Linux
+          path: artifacts/javascript-scale.json
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30
+
+  rust-exact-scale:
+    if: ${{ github.event_name == 'push' || inputs.confirm_exact_scale == true }}
+    name: Rust exact 100-GiB evidence (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@7d11e79e1714f6b6da93cac39ad8435666f5c337 # 1.82.0
+      - run: mkdir -p artifacts
+      - name: Bind evidence to the checked-out commit
+        id: source
+        run: echo "revision=$(git rev-parse --verify HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Stream exactly 100 GiB through Rust
+        env:
+          OGVCS_SOURCE_REVISION: ${{ steps.source.outputs.revision }}
+          OGVCS_SCALE_REPORT_PATH: ${{ github.workspace }}/artifacts/rust-scale.json
+          OGVCS_RUST_VERSION: 1.82.0
+        run: cargo run --manifest-path core/chunking-manifest/rust/Cargo.toml --locked --release --example run_scale
+      - name: Upload Rust exact-scale evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: chunking-scale-rust-Linux
+          path: artifacts/rust-scale.json
+          if-no-files-found: error
+          retention-days: 30
+
+  compare-exact-scale:
+    name: Compare JavaScript and Rust exact 100-GiB evidence
+    needs:
+      - javascript-exact-scale
+      - rust-exact-scale
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - run: mkdir -p artifacts
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: chunking-scale-javascript-Linux
+          path: artifacts
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: chunking-scale-rust-Linux
+          path: artifacts
+      - name: Require exact byte-boundary parity and declared bounds
+        run: >-
+          node tools/compare-chunking-scale.mjs
+          --javascript artifacts/javascript-scale.json
+          --rust artifacts/rust-scale.json
+          --output artifacts/scale-comparison.json
+      - name: Upload combined exact-scale evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: chunking-scale-comparison-Linux
+          path: artifacts/*.json
+          if-no-files-found: error
+          retention-days: 30
