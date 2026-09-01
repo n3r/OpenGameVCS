@@ -34,15 +34,30 @@ The private workspace-index candidate adds:
 - create-new, sealed generations whose artifacts and owning directory are
   synced before an atomic active-pointer promotion; status fails closed while
   a transition is active and revalidates active/watcher state before return;
+- an enforced subscribe → complete baseline/ignore/full-scan → final watcher
+  barrier order for rebuild and repair, with repair retaining one mutation lock
+  across verification of and reseal from the exact same active generation;
 - a fixed-width digest lookup that always revalidates the complete canonical
   path, repository key, and platform key after a digest hit;
 - a strict `+1`, hash-chained watcher journal with exact 100,000-event and
   bounded-chunk limits, atomic cursor state, gap/overflow degradation, and
   content hashing for every event-touched regular file;
+- opening and final private status-time watcher barriers under the mutation
+  lock that journal exact session/cursor-linked batches and reject a page when
+  the final event transcript differs from the one classified; an idle
+  cursor-only advance is bound into the returned page and an authenticated
+  prior page can continue when the exact authority and event transcript remain
+  unchanged, while unavailable, failed, gapped, or substituted authority
+  closes/degrades and the public wrapper installs only the unavailable fence;
+- persisted watcher liveness with only two accepted shapes: authoritative is
+  continuous, resumable, open, and not reconciliation-required; degraded is
+  non-continuous, closed, and reconciliation-required;
 - deterministic status classification, repository/local ignore precedence,
-  and owner-keyed HMAC paging cursors bound to the generation, repository
-  settings, path profile/case mode, both ignore digests, filter, and full last
-  path key;
+  fully validated Applied staging candidates, and owner-keyed HMAC v2 paging
+  cursors retaining the exact watcher payload/cursor as authenticated
+  predecessor audit bindings and binding the watcher authority plus event
+  transcript, generation, staging generation/digest, repository settings, path
+  profile/case mode, both ignore digests, filter, and full last path key;
 - per-call authenticated reader leases created, synced, and kernel-locked
   before the mutation lock is released, so compaction cannot remove the
   generation used to construct that page;
@@ -58,10 +73,16 @@ proof: the only public checkpoint constructor is degraded. The first-party
 binary also has no authenticated workspace-baseline route, so authoritative
 clean status is not publicly available. Compaction likewise has no public CLI
 route. A lease covers only one status call/page: after that call returns, its
-cursor remains authenticated but a later page may fail stale if its generation
-has been reclaimed. The active generation remains byte-compatible with the
-`0.1.0-rc.1` generation format; the additive `0.1.0-rc.2` retention controls
-are private local metadata. Mixed old/new processes are unsupported during
+cursor remains authenticated but a later page fails stale if its generation,
+watcher authority/event transcript, or staging snapshot changed. Only the old
+payload digest/cursor may drift under an exact stable authority and transcript;
+they remain authenticated predecessor audit bindings. Cursor-only
+idle advances are rebound on the next returned page and do not force an
+unbounded restart. The active generation remains
+byte-compatible with the `0.1.0-rc.1` generation format; the additive rc.2
+retention controls and rc.3 reconciliation/cursor semantics are private local
+metadata. The stable `cursor-hmac-key-v1.bin` name versions key storage; rc.3
+uses `status-cursor/v2` plus a v2 domain and rejects v1 cursors. Mixed old/new processes are unsupported during
 compaction: restart cooperating clients before enabling it, and rebuild the
 private index before downgrading. Owner-HMACs and kernel locks fail closed for
 cross-workspace/repository records, but they do not solve the documented

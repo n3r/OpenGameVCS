@@ -1,8 +1,8 @@
 # OGVCS-012 durable workspace-index candidate boundary review
 
-- **Reviewed integration baseline:** `c973c4d468498664b2a7746ecaaf5a642be051ab`
+- **Reviewed integration baseline:** `70ef689187d7d7749e33348e472d9310b4bd0828`
 - **Private candidate contract:** `client/native-cli/rust/contracts/workspace-index/v1`
-  version `0.1.0-rc.2` (generation bytes remain `0.1.0-rc.1`)
+  version `0.1.0-rc.3` (generation bytes remain `0.1.0-rc.1`)
 - **Verdict:** useful fail-closed native implementation slice; OGVCS-012
   remains Todo.
 
@@ -14,6 +14,14 @@ million-entry caller vector. Every baseline chunk is at most 1,000 entries and
 1 MiB, the full stream is canonical and duplicate/collision free, and the final
 receipt binds the repository, baseline, settings, path profile/case mode,
 ordered digest, count, and repository ignore digest.
+
+The writer now enforces the reconciliation fence order. It subscribes before
+baseline work; after the complete receipt it writes the ignore snapshot and
+finishes the complete filesystem scan; only then can the watcher sink accept
+events and advance to its final native barrier. Baseline chunks are rejected
+after that preparation point and watcher chunks are rejected before it. This
+covers changes before the scan through the scan and changes after it through
+the subscribed watcher without treating a synthetic barrier as native proof.
 
 Generation artifacts are create-new. The writer publishes and syncs a
 transition, syncs every artifact, creates and syncs the seal, syncs the owning
@@ -38,11 +46,50 @@ reconciliation. A same-path transient untracked create/delete is the narrow
 case that can collapse to no finding.
 
 Status hashes every event-touched regular file and never treats timestamps as
-content equality. It emits the complete required status vocabulary, applies
-deterministic repository/local exact/subtree ignores, and pages at most 1,000
-items. The opaque paging cursor is HMAC-SHA256 authenticated by an owner-private
-local key and binds the exact generation/active digest, settings, profile/mode,
-both ignore digests, filter, and last full path/platform key.
+content equality. The private fenced path asks the existing session for an
+opening barrier before releasing the mutation lock/read-lease publication,
+then reacquires that lock for a final native barrier after every filesystem
+probe. Exact session/prior-cursor batches use journal-fsync then atomic
+watcher-state publication. If the final barrier drains any event, the in-flight
+page is rejected and restarted against the persisted transcript; a local
+watcher-file reread alone is never treated as proof. A cursor-only idle advance
+with unchanged event count/bytes/tail is safe and becomes the exact cursor
+recorded in the returned page. A subsequent page may carry that authenticated
+prior payload/cursor while the generation, staging/filter inputs, watcher
+authority digest, and exact transcript remain unchanged; the next result is
+rebound to its final cursor, avoiding idle-cursor pagination livelock without
+admitting an event. Unsupported, failed, gapped, or substituted authority
+closes the historical session and forces reconciliation. The public wrapper
+installs only the unavailable authority, so it never borrows the test-only
+native proof.
+
+Persisted watcher liveness has two accepted shapes. An authoritative state is
+continuous, resumable, session-open, and not reconciliation-required; a
+degraded state is non-continuous, session-closed, and reconciliation-required.
+A closed-but-continuous state fails validation even when its plain payload
+digest is recomputed, so it cannot skip the public unavailable fence and
+produce a clean result.
+
+Status emits the complete required vocabulary, applies deterministic
+repository/local exact/subtree ignores, and pages at most 1,000 items. It
+validates the exact staging snapshot before early clean; Applied Add, Move, and
+Delete intents seed destinations/sources, prior path, and staged FileID without
+waiting for watcher delivery. Prepared or Reverting staging requires recovery.
+The v2 opaque paging cursor is HMAC-SHA256 authenticated by an owner-private
+local key. It retains the exact watcher payload digest/cursor as authenticated
+predecessor audit bindings and binds the watcher
+generation/adapter/session/continuity digest, exact event
+count/bytes/tail, generation/active digest, staging generation/full-state
+digest, settings, profile/mode, both ignore digests, filter, and last full
+path/platform key. It contains no staged intent plaintext. Final revalidation
+checks active, watcher, and staging snapshots, so a newly appended
+earlier-sorting event cannot be omitted by continuing an old page cursor. Only
+the authenticated predecessor payload/cursor may drift while that authority
+digest and transcript stay exact.
+
+The cursor payload schema and HMAC domain are both v2. The existing
+`cursor-hmac-key-v1.bin` filename deliberately versions only the unchanged
+owner-random key-storage format; v1-shaped and v1-schema cursors fail closed.
 
 Each status page now acquires an owner-HMAC-authenticated reader lease while
 the mutation lock is still held, syncs the lease, and acquires its shared OS
@@ -69,6 +116,12 @@ unchanged. Mixed old/new processes are unsupported for this unpublished local
 candidate: cooperating clients must be restarted before compaction, and a
 downgrade rebuilds only the private index.
 
+Repair starts its watcher subscription before locking, then holds one mutation
+lock across complete hash/lookup/watch-chain verification of the exact active
+generation, old-entry consumption, full scan, final barrier, and publication.
+A cooperating transition, watcher append, or compaction therefore cannot
+replace the generation between verify and reseal.
+
 ## Adversarial and bounded evidence
 
 The default focused Rust suite covers:
@@ -78,9 +131,12 @@ The default focused Rust suite covers:
 - status loaded before a writer publishes a transition, status invoked during
   a transition, and the exact new generation after promotion;
 - watcher gap, oversized chunk, strict journal tail, synced-unpublished tail,
-  and portable watcher degradation;
+  portable watcher degradation, status-time missed-event append, final-checkpoint
+  session substitution, cursor-gap degradation, and an event withheld until
+  the final post-probe barrier;
 - digest collision substitution, path order/case collision, current
-  profile/case/settings/generation binding, and HMAC cursor tamper/staleness;
+  profile/case/settings/generation binding, HMAC cursor tamper/staleness,
+  v1 cursor rejection, and an earlier-sorting watcher append between pages;
 - index-root/generation-artifact symlink or reparse rejection;
 - reader-lease HMAC known-answer, wrong-key/domain/payload rejection,
   cross-workspace/repository rejection, exact 127/128/129 admission, locked
@@ -95,7 +151,11 @@ The default focused Rust suite covers:
 - timestamp-preserving same-size file edits and same-length sealed-artifact
   corruption; and
 - deleted tracked directory uncertainty, transient untracked deletion, and
-  repair that leaves local work files byte-for-byte unchanged.
+  repair that leaves local work files byte-for-byte unchanged;
+- subscribe/scan/final-barrier ordering with deterministic mutations on both
+  sides of the scan; and
+- Applied Add/Move/Delete staging visibility without watcher delivery, with no
+  plaintext staging details in the cursor.
 
 Two explicit bounded release tests produced this local candidate evidence:
 
@@ -104,8 +164,8 @@ Two explicit bounded release tests produced this local candidate evidence:
 | 1,000 changed files | 1,000 modified items, every content verified, 210 ms | one local debug test run; not p95 |
 | 100,000 watcher events | 100 chunks × 1,000, full-chain verification, event 100,001 rejected before append, 11.619 s | one local debug test run; not a million-path benchmark |
 
-The final default Rust run passed 42 library tests (with the two exact tests
-explicitly ignored), 2 binary-contract tests, 2 contract-vector tests, and 11
+The final default Rust run passed 54 library tests (with the two exact tests
+explicitly ignored), 2 binary-contract tests, 2 contract-vector tests, and 12
 production-foundation integration tests. Rustfmt and all-target clippy with
 warnings denied passed on Rust 1.82. This host lacks the
 `x86_64-pc-windows-gnu` Rust standard-library target, so the exact candidate's
@@ -116,7 +176,7 @@ passed 3 Node tests, the roadmap validator passed 8 tests, and the new private-
 contract generator/validator passed on Node 24.
 
 The private contract manifest authenticates six artifacts with artifact-set
-SHA-256 `edc1657f17204135bc8e25c39134275f4ac5cda2c2c8b253148b630befd48831`.
+SHA-256 `fcbb718537a382ecedc6a7e39ec409669d1d10e54aeb70b4b209e41cc83fb3f2`.
 Node 24 independently recomputes the cursor and retention HMAC vectors. Rust
 pins an independently calculated retention HMAC-SHA256 known answer, exercises
 wrong-key/domain/payload rejection, uses the production cursor encoder, and

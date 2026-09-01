@@ -44,12 +44,12 @@ pub const WORKSPACE_INDEX_SCHEMA: &str = "ogvcs.workspace-index/active/v1";
 pub const WORKSPACE_INDEX_REPORT_SCHEMA: &str = "ogvcs.workspace-index/report/v1";
 pub const WORKSPACE_STATUS_SCHEMA: &str = "ogvcs.workspace-index/status-page/v1";
 pub const BASELINE_RECEIPT_SCHEMA: &str = "ogvcs.workspace-index/baseline-receipt/v1";
-pub const WORKSPACE_INDEX_CONTRACT_VERSION: &str = "0.1.0-rc.2";
+pub const WORKSPACE_INDEX_CONTRACT_VERSION: &str = "0.1.0-rc.3";
 const WORKSPACE_INDEX_GENERATION_FORMAT_VERSION: &str = "0.1.0-rc.1";
 pub const WORKSPACE_INDEX_CONTRACT_SHA256: &str =
-    "5d2ed804e47862b5387bc09d07bd95cf6464f5f228452314bba3b48008216eb5";
+    "8b2f8281a34b1805760eb4c674bb9a5068b791a8486316beb8e9b237eed213f8";
 pub const WORKSPACE_INDEX_CONTRACT_ARTIFACT_SET_SHA256: &str =
-    "edc1657f17204135bc8e25c39134275f4ac5cda2c2c8b253148b630befd48831";
+    "fcbb718537a382ecedc6a7e39ec409669d1d10e54aeb70b4b209e41cc83fb3f2";
 pub const MAX_BASELINE_ENTRIES: u64 = 10_000_000;
 pub const MAX_BASELINE_CHUNK_ITEMS: usize = 1_000;
 pub const MAX_BASELINE_CHUNK_BYTES: usize = 1024 * 1024;
@@ -68,7 +68,7 @@ const MAX_EVENTS_BYTES: u64 = 128 * 1024 * 1024;
 const LOOKUP_RECORD_BYTES: u64 = 76;
 const ORDERED_BASELINE_DOMAIN: &[u8] = b"ogvcs.workspace-index/baseline-ordered/v1\0";
 const WATCH_RECORD_DOMAIN: &[u8] = b"ogvcs.workspace-index/watch-record/v1\0";
-const STATUS_CURSOR_DOMAIN: &[u8] = b"ogvcs.workspace-index/status-cursor-hmac/v1\0";
+const STATUS_CURSOR_DOMAIN: &[u8] = b"ogvcs.workspace-index/status-cursor-hmac/v2\0";
 const CURSOR_KEY_NAME: &str = "cursor-hmac-key-v1.bin";
 const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
@@ -209,6 +209,12 @@ pub trait WorkspaceWatchEventSink {
     fn append_watch_chunk(&mut self, events: &[WorkspaceWatchEvent]) -> Result<(), CliError>;
 }
 
+pub trait WorkspaceWatchBatchSink {
+    /// Commits one exact session/cursor-linked batch using the active
+    /// generation's append-sync-state publication order.
+    fn append_watch_batch(&mut self, batch: &WorkspaceWatchBatch) -> Result<(), CliError>;
+}
+
 /// Trust boundary for USN/FSEvents/inotify continuity. A production adapter
 /// must subscribe before reconciliation, stream every queued event through the
 /// bounded sink, and return a durable cursor only after its native barrier.
@@ -224,6 +230,26 @@ pub trait WorkspaceWatcherAuthority {
         start: &WorkspaceWatcherStart,
         sink: &mut dyn WorkspaceWatchEventSink,
     ) -> Result<WorkspaceWatcherCheckpoint, CliError>;
+
+    /// Advances an already-open native session to an exact status-time
+    /// barrier. The default cannot mint continuity, so third-party and
+    /// unavailable implementations remain fail-degraded until a built-in
+    /// native authority lands.
+    fn fence_status(
+        &mut self,
+        _: &Path,
+        _: &VerifiedBinding,
+        start: &WorkspaceWatcherStart,
+        _: &mut dyn WorkspaceWatchBatchSink,
+    ) -> Result<WorkspaceWatcherCheckpoint, CliError> {
+        WorkspaceWatcherCheckpoint::unsupported(
+            start,
+            start
+                .resume_cursor
+                .clone()
+                .unwrap_or_else(|| "unsupported".to_owned()),
+        )
+    }
 }
 
 #[derive(Default)]
@@ -374,6 +400,14 @@ struct StatusCursorPayload {
     schema: String,
     generation_id: String,
     active_sha256: String,
+    watcher_payload_sha256: String,
+    watcher_cursor: String,
+    watcher_authority_sha256: String,
+    watcher_event_count: u64,
+    watcher_event_bytes: u64,
+    watcher_event_tail_sha256: String,
+    staging_generation: u64,
+    staging_state_sha256: String,
     repository_settings_digest: String,
     path_profile: String,
     case_mode: String,
@@ -389,6 +423,20 @@ struct StatusCursorPayload {
 struct StatusCursor {
     payload: StatusCursorPayload,
     mac_sha256: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WatcherCursorAuthorityBinding<'a> {
+    schema: &'static str,
+    generation_id: &'a str,
+    adapter: &'a str,
+    session_id: &'a str,
+    continuity_proven: bool,
+    resume_supported: bool,
+    session_open: bool,
+    reconciliation_required: bool,
+    reason: &'a str,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -802,8 +850,13 @@ struct GenerationWriter {
     prior_sort_key: Option<(String, String)>,
     prior_repository_key: Option<String>,
     local_ignore_rules: Vec<WorkspaceIgnoreRule>,
+    reconciliation_prepared: bool,
     committed: bool,
     abandoned_for_test: bool,
+}
+
+struct PreparedGeneration {
+    provisional_seal: GenerationSealPayload,
 }
 
 impl GenerationWriter {
@@ -887,6 +940,7 @@ impl GenerationWriter {
                 prior_sort_key: None,
                 prior_repository_key: None,
                 local_ignore_rules,
+                reconciliation_prepared: false,
                 committed: false,
                 abandoned_for_test: false,
             })
@@ -1142,6 +1196,9 @@ impl GenerationWriter {
 
 impl WorkspaceBaselineSink for GenerationWriter {
     fn append_chunk(&mut self, entries: &[WorkspaceBaselineEntry]) -> Result<(), CliError> {
+        if self.reconciliation_prepared {
+            return Err(index_invalid());
+        }
         self.validate_chunk(entries)?;
         for entry in entries {
             self.append_one(entry)?;
@@ -1152,6 +1209,9 @@ impl WorkspaceBaselineSink for GenerationWriter {
 
 impl WorkspaceWatchEventSink for GenerationWriter {
     fn append_watch_chunk(&mut self, events: &[WorkspaceWatchEvent]) -> Result<(), CliError> {
+        if !self.reconciliation_prepared {
+            return Err(index_invalid());
+        }
         self.append_watch_events(events)
     }
 }
@@ -1763,12 +1823,17 @@ fn native_adapter_matches_host(adapter: &str) -> bool {
 }
 
 impl GenerationWriter {
-    fn finish(
-        mut self,
+    /// Completes every filesystem observation before the watcher authority is
+    /// allowed to drain to its final native barrier. Once prepared, baseline
+    /// entries can no longer be appended and only watcher events may advance.
+    fn prepare_reconciliation(
+        &mut self,
         receipt: WorkspaceBaselineReceipt,
-        checkpoint: WorkspaceWatcherCheckpoint,
-    ) -> Result<WorkspaceIndexReport, CliError> {
-        validate_baseline_receipt(&receipt, &self)?;
+    ) -> Result<PreparedGeneration, CliError> {
+        if self.reconciliation_prepared {
+            return Err(index_invalid());
+        }
+        validate_baseline_receipt(&receipt, self)?;
         let repository_ignore_digest = receipt.repository_ignore_rules_sha256.clone();
         let local_ignore_digest = ignore_rules_digest(&self.local_ignore_rules)?;
         let ignores = self.write_ignores(receipt.repository_ignore_rules)?;
@@ -1808,7 +1873,23 @@ impl GenerationWriter {
             repository_ignore_rules_sha256: repository_ignore_digest,
             local_ignore_rules_sha256: local_ignore_digest,
         };
-        append_untracked_findings(&mut self, &provisional_seal, &ignores)?;
+        append_untracked_findings(self, &provisional_seal, &ignores)?;
+        self.reconciliation_prepared = true;
+        Ok(PreparedGeneration { provisional_seal })
+    }
+
+    fn finish(
+        mut self,
+        prepared: PreparedGeneration,
+        checkpoint: WorkspaceWatcherCheckpoint,
+    ) -> Result<WorkspaceIndexReport, CliError> {
+        if !self.reconciliation_prepared
+            || prepared.provisional_seal.generation_id != self.generation_id
+            || prepared.provisional_seal.generation != self.generation
+        {
+            return Err(index_invalid());
+        }
+        let provisional_seal = prepared.provisional_seal;
         validate_watcher_checkpoint(
             &WorkspaceWatcherStart {
                 adapter: checkpoint.adapter.clone(),
@@ -2004,10 +2085,10 @@ pub fn rebuild_workspace_index(
         Err(error) => return Err(error),
     };
     cancellation.check("after-workspace-baseline-stream")?;
-    validate_baseline_receipt(&receipt, &writer)?;
+    let prepared = writer.prepare_reconciliation(receipt)?;
     let checkpoint = watcher.finish_reconciliation(&watcher_start, &mut writer)?;
     validate_watcher_checkpoint(&watcher_start, &checkpoint)?;
-    writer.finish(receipt, checkpoint)
+    writer.finish(prepared, checkpoint)
 }
 
 fn validate_index_session(
@@ -2203,9 +2284,9 @@ fn validate_watcher_state(
         || !valid_digest(&payload.event_tail_sha256)
         || payload.event_count > MAX_WATCH_EVENTS
         || payload.event_bytes > MAX_EVENTS_BYTES
-        || (payload.continuity_proven && !native_adapter_matches_host(&payload.adapter))
-        || (payload.continuity_proven && !payload.resume_supported)
-        || (!payload.continuity_proven && !payload.reconciliation_required)
+        || !watcher_liveness_shape_is_coherent(payload)
+        || (watcher_state_is_authoritative(payload)
+            && !native_adapter_matches_host(&payload.adapter))
     {
         return Err(index_invalid());
     }
@@ -2216,6 +2297,18 @@ fn validate_watcher_state(
         return Err(index_invalid());
     }
     Ok(())
+}
+
+fn watcher_state_is_authoritative(payload: &WatcherStatePayload) -> bool {
+    payload.continuity_proven
+        && payload.resume_supported
+        && payload.session_open
+        && !payload.reconciliation_required
+}
+
+fn watcher_liveness_shape_is_coherent(payload: &WatcherStatePayload) -> bool {
+    watcher_state_is_authoritative(payload)
+        || (!payload.continuity_proven && !payload.session_open && payload.reconciliation_required)
 }
 
 fn validate_ignore_file(
@@ -2251,7 +2344,16 @@ pub fn verify_workspace_index(root: &Path) -> Result<WorkspaceIndexReport, CliEr
     let root = validated_root(root)?;
     let _lock = MutationLock::acquire(&root)?;
     let (index, _, active, seal, watcher, _) = load_active(&root, false)?;
-    let _ = read_cursor_key(&index)?;
+    verify_loaded_workspace_index(&index, &active, &seal, &watcher)
+}
+
+fn verify_loaded_workspace_index(
+    index: &Path,
+    active: &ActiveManifest,
+    seal: &GenerationSeal,
+    watcher: &WatcherState,
+) -> Result<WorkspaceIndexReport, CliError> {
+    let _ = read_cursor_key(index)?;
     for artifact in [
         &seal.payload.entries,
         &seal.payload.lookup,
@@ -2262,9 +2364,9 @@ pub fn verify_workspace_index(root: &Path) -> Result<WorkspaceIndexReport, CliEr
             return Err(index_invalid());
         }
     }
-    validate_lookup_order(&index, &seal.payload)?;
-    validate_watch_records(&index, &seal.payload, &watcher.payload)?;
-    Ok(report_from_loaded(&active, &seal, &watcher))
+    validate_lookup_order(index, &seal.payload)?;
+    validate_watch_records(index, &seal.payload, &watcher.payload)?;
+    Ok(report_from_loaded(active, seal, watcher))
 }
 
 fn validate_lookup_order(index: &Path, seal: &GenerationSealPayload) -> Result<(), CliError> {
@@ -2349,7 +2451,7 @@ fn report_from_loaded(
     seal: &GenerationSeal,
     watcher: &WatcherState,
 ) -> WorkspaceIndexReport {
-    let complete = watcher.payload.continuity_proven && !watcher.payload.reconciliation_required;
+    let complete = watcher_state_is_authoritative(&watcher.payload);
     WorkspaceIndexReport {
         schema: WORKSPACE_INDEX_REPORT_SCHEMA,
         generation: active.payload.generation,
@@ -2366,20 +2468,27 @@ fn report_from_loaded(
 }
 
 fn revalidate_status_snapshot(
-    index: &Path,
-    active: &ActiveManifest,
-    seal: &GenerationSeal,
-    watcher: &WatcherState,
+    root: &Path,
+    snapshot: &StatusSnapshotIdentity<'_>,
+    watcher: &mut WatcherState,
+    authority: &mut dyn WorkspaceWatcherAuthority,
 ) -> Result<(), CliError> {
-    match fs::symlink_metadata(index.join("transition.json")) {
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-        Ok(_) => return Err(index_recovery_required()),
-        Err(_) => return Err(index_invalid()),
+    let _lock = MutationLock::acquire(root)?;
+    let (current_index, current_metadata, current_active, current_seal, mut current_watcher, _) =
+        load_active(root, false)?;
+    if current_index != snapshot.index
+        || json_digest(&current_metadata)? != json_digest(snapshot.metadata)?
+        || current_seal.payload_sha256 != snapshot.seal.payload_sha256
+    {
+        return Err(index_error(
+            "WORKSPACE_STATUS_SNAPSHOT_CHANGED",
+            "The workspace-index authority changed while status was being classified.",
+            "Restart status from its first page against the current sealed generation.",
+        ));
     }
-    let current_active = read_optional_active(index)?.ok_or_else(index_invalid)?;
-    if current_active.payload.generation != active.payload.generation
-        || current_active.payload.generation_id != active.payload.generation_id
-        || current_active.payload_sha256 != active.payload_sha256
+    if current_active.payload.generation != snapshot.active.payload.generation
+        || current_active.payload.generation_id != snapshot.active.payload.generation_id
+        || current_active.payload_sha256 != snapshot.active.payload_sha256
     {
         return Err(index_error(
             "WORKSPACE_STATUS_SNAPSHOT_CHANGED",
@@ -2387,12 +2496,6 @@ fn revalidate_status_snapshot(
             "Restart status from its first page against the new sealed generation.",
         ));
     }
-    let current_watcher: WatcherState = read_json_private(
-        &index.join(format!("watcher-{}.v1", active.payload.generation_id)),
-        MAX_CONTROL_BYTES,
-    )?;
-    validate_wrapped(&current_watcher.payload, &current_watcher.payload_sha256)?;
-    validate_watcher_state(index, seal, &current_watcher)?;
     if current_watcher.payload_sha256 != watcher.payload_sha256
         || current_watcher.payload.event_count != watcher.payload.event_count
         || current_watcher.payload.event_bytes != watcher.payload.event_bytes
@@ -2404,6 +2507,54 @@ fn revalidate_status_snapshot(
             "Restart status from its first page against the current watcher cursor.",
         ));
     }
+    let current_staging = read_validated_staging_snapshot(root, &current_metadata.binding)?;
+    if current_staging.state.generation != snapshot.staging_generation
+        || current_staging.state_sha256 != snapshot.staging_state_sha256
+    {
+        return Err(index_error(
+            "WORKSPACE_STATUS_SNAPSHOT_CHANGED",
+            "The durable staging snapshot changed while status was being classified.",
+            "Restart status from its first page against the current staging journal.",
+        ));
+    }
+    fence_status_locked(
+        root,
+        snapshot.index,
+        &current_metadata,
+        &current_active,
+        &current_seal,
+        &mut current_watcher,
+        authority,
+    )?;
+    validate_watcher_state(snapshot.index, &current_seal, &current_watcher)?;
+    if current_watcher.payload.event_count != watcher.payload.event_count
+        || current_watcher.payload.event_bytes != watcher.payload.event_bytes
+        || current_watcher.payload.event_tail_sha256 != watcher.payload.event_tail_sha256
+    {
+        return Err(index_error(
+            "WORKSPACE_STATUS_SNAPSHOT_CHANGED",
+            "The final native watcher barrier drained a change after status classification began.",
+            "Restart status from its first page against the newly journaled watcher transcript.",
+        ));
+    }
+    let final_staging = read_validated_staging_snapshot(root, &current_metadata.binding)?;
+    if final_staging.state.generation != snapshot.staging_generation
+        || final_staging.state_sha256 != snapshot.staging_state_sha256
+    {
+        return Err(index_error(
+            "WORKSPACE_STATUS_SNAPSHOT_CHANGED",
+            "The durable staging snapshot changed before the final watcher barrier completed.",
+            "Restart status from its first page against the current staging journal.",
+        ));
+    }
+    // A trusted native authority may advance a volume-global cursor without
+    // yielding a repository event. The transcript remains the classified
+    // snapshot, so bind the returned page to this exact final cursor/payload.
+    // Cursor decoding accepts that authenticated prior cursor only while the
+    // generation, staging/filter inputs, watcher authority, and complete event
+    // transcript remain exact; this prevents idle advances from livelocking
+    // pagination without admitting a missed repository event.
+    *watcher = current_watcher;
     Ok(())
 }
 
@@ -2430,6 +2581,21 @@ pub fn record_workspace_change_batch(
     root: &Path,
     batch: &WorkspaceWatchBatch,
 ) -> Result<WorkspaceIndexReport, CliError> {
+    let root = validated_root(root)?;
+    let _lock = MutationLock::acquire(&root)?;
+    let (index, metadata, active, seal, mut watcher, _) = load_active(&root, false)?;
+    append_watch_batch_locked(&index, &metadata, &active, &seal, &mut watcher, batch)?;
+    Ok(report_from_loaded(&active, &seal, &watcher))
+}
+
+fn append_watch_batch_locked(
+    index: &Path,
+    metadata: &VerifiedWorkspaceMetadata,
+    active: &ActiveManifest,
+    seal: &GenerationSeal,
+    watcher: &mut WatcherState,
+    batch: &WorkspaceWatchBatch,
+) -> Result<(), CliError> {
     if !valid_bounded_opaque(&batch.session_id, 128)
         || !valid_bounded_opaque(&batch.prior_cursor, 512)
         || !valid_bounded_opaque(&batch.cursor, 512)
@@ -2437,15 +2603,12 @@ pub fn record_workspace_change_batch(
     {
         return Err(input_error());
     }
-    let root = validated_root(root)?;
-    let _lock = MutationLock::acquire(&root)?;
-    let (index, metadata, active, seal, mut watcher, _) = load_active(&root, false)?;
     validate_watch_chunk(&batch.events, &metadata.binding)?;
     if !watcher.payload.session_open
         || watcher.payload.session_id != batch.session_id
         || watcher.payload.cursor != batch.prior_cursor
     {
-        persist_degraded_state(&index, &mut watcher, "cursor-gap", true)?;
+        persist_degraded_state(index, watcher, "cursor-gap", true)?;
         return Err(index_error(
             "WORKSPACE_WATCHER_CURSOR_GAP",
             "The watcher cursor or session does not continue the durable journal.",
@@ -2471,7 +2634,7 @@ pub fn record_workspace_change_batch(
         )
         .ok_or_else(index_invalid)?;
     if count > MAX_WATCH_EVENTS || bytes > MAX_EVENTS_BYTES {
-        persist_degraded_state(&index, &mut watcher, "overflow", true)?;
+        persist_degraded_state(index, watcher, "overflow", true)?;
         return Err(index_limit("WORKSPACE_WATCH_EVENT_LIMIT"));
     }
     let events_path = index.join(&seal.payload.events_name);
@@ -2502,8 +2665,29 @@ pub fn record_workspace_change_batch(
         &index.join(format!("watcher-{}.v1", active.payload.generation_id)),
         &watcher,
     )?;
-    sync_directory(&index)?;
-    Ok(report_from_loaded(&active, &seal, &watcher))
+    sync_directory(index)?;
+    Ok(())
+}
+
+struct StatusFenceSink<'a> {
+    index: &'a Path,
+    metadata: &'a VerifiedWorkspaceMetadata,
+    active: &'a ActiveManifest,
+    seal: &'a GenerationSeal,
+    watcher: &'a mut WatcherState,
+}
+
+impl WorkspaceWatchBatchSink for StatusFenceSink<'_> {
+    fn append_watch_batch(&mut self, batch: &WorkspaceWatchBatch) -> Result<(), CliError> {
+        append_watch_batch_locked(
+            self.index,
+            self.metadata,
+            self.active,
+            self.seal,
+            self.watcher,
+            batch,
+        )
+    }
 }
 
 fn encode_watch_records(
@@ -2581,10 +2765,125 @@ struct StatusCandidate {
     event_kind: Option<WorkspaceWatchEventKind>,
     saw_created: bool,
     saw_deleted: bool,
+    staged_file_id: Option<String>,
+}
+
+struct ValidatedStagingSnapshot {
+    state: super::StagingState,
+    state_sha256: String,
+}
+
+struct StatusSnapshotIdentity<'a> {
+    index: &'a Path,
+    metadata: &'a VerifiedWorkspaceMetadata,
+    active: &'a ActiveManifest,
+    seal: &'a GenerationSeal,
+    staging_generation: u64,
+    staging_state_sha256: &'a str,
+}
+
+struct StatusCursorContext<'a> {
+    active: &'a ActiveManifest,
+    seal: &'a GenerationSealPayload,
+    watcher: &'a WatcherState,
+    staging_generation: u64,
+    staging_state_sha256: &'a str,
+    binding: &'a VerifiedBinding,
+    filter_sha256: &'a str,
+}
+
+fn read_validated_staging_snapshot(
+    root: &Path,
+    binding: &VerifiedBinding,
+) -> Result<ValidatedStagingSnapshot, CliError> {
+    let state = super::read_staging_state(root)?;
+    for intent in &state.intents {
+        super::validate_intent(intent, binding)?;
+        if intent.state != super::IntentState::Applied {
+            return Err(index_recovery_required());
+        }
+    }
+    let state_sha256 = json_digest(&state)?;
+    Ok(ValidatedStagingSnapshot {
+        state,
+        state_sha256,
+    })
+}
+
+fn persist_status_checkpoint(
+    index: &Path,
+    watcher: &mut WatcherState,
+    checkpoint: WorkspaceWatcherCheckpoint,
+) -> Result<(), CliError> {
+    watcher.payload.adapter = checkpoint.adapter;
+    watcher.payload.session_id = checkpoint.session_id;
+    watcher.payload.cursor = checkpoint.cursor;
+    watcher.payload.continuity_proven = true;
+    watcher.payload.resume_supported = true;
+    watcher.payload.session_open = true;
+    watcher.payload.reconciliation_required = false;
+    watcher.payload.reason = "current-native-cursor".to_owned();
+    watcher.payload_sha256 = json_digest(&watcher.payload)?;
+    write_json_atomic(
+        &index.join(format!("watcher-{}.v1", watcher.payload.generation_id)),
+        watcher,
+    )?;
+    sync_directory(index)
+}
+
+fn fence_status_locked(
+    root: &Path,
+    index: &Path,
+    metadata: &VerifiedWorkspaceMetadata,
+    active: &ActiveManifest,
+    seal: &GenerationSeal,
+    watcher: &mut WatcherState,
+    authority: &mut dyn WorkspaceWatcherAuthority,
+) -> Result<(), CliError> {
+    if !watcher_state_is_authoritative(&watcher.payload) {
+        return Ok(());
+    }
+    let start = WorkspaceWatcherStart {
+        adapter: watcher.payload.adapter.clone(),
+        session_id: watcher.payload.session_id.clone(),
+        resume_cursor: Some(watcher.payload.cursor.clone()),
+    };
+    validate_watcher_start(&start)?;
+    let result = {
+        let mut sink = StatusFenceSink {
+            index,
+            metadata,
+            active,
+            seal,
+            watcher,
+        };
+        authority.fence_status(root, &metadata.binding, &start, &mut sink)
+    };
+    match result {
+        Ok(checkpoint) => match validate_watcher_checkpoint(&start, &checkpoint) {
+            Ok(()) if checkpoint.continuity_proven && checkpoint.resume_supported => {
+                persist_status_checkpoint(index, watcher, checkpoint)
+            }
+            Ok(()) => persist_degraded_state(index, watcher, "status-fence-unavailable", true),
+            Err(_) => persist_degraded_state(index, watcher, "status-fence-invalid", true),
+        },
+        Err(_) if watcher.payload.reconciliation_required && !watcher.payload.session_open => {
+            Ok(())
+        }
+        Err(_) => persist_degraded_state(index, watcher, "status-fence-failed", true),
+    }
 }
 
 pub fn workspace_status_page(
     request: &WorkspaceStatusPageRequest,
+) -> Result<WorkspaceStatusPage, CliError> {
+    let mut watcher = UnavailableWorkspaceWatcher;
+    workspace_status_page_fenced(request, &mut watcher)
+}
+
+fn workspace_status_page_fenced(
+    request: &WorkspaceStatusPageRequest,
+    watcher_authority: &mut dyn WorkspaceWatcherAuthority,
 ) -> Result<WorkspaceStatusPage, CliError> {
     if request.limit == 0 || request.limit > MAX_STATUS_PAGE_ITEMS {
         return Err(input_error());
@@ -2595,34 +2894,63 @@ pub fn workspace_status_page(
     // therefore declare a concurrently changed workspace clean.  Status is
     // deliberately unavailable until recovery removes the transition or the
     // new sealed generation becomes active.
-    let (index, metadata, active, seal, watcher, ignores, _lease) = {
+    let (index, metadata, active, seal, mut watcher, ignores, staging, _lease) = {
         let _lock = MutationLock::acquire(&root)?;
-        let (index, metadata, active, seal, watcher, ignores) = load_active(&root, false)?;
+        let (index, metadata, active, seal, mut watcher, ignores) = load_active(&root, false)?;
+        // This is the sole active-generation writer lease for the fence. Every
+        // appended batch is journal-sync/state-published under MutationLock,
+        // and pre-existing readers detect it through final payload revalidation.
+        fence_status_locked(
+            &root,
+            &index,
+            &metadata,
+            &active,
+            &seal,
+            &mut watcher,
+            watcher_authority,
+        )?;
+        let staging = read_validated_staging_snapshot(&root, &metadata.binding)?;
         let lease = retention::acquire_generation_read_lease(&index, &metadata, &active)?;
-        (index, metadata, active, seal, watcher, ignores, lease)
+        (
+            index, metadata, active, seal, watcher, ignores, staging, lease,
+        )
+    };
+    let snapshot = StatusSnapshotIdentity {
+        index: &index,
+        metadata: &metadata,
+        active: &active,
+        seal: &seal,
+        staging_generation: staging.state.generation,
+        staging_state_sha256: &staging.state_sha256,
     };
     status_after_load_hook(&index);
     let cursor_key = read_cursor_key(&index)?;
     let filter_sha256 = json_digest(&request.filter)?;
-    let after_key = request
-        .cursor
-        .as_deref()
-        .map(|cursor| {
-            decode_status_cursor(
-                cursor,
-                &active,
-                &seal.payload,
-                &metadata.binding,
-                &filter_sha256,
-                &cursor_key,
-            )
-        })
-        .transpose()?;
-    let mut complete =
-        watcher.payload.continuity_proven && !watcher.payload.reconciliation_required;
+    let after_key = {
+        let context = StatusCursorContext {
+            active: &active,
+            seal: &seal.payload,
+            watcher: &watcher,
+            staging_generation: staging.state.generation,
+            staging_state_sha256: &staging.state_sha256,
+            binding: &metadata.binding,
+            filter_sha256: &filter_sha256,
+        };
+        request
+            .cursor
+            .as_deref()
+            .map(|cursor| decode_status_cursor(cursor, &context, &cursor_key))
+            .transpose()?
+    };
+    let mut complete = watcher_state_is_authoritative(&watcher.payload);
     let mut reason = watcher.payload.reason.clone();
-    if seal.payload.finding_count == 0 && watcher.payload.event_count == 0 {
-        revalidate_status_snapshot(&index, &active, &seal, &watcher)?;
+    if seal.payload.finding_count == 0
+        && watcher.payload.event_count == 0
+        && staging.state.intents.is_empty()
+    {
+        revalidate_status_snapshot(&root, &snapshot, &mut watcher, watcher_authority)?;
+        complete = watcher_state_is_authoritative(&watcher.payload);
+        reason = watcher.payload.reason.clone();
         return Ok(WorkspaceStatusPage {
             schema: WORKSPACE_STATUS_SCHEMA,
             generation: active.payload.generation,
@@ -2645,27 +2973,18 @@ pub fn workspace_status_page(
     if candidates.len() > MAX_STATUS_CANDIDATES {
         return Err(index_invalid());
     }
-    let staging = super::read_staging_state(&root)?;
-    let added: BTreeSet<&str> = staging
-        .intents
-        .iter()
-        .filter(|intent| intent.kind == super::IntentKind::Add)
-        .filter_map(|intent| intent.destination_path.as_deref())
-        .collect();
+    merge_staged_candidates(&metadata.binding, &mut candidates, &staging.state)?;
+    if candidates.len() > MAX_STATUS_CANDIDATES {
+        return Err(index_invalid());
+    }
     let mut lookup = LookupReader::open(&index, &seal.payload)?;
     let mut status_counts = BTreeMap::new();
     let mut items = Vec::with_capacity(request.limit);
     let mut total = 0u64;
     let mut has_more = false;
     for (sort_key, candidate) in candidates {
-        let classified = classify_status_candidate(
-            &root,
-            &metadata.binding,
-            &ignores,
-            &mut lookup,
-            &added,
-            candidate,
-        )?;
+        let classified =
+            classify_status_candidate(&root, &metadata.binding, &ignores, &mut lookup, candidate)?;
         if classified.requires_reconciliation {
             complete = false;
             reason = "deleted-path-descendants-unproven".to_owned();
@@ -2695,15 +3014,25 @@ pub fn workspace_status_page(
             has_more = true;
         }
     }
+    revalidate_status_snapshot(&root, &snapshot, &mut watcher, watcher_authority)?;
+    if !watcher_state_is_authoritative(&watcher.payload) {
+        complete = false;
+        reason = watcher.payload.reason.clone();
+    }
     let next_cursor = if has_more {
         items
             .last()
             .map(|item| {
                 encode_status_cursor(
-                    &active,
-                    &seal.payload,
-                    &metadata.binding,
-                    &filter_sha256,
+                    &StatusCursorContext {
+                        active: &active,
+                        seal: &seal.payload,
+                        watcher: &watcher,
+                        staging_generation: staging.state.generation,
+                        staging_state_sha256: &staging.state_sha256,
+                        binding: &metadata.binding,
+                        filter_sha256: &filter_sha256,
+                    },
                     &item.repository_path,
                     &cursor_key,
                 )
@@ -2712,7 +3041,6 @@ pub fn workspace_status_page(
     } else {
         None
     };
-    revalidate_status_snapshot(&index, &active, &seal, &watcher)?;
     Ok(WorkspaceStatusPage {
         schema: WORKSPACE_STATUS_SCHEMA,
         generation: active.payload.generation,
@@ -2727,25 +3055,44 @@ pub fn workspace_status_page(
     })
 }
 
+fn watcher_cursor_authority_digest(watcher: &WatcherState) -> Result<String, CliError> {
+    json_digest(&WatcherCursorAuthorityBinding {
+        schema: "ogvcs.workspace-index/status-cursor-watcher-authority/v1",
+        generation_id: &watcher.payload.generation_id,
+        adapter: &watcher.payload.adapter,
+        session_id: &watcher.payload.session_id,
+        continuity_proven: watcher.payload.continuity_proven,
+        resume_supported: watcher.payload.resume_supported,
+        session_open: watcher.payload.session_open,
+        reconciliation_required: watcher.payload.reconciliation_required,
+        reason: &watcher.payload.reason,
+    })
+}
+
 fn encode_status_cursor(
-    active: &ActiveManifest,
-    seal: &GenerationSealPayload,
-    binding: &VerifiedBinding,
-    filter_sha256: &str,
+    context: &StatusCursorContext<'_>,
     after_path: &str,
     key: &[u8; 32],
 ) -> Result<String, CliError> {
-    let (after_platform_key, _) = status_sort_key(after_path, binding)?;
+    let (after_platform_key, _) = status_sort_key(after_path, context.binding)?;
     let payload = StatusCursorPayload {
-        schema: "ogvcs.workspace-index/status-cursor/v1".to_owned(),
-        generation_id: active.payload.generation_id.clone(),
-        active_sha256: active.payload_sha256.clone(),
-        repository_settings_digest: binding.repository_settings_digest.clone(),
-        path_profile: binding.path_profile.clone(),
-        case_mode: binding.case_mode.clone(),
-        repository_ignore_rules_sha256: seal.repository_ignore_rules_sha256.clone(),
-        local_ignore_rules_sha256: seal.local_ignore_rules_sha256.clone(),
-        filter_sha256: filter_sha256.to_owned(),
+        schema: "ogvcs.workspace-index/status-cursor/v2".to_owned(),
+        generation_id: context.active.payload.generation_id.clone(),
+        active_sha256: context.active.payload_sha256.clone(),
+        watcher_payload_sha256: context.watcher.payload_sha256.clone(),
+        watcher_cursor: context.watcher.payload.cursor.clone(),
+        watcher_authority_sha256: watcher_cursor_authority_digest(context.watcher)?,
+        watcher_event_count: context.watcher.payload.event_count,
+        watcher_event_bytes: context.watcher.payload.event_bytes,
+        watcher_event_tail_sha256: context.watcher.payload.event_tail_sha256.clone(),
+        staging_generation: context.staging_generation,
+        staging_state_sha256: context.staging_state_sha256.to_owned(),
+        repository_settings_digest: context.binding.repository_settings_digest.clone(),
+        path_profile: context.binding.path_profile.clone(),
+        case_mode: context.binding.case_mode.clone(),
+        repository_ignore_rules_sha256: context.seal.repository_ignore_rules_sha256.clone(),
+        local_ignore_rules_sha256: context.seal.local_ignore_rules_sha256.clone(),
+        filter_sha256: context.filter_sha256.to_owned(),
         after_repository_path: after_path.to_owned(),
         after_platform_key,
     };
@@ -2761,10 +3108,7 @@ fn encode_status_cursor(
 
 fn decode_status_cursor(
     encoded: &str,
-    active: &ActiveManifest,
-    seal: &GenerationSealPayload,
-    binding: &VerifiedBinding,
-    filter_sha256: &str,
+    context: &StatusCursorContext<'_>,
     key: &[u8; 32],
 ) -> Result<(String, String), CliError> {
     if encoded.is_empty() || encoded.len() > 32 * 1024 || encoded.len() % 2 != 0 {
@@ -2783,21 +3127,32 @@ fn decode_status_cursor(
     {
         return Err(input_error());
     }
-    let expected_key = status_sort_key(&cursor.payload.after_repository_path, binding)?;
-    if cursor.payload.schema != "ogvcs.workspace-index/status-cursor/v1"
-        || cursor.payload.generation_id != active.payload.generation_id
-        || cursor.payload.active_sha256 != active.payload_sha256
-        || cursor.payload.repository_settings_digest != binding.repository_settings_digest
-        || cursor.payload.path_profile != binding.path_profile
-        || cursor.payload.case_mode != binding.case_mode
-        || cursor.payload.repository_ignore_rules_sha256 != seal.repository_ignore_rules_sha256
-        || cursor.payload.local_ignore_rules_sha256 != seal.local_ignore_rules_sha256
-        || cursor.payload.filter_sha256 != filter_sha256
+    let expected_key = status_sort_key(&cursor.payload.after_repository_path, context.binding)?;
+    let watcher_authority_sha256 = watcher_cursor_authority_digest(context.watcher)?;
+    if cursor.payload.schema != "ogvcs.workspace-index/status-cursor/v2"
+        || cursor.payload.generation_id != context.active.payload.generation_id
+        || cursor.payload.active_sha256 != context.active.payload_sha256
+        || !valid_digest(&cursor.payload.watcher_payload_sha256)
+        || !valid_bounded_opaque(&cursor.payload.watcher_cursor, 512)
+        || !valid_digest(&cursor.payload.watcher_authority_sha256)
+        || cursor.payload.watcher_authority_sha256 != watcher_authority_sha256
+        || cursor.payload.watcher_event_count != context.watcher.payload.event_count
+        || cursor.payload.watcher_event_bytes != context.watcher.payload.event_bytes
+        || cursor.payload.watcher_event_tail_sha256 != context.watcher.payload.event_tail_sha256
+        || cursor.payload.staging_generation != context.staging_generation
+        || cursor.payload.staging_state_sha256 != context.staging_state_sha256
+        || cursor.payload.repository_settings_digest != context.binding.repository_settings_digest
+        || cursor.payload.path_profile != context.binding.path_profile
+        || cursor.payload.case_mode != context.binding.case_mode
+        || cursor.payload.repository_ignore_rules_sha256
+            != context.seal.repository_ignore_rules_sha256
+        || cursor.payload.local_ignore_rules_sha256 != context.seal.local_ignore_rules_sha256
+        || cursor.payload.filter_sha256 != context.filter_sha256
         || cursor.payload.after_platform_key != expected_key.0
     {
         return Err(index_error(
             "WORKSPACE_STATUS_CURSOR_STALE",
-            "The status cursor does not bind the current generation, settings, and filter.",
+            "The status cursor does not bind the current generation, watcher transcript, staging snapshot, settings, and filter.",
             "Restart status paging from the first page.",
         ));
     }
@@ -2848,6 +3203,7 @@ fn read_findings(
                 event_kind: None,
                 saw_created: false,
                 saw_deleted: false,
+                staged_file_id: None,
             },
         );
         count = count.checked_add(1).ok_or_else(index_invalid)?;
@@ -2872,6 +3228,7 @@ fn merge_event_candidate(
         event_kind: None,
         saw_created: false,
         saw_deleted: false,
+        staged_file_id: None,
     });
     candidate.prior_path = event
         .prior_repository_path
@@ -2897,7 +3254,66 @@ fn merge_event_candidate(
             event_kind: Some(WorkspaceWatchEventKind::Deleted),
             saw_created: false,
             saw_deleted: true,
+            staged_file_id: None,
         });
+    }
+    Ok(())
+}
+
+fn merge_staged_candidates(
+    binding: &VerifiedBinding,
+    candidates: &mut BTreeMap<(String, String), StatusCandidate>,
+    staging: &super::StagingState,
+) -> Result<(), CliError> {
+    for intent in &staging.intents {
+        let (event, bound_paths): (WorkspaceWatchEvent, Vec<&str>) = match intent.kind {
+            super::IntentKind::Add => {
+                let destination = intent
+                    .destination_path
+                    .as_deref()
+                    .ok_or_else(index_invalid)?;
+                (
+                    WorkspaceWatchEvent {
+                        kind: WorkspaceWatchEventKind::Created,
+                        repository_path: destination.to_owned(),
+                        prior_repository_path: None,
+                    },
+                    vec![destination],
+                )
+            }
+            super::IntentKind::Move => {
+                let source = intent.source_path.as_deref().ok_or_else(index_invalid)?;
+                let destination = intent
+                    .destination_path
+                    .as_deref()
+                    .ok_or_else(index_invalid)?;
+                (
+                    WorkspaceWatchEvent {
+                        kind: WorkspaceWatchEventKind::Renamed,
+                        repository_path: destination.to_owned(),
+                        prior_repository_path: Some(source.to_owned()),
+                    },
+                    vec![source, destination],
+                )
+            }
+            super::IntentKind::Delete => {
+                let source = intent.source_path.as_deref().ok_or_else(index_invalid)?;
+                (
+                    WorkspaceWatchEvent {
+                        kind: WorkspaceWatchEventKind::Deleted,
+                        repository_path: source.to_owned(),
+                        prior_repository_path: None,
+                    },
+                    vec![source],
+                )
+            }
+        };
+        merge_event_candidate(binding, candidates, &event)?;
+        for path in bound_paths {
+            let key = status_sort_key(path, binding)?;
+            let candidate = candidates.get_mut(&key).ok_or_else(index_invalid)?;
+            candidate.staged_file_id = Some(intent.file_id.clone());
+        }
     }
     Ok(())
 }
@@ -2912,7 +3328,6 @@ fn classify_status_candidate(
     binding: &VerifiedBinding,
     ignores: &IgnoreFile,
     lookup: &mut LookupReader,
-    added: &BTreeSet<&str>,
     candidate: StatusCandidate,
 ) -> Result<ClassifiedStatus, CliError> {
     let baseline = lookup.find(&candidate.path, binding)?;
@@ -2965,6 +3380,7 @@ fn classify_status_candidate(
             });
         }
         FileProbe::Absent if candidate.event_kind == Some(WorkspaceWatchEventKind::Deleted) => {
+            let requires_reconciliation = candidate.staged_file_id.is_none();
             return Ok(ClassifiedStatus {
                 item: Some(status_item(
                     candidate,
@@ -2973,7 +3389,7 @@ fn classify_status_candidate(
                     None,
                     false,
                 )),
-                requires_reconciliation: true,
+                requires_reconciliation,
             });
         }
         FileProbe::Absent => {
@@ -2993,9 +3409,6 @@ fn classify_status_candidate(
         FileProbe::Regular { .. }
             if candidate.event_kind == Some(WorkspaceWatchEventKind::Created) =>
         {
-            WorkspaceStatus::Added
-        }
-        FileProbe::Regular { .. } if added.contains(candidate.path.as_str()) => {
             WorkspaceStatus::Added
         }
         FileProbe::Regular { .. } => candidate.hint.max(WorkspaceStatus::Untracked),
@@ -3019,11 +3432,14 @@ fn status_item(
     ignore: Option<IgnoreExplanation>,
     content_verified: bool,
 ) -> WorkspaceStatusItem {
+    let file_id = baseline
+        .map(|entry| entry.file_id.clone())
+        .or_else(|| candidate.staged_file_id.clone());
     WorkspaceStatusItem {
         repository_path: candidate.path,
         status,
         prior_repository_path: candidate.prior_path,
-        file_id: baseline.map(|entry| entry.file_id.clone()),
+        file_id,
         ignore,
         content_verified,
     }
@@ -3175,15 +3591,12 @@ pub fn repair_workspace_index(
     watcher: &mut dyn WorkspaceWatcherAuthority,
     cancellation: &dyn Cancellation,
 ) -> Result<WorkspaceIndexReport, CliError> {
-    // Full verification prevents a corrupt local baseline from becoming the
-    // authority for repair. A corrupt baseline requires authenticated rebuild.
-    verify_workspace_index(root)?;
     let root = validated_root(root)?;
     let metadata_before = read_ready_metadata(&root)?;
     let watcher_start = watcher.begin_reconciliation(&root, &metadata_before.binding)?;
     validate_watcher_start(&watcher_start)?;
     let _lock = MutationLock::acquire(&root)?;
-    let (index, metadata, _, old_seal, _, ignores) = load_active(&root, false)?;
+    let (index, metadata, old_active, old_seal, old_watcher, ignores) = load_active(&root, false)?;
     if json_digest(&metadata_before)? != json_digest(&metadata)? {
         return Err(index_error(
             "WORKSPACE_INDEX_BINDING_STALE",
@@ -3191,6 +3604,10 @@ pub fn repair_workspace_index(
             "Restart repair against the current authenticated baseline.",
         ));
     }
+    // Verify and consume the exact same active generation while retaining the
+    // single mutation lock. A corrupt baseline cannot become repair authority,
+    // and another writer cannot replace it between verification and reseal.
+    verify_loaded_workspace_index(&index, &old_active, &old_seal, &old_watcher)?;
     let mut writer = GenerationWriter::begin(&root, metadata.clone(), ignores.local_rules.clone())?;
     let file = open_private_file(&index.join(&old_seal.payload.entries.name))?;
     let mut reader = BufReader::new(file);
@@ -3242,9 +3659,10 @@ pub fn repair_workspace_index(
         repository_ignore_rules_sha256: ignore_rules_digest(&ignores.repository_rules)?,
         repository_ignore_rules: ignores.repository_rules,
     };
+    let prepared = writer.prepare_reconciliation(receipt)?;
     let checkpoint = watcher.finish_reconciliation(&watcher_start, &mut writer)?;
     validate_watcher_checkpoint(&watcher_start, &checkpoint)?;
-    writer.finish(receipt, checkpoint)
+    writer.finish(prepared, checkpoint)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -3530,7 +3948,7 @@ mod tests {
         let vector: CursorVector = serde_json::from_slice(VECTOR).unwrap();
         assert_eq!(
             vector.schema,
-            "ogvcs.workspace-index/status-cursor-hmac-vector/v1"
+            "ogvcs.workspace-index/status-cursor-hmac-vector/v2"
         );
         let key_bytes = vector
             .key_hex
@@ -3545,6 +3963,149 @@ mod tests {
         let key: [u8; 32] = key_bytes.try_into().unwrap();
         let payload = serde_json::to_vec(&vector.payload).unwrap();
         assert_eq!(hmac_sha256(&key, &payload), vector.expected_mac_sha256);
+    }
+
+    #[test]
+    fn v1_status_cursor_shape_and_schema_are_rejected_under_v2() {
+        const VECTOR: &[u8] =
+            include_bytes!("../../contracts/workspace-index/v1/vectors/status-cursor-hmac.json");
+        let mut vector: CursorVector = serde_json::from_slice(VECTOR).unwrap();
+        let key_bytes = vector
+            .key_hex
+            .as_bytes()
+            .chunks_exact(2)
+            .map(|pair| (hex_nibble(pair[0]).unwrap() << 4) | hex_nibble(pair[1]).unwrap())
+            .collect::<Vec<_>>();
+        let key: [u8; 32] = key_bytes.try_into().unwrap();
+        let mut binding = binding();
+        binding.repository_settings_digest = "2".repeat(64);
+        let active = ActiveManifest {
+            payload: ActivePayload {
+                schema: WORKSPACE_INDEX_SCHEMA.to_owned(),
+                contract_version: WORKSPACE_INDEX_GENERATION_FORMAT_VERSION.to_owned(),
+                generation_id: vector.payload.generation_id.clone(),
+                generation: 1,
+                generation_seal_sha256: "9".repeat(64),
+                workspace_id_digest: "a".repeat(64),
+                repository_id_hex: binding.repository_id_hex.clone(),
+                branch: binding.branch.clone(),
+                baseline: binding.baseline.clone(),
+                repository_settings_digest: binding.repository_settings_digest.clone(),
+                path_profile: binding.path_profile.clone(),
+                case_mode: binding.case_mode.clone(),
+                created_at_unix_ms: 1,
+            },
+            payload_sha256: vector.payload.active_sha256.clone(),
+        };
+        let artifact = |name: &str| FileSeal {
+            name: name.to_owned(),
+            bytes: 0,
+            sha256: EMPTY_SHA256.to_owned(),
+            metadata_fingerprint_sha256: "a".repeat(64),
+        };
+        let seal = GenerationSealPayload {
+            schema: "ogvcs.workspace-index/generation-seal/v1".to_owned(),
+            generation_id: vector.payload.generation_id.clone(),
+            generation: 1,
+            entry_count: 1,
+            finding_count: 0,
+            entries: artifact("entries"),
+            lookup: artifact("lookup"),
+            findings: artifact("findings"),
+            ignores: artifact("ignores"),
+            events_name: "events".to_owned(),
+            ordered_entries_sha256: "b".repeat(64),
+            repository_ignore_rules_sha256: "3".repeat(64),
+            local_ignore_rules_sha256: "4".repeat(64),
+        };
+        let watcher = WatcherState {
+            payload: WatcherStatePayload {
+                schema: "ogvcs.workspace-index/watcher-state/v1".to_owned(),
+                generation_id: vector.payload.generation_id.clone(),
+                adapter: host_adapter().to_owned(),
+                session_id: "session.vector".to_owned(),
+                cursor: vector.payload.watcher_cursor.clone(),
+                continuity_proven: true,
+                resume_supported: true,
+                session_open: true,
+                reconciliation_required: false,
+                reason: "current-native-cursor".to_owned(),
+                event_count: vector.payload.watcher_event_count,
+                event_bytes: vector.payload.watcher_event_bytes,
+                event_tail_sha256: vector.payload.watcher_event_tail_sha256.clone(),
+            },
+            payload_sha256: vector.payload.watcher_payload_sha256.clone(),
+        };
+
+        vector.payload.schema = "ogvcs.workspace-index/status-cursor/v1".to_owned();
+        let payload = serde_json::to_vec(&vector.payload).unwrap();
+        // Independently calculated with Node over the v1 schema plus the
+        // current v2 HMAC domain. A valid MAC cannot upgrade old semantics.
+        let independent_mac = "cf71969691d2db8be06ae2d936bc243853a94289f2b63441d76b180022603326";
+        assert_eq!(hmac_sha256(&key, &payload), independent_mac);
+        let encoded = hex_bytes(
+            &serde_json::to_vec(&StatusCursor {
+                payload: vector.payload.clone(),
+                mac_sha256: independent_mac.to_owned(),
+            })
+            .unwrap(),
+        );
+        assert_eq!(
+            decode_status_cursor(
+                &encoded,
+                &StatusCursorContext {
+                    active: &active,
+                    seal: &seal,
+                    watcher: &watcher,
+                    staging_generation: 9,
+                    staging_state_sha256: &"8".repeat(64),
+                    binding: &binding,
+                    filter_sha256: &"5".repeat(64),
+                },
+                &key,
+            )
+            .unwrap_err()
+            .code,
+            "WORKSPACE_STATUS_CURSOR_STALE"
+        );
+
+        let old_payload = serde_json::json!({
+            "schema": "ogvcs.workspace-index/status-cursor/v1",
+            "generationId": active.payload.generation_id.clone(),
+            "activeSha256": active.payload_sha256.clone(),
+            "repositorySettingsDigest": binding.repository_settings_digest.clone(),
+            "pathProfile": binding.path_profile.clone(),
+            "caseMode": binding.case_mode.clone(),
+            "repositoryIgnoreRulesSha256": seal.repository_ignore_rules_sha256.clone(),
+            "localIgnoreRulesSha256": seal.local_ignore_rules_sha256.clone(),
+            "filterSha256": "5".repeat(64),
+            "afterRepositoryPath": "Game/Textures/Hero.DDS",
+            "afterPlatformKey": "game/textures/hero.dds"
+        });
+        let old_payload_bytes = serde_json::to_vec(&old_payload).unwrap();
+        let old_shape = serde_json::json!({
+            "payload": old_payload,
+            "macSha256": hmac_sha256(&key, &old_payload_bytes)
+        });
+        let encoded = hex_bytes(&serde_json::to_vec(&old_shape).unwrap());
+        assert_eq!(
+            decode_status_cursor(
+                &encoded,
+                &StatusCursorContext {
+                    active: &active,
+                    seal: &seal,
+                    watcher: &watcher,
+                    staging_generation: 9,
+                    staging_state_sha256: &"8".repeat(64),
+                    binding: &binding,
+                    filter_sha256: &"5".repeat(64),
+                },
+                &key,
+            )
+            .unwrap_err()
+            .code,
+            "INPUT_INVALID"
+        );
     }
 
     fn initialize_workspace(root: &Path) {
@@ -3660,13 +4221,13 @@ mod tests {
             &mut self,
             _: &AuthenticationSession,
             _: &VerifiedBinding,
-            _: &str,
+            repository_path_key: &str,
             _: &dyn Cancellation,
         ) -> Result<PresentedFileIdAllocation, CliError> {
             Ok(PresentedFileIdAllocation {
                 allocation_schema_version: FILE_ID_ALLOCATION_SCHEMA.to_owned(),
                 repository_id: "00000000-0000-4000-8000-000000000002".to_owned(),
-                repository_path_key: "unused".to_owned(),
+                repository_path_key: repository_path_key.to_owned(),
                 file_id: "fid:00000000000000000000000000000001".to_owned(),
                 allocation_receipt: FileIdAllocationReceipt::new(format!(
                     "far1.{}",
@@ -3684,7 +4245,7 @@ mod tests {
             _: &str,
             _: &dyn Cancellation,
         ) -> Result<String, CliError> {
-            unreachable!()
+            Ok("fid:00000000000000000000000000000002".to_owned())
         }
 
         fn stream_workspace_baseline(
@@ -3716,6 +4277,10 @@ mod tests {
         continuity: bool,
         queued: Vec<WorkspaceWatchEvent>,
         cursor: String,
+        fence_batches: Vec<WorkspaceWatchBatch>,
+        fence_session_id: Option<String>,
+        fence_cursor: Option<String>,
+        fence_error: bool,
     }
 
     impl Default for TestWatcher {
@@ -3724,6 +4289,10 @@ mod tests {
                 continuity: true,
                 queued: Vec::new(),
                 cursor: "cursor.1".to_owned(),
+                fence_batches: Vec::new(),
+                fence_session_id: None,
+                fence_cursor: None,
+                fence_error: false,
             }
         }
     }
@@ -3753,6 +4322,38 @@ mod tests {
                 adapter: start.adapter.clone(),
                 session_id: start.session_id.clone(),
                 cursor: self.cursor.clone(),
+                continuity_proven: self.continuity,
+                resume_supported: self.continuity,
+            })
+        }
+
+        fn fence_status(
+            &mut self,
+            _: &Path,
+            _: &VerifiedBinding,
+            start: &WorkspaceWatcherStart,
+            sink: &mut dyn WorkspaceWatchBatchSink,
+        ) -> Result<WorkspaceWatcherCheckpoint, CliError> {
+            if self.fence_error {
+                return Err(index_invalid());
+            }
+            let batches = std::mem::take(&mut self.fence_batches);
+            for batch in &batches {
+                sink.append_watch_batch(batch)?;
+            }
+            let cursor = self
+                .fence_cursor
+                .clone()
+                .or_else(|| batches.last().map(|batch| batch.cursor.clone()))
+                .or_else(|| start.resume_cursor.clone())
+                .unwrap_or_else(|| self.cursor.clone());
+            Ok(WorkspaceWatcherCheckpoint {
+                adapter: start.adapter.clone(),
+                session_id: self
+                    .fence_session_id
+                    .clone()
+                    .unwrap_or_else(|| start.session_id.clone()),
+                cursor,
                 continuity_proven: self.continuity,
                 resume_supported: self.continuity,
             })
@@ -3788,6 +4389,144 @@ mod tests {
                 adapter: start.adapter.clone(),
                 session_id: start.session_id.clone(),
                 cursor: "blocking.cursor".to_owned(),
+                continuity_proven: true,
+                resume_supported: true,
+            })
+        }
+    }
+
+    struct OrderingWatcher {
+        root: PathBuf,
+    }
+
+    impl WorkspaceWatcherAuthority for OrderingWatcher {
+        fn begin_reconciliation(
+            &mut self,
+            _: &Path,
+            _: &VerifiedBinding,
+        ) -> Result<WorkspaceWatcherStart, CliError> {
+            fs::create_dir_all(self.root.join("Untracked")).unwrap();
+            fs::write(self.root.join("Untracked/during-subscribe.bin"), b"early").unwrap();
+            Ok(WorkspaceWatcherStart {
+                adapter: host_adapter().to_owned(),
+                session_id: "ordering.session".to_owned(),
+                resume_cursor: None,
+            })
+        }
+
+        fn finish_reconciliation(
+            &mut self,
+            start: &WorkspaceWatcherStart,
+            sink: &mut dyn WorkspaceWatchEventSink,
+        ) -> Result<WorkspaceWatcherCheckpoint, CliError> {
+            // This append is accepted only after the complete scan has sealed
+            // its candidate set. The later filesystem mutation is therefore
+            // covered solely by the final watcher drain.
+            fs::write(self.root.join("Untracked/during-barrier.bin"), b"late").unwrap();
+            sink.append_watch_chunk(&[WorkspaceWatchEvent {
+                kind: WorkspaceWatchEventKind::Created,
+                repository_path: "Untracked/during-barrier.bin".to_owned(),
+                prior_repository_path: None,
+            }])?;
+            Ok(WorkspaceWatcherCheckpoint {
+                adapter: start.adapter.clone(),
+                session_id: start.session_id.clone(),
+                cursor: "ordering.cursor".to_owned(),
+                continuity_proven: true,
+                resume_supported: true,
+            })
+        }
+    }
+
+    struct WithheldStatusWatcher {
+        fences: u8,
+    }
+
+    impl WorkspaceWatcherAuthority for WithheldStatusWatcher {
+        fn begin_reconciliation(
+            &mut self,
+            _: &Path,
+            _: &VerifiedBinding,
+        ) -> Result<WorkspaceWatcherStart, CliError> {
+            unreachable!()
+        }
+
+        fn finish_reconciliation(
+            &mut self,
+            _: &WorkspaceWatcherStart,
+            _: &mut dyn WorkspaceWatchEventSink,
+        ) -> Result<WorkspaceWatcherCheckpoint, CliError> {
+            unreachable!()
+        }
+
+        fn fence_status(
+            &mut self,
+            _: &Path,
+            _: &VerifiedBinding,
+            start: &WorkspaceWatcherStart,
+            sink: &mut dyn WorkspaceWatchBatchSink,
+        ) -> Result<WorkspaceWatcherCheckpoint, CliError> {
+            self.fences += 1;
+            let cursor = if self.fences == 1 {
+                start.resume_cursor.clone().unwrap()
+            } else {
+                let prior = start.resume_cursor.clone().unwrap();
+                let cursor = "cursor.withheld".to_owned();
+                sink.append_watch_batch(&WorkspaceWatchBatch {
+                    session_id: start.session_id.clone(),
+                    prior_cursor: prior,
+                    cursor: cursor.clone(),
+                    events: vec![WorkspaceWatchEvent {
+                        kind: WorkspaceWatchEventKind::Modified,
+                        repository_path: "Game/value.bin".to_owned(),
+                        prior_repository_path: None,
+                    }],
+                })?;
+                cursor
+            };
+            Ok(WorkspaceWatcherCheckpoint {
+                adapter: start.adapter.clone(),
+                session_id: start.session_id.clone(),
+                cursor,
+                continuity_proven: true,
+                resume_supported: true,
+            })
+        }
+    }
+
+    struct IdleAdvanceWatcher {
+        fences: u8,
+    }
+
+    impl WorkspaceWatcherAuthority for IdleAdvanceWatcher {
+        fn begin_reconciliation(
+            &mut self,
+            _: &Path,
+            _: &VerifiedBinding,
+        ) -> Result<WorkspaceWatcherStart, CliError> {
+            unreachable!()
+        }
+
+        fn finish_reconciliation(
+            &mut self,
+            _: &WorkspaceWatcherStart,
+            _: &mut dyn WorkspaceWatchEventSink,
+        ) -> Result<WorkspaceWatcherCheckpoint, CliError> {
+            unreachable!()
+        }
+
+        fn fence_status(
+            &mut self,
+            _: &Path,
+            _: &VerifiedBinding,
+            start: &WorkspaceWatcherStart,
+            _: &mut dyn WorkspaceWatchBatchSink,
+        ) -> Result<WorkspaceWatcherCheckpoint, CliError> {
+            self.fences += 1;
+            Ok(WorkspaceWatcherCheckpoint {
+                adapter: start.adapter.clone(),
+                session_id: start.session_id.clone(),
+                cursor: format!("idle.cursor.{}", self.fences),
                 continuity_proven: true,
                 resume_supported: true,
             })
@@ -3913,6 +4652,12 @@ mod tests {
         }
     }
 
+    fn test_status_page(
+        request: &WorkspaceStatusPageRequest,
+    ) -> Result<WorkspaceStatusPage, CliError> {
+        workspace_status_page_fenced(request, &mut TestWatcher::default())
+    }
+
     fn acquire_test_read_lease(root: &Path) -> retention::GenerationReadLease {
         let _lock = MutationLock::acquire(root).unwrap();
         let (index, metadata, active, _, _, _) = load_active(root, false).unwrap();
@@ -4017,7 +4762,7 @@ mod tests {
         assert!(report.initial_finding_count >= 7);
         assert!(!report.authoritative_clean);
 
-        let first = workspace_status_page(&status_request(&root.0, 3)).unwrap();
+        let first = test_status_page(&status_request(&root.0, 3)).unwrap();
         assert!(first.complete);
         assert!(!first.authoritative_clean);
         assert_eq!(first.items.len(), 3);
@@ -4043,24 +4788,30 @@ mod tests {
 
         let mut second_request = status_request(&root.0, 100);
         second_request.cursor = first.next_cursor.clone();
-        let second = workspace_status_page(&second_request).unwrap();
+        let second = test_status_page(&second_request).unwrap();
         assert!(!second.items.is_empty());
         let mut changed_filter = second_request.clone();
         changed_filter.filter.include_ignored = false;
-        let error = workspace_status_page(&changed_filter).unwrap_err();
+        let error = test_status_page(&changed_filter).unwrap_err();
         assert_eq!(error.code, "WORKSPACE_STATUS_CURSOR_STALE");
 
-        let (index, metadata, active, seal, _, _) = load_active(&root.0, false).unwrap();
+        let (index, metadata, active, seal, watcher, _) = load_active(&root.0, false).unwrap();
+        let staging = read_validated_staging_snapshot(&root.0, &metadata.binding).unwrap();
         let key = read_cursor_key(&index).unwrap();
         let mut changed_ignores = seal.payload.clone();
         changed_ignores.local_ignore_rules_sha256 = "f".repeat(64);
         assert_eq!(
             decode_status_cursor(
                 first.next_cursor.as_deref().unwrap(),
-                &active,
-                &changed_ignores,
-                &metadata.binding,
-                &json_digest(&WorkspaceStatusFilter::default()).unwrap(),
+                &StatusCursorContext {
+                    active: &active,
+                    seal: &changed_ignores,
+                    watcher: &watcher,
+                    staging_generation: staging.state.generation,
+                    staging_state_sha256: &staging.state_sha256,
+                    binding: &metadata.binding,
+                    filter_sha256: &json_digest(&WorkspaceStatusFilter::default()).unwrap(),
+                },
                 &key,
             )
             .unwrap_err()
@@ -4070,7 +4821,7 @@ mod tests {
 
         let mut tampered = second_request;
         tampered.cursor.as_mut().unwrap().replace_range(0..2, "00");
-        assert!(workspace_status_page(&tampered).is_err());
+        assert!(test_status_page(&tampered).is_err());
         verify_workspace_index(&root.0).unwrap();
     }
 
@@ -4097,9 +4848,523 @@ mod tests {
         assert!(report.reconciliation_required);
         assert!(!report.authoritative_clean);
         assert_eq!(report.reason, "unsupported-resume");
-        let status = workspace_status_page(&status_request(&root.0, 100)).unwrap();
+        let status = test_status_page(&status_request(&root.0, 100)).unwrap();
         assert!(!status.complete);
         assert!(!status.authoritative_clean);
+    }
+
+    #[test]
+    fn closed_but_continuous_watcher_state_cannot_bypass_public_fence() {
+        let root = TestRoot::new("closed-continuous-status");
+        root.write("Game/clean.bin", b"clean");
+        initialize_workspace(&root.0);
+        build(
+            &root.0,
+            &mut TestRoutes::new(vec![baseline_entry(
+                1,
+                "Game/clean.bin",
+                b"clean",
+                BaselineMaterialization::Full,
+            )]),
+            &mut TestWatcher::default(),
+        );
+
+        {
+            let _lock = MutationLock::acquire(&root.0).unwrap();
+            let (index, _, active, _, mut watcher, _) = load_active(&root.0, false).unwrap();
+            assert!(watcher_state_is_authoritative(&watcher.payload));
+            watcher.payload.session_open = false;
+            watcher.payload_sha256 = json_digest(&watcher.payload).unwrap();
+            write_json_atomic(
+                &index.join(format!("watcher-{}.v1", active.payload.generation_id)),
+                &watcher,
+            )
+            .unwrap();
+            sync_directory(&index).unwrap();
+        }
+
+        assert_eq!(
+            workspace_status_page(&status_request(&root.0, 100))
+                .unwrap_err()
+                .code,
+            "WORKSPACE_INDEX_INVALID"
+        );
+        assert_eq!(fs::read(root.0.join("Game/clean.bin")).unwrap(), b"clean");
+    }
+
+    #[test]
+    fn scan_completes_before_final_barrier_and_covers_both_sides() {
+        let root = TestRoot::new("scan-before-barrier");
+        root.write("Game/tracked.bin", b"tracked");
+        initialize_workspace(&root.0);
+        let mut routes = TestRoutes::new(vec![baseline_entry(
+            1,
+            "Game/tracked.bin",
+            b"tracked",
+            BaselineMaterialization::Full,
+        )]);
+        let report = rebuild_workspace_index(
+            &request(&root.0),
+            &TestProvider,
+            &mut routes,
+            &mut OrderingWatcher {
+                root: root.0.clone(),
+            },
+            &NeverCancelled,
+            &mut DiscardProgress,
+        )
+        .unwrap();
+        assert_eq!(report.initial_finding_count, 1);
+        assert_eq!(report.queued_event_count, 1);
+
+        let status = test_status_page(&status_request(&root.0, 100)).unwrap();
+        assert!(status.complete);
+        assert!(status.items.iter().any(|item| {
+            item.repository_path == "Untracked/during-subscribe.bin"
+                && item.status == WorkspaceStatus::Untracked
+        }));
+        assert!(status.items.iter().any(|item| {
+            item.repository_path == "Untracked/during-barrier.bin"
+                && item.status == WorkspaceStatus::Added
+        }));
+
+        let lock = MutationLock::acquire(&root.0).unwrap();
+        let mut premature =
+            GenerationWriter::begin(&root.0, read_ready_metadata(&root.0).unwrap(), Vec::new())
+                .unwrap();
+        assert_eq!(
+            premature
+                .append_watch_chunk(&[WorkspaceWatchEvent {
+                    kind: WorkspaceWatchEventKind::Created,
+                    repository_path: "Untracked/too-early.bin".to_owned(),
+                    prior_repository_path: None,
+                }])
+                .unwrap_err()
+                .code,
+            "WORKSPACE_INDEX_INVALID"
+        );
+        drop(premature);
+        drop(lock);
+    }
+
+    #[test]
+    fn status_fence_appends_missed_event_before_classification() {
+        let root = TestRoot::new("status-fence-event");
+        root.write("Game/value.bin", b"old");
+        initialize_workspace(&root.0);
+        build(
+            &root.0,
+            &mut TestRoutes::new(vec![baseline_entry(
+                1,
+                "Game/value.bin",
+                b"old",
+                BaselineMaterialization::Full,
+            )]),
+            &mut TestWatcher::default(),
+        );
+        fs::write(root.0.join("Game/value.bin"), b"new").unwrap();
+        let mut authority = TestWatcher {
+            fence_batches: vec![WorkspaceWatchBatch {
+                session_id: "session.1".to_owned(),
+                prior_cursor: "cursor.1".to_owned(),
+                cursor: "cursor.2".to_owned(),
+                events: vec![WorkspaceWatchEvent {
+                    kind: WorkspaceWatchEventKind::Modified,
+                    repository_path: "Game/value.bin".to_owned(),
+                    prior_repository_path: None,
+                }],
+            }],
+            ..TestWatcher::default()
+        };
+        let page =
+            workspace_status_page_fenced(&status_request(&root.0, 100), &mut authority).unwrap();
+        assert!(page.complete);
+        assert_eq!(page.items.len(), 1);
+        assert_eq!(page.items[0].status, WorkspaceStatus::Modified);
+        let (_, _, _, _, watcher, _) = load_active(&root.0, false).unwrap();
+        assert_eq!(watcher.payload.cursor, "cursor.2");
+        assert_eq!(watcher.payload.event_count, 1);
+        assert_eq!(watcher.payload.reason, "current-native-cursor");
+    }
+
+    #[test]
+    fn final_native_barrier_rejects_event_withheld_during_clean_scan() {
+        let root = TestRoot::new("final-status-fence");
+        root.write("Game/value.bin", b"old");
+        initialize_workspace(&root.0);
+        build(
+            &root.0,
+            &mut TestRoutes::new(vec![baseline_entry(
+                1,
+                "Game/value.bin",
+                b"old",
+                BaselineMaterialization::Full,
+            )]),
+            &mut TestWatcher::default(),
+        );
+
+        let entered = Arc::new(Barrier::new(2));
+        let release = Arc::new(Barrier::new(2));
+        *STATUS_AFTER_LOAD_HOOK.lock().unwrap() = Some(StatusAfterLoadHook {
+            index: existing_index_directory(&root.0).unwrap(),
+            entered: entered.clone(),
+            release: release.clone(),
+        });
+        let worker_root = root.0.clone();
+        let worker = thread::spawn(move || {
+            workspace_status_page_fenced(
+                &status_request(&worker_root, 100),
+                &mut WithheldStatusWatcher { fences: 0 },
+            )
+        });
+        entered.wait();
+        fs::write(root.0.join("Game/value.bin"), b"new").unwrap();
+        release.wait();
+        assert_eq!(
+            worker.join().unwrap().unwrap_err().code,
+            "WORKSPACE_STATUS_SNAPSHOT_CHANGED"
+        );
+        let (_, _, _, _, watcher, _) = load_active(&root.0, false).unwrap();
+        assert_eq!(watcher.payload.event_count, 1);
+        assert_eq!(watcher.payload.cursor, "cursor.withheld");
+
+        let retry = test_status_page(&status_request(&root.0, 100)).unwrap();
+        assert!(!retry.authoritative_clean);
+        assert_eq!(retry.items.len(), 1);
+        assert_eq!(retry.items[0].status, WorkspaceStatus::Modified);
+    }
+
+    #[test]
+    fn unsupported_status_fence_closes_but_does_not_relabel_clean_session() {
+        let root = TestRoot::new("unsupported-status-fence");
+        root.write("Game/value.bin", b"value");
+        initialize_workspace(&root.0);
+        build(
+            &root.0,
+            &mut TestRoutes::new(vec![baseline_entry(
+                1,
+                "Game/value.bin",
+                b"value",
+                BaselineMaterialization::Full,
+            )]),
+            &mut TestWatcher::default(),
+        );
+        let (_, _, _, _, before, _) = load_active(&root.0, false).unwrap();
+        assert_eq!(before.payload.reason, "current-native-cursor");
+
+        let page = workspace_status_page(&status_request(&root.0, 100)).unwrap();
+        assert!(!page.complete);
+        assert!(!page.authoritative_clean);
+        assert_eq!(page.reason, "status-fence-unavailable");
+        let (_, _, _, _, after, _) = load_active(&root.0, false).unwrap();
+        assert!(!after.payload.continuity_proven);
+        assert!(!after.payload.session_open);
+        assert_eq!(after.payload.cursor, before.payload.cursor);
+        assert_eq!(after.payload.session_id, before.payload.session_id);
+        assert_eq!(after.payload.reason, "status-fence-unavailable");
+
+        let digest = after.payload_sha256;
+        let second = workspace_status_page(&status_request(&root.0, 100)).unwrap();
+        assert_eq!(second.reason, "status-fence-unavailable");
+        let (_, _, _, _, stable, _) = load_active(&root.0, false).unwrap();
+        assert_eq!(stable.payload_sha256, digest);
+    }
+
+    #[test]
+    fn status_fence_gap_and_session_substitution_fail_degraded() {
+        let gap_root = TestRoot::new("status-fence-gap");
+        gap_root.write("Game/value.bin", b"value");
+        initialize_workspace(&gap_root.0);
+        let entry = baseline_entry(1, "Game/value.bin", b"value", BaselineMaterialization::Full);
+        build(
+            &gap_root.0,
+            &mut TestRoutes::new(vec![entry.clone()]),
+            &mut TestWatcher::default(),
+        );
+        let mut gap = TestWatcher {
+            fence_batches: vec![WorkspaceWatchBatch {
+                session_id: "session.1".to_owned(),
+                prior_cursor: "forged.cursor".to_owned(),
+                cursor: "cursor.2".to_owned(),
+                events: vec![WorkspaceWatchEvent {
+                    kind: WorkspaceWatchEventKind::Modified,
+                    repository_path: "Game/value.bin".to_owned(),
+                    prior_repository_path: None,
+                }],
+            }],
+            ..TestWatcher::default()
+        };
+        let page =
+            workspace_status_page_fenced(&status_request(&gap_root.0, 100), &mut gap).unwrap();
+        assert!(!page.complete);
+        assert_eq!(page.reason, "cursor-gap");
+
+        let substitute_root = TestRoot::new("status-fence-substitution");
+        substitute_root.write("Game/value.bin", b"value");
+        initialize_workspace(&substitute_root.0);
+        build(
+            &substitute_root.0,
+            &mut TestRoutes::new(vec![entry]),
+            &mut TestWatcher::default(),
+        );
+        let mut substitute = TestWatcher {
+            fence_session_id: Some("forged.session".to_owned()),
+            ..TestWatcher::default()
+        };
+        let page =
+            workspace_status_page_fenced(&status_request(&substitute_root.0, 100), &mut substitute)
+                .unwrap();
+        assert!(!page.complete);
+        assert_eq!(page.reason, "status-fence-invalid");
+        let (_, _, _, _, watcher, _) = load_active(&substitute_root.0, false).unwrap();
+        assert!(!watcher.payload.session_open);
+        assert_eq!(watcher.payload.cursor, "cursor.1");
+    }
+
+    #[test]
+    fn page_cursor_rejects_watcher_append_between_pages() {
+        let root = TestRoot::new("page-watcher-snapshot");
+        root.write("Game/a.bin", b"changed-a");
+        root.write("Game/b.bin", b"changed-b");
+        initialize_workspace(&root.0);
+        build(
+            &root.0,
+            &mut TestRoutes::new(vec![
+                baseline_entry(1, "Game/a.bin", b"a", BaselineMaterialization::Full),
+                baseline_entry(2, "Game/b.bin", b"b", BaselineMaterialization::Full),
+            ]),
+            &mut TestWatcher::default(),
+        );
+        let first = test_status_page(&status_request(&root.0, 1)).unwrap();
+        let mut second_request = status_request(&root.0, 100);
+        second_request.cursor = first.next_cursor;
+        // This sorts before the already-returned `Game/a.bin`; accepting the
+        // old cursor would permanently omit it from the paginated result.
+        root.write("Aardvark/new.bin", b"new");
+        let mut authority = TestWatcher {
+            fence_batches: vec![WorkspaceWatchBatch {
+                session_id: "session.1".to_owned(),
+                prior_cursor: "cursor.1".to_owned(),
+                cursor: "cursor.2".to_owned(),
+                events: vec![WorkspaceWatchEvent {
+                    kind: WorkspaceWatchEventKind::Created,
+                    repository_path: "Aardvark/new.bin".to_owned(),
+                    prior_repository_path: None,
+                }],
+            }],
+            ..TestWatcher::default()
+        };
+        assert_eq!(
+            workspace_status_page_fenced(&second_request, &mut authority)
+                .unwrap_err()
+                .code,
+            "WORKSPACE_STATUS_CURSOR_STALE"
+        );
+        let (_, _, _, _, watcher, _) = load_active(&root.0, false).unwrap();
+        assert_eq!(watcher.payload.event_count, 1);
+        assert_eq!(watcher.payload.cursor, "cursor.2");
+    }
+
+    #[test]
+    fn idle_final_cursor_advance_is_bound_to_returned_page() {
+        let root = TestRoot::new("idle-final-cursor");
+        root.write("Game/a.bin", b"changed-a");
+        root.write("Game/b.bin", b"changed-b");
+        initialize_workspace(&root.0);
+        build(
+            &root.0,
+            &mut TestRoutes::new(vec![
+                baseline_entry(1, "Game/a.bin", b"a", BaselineMaterialization::Full),
+                baseline_entry(2, "Game/b.bin", b"b", BaselineMaterialization::Full),
+            ]),
+            &mut TestWatcher::default(),
+        );
+        let mut authority = IdleAdvanceWatcher { fences: 0 };
+        let first =
+            workspace_status_page_fenced(&status_request(&root.0, 1), &mut authority).unwrap();
+        let encoded = first.next_cursor.clone().unwrap();
+        let bytes = encoded
+            .as_bytes()
+            .chunks_exact(2)
+            .map(|pair| (hex_nibble(pair[0]).unwrap() << 4) | hex_nibble(pair[1]).unwrap())
+            .collect::<Vec<_>>();
+        let cursor: StatusCursor = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(cursor.payload.watcher_cursor, "idle.cursor.2");
+        assert_eq!(cursor.payload.watcher_event_count, 0);
+
+        let mut next = status_request(&root.0, 100);
+        next.cursor = Some(encoded);
+        let second = workspace_status_page_fenced(&next, &mut authority).unwrap();
+        assert_eq!(second.items.len(), 1);
+        assert!(second.next_cursor.is_none());
+        assert_eq!(authority.fences, 4);
+        let (_, _, _, _, watcher, _) = load_active(&root.0, false).unwrap();
+        assert_eq!(watcher.payload.cursor, "idle.cursor.4");
+        assert_eq!(watcher.payload.event_count, 0);
+    }
+
+    #[test]
+    fn page_cursor_rejects_watcher_authority_change_with_unchanged_transcript() {
+        let root = TestRoot::new("page-watcher-authority");
+        root.write("Game/a.bin", b"changed-a");
+        root.write("Game/b.bin", b"changed-b");
+        initialize_workspace(&root.0);
+        build(
+            &root.0,
+            &mut TestRoutes::new(vec![
+                baseline_entry(1, "Game/a.bin", b"a", BaselineMaterialization::Full),
+                baseline_entry(2, "Game/b.bin", b"b", BaselineMaterialization::Full),
+            ]),
+            &mut TestWatcher::default(),
+        );
+        let first = test_status_page(&status_request(&root.0, 1)).unwrap();
+        let mut next = status_request(&root.0, 100);
+        next.cursor = first.next_cursor;
+
+        {
+            let _lock = MutationLock::acquire(&root.0).unwrap();
+            let (index, _, active, _, mut watcher, _) = load_active(&root.0, false).unwrap();
+            assert_eq!(watcher.payload.event_count, 0);
+            assert_eq!(watcher.payload.event_bytes, 0);
+            watcher.payload.session_id = "session.2".to_owned();
+            watcher.payload_sha256 = json_digest(&watcher.payload).unwrap();
+            write_json_atomic(
+                &index.join(format!("watcher-{}.v1", active.payload.generation_id)),
+                &watcher,
+            )
+            .unwrap();
+            sync_directory(&index).unwrap();
+        }
+
+        assert_eq!(
+            test_status_page(&next).unwrap_err().code,
+            "WORKSPACE_STATUS_CURSOR_STALE"
+        );
+        let (_, _, _, _, watcher, _) = load_active(&root.0, false).unwrap();
+        assert_eq!(watcher.payload.session_id, "session.2");
+        assert_eq!(watcher.payload.event_count, 0);
+        assert_eq!(watcher.payload.event_bytes, 0);
+        assert_eq!(watcher.payload.event_tail_sha256, EMPTY_SHA256);
+    }
+
+    #[test]
+    fn page_cursor_rejects_earlier_staging_snapshot_between_pages() {
+        let root = TestRoot::new("page-staging-snapshot");
+        root.write("Game/a.bin", b"changed-a");
+        root.write("Game/b.bin", b"changed-b");
+        initialize_workspace(&root.0);
+        let mut routes = TestRoutes::new(vec![
+            baseline_entry(1, "Game/a.bin", b"a", BaselineMaterialization::Full),
+            baseline_entry(2, "Game/b.bin", b"b", BaselineMaterialization::Full),
+        ]);
+        build(&root.0, &mut routes, &mut TestWatcher::default());
+        let first = test_status_page(&status_request(&root.0, 1)).unwrap();
+        let mut next = status_request(&root.0, 100);
+        next.cursor = first.next_cursor;
+
+        root.write("Aardvark/staged.bin", b"new");
+        super::super::stage_add(
+            &super::super::StageAddRequest {
+                root: root.0.clone(),
+                repository_path: "Aardvark/staged.bin".to_owned(),
+                authentication: request(&root.0).authentication,
+            },
+            &TestProvider,
+            &mut routes,
+            &NeverCancelled,
+            &mut DiscardProgress,
+        )
+        .unwrap();
+        assert_eq!(
+            test_status_page(&next).unwrap_err().code,
+            "WORKSPACE_STATUS_CURSOR_STALE"
+        );
+    }
+
+    #[test]
+    fn applied_staging_seeds_add_move_delete_without_watcher_delivery() {
+        let root = TestRoot::new("staging-status-candidates");
+        root.write("Tracked/move-source.bin", b"move");
+        root.write("Tracked/delete-source.bin", b"delete");
+        initialize_workspace(&root.0);
+        let entries = vec![
+            baseline_entry(
+                1,
+                "Tracked/move-source.bin",
+                b"move",
+                BaselineMaterialization::Full,
+            ),
+            baseline_entry(
+                2,
+                "Tracked/delete-source.bin",
+                b"delete",
+                BaselineMaterialization::Full,
+            ),
+        ];
+        let mut routes = TestRoutes::new(entries);
+        build(&root.0, &mut routes, &mut TestWatcher::default());
+        root.write("Added/new.bin", b"add");
+        fs::create_dir(root.0.join("Moved")).unwrap();
+        let authentication = request(&root.0).authentication;
+        super::super::stage_add(
+            &super::super::StageAddRequest {
+                root: root.0.clone(),
+                repository_path: "Added/new.bin".to_owned(),
+                authentication: authentication.clone(),
+            },
+            &TestProvider,
+            &mut routes,
+            &NeverCancelled,
+            &mut DiscardProgress,
+        )
+        .unwrap();
+        super::super::stage_move(
+            &super::super::StageMoveRequest {
+                root: root.0.clone(),
+                source_repository_path: "Tracked/move-source.bin".to_owned(),
+                destination_repository_path: "Moved/move-destination.bin".to_owned(),
+                authentication: authentication.clone(),
+            },
+            &TestProvider,
+            &mut routes,
+            &NeverCancelled,
+            &mut DiscardProgress,
+        )
+        .unwrap();
+        super::super::stage_delete(
+            &super::super::StageDeleteRequest {
+                root: root.0.clone(),
+                repository_path: "Tracked/delete-source.bin".to_owned(),
+                authentication,
+            },
+            &TestProvider,
+            &mut routes,
+            &NeverCancelled,
+            &mut DiscardProgress,
+        )
+        .unwrap();
+
+        let page = test_status_page(&status_request(&root.0, 100)).unwrap();
+        assert!(page.complete);
+        assert_eq!(page.candidate_count, 4);
+        assert!(page.items.iter().any(|item| {
+            item.repository_path == "Added/new.bin"
+                && item.status == WorkspaceStatus::Added
+                && item.file_id.as_deref() == Some("fid:00000000000000000000000000000001")
+        }));
+        assert!(page.items.iter().any(|item| {
+            item.repository_path == "Moved/move-destination.bin"
+                && item.prior_repository_path.as_deref() == Some("Tracked/move-source.bin")
+                && item.status == WorkspaceStatus::MovedRenamedHint
+                && item.file_id.as_deref() == Some("fid:00000000000000000000000000000002")
+        }));
+        for deleted in ["Tracked/move-source.bin", "Tracked/delete-source.bin"] {
+            assert!(page.items.iter().any(|item| {
+                item.repository_path == deleted && item.status == WorkspaceStatus::Deleted
+            }));
+        }
+        let (_, _, _, _, watcher, _) = load_active(&root.0, false).unwrap();
+        assert_eq!(watcher.payload.event_count, 0);
     }
 
     #[test]
@@ -4178,7 +5443,7 @@ mod tests {
             },
         )
         .unwrap();
-        let status = workspace_status_page(&status_request(&root.0, 100)).unwrap();
+        let status = test_status_page(&status_request(&root.0, 100)).unwrap();
         assert!(!status.complete);
         assert!(!status.authoritative_clean);
         assert!(status.reconciliation_required);
@@ -4213,7 +5478,7 @@ mod tests {
             },
         )
         .unwrap();
-        let status = workspace_status_page(&status_request(&root.0, 100)).unwrap();
+        let status = test_status_page(&status_request(&root.0, 100)).unwrap();
         assert!(status.complete);
         assert!(status
             .items
@@ -4249,7 +5514,7 @@ mod tests {
         .unwrap_err();
         assert_eq!(error.code, "WORKSPACE_WATCHER_INJECTED_STATE_FAULT");
         assert_eq!(
-            workspace_status_page(&status_request(&root.0, 100))
+            test_status_page(&status_request(&root.0, 100))
                 .unwrap_err()
                 .code,
             "WORKSPACE_INDEX_INVALID"
@@ -4300,7 +5565,7 @@ mod tests {
             },
         )
         .unwrap();
-        let status = workspace_status_page(&status_request(&root.0, 100)).unwrap();
+        let status = test_status_page(&status_request(&root.0, 100)).unwrap();
         assert_eq!(status.items.len(), 1);
         assert_eq!(status.items[0].status, WorkspaceStatus::Modified);
         assert!(status.items[0].content_verified);
@@ -4410,11 +5675,11 @@ mod tests {
         });
         entered.wait();
         root.write("Game/value.bin", b"changed");
-        let during = workspace_status_page(&status_request(&root.0, 100)).unwrap_err();
+        let during = test_status_page(&status_request(&root.0, 100)).unwrap_err();
         assert_eq!(during.code, "WORKSPACE_BUSY");
         release.wait();
         let second = worker.join().unwrap();
-        let after = workspace_status_page(&status_request(&root.0, 100)).unwrap();
+        let after = test_status_page(&status_request(&root.0, 100)).unwrap();
         assert_eq!(after.generation, second.generation);
         assert_eq!(second.generation, first.generation + 1);
         assert!(!after.authoritative_clean);
@@ -4423,7 +5688,7 @@ mod tests {
     }
 
     #[test]
-    fn status_revalidates_after_load_when_transition_races_clean_return() {
+    fn status_final_barrier_fails_busy_when_transition_races_clean_return() {
         let root = TestRoot::new("status-after-load-seqlock");
         root.write("Game/value.bin", b"value");
         initialize_workspace(&root.0);
@@ -4445,7 +5710,7 @@ mod tests {
         });
         let status_root = root.0.clone();
         let status_worker =
-            thread::spawn(move || workspace_status_page(&status_request(&status_root, 100)));
+            thread::spawn(move || test_status_page(&status_request(&status_root, 100)));
         status_entered.wait();
 
         let writer_entered = Arc::new(Barrier::new(2));
@@ -4464,12 +5729,12 @@ mod tests {
 
         status_release.wait();
         let error = status_worker.join().unwrap().unwrap_err();
-        assert_eq!(error.code, "WORKSPACE_INDEX_RECOVERY_REQUIRED");
+        assert_eq!(error.code, "WORKSPACE_BUSY");
 
         writer_release.wait();
         let second = writer.join().unwrap();
         assert_eq!(second.generation, first.generation + 1);
-        let after = workspace_status_page(&status_request(&root.0, 100)).unwrap();
+        let after = test_status_page(&status_request(&root.0, 100)).unwrap();
         assert!(!after.authoritative_clean);
         assert_eq!(after.items.len(), 1);
         assert_eq!(after.items[0].status, WorkspaceStatus::Modified);
@@ -4542,7 +5807,7 @@ mod tests {
             &mut TestRoutes::new(vec![entry.clone()]),
             &mut TestWatcher::default(),
         );
-        let first_page = workspace_status_page(&status_request(&root.0, 1)).unwrap();
+        let first_page = test_status_page(&status_request(&root.0, 1)).unwrap();
         let cursor = first_page.next_cursor.unwrap();
         let index = existing_index_directory(&root.0).unwrap();
         let original = read_optional_active(&index).unwrap().unwrap();
@@ -4556,7 +5821,7 @@ mod tests {
             }
             changed.payload_sha256 = json_digest(&changed.payload).unwrap();
             write_json_atomic(&index.join("active.json"), &changed).unwrap();
-            let error = workspace_status_page(&status_request(&root.0, 10)).unwrap_err();
+            let error = test_status_page(&status_request(&root.0, 10)).unwrap_err();
             assert_eq!(error.code, "WORKSPACE_INDEX_BINDING_STALE");
         }
         write_json_atomic(&index.join("active.json"), &original).unwrap();
@@ -4567,7 +5832,7 @@ mod tests {
         );
         let mut stale_cursor = status_request(&root.0, 10);
         stale_cursor.cursor = Some(cursor);
-        let error = workspace_status_page(&stale_cursor).unwrap_err();
+        let error = test_status_page(&stale_cursor).unwrap_err();
         assert_eq!(error.code, "WORKSPACE_STATUS_CURSOR_STALE");
     }
 
@@ -4605,7 +5870,7 @@ mod tests {
             let backup = index.join(format!("backup-{name}"));
             fs::rename(&path, &backup).unwrap();
             symlink(&backup, &path).unwrap();
-            assert!(workspace_status_page(&status_request(&root.0, 10)).is_err());
+            assert!(test_status_page(&status_request(&root.0, 10)).is_err());
             fs::remove_file(&path).unwrap();
             fs::rename(&backup, &path).unwrap();
         }
@@ -4614,7 +5879,7 @@ mod tests {
         let moved = control.join("workspace-index-v1-backup");
         fs::rename(&index, &moved).unwrap();
         symlink(&moved, &index).unwrap();
-        assert!(workspace_status_page(&status_request(&root.0, 10)).is_err());
+        assert!(test_status_page(&status_request(&root.0, 10)).is_err());
         fs::remove_file(&index).unwrap();
         fs::rename(moved, index).unwrap();
     }
@@ -4635,7 +5900,7 @@ mod tests {
             &mut TestWatcher::default(),
         );
         assert!(
-            workspace_status_page(&status_request(&root.0, 10))
+            test_status_page(&status_request(&root.0, 10))
                 .unwrap()
                 .authoritative_clean
         );
@@ -4646,7 +5911,7 @@ mod tests {
         bytes[offset] ^= 1;
         fs::write(entries_path, bytes).unwrap();
         assert_eq!(
-            workspace_status_page(&status_request(&root.0, 10))
+            test_status_page(&status_request(&root.0, 10))
                 .unwrap_err()
                 .code,
             "WORKSPACE_INDEX_INVALID"
@@ -4690,7 +5955,7 @@ mod tests {
         // operation so callers can observe and recover every deletion intent.
         assert!(prior_events.is_file());
         assert!(
-            workspace_status_page(&status_request(&root.0, 100))
+            test_status_page(&status_request(&root.0, 100))
                 .unwrap()
                 .authoritative_clean
         );
@@ -4933,7 +6198,7 @@ mod tests {
             &mut TestRoutes::new(entries.clone()),
             &mut TestWatcher::default(),
         );
-        let first = workspace_status_page(&status_request(&root.0, 1)).unwrap();
+        let first = test_status_page(&status_request(&root.0, 1)).unwrap();
         let cursor = first.next_cursor.unwrap();
         let index = existing_index_directory(&root.0).unwrap();
         assert_eq!(
@@ -4951,7 +6216,7 @@ mod tests {
         let mut next = status_request(&root.0, 1);
         next.cursor = Some(cursor);
         assert_eq!(
-            workspace_status_page(&next).unwrap_err().code,
+            test_status_page(&next).unwrap_err().code,
             "WORKSPACE_STATUS_CURSOR_STALE"
         );
         assert_eq!(
@@ -5099,7 +6364,7 @@ mod tests {
         build_one_file_generation(&root);
         retention::set_retention_crash_point(retention::RetentionCrashPoint::LeasePublished);
         assert_eq!(
-            workspace_status_page(&status_request(&root.0, 10))
+            test_status_page(&status_request(&root.0, 10))
                 .unwrap_err()
                 .code,
             "WORKSPACE_INDEX_COMPACTION_INJECTED_CRASH"
@@ -5182,6 +6447,24 @@ mod tests {
             compact_workspace_index(&root.0).unwrap_err().code,
             "WORKSPACE_BUSY"
         );
+        assert_eq!(
+            record_workspace_change_batch(
+                &root.0,
+                &WorkspaceWatchBatch {
+                    session_id: "session.1".to_owned(),
+                    prior_cursor: "cursor.1".to_owned(),
+                    cursor: "cursor.race".to_owned(),
+                    events: vec![WorkspaceWatchEvent {
+                        kind: WorkspaceWatchEventKind::Modified,
+                        repository_path: "Assets/lease.bin".to_owned(),
+                        prior_repository_path: None,
+                    }],
+                },
+            )
+            .unwrap_err()
+            .code,
+            "WORKSPACE_BUSY"
+        );
         release.wait();
         assert_eq!(repair.join().unwrap().unwrap().generation, 4);
         assert!(
@@ -5222,7 +6505,7 @@ mod tests {
             "WORKSPACE_INDEX_ORDER_INVALID" | "WORKSPACE_INDEX_PATH_COLLISION"
         ));
         recover_workspace_index(&root.0).unwrap();
-        let current = workspace_status_page(&status_request(&root.0, 10)).unwrap();
+        let current = test_status_page(&status_request(&root.0, 10)).unwrap();
         assert_eq!(current.generation, first.generation);
 
         let index = existing_index_directory(&root.0).unwrap();
@@ -5352,7 +6635,7 @@ mod tests {
         )
         .unwrap();
         let started = Instant::now();
-        let status = workspace_status_page(&status_request(&root.0, 1_000)).unwrap();
+        let status = test_status_page(&status_request(&root.0, 1_000)).unwrap();
         let elapsed = started.elapsed();
         assert_eq!(status.items.len(), 1_000);
         assert_eq!(status.status_counts.get("modified"), Some(&1_000));

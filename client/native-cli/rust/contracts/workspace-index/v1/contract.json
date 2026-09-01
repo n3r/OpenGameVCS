@@ -1,6 +1,6 @@
 {
   "schema": "ogvcs.workspace-index/private-contract/v1",
-  "contractVersion": "0.1.0-rc.2",
+  "contractVersion": "0.1.0-rc.3",
   "visibility": "private-local-candidate",
   "onDiskRoot": ".ogvcs/workspace-index-v1",
   "limits": {
@@ -31,6 +31,10 @@
     "publicationOrder": [
       "publish-and-fsync-transition",
       "create-new-generation-artifacts",
+      "stream-and-validate-complete-baseline-receipt",
+      "write-ignore-snapshot",
+      "complete-full-filesystem-scan",
+      "drain-watcher-through-final-native-barrier",
       "fsync-artifact-files",
       "create-and-fsync-seal",
       "fsync-generation-directory",
@@ -46,7 +50,9 @@
     "statusSnapshotRevalidation": [
       "transition-absent-after-classification",
       "active-generation-id-generation-and-payload-digest-unchanged",
-      "watcher-payload-digest-count-bytes-tail-and-event-file-length-unchanged"
+      "pre-final-barrier-persisted-watcher-payload-digest-and-event-transcript-unchanged",
+      "post-final-barrier-watcher-authority-count-bytes-tail-and-event-file-length-unchanged-while-idle-payload-digest-and-cursor-may-advance",
+      "staging-generation-and-full-state-digest-unchanged"
     ],
     "readerSnapshot": "exactly-one-sealed-active-generation-held-by-owner-authenticated-kernel-locked-page-lease",
     "generationFormatVersion": "0.1.0-rc.1",
@@ -108,6 +114,13 @@
     "recordDigestFraming": "sha256(domain || u64-be(core-json-byte-length) || compact-core-json-utf8)",
     "recordDigestDomainUtf8Nul": "ogvcs.workspace-index/watch-record/v1",
     "statePublication": "append-fsync-journal-then-atomically-publish-state-and-fsync-directory",
+    "generationBarrierOrder": "subscribe-before-baseline-stream-then-complete-full-scan-before-final-native-drain",
+    "statusFence": "opening-barrier-under-mutation-lock-before-reader-lease-plus-final-barrier-under-reacquired-mutation-lock-after-all-filesystem-probes",
+    "statusFinalBarrier": "append-each-exact-session-and-prior-cursor-batch-then-reject-page-if-count-bytes-or-tail-changed-during-classification",
+    "idleCursorAdvance": "accept-authenticated-prior-cursor-when-generation-staging-filter-watcher-authority-and-exact-event-transcript-are-unchanged-then-rebind-next-page-to-final-cursor",
+    "stateCoherence": "authoritative-exactly-continuity-plus-resume-plus-open-session-plus-no-reconciliation-otherwise-degraded-requires-no-continuity-plus-closed-session-plus-reconciliation",
+    "statusFenceUnavailable": "retain-historical-cursor-close-session-and-require-reconciliation",
+    "concurrentStatusReader": "final-native-barrier-rejects-every-event-transcript-authority-generation-or-staging-change",
     "unmatchedAbsentDelete": "dirty-and-reconciliation-required-unless-same-path-created-then-deleted",
     "productionContinuityAuthority": "built-in-native-adapter-only",
     "portableAdapter": "always-reconciliation-required",
@@ -120,10 +133,20 @@
   "statusCursor": {
     "encoding": "lowercase-hex(compact-json-utf8({payload,macSha256}))",
     "authentication": "hmac-sha256(owner-only-random-32-byte-key,domain||compact-payload-json-utf8)",
-    "domainUtf8Nul": "ogvcs.workspace-index/status-cursor-hmac/v1",
+    "domainUtf8Nul": "ogvcs.workspace-index/status-cursor-hmac/v2",
+    "keyStorage": "cursor-hmac-key-v1.bin-stable-owner-random-key-storage-format-domain-versioned-separately",
+    "priorWatcherPayloadCursor": "authenticated-predecessor-audit-bindings-tolerated-only-when-watcher-authority-and-exact-event-transcript-remain-unchanged",
     "requiredBindings": [
       "generation-id",
       "active-payload-sha256",
+      "watcher-payload-sha256",
+      "watcher-cursor",
+      "watcher-authority-sha256",
+      "watcher-event-count",
+      "watcher-event-bytes",
+      "watcher-event-tail-sha256",
+      "staging-generation",
+      "staging-state-sha256",
       "repository-settings-digest",
       "path-profile",
       "case-mode",
@@ -133,6 +156,16 @@
       "after-repository-path",
       "after-platform-key"
     ]
+  },
+  "stagingStatus": {
+    "admittedState": "fully-validated-applied-intents-only",
+    "earlyClean": "requires-empty-staging-snapshot",
+    "candidateSeeds": [
+      "add-destination-and-staged-file-id",
+      "move-source-destination-prior-path-and-staged-file-id",
+      "delete-source-and-staged-file-id"
+    ],
+    "cursorDisclosure": "generation-and-full-state-sha256-only-no-intent-plaintext"
   },
   "statusValues": [
     "modified",
@@ -154,7 +187,9 @@
     "compactionMayModifyWorkspaceFiles": false,
     "compactionMayDeleteCurrentPredecessorOrPinnedGeneration": false,
     "corruptOrGappedJournalMayReportClean": false,
-    "uncleanOrUnsupportedWatcherMayReportClean": false
+    "uncleanOrUnsupportedWatcherMayReportClean": false,
+    "statusWithoutExactNativeFenceMayReportClean": false,
+    "repairMayResealDifferentGenerationThanVerified": false
   },
   "privateCandidateClaims": {
     "readerSafeGenerationGcImplemented": true

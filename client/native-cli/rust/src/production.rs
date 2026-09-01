@@ -35,7 +35,7 @@ pub use workspace_index::{
     WorkspaceBaselineSink, WorkspaceIgnoreRule, WorkspaceIndexBuildRequest,
     WorkspaceIndexCompactionReport, WorkspaceIndexReport, WorkspaceStatus, WorkspaceStatusFilter,
     WorkspaceStatusItem, WorkspaceStatusPage, WorkspaceStatusPageRequest, WorkspaceWatchBatch,
-    WorkspaceWatchEvent, WorkspaceWatchEventKind, WorkspaceWatchEventSink,
+    WorkspaceWatchBatchSink, WorkspaceWatchEvent, WorkspaceWatchEventKind, WorkspaceWatchEventSink,
     WorkspaceWatcherAuthority, WorkspaceWatcherCheckpoint, WorkspaceWatcherStart,
     BASELINE_RECEIPT_SCHEMA, BASE_RETAINED_GENERATIONS, MAX_AUTHENTICATED_GENERATIONS,
     MAX_BASELINE_CHUNK_BYTES, MAX_BASELINE_CHUNK_ITEMS, MAX_BASELINE_ENTRIES,
