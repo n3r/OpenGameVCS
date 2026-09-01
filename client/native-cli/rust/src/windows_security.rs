@@ -6,7 +6,7 @@
 //! closed. Handles are opened without following a final reparse point.
 
 use std::ffi::c_void;
-use std::fs::File;
+use std::fs::{self, File};
 use std::io;
 use std::mem::{size_of, zeroed};
 use std::os::windows::ffi::OsStrExt;
@@ -15,26 +15,28 @@ use std::path::Path;
 use std::ptr::{null, null_mut};
 
 use windows_sys::Win32::Foundation::{
-    CloseHandle, LocalFree, ERROR_INSUFFICIENT_BUFFER, GENERIC_READ, HANDLE, INVALID_HANDLE_VALUE,
-    PSID,
+    CloseHandle, LocalFree, ERROR_INSUFFICIENT_BUFFER, GENERIC_READ, GENERIC_WRITE, HANDLE,
+    INVALID_HANDLE_VALUE, PSID,
 };
 use windows_sys::Win32::Security::Authorization::{
     GetSecurityInfo, SetSecurityInfo, SE_FILE_OBJECT,
 };
 use windows_sys::Win32::Security::{
-    AclSizeInformation, CreateWellKnownSid, EqualSid, GetAce, GetAclInformation,
-    GetSecurityDescriptorControl, GetTokenInformation, TokenUser, WinBuiltinAdministratorsSid,
-    WinLocalSystemSid, ACCESS_ALLOWED_ACE, ACL, ACL_SIZE_INFORMATION, DACL_SECURITY_INFORMATION,
-    OWNER_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION, SE_DACL_PROTECTED,
-    TOKEN_QUERY, TOKEN_USER,
+    AclSizeInformation, AddAccessAllowedAceEx, CreateWellKnownSid, EqualSid, GetAce,
+    GetAclInformation, GetLengthSid, GetSecurityDescriptorControl, GetTokenInformation,
+    InitializeAcl, TokenUser, WinBuiltinAdministratorsSid, WinLocalSystemSid, ACCESS_ALLOWED_ACE,
+    ACL, ACL_REVISION, ACL_SIZE_INFORMATION, CONTAINER_INHERIT_ACE, DACL_SECURITY_INFORMATION,
+    OBJECT_INHERIT_ACE, OWNER_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION,
+    SE_DACL_PROTECTED, TOKEN_QUERY, TOKEN_USER,
 };
 use windows_sys::Win32::Storage::FileSystem::{
     CreateFileW, FileRenameInfo, GetFileInformationByHandle, GetFinalPathNameByHandleW,
-    SetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION, DELETE, FILE_ADD_FILE,
-    FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
-    FILE_LIST_DIRECTORY, FILE_NAME_NORMALIZED, FILE_READ_ATTRIBUTES, FILE_RENAME_INFO,
-    FILE_RENAME_INFO_0, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
-    READ_CONTROL, VOLUME_NAME_DOS,
+    SetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION, CREATE_NEW, DELETE, FILE_ADD_FILE,
+    FILE_ALL_ACCESS, FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_REPARSE_POINT,
+    FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_LIST_DIRECTORY,
+    FILE_NAME_NORMALIZED, FILE_READ_ATTRIBUTES, FILE_RENAME_INFO, FILE_RENAME_INFO_0,
+    FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING, READ_CONTROL,
+    VOLUME_NAME_DOS, WRITE_DAC, WRITE_OWNER,
 };
 use windows_sys::Win32::System::SystemServices::{
     ACCESS_ALLOWED_ACE_TYPE, ACCESS_DENIED_ACE_TYPE, ACCESS_DENIED_CALLBACK_ACE_TYPE,
@@ -80,9 +82,45 @@ fn open_private(path: &Path, directory: bool) -> io::Result<File> {
     Ok(file)
 }
 
-pub fn protect_private_directory(path: &Path) -> io::Result<()> {
-    let file = open_reparse_handle(path)?;
-    protect_private_handle(&file, true)
+pub fn harden_new_private_directory(path: &Path) -> io::Result<()> {
+    let file = open_reparse_handle_with_access(
+        path,
+        FILE_READ_ATTRIBUTES | READ_CONTROL | WRITE_DAC | WRITE_OWNER | GENERIC_READ,
+    )?;
+    harden_new_private_handle(&file, true)
+}
+
+pub fn create_new_private_file(path: &Path) -> io::Result<File> {
+    let file = create_new_regular_file(path)?;
+    if let Err(error) = harden_new_private_handle(&file, false) {
+        drop(file);
+        let _ = fs::remove_file(path);
+        return Err(error);
+    }
+    Ok(file)
+}
+
+pub fn open_or_create_private_lock(path: &Path) -> io::Result<File> {
+    match create_new_regular_file(path) {
+        Ok(file) => {
+            if let Err(error) = harden_new_private_handle(&file, false) {
+                drop(file);
+                let _ = fs::remove_file(path);
+                return Err(error);
+            }
+            Ok(file)
+        }
+        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+            let file = open_reparse_handle_with_access(
+                path,
+                FILE_READ_ATTRIBUTES | READ_CONTROL | GENERIC_READ | GENERIC_WRITE,
+            )?;
+            validate_kind(&file, false)?;
+            validate_owner_and_dacl(file.as_raw_handle() as HANDLE, true)?;
+            Ok(file)
+        }
+        Err(error) => Err(error),
+    }
 }
 
 fn open_reparse_handle(path: &Path) -> io::Result<File> {
@@ -90,11 +128,7 @@ fn open_reparse_handle(path: &Path) -> io::Result<File> {
 }
 
 fn open_reparse_handle_with_access(path: &Path, access: u32) -> io::Result<File> {
-    let mut wide: Vec<u16> = path.as_os_str().encode_wide().collect();
-    if wide.iter().any(|unit| *unit == 0) {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "embedded NUL"));
-    }
-    wide.push(0);
+    let wide = wide_path(path)?;
     // SAFETY: the UTF-16 path is terminated, all pointer arguments are valid,
     // and the returned handle is either rejected or transferred into File.
     let handle = unsafe {
@@ -116,6 +150,40 @@ fn open_reparse_handle_with_access(path: &Path, access: u32) -> io::Result<File>
     let file = unsafe { File::from_raw_handle(owned.0 as _) };
     std::mem::forget(owned);
     Ok(file)
+}
+
+fn create_new_regular_file(path: &Path) -> io::Result<File> {
+    let wide = wide_path(path)?;
+    // SAFETY: the UTF-16 path is terminated, CREATE_NEW makes publication
+    // atomic, and the returned handle is either rejected or owned by File.
+    let handle = unsafe {
+        CreateFileW(
+            wide.as_ptr(),
+            GENERIC_READ | GENERIC_WRITE | READ_CONTROL | WRITE_DAC | WRITE_OWNER,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            null(),
+            CREATE_NEW,
+            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT,
+            0,
+        )
+    };
+    if handle == INVALID_HANDLE_VALUE {
+        return Err(io::Error::last_os_error());
+    }
+    let owned = OwnedHandle(handle);
+    // SAFETY: ownership is transferred from OwnedHandle into File exactly once.
+    let file = unsafe { File::from_raw_handle(owned.0 as _) };
+    std::mem::forget(owned);
+    Ok(file)
+}
+
+fn wide_path(path: &Path) -> io::Result<Vec<u16>> {
+    let mut wide: Vec<u16> = path.as_os_str().encode_wide().collect();
+    if wide.iter().any(|unit| *unit == 0) {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "embedded NUL"));
+    }
+    wide.push(0);
+    Ok(wide)
 }
 
 fn validate_kind(file: &File, directory: bool) -> io::Result<()> {
@@ -321,47 +389,30 @@ fn set_rename_noreplace(
     }
 }
 
-pub fn protect_private_file(file: &File) -> io::Result<()> {
-    protect_private_handle(file, false)
-}
-
-fn protect_private_handle(file: &File, directory: bool) -> io::Result<()> {
+fn harden_new_private_handle(file: &File, directory: bool) -> io::Result<()> {
     validate_kind(file, directory)?;
     let handle = file.as_raw_handle() as HANDLE;
-    validate_owner_and_dacl(handle, false)?;
-    let mut dacl: *mut ACL = null_mut();
-    let mut descriptor = null_mut();
-    // SAFETY: output pointers are valid and descriptor is released below.
-    let status = unsafe {
-        GetSecurityInfo(
-            handle,
-            SE_FILE_OBJECT,
-            DACL_SECURITY_INFORMATION,
-            null_mut(),
-            null_mut(),
-            &mut dacl,
-            null_mut(),
-            &mut descriptor,
-        )
-    };
-    if status != 0 || dacl.is_null() || descriptor.is_null() {
-        if !descriptor.is_null() {
-            // SAFETY: descriptor came from GetSecurityInfo.
-            unsafe { LocalFree(descriptor) };
-        }
-        return Err(io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            "workspace DACL unavailable",
-        ));
-    }
-    let _descriptor = LocalSecurityDescriptor(descriptor);
-    // SAFETY: dacl remains owned by the live descriptor for this call.
+    let token_user = current_token_user()?;
+    let system = WellKnownSid::new(WinLocalSystemSid)?;
+    let administrators = WellKnownSid::new(WinBuiltinAdministratorsSid)?;
+    validate_new_object_owner(handle, token_user.sid(), system.sid(), administrators.sid())?;
+    let mut acl_storage = private_acl(
+        token_user.sid(),
+        system.sid(),
+        administrators.sid(),
+        directory,
+    )?;
+    let dacl = acl_storage.as_mut_ptr().cast::<ACL>();
+    // SAFETY: the create-new handle was opened with WRITE_OWNER and WRITE_DAC;
+    // the token SID and ACL storage remain live for the duration of the call.
     let status = unsafe {
         SetSecurityInfo(
             handle,
             SE_FILE_OBJECT,
-            DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
-            null_mut(),
+            OWNER_SECURITY_INFORMATION
+                | DACL_SECURITY_INFORMATION
+                | PROTECTED_DACL_SECURITY_INFORMATION,
+            token_user.sid(),
             null_mut(),
             dacl,
             null(),
@@ -371,6 +422,100 @@ fn protect_private_handle(file: &File, directory: bool) -> io::Result<()> {
         return Err(io::Error::from_raw_os_error(status as i32));
     }
     validate_owner_and_dacl(handle, true)
+}
+
+fn validate_new_object_owner(
+    handle: HANDLE,
+    token_user: PSID,
+    system: PSID,
+    administrators: PSID,
+) -> io::Result<()> {
+    let mut owner: PSID = null_mut();
+    let mut descriptor = null_mut();
+    // SAFETY: output pointers are valid and descriptor is released below.
+    let status = unsafe {
+        GetSecurityInfo(
+            handle,
+            SE_FILE_OBJECT,
+            OWNER_SECURITY_INFORMATION,
+            &mut owner,
+            null_mut(),
+            null_mut(),
+            null_mut(),
+            &mut descriptor,
+        )
+    };
+    if status != 0 || owner.is_null() || descriptor.is_null() {
+        if !descriptor.is_null() {
+            // SAFETY: descriptor came from GetSecurityInfo.
+            unsafe { LocalFree(descriptor) };
+        }
+        return if status == 0 {
+            Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "new workspace object has no owner",
+            ))
+        } else {
+            Err(io::Error::from_raw_os_error(status as i32))
+        };
+    }
+    let _descriptor = LocalSecurityDescriptor(descriptor);
+    // Windows may assign the elevated token's Administrators default owner to
+    // a just-created object. Only the token SID and the two trusted operating
+    // system principals are eligible for normalization.
+    if unsafe {
+        EqualSid(owner, token_user) == 0
+            && EqualSid(owner, system) == 0
+            && EqualSid(owner, administrators) == 0
+    } {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "new workspace object has an untrusted owner",
+        ));
+    }
+    Ok(())
+}
+
+fn private_acl(
+    token_user: PSID,
+    system: PSID,
+    administrators: PSID,
+    directory: bool,
+) -> io::Result<Vec<usize>> {
+    let sids = [token_user, system, administrators];
+    let ace_prefix = size_of::<ACCESS_ALLOWED_ACE>() - size_of::<u32>();
+    let mut byte_len = size_of::<ACL>();
+    for sid in sids {
+        // SAFETY: every SID is backed by a live token or well-known SID buffer.
+        let sid_len = unsafe { GetLengthSid(sid) } as usize;
+        if sid_len == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        byte_len = byte_len
+            .checked_add(ace_prefix)
+            .and_then(|length| length.checked_add(sid_len))
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "ACL size overflow"))?;
+    }
+    let word = size_of::<usize>();
+    let mut storage = vec![0usize; (byte_len + word - 1) / word];
+    let acl = storage.as_mut_ptr().cast::<ACL>();
+    // SAFETY: storage is aligned and contains at least byte_len writable bytes.
+    if unsafe { InitializeAcl(acl, byte_len as u32, ACL_REVISION) } == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let flags = if directory {
+        OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE
+    } else {
+        0
+    };
+    for sid in sids {
+        // SAFETY: acl is initialized with capacity for all three exact ACEs,
+        // and each SID remains live until SetSecurityInfo completes.
+        if unsafe { AddAccessAllowedAceEx(acl, ACL_REVISION, flags, FILE_ALL_ACCESS, sid) } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+    }
+    Ok(storage)
 }
 
 fn validate_owner_and_dacl(handle: HANDLE, require_protected: bool) -> io::Result<()> {

@@ -691,16 +691,19 @@ struct MutationLock {
 impl MutationLock {
     fn acquire(root: &Path) -> Result<Self, CliError> {
         let path = root.join(".ogvcs-mutation-v2.lock");
-        let mut options = OpenOptions::new();
-        options.read(true).write(true).create(true);
         #[cfg(not(windows))]
-        options
-            .mode(0o600)
-            .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC);
+        let file = {
+            let mut options = OpenOptions::new();
+            options.read(true).write(true).create(true);
+            options
+                .mode(0o600)
+                .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC);
+            options
+                .open(&path)
+                .map_err(|_| workspace_write_unavailable())?
+        };
         #[cfg(windows)]
-        options.custom_flags(0x0020_0000);
-        let file = options
-            .open(&path)
+        let file = super::windows_security::open_or_create_private_lock(&path)
             .map_err(|_| workspace_write_unavailable())?;
         #[cfg(not(windows))]
         {
@@ -735,8 +738,6 @@ impl MutationLock {
                 LockFileEx, LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY,
             };
             use windows_sys::Win32::System::IO::OVERLAPPED;
-            super::windows_security::protect_private_file(&file)
-                .map_err(|_| workspace_write_unavailable())?;
             // SAFETY: file handle and zeroed OVERLAPPED for offset zero are valid.
             let mut overlapped: OVERLAPPED = unsafe { zeroed() };
             if unsafe {
