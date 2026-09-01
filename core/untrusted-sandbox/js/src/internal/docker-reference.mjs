@@ -134,12 +134,12 @@ const mountFile = (handle, target) => `type=bind,src=${procDescriptorPath(handle
 
 const WORKER_EXECUTE_RESULT_KEYS = Object.freeze(['code', 'kind', 'signal', 'stderr', 'stdout', 'stdoutBytes']);
 
-const workerFailureClass = (source) => {
+const exactWorkerExecuteResult = (source) => {
   try {
-    if (source === null || typeof source !== 'object' || types.isProxy(source) || !Object.isFrozen(source)) return 'CONTROL';
+    if (source === null || typeof source !== 'object' || types.isProxy(source) || !Object.isFrozen(source) || Object.getPrototypeOf(source) !== Object.prototype) return null;
     const descriptors = Object.getOwnPropertyDescriptors(source);
-    if (Object.keys(descriptors).sort().join('\0') !== WORKER_EXECUTE_RESULT_KEYS.join('\0')
-      || Object.values(descriptors).some((descriptor) => !descriptor.enumerable || !Object.hasOwn(descriptor, 'value') || Object.hasOwn(descriptor, 'get') || Object.hasOwn(descriptor, 'set'))) return 'CONTROL';
+    if (Reflect.ownKeys(source).sort().join('\0') !== WORKER_EXECUTE_RESULT_KEYS.join('\0')
+      || Object.values(descriptors).some((descriptor) => !descriptor.enumerable || !Object.hasOwn(descriptor, 'value') || Object.hasOwn(descriptor, 'get') || Object.hasOwn(descriptor, 'set'))) return null;
     const value = Object.fromEntries(WORKER_EXECUTE_RESULT_KEYS.map((key) => [key, descriptors[key].value]));
     if (value.kind !== 'exit'
       || value.signal !== null
@@ -154,7 +154,15 @@ const workerFailureClass = (source) => {
       || value.stdout.length !== value.stdoutBytes
       || !Buffer.isBuffer(value.stderr)
       || Object.getPrototypeOf(value.stderr) !== Buffer.prototype
-      || value.stderr.length > 64 * 1024) return 'CONTROL';
+      || value.stderr.length > 64 * 1024) return null;
+    return value;
+  } catch { return null; }
+};
+
+const workerFailureClass = (source) => {
+  try {
+    const value = exactWorkerExecuteResult(source);
+    if (!value) return 'CONTROL';
     const stderrBytes = value.stderr.length;
     if (value.code === 63 && value.stdoutBytes === 0 && stderrBytes === 0) return 'INPUT_READ';
     if (value.code === 64 && value.stdoutBytes === 0 && stderrBytes === 0) return 'OUTPUT_WRITE';
@@ -164,6 +172,65 @@ const workerFailureClass = (source) => {
     if (stderrBytes > 0 && value.stdoutBytes === 0) return 'STDERR';
     return 'CONTROL';
   } catch { return 'CONTROL'; }
+};
+
+const POST_NONZERO_CONTROL = Object.freeze({ failureClass: 'CONTROL', kind: 'failed', poison: true });
+const POST_NONZERO_ACTIVATION_CONTROL = Object.freeze({ failureClass: 'ACTIVATION_CONTROL', kind: 'failed', poison: false });
+const POST_NONZERO_TOOL_EXITED = Object.freeze({ failureClass: 'TOOL_EXITED', kind: 'failed', poison: false });
+const POST_NONZERO_RESOURCE_LIMIT = Object.freeze({ failureClass: null, kind: 'resource-limit', poison: false });
+
+const postNonzeroFailureDisposition = (startSource, inspectSource, expectedId, expectedName) => {
+  try {
+    const start = exactWorkerExecuteResult(startSource);
+    const inspected = exactWorkerExecuteResult(inspectSource);
+    if (!start
+      || workerFailureClass(startSource) !== 'NONZERO'
+      || !inspected
+      || inspected.code !== 0
+      || inspected.stderr.length !== 0
+      || inspected.stdoutBytes === 0
+      || typeof expectedId !== 'string'
+      || !/^[0-9a-f]{64}$/u.test(expectedId)
+      || typeof expectedName !== 'string'
+      || !/^ogvcs-sandbox-[0-9a-f]{24}$/u.test(expectedName)) return POST_NONZERO_CONTROL;
+    let containers;
+    try { containers = JSON.parse(inspected.stdout.toString('utf8')); } catch { return POST_NONZERO_CONTROL; }
+    if (!Array.isArray(containers) || containers.length !== 1) return POST_NONZERO_CONTROL;
+    const container = containers[0];
+    if (container === null
+      || typeof container !== 'object'
+      || Array.isArray(container)
+      || container.Id !== expectedId
+      || container.Name !== `/${expectedName}`) return POST_NONZERO_CONTROL;
+    const state = container.State;
+    if (state === null
+      || typeof state !== 'object'
+      || Array.isArray(state)
+      || !['created', 'exited'].includes(state.Status)
+      || !Number.isSafeInteger(state.ExitCode)
+      || state.ExitCode < 0
+      || state.ExitCode > 255
+      || typeof state.OOMKilled !== 'boolean'
+      || typeof state.Error !== 'string'
+      || state.Running !== false
+      || state.Paused !== false
+      || state.Restarting !== false
+      || state.Dead !== false
+      || state.Pid !== 0) return POST_NONZERO_CONTROL;
+    const stateErrorPresent = state.Error.length !== 0;
+    const stdoutPresent = start.stdoutBytes !== 0;
+    const stderrPresent = start.stderr.length !== 0;
+    if (state.Status === 'created') return start.code === 1
+      && !stdoutPresent
+      && stderrPresent
+      && state.ExitCode !== 0
+      && !state.OOMKilled
+      && stateErrorPresent ? POST_NONZERO_ACTIVATION_CONTROL : POST_NONZERO_CONTROL;
+    if (state.ExitCode !== start.code || stateErrorPresent || stdoutPresent || stderrPresent) return POST_NONZERO_CONTROL;
+    if (state.OOMKilled && start.code !== 137) return POST_NONZERO_CONTROL;
+    if (state.OOMKilled || [137, 152].includes(start.code)) return POST_NONZERO_RESOURCE_LIMIT;
+    return POST_NONZERO_TOOL_EXITED;
+  } catch { return POST_NONZERO_CONTROL; }
 };
 
 const emptyCollection = (value) => value == null
@@ -516,10 +583,18 @@ export class DockerReferenceAdapter {
     }
     const deadline = Math.min(policy.elapsedMilliseconds, 60_000);
     const value = await execute({ binary: this.#binary, args: ['start', '--attach', id], maximumStdout: 64 * 1024, maximumStderr: 64 * 1024, timeoutMilliseconds: deadline, signal });
-    const failureClass = workerFailureClass(value);
+    let failureClass = workerFailureClass(value);
+    let postNonzeroKind = null;
+    if (failureClass === 'NONZERO') {
+      const inspected = await this.#control(['container', 'inspect', id], { maximumStderr: 64 * 1024, maximumStdout: 64 * 1024, timeoutMilliseconds: 2_000 });
+      const disposition = postNonzeroFailureDisposition(value, inspected, id, name);
+      failureClass = disposition.failureClass;
+      postNonzeroKind = disposition.kind;
+      if (disposition.poison) this.#poisoned = true;
+    }
     const containerGone = await this.#cleanupContainer(id, name);
     if (!containerGone) { await this.#cleanupVolume(volume.name); this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
-    const kind = value.kind === 'timeout' ? 'timeout' : value.kind === 'aborted' ? 'cancelled' : value.kind === 'overflow' ? 'output-limit' : value.kind === 'exit' && [137, 152].includes(value.code) ? 'resource-limit' : value.kind !== 'exit' || value.code !== 0 || value.stdoutBytes !== 0 || value.stderr.length !== 0 ? 'failed' : 'success';
+    const kind = postNonzeroKind ?? (value.kind === 'timeout' ? 'timeout' : value.kind === 'aborted' ? 'cancelled' : value.kind === 'overflow' ? 'output-limit' : value.kind !== 'exit' || value.code !== 0 || value.stdoutBytes !== 0 || value.stderr.length !== 0 ? 'failed' : 'success');
     return Object.freeze(kind === 'failed' ? { failureClass, kind, volume } : { kind, volume });
   }
 
@@ -558,4 +633,5 @@ export class DockerReferenceAdapter {
 export const isDockerReferenceAdapter = (value) => adapters.has(value);
 
 export const executeDockerForTesting = execute;
+export const postNonzeroFailureDispositionForTesting = postNonzeroFailureDisposition;
 export const workerFailureClassForTesting = workerFailureClass;

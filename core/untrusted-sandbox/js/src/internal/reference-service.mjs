@@ -34,15 +34,18 @@ const POSTSTART_SINGLETON_DIAGNOSTIC_EVENTS = Object.freeze([
   'TRUSTED_OUTPUT_SHIM_REJECTED',
 ]);
 const WORKER_FAILURE_CLASSES = Object.freeze([
+  'ACTIVATION_CONTROL',
   'CONTROL',
   'ENTRYPOINT',
   'INPUT_READ',
-  'NONZERO',
   'OUTPUT_WRITE',
   'STDERR',
   'STDOUT',
+  'TOOL_EXITED',
 ]);
 const WORKER_FAILURE_EVENTS = Object.freeze(WORKER_FAILURE_CLASSES.map((failureClass) => `WORKER_FAILURE_${failureClass}`));
+const VERIFIED_WORKER_FAILURE_CLASSES = Object.freeze([...WORKER_FAILURE_CLASSES, 'NONZERO']);
+const VERIFIED_WORKER_FAILURE_EVENTS = Object.freeze(VERIFIED_WORKER_FAILURE_CLASSES.map((failureClass) => `WORKER_FAILURE_${failureClass}`));
 const PRESTART_INSPECT_MISMATCHES = Object.freeze([
   'config-content',
   'config-image',
@@ -247,8 +250,8 @@ export const authenticatedResultDiagnostic = (source) => {
     if (result.code === 'SANDBOX_VALIDATION_FAILED') {
       if (provenance.securityEvents.length === 1 && POSTSTART_SINGLETON_DIAGNOSTIC_EVENTS.includes(provenance.securityEvents[0])) return provenance.securityEvents[0];
       if (provenance.securityEvents.length !== 2 || provenance.securityEvents[0] !== 'WORKER_FAILED') return 'none';
-      const detailIndex = WORKER_FAILURE_EVENTS.indexOf(provenance.securityEvents[1]);
-      return detailIndex < 0 ? 'none' : `WORKER_FAILED:${WORKER_FAILURE_CLASSES[detailIndex]}`;
+      const detailIndex = VERIFIED_WORKER_FAILURE_EVENTS.indexOf(provenance.securityEvents[1]);
+      return detailIndex < 0 ? 'none' : `WORKER_FAILED:${VERIFIED_WORKER_FAILURE_CLASSES[detailIndex]}`;
     }
     return provenance.securityEvents.length === 2
       && PRESTART_DIAGNOSTIC_EVENTS.includes(provenance.securityEvents[0])

@@ -8,6 +8,7 @@ import {
   createdContainerInspectMismatch,
   DockerReferenceAdapter,
   isPrestartImageDiagnostic,
+  postNonzeroFailureDispositionForTesting,
   prestartImageDiagnostic,
   runtimeImageInspectMismatch,
   validateCreatedContainerInspect,
@@ -158,6 +159,11 @@ const workerExecuteResult = (overrides = {}) => Object.freeze({
   ...overrides,
 });
 
+const postNonzeroInspectResult = ({ id, name, state, ...containerOverrides }, executeOverrides = {}) => {
+  const stdout = Buffer.from(JSON.stringify([{ Id: id, Name: `/${name}`, State: state, ...containerOverrides }]));
+  return workerExecuteResult({ code: 0, stdout, stdoutBytes: stdout.length, ...executeOverrides });
+};
+
 const makeManifest = ({ privateKey, publicKey, toolDigest, nowUnixMs, resourcePolicy = null }) => {
   const policy = resourcePolicy ?? Object.freeze({ cpuMilliseconds: 1_000, elapsedMilliseconds: 10_000, fanout: 16, memoryBytes: 64 * 1024 * 1024, outputBytes: 1024 * 1024, processes: 4, profileId: 'linux-reference-v1', scratchBytes: 2 * 1024 * 1024 });
   const unsigned = Object.freeze({
@@ -267,8 +273,82 @@ test('worker failure subclasses derive only from an exact bounded execute result
   assert.equal(workerFailureClassForTesting(Object.freeze(accessor)), 'CONTROL');
 });
 
+test('post-NONZERO inspection emits only closed semantic classes and poisons every mismatch', () => {
+  const id = '1'.repeat(64);
+  const name = `ogvcs-sandbox-${'2'.repeat(24)}`;
+  const start = workerExecuteResult({ code: 1, stderr: Buffer.from('hostile raw /home/runner/private container.246810') });
+  const state = { Dead: false, Error: 'hostile daemon detail /var/lib/docker/secret', ExitCode: 128, OOMKilled: false, Paused: false, Pid: 0, Restarting: false, Running: false, Status: 'created' };
+  const silent = { stderr: Buffer.alloc(0) };
+  const disposition = (stateOverrides = {}, inspectOverrides = {}, startOverrides = {}) => postNonzeroFailureDispositionForTesting(
+    workerExecuteResult({ ...start, ...startOverrides }),
+    postNonzeroInspectResult({ id, name, state: { ...state, ...stateOverrides } }, inspectOverrides),
+    id,
+    name,
+  );
+  assert.deepEqual(disposition(), { failureClass: 'ACTIVATION_CONTROL', kind: 'failed', poison: false });
+  assert.deepEqual(disposition({ Error: '', ExitCode: 1, Status: 'exited' }, {}, silent), { failureClass: 'TOOL_EXITED', kind: 'failed', poison: false });
+  assert.deepEqual(disposition({ Error: '', ExitCode: 255, Status: 'exited' }, {}, { code: 255, ...silent }), { failureClass: 'TOOL_EXITED', kind: 'failed', poison: false });
+  assert.deepEqual(disposition({ Error: '', ExitCode: 137, OOMKilled: true, Status: 'exited' }, {}, { code: 137, ...silent }), { failureClass: null, kind: 'resource-limit', poison: false });
+  assert.deepEqual(disposition({ Error: '', ExitCode: 137, Status: 'exited' }, {}, { code: 137, ...silent }), { failureClass: null, kind: 'resource-limit', poison: false });
+  assert.deepEqual(disposition({ Error: '', ExitCode: 152, Status: 'exited' }, {}, { code: 152, ...silent }), { failureClass: null, kind: 'resource-limit', poison: false });
+  for (const actual of [disposition(), disposition({ Error: '', ExitCode: 1, Status: 'exited' }, {}, silent), disposition({ Error: '', ExitCode: 255, Status: 'exited' }, {}, { code: 255, ...silent }), disposition({ Error: '', ExitCode: 137, OOMKilled: true, Status: 'exited' }, {}, { code: 137, ...silent })]) {
+    const exposed = JSON.stringify(actual);
+    assert.equal(Object.isFrozen(actual), true);
+    for (const secret of ['128', '255', '/home/runner', '/var/lib/docker', '246810', id, name]) assert.equal(exposed.includes(secret), false);
+  }
+
+  const poison = Object.freeze({ failureClass: 'CONTROL', kind: 'failed', poison: true });
+  for (const actual of [
+    disposition({ Status: 'running' }),
+    disposition({ ExitCode: -1 }),
+    disposition({ ExitCode: 256 }),
+    disposition({ ExitCode: 1.5 }),
+    disposition({ ExitCode: '1' }),
+    disposition({ OOMKilled: 'false' }),
+    disposition({ Error: null }),
+    disposition({ Error: '' }),
+    disposition({ ExitCode: 0 }),
+    disposition({ OOMKilled: true }),
+    disposition({ Dead: true }),
+    disposition({ Paused: true }),
+    disposition({ Pid: 1 }),
+    disposition({ Restarting: true }),
+    disposition({ Running: true }),
+    disposition({}, {}, { code: 2 }),
+    disposition({}, {}, { stdout: Buffer.from('x'), stdoutBytes: 1 }),
+    disposition({}, {}, { stderr: Buffer.alloc(0) }),
+    disposition({ Error: '', ExitCode: 1, Status: 'exited' }),
+    disposition({ Error: 'daemon failure', ExitCode: 2, Status: 'exited' }),
+    disposition({ Error: '', ExitCode: 2, Status: 'exited' }),
+    disposition({ Error: '', ExitCode: 1, OOMKilled: true, Status: 'exited' }, {}, silent),
+    disposition({ Error: '', ExitCode: 137, OOMKilled: true, Status: 'exited' }, {}, { code: 137 }),
+    disposition({ Error: '', ExitCode: 1, Status: 'exited' }, {}, { stdout: Buffer.from('x'), stdoutBytes: 1, ...silent }),
+    disposition({ Error: '', ExitCode: 1, Status: 'exited' }, {}, { code: 255 }),
+    disposition({ Error: '', ExitCode: 63, Status: 'exited' }, {}, { code: 63, stderr: Buffer.alloc(0) }),
+    disposition({ Error: '', ExitCode: 126, Status: 'exited' }, {}, { code: 126 }),
+  ]) assert.deepEqual(actual, poison);
+
+  const validInspect = postNonzeroInspectResult({ id, name, state });
+  const malformedBytes = Buffer.from('{"SECRET":"/home/runner/private"}');
+  const multiple = Buffer.from(JSON.stringify([{ Id: id, Name: `/${name}`, State: state }, { Id: id, Name: `/${name}`, State: state }]));
+  for (const inspected of [
+    workerExecuteResult({ code: 1, stderr: Buffer.from('SECRET=/home/runner/private') }),
+    workerExecuteResult({ code: 0, stdout: malformedBytes, stdoutBytes: malformedBytes.length }),
+    workerExecuteResult({ code: 0, stdout: multiple, stdoutBytes: multiple.length }),
+    postNonzeroInspectResult({ id, name, state }, { stderr: Buffer.from('SECRET=/home/runner/private') }),
+    postNonzeroInspectResult({ id: '3'.repeat(64), name, state }),
+    postNonzeroInspectResult({ id, name: `ogvcs-sandbox-${'4'.repeat(24)}`, state }),
+    postNonzeroInspectResult({ id, name, state: null }),
+    Object.freeze({ kind: 'timeout' }),
+    { ...validInspect },
+    new Proxy(validInspect, {}),
+  ]) assert.deepEqual(postNonzeroFailureDispositionForTesting(start, inspected, id, name), poison);
+  assert.deepEqual(postNonzeroFailureDispositionForTesting(start, validInspect, `${'5'.repeat(64)}`, name), poison);
+  assert.deepEqual(postNonzeroFailureDispositionForTesting(start, validInspect, id, `ogvcs-sandbox-${'6'.repeat(24)}`), poison);
+});
+
 referenceStateTest('post-start diagnostics require exact authenticated provenance and expose only closed stages', async () => {
-  const workerCases = Object.freeze(['CONTROL', 'ENTRYPOINT', 'INPUT_READ', 'NONZERO', 'OUTPUT_WRITE', 'STDERR', 'STDOUT'].map((failureClass) => Object.freeze({
+  const workerCases = Object.freeze(['ACTIVATION_CONTROL', 'CONTROL', 'ENTRYPOINT', 'INPUT_READ', 'OUTPUT_WRITE', 'STDERR', 'STDOUT', 'TOOL_EXITED'].map((failureClass) => Object.freeze({
     adapter: new FakeContainerAdapter({ failureClass, runKind: 'failed' }),
     diagnostic: `WORKER_FAILED:${failureClass}`,
     events: Object.freeze(['WORKER_FAILED', `WORKER_FAILURE_${failureClass}`]),
@@ -348,8 +428,24 @@ referenceStateTest('authenticated worker detail rejects mixed, duplicate, unknow
   }, { adapter: new FakeContainerAdapter({ failureClass: 'INPUT_READ', runKind: 'failed' }) });
 });
 
+referenceStateTest('legacy authenticated NONZERO evidence remains verifiable but is no longer emitted', async () => {
+  await withFixture(async (fixture) => {
+    const result = await fixture.service.run(fixture.jobFor(), fixture.acquisition);
+    const evidenceBytes = await readFile(join(fixture.root, 'state/evidence', `${result.provenanceDigest}.json`));
+    const provenance = JSON.parse(evidenceBytes.toString('utf8'));
+    assert.deepEqual(provenance.securityEvents, ['WORKER_FAILED']);
+    const legacyBytes = authenticatedEvidenceBytes({ ...provenance, securityEvents: ['WORKER_FAILED', 'WORKER_FAILURE_NONZERO'] }, fixture.evidenceHmacKey);
+    const legacyResult = { ...result, provenanceDigest: sha256(legacyBytes) };
+    assert.equal(authenticatedResultDiagnostic({ evidenceBytes: legacyBytes, evidenceHmacKey: fixture.evidenceHmacKey, evidenceKeyId: fixture.evidenceKeyId, result: legacyResult }), 'WORKER_FAILED:NONZERO');
+    const tampered = Buffer.from(legacyBytes);
+    tampered[tampered.length - 2] ^= 1;
+    assert.equal(authenticatedResultDiagnostic({ evidenceBytes: tampered, evidenceHmacKey: fixture.evidenceHmacKey, evidenceKeyId: fixture.evidenceKeyId, result: { ...legacyResult, provenanceDigest: sha256(tampered) } }), 'none');
+  }, { adapter: new FakeContainerAdapter({ failureClass: 'NONZERO', runKind: 'failed' }) });
+});
+
 referenceStateTest('hostile adapter failure details are dropped rather than persisted or reflected', async () => {
   for (const failureClass of [
+    'NONZERO',
     'WORKER_FAILURE_INPUT_READ',
     'INPUT_READ:/home/runner/private',
     'CODE_63',
