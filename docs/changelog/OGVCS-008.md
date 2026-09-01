@@ -55,6 +55,35 @@ The `0.1.0-rc.6` contract extends the filesystem anchor additively with S3 and
 content-transfer profiles, seven schemas, and five vector sets. Existing error
 codes, transition assignments, and public/wire route ownership are unchanged.
 
+## Additive content-manifest production acceptor candidate
+
+- Added an opaque package-branded repository-metadata candidate port without
+  changing the frozen rc.6 semantic vectors or its existing same-process
+  one-use receipt participant.
+- The service now has an opt-in path that reads the durable stored manifest,
+  reads every exact chunk from the same mapped tenant/repository authority,
+  checks lifecycle and backend identities around every bounded read, calls the
+  package-owned `verifyManifest()`, and crosses `commitProductionManifest()`
+  before the adapter may atomically record kind-2 availability.
+- Immediate commit and response-loss replay proofs bind the exact manifest,
+  opaque key, authority/subject/tenant scope, backend receipt, generation,
+  immutable production statement, verification digest, and original finalize
+  semantic fingerprint. An `available` row alone is never accepted.
+- Dependency reads are limited to the exact signed explicit grant set: at most
+  4,096 unique objects including the manifest. The candidate advertises
+  `requestRootDependencyClosure=false`; it streams the sorted dependency
+  generation-set digest and requires the owning adapter to lock or revalidate
+  every exact dependency generation through the same commit.
+- Adapter functions and registries are captured; passive records are cloned and
+  frozen; proxy/prototype/cross-instance handles fail closed. Adapter errors,
+  including hostile getters/proxies/non-Error values, map to fixed
+  non-secret-bearing transfer errors.
+
+This is not a contract ratification or deployment claim. No real OGVCS-003,
+OGVCS-006, or OGVCS-009 adapter and no public route currently implements the
+candidate port. Its explicit 4,096-object ceiling cannot support the OGVCS-007
+100-GiB request-root profile, so it must not be used to ratify that profile.
+
 ## Deliberate remaining work and open gates
 
 OGVCS-008 and OGVCS-010 remain Todo. The pinned live-MinIO workflow now has

@@ -12,7 +12,7 @@
     "@opengamevcs/protocol-baseline": "1.0.0-rc.1"
   },
   "scripts": {
-    "check": "node --check src/index.mjs && node --check src/backend-access.mjs && node --check src/backend-port.mjs && node --check src/backend.mjs && node --check src/content-plan.mjs && node --check src/delete-permit.mjs && node --check src/events.mjs && node --check src/fs-util.mjs && node --check src/lifecycle.mjs && node --check src/lifecycle-port.mjs && node --check src/quota-ledger.mjs && node --check src/s3-backend.mjs && node --check src/service.mjs && node --check src/telemetry.mjs && node --check src/transaction-participant.mjs",
+    "check": "node --check src/index.mjs && node --check src/backend-access.mjs && node --check src/backend-port.mjs && node --check src/backend.mjs && node --check src/content-manifest-production-port.mjs && node --check src/content-plan.mjs && node --check src/delete-permit.mjs && node --check src/events.mjs && node --check src/fs-util.mjs && node --check src/lifecycle.mjs && node --check src/lifecycle-port.mjs && node --check src/quota-ledger.mjs && node --check src/s3-backend.mjs && node --check src/service.mjs && node --check src/telemetry.mjs && node --check src/transaction-participant.mjs",
     "test": "node --preserve-symlinks --test --test-concurrency=1 test/*.test.mjs"
   },
   "engines": { "node": ">=22" },

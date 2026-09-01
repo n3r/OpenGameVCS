@@ -105,7 +105,12 @@ Start with filesystem development backend and one supported S3 profile. New back
   backend ports, a SigV4 S3-compatible adapter, one shared backend suite, paged
   logical content plans, sealed batch/range plans, durable unique-byte quota,
   bounded internal events/telemetry, and an explicit repository-metadata
-  lifecycle adapter seam. The canonical object limit remains 64 MiB.
+  lifecycle adapter seam. An additive opaque kind-2 production-acceptor
+  candidate verifies durable manifests/chunks and enters atomic metadata
+  availability only through the package production callback. Its dependency
+  authority is explicitly limited to signed sets of at most 4,096 objects;
+  request-root closure remains unavailable. The canonical object limit remains
+  64 MiB.
 - Test and benchmark results: local bounded runtime, generated/independently
   validated contract, workflow policy, and roadmap gates are recorded in the
   OGVCS-008 review. The offline 100-GiB logical-plan test proves 1,600
@@ -119,4 +124,7 @@ Start with filesystem development backend and one supported S3 profile. New back
   review record, pinned MinIO provenance policy, and manual exact-scale workflow.
 - Rollout result: not performed. The PRD remains Todo until retained hosted
   MinIO conformance, the exact 100-GiB interrupted throughput/memory result, and
-  separately owned repository-metadata lifecycle integration are complete.
+  separately owned repository-metadata lifecycle integration are complete. No
+  real OGVCS-003/006/009 production adapter or public route currently backs the
+  new acceptor, and its explicit-set profile cannot justify OGVCS-007
+  ratification.

@@ -27,6 +27,26 @@ contender's `EEXIST` and pinned recovery inspection; ACL, identity, symlink,
 and every other storage error still fail closed. The full local suite and the
 corrected four-job hosted run passed.
 
+## Additive kind-2 acceptor evidence
+
+The later package-only production-acceptor candidate adds a 13-case focused
+suite in `core/object-transfer/js/test/content-manifest-production.test.mjs`.
+The local bounded run passed all 13 cases, including durable manifest/chunk
+verification, early/middle/last missing/corrupt/wrong-length/wrong-ID and
+unauthorized dependencies, lifecycle changes around reads, dependency changes
+at commit, precommit abort, commit-response loss and restart, forged available
+state, mismatched commit response, registry/port/handle forgery, immutable
+snapshots, and hostile adapter error redaction.
+
+That evidence is candidate-only and non-scale. It uses an in-memory fake for the
+owning repository-metadata transaction and a test-only cloned registry with the
+profile row enabled; it does not mutate the shared registry. Dependency
+authorization is the exact explicit signed grant set only, capped at 4,096
+unique objects including the manifest. The port advertises
+`requestRootDependencyClosure=false`. No real OGVCS-003/006/009 adapter or
+public route was exercised, and this result cannot satisfy or authorize the
+OGVCS-007 100-GiB ratification gate.
+
 ## Dispatch provenance
 
 GitHub only registers a new workflow identity after its path exists on the

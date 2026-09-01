@@ -3,6 +3,11 @@ import { constants } from 'node:fs';
 import { link, lstat, open, opendir, rmdir, unlink } from 'node:fs/promises';
 import { isAbsolute, join, resolve } from 'node:path';
 import { ObjectRef } from '@opengamevcs/object-model';
+import {
+  ChunkingError,
+  commitProductionManifest,
+  verifyManifest,
+} from '@opengamevcs/chunking-manifest';
 import { verifyTransferGrant } from '@opengamevcs/authorization-contract';
 import {
   IdempotencyReplayStore,
@@ -34,6 +39,11 @@ import {
 } from './lifecycle-port.mjs';
 import { DurableQuotaLedger } from './quota-ledger.mjs';
 import { nullTransferTelemetry } from './telemetry.mjs';
+import {
+  contentManifestProductionCandidateCapabilities,
+  contentManifestProductionStatementSha256,
+  trustedContentManifestProductionCandidatePort,
+} from './content-manifest-production-port.mjs';
 
 export const TRANSFER_LIMITS = Object.freeze({
   batchMaximum: 4096,
@@ -122,6 +132,11 @@ function publicError(error) {
     transferError('TRANSFER_INPUT_INVALID', 'public protocol idempotency input is invalid');
   }
   throw error;
+}
+
+function safeInstanceOf(value, constructor) {
+  try { return value instanceof constructor; }
+  catch { return false; }
 }
 
 function validateAvailableReceipt(value, session) {
@@ -247,6 +262,7 @@ export class ObjectTransferService {
   #secret;
   #telemetry;
   #verifyGrant;
+  #contentManifestProduction;
   #rootPin;
   #sessionsPin;
   #sessionLocksPin;
@@ -274,6 +290,7 @@ export class ObjectTransferService {
     lockLeaseMilliseconds = 300_000,
     backend = null,
     lifecycleAdapter = null,
+    contentManifestProductionCandidatePort = null,
     telemetry = null,
   } = {}) {
     if (typeof root !== 'string' || !isAbsolute(root) || !(backendSecret instanceof Uint8Array)
@@ -318,6 +335,24 @@ export class ObjectTransferService {
     });
     this.lifecycleCapabilities = lifecycleAdapterCapabilities(lifecyclePort);
     this.lifecycle = trustedLifecycleAdapterPort(lifecyclePort);
+    if (contentManifestProductionCandidatePort === null) {
+      this.#contentManifestProduction = null;
+    } else {
+      const productionCapabilities = contentManifestProductionCandidateCapabilities(
+        contentManifestProductionCandidatePort,
+      );
+      if (this.lifecycleCapabilities.storageAuthority !== 'repository-metadata'
+          || this.lifecycleCapabilities.atomicWithRepositoryMetadata !== true
+          || productionCapabilities.storageAuthority !== 'repository-metadata'
+          || productionCapabilities.atomicWithRepositoryMetadata !== true
+          || productionCapabilities.lifecycleContractVersion
+            !== this.lifecycleCapabilities.lifecycleContractVersion) {
+        transferError('TRANSFER_INPUT_INVALID', 'content-manifest production candidate authority differs');
+      }
+      this.#contentManifestProduction = trustedContentManifestProductionCandidatePort(
+        contentManifestProductionCandidatePort,
+      );
+    }
     this.durableQuota = new DurableQuotaLedger({
       root: join(this.root, 'durable-quota'),
       maximumBytes: maxTenantDurableUniqueBytes,
@@ -1013,11 +1048,452 @@ export class ObjectTransferService {
     });
   }
 
+  #productionSubjectDigest(claims) {
+    return sha256(Buffer.concat([
+      Buffer.from('OGVCS-OBJECT-TRANSFER-PRODUCTION-SUBJECT-V1\0'),
+      canonicalBytes({ issuer: claims.issuer, subject: claims.subject }),
+    ]));
+  }
+
+  async #productionAuthority(binding) {
+    if (this.#contentManifestProduction === null) {
+      transferError(
+        'TRANSFER_AUTHORIZATION_DENIED',
+        'content-manifest availability requires the repository-metadata production candidate port',
+      );
+    }
+    if (binding.claims.requestRoot !== null || !Array.isArray(binding.claims.objectIds)
+        || binding.claims.objectIds.length < 1) {
+      transferError(
+        'TRANSFER_AUTHORIZATION_DENIED',
+        'content-manifest dependency authorization was denied',
+      );
+    }
+    return this.#contentManifestProduction.mapGrantAuthority({
+      schemaVersion: 'ogvcs.object-transfer/content-manifest-grant-authority/v1',
+      grantTenant: binding.claims.tenant,
+      grantRepository: binding.claims.repository,
+      grantObjectIds: [...binding.claims.objectIds],
+      grantRequestRoot: binding.claims.requestRoot,
+      subjectDigestSha256: this.#productionSubjectDigest(binding.claims),
+      authorityBindingSha256: binding.authorityBindingSha256,
+      tenantScopeSha256: binding.tenantScopeSha256,
+      grantBindingSha256: binding.grantBindingSha256,
+    });
+  }
+
+  #productionLookup(session, binding, backendReceiptSha256, finalizeSemanticFingerprint) {
+    return Object.freeze({
+      schemaVersion: 'ogvcs.object-transfer/content-manifest-availability-lookup/v1',
+      opaqueKey: session.opaqueKey,
+      objectId: session.objectId,
+      length: session.declaredLength,
+      authorityBindingSha256: session.authorityBindingSha256,
+      tenantScopeSha256: session.tenantScopeSha256,
+      subjectDigestSha256: this.#productionSubjectDigest(binding.claims),
+      backendReceiptSha256,
+      finalizeSemanticFingerprint,
+    });
+  }
+
+  #productionCurrentRequest({
+    opaqueKey,
+    objectId,
+    length,
+    authorityBindingSha256 = null,
+    durableBackendReceiptSha256 = null,
+  }) {
+    return Object.freeze({
+      schemaVersion: 'ogvcs.object-transfer/content-manifest-current-request/v1',
+      opaqueKey,
+      objectId,
+      length,
+      authorityBindingSha256,
+      durableBackendReceiptSha256,
+    });
+  }
+
+  #assertBackendIdentity(value, expected, message) {
+    if (!value || value.opaqueKey !== expected.opaqueKey || value.objectId !== expected.objectId
+        || value.length !== expected.length || value.durable !== true
+        || value.receiptSha256 !== expected.backendReceiptSha256
+        || !SHA.test(value.payloadSha256 ?? '')) {
+      transferError('TRANSFER_BACKEND_CORRUPT', message);
+    }
+    return value;
+  }
+
+  #assertProductionCurrentExact(current, expected, states, message) {
+    if (!current || !states.includes(current.state)
+        || current.opaqueKey !== expected.opaqueKey || current.objectId !== expected.objectId
+        || current.length !== expected.length
+        || (expected.authorityBindingSha256 !== null
+          && current.authorityBindingSha256 !== expected.authorityBindingSha256)
+        || (expected.durableBackendReceiptSha256 !== null
+          && current.durableBackendReceiptSha256 !== expected.durableBackendReceiptSha256)) {
+      transferError('TRANSFER_LIFECYCLE_STALE', message);
+    }
+    return current;
+  }
+
+  #sameProductionCurrent(left, right) {
+    return canonicalBytes(left, { maxBytes: 64 * 1024 })
+      .equals(canonicalBytes(right, { maxBytes: 64 * 1024 }));
+  }
+
+  async #readProductionRange({ transaction, request, expectedCurrent, start, endExclusive }) {
+    const beforeCurrent = this.#assertProductionCurrentExact(
+      await this.#contentManifestProduction.readCurrent(transaction, request),
+      request,
+      [expectedCurrent.state],
+      'repository-metadata lifecycle changed before a verified object read',
+    );
+    if (!this.#sameProductionCurrent(beforeCurrent, expectedCurrent)) {
+      transferError('TRANSFER_LIFECYCLE_STALE', 'repository-metadata lifecycle identity changed before a verified object read');
+    }
+    const backendExpected = {
+      opaqueKey: request.opaqueKey,
+      objectId: request.objectId,
+      length: request.length,
+      backendReceiptSha256: expectedCurrent.durableBackendReceiptSha256,
+    };
+    this.#assertBackendIdentity(
+      await this.backend.verify(request.opaqueKey),
+      backendExpected,
+      'backend identity differs before a production verification read',
+    );
+    const range = await this.backend.readVerifiedRange(request.opaqueKey, start, endExclusive);
+    this.#assertBackendIdentity(
+      range,
+      backendExpected,
+      'backend range identity differs during production verification',
+    );
+    if (!(range.bytes instanceof Uint8Array) || range.start !== start
+        || range.endExclusive !== endExclusive || range.totalLength !== request.length
+        || range.bytes.byteLength !== endExclusive - start
+        || range.contentSha256 !== sha256(range.bytes)) {
+      transferError('TRANSFER_BACKEND_CORRUPT', 'backend production verification range is invalid');
+    }
+    this.#assertBackendIdentity(
+      await this.backend.verify(request.opaqueKey),
+      backendExpected,
+      'backend identity changed after a production verification read',
+    );
+    const afterCurrent = this.#assertProductionCurrentExact(
+      await this.#contentManifestProduction.readCurrent(transaction, request),
+      request,
+      [expectedCurrent.state],
+      'repository-metadata lifecycle changed after a verified object read',
+    );
+    if (!this.#sameProductionCurrent(afterCurrent, expectedCurrent)) {
+      transferError('TRANSFER_LIFECYCLE_STALE', 'repository-metadata lifecycle identity changed during a verified object read');
+    }
+    return Buffer.from(range.bytes);
+  }
+
+  async #readStoredProductionManifest(transaction, request, expectedCurrent) {
+    if (request.length < 1) {
+      transferError('TRANSFER_BACKEND_CORRUPT', 'stored content manifest is empty');
+    }
+    const bytes = Buffer.alloc(request.length);
+    const maximum = this.backendCapabilities.rangeBytesMaximum;
+    for (let start = 0; start < request.length; start += maximum) {
+      const endExclusive = Math.min(request.length, start + maximum);
+      const range = await this.#readProductionRange({
+        transaction,
+        request,
+        expectedCurrent,
+        start,
+        endExclusive,
+      });
+      range.copy(bytes, start);
+    }
+    return bytes;
+  }
+
+  #productionChunkSource(transaction) {
+    return async (part) => {
+      const objectId = objectIdValue(part?.objectId);
+      integer(part?.length, 1, TRANSFER_LIMITS.objectMaximum, 'content-manifest chunk length');
+      const length = part.length;
+      if (!transaction.binding.claims.objectIds.includes(objectId)) {
+        transferError('TRANSFER_AUTHORIZATION_DENIED', 'content-manifest dependency authorization was denied');
+      }
+      const request = this.#productionCurrentRequest({
+        opaqueKey: this.#opaqueKey(transaction.binding.claims.tenant, objectId),
+        objectId,
+        length,
+      });
+      await this.#contentManifestProduction.authorizeDependencyRead(transaction.handle, {
+        schemaVersion: 'ogvcs.object-transfer/content-manifest-dependency-read/v1',
+        manifestOpaqueKey: transaction.session.opaqueKey,
+        manifestObjectId: transaction.session.objectId,
+        dependencyOpaqueKey: request.opaqueKey,
+        dependencyObjectId: request.objectId,
+        dependencyLength: request.length,
+        grantBindingSha256: transaction.binding.grantBindingSha256,
+      });
+      const first = this.#assertProductionCurrentExact(
+        await this.#contentManifestProduction.readCurrent(transaction.handle, request),
+        request,
+        ['available'],
+        'content-manifest references a chunk that is not currently available',
+      );
+      if (first.backendReceiptSha256 !== first.durableBackendReceiptSha256
+          || first.verificationReceiptSha256 !== null) {
+        transferError('TRANSFER_LIFECYCLE_STALE', 'content-manifest chunk lifecycle receipt binding is invalid');
+      }
+      const service = this;
+      return (async function* () {
+        const maximum = service.backendCapabilities.rangeBytesMaximum;
+        for (let start = 0; start < length; start += maximum) {
+          const endExclusive = Math.min(length, start + maximum);
+          yield await service.#readProductionRange({
+            transaction: transaction.handle,
+            request,
+            expectedCurrent: first,
+            start,
+            endExclusive,
+          });
+        }
+      }());
+    };
+  }
+
+  async #assertProductionProofCurrent(session, binding, authority, proof) {
+    const current = await this.lifecycle.get(session.opaqueKey);
+    if (current?.state !== 'available' || current.generation !== proof.generation
+        || current.backendReceiptSha256 !== proof.backendReceiptSha256
+        || current.authorityBindingSha256 !== proof.authorityBindingSha256
+        || current.tenantScopeSha256 !== proof.tenantScopeSha256
+        || current.objectId !== proof.objectId || current.length !== proof.length) {
+      transferError('TRANSFER_LIFECYCLE_STALE', 'committed content-manifest proof is not the current lifecycle generation');
+    }
+    const backend = this.#assertBackendIdentity(
+      await this.backend.verify(session.opaqueKey),
+      {
+        opaqueKey: session.opaqueKey,
+        objectId: session.objectId,
+        length: session.declaredLength,
+        backendReceiptSha256: proof.backendReceiptSha256,
+      },
+      'committed content-manifest proof has no exact current backend object',
+    );
+    if (backend.payloadSha256 !== proof.productionStatement.manifestSha256) {
+      transferError('TRANSFER_BACKEND_CORRUPT', 'committed content-manifest statement differs from stored manifest bytes');
+    }
+    const lookup = this.#productionLookup(
+      session,
+      binding,
+      proof.backendReceiptSha256,
+      proof.finalizeSemanticFingerprint,
+    );
+    const authenticated = await this.#contentManifestProduction.lookupCommittedCurrent(
+      authority.handle,
+      lookup,
+    );
+    if (authenticated === null || authenticated.proofSha256 !== proof.proofSha256) {
+      transferError('TRANSFER_LIFECYCLE_STALE', 'content-manifest committed proof is no longer authenticated and current');
+    }
+    const after = await this.lifecycle.get(session.opaqueKey);
+    if (after?.state !== current.state || after.generation !== current.generation
+        || after.backendReceiptSha256 !== current.backendReceiptSha256
+        || after.authorityBindingSha256 !== current.authorityBindingSha256
+        || after.tenantScopeSha256 !== current.tenantScopeSha256
+        || after.objectId !== current.objectId || after.length !== current.length) {
+      transferError('TRANSFER_LIFECYCLE_STALE', 'content-manifest lifecycle changed during committed-proof validation');
+    }
+    return current;
+  }
+
+  async #lookupProductionProof(session, binding, authority, backendReceiptSha256, fingerprint) {
+    const proof = await this.#contentManifestProduction.lookupCommittedCurrent(
+      authority.handle,
+      this.#productionLookup(session, binding, backendReceiptSha256, fingerprint),
+    );
+    if (proof === null) return null;
+    const current = await this.#assertProductionProofCurrent(session, binding, authority, proof);
+    return Object.freeze({ proof, current });
+  }
+
+  #mapProductionFailure(error) {
+    if (safeInstanceOf(error, ObjectTransferError)) throw error;
+    if (safeInstanceOf(error, ChunkingError)) {
+      let nested = error;
+      for (let depth = 0; depth < 8 && safeInstanceOf(nested, ChunkingError); depth += 1) {
+        let descriptor;
+        try { descriptor = Object.getOwnPropertyDescriptor(nested, 'cause'); }
+        catch { break; }
+        if (!descriptor || !Object.hasOwn(descriptor, 'value')) break;
+        nested = descriptor.value;
+        if (safeInstanceOf(nested, ObjectTransferError)) throw nested;
+      }
+      transferError('TRANSFER_BACKEND_CORRUPT', 'stored content-manifest production verification failed');
+    }
+    transferError('TRANSFER_BACKEND_IO', 'content-manifest production operation failed');
+  }
+
+  async #finalizeProductionManifest({ session, binding, lifecycle, verified, fingerprint }) {
+    const authority = await this.#productionAuthority(binding);
+    const replay = await this.#lookupProductionProof(
+      session,
+      binding,
+      authority,
+      verified.receiptSha256,
+      fingerprint,
+    );
+    if (replay !== null) return replay.current;
+    if (lifecycle?.state !== 'staged' || lifecycle.objectId !== session.objectId
+        || lifecycle.length !== session.declaredLength
+        || lifecycle.authorityBindingSha256 !== session.authorityBindingSha256
+        || lifecycle.tenantScopeSha256 !== session.tenantScopeSha256
+        || lifecycle.backendReceiptSha256 !== null) {
+      transferError('TRANSFER_LIFECYCLE_STALE', 'content-manifest is not an exact staged production candidate');
+    }
+    const lookup = this.#productionLookup(
+      session,
+      binding,
+      verified.receiptSha256,
+      fingerprint,
+    );
+    const transaction = await this.#contentManifestProduction.beginAvailability(authority.handle, lookup);
+    try {
+      const manifestRequest = this.#productionCurrentRequest({
+        opaqueKey: session.opaqueKey,
+        objectId: session.objectId,
+        length: session.declaredLength,
+        authorityBindingSha256: session.authorityBindingSha256,
+        durableBackendReceiptSha256: verified.receiptSha256,
+      });
+      const manifestCurrent = this.#assertProductionCurrentExact(
+        await this.#contentManifestProduction.readCurrent(transaction, manifestRequest),
+        manifestRequest,
+        ['staged', 'available'],
+        'content-manifest transaction did not bind the expected lifecycle generation',
+      );
+      if (manifestCurrent.state === 'available') {
+        await this.#contentManifestProduction.abortAvailability(transaction);
+        const concurrent = await this.#lookupProductionProof(
+          session,
+          binding,
+          authority,
+          verified.receiptSha256,
+          fingerprint,
+        );
+        if (concurrent !== null) return concurrent.current;
+        transferError('TRANSFER_LIFECYCLE_STALE', 'available content-manifest lacks an authenticated production commit');
+      }
+      if (manifestCurrent.generation !== lifecycle.generation
+          || manifestCurrent.backendReceiptSha256 !== null
+          || manifestCurrent.verificationReceiptSha256 !== null) {
+        transferError('TRANSFER_LIFECYCLE_STALE', 'content-manifest staged generation changed before verification');
+      }
+      const manifest = await this.#readStoredProductionManifest(
+        transaction,
+        manifestRequest,
+        manifestCurrent,
+      );
+      const verifiedManifest = await verifyManifest({
+        manifest,
+        source: this.#productionChunkSource({ handle: transaction, binding, session }),
+      });
+      let wrote = false;
+      let committed = false;
+      const publication = Object.freeze({
+        write: (bytes, context) => {
+          if (wrote || committed || context?.manifestObjectId !== session.objectId
+              || !(bytes instanceof Uint8Array) || !Buffer.from(bytes).equals(manifest)) {
+            transferError('TRANSFER_AUTHORIZATION_DENIED', 'content-manifest production publication write was denied');
+          }
+          wrote = true;
+        },
+        commit: async (context) => {
+          if (!wrote || committed || context?.manifestObjectId !== session.objectId) {
+            transferError('TRANSFER_AUTHORIZATION_DENIED', 'content-manifest production publication commit was denied');
+          }
+          const statement = Object.freeze({
+            boundary: context.boundary,
+            logicalBytes: context.logicalBytes,
+            manifestObjectId: context.manifestObjectId,
+            manifestSha256: context.manifestSha256,
+            profile: context.profile,
+            verifier: context.verifier,
+            wholeFileSha256: context.wholeFileSha256,
+          });
+          const productionStatementSha256 = contentManifestProductionStatementSha256(statement);
+          committed = true;
+          return this.#contentManifestProduction.commitAvailability(transaction, {
+            schemaVersion: 'ogvcs.object-transfer/content-manifest-availability-commit/v1',
+            tenantId: authority.mapping.tenantId,
+            repositoryId: authority.mapping.repositoryId,
+            opaqueKey: session.opaqueKey,
+            objectId: session.objectId,
+            length: session.declaredLength,
+            expectedState: 'staged',
+            expectedGeneration: manifestCurrent.generation,
+            targetState: 'available',
+            targetGeneration: manifestCurrent.generation + 1,
+            authorityBindingSha256: session.authorityBindingSha256,
+            tenantScopeSha256: session.tenantScopeSha256,
+            subjectDigestSha256: this.#productionSubjectDigest(binding.claims),
+            backendReceiptSha256: verified.receiptSha256,
+            verificationReceiptSha256: productionStatementSha256,
+            finalizeSemanticFingerprint: fingerprint,
+            productionStatement: statement,
+            productionStatementSha256,
+          });
+        },
+        abort: () => this.#contentManifestProduction.abortAvailability(transaction),
+      });
+      const accepted = await commitProductionManifest({
+        registry: this.#contentManifestProduction.registry,
+        manifest,
+        verificationReceipt: verifiedManifest.verificationReceipt,
+        publication,
+      });
+      const proof = accepted.publicationResult;
+      return this.#assertProductionProofCurrent(session, binding, authority, proof);
+    } catch (error) {
+      await this.#contentManifestProduction.abortAvailability(transaction).catch(() => {});
+      return this.#mapProductionFailure(error);
+    }
+  }
+
   async #assertFinalizedCurrent(sessionId, binding) {
     const session = await this.#session(sessionId);
     this.#assertSessionBinding(session, binding);
     if (session.state !== 'finalized' || !session.finalized) {
       transferError('TRANSFER_LIFECYCLE_STALE', 'finalized session receipt is unavailable');
+    }
+    if (ObjectRef.parse(session.objectId).kindName === 'content-manifest') {
+      const authority = await this.#productionAuthority(binding);
+      const fingerprint = semanticIdempotencyFingerprint({
+        operation: 'finalize-upload',
+        sessionId: session.sessionId,
+      });
+      const committed = await this.#lookupProductionProof(
+        session,
+        binding,
+        authority,
+        session.finalized.backendReceiptSha256,
+        fingerprint,
+      );
+      if (committed === null
+          || committed.proof.generation !== session.finalized.generation
+          || committed.proof.backendReceiptSha256 !== session.finalized.backendReceiptSha256
+          || committed.proof.authorityBindingSha256 !== session.finalized.authorityBindingSha256
+          || committed.proof.tenantScopeSha256 !== session.finalized.tenantScopeSha256
+          || committed.proof.objectId !== session.finalized.objectId
+          || committed.proof.length !== session.finalized.length) {
+        transferError('TRANSFER_LIFECYCLE_STALE', 'finalized content-manifest lacks its exact authenticated production proof');
+      }
+      await this.events.contentAvailable({
+        tenantScopeSha256: session.finalized.tenantScopeSha256,
+        objectId: session.finalized.objectId,
+        generation: session.finalized.generation,
+        backendReceiptSha256: session.finalized.backendReceiptSha256,
+      });
+      return session.finalized;
     }
     const current = await this.lifecycle.get(session.opaqueKey);
     if (current?.state !== 'available' || current.generation !== session.finalized.generation
@@ -1153,17 +1629,15 @@ export class ObjectTransferService {
             nextAuthorityBindingSha256: initialBinding.authorityBindingSha256,
             reopenReceipt: backend.reopenReceipt,
           });
-        if (lifecycle?.state === 'staged') {
-          if (ObjectRef.parse(session.objectId).kindName === 'content-manifest') {
-            // Content manifests may be made durable here, but availability is
-            // owned by the receipt-gated lifecycle transaction participant.
-            // Leaving the record staged lets that same-transaction boundary
-            // perform the only admissible kind-2 availability CAS.
-            transferError(
-              'TRANSFER_AUTHORIZATION_DENIED',
-              'content-manifest availability requires the production receipt boundary',
-            );
-          }
+        if (ObjectRef.parse(session.objectId).kindName === 'content-manifest') {
+          lifecycle = await this.#finalizeProductionManifest({
+            session,
+            binding: initialBinding,
+            lifecycle,
+            verified,
+            fingerprint: expectedFingerprint,
+          });
+        } else if (lifecycle?.state === 'staged') {
           lifecycle = await this.lifecycle.compareAndSwap({
             opaqueKey: session.opaqueKey,
             expectedGeneration: lifecycle.generation,

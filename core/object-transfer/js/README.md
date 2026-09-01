@@ -58,8 +58,28 @@ filesystem-local lifecycle candidate, plus `createLifecycleAdapterPort()` as an
 explicit captured seam for the separately owned repository-metadata lifecycle
 lane. The seam advertises whether state is atomic with repository metadata; this
 package does not invent repository-metadata v9 tables or claim that integration
-has landed. `content-manifest` availability remains gated by the exact
-same-process OGVCS-007 production receipt boundary.
+has landed. The frozen rc.6 transaction participant retains its exact
+same-process, one-use OGVCS-007 receipt behavior.
+
+An additional candidate path,
+`createRepositoryMetadataContentManifestCandidatePort()`, lets the service read
+the durable stored manifest and every exact referenced chunk, verify lifecycle
+and backend identity before and after bounded reads, obtain a fresh package-owned
+one-use receipt from `verifyManifest()`, and enter repository-metadata
+availability only from `commitProductionManifest()`'s commit callback. The port
+snapshots passive records, hides mutable adapter capabilities behind package
+brands, requires an atomic repository-metadata transaction, and authenticates
+settled-commit replay with the exact production statement, finalize fingerprint,
+authority, backend receipt, and current generation. A merely `available` row is
+not recovery proof.
+
+This candidate authorizes dependencies only from the signed explicit grant
+object set: at most 4,096 unique objects including the manifest. Its advertised
+`requestRootDependencyClosure` is `false`. The metadata adapter must authorize
+each dependency inside the same transaction and lock or revalidate every exact
+dependency generation through commit. No real OGVCS-003/006/009 adapter or
+public route supplies that capability yet; filesystem-local lifecycle therefore
+continues to leave content manifests staged.
 
 Staging bytes, durable unique bytes, request rate, and transfer bytes are
 accounted separately. Durable reservations and commits survive response loss;
@@ -81,4 +101,7 @@ only Node's exact verified-directory `EPERM` fsync limitation.
 
 This candidate does not claim public HTTP completion, OGVCS-010 publication,
 reachability/GC, hosted MinIO evidence, exact-scale throughput, or final
-OGVCS-008 acceptance until those separate gates land.
+OGVCS-008 acceptance until those separate gates land. In particular, the
+explicit-set candidate cannot justify the OGVCS-007 100-GiB ratification gate:
+that requires a verifier-owned bounded request-root closure and the real
+repository-metadata/authorization transport.
