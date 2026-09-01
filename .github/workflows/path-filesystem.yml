@@ -1,174 +1,39 @@
-name: Path and workspace filesystem conformance
+name: Native CLI evidence only
 
 on:
-  pull_request:
-    paths:
-      - ".github/workflows/path-filesystem.yml"
-      - "LICENSE*"
-      - "README.md"
-      - "adr/0012-*.md"
-      - "adr/README.md"
-      - "architecture.md"
-      - "core/object-model/js/**"
-      - "core/object-model/rust/registries/profiles.json"
-      - "core/object-model/rust/src/registry.rs"
-      - "core/paths-filesystem/**"
-      - "docs/changelog/OGVCS-004.md"
-      - "docs/changelog/OGVCS-046.md"
-      - "docs/evidence/OGVCS-004/**"
-      - "docs/evidence/OGVCS-046/**"
-      - "docs/reviews/OGVCS-004-critical-review.md"
-      - "docs/reviews/OGVCS-046-critical-review.md"
-      - "docs/runbooks/OGVCS-046-*.md"
-      - "package.json"
-      - "package-lock.json"
-      - "prd/README.md"
-      - "prd/ROADMAP.md"
-      - "prd/TEMPLATE.md"
-      - "prd/validate-roadmap.mjs"
-      - "prd/validate-roadmap.test.mjs"
-      - "prd/todo/OGVCS-004-*.md"
-      - "prd/todo/OGVCS-046-*.md"
-      - "prd/done/OGVCS-004-*.md"
-      - "prd/done/OGVCS-046-*.md"
-      - "prd/done/README.md"
-      - "spec/path-filesystem/v1/**"
-      - "spec/repository-format/v1/registries/profiles.json"
-      - "spec/repository-format/v1/vectors/**"
-      - "tools/path-filesystem-*.mjs"
-      - "tools/compare-path-filesystem-reports.mjs"
-      - "tools/normalize-npm-tarball.mjs"
-      - "tools/run-packed-path-filesystem-conformance.mjs"
-  push:
-    branches:
-      - main
-      - "ogvcs-004/**"
-      - "ogvcs-046/**"
-      - "ogvcs046-*"
-    paths:
-      - ".github/workflows/path-filesystem.yml"
-      - "LICENSE*"
-      - "README.md"
-      - "adr/0012-*.md"
-      - "adr/README.md"
-      - "architecture.md"
-      - "core/object-model/js/**"
-      - "core/object-model/rust/registries/profiles.json"
-      - "core/object-model/rust/src/registry.rs"
-      - "core/paths-filesystem/**"
-      - "docs/changelog/OGVCS-004.md"
-      - "docs/changelog/OGVCS-046.md"
-      - "docs/evidence/OGVCS-004/**"
-      - "docs/evidence/OGVCS-046/**"
-      - "docs/reviews/OGVCS-004-critical-review.md"
-      - "docs/reviews/OGVCS-046-critical-review.md"
-      - "docs/runbooks/OGVCS-046-*.md"
-      - "package.json"
-      - "package-lock.json"
-      - "prd/README.md"
-      - "prd/ROADMAP.md"
-      - "prd/TEMPLATE.md"
-      - "prd/validate-roadmap.mjs"
-      - "prd/validate-roadmap.test.mjs"
-      - "prd/todo/OGVCS-004-*.md"
-      - "prd/todo/OGVCS-046-*.md"
-      - "prd/done/OGVCS-004-*.md"
-      - "prd/done/OGVCS-046-*.md"
-      - "prd/done/README.md"
-      - "spec/path-filesystem/v1/**"
-      - "spec/repository-format/v1/registries/profiles.json"
-      - "spec/repository-format/v1/vectors/**"
-      - "tools/path-filesystem-*.mjs"
-      - "tools/compare-path-filesystem-reports.mjs"
-      - "tools/normalize-npm-tarball.mjs"
-      - "tools/run-packed-path-filesystem-conformance.mjs"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: path-filesystem-${{ github.workflow }}-${{ github.ref }}
+  group: native-cli-evidence-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  conformance:
-    name: Packed conformance (${{ matrix.os }})
+  native-cli:
+    name: Native CLI (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-          cache: npm
-      - name: Install exact workspace dependencies
-        run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Validate and mutation-test the language-neutral path contract
-        run: npm test --workspace @opengamevcs/path-contract-v1
-      - name: Test path, workspace, watcher, and OGVCS-002 integration
-        run: npm test --workspace @opengamevcs/path-filesystem
-      - name: Retain elevated syscall proof for unsafe-target confinement
-        if: runner.os == 'Linux'
+      - uses: dtolnay/rust-toolchain@7d11e79e1714f6b6da93cac39ad8435666f5c337 # 1.82.0
+        with:
+          components: clippy, rustfmt
+      - run: node spec/cli-workspace/v1/scripts/generate.mjs --check
+      - run: node client/native-cli/rust/scripts/sync-contract.mjs --check
+      - run: node spec/cli-workspace/v1/validate-spec.mjs
+      - run: node --test spec/cli-workspace/v1/test/*.test.mjs
+      - run: cargo fmt --manifest-path client/native-cli/rust/Cargo.toml -- --check
+      - run: cargo test --manifest-path client/native-cli/rust/Cargo.toml --locked
+      - run: cargo clippy --manifest-path client/native-cli/rust/Cargo.toml --locked --all-targets -- -D warnings
+      - run: ./scripts/test-packed.sh
         shell: bash
-        run: |
-          if ! command -v strace >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install --yes strace
-          fi
-          trace_root="${RUNNER_TEMP}/ogvcs-path-trace-workspace"
-          trace_outside="${RUNNER_TEMP}/ogvcs-path-trace-outside"
-          mkdir -p "$trace_root" "$trace_outside" "artifacts/path-filesystem-${RUNNER_OS}"
-          chmod 700 "$trace_root" "$trace_outside"
-          ln -s "$trace_outside" "$trace_root/escape"
-          strace -f -qq -e trace=openat,openat2,rename,renameat,renameat2,unlink,unlinkat,mkdir,mkdirat,link,linkat,symlink,symlinkat \
-            -o "artifacts/path-filesystem-${RUNNER_OS}/filesystem-trace.log" \
-            node tools/path-filesystem-trace-fixture.mjs "$trace_root" "$trace_outside" \
-            > "artifacts/path-filesystem-${RUNNER_OS}/filesystem-trace-fixture.json"
-          test ! -e "$trace_outside/pwned"
-          node tools/path-filesystem-trace-audit.mjs \
-            --trace "artifacts/path-filesystem-${RUNNER_OS}/filesystem-trace.log" \
-            --workspace "$trace_root" --outside "$trace_outside" \
-            > "artifacts/path-filesystem-${RUNNER_OS}/filesystem-trace-audit.json"
-      - name: Build retained report from offline-installed packed artifacts
-        run: node tools/run-packed-path-filesystem-conformance.mjs --output artifacts/path-filesystem-${{ runner.os }}
-      - name: Validate roadmap lifecycle
-        if: runner.os == 'Linux'
-        run: npm run test:roadmap
-      - name: Test report tooling and reference-vector audit
-        if: runner.os == 'Linux'
-        run: node --test tools/path-filesystem-conformance-report.test.mjs tools/compare-path-filesystem-reports.test.mjs tools/path-filesystem-trace-audit.test.mjs tools/path-filesystem-workflow-policy.test.mjs tools/verify-reference-vectors.test.mjs
-      - name: Upload exact packages and conformance evidence
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: path-filesystem-${{ runner.os }}
-          path: artifacts/path-filesystem-${{ runner.os }}
-          if-no-files-found: error
-          retention-days: 30
-
-  compare:
-    name: Compare Linux, macOS, and Windows results
-    if: ${{ !cancelled() }}
-    needs: conformance
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          pattern: path-filesystem-*
-          path: artifacts/downloaded
-      - name: Require exact pure decisions and package bytes across all operating systems
-        run: >-
-          node tools/compare-path-filesystem-reports.mjs
-          artifacts/downloaded/path-filesystem-Linux/conformance-report.json
-          artifacts/downloaded/path-filesystem-macOS/conformance-report.json
-          artifacts/downloaded/path-filesystem-Windows/conformance-report.json
+        working-directory: client/native-cli/rust
