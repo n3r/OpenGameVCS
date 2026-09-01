@@ -31,6 +31,9 @@ scratch/output tmpfs mounts. The adapter explicitly selects a daemon-registered
 OCI runtime named `runc`, labels the exact job and parser/output-shim role,
 requests private non-recursive bind propagation, and inspects the security,
 resource, namespace, and mount projection while the container is still stopped.
+Docker/Moby encodes its default private PID namespace as an empty inspected
+`HostConfig.PidMode`; the adapter requires that exact value because the literal
+`private` mode is not a valid Docker PID-mode input.
 It requires the standard protected `/proc` and `/sys` masks/read-only paths but
 admits additional daemon hardening paths. The output volume is also inspected
 for the exact local tmpfs driver, options, ownership labels, and mountpoint used
