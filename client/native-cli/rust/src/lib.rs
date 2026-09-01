@@ -1084,29 +1084,31 @@ fn valid_digest(value: &str) -> bool {
 }
 
 fn create_private_directory(path: &Path) -> Result<(), CliError> {
-    fs::create_dir(path).map_err(|_| {
+    #[cfg(windows)]
+    windows_security::create_new_private_directory(path).map_err(|_| {
         workspace_error(
             "WORKSPACE_CREATE_UNAVAILABLE",
-            "Private workspace metadata could not be created.",
-            "Retry on an owned private local filesystem.",
+            "Private workspace metadata could not be created with a protected DACL.",
+            "Retry in an owned directory that permits private atomic creation.",
         )
     })?;
     #[cfg(not(windows))]
-    fs::set_permissions(path, fs::Permissions::from_mode(0o700)).map_err(|_| {
-        workspace_error(
-            "WORKSPACE_CREATE_UNAVAILABLE",
-            "Private workspace metadata could not be created.",
-            "Retry on an owned private local filesystem.",
-        )
-    })?;
-    #[cfg(windows)]
-    windows_security::harden_new_private_directory(path).map_err(|_| {
-        workspace_error(
-            "WORKSPACE_CREATE_UNAVAILABLE",
-            "Private workspace metadata could not be protected from inherited access.",
-            "Retry in an owned directory with a private protected DACL.",
-        )
-    })?;
+    {
+        fs::create_dir(path).map_err(|_| {
+            workspace_error(
+                "WORKSPACE_CREATE_UNAVAILABLE",
+                "Private workspace metadata could not be created.",
+                "Retry on an owned private local filesystem.",
+            )
+        })?;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o700)).map_err(|_| {
+            workspace_error(
+                "WORKSPACE_CREATE_UNAVAILABLE",
+                "Private workspace metadata could not be created.",
+                "Retry on an owned private local filesystem.",
+            )
+        })?;
+    }
     ensure_private_directory(path)
 }
 
@@ -1298,6 +1300,7 @@ fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<(), CliErro
             .map_err(|_| write_workspace_error())?;
         file.write_all(b"\n").map_err(|_| write_workspace_error())?;
         file.sync_all().map_err(|_| write_workspace_error())?;
+        drop(file);
         fs::rename(&temporary, path).map_err(|_| write_workspace_error())?;
         sync_directory(parent)
     })();
@@ -1313,8 +1316,8 @@ fn create_private_file(path: &Path, create_new: bool) -> Result<File, CliError> 
         if !create_new {
             return Err(write_workspace_error());
         }
-        return windows_security::create_new_private_file(path)
-            .map_err(|_| write_workspace_error());
+        windows_security::create_new_private_file(path)
+            .map_err(|error| write_workspace_io_error("private-file-create", &error))
     }
     #[cfg(not(windows))]
     {
@@ -1332,6 +1335,14 @@ fn write_workspace_error() -> CliError {
         "Local workspace metadata could not be written safely.",
         "Check private filesystem ownership and run workspace recover if initialization was published.",
     )
+}
+
+#[cfg(windows)]
+fn write_workspace_io_error(operation: &'static str, error: &io::Error) -> CliError {
+    write_workspace_error().with_data(serde_json::json!({
+        "ioErrorCode": error.raw_os_error(),
+        "operation": operation
+    }))
 }
 
 fn sync_directory(path: &Path) -> Result<(), CliError> {

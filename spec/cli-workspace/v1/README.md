@@ -93,13 +93,17 @@ Workspace metadata requires owner-only Unix modes with macOS extended ACLs
 rejected. Windows requires the current owner, permits granting ACEs only for
 the owner, LocalSystem, and Administrators, rejects reparse/multi-link metadata
 objects, and requires a protected DACL so future inheritance cannot broaden
-access.
+access. New Windows files and directories receive that owner and protected
+DACL through creation-time security attributes, before publication with an
+inherited broad ACL. File handles and active lock handles deny delete sharing.
+`CreateDirectoryW` does not return the created handle, so a malicious process
+with the same OS authority can still race the no-follow validation reopen.
 
 The exclusive mutation file lock prevents races among cooperating CLI
 processes. A malicious process running as the same OS authority can still
-unlink/replace a lock namespace entry on Unix or exploit Windows delete-sharing
-semantics; this candidate does not claim a security boundary against that
-same-authority attacker.
+unlink/replace a lock namespace entry on Unix or replace the persistent Windows
+lock between commands; this candidate does not claim a security boundary
+against that same-authority attacker.
 
 ## Cancellation, diagnostics, and remaining scope
 
