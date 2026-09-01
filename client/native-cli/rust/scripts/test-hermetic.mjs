@@ -200,8 +200,11 @@ function freshRuntimeEnvironment(paths) {
   };
 }
 
-function parseMachineResult(result, expectedStatus, code) {
-  check(result.status === expectedStatus && result.signal === null, code);
+function parseMachineResult(result, expectedStatus, code, statusMismatchCode = code) {
+  check(
+    result.status === expectedStatus && result.signal === null,
+    statusMismatchCode,
+  );
   check(result.stderr.length === 0, `${code}_STDERR`);
   check(Buffer.byteLength(result.stdout, 'utf8') <= MAX_SIGNAL_OUTPUT_BYTES, `${code}_OUTPUT_LIMIT`);
   let value;
@@ -452,13 +455,28 @@ async function main() {
     ]);
     const runtimeEnvironment = freshRuntimeEnvironment(environmentPaths);
 
-    const installed = (commandArguments, expectedStatus, code, extraEnvironment = {}) => {
+    const installed = (
+      commandArguments,
+      expectedStatus,
+      code,
+      extraEnvironment = {},
+      { forbidden = [], statusMismatchCode = code } = {},
+    ) => {
       const raw = runRaw(installedBinary, commandArguments, {
         cwd: runtimeRoot,
         env: { ...runtimeEnvironment, ...extraEnvironment },
       });
       assertNoPathDisclosure(raw, [temporary, REPOSITORY_ROOT, CLI_ROOT], code);
-      return { raw, value: parseMachineResult(raw, expectedStatus, code) };
+      for (const value of forbidden) {
+        check(
+          !raw.stdout.includes(value) && !raw.stderr.includes(value),
+          `${code}_DETAIL_LEAK`,
+        );
+      }
+      return {
+        raw,
+        value: parseMachineResult(raw, expectedStatus, code, statusMismatchCode),
+      };
     };
     const fixture = (action, path, expectedStatus = 0) => {
       const result = runRaw(fixtureBinary, [action, path], {
@@ -515,10 +533,70 @@ async function main() {
     check(authentication.code === 'AUTHENTICATION_REQUIRED', 'AUTH_FAILURE_MISMATCH');
     check(authentication.data?.prompted === false, 'AUTH_PROMPTED');
 
-    const remoteRoot = join(stateRoot, 'remote-fail');
-    fixture('empty-root', remoteRoot);
     const locator = 'repo:hermetic-private-locator';
     const secret = 'hermetic-must-never-appear';
+    const authenticationRoute = installed(
+      [
+        '--format',
+        'json',
+        '--non-interactive',
+        'auth',
+        'invoke',
+        '--credential-env',
+        'OGVCS_TOKEN_HERMETIC',
+      ],
+      7,
+      'AUTH_ROUTE_FAILURE_MISMATCH',
+      { OGVCS_TOKEN_HERMETIC: secret },
+      { forbidden: [secret], statusMismatchCode: 'AUTH_ROUTE_STATUS_MISMATCH' },
+    );
+    check(
+      authenticationRoute.value.code === 'PUBLIC_ROUTE_UNAVAILABLE',
+      'AUTH_ROUTE_CODE_MISMATCH',
+    );
+    check(
+      authenticationRoute.value.exitClass === 'unavailable',
+      'AUTH_ROUTE_CLASS_MISMATCH',
+    );
+    check(
+      authenticationRoute.value.data?.mutationStarted === false,
+      'AUTH_ROUTE_MUTATION_STARTED',
+    );
+
+    if (process.platform === 'win32') {
+      const hostileRoot = join(stateRoot, 'hostile-root');
+      fixture('hostile-root', hostileRoot);
+      const hostile = installed(
+        [
+          '--format',
+          'json',
+          '--non-interactive',
+          'workspace',
+          'create',
+          '--root',
+          hostileRoot,
+          '--repository',
+          locator,
+          '--branch',
+          'main',
+          '--credential-env',
+          'OGVCS_TOKEN_HERMETIC',
+        ],
+        3,
+        'HOSTILE_ROOT_FAILURE_MISMATCH',
+        { OGVCS_TOKEN_HERMETIC: secret },
+        {
+          forbidden: [locator, secret],
+          statusMismatchCode: 'HOSTILE_ROOT_STATUS_MISMATCH',
+        },
+      );
+      check(hostile.value.code === 'UNSAFE_WORKSPACE', 'HOSTILE_ROOT_CODE_MISMATCH');
+      check(hostile.value.exitClass === 'workspace', 'HOSTILE_ROOT_CLASS_MISMATCH');
+      await assertAbsent(join(hostileRoot, '.ogvcs'), 'HOSTILE_ROOT_PARTIAL_WORKSPACE');
+    }
+
+    const remoteRoot = join(stateRoot, 'remote-fail');
+    fixture('empty-root', remoteRoot);
     const remote = installed(
       [
         '--format',
@@ -538,8 +616,13 @@ async function main() {
       7,
       'REMOTE_FAILURE_MISMATCH',
       { OGVCS_TOKEN_HERMETIC: secret },
+      {
+        forbidden: [locator, secret],
+        statusMismatchCode: 'REMOTE_STATUS_MISMATCH',
+      },
     );
-    check(remote.value.code === 'PUBLIC_ROUTE_UNAVAILABLE', 'REMOTE_FAILURE_MISMATCH');
+    check(remote.value.code === 'PUBLIC_ROUTE_UNAVAILABLE', 'REMOTE_CODE_MISMATCH');
+    check(remote.value.exitClass === 'unavailable', 'REMOTE_CLASS_MISMATCH');
     check(remote.value.data?.mutationStarted === false, 'REMOTE_MUTATION_STARTED');
     for (const forbidden of [remoteRoot, locator, secret]) {
       check(!remote.raw.stdout.includes(forbidden) && !remote.raw.stderr.includes(forbidden), 'REMOTE_DETAIL_LEAK');

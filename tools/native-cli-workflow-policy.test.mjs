@@ -96,6 +96,23 @@ test('hermetic gate separates the normal release target from the controller and 
   assert.match(gate, /SOURCE_PATH_IN_RUNTIME_ENVIRONMENT/u);
   assert.match(gate, /SOURCE_TREE_RETAINED/u);
   assert.match(gate, /assertNoPathDisclosure\(raw, \[temporary, REPOSITORY_ROOT, CLI_ROOT\], code\)/u);
+  assert.match(gate, /AUTH_ROUTE_STATUS_MISMATCH/u);
+  assert.match(gate, /AUTH_ROUTE_CODE_MISMATCH/u);
+  assert.match(gate, /AUTH_ROUTE_CLASS_MISMATCH/u);
+  assert.match(gate, /AUTH_ROUTE_MUTATION_STARTED/u);
+  assert.match(gate, /REMOTE_STATUS_MISMATCH/u);
+  assert.match(gate, /REMOTE_CODE_MISMATCH/u);
+  assert.match(gate, /REMOTE_CLASS_MISMATCH/u);
+  assert.match(gate, /HOSTILE_ROOT_PARTIAL_WORKSPACE/u);
+  assert.match(gate, /forbidden: \[locator, secret\]/u);
+  const installedHelper = gate.slice(
+    gate.indexOf('const installed = ('),
+    gate.indexOf('const fixture = ('),
+  );
+  const forbiddenCheck = installedHelper.indexOf('for (const value of forbidden)');
+  const machineParse = installedHelper.indexOf('value: parseMachineResult');
+  assert.ok(forbiddenCheck >= 0 && machineParse > forbiddenCheck);
+  assert.match(installedHelper, /statusMismatchCode = code/u);
   assert.match(gate, /CREATE_RECOVERY_PENDING_RETAINED/u);
   assert.match(gate, /CONFIGURE_RECOVERY_BRANCH_MISMATCH/u);
   assert.match(gate, /REMOVE_JOURNAL_RECORD_RETAINED/u);
@@ -131,9 +148,13 @@ test('recovery and signal claims are exact and fail closed', async () => {
   assert.match(gate, /'SIGTERM'/u);
   assert.match(fixture, /CREATE_NEW_PROCESS_GROUP/u);
   assert.match(fixture, /GenerateConsoleCtrlEvent\(CTRL_BREAK_EVENT, child\.id\(\)\)/u);
-  assert.equal(fixture.match(/Command::new\("icacls"\)/gu)?.length, 2);
-  assert.equal(fixture.match(/\.stdout\(Stdio::null\(\)\)/gu)?.length, 2);
-  assert.equal(fixture.match(/\.stderr\(Stdio::null\(\)\)/gu)?.length, 2);
+  assert.match(fixture, /#\[path = "\.\.\/\.\.\/src\/windows_security\.rs"\]/u);
+  assert.match(fixture, /windows_security::create_new_private_directory\(root\)/u);
+  assert.match(fixture, /"hostile-root"/u);
+  assert.match(fixture, /\*S-1-1-0:\(OI\)\(CI\)F/u);
+  assert.equal(fixture.match(/Command::new\("icacls"\)/gu)?.length, 1);
+  assert.equal(fixture.match(/\.stdout\(Stdio::null\(\)\)/gu)?.length, 1);
+  assert.equal(fixture.match(/\.stderr\(Stdio::null\(\)\)/gu)?.length, 1);
   assert.match(fixture, /if unsafe \{ GenerateConsoleCtrlEvent[\s\S]+child\.kill\(\)[\s\S]+return Err\("SIGNAL_DELIVERY_FAILED"/u);
   assert.match(gate, /result\.data\?\.remoteDurableState === 'unchanged'/u);
   assert.match(gate, /result\.status === expectedStatus && result\.signal === null/u);

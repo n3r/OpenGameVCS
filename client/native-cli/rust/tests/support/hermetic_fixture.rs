@@ -38,6 +38,11 @@ use windows_sys::Win32::System::Console::{GenerateConsoleCtrlEvent, CTRL_BREAK_E
 #[cfg(windows)]
 use windows_sys::Win32::System::Threading::CREATE_NEW_PROCESS_GROUP;
 
+#[cfg(windows)]
+#[allow(dead_code)]
+#[path = "../../src/windows_security.rs"]
+mod windows_security;
+
 const HARD_EXIT_CODE: i32 = 86;
 const SIGNAL_WAIT_MAXIMUM: Duration = Duration::from_secs(15);
 
@@ -301,51 +306,29 @@ fn prepare_root(root: &Path) -> Result<(), String> {
     if !root.is_absolute() {
         return Err("ROOT_NOT_ABSOLUTE".to_owned());
     }
-    fs::create_dir(root).map_err(|_| "ROOT_CREATE_FAILED".to_owned())?;
     #[cfg(not(windows))]
-    fs::set_permissions(root, fs::Permissions::from_mode(0o700))
-        .map_err(|_| "ROOT_PROTECT_FAILED".to_owned())?;
+    {
+        fs::create_dir(root).map_err(|_| "ROOT_CREATE_FAILED".to_owned())?;
+        fs::set_permissions(root, fs::Permissions::from_mode(0o700))
+            .map_err(|_| "ROOT_PROTECT_FAILED".to_owned())?;
+    }
     #[cfg(windows)]
-    protect_windows_root(root)?;
+    windows_security::create_new_private_directory(root)
+        .map_err(|_| "WINDOWS_ROOT_PROTECT_FAILED".to_owned())?;
     Ok(())
 }
 
 #[cfg(windows)]
-fn protect_windows_root(root: &Path) -> Result<(), String> {
-    let identity = String::from_utf8(
-        Command::new("whoami")
-            .output()
-            .map_err(|_| "WINDOWS_IDENTITY_FAILED".to_owned())?
-            .stdout,
-    )
-    .map_err(|_| "WINDOWS_IDENTITY_FAILED".to_owned())?
-    .trim()
-    .to_owned();
-    if identity.is_empty() {
-        return Err("WINDOWS_IDENTITY_FAILED".to_owned());
-    }
-    let owner = Command::new("icacls")
+fn add_hostile_everyone_ace(root: &Path) -> Result<(), String> {
+    let status = Command::new("icacls")
         .arg(root)
-        .args(["/setowner", &identity])
+        .args(["/grant:r", "*S-1-1-0:(OI)(CI)F"])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
-        .map_err(|_| "WINDOWS_ROOT_PROTECT_FAILED".to_owned())?;
-    let protected = Command::new("icacls")
-        .arg(root)
-        .args([
-            "/inheritance:r",
-            "/grant:r",
-            &format!("{identity}:(OI)(CI)F"),
-            "*S-1-5-18:(OI)(CI)F",
-            "*S-1-5-32-544:(OI)(CI)F",
-        ])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map_err(|_| "WINDOWS_ROOT_PROTECT_FAILED".to_owned())?;
-    if !owner.success() || !protected.success() {
-        return Err("WINDOWS_ROOT_PROTECT_FAILED".to_owned());
+        .map_err(|_| "WINDOWS_HOSTILE_DACL_FAILED".to_owned())?;
+    if !status.success() {
+        return Err("WINDOWS_HOSTILE_DACL_FAILED".to_owned());
     }
     Ok(())
 }
@@ -467,10 +450,17 @@ fn run() -> Result<(), String> {
         "signal-child" => return signal_child(&path),
         #[cfg(windows)]
         "signal-windows" => return windows_signal_parent(&path),
+        #[cfg(windows)]
+        "hostile-root" => {
+            prepare_root(&path)?;
+            add_hostile_everyone_ace(&path)?;
+        }
         _ => prepare_root(&path)?,
     }
     let result = match action.as_str() {
         "empty-root" => Ok(()),
+        #[cfg(windows)]
+        "hostile-root" => Ok(()),
         "ready" => create_ready(&path),
         "crash-create-journal" => create_crash(&path),
         "crash-configure-journal" => configure_crash(&path),

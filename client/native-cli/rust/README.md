@@ -151,15 +151,21 @@ and removal boundaries. Recovery, listing, and removal are then executed only
 through the copied release binary. The installed binary has no fixture path,
 feature, environment override, or route implementation. Cargo examples are not
 installed, and workflow policy mechanically checks the separate target and
-runtime inventories.
+runtime inventories. On Windows, the controller compiles the packaged native
+security module directly to create roots with the same atomic protected DACL
+that the product validates; a separate root with an explicit Everyone allow
+ACE proves that the installed binary rejects the hostile DACL before mutation.
+An isolated `auth invoke` case proves credential environment delivery and the
+unavailable public route independently of workspace-root validation.
 
 The gate delivers real SIGINT and SIGTERM to the synchronized controller on
 Linux and macOS. On Windows it creates a dedicated console process group and
 requires `CTRL_BREAK_EVENT` delivery to that exact group; an unsupported or
 failed delivery fails the gate, and the cleanup kill is never accepted as
 signal evidence. Local macOS execution is proven by the source gate. Linux and
-Windows execution remain unproven for this exact candidate until the existing
-three-OS workflow is registered on the default branch and completes there.
+Windows execution for an exact candidate requires the pinned three-OS workflow
+registered on `main` and `r1-foundation-integration` to complete for that exact
+commit; this source tree does not substitute a prior run as candidate evidence.
 This gate does not add a public route or authentication carrier, selective-sync
 semantics, signing, installation packaging, or an OGVCS-011 completion claim.
 
