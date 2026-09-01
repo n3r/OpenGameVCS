@@ -8,11 +8,12 @@ import { fileURLToPath } from 'node:url';
 
 const SPEC = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const REPOSITORY = resolve(SPEC, '../../..');
-const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const npm = 'npm';
 const npmCache = mkdtempSync(join(tmpdir(), 'ogvcs011-npm-cache-'));
 const run = (command, args, cwd) => spawnSync(command, args, {
   cwd,
   encoding: 'utf8',
+  shell: process.platform === 'win32' && command === npm,
   env: {
     ...process.env,
     npm_config_audit: 'false',
