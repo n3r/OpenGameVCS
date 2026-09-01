@@ -43,8 +43,10 @@ Windows lock handles deny delete sharing while held. Windows files receive
 their owner and protected DACL atomically at `CREATE_NEW`; directories receive
 the same descriptor at `CreateDirectoryW`, followed by a no-follow validation
 open. The same-authority namespace interval between directory creation and that
-open remains an explicit residual. Hosted Windows runtime evidence is tracked
-separately.
+open remains an explicit residual. If that reopen cannot prove the created
+identity, the command fails closed and deliberately leaves uncertain cleanup
+to recovery instead of deleting a possibly substituted directory. Hosted
+Windows runtime evidence is tracked separately.
 
 The authenticated companion schemas/vectors live in
 [`spec/cli-workspace/v1`](../../../spec/cli-workspace/v1). The original v1

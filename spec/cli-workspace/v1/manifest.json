@@ -1,7 +1,7 @@
 {
   "schema": "ogvcs.cli-workspace/contract-manifest/v1",
   "contractVersion": "0.2.0-rc.2",
-  "artifactSetSha256": "085a83e34024c18e6a41f65c4dde7b0bcc1ccb10d51a1c890ba49f7b1770a948",
+  "artifactSetSha256": "2607389f06af01b5c8c638114455514d39441f802f2ff75ba38923e052e3f1ee",
   "registrySetSha256": "054959d4e17065133cc7305c1c0a1cf6b59b61e3c3c132f69b1c91d649742320",
   "schemaSetSha256": "e9badce5ef0295018f59f1e4776f9bfd233ebad46a67325ba0a73a50a8e12aba",
   "vectorSetSha256": "aec32c73bf5de6f6c8eb0351ce9c53797f01b14cbc09b5791277dae94ac6b42f",
@@ -20,8 +20,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 7682,
-      "sha256": "a9cb528b04db93e2560ccdb6acf4f78d113af96a1a244cec9eccb89a9ed17ac8"
+      "bytes": 8202,
+      "sha256": "58c94078d66ecc94e4c90e199c9c2c988698a34d981205556f30fda05d2c79a1"
     },
     {
       "path": "package.json",
