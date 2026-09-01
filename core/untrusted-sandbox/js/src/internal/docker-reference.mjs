@@ -290,10 +290,18 @@ const emptyCollection = (value) => value == null
   || (Array.isArray(value) && value.length === 0)
   || (typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0);
 
-const exactSecurityOptions = (source, seccompCanonical) => {
-  if (!Array.isArray(source) || source.length !== 2 || source.filter((value) => value === 'no-new-privileges=true').length !== 1) return false;
+const exactSecurityOptions = (source, seccompCanonical, appArmorProfile) => {
+  if (!Array.isArray(source)
+    || ![2, 3].includes(source.length)
+    || new Set(source).size !== source.length
+    || source.filter((value) => value === 'no-new-privileges=true').length !== 1) return false;
   const encoded = source.find((value) => typeof value === 'string' && value.startsWith('seccomp='));
   if (!encoded) return false;
+  const appArmor = source.find((value) => typeof value === 'string' && value.startsWith('apparmor='));
+  if (source.some((value) => value !== 'no-new-privileges=true' && value !== encoded && value !== appArmor)
+    || (appArmor !== undefined && appArmor !== 'apparmor=docker-default')
+    || ![undefined, '', 'docker-default'].includes(appArmorProfile)
+    || (appArmor !== undefined && appArmorProfile !== 'docker-default')) return false;
   try { return canonicalJson(JSON.parse(encoded.slice('seccomp='.length))) === seccompCanonical; } catch { return false; }
 };
 
@@ -413,7 +421,7 @@ const containerInspectMismatch = (container, expected, expectedState) => {
       ['host-runtime', host?.Runtime === OCI_RUNTIME],
       ['host-root', host?.ReadonlyRootfs === true && containsRequiredPaths(host?.MaskedPaths, REQUIRED_MASKED_PATHS) && containsRequiredPaths(host?.ReadonlyPaths, REQUIRED_READONLY_PATHS)],
       ['host-capabilities', canonicalJson(host?.CapDrop) === '["ALL"]' && emptyCollection(host?.CapAdd) && emptyCollection(host?.GroupAdd)],
-      ['host-security', exactSecurityOptions(host?.SecurityOpt, expected.seccompCanonical) && host?.Privileged === false && host?.OomKillDisable === false && (host?.Init == null || host.Init === false)],
+      ['host-security', exactSecurityOptions(host?.SecurityOpt, expected.seccompCanonical, container?.AppArmorProfile) && host?.Privileged === false && host?.OomKillDisable === false && (host?.Init == null || host.Init === false)],
       // Moby represents its private PID namespace with an empty PidMode and
       // rejects the otherwise intuitive literal `private` as invalid.
       ['host-namespaces', host?.CgroupnsMode === 'private' && host?.PidMode === '' && host?.IpcMode === 'none' && (host?.UTSMode ?? '') === '' && (host?.UsernsMode ?? '') === ''],

@@ -525,9 +525,10 @@ const dockerContainerInspect = (expected, id, stateKind = 'created') => {
     ? { Dead: false, Error: '', ExitCode: 0, OOMKilled: false, Paused: false, Pid: 2468, Restarting: false, Running: true, Status: 'running' }
     : { Paused: false, Pid: 0, Restarting: false, Running: false, Status: 'created' };
   return {
+    AppArmorProfile: stateKind === 'running' ? 'docker-default' : '',
     Args: [],
     Config: { Cmd: null, Domainname: '', Entrypoint: [expected.entrypoint], Env: null, ExposedPorts: null, Healthcheck: null, Hostname: 'ogvcs-worker', Image: expected.runtimeImage, Labels: { 'org.opengamevcs.sandbox.job': expected.jobId, 'org.opengamevcs.sandbox.role': expected.role, 'org.opengamevcs.sandbox.runtime': 'linux-reference-v1', 'org.opengamevcs.sandbox.runtime-contract-sha256': expected.runtimeContractSha256 }, OpenStdin: false, StdinOnce: false, StopTimeout: 1, Tty: false, User: '65532:65532', Volumes: null, WorkingDir: '/scratch' },
-    HostConfig: { AutoRemove: false, Binds: null, CapAdd: null, CapDrop: ['ALL'], CgroupnsMode: 'private', CpuPeriod: 0, CpuQuota: 0, CpuShares: 0, DeviceCgroupRules: null, DeviceRequests: null, Devices: null, Dns: null, DnsOptions: null, DnsSearch: null, ExtraHosts: null, GroupAdd: null, Init: null, IpcMode: 'none', Links: null, LogConfig: { Config: {}, Type: 'none' }, MaskedPaths: ['/proc/acpi', '/proc/asound', '/proc/interrupts', '/proc/kcore', '/proc/keys', '/proc/latency_stats', '/proc/sched_debug', '/proc/scsi', '/proc/timer_list', '/proc/timer_stats', '/sys/firmware'], Memory: expected.policy.memoryBytes, MemoryReservation: 0, MemorySwap: expected.policy.memoryBytes, Mounts: hostMounts, NanoCpus: 1_000_000_000, NetworkMode: 'none', OomKillDisable: false, PidMode: '', PidsLimit: expected.policy.processes, PortBindings: {}, Privileged: false, PublishAllPorts: false, ReadonlyPaths: ['/proc/bus', '/proc/fs', '/proc/irq', '/proc/sys', '/proc/sysrq-trigger'], ReadonlyRootfs: true, RestartPolicy: { MaximumRetryCount: 0, Name: 'no' }, Runtime: 'runc', SecurityOpt: ['no-new-privileges=true', 'seccomp={}'], Sysctls: null, Tmpfs: { '/scratch': `rw,nosuid,nodev,noexec,size=${expected.policy.scratchBytes},uid=65532,gid=65532,mode=0700` }, UsernsMode: '', UTSMode: '', Ulimits: [{ Hard: expected.policy.cpuMilliseconds / 1_000, Name: 'cpu', Soft: expected.policy.cpuMilliseconds / 1_000 }, { Hard: expected.policy.outputBytes, Name: 'fsize', Soft: expected.policy.outputBytes }, { Hard: 64, Name: 'nofile', Soft: 64 }], VolumesFrom: null },
+    HostConfig: { AutoRemove: false, Binds: null, CapAdd: null, CapDrop: ['ALL'], CgroupnsMode: 'private', CpuPeriod: 0, CpuQuota: 0, CpuShares: 0, DeviceCgroupRules: null, DeviceRequests: null, Devices: null, Dns: null, DnsOptions: null, DnsSearch: null, ExtraHosts: null, GroupAdd: null, Init: null, IpcMode: 'none', Links: null, LogConfig: { Config: {}, Type: 'none' }, MaskedPaths: ['/proc/acpi', '/proc/asound', '/proc/interrupts', '/proc/kcore', '/proc/keys', '/proc/latency_stats', '/proc/sched_debug', '/proc/scsi', '/proc/timer_list', '/proc/timer_stats', '/sys/firmware'], Memory: expected.policy.memoryBytes, MemoryReservation: 0, MemorySwap: expected.policy.memoryBytes, Mounts: hostMounts, NanoCpus: 1_000_000_000, NetworkMode: 'none', OomKillDisable: false, PidMode: '', PidsLimit: expected.policy.processes, PortBindings: {}, Privileged: false, PublishAllPorts: false, ReadonlyPaths: ['/proc/bus', '/proc/fs', '/proc/irq', '/proc/sys', '/proc/sysrq-trigger'], ReadonlyRootfs: true, RestartPolicy: { MaximumRetryCount: 0, Name: 'no' }, Runtime: 'runc', SecurityOpt: [...(stateKind === 'running' ? ['apparmor=docker-default'] : []), 'no-new-privileges=true', 'seccomp={}'], Sysctls: null, Tmpfs: { '/scratch': `rw,nosuid,nodev,noexec,size=${expected.policy.scratchBytes},uid=65532,gid=65532,mode=0700` }, UsernsMode: '', UTSMode: '', Ulimits: [{ Hard: expected.policy.cpuMilliseconds / 1_000, Name: 'cpu', Soft: expected.policy.cpuMilliseconds / 1_000 }, { Hard: expected.policy.outputBytes, Name: 'fsize', Soft: expected.policy.outputBytes }, { Hard: 64, Name: 'nofile', Soft: 64 }], VolumesFrom: null },
     Id: id,
     Mounts: effectiveMounts,
     Name: `/${expected.name}`,
@@ -1526,8 +1527,19 @@ test('pre-start inspection binds every role mount and effective isolation contro
   anchor.Mounts = [{ Destination: '/output', Driver: 'local', Mode: 'z', Name: expected.volume, Propagation: '', RW: false, Source: expected.volumeMountpoint, Type: 'volume' }];
   assert.equal(validateCreatedContainerInspect(anchor, anchorExpected), true);
   const runningAnchor = structuredClone(anchor);
+  runningAnchor.AppArmorProfile = 'docker-default';
+  runningAnchor.HostConfig.SecurityOpt.unshift('apparmor=docker-default');
   runningAnchor.State = { Dead: false, Error: '', ExitCode: 0, OOMKilled: false, Paused: false, Pid: 2468, Restarting: false, Running: true, Status: 'running' };
   assert.equal(validateRunningContainerInspect(runningAnchor, anchorExpected), true);
+  for (const mutate of [
+    (value) => { value.AppArmorProfile = 'unconfined'; },
+    (value) => { value.HostConfig.SecurityOpt[0] = 'apparmor=unconfined'; },
+    (value) => { value.HostConfig.SecurityOpt.push('apparmor=docker-default'); },
+    (value) => { value.HostConfig.SecurityOpt.push('label=SECRET=/home/runner/private'); },
+  ]) {
+    const candidate = structuredClone(runningAnchor); mutate(candidate);
+    assert.equal(runningContainerInspectMismatch(candidate, anchorExpected), 'host-security');
+  }
   assert.equal(runningContainerInspectMismatch(anchor, anchorExpected), 'state');
   assert.equal(createdContainerInspectMismatch(runningAnchor, anchorExpected), 'state');
   for (const [label, mutate] of [
