@@ -1,4 +1,5 @@
 name: Object transfer bounded conformance
+# Tree-local dispatch marker for the exact 70ef689 integration candidate.
 
 on:
   pull_request:
