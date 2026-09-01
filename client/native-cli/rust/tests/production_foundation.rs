@@ -61,6 +61,12 @@ fn protect_test_directory(path: &Path) {
     .trim()
     .to_owned();
     assert!(!identity.is_empty());
+    let owner_status = Command::new("icacls")
+        .arg(path)
+        .args(["/setowner", &identity])
+        .status()
+        .expect("set Windows test directory owner");
+    assert!(owner_status.success());
     let status = Command::new("icacls")
         .arg(path)
         .args([
@@ -86,6 +92,12 @@ fn protect_test_file(path: &Path) {
     .expect("Windows identity is text")
     .trim()
     .to_owned();
+    let owner_status = Command::new("icacls")
+        .arg(path)
+        .args(["/setowner", &identity])
+        .status()
+        .expect("set Windows test file owner");
+    assert!(owner_status.success());
     let status = Command::new("icacls")
         .arg(path)
         .args([
