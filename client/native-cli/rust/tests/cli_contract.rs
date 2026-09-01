@@ -37,6 +37,12 @@ fn protect_test_directory(path: &std::path::Path) {
         .unwrap()
         .trim()
         .to_owned();
+    let owner_status = Command::new("icacls")
+        .arg(path)
+        .args(["/setowner", &identity])
+        .status()
+        .unwrap();
+    assert!(owner_status.success());
     let status = Command::new("icacls")
         .arg(path)
         .args([
@@ -127,7 +133,13 @@ fn binary_remote_boundary_fails_closed_without_emitting_paths_locators_or_secret
         .env_remove("OGVCS_OUTPUT")
         .output()
         .unwrap();
-    assert_eq!(create.status.code(), Some(7));
+    assert_eq!(
+        create.status.code(),
+        Some(7),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&create.stdout),
+        String::from_utf8_lossy(&create.stderr)
+    );
     let result = machine(&create);
     let rendered = serde_json::to_string(&result).unwrap();
     assert_eq!(result["code"], "PUBLIC_ROUTE_UNAVAILABLE");
