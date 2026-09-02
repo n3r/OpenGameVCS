@@ -31,6 +31,7 @@ use std::os::windows::{
 pub const RECORD_SCHEMA: &str = "ogvcs.local-checkpoint/record/v1";
 pub const INTENT_SCHEMA: &str = "ogvcs.local-checkpoint/create-intent/v1";
 pub const COMPLETE_SCHEMA: &str = "ogvcs.local-checkpoint/complete-manifest/v1";
+pub const APPLICATION_PREVIEW_SCHEMA: &str = "ogvcs.local-checkpoint/application-preview/v1";
 pub const LOCK_AUTHORITY_STATE: &str = "historical-untrusted-exclusivity-unverified";
 
 pub const CHECKPOINTS_MAXIMUM: usize = 10_000;
@@ -42,8 +43,20 @@ pub const PATH_BYTES_TOTAL_MAXIMUM: u64 = 67_108_864;
 pub const RECORD_BYTES_MAXIMUM: u64 = 67_108_864;
 pub const STORE_RECORD_BYTES_MAXIMUM: u64 = 268_435_456;
 pub const GRAPH_DEPTH_MAXIMUM: usize = 1_024;
+pub const PREVIEW_PATHS_MAXIMUM: usize = 20_000;
+pub const PREVIEW_CONTENT_FACTS_MAXIMUM: usize = 10_000;
+pub const PREVIEW_PATH_BYTES_MAXIMUM: u64 = 8_388_608;
+pub const PREVIEW_CHAIN_RECORD_BYTES_MAXIMUM: u64 = 268_435_456;
+pub const PREVIEW_CHAIN_OPERATIONS_MAXIMUM: usize = 100_000;
+pub const PREVIEW_WORK_UNITS_MAXIMUM: u64 = 600_000;
+pub const PREVIEW_RETAINED_BYTES_MAXIMUM: u64 = 67_108_864;
 const SMALL_METADATA_BYTES_MAXIMUM: u64 = 65_536;
 const MAXIMUM_ARTIFACTS_PER_ENTRY: usize = 8;
+const PREVIEW_RETAINED_PATH_ENTRY_BYTES: u64 = 512;
+const PREVIEW_RETAINED_CONTENT_FACT_BYTES: u64 = 256;
+const PREVIEW_RETAINED_REPOSITORY_KEY_COPIES: u64 = 3;
+const PREVIEW_RETAINED_PLATFORM_KEY_COPIES: u64 = 3;
+const PREVIEW_RETAINED_CANONICAL_PATH_COPIES: u64 = 5;
 
 const STORE_DIRECTORY: &str = "local-checkpoints-v1";
 const ENTRIES_DIRECTORY: &str = "entries";
@@ -54,6 +67,8 @@ const COMPLETE_FILE: &str = "complete-v1.json";
 const CHECKPOINT_ID_DOMAIN: &[u8] = b"OpenGameVCS local checkpoint record\0";
 const INTENT_INTEGRITY_DOMAIN: &[u8] = b"OpenGameVCS local checkpoint intent\0";
 const COMPLETE_INTEGRITY_DOMAIN: &[u8] = b"OpenGameVCS local checkpoint complete\0";
+const CONTENT_PROJECTION_DOMAIN: &[u8] = b"OpenGameVCS local checkpoint content projection\0";
+const APPLICATION_PREVIEW_DOMAIN: &[u8] = b"OpenGameVCS local checkpoint application preview\0";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CheckpointErrorCode {
@@ -75,6 +90,7 @@ pub enum CheckpointErrorCode {
     ParentBindingMismatch,
     ParentCycle,
     GraphDepthExceeded,
+    Cancelled,
     ConcurrentMutation,
     Io,
     InjectedCrash,
@@ -101,6 +117,7 @@ impl CheckpointErrorCode {
             Self::ParentBindingMismatch => "CHECKPOINT_PARENT_BINDING_MISMATCH",
             Self::ParentCycle => "CHECKPOINT_PARENT_CYCLE",
             Self::GraphDepthExceeded => "CHECKPOINT_GRAPH_DEPTH_EXCEEDED",
+            Self::Cancelled => "CHECKPOINT_CANCELLED",
             Self::ConcurrentMutation => "CHECKPOINT_CONCURRENT_MUTATION",
             Self::Io => "CHECKPOINT_IO_FAILURE",
             Self::InjectedCrash => "CHECKPOINT_INJECTED_CRASH",
@@ -313,6 +330,144 @@ pub struct VerificationReport {
     pub lock_authority: LockAuthorityState,
 }
 
+/// Caller intent used only to classify this read-only preview. It is neither
+/// authorization nor permission to write, remove, or replace a workspace path.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum PreviewReplacementIntent {
+    #[default]
+    PreserveCurrentWorkspace,
+    ReplaceRecordedPaths,
+}
+
+impl PreviewReplacementIntent {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::PreserveCurrentWorkspace => "preserve-current-workspace",
+            Self::ReplaceRecordedPaths => "replace-recorded-paths",
+        }
+    }
+}
+
+/// Explicit caller observation about a current workspace path. This crate
+/// does not inspect the ordinary workspace path and does not authenticate the
+/// observation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SuppliedWorkspacePathState {
+    Absent,
+    RegularFile {
+        file_id: FileId,
+        whole_file_digest: [u8; 32],
+        logical_length: u64,
+    },
+    Directory,
+    SymlinkOrReparse,
+    Inaccessible,
+    Unknown,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SuppliedWorkspacePathFact {
+    pub path: String,
+    pub state: SuppliedWorkspacePathState,
+}
+
+/// Availability is a caller-supplied observation. `AvailableUnverified` does
+/// not mean that this crate read, hashed, authenticated, or pinned any bytes.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SuppliedContentAvailability {
+    AvailableUnverified,
+    Unavailable,
+}
+
+/// Availability for a final content-bearing effect must bind the exact
+/// selected-record ordinal, FileID, manifest, whole-file digest, length, and
+/// ordered chunk projection.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SuppliedCheckpointContentFact {
+    pub operation_ordinal: u32,
+    pub file_id: FileId,
+    pub content: CanonicalContentBinding,
+    pub availability: SuppliedContentAvailability,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CheckpointApplicationPreviewRequest {
+    pub checkpoint_id: CheckpointId,
+    pub bindings: CheckpointBindings,
+    pub workspace_facts: Vec<SuppliedWorkspacePathFact>,
+    pub content_facts: Vec<SuppliedCheckpointContentFact>,
+    pub replacement_intent: PreviewReplacementIntent,
+}
+
+pub trait PreviewCancellation {
+    fn is_cancelled(&self, phase: &'static str) -> bool;
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NeverCancelledPreview;
+
+impl PreviewCancellation for NeverCancelledPreview {
+    fn is_cancelled(&self, _: &'static str) -> bool {
+        false
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PreviewContentIdentity {
+    pub manifest: ObjectRef,
+    pub whole_file_digest: [u8; 32],
+    pub logical_length: u64,
+    pub projection_sha256: [u8; 32],
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PreviewDesiredState {
+    Absent,
+    Content(PreviewContentIdentity),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PreviewWorkspaceImpact {
+    AlreadyMatches,
+    WouldCreate,
+    ReplacementProtected,
+    ReplacementIntended,
+    RemovalProtected,
+    RemovalIntended,
+    Obstructed,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CheckpointApplicationPreviewItem {
+    pub path: String,
+    pub repository_path_key: String,
+    pub platform_path_key: String,
+    pub first_operation_ordinal: u32,
+    pub last_operation_ordinal: u32,
+    pub operation_touch_count: u32,
+    pub file_id: FileId,
+    pub desired: PreviewDesiredState,
+    pub supplied_workspace_state: SuppliedWorkspacePathState,
+    pub supplied_content_availability: Option<SuppliedContentAvailability>,
+    pub workspace_impact: PreviewWorkspaceImpact,
+    pub blocked: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CheckpointApplicationPreview {
+    pub schema: &'static str,
+    pub checkpoint_id: CheckpointId,
+    pub bindings: CheckpointBindings,
+    pub verified_chain_depth: usize,
+    pub selected_record_operation_count: usize,
+    pub replacement_intent: PreviewReplacementIntent,
+    pub preview_sha256: [u8; 32],
+    pub items: Vec<CheckpointApplicationPreviewItem>,
+    pub has_blocking_observation: bool,
+    pub lock_authority: LockAuthorityState,
+    pub historical_lock_receipts_considered: bool,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PublicationBoundary {
     EntryDirectorySynced,
@@ -371,6 +526,27 @@ struct LoadedCheckpoint {
     record_sha256: [u8; 32],
     record_bytes: u64,
     intent_integrity_sha256: [u8; 32],
+}
+
+type PreviewPathSortKey = (String, String, String);
+
+#[derive(Clone, Debug)]
+struct DesiredPreviewEffect {
+    path: String,
+    first_ordinal: u32,
+    last_ordinal: u32,
+    touch_count: u32,
+    file_id: FileId,
+    content: Option<PreviewContentIdentity>,
+    content_ordinal: Option<u32>,
+}
+
+struct PreviewEffectAccumulator {
+    profile: PathProfile,
+    case_mode: CaseMode,
+    effects: BTreeMap<PreviewPathSortKey, DesiredPreviewEffect>,
+    repository_aliases: BTreeMap<String, String>,
+    platform_aliases: BTreeMap<String, String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -656,6 +832,115 @@ impl CheckpointStore {
         })
     }
 
+    /// Produces a deterministic, read-only impact preview for the selected
+    /// complete record's final touched-path effects. This is deliberately not
+    /// a full checkpoint restore plan: the record lacks authenticated base-tree
+    /// before-state and kind/mode/policy data. Ordinary workspace and cache
+    /// bytes are never opened here.
+    pub fn preview_checkpoint_application(
+        &self,
+        request: &CheckpointApplicationPreviewRequest,
+        cancellation: &dyn PreviewCancellation,
+    ) -> Result<CheckpointApplicationPreview> {
+        check_preview_cancellation(cancellation, "preview-before-checkpoint-read")?;
+        let (loaded, chain_depth, chain_operation_count) =
+            self.load_verified_chain_for_preview(request.checkpoint_id, cancellation)?;
+        if loaded.checkpoint.bindings != request.bindings {
+            return Err(error(
+                CheckpointErrorCode::BindingInvalid,
+                "preview-checkpoint-bindings",
+            ));
+        }
+        preflight_application_preview(
+            &loaded.checkpoint,
+            chain_depth,
+            chain_operation_count,
+            request,
+            cancellation,
+        )?;
+        check_preview_cancellation(cancellation, "preview-before-retained-projection")?;
+
+        let effects = fold_selected_record_effects(&loaded.checkpoint, cancellation)?;
+        let workspace_facts = bind_supplied_workspace_facts(
+            &loaded.checkpoint.bindings,
+            &effects,
+            &request.workspace_facts,
+            cancellation,
+        )?;
+        let content_facts = bind_supplied_content_facts(
+            &loaded.checkpoint,
+            &effects,
+            &request.content_facts,
+            cancellation,
+        )?;
+
+        let mut items = Vec::with_capacity(effects.len());
+        let mut has_blocking_observation = false;
+        for (sort_key, effect) in &effects {
+            check_preview_cancellation(cancellation, "preview-classify-effect")?;
+            let workspace = workspace_facts
+                .get(sort_key)
+                .expect("exact workspace fact set was validated");
+            let availability = effect.content_ordinal.map(|ordinal| {
+                content_facts
+                    .get(&ordinal)
+                    .expect("exact content fact set was validated")
+                    .availability
+            });
+            let desired = effect
+                .content
+                .map_or(PreviewDesiredState::Absent, PreviewDesiredState::Content);
+            let workspace_impact = classify_preview_workspace_impact(
+                workspace.state,
+                effect.file_id,
+                desired,
+                request.replacement_intent,
+            );
+            let blocked = matches!(
+                workspace_impact,
+                PreviewWorkspaceImpact::ReplacementProtected
+                    | PreviewWorkspaceImpact::RemovalProtected
+                    | PreviewWorkspaceImpact::Obstructed
+            ) || availability == Some(SuppliedContentAvailability::Unavailable);
+            has_blocking_observation |= blocked;
+            items.push(CheckpointApplicationPreviewItem {
+                path: effect.path.clone(),
+                repository_path_key: sort_key.0.clone(),
+                platform_path_key: sort_key.1.clone(),
+                first_operation_ordinal: effect.first_ordinal,
+                last_operation_ordinal: effect.last_ordinal,
+                operation_touch_count: effect.touch_count,
+                file_id: effect.file_id,
+                desired,
+                supplied_workspace_state: workspace.state,
+                supplied_content_availability: availability,
+                workspace_impact,
+                blocked,
+            });
+        }
+        let preview_sha256 = application_preview_digest(
+            &loaded,
+            chain_depth,
+            request,
+            &workspace_facts,
+            &content_facts,
+            &items,
+        )?;
+        Ok(CheckpointApplicationPreview {
+            schema: APPLICATION_PREVIEW_SCHEMA,
+            checkpoint_id: loaded.checkpoint.id,
+            bindings: loaded.checkpoint.bindings,
+            verified_chain_depth: chain_depth,
+            selected_record_operation_count: loaded.checkpoint.operations.len(),
+            replacement_intent: request.replacement_intent,
+            preview_sha256,
+            items,
+            has_blocking_observation,
+            lock_authority: LockAuthorityState::HistoricalUntrustedExclusivityUnverified,
+            historical_lock_receipts_considered: false,
+        })
+    }
+
     /// Scans every bounded entry in deterministic name order. An exact intact
     /// intent plus record may be completed by a create-new manifest; every
     /// other incomplete/corrupt shape is reported without deletion, rename,
@@ -846,6 +1131,98 @@ impl CheckpointStore {
         })
     }
 
+    fn load_verified_chain_for_preview(
+        &self,
+        checkpoint_id: CheckpointId,
+        cancellation: &dyn PreviewCancellation,
+    ) -> Result<(LoadedCheckpoint, usize, usize)> {
+        self.revalidate_namespace()?;
+        let mut current = checkpoint_id;
+        let mut seen = BTreeSet::new();
+        let mut depth = 0usize;
+        let mut first = None;
+        let mut child_bindings: Option<CheckpointBindings> = None;
+        let mut total_record_bytes = 0u64;
+        let mut total_operations = 0usize;
+        loop {
+            check_preview_cancellation(cancellation, "preview-verify-parent-chain")?;
+            if depth >= GRAPH_DEPTH_MAXIMUM {
+                return Err(error(
+                    CheckpointErrorCode::GraphDepthExceeded,
+                    "parent-chain",
+                ));
+            }
+            if !seen.insert(current) {
+                return Err(error(CheckpointErrorCode::ParentCycle, "parent-chain"));
+            }
+            let entry = self.entries_root.join(current.directory_name());
+            match fs::symlink_metadata(&entry) {
+                Ok(_) => {}
+                Err(failure) if failure.kind() == std::io::ErrorKind::NotFound => {
+                    return Err(error(
+                        if depth == 0 {
+                            CheckpointErrorCode::NotFound
+                        } else {
+                            CheckpointErrorCode::ParentMissing
+                        },
+                        "checkpoint-entry",
+                    ));
+                }
+                Err(_) => {
+                    return Err(error(CheckpointErrorCode::Io, "checkpoint-entry-metadata"));
+                }
+            }
+            let loaded = self
+                .read_complete_entry(&entry, current)
+                .map_err(|failure| {
+                    if depth > 0
+                        && matches!(
+                            failure.code(),
+                            CheckpointErrorCode::NotFound | CheckpointErrorCode::Incomplete
+                        )
+                    {
+                        error(CheckpointErrorCode::ParentMissing, "parent-entry")
+                    } else {
+                        failure
+                    }
+                })?;
+            charge_preview_chain_record_bytes(&mut total_record_bytes, loaded.record_bytes)?;
+            charge_preview_chain_operations(
+                &mut total_operations,
+                loaded.checkpoint.operations.len(),
+            )?;
+            if let Some(bindings) = &child_bindings {
+                if bindings != &loaded.checkpoint.bindings {
+                    return Err(error(
+                        CheckpointErrorCode::ParentBindingMismatch,
+                        "parent-bindings",
+                    ));
+                }
+            }
+            let parent = loaded.checkpoint.parent;
+            let bindings = loaded.checkpoint.bindings.clone();
+            if first.is_none() {
+                first = Some(loaded);
+            }
+            depth += 1;
+            match parent {
+                Some(parent) if parent == current => {
+                    return Err(error(CheckpointErrorCode::ParentCycle, "self-parent"));
+                }
+                Some(parent) => {
+                    child_bindings = Some(bindings);
+                    current = parent;
+                }
+                None => break,
+            }
+        }
+        Ok((
+            first.expect("chain contains requested checkpoint"),
+            depth,
+            total_operations,
+        ))
+    }
+
     fn load_verified_chain(
         &self,
         checkpoint_id: CheckpointId,
@@ -981,6 +1358,821 @@ impl CheckpointStore {
         let _ = CheckpointId::from_directory_name(name)?;
         reject_link_or_non_directory(entry, true, "checkpoint-entry")
     }
+}
+
+fn check_preview_cancellation(
+    cancellation: &dyn PreviewCancellation,
+    context: &'static str,
+) -> Result<()> {
+    if cancellation.is_cancelled(context) {
+        Err(error(CheckpointErrorCode::Cancelled, context))
+    } else {
+        Ok(())
+    }
+}
+
+fn preview_mutated_paths(operation: &CheckpointOperation) -> Result<[Option<&str>; 2]> {
+    let source = operation.source_path.as_deref();
+    let destination = operation.destination_path.as_deref();
+    match operation.kind {
+        OperationKind::Add | OperationKind::Modify | OperationKind::Copy => Ok([
+            Some(destination.ok_or_else(|| {
+                error(CheckpointErrorCode::OperationInvalid, "preview-destination")
+            })?),
+            None,
+        ]),
+        OperationKind::Move => Ok([
+            Some(source.ok_or_else(|| {
+                error(CheckpointErrorCode::OperationInvalid, "preview-move-source")
+            })?),
+            Some(destination.ok_or_else(|| {
+                error(
+                    CheckpointErrorCode::OperationInvalid,
+                    "preview-move-destination",
+                )
+            })?),
+        ]),
+        OperationKind::Delete => Ok([
+            Some(source.ok_or_else(|| {
+                error(
+                    CheckpointErrorCode::OperationInvalid,
+                    "preview-delete-source",
+                )
+            })?),
+            None,
+        ]),
+    }
+}
+
+fn charge_preview_work(total: &mut u64, units: usize) -> Result<()> {
+    *total = total
+        .checked_add(
+            u64::try_from(units)
+                .map_err(|_| error(CheckpointErrorCode::CountExceeded, "preview-work"))?,
+        )
+        .ok_or_else(|| error(CheckpointErrorCode::CountExceeded, "preview-work"))?;
+    if *total > PREVIEW_WORK_UNITS_MAXIMUM {
+        return Err(error(CheckpointErrorCode::CountExceeded, "preview-work"));
+    }
+    Ok(())
+}
+
+fn charge_preview_path_bytes(total: &mut u64, bytes: usize) -> Result<()> {
+    *total = total
+        .checked_add(
+            u64::try_from(bytes)
+                .map_err(|_| error(CheckpointErrorCode::BytesExceeded, "preview-path-bytes"))?,
+        )
+        .ok_or_else(|| error(CheckpointErrorCode::BytesExceeded, "preview-path-bytes"))?;
+    if *total > PREVIEW_PATH_BYTES_MAXIMUM {
+        return Err(error(
+            CheckpointErrorCode::BytesExceeded,
+            "preview-path-bytes",
+        ));
+    }
+    Ok(())
+}
+
+fn charge_preview_chain_record_bytes(total: &mut u64, bytes: u64) -> Result<()> {
+    *total = total.checked_add(bytes).ok_or_else(|| {
+        error(
+            CheckpointErrorCode::BytesExceeded,
+            "preview-chain-record-bytes",
+        )
+    })?;
+    if *total > PREVIEW_CHAIN_RECORD_BYTES_MAXIMUM {
+        return Err(error(
+            CheckpointErrorCode::BytesExceeded,
+            "preview-chain-record-bytes",
+        ));
+    }
+    Ok(())
+}
+
+fn charge_preview_chain_operations(total: &mut usize, operations: usize) -> Result<()> {
+    *total = total.checked_add(operations).ok_or_else(|| {
+        error(
+            CheckpointErrorCode::CountExceeded,
+            "preview-chain-operations",
+        )
+    })?;
+    if *total > PREVIEW_CHAIN_OPERATIONS_MAXIMUM {
+        return Err(error(
+            CheckpointErrorCode::CountExceeded,
+            "preview-chain-operations",
+        ));
+    }
+    Ok(())
+}
+
+fn charge_preview_retained_bytes(total: &mut u64, bytes: u64) -> Result<()> {
+    *total = total
+        .checked_add(bytes)
+        .ok_or_else(|| error(CheckpointErrorCode::BytesExceeded, "preview-retained-bytes"))?;
+    if *total > PREVIEW_RETAINED_BYTES_MAXIMUM {
+        return Err(error(
+            CheckpointErrorCode::BytesExceeded,
+            "preview-retained-bytes",
+        ));
+    }
+    Ok(())
+}
+
+fn charge_preview_retained_path_projection(
+    total: &mut u64,
+    path: &str,
+    profile: PathProfile,
+    case_mode: CaseMode,
+) -> Result<()> {
+    // The steady-state high-water mark is bounded by the simultaneously
+    // retained effect, caller-fact, alias, and result projections. Re-derive
+    // exact collision-key lengths before any of those maps are allocated.
+    let keys = validate_repository_path(path, profile, case_mode)?;
+    let repository_bytes = u64::try_from(keys.repository_key().as_str().len()).map_err(|_| {
+        error(
+            CheckpointErrorCode::BytesExceeded,
+            "preview-retained-path-keys",
+        )
+    })?;
+    let platform_bytes = u64::try_from(keys.platform_key().len()).map_err(|_| {
+        error(
+            CheckpointErrorCode::BytesExceeded,
+            "preview-retained-path-keys",
+        )
+    })?;
+    let canonical_bytes = u64::try_from(path.len()).map_err(|_| {
+        error(
+            CheckpointErrorCode::BytesExceeded,
+            "preview-retained-path-keys",
+        )
+    })?;
+    let projected = repository_bytes
+        .checked_mul(PREVIEW_RETAINED_REPOSITORY_KEY_COPIES)
+        .and_then(|bytes| {
+            platform_bytes
+                .checked_mul(PREVIEW_RETAINED_PLATFORM_KEY_COPIES)
+                .and_then(|platform| bytes.checked_add(platform))
+        })
+        .and_then(|bytes| {
+            canonical_bytes
+                .checked_mul(PREVIEW_RETAINED_CANONICAL_PATH_COPIES)
+                .and_then(|canonical| bytes.checked_add(canonical))
+        })
+        .ok_or_else(|| {
+            error(
+                CheckpointErrorCode::BytesExceeded,
+                "preview-retained-path-keys",
+            )
+        })?;
+    charge_preview_retained_bytes(total, projected)
+}
+
+fn validate_supplied_workspace_state(state: SuppliedWorkspacePathState) -> Result<()> {
+    if let SuppliedWorkspacePathState::RegularFile { logical_length, .. } = state {
+        if logical_length > LOGICAL_MAXIMUM {
+            return Err(error(
+                CheckpointErrorCode::LogicalOverflow,
+                "preview-workspace-logical-length",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn preflight_application_preview(
+    checkpoint: &Checkpoint,
+    chain_depth: usize,
+    chain_operation_count: usize,
+    request: &CheckpointApplicationPreviewRequest,
+    cancellation: &dyn PreviewCancellation,
+) -> Result<()> {
+    if request.workspace_facts.len() > PREVIEW_PATHS_MAXIMUM {
+        return Err(error(
+            CheckpointErrorCode::CountExceeded,
+            "preview-workspace-facts",
+        ));
+    }
+    if request.content_facts.len() > PREVIEW_CONTENT_FACTS_MAXIMUM {
+        return Err(error(
+            CheckpointErrorCode::CountExceeded,
+            "preview-content-facts",
+        ));
+    }
+
+    let mut affected_path_occurrences = 0usize;
+    let mut checkpoint_chunk_references = 0usize;
+    let mut supplied_chunk_references = 0usize;
+    let mut path_bytes = 0u64;
+    let mut retained_path_projection_bytes = 0u64;
+    let mut work = 0u64;
+    let profile = PathProfile::parse(&checkpoint.bindings.path_profile)
+        .map_err(|_| error(CheckpointErrorCode::BindingInvalid, "preview-path-profile"))?;
+    charge_preview_work(&mut work, chain_depth)?;
+    charge_preview_work(&mut work, chain_operation_count)?;
+    charge_preview_work(&mut work, checkpoint.operations.len())?;
+    for operation in &checkpoint.operations {
+        check_preview_cancellation(cancellation, "preview-preflight-operation")?;
+        for path in preview_mutated_paths(operation)?.into_iter().flatten() {
+            affected_path_occurrences =
+                affected_path_occurrences.checked_add(1).ok_or_else(|| {
+                    error(CheckpointErrorCode::CountExceeded, "preview-affected-paths")
+                })?;
+            if affected_path_occurrences > PREVIEW_PATHS_MAXIMUM {
+                return Err(error(
+                    CheckpointErrorCode::CountExceeded,
+                    "preview-affected-paths",
+                ));
+            }
+            charge_preview_path_bytes(&mut path_bytes, path.len())?;
+            charge_preview_retained_path_projection(
+                &mut retained_path_projection_bytes,
+                path,
+                profile,
+                checkpoint.bindings.case_mode,
+            )?;
+        }
+        if let Some(content) = &operation.content {
+            checkpoint_chunk_references = checkpoint_chunk_references
+                .checked_add(content.chunks.len())
+                .ok_or_else(|| {
+                    error(
+                        CheckpointErrorCode::CountExceeded,
+                        "preview-checkpoint-chunks",
+                    )
+                })?;
+            if checkpoint_chunk_references > CHUNK_REFERENCES_MAXIMUM {
+                return Err(error(
+                    CheckpointErrorCode::CountExceeded,
+                    "preview-checkpoint-chunks",
+                ));
+            }
+        }
+    }
+    charge_preview_work(&mut work, affected_path_occurrences)?;
+    charge_preview_work(&mut work, checkpoint_chunk_references)?;
+
+    charge_preview_work(&mut work, request.workspace_facts.len())?;
+    for fact in &request.workspace_facts {
+        check_preview_cancellation(cancellation, "preview-preflight-workspace-fact")?;
+        charge_preview_path_bytes(&mut path_bytes, fact.path.len())?;
+        charge_preview_retained_path_projection(
+            &mut retained_path_projection_bytes,
+            &fact.path,
+            profile,
+            checkpoint.bindings.case_mode,
+        )?;
+        validate_supplied_workspace_state(fact.state)?;
+    }
+
+    charge_preview_work(&mut work, request.content_facts.len())?;
+    for fact in &request.content_facts {
+        check_preview_cancellation(cancellation, "preview-preflight-content-fact")?;
+        supplied_chunk_references = supplied_chunk_references
+            .checked_add(fact.content.chunks.len())
+            .ok_or_else(|| {
+                error(
+                    CheckpointErrorCode::CountExceeded,
+                    "preview-supplied-chunks",
+                )
+            })?;
+        if supplied_chunk_references > CHUNK_REFERENCES_MAXIMUM {
+            return Err(error(
+                CheckpointErrorCode::CountExceeded,
+                "preview-supplied-chunks",
+            ));
+        }
+    }
+    charge_preview_work(&mut work, supplied_chunk_references)?;
+    // One fold and one output classification for every upper-bound path.
+    charge_preview_work(&mut work, affected_path_occurrences)?;
+    charge_preview_work(&mut work, affected_path_occurrences)?;
+
+    let mut retained_bytes = 0u64;
+    charge_preview_retained_bytes(
+        &mut retained_bytes,
+        u64::try_from(affected_path_occurrences)
+            .map_err(|_| error(CheckpointErrorCode::BytesExceeded, "preview-retained-paths"))?
+            .checked_mul(PREVIEW_RETAINED_PATH_ENTRY_BYTES)
+            .ok_or_else(|| error(CheckpointErrorCode::BytesExceeded, "preview-retained-paths"))?,
+    )?;
+    charge_preview_retained_bytes(
+        &mut retained_bytes,
+        u64::try_from(request.workspace_facts.len())
+            .map_err(|_| {
+                error(
+                    CheckpointErrorCode::BytesExceeded,
+                    "preview-retained-workspace-facts",
+                )
+            })?
+            .checked_mul(PREVIEW_RETAINED_PATH_ENTRY_BYTES)
+            .ok_or_else(|| {
+                error(
+                    CheckpointErrorCode::BytesExceeded,
+                    "preview-retained-workspace-facts",
+                )
+            })?,
+    )?;
+    charge_preview_retained_bytes(
+        &mut retained_bytes,
+        u64::try_from(request.content_facts.len())
+            .map_err(|_| {
+                error(
+                    CheckpointErrorCode::BytesExceeded,
+                    "preview-retained-content-facts",
+                )
+            })?
+            .checked_mul(PREVIEW_RETAINED_CONTENT_FACT_BYTES)
+            .ok_or_else(|| {
+                error(
+                    CheckpointErrorCode::BytesExceeded,
+                    "preview-retained-content-facts",
+                )
+            })?,
+    )?;
+    charge_preview_retained_bytes(&mut retained_bytes, retained_path_projection_bytes)?;
+    Ok(())
+}
+
+fn bind_preview_alias(aliases: &mut BTreeMap<String, String>, key: &str, path: &str) -> Result<()> {
+    if aliases
+        .insert(key.to_owned(), path.to_owned())
+        .is_some_and(|previous| previous != path)
+    {
+        return Err(error(
+            CheckpointErrorCode::OperationInvalid,
+            "preview-path-collision",
+        ));
+    }
+    Ok(())
+}
+
+fn preview_path_sort_key(
+    path: &str,
+    profile: PathProfile,
+    case_mode: CaseMode,
+    repository_aliases: &mut BTreeMap<String, String>,
+    platform_aliases: &mut BTreeMap<String, String>,
+) -> Result<PreviewPathSortKey> {
+    let keys = validate_repository_path(path, profile, case_mode)?;
+    bind_preview_alias(repository_aliases, keys.repository_key().as_str(), path)?;
+    bind_preview_alias(platform_aliases, keys.platform_key(), path)?;
+    Ok((
+        keys.repository_key().as_str().to_owned(),
+        keys.platform_key().to_owned(),
+        path.to_owned(),
+    ))
+}
+
+fn update_framed(writer: &mut Sha256Writer, bytes: &[u8]) -> Result<()> {
+    writer.update(
+        &u64::try_from(bytes.len())
+            .map_err(|_| error(CheckpointErrorCode::BytesExceeded, "preview-digest-frame"))?
+            .to_be_bytes(),
+    );
+    writer.update(bytes);
+    Ok(())
+}
+
+fn content_projection_identity(
+    content: &CanonicalContentBinding,
+) -> Result<PreviewContentIdentity> {
+    let mut writer = Sha256Writer::new();
+    writer.update(CONTENT_PROJECTION_DOMAIN);
+    writer.update(&1u16.to_be_bytes());
+    update_framed(&mut writer, content.manifest.to_string().as_bytes())?;
+    update_framed(&mut writer, &content.whole_file_digest)?;
+    writer.update(&content.logical_length.to_be_bytes());
+    writer.update(
+        &u64::try_from(content.chunks.len())
+            .map_err(|_| error(CheckpointErrorCode::CountExceeded, "preview-content-chunks"))?
+            .to_be_bytes(),
+    );
+    for chunk in &content.chunks {
+        update_framed(&mut writer, chunk.chunk.to_string().as_bytes())?;
+        writer.update(&chunk.logical_length.to_be_bytes());
+    }
+    Ok(PreviewContentIdentity {
+        manifest: content.manifest,
+        whole_file_digest: content.whole_file_digest,
+        logical_length: content.logical_length,
+        projection_sha256: writer.finish(),
+    })
+}
+
+impl PreviewEffectAccumulator {
+    fn insert(
+        &mut self,
+        operation: &CheckpointOperation,
+        path: &str,
+        content: Option<&CanonicalContentBinding>,
+    ) -> Result<()> {
+        let key = preview_path_sort_key(
+            path,
+            self.profile,
+            self.case_mode,
+            &mut self.repository_aliases,
+            &mut self.platform_aliases,
+        )?;
+        let content = content.map(content_projection_identity).transpose()?;
+        if let Some(effect) = self.effects.get_mut(&key) {
+            effect.last_ordinal = operation.ordinal;
+            effect.touch_count = effect.touch_count.checked_add(1).ok_or_else(|| {
+                error(
+                    CheckpointErrorCode::CountExceeded,
+                    "preview-path-touch-count",
+                )
+            })?;
+            effect.file_id = operation.file_id;
+            effect.content = content;
+            effect.content_ordinal = content.map(|_| operation.ordinal);
+        } else {
+            self.effects.insert(
+                key,
+                DesiredPreviewEffect {
+                    path: path.to_owned(),
+                    first_ordinal: operation.ordinal,
+                    last_ordinal: operation.ordinal,
+                    touch_count: 1,
+                    file_id: operation.file_id,
+                    content,
+                    content_ordinal: content.map(|_| operation.ordinal),
+                },
+            );
+        }
+        Ok(())
+    }
+}
+
+fn fold_selected_record_effects(
+    checkpoint: &Checkpoint,
+    cancellation: &dyn PreviewCancellation,
+) -> Result<BTreeMap<PreviewPathSortKey, DesiredPreviewEffect>> {
+    let profile = PathProfile::parse(&checkpoint.bindings.path_profile)
+        .map_err(|_| error(CheckpointErrorCode::BindingInvalid, "preview-path-profile"))?;
+    let mut accumulator = PreviewEffectAccumulator {
+        profile,
+        case_mode: checkpoint.bindings.case_mode,
+        effects: BTreeMap::new(),
+        repository_aliases: BTreeMap::new(),
+        platform_aliases: BTreeMap::new(),
+    };
+    for operation in &checkpoint.operations {
+        check_preview_cancellation(cancellation, "preview-fold-operation")?;
+        match operation.kind {
+            OperationKind::Add | OperationKind::Modify | OperationKind::Copy => {
+                accumulator.insert(
+                    operation,
+                    operation.destination_path.as_deref().ok_or_else(|| {
+                        error(CheckpointErrorCode::OperationInvalid, "preview-destination")
+                    })?,
+                    operation.content.as_ref(),
+                )?;
+            }
+            OperationKind::Move => {
+                accumulator.insert(
+                    operation,
+                    operation.source_path.as_deref().ok_or_else(|| {
+                        error(CheckpointErrorCode::OperationInvalid, "preview-move-source")
+                    })?,
+                    None,
+                )?;
+                accumulator.insert(
+                    operation,
+                    operation.destination_path.as_deref().ok_or_else(|| {
+                        error(
+                            CheckpointErrorCode::OperationInvalid,
+                            "preview-move-destination",
+                        )
+                    })?,
+                    operation.content.as_ref(),
+                )?;
+            }
+            OperationKind::Delete => {
+                accumulator.insert(
+                    operation,
+                    operation.source_path.as_deref().ok_or_else(|| {
+                        error(
+                            CheckpointErrorCode::OperationInvalid,
+                            "preview-delete-source",
+                        )
+                    })?,
+                    None,
+                )?;
+            }
+        }
+    }
+    Ok(accumulator.effects)
+}
+
+fn bind_supplied_workspace_facts<'a>(
+    bindings: &CheckpointBindings,
+    effects: &BTreeMap<PreviewPathSortKey, DesiredPreviewEffect>,
+    facts: &'a [SuppliedWorkspacePathFact],
+    cancellation: &dyn PreviewCancellation,
+) -> Result<BTreeMap<PreviewPathSortKey, &'a SuppliedWorkspacePathFact>> {
+    let profile = PathProfile::parse(&bindings.path_profile)
+        .map_err(|_| error(CheckpointErrorCode::BindingInvalid, "preview-path-profile"))?;
+    let mut repository_aliases = BTreeMap::new();
+    let mut platform_aliases = BTreeMap::new();
+    let mut bound = BTreeMap::new();
+    for fact in facts {
+        check_preview_cancellation(cancellation, "preview-bind-workspace-fact")?;
+        let key = preview_path_sort_key(
+            &fact.path,
+            profile,
+            bindings.case_mode,
+            &mut repository_aliases,
+            &mut platform_aliases,
+        )?;
+        if !effects.contains_key(&key) || bound.insert(key, fact).is_some() {
+            return Err(error(
+                CheckpointErrorCode::InputInvalid,
+                "preview-workspace-fact-set",
+            ));
+        }
+    }
+    if bound.len() != effects.len() || effects.keys().any(|key| !bound.contains_key(key)) {
+        return Err(error(
+            CheckpointErrorCode::InputInvalid,
+            "preview-workspace-fact-set",
+        ));
+    }
+    Ok(bound)
+}
+
+fn bind_supplied_content_facts<'a>(
+    checkpoint: &Checkpoint,
+    effects: &BTreeMap<PreviewPathSortKey, DesiredPreviewEffect>,
+    facts: &'a [SuppliedCheckpointContentFact],
+    cancellation: &dyn PreviewCancellation,
+) -> Result<BTreeMap<u32, &'a SuppliedCheckpointContentFact>> {
+    let mut expected = BTreeMap::new();
+    for effect in effects.values() {
+        if let Some(ordinal) = effect.content_ordinal {
+            if expected.insert(ordinal, effect).is_some() {
+                return Err(error(
+                    CheckpointErrorCode::OperationInvalid,
+                    "preview-content-ordinal",
+                ));
+            }
+        }
+    }
+    let mut bound = BTreeMap::new();
+    for fact in facts {
+        check_preview_cancellation(cancellation, "preview-bind-content-fact")?;
+        if !expected.contains_key(&fact.operation_ordinal)
+            || bound.insert(fact.operation_ordinal, fact).is_some()
+        {
+            return Err(error(
+                CheckpointErrorCode::InputInvalid,
+                "preview-content-fact-set",
+            ));
+        }
+    }
+    if bound.len() != expected.len() {
+        return Err(error(
+            CheckpointErrorCode::InputInvalid,
+            "preview-content-fact-set",
+        ));
+    }
+    for (ordinal, effect) in expected {
+        let fact = bound.get(&ordinal).ok_or_else(|| {
+            error(
+                CheckpointErrorCode::InputInvalid,
+                "preview-content-fact-set",
+            )
+        })?;
+        let operation = checkpoint
+            .operations
+            .get(usize::try_from(ordinal).map_err(|_| {
+                error(
+                    CheckpointErrorCode::OperationInvalid,
+                    "preview-content-ordinal",
+                )
+            })?)
+            .ok_or_else(|| {
+                error(
+                    CheckpointErrorCode::OperationInvalid,
+                    "preview-content-ordinal",
+                )
+            })?;
+        if operation.ordinal != ordinal
+            || fact.file_id != effect.file_id
+            || fact.file_id != operation.file_id
+            || operation.content.as_ref() != Some(&fact.content)
+            || effect.content != Some(content_projection_identity(&fact.content)?)
+        {
+            return Err(error(
+                CheckpointErrorCode::BindingInvalid,
+                "preview-content-fact-binding",
+            ));
+        }
+    }
+    Ok(bound)
+}
+
+fn classify_preview_workspace_impact(
+    current: SuppliedWorkspacePathState,
+    target_file_id: FileId,
+    desired: PreviewDesiredState,
+    replacement_intent: PreviewReplacementIntent,
+) -> PreviewWorkspaceImpact {
+    match (current, desired) {
+        (SuppliedWorkspacePathState::Absent, PreviewDesiredState::Absent) => {
+            PreviewWorkspaceImpact::AlreadyMatches
+        }
+        (SuppliedWorkspacePathState::Absent, PreviewDesiredState::Content(_)) => {
+            PreviewWorkspaceImpact::WouldCreate
+        }
+        (SuppliedWorkspacePathState::RegularFile { .. }, PreviewDesiredState::Absent) => {
+            match replacement_intent {
+                PreviewReplacementIntent::PreserveCurrentWorkspace => {
+                    PreviewWorkspaceImpact::RemovalProtected
+                }
+                PreviewReplacementIntent::ReplaceRecordedPaths => {
+                    PreviewWorkspaceImpact::RemovalIntended
+                }
+            }
+        }
+        (
+            SuppliedWorkspacePathState::RegularFile {
+                file_id,
+                whole_file_digest,
+                logical_length,
+            },
+            PreviewDesiredState::Content(content),
+        ) if file_id == target_file_id
+            && whole_file_digest == content.whole_file_digest
+            && logical_length == content.logical_length =>
+        {
+            PreviewWorkspaceImpact::AlreadyMatches
+        }
+        (SuppliedWorkspacePathState::RegularFile { .. }, PreviewDesiredState::Content(_)) => {
+            match replacement_intent {
+                PreviewReplacementIntent::PreserveCurrentWorkspace => {
+                    PreviewWorkspaceImpact::ReplacementProtected
+                }
+                PreviewReplacementIntent::ReplaceRecordedPaths => {
+                    PreviewWorkspaceImpact::ReplacementIntended
+                }
+            }
+        }
+        (
+            SuppliedWorkspacePathState::Directory
+            | SuppliedWorkspacePathState::SymlinkOrReparse
+            | SuppliedWorkspacePathState::Inaccessible
+            | SuppliedWorkspacePathState::Unknown,
+            _,
+        ) => PreviewWorkspaceImpact::Obstructed,
+    }
+}
+
+fn update_object_ref(writer: &mut Sha256Writer, value: ObjectRef) -> Result<()> {
+    update_framed(writer, value.to_string().as_bytes())
+}
+
+fn update_content_identity(
+    writer: &mut Sha256Writer,
+    identity: PreviewContentIdentity,
+) -> Result<()> {
+    update_object_ref(writer, identity.manifest)?;
+    update_framed(writer, &identity.whole_file_digest)?;
+    writer.update(&identity.logical_length.to_be_bytes());
+    update_framed(writer, &identity.projection_sha256)
+}
+
+fn update_supplied_workspace_state(
+    writer: &mut Sha256Writer,
+    state: SuppliedWorkspacePathState,
+) -> Result<()> {
+    match state {
+        SuppliedWorkspacePathState::Absent => writer.update(&[0]),
+        SuppliedWorkspacePathState::RegularFile {
+            file_id,
+            whole_file_digest,
+            logical_length,
+        } => {
+            writer.update(&[1]);
+            update_framed(writer, file_id.as_bytes())?;
+            update_framed(writer, &whole_file_digest)?;
+            writer.update(&logical_length.to_be_bytes());
+        }
+        SuppliedWorkspacePathState::Directory => writer.update(&[2]),
+        SuppliedWorkspacePathState::SymlinkOrReparse => writer.update(&[3]),
+        SuppliedWorkspacePathState::Inaccessible => writer.update(&[4]),
+        SuppliedWorkspacePathState::Unknown => writer.update(&[5]),
+    }
+    Ok(())
+}
+
+fn application_preview_digest(
+    loaded: &LoadedCheckpoint,
+    chain_depth: usize,
+    request: &CheckpointApplicationPreviewRequest,
+    workspace_facts: &BTreeMap<PreviewPathSortKey, &SuppliedWorkspacePathFact>,
+    content_facts: &BTreeMap<u32, &SuppliedCheckpointContentFact>,
+    items: &[CheckpointApplicationPreviewItem],
+) -> Result<[u8; 32]> {
+    let mut writer = Sha256Writer::new();
+    writer.update(APPLICATION_PREVIEW_DOMAIN);
+    writer.update(&1u16.to_be_bytes());
+    update_framed(&mut writer, APPLICATION_PREVIEW_SCHEMA.as_bytes())?;
+    update_framed(&mut writer, loaded.checkpoint.id.digest())?;
+    update_framed(&mut writer, &loaded.record_sha256)?;
+    update_object_ref(&mut writer, loaded.checkpoint.bindings.repository)?;
+    update_object_ref(&mut writer, loaded.checkpoint.bindings.base_snapshot)?;
+    update_framed(&mut writer, &loaded.checkpoint.bindings.workspace_id)?;
+    update_framed(&mut writer, &loaded.checkpoint.bindings.spec_digest)?;
+    update_framed(
+        &mut writer,
+        loaded.checkpoint.bindings.path_profile.as_bytes(),
+    )?;
+    update_framed(
+        &mut writer,
+        loaded.checkpoint.bindings.case_mode.as_str().as_bytes(),
+    )?;
+    writer.update(
+        &u64::try_from(chain_depth)
+            .map_err(|_| error(CheckpointErrorCode::CountExceeded, "preview-chain-depth"))?
+            .to_be_bytes(),
+    );
+    writer.update(
+        &u64::try_from(loaded.checkpoint.operations.len())
+            .map_err(|_| {
+                error(
+                    CheckpointErrorCode::CountExceeded,
+                    "preview-operation-count",
+                )
+            })?
+            .to_be_bytes(),
+    );
+    update_framed(&mut writer, request.replacement_intent.as_str().as_bytes())?;
+    update_framed(&mut writer, LOCK_AUTHORITY_STATE.as_bytes())?;
+
+    writer.update(
+        &u64::try_from(workspace_facts.len())
+            .map_err(|_| {
+                error(
+                    CheckpointErrorCode::CountExceeded,
+                    "preview-workspace-facts",
+                )
+            })?
+            .to_be_bytes(),
+    );
+    for (sort_key, fact) in workspace_facts {
+        update_framed(&mut writer, sort_key.0.as_bytes())?;
+        update_framed(&mut writer, sort_key.1.as_bytes())?;
+        update_framed(&mut writer, fact.path.as_bytes())?;
+        update_supplied_workspace_state(&mut writer, fact.state)?;
+    }
+
+    writer.update(
+        &u64::try_from(content_facts.len())
+            .map_err(|_| error(CheckpointErrorCode::CountExceeded, "preview-content-facts"))?
+            .to_be_bytes(),
+    );
+    for (ordinal, fact) in content_facts {
+        writer.update(&ordinal.to_be_bytes());
+        update_framed(&mut writer, fact.file_id.as_bytes())?;
+        update_content_identity(&mut writer, content_projection_identity(&fact.content)?)?;
+        writer.update(&[match fact.availability {
+            SuppliedContentAvailability::AvailableUnverified => 0,
+            SuppliedContentAvailability::Unavailable => 1,
+        }]);
+    }
+
+    writer.update(
+        &u64::try_from(items.len())
+            .map_err(|_| error(CheckpointErrorCode::CountExceeded, "preview-items"))?
+            .to_be_bytes(),
+    );
+    for item in items {
+        update_framed(&mut writer, item.path.as_bytes())?;
+        update_framed(&mut writer, item.repository_path_key.as_bytes())?;
+        update_framed(&mut writer, item.platform_path_key.as_bytes())?;
+        writer.update(&item.first_operation_ordinal.to_be_bytes());
+        writer.update(&item.last_operation_ordinal.to_be_bytes());
+        writer.update(&item.operation_touch_count.to_be_bytes());
+        update_framed(&mut writer, item.file_id.as_bytes())?;
+        match item.desired {
+            PreviewDesiredState::Absent => writer.update(&[0]),
+            PreviewDesiredState::Content(identity) => {
+                writer.update(&[1]);
+                update_content_identity(&mut writer, identity)?;
+            }
+        }
+        writer.update(&[match item.workspace_impact {
+            PreviewWorkspaceImpact::AlreadyMatches => 0,
+            PreviewWorkspaceImpact::WouldCreate => 1,
+            PreviewWorkspaceImpact::ReplacementProtected => 2,
+            PreviewWorkspaceImpact::ReplacementIntended => 3,
+            PreviewWorkspaceImpact::RemovalProtected => 4,
+            PreviewWorkspaceImpact::RemovalIntended => 5,
+            PreviewWorkspaceImpact::Obstructed => 6,
+        }]);
+        writer.update(&[u8::from(item.blocked)]);
+    }
+    Ok(writer.finish())
 }
 
 fn validate_request(request: &CheckpointCreateRequest) -> Result<()> {
@@ -2228,6 +3420,84 @@ mod tests {
         checkpoint_id(&canonical_json(&record).unwrap())
     }
 
+    fn preview_request(
+        checkpoint: &Checkpoint,
+        replacement_intent: PreviewReplacementIntent,
+    ) -> CheckpointApplicationPreviewRequest {
+        let effects = fold_selected_record_effects(checkpoint, &NeverCancelledPreview).unwrap();
+        let workspace_facts = effects
+            .values()
+            .map(|effect| SuppliedWorkspacePathFact {
+                path: effect.path.clone(),
+                state: SuppliedWorkspacePathState::Absent,
+            })
+            .collect();
+        let content_facts = effects
+            .values()
+            .filter_map(|effect| {
+                let ordinal = effect.content_ordinal?;
+                let operation = &checkpoint.operations[ordinal as usize];
+                Some(SuppliedCheckpointContentFact {
+                    operation_ordinal: ordinal,
+                    file_id: operation.file_id,
+                    content: operation.content.clone().unwrap(),
+                    availability: SuppliedContentAvailability::AvailableUnverified,
+                })
+            })
+            .collect();
+        CheckpointApplicationPreviewRequest {
+            checkpoint_id: checkpoint.id,
+            bindings: checkpoint.bindings.clone(),
+            workspace_facts,
+            content_facts,
+            replacement_intent,
+        }
+    }
+
+    fn operation(
+        ordinal: u32,
+        kind: OperationKind,
+        id: FileId,
+        source: Option<&str>,
+        destination: Option<&str>,
+        value: Option<CanonicalContentBinding>,
+    ) -> CheckpointOperation {
+        CheckpointOperation {
+            ordinal,
+            kind,
+            file_id: id,
+            source_path: source.map(str::to_owned),
+            destination_path: destination.map(str::to_owned),
+            content: value,
+        }
+    }
+
+    fn create_with_operations(
+        store: &CheckpointStore,
+        checkpoint_bindings: CheckpointBindings,
+        operations: Vec<CheckpointOperation>,
+        seed: u8,
+    ) -> Checkpoint {
+        let mut value = request(None, checkpoint_bindings, seed);
+        value.operations = operations;
+        store.create(&value, PublicationControl::default()).unwrap()
+    }
+
+    struct CancelAtPhase(&'static str);
+
+    impl PreviewCancellation for CancelAtPhase {
+        fn is_cancelled(&self, phase: &'static str) -> bool {
+            phase == self.0
+        }
+    }
+
+    fn preview_item<'a>(
+        preview: &'a CheckpointApplicationPreview,
+        path: &str,
+    ) -> &'a CheckpointApplicationPreviewItem {
+        preview.items.iter().find(|item| item.path == path).unwrap()
+    }
+
     fn all_boundaries() -> [PublicationBoundary; 7] {
         [
             PublicationBoundary::EntryDirectorySynced,
@@ -2269,6 +3539,650 @@ mod tests {
             .recover_incomplete(PublicationControl::default())
             .unwrap()
             .is_empty());
+    }
+
+    #[test]
+    fn application_preview_is_deterministic_read_only_and_exactly_bound() {
+        let workspace = TestWorkspace::new("preview-deterministic");
+        let sentinel = workspace.path.join("newer-uncheckpointed.bin");
+        fs::write(&sentinel, b"preserve-newer-work").unwrap();
+        let store = workspace.store();
+        let parent = store
+            .create(
+                &request(None, bindings(90), 90),
+                PublicationControl::default(),
+            )
+            .unwrap();
+        let mut child_request = request(Some(parent.id), parent.bindings.clone(), 91);
+        child_request.operations = vec![
+            operation(
+                0,
+                OperationKind::Add,
+                file_id(91),
+                None,
+                Some("Content/zeta.bin"),
+                Some(content(91)),
+            ),
+            operation(
+                1,
+                OperationKind::Add,
+                file_id(92),
+                None,
+                Some("Content/alpha.bin"),
+                Some(content(100)),
+            ),
+        ];
+        let child = store
+            .create(&child_request, PublicationControl::default())
+            .unwrap();
+        let mut supplied =
+            preview_request(&child, PreviewReplacementIntent::PreserveCurrentWorkspace);
+        supplied.workspace_facts.reverse();
+        supplied.content_facts.reverse();
+        let first = store
+            .preview_checkpoint_application(&supplied, &NeverCancelledPreview)
+            .unwrap();
+        supplied.workspace_facts.reverse();
+        supplied.content_facts.reverse();
+        let reordered = store
+            .preview_checkpoint_application(&supplied, &NeverCancelledPreview)
+            .unwrap();
+
+        assert_eq!(first, reordered);
+        assert_eq!(first.schema, APPLICATION_PREVIEW_SCHEMA);
+        assert_eq!(first.verified_chain_depth, 2);
+        assert_eq!(first.selected_record_operation_count, 2);
+        assert_eq!(first.items.len(), 2);
+        let mut paths = first
+            .items
+            .iter()
+            .map(|item| item.path.as_str())
+            .collect::<Vec<_>>();
+        paths.sort_unstable();
+        assert_eq!(paths, vec!["Content/alpha.bin", "Content/zeta.bin"]);
+        assert!(first.items.iter().all(|item| {
+            item.workspace_impact == PreviewWorkspaceImpact::WouldCreate
+                && !item.blocked
+                && !item.repository_path_key.is_empty()
+                && !item.platform_path_key.is_empty()
+                && item.supplied_content_availability
+                    == Some(SuppliedContentAvailability::AvailableUnverified)
+        }));
+        assert!(!first.has_blocking_observation);
+        assert_eq!(
+            first.lock_authority,
+            LockAuthorityState::HistoricalUntrustedExclusivityUnverified
+        );
+        assert!(!first.historical_lock_receipts_considered);
+        assert_eq!(
+            encode_hex(&first.preview_sha256),
+            "d9cd72cba7f1d60e1d8e56b361d75f23b2c009e6b4c480333881fd0b78cff341"
+        );
+
+        let mut replacement = supplied.clone();
+        replacement.replacement_intent = PreviewReplacementIntent::ReplaceRecordedPaths;
+        let replacement = store
+            .preview_checkpoint_application(&replacement, &NeverCancelledPreview)
+            .unwrap();
+        assert_ne!(replacement.preview_sha256, first.preview_sha256);
+        assert_eq!(replacement.items, first.items);
+        assert_eq!(fs::read(&sentinel).unwrap(), b"preserve-newer-work");
+    }
+
+    #[test]
+    fn replacement_intent_never_bypasses_obstruction_or_unavailable_content() {
+        let workspace = TestWorkspace::new("preview-obstruction");
+        let sentinel = workspace.path.join("newer-uncheckpointed.bin");
+        fs::write(&sentinel, b"do-not-overwrite").unwrap();
+        let store = workspace.store();
+        let checkpoint = create_with_operations(
+            &store,
+            bindings(100),
+            vec![
+                operation(
+                    0,
+                    OperationKind::Add,
+                    file_id(1),
+                    None,
+                    Some("Content/replace.bin"),
+                    Some(content(10)),
+                ),
+                operation(
+                    1,
+                    OperationKind::Delete,
+                    file_id(2),
+                    Some("Content/remove.bin"),
+                    None,
+                    None,
+                ),
+                operation(
+                    2,
+                    OperationKind::Add,
+                    file_id(3),
+                    None,
+                    Some("Content/directory.bin"),
+                    Some(content(20)),
+                ),
+                operation(
+                    3,
+                    OperationKind::Add,
+                    file_id(4),
+                    None,
+                    Some("Content/link.bin"),
+                    Some(content(30)),
+                ),
+                operation(
+                    4,
+                    OperationKind::Add,
+                    file_id(5),
+                    None,
+                    Some("Content/inaccessible.bin"),
+                    Some(content(40)),
+                ),
+                operation(
+                    5,
+                    OperationKind::Add,
+                    file_id(6),
+                    None,
+                    Some("Content/unknown.bin"),
+                    Some(content(50)),
+                ),
+                operation(
+                    6,
+                    OperationKind::Add,
+                    file_id(7),
+                    None,
+                    Some("Content/unavailable.bin"),
+                    Some(content(60)),
+                ),
+            ],
+            100,
+        );
+        let mut supplied = preview_request(
+            &checkpoint,
+            PreviewReplacementIntent::PreserveCurrentWorkspace,
+        );
+        for fact in &mut supplied.workspace_facts {
+            fact.state = match fact.path.as_str() {
+                "Content/replace.bin" | "Content/remove.bin" => {
+                    SuppliedWorkspacePathState::RegularFile {
+                        file_id: file_id(120),
+                        whole_file_digest: [0xee; 32],
+                        logical_length: 9,
+                    }
+                }
+                "Content/directory.bin" => SuppliedWorkspacePathState::Directory,
+                "Content/link.bin" => SuppliedWorkspacePathState::SymlinkOrReparse,
+                "Content/inaccessible.bin" => SuppliedWorkspacePathState::Inaccessible,
+                "Content/unknown.bin" => SuppliedWorkspacePathState::Unknown,
+                "Content/unavailable.bin" => SuppliedWorkspacePathState::Absent,
+                _ => panic!("unexpected preview path"),
+            };
+        }
+        supplied
+            .content_facts
+            .iter_mut()
+            .find(|fact| fact.operation_ordinal == 6)
+            .unwrap()
+            .availability = SuppliedContentAvailability::Unavailable;
+
+        let preserve = store
+            .preview_checkpoint_application(&supplied, &NeverCancelledPreview)
+            .unwrap();
+        assert_eq!(
+            preview_item(&preserve, "Content/replace.bin").workspace_impact,
+            PreviewWorkspaceImpact::ReplacementProtected
+        );
+        assert_eq!(
+            preview_item(&preserve, "Content/remove.bin").workspace_impact,
+            PreviewWorkspaceImpact::RemovalProtected
+        );
+        assert!(preserve.has_blocking_observation);
+
+        supplied.replacement_intent = PreviewReplacementIntent::ReplaceRecordedPaths;
+        let replace = store
+            .preview_checkpoint_application(&supplied, &NeverCancelledPreview)
+            .unwrap();
+        assert_eq!(
+            preview_item(&replace, "Content/replace.bin").workspace_impact,
+            PreviewWorkspaceImpact::ReplacementIntended
+        );
+        assert!(!preview_item(&replace, "Content/replace.bin").blocked);
+        assert_eq!(
+            preview_item(&replace, "Content/remove.bin").workspace_impact,
+            PreviewWorkspaceImpact::RemovalIntended
+        );
+        assert!(!preview_item(&replace, "Content/remove.bin").blocked);
+        for path in [
+            "Content/directory.bin",
+            "Content/link.bin",
+            "Content/inaccessible.bin",
+            "Content/unknown.bin",
+        ] {
+            assert_eq!(
+                preview_item(&replace, path).workspace_impact,
+                PreviewWorkspaceImpact::Obstructed
+            );
+            assert!(preview_item(&replace, path).blocked);
+        }
+        let unavailable = preview_item(&replace, "Content/unavailable.bin");
+        assert_eq!(
+            unavailable.supplied_content_availability,
+            Some(SuppliedContentAvailability::Unavailable)
+        );
+        assert!(unavailable.blocked);
+        assert!(replace.has_blocking_observation);
+        assert_eq!(fs::read(&sentinel).unwrap(), b"do-not-overwrite");
+    }
+
+    #[test]
+    fn preview_rejects_binding_path_file_id_content_and_case_substitution() {
+        let workspace = TestWorkspace::new("preview-substitution");
+        let store = workspace.store();
+        let checkpoint = store
+            .create(
+                &request(None, bindings(110), 110),
+                PublicationControl::default(),
+            )
+            .unwrap();
+        let supplied = preview_request(
+            &checkpoint,
+            PreviewReplacementIntent::PreserveCurrentWorkspace,
+        );
+
+        let binding_substitutions = [
+            {
+                let mut value = supplied.clone();
+                value.bindings.repository = object(ObjectKind::RepositoryDescriptor, 0xfd);
+                value
+            },
+            {
+                let mut value = supplied.clone();
+                value.bindings.base_snapshot = object(ObjectKind::Snapshot, 0xfe);
+                value
+            },
+            {
+                let mut value = supplied.clone();
+                value.bindings.workspace_id = [0xfc; 32];
+                value
+            },
+            {
+                let mut value = supplied.clone();
+                value.bindings.spec_digest = [0xfb; 32];
+                value
+            },
+            {
+                let mut value = supplied.clone();
+                value.bindings.path_profile = "path.opengamevcs/macos@1".to_owned();
+                value
+            },
+            {
+                let mut value = supplied.clone();
+                value.bindings.case_mode = CaseMode::Folded;
+                value
+            },
+        ];
+        for binding_substitution in &binding_substitutions {
+            assert_eq!(
+                store
+                    .preview_checkpoint_application(binding_substitution, &NeverCancelledPreview,)
+                    .unwrap_err()
+                    .code(),
+                CheckpointErrorCode::BindingInvalid
+            );
+        }
+        let mut workspace_substitution = supplied.clone();
+        workspace_substitution.workspace_facts[0].path = "Content/substituted.bin".to_owned();
+        assert_eq!(
+            store
+                .preview_checkpoint_application(&workspace_substitution, &NeverCancelledPreview,)
+                .unwrap_err()
+                .code(),
+            CheckpointErrorCode::InputInvalid
+        );
+        let mut missing_workspace_fact = supplied.clone();
+        missing_workspace_fact.workspace_facts.clear();
+        assert_eq!(
+            store
+                .preview_checkpoint_application(&missing_workspace_fact, &NeverCancelledPreview,)
+                .unwrap_err()
+                .code(),
+            CheckpointErrorCode::InputInvalid
+        );
+        let mut extra_workspace_fact = supplied.clone();
+        extra_workspace_fact
+            .workspace_facts
+            .push(SuppliedWorkspacePathFact {
+                path: "Content/extra.bin".to_owned(),
+                state: SuppliedWorkspacePathState::Absent,
+            });
+        assert_eq!(
+            store
+                .preview_checkpoint_application(&extra_workspace_fact, &NeverCancelledPreview,)
+                .unwrap_err()
+                .code(),
+            CheckpointErrorCode::InputInvalid
+        );
+        let mut ordinal_substitution = supplied.clone();
+        ordinal_substitution.content_facts[0].operation_ordinal = 99;
+        assert_eq!(
+            store
+                .preview_checkpoint_application(&ordinal_substitution, &NeverCancelledPreview,)
+                .unwrap_err()
+                .code(),
+            CheckpointErrorCode::InputInvalid
+        );
+        let mut file_id_substitution = supplied.clone();
+        file_id_substitution.content_facts[0].file_id = file_id(111);
+        assert_eq!(
+            store
+                .preview_checkpoint_application(&file_id_substitution, &NeverCancelledPreview,)
+                .unwrap_err()
+                .code(),
+            CheckpointErrorCode::BindingInvalid
+        );
+        let mut content_substitution = supplied.clone();
+        content_substitution.content_facts[0]
+            .content
+            .whole_file_digest = [0xdd; 32];
+        assert_eq!(
+            store
+                .preview_checkpoint_application(&content_substitution, &NeverCancelledPreview)
+                .unwrap_err()
+                .code(),
+            CheckpointErrorCode::BindingInvalid
+        );
+        let mut missing_content_fact = supplied.clone();
+        missing_content_fact.content_facts.clear();
+        assert_eq!(
+            store
+                .preview_checkpoint_application(&missing_content_fact, &NeverCancelledPreview,)
+                .unwrap_err()
+                .code(),
+            CheckpointErrorCode::InputInvalid
+        );
+        let original = store
+            .preview_checkpoint_application(&supplied, &NeverCancelledPreview)
+            .unwrap();
+        let mut current_state_substitution = supplied.clone();
+        current_state_substitution.workspace_facts[0].state = SuppliedWorkspacePathState::Unknown;
+        let current_state_substitution = store
+            .preview_checkpoint_application(&current_state_substitution, &NeverCancelledPreview)
+            .unwrap();
+        assert_ne!(
+            original.preview_sha256,
+            current_state_substitution.preview_sha256
+        );
+        assert!(current_state_substitution.has_blocking_observation);
+        let mut unavailable = supplied.clone();
+        unavailable.content_facts[0].availability = SuppliedContentAvailability::Unavailable;
+        let unavailable = store
+            .preview_checkpoint_application(&unavailable, &NeverCancelledPreview)
+            .unwrap();
+        assert_ne!(original.preview_sha256, unavailable.preview_sha256);
+        assert!(unavailable.has_blocking_observation);
+
+        let mut folded_bindings = bindings(112);
+        folded_bindings.path_profile = "path.opengamevcs/windows@1".to_owned();
+        folded_bindings.case_mode = CaseMode::Folded;
+        let collision = create_with_operations(
+            &store,
+            folded_bindings.clone(),
+            vec![
+                operation(
+                    0,
+                    OperationKind::Add,
+                    file_id(1),
+                    None,
+                    Some("Content/Foo.bin"),
+                    Some(content(112)),
+                ),
+                operation(
+                    1,
+                    OperationKind::Add,
+                    file_id(2),
+                    None,
+                    Some("Content/foo.bin"),
+                    Some(content(120)),
+                ),
+            ],
+            112,
+        );
+        let collision_request = CheckpointApplicationPreviewRequest {
+            checkpoint_id: collision.id,
+            bindings: folded_bindings,
+            workspace_facts: Vec::new(),
+            content_facts: Vec::new(),
+            replacement_intent: PreviewReplacementIntent::PreserveCurrentWorkspace,
+        };
+        assert_eq!(
+            store
+                .preview_checkpoint_application(&collision_request, &NeverCancelledPreview)
+                .unwrap_err()
+                .code(),
+            CheckpointErrorCode::OperationInvalid
+        );
+    }
+
+    #[test]
+    fn preview_folds_copy_move_and_repeated_touch_to_final_record_effect() {
+        let workspace = TestWorkspace::new("preview-fold");
+        let store = workspace.store();
+        let checkpoint = create_with_operations(
+            &store,
+            bindings(120),
+            vec![
+                operation(
+                    0,
+                    OperationKind::Add,
+                    file_id(1),
+                    None,
+                    Some("Content/a.bin"),
+                    Some(content(80)),
+                ),
+                operation(
+                    1,
+                    OperationKind::Modify,
+                    file_id(1),
+                    Some("Content/a.bin"),
+                    Some("Content/a.bin"),
+                    Some(content(90)),
+                ),
+                operation(
+                    2,
+                    OperationKind::Copy,
+                    file_id(2),
+                    Some("Content/a.bin"),
+                    Some("Content/b.bin"),
+                    Some(content(100)),
+                ),
+                operation(
+                    3,
+                    OperationKind::Move,
+                    file_id(1),
+                    Some("Content/a.bin"),
+                    Some("Content/c.bin"),
+                    Some(content(110)),
+                ),
+            ],
+            120,
+        );
+        let mut supplied =
+            preview_request(&checkpoint, PreviewReplacementIntent::ReplaceRecordedPaths);
+        supplied
+            .workspace_facts
+            .iter_mut()
+            .find(|fact| fact.path == "Content/a.bin")
+            .unwrap()
+            .state = SuppliedWorkspacePathState::RegularFile {
+            file_id: file_id(1),
+            whole_file_digest: content(90).whole_file_digest,
+            logical_length: content(90).logical_length,
+        };
+        let preview = store
+            .preview_checkpoint_application(&supplied, &NeverCancelledPreview)
+            .unwrap();
+        assert_eq!(
+            preview
+                .items
+                .iter()
+                .map(|item| item.path.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Content/a.bin", "Content/b.bin", "Content/c.bin"]
+        );
+        let source = &preview.items[0];
+        assert_eq!(source.first_operation_ordinal, 0);
+        assert_eq!(source.last_operation_ordinal, 3);
+        assert_eq!(source.operation_touch_count, 3);
+        assert_eq!(source.desired, PreviewDesiredState::Absent);
+        assert_eq!(
+            source.workspace_impact,
+            PreviewWorkspaceImpact::RemovalIntended
+        );
+        assert_eq!(
+            supplied
+                .content_facts
+                .iter()
+                .map(|fact| fact.operation_ordinal)
+                .collect::<Vec<_>>(),
+            vec![2, 3]
+        );
+        let mut intermediate = supplied;
+        intermediate
+            .content_facts
+            .push(SuppliedCheckpointContentFact {
+                operation_ordinal: 1,
+                file_id: file_id(1),
+                content: content(90),
+                availability: SuppliedContentAvailability::AvailableUnverified,
+            });
+        assert_eq!(
+            store
+                .preview_checkpoint_application(&intermediate, &NeverCancelledPreview)
+                .unwrap_err()
+                .code(),
+            CheckpointErrorCode::InputInvalid
+        );
+    }
+
+    #[test]
+    fn preview_count_byte_work_memory_and_cancellation_bounds_are_exact() {
+        let mut work = PREVIEW_WORK_UNITS_MAXIMUM - 1;
+        charge_preview_work(&mut work, 1).unwrap();
+        assert_eq!(work, PREVIEW_WORK_UNITS_MAXIMUM);
+        assert_eq!(
+            charge_preview_work(&mut work, 1).unwrap_err().code(),
+            CheckpointErrorCode::CountExceeded
+        );
+        let mut path_bytes = PREVIEW_PATH_BYTES_MAXIMUM - 1;
+        charge_preview_path_bytes(&mut path_bytes, 1).unwrap();
+        assert_eq!(path_bytes, PREVIEW_PATH_BYTES_MAXIMUM);
+        assert_eq!(
+            charge_preview_path_bytes(&mut path_bytes, 1)
+                .unwrap_err()
+                .code(),
+            CheckpointErrorCode::BytesExceeded
+        );
+        let mut chain_record_bytes = PREVIEW_CHAIN_RECORD_BYTES_MAXIMUM - 1;
+        charge_preview_chain_record_bytes(&mut chain_record_bytes, 1).unwrap();
+        assert_eq!(chain_record_bytes, PREVIEW_CHAIN_RECORD_BYTES_MAXIMUM);
+        assert_eq!(
+            charge_preview_chain_record_bytes(&mut chain_record_bytes, 1)
+                .unwrap_err()
+                .code(),
+            CheckpointErrorCode::BytesExceeded
+        );
+        let mut chain_operations = PREVIEW_CHAIN_OPERATIONS_MAXIMUM - 1;
+        charge_preview_chain_operations(&mut chain_operations, 1).unwrap();
+        assert_eq!(chain_operations, PREVIEW_CHAIN_OPERATIONS_MAXIMUM);
+        assert_eq!(
+            charge_preview_chain_operations(&mut chain_operations, 1)
+                .unwrap_err()
+                .code(),
+            CheckpointErrorCode::CountExceeded
+        );
+        let mut retained = PREVIEW_RETAINED_BYTES_MAXIMUM - 1;
+        charge_preview_retained_bytes(&mut retained, 1).unwrap();
+        assert_eq!(retained, PREVIEW_RETAINED_BYTES_MAXIMUM);
+        assert_eq!(
+            charge_preview_retained_bytes(&mut retained, 1)
+                .unwrap_err()
+                .code(),
+            CheckpointErrorCode::BytesExceeded
+        );
+
+        let workspace = TestWorkspace::new("preview-bounds");
+        let sentinel = workspace.path.join("newer.bin");
+        fs::write(&sentinel, b"newer").unwrap();
+        let store = workspace.store();
+        let checkpoint = store
+            .create(
+                &request(None, bindings(130), 130),
+                PublicationControl::default(),
+            )
+            .unwrap();
+        let base = preview_request(
+            &checkpoint,
+            PreviewReplacementIntent::PreserveCurrentWorkspace,
+        );
+        let mut exact = base.clone();
+        exact.workspace_facts = (0..PREVIEW_PATHS_MAXIMUM)
+            .map(|index| SuppliedWorkspacePathFact {
+                path: format!("Content/fact-{index}.bin"),
+                state: SuppliedWorkspacePathState::Absent,
+            })
+            .collect();
+        exact.content_facts = (0..PREVIEW_CONTENT_FACTS_MAXIMUM)
+            .map(|_| base.content_facts[0].clone())
+            .collect();
+        preflight_application_preview(
+            &checkpoint,
+            1,
+            checkpoint.operations.len(),
+            &exact,
+            &NeverCancelledPreview,
+        )
+        .unwrap();
+        exact.workspace_facts.push(SuppliedWorkspacePathFact {
+            path: "Content/fact-plus-one.bin".to_owned(),
+            state: SuppliedWorkspacePathState::Absent,
+        });
+        assert_eq!(
+            preflight_application_preview(
+                &checkpoint,
+                1,
+                checkpoint.operations.len(),
+                &exact,
+                &NeverCancelledPreview,
+            )
+            .unwrap_err()
+            .code(),
+            CheckpointErrorCode::CountExceeded
+        );
+        exact.workspace_facts.pop();
+        exact.content_facts.push(base.content_facts[0].clone());
+        assert_eq!(
+            preflight_application_preview(
+                &checkpoint,
+                1,
+                checkpoint.operations.len(),
+                &exact,
+                &NeverCancelledPreview,
+            )
+            .unwrap_err()
+            .code(),
+            CheckpointErrorCode::CountExceeded
+        );
+
+        let failure = store
+            .preview_checkpoint_application(
+                &base,
+                &CancelAtPhase("preview-before-retained-projection"),
+            )
+            .unwrap_err();
+        assert_eq!(failure.code(), CheckpointErrorCode::Cancelled);
+        assert_eq!(failure.context(), "preview-before-retained-projection");
+        assert_eq!(fs::read(&sentinel).unwrap(), b"newer");
     }
 
     #[test]

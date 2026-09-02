@@ -110,7 +110,17 @@ Enable after local format recovery tests. Workspace clients retain read support 
   recovery seals only an exact reread intent+record or reports incomplete/
   corrupt state without intentionally addressing ordinary workspace paths.
   Recovery re-syncs surviving exact files/directories before trusting or
-  sealing them.
+  sealing them. A second private surface now verifies the selected complete
+  record and its bounded ancestor chain, requires exact caller-supplied
+  repository/base/workspace/spec/path bindings, and folds only that record's
+  final touched-path effects into a deterministic read-only application
+  preview. Exact current-path observations and final content facts bind path
+  collision keys, ordinals, FileIDs, manifest/whole-file/chunk projections and
+  availability. Availability remains `AvailableUnverified` or `Unavailable`;
+  the crate reads no ordinary workspace/cache byte. The default preserves
+  differing current work. Explicit replacement intent affects only preview
+  classification and cannot bypass unknown/inaccessible/link/directory/
+  collision/unavailable blockers or perform a write.
 - **Test and benchmark results:** bounded Rust tests cover deterministic
   identity, list/show/verify, all seven create publication boundaries,
   preservation of a prior complete checkpoint and a newer workspace sentinel,
@@ -119,6 +129,14 @@ Enable after local format recovery tests. Workspace clients retain read support 
   object/count/byte/chunk/logical exact and max+1 bounds, same-identity
   manifest/chunk conflicts, safe arbitrary-name reporting, abstract self/
   cycle/missing/duplicate-ID/over-depth graphs, and Unix symlinks/hard links.
+  Five preview groups cover the domain-separated digest known answer and
+  reordered-input determinism, immutable-binding and path/FileID/content/
+  disposition substitution, missing/extra facts and case collision,
+  copy/move/repeated-touch folding, newer-work preservation, all supplied
+  obstruction states, unavailable bytes, exact plus-one count/path/chain-byte/
+  chain-operation/work/retained-memory bounds, and cancellation before retained
+  projection. The test sentinel remains unchanged under both replacement
+  intents.
   Rustfmt, warning-denied Clippy, exact offline packed-crate, Node source-policy,
   Windows cross-compilation, and roadmap gates are the candidate acceptance
   boundary. No scale, hosted three-OS, or real power-cut result is claimed.
@@ -129,13 +147,16 @@ Enable after local format recovery tests. Workspace clients retain read support 
   verification immediately before create-new manifest publication and rejects
   extraneous artifacts. Prospective-child depth and store-count admission occur
   before sealing/entry creation; regular artifact handles must be single-link.
-  Manifest/chunk/cache inputs remain untrusted caller projections. Pathnames
-  are reopened between checks, so malicious same-authority namespace replacement
-  remains an explicit residual.
+  Manifest/chunk/cache and current-workspace facts remain untrusted caller
+  observations. Historical lock receipts are ignored by preview, whose only
+  lock result is the fixed unverified warning. Pathnames are reopened between
+  checks, so malicious same-authority namespace replacement remains an
+  explicit residual.
 - **Documentation/runbooks:** the private crate README defines the exact
   identity domain, namespace, seven durability points, recovery dispositions,
-  limits, lock warning, gates, and nonclaims. There is no restore/publish/cache
-  runbook because none of those operations exists in this tranche.
+  preview digest/observation/replacement-intent boundary, limits, lock warning,
+  gates, and nonclaims. There is no restore/publish/cache runbook because none
+  of those operations exists in this tranche.
 - **Rollout result:** none. There is no public CLI/JSON command, route,
   authorization/permission/grant check, lock authority, cache pin/eviction
   mutation, telemetry upload, restore, delete/squash, or publish handoff.
@@ -143,9 +164,11 @@ Enable after local format recovery tests. Workspace clients retain read support 
 
 ### Candidate residuals blocking completion
 
-- Diff, restore/open-copy, exact obstruction preview, overwrite confirmation,
-  delete, squash, retention/grace, mutable messages, broader DAG operations,
-  and publish conversion are absent.
+- Full base-tree/checkpoint diff, restore/open-copy, executable filesystem
+  obstruction preflight, overwrite confirmation/action, delete, squash,
+  retention/grace, mutable messages, broader DAG operations, and publish
+  conversion are absent. The selected-record application preview cannot
+  account for untouched/newer paths or reconstruct a target tree.
 - Shared-cache pins, eviction/selection/workspace-removal races, cache-byte
   availability and corruption verification, transfer/refetch, and recovery
   grace are absent; this candidate neither reads nor re-encodes content.
@@ -156,8 +179,9 @@ Enable after local format recovery tests. Workspace clients retain read support 
   loaded from authenticated workspace metadata.
 - Same-authority path replacement, full Unix ACL/ownership policy, Windows
   inherited-ACL/owner verification, hosted reparse/hard-link/directory-flush
-  execution, actual power loss, three-OS crash/corruption, scale, restore
-  obstruction, lock reconciliation, and cache-race campaigns remain unproved.
+  execution, actual power loss, three-OS crash/corruption, scale, real
+  filesystem/cache observation, complete restore obstruction, lock
+  reconciliation, and cache-race campaigns remain unproved.
 - Public CLI/JSON/GUI integration, auth/permission/grant and request-root
   checks, lock validation, telemetry consent/upload, support diagnostics,
   rollout/rollback, and every OGVCS-014 acceptance criterion remain open.

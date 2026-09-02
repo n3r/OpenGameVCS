@@ -5,11 +5,12 @@
 Accept this tranche only as an unpublished, unwired Rust 1.82 local metadata
 candidate. It establishes a bounded immutable record, content-derived local
 checkpoint ID, create-new/manifest-last publication order, complete-only
-list/show/verification, and conservative incomplete recovery. It does not
-satisfy an OGVCS-014 acceptance criterion and OGVCS-014 remains **Todo**.
+list/show/verification, conservative incomplete recovery, and a bounded
+read-only selected-record application preview. It does not satisfy an
+OGVCS-014 acceptance criterion and OGVCS-014 remains **Todo**.
 
 The exact candidate base before this tranche is
-`a0c7bfdad33aca6e512069c5324c022cad5f35a8`.
+`6dedb0c77c9d6bdc0f5340d190b9acd957c3880b`.
 
 ## Identity and input boundary
 
@@ -40,6 +41,48 @@ allocation/lifetime receipt, or re-encode content. The typed identities retain
 their existing OGVCS-002 formats, but neither the caller nor this crate becomes
 server/cache authority. The root is not compared with an authenticated
 workspace/spec producer.
+
+## Selected-record application-preview boundary
+
+The new library surface reads the selected checkpoint only through exact
+complete-manifest and bounded complete-ancestor verification, then requires a
+caller binding that exactly repeats its repository, base snapshot, workspace,
+spec, path profile, and case mode. It folds only that selected record's final
+touched-path effects. Add/modify/copy affect the destination, move affects its
+source and destination, delete affects its source, and repeated touches retain
+the exact first/last ordinal and count. Repository and platform collision keys
+are re-derived and retained; aliases fail rather than being guessed.
+
+Every final path requires exactly one caller-supplied current observation.
+Every final content-bearing ordinal requires exactly one caller-supplied fact
+that matches its ordinal, FileID, manifest, whole-file digest, logical length,
+and ordered chunk projection. These are observations, not trusted filesystem
+or cache evidence. `AvailableUnverified` says only what the caller supplied;
+`Unavailable` stays visible and blocking. Missing, extra, duplicate, colliding,
+or substituted path/content facts fail closed.
+
+The default `PreserveCurrentWorkspace` intent protects any known differing
+regular file or recorded removal. `ReplaceRecordedPaths` is a preview-only
+replacement intent, not permission or authorization. It can acknowledge those
+two known-regular-file cases, but cannot bypass directory, symlink/reparse,
+inaccessible, unknown, collision, or unavailable-content blockers. The method
+performs no workspace/cache open, write, create, rename, removal, truncation,
+restore, or publish operation.
+
+A domain-separated digest binds the selected checkpoint ID and exact record
+digest, complete-chain depth, immutable bindings, selected operation count,
+replacement intent, sorted collision keys, exact supplied observation sets,
+folded items, and the fixed unverified lock warning. Reordering facts cannot
+change the digest. This is a deterministic local comparison token, not a
+durable restore receipt, authentication, authorization, or lock authority.
+Historical lock receipts are ignored and the result says they were not
+considered.
+
+This surface is intentionally not called restore or full diff. The record has
+no authenticated base-tree before-state, kind/mode/policy, or inventory of
+untouched/newer workspace paths. Ancestors are verified but their operations
+are not replayed. The preview cannot reconstruct a target tree or declare a
+workspace safely restorable.
 
 ## Parent and graph boundary
 
@@ -114,9 +157,23 @@ parsing. Serde-derived values and allocator overhead are not separately
 memory-accounted, so these raw-byte ceilings are not an exact peak-memory
 claim. Store-count admission occurs before a new entry directory is created.
 
+Preview separately caps 20,000 final/current paths, 10,000 final content
+facts, 8 MiB of selected-operation/current-fact path bytes, 256 MiB of raw
+verified-chain record bytes, 100,000 verified-chain operations, 600,000
+structural work units, and a conservative 64 MiB retained-allocation ledger.
+The chain/raw-input and all caller vector/count/byte/work ledgers are admitted
+before preview maps or result items are retained. Cancellation is checked
+before record loading, per bounded parent/operation/fact pass, and immediately
+before retained projection. The retained ledger charges fixed per-entry
+overhead plus exact re-derived repository-key, platform-key, and canonical-path
+lengths at their maximum simultaneous copy counts; per-record serde allocation
+remains subject to the existing 64 MiB raw ceiling and is not an exact allocator
+peak.
+
 Create never emits a trusted checkpoint before the manifest-last marker.
 Errors are typed. Recovery never deletes, renames, truncates, overwrites, or
-silently hides an incomplete/corrupt entry in its separate report.
+silently hides an incomplete/corrupt entry in its separate report. Preview is
+read-only and never turns replacement intent into a mutation.
 
 ## Test relevance
 
@@ -127,16 +184,24 @@ missing/mismatched/corrupt parents, substituted intent-only metadata,
 path/object/message/operation/chunk/receipt/logical and exact/max+1 bounds,
 same-identity manifest/chunk projection conflicts, safe arbitrary-name
 reporting, abstract self/cycle/missing/duplicate-ID/over-depth graphs, and Unix
-symlinked or hard-linked artifact rejection. The packed gate builds exact dependency crates,
-extracts the candidate, regenerates its lockfile offline against those
-packages, and repeats its tests. The Node policy gate protects the unwired
-private boundary, literal limits, direct canonical dependencies, manifest-last
-layout, explicit lock warning, Todo lifecycle, and prohibited public/destructive
-claims.
+symlinked or hard-linked artifact rejection. Five additive preview groups cover
+the digest known answer and input-order determinism, exact complete-chain and
+immutable binding, preservation of a newer workspace sentinel, default
+replacement/removal protection, explicit replacement intent, non-bypassable
+directory/symlink/inaccessible/unknown/unavailable observations, missing/extra
+and path/FileID/ordinal/content/disposition substitution, case collision,
+copy/move source-versus-destination behavior, repeated-touch folding, and exact
+plus-one path/count/chain-byte/chain-operation/work/retained-memory bounds and
+cancellation. The packed gate builds exact dependency crates, extracts the
+candidate, regenerates its lockfile offline against those packages, and
+repeats its tests. The Node policy gate protects the unwired private boundary,
+literal limits, direct canonical dependencies, manifest-last layout, explicit
+lock warning, Todo lifecycle, preview read-only ordering, and prohibited
+public/destructive claims.
 
 This is bounded local source evidence. It is not three-OS hosted proof, actual
 power-cut testing, cache pin/eviction concurrency, manifest/chunk byte
-verification, restore safety, or acceptance evidence.
+verification, full restore safety, or acceptance evidence.
 
 ## Security and portability residuals
 
@@ -152,13 +217,16 @@ filesystem or power-loss behavior beyond this bounded source model.
 
 Stored lock-receipt material is a digest-only historical snapshot. The only
 reported state is `historical-untrusted-exclusivity-unverified`; it cannot be
-used to assert or renew exclusivity. There is no authorization, permission,
-grant, request-root, publish, telemetry, or remote diagnostic path.
+used to assert or renew exclusivity. The application preview does not inspect
+the receipts and emits only that fixed warning. There is no authorization,
+permission, grant, request-root, publish, telemetry, or remote diagnostic path.
 
 ## Residuals blocking OGVCS-014
 
-- No diff, restore, open-copy, overwrite confirmation, delete, squash,
-  retention/grace, mutable message, checkpoint DAG editing, or publish handoff.
+- No full base-tree/checkpoint diff, restore, open-copy, executable overwrite
+  confirmation, delete, squash, retention/grace, mutable message, checkpoint
+  DAG editing, or publish handoff. The selected-record application preview
+  performs no action and cannot account for untouched/newer paths.
 - No real shared-cache pin/eviction/availability integration, transfer, corrupt
   cache-byte handling, or selection/workspace-removal race proof.
 - No authenticated operation/manifest/cache producer and no canonical
@@ -169,8 +237,8 @@ grant, request-root, publish, telemetry, or remote diagnostic path.
 - No public native CLI/JSON contract, GUI, route, authorization, lock
   validation, telemetry consent/upload, or production rollout.
 - No three-OS hosted crash/corruption matrix, real screen/support journey,
-  actual power-cut campaign, scale result, restore obstruction matrix, or
-  acceptance-criterion proof.
+  actual power-cut campaign, scale result, real filesystem/cache observation,
+  complete restore obstruction matrix, or acceptance-criterion proof.
 
 ## Verdict
 

@@ -35,6 +35,13 @@ test('private local checkpoint stays bounded, unwired, manifest-last, and Todo',
     ['RECORD_BYTES_MAXIMUM', '67_108_864'],
     ['STORE_RECORD_BYTES_MAXIMUM', '268_435_456'],
     ['GRAPH_DEPTH_MAXIMUM', '1_024'],
+    ['PREVIEW_PATHS_MAXIMUM', '20_000'],
+    ['PREVIEW_CONTENT_FACTS_MAXIMUM', '10_000'],
+    ['PREVIEW_PATH_BYTES_MAXIMUM', '8_388_608'],
+    ['PREVIEW_CHAIN_RECORD_BYTES_MAXIMUM', '268_435_456'],
+    ['PREVIEW_CHAIN_OPERATIONS_MAXIMUM', '100_000'],
+    ['PREVIEW_WORK_UNITS_MAXIMUM', '600_000'],
+    ['PREVIEW_RETAINED_BYTES_MAXIMUM', '67_108_864'],
   ]) {
     assert.match(source, new RegExp(`pub const ${constant}: [^=]+ = ${value};`, 'u'));
   }
@@ -75,6 +82,8 @@ test('private local checkpoint stays bounded, unwired, manifest-last, and Todo',
   assert.match(source, /sync_complete_artifacts\(&entry\)\?/u);
   assert.match(source, /os-name-hex:/u);
   assert.match(source, /0a65d00f0d7c832a39a4232d418d43520141e3e11f9213646f7f4023b3c4d18f/u);
+  assert.match(source, /OpenGameVCS local checkpoint application preview\\0/u);
+  assert.match(source, /d9cd72cba7f1d60e1d8e56b361d75f23b2c009e6b4c480333881fd0b78cff341/u);
 
   const production = source.slice(0, source.indexOf('#[cfg(test)]'));
   assert.doesNotMatch(production, /std::net|TcpListener|reqwest|AuthorizationContext|TransactionAuthorized/iu);
@@ -86,13 +95,19 @@ test('private local checkpoint stays bounded, unwired, manifest-last, and Todo',
   assert.match(readme, /integrity framing, not caller\nauthentication/u);
   assert.match(readme, /Operation records omit entry kind, mode, policy/u);
   assert.match(readme, /real power-loss durability is established only after/u);
+  assert.match(readme, /intentionally narrower than checkpoint diff or restore/u);
+  assert.match(readme, /AvailableUnverified[\s\S]+caller reported availability/u);
+  assert.match(readme, /or removal \*intended\*; it is not authorization or permission/u);
   assert.match(readme, /no:[\s\S]+restore[\s\S]+cache pin[\s\S]+public CLI/iu);
   assert.match(review, /ship only as a private unwired candidate/u);
   assert.match(review, /no-ship for a\npublic command/u);
-  assert.match(review, /does not\s+satisfy an OGVCS-014 acceptance criterion/u);
+  assert.match(review, /does not\s+satisfy an\s+OGVCS-014 acceptance criterion/u);
+  assert.match(review, /selected-record application-preview boundary/iu);
+  assert.match(review, /not trusted filesystem\nor cache evidence/u);
   assert.match(prd, /^\*\*Status:\*\* Todo  $/mu);
   assert.match(prd, /OGVCS-014 remains \*\*Todo\*\*/u);
   assert.match(prd, /no acceptance criterion is claimed/u);
+  assert.match(prd, /selected-record application preview cannot\n  account for untouched\/newer paths/u);
 
   assert.equal(packageValue.scripts['test:checkpoint'], 'node --test tools/local-checkpoint-policy.test.mjs');
   assert.match(packageValue.scripts.test, /npm run test:checkpoint/u);
@@ -100,6 +115,67 @@ test('private local checkpoint stays bounded, unwired, manifest-last, and Todo',
   assert.match(packed, /cargo package/u);
   assert.match(packed, /cargo test --locked --offline/u);
   assert.match(packed, /ogvcs-local-checkpoint-0\.1\.0-rc\.1\.crate/u);
+});
+
+test('application preview binds supplied observations and remains read-only', async () => {
+  const source = await read('client/local-checkpoint/rust/src/lib.rs');
+  for (const type of [
+    'CheckpointApplicationPreviewRequest',
+    'PreviewReplacementIntent',
+    'SuppliedWorkspacePathFact',
+    'SuppliedWorkspacePathState',
+    'SuppliedCheckpointContentFact',
+    'SuppliedContentAvailability',
+    'CheckpointApplicationPreview',
+  ]) {
+    assert.match(source, new RegExp(`pub (?:struct|enum) ${type}`, 'u'));
+  }
+  assert.match(source, /AvailableUnverified/u);
+  assert.match(source, /Unavailable/u);
+  assert.match(source, /PreserveCurrentWorkspace/u);
+  assert.match(source, /ReplaceRecordedPaths/u);
+  assert.match(source, /historical_lock_receipts_considered: false/u);
+
+  const previewStart = source.indexOf('    pub fn preview_checkpoint_application(');
+  const recoveryStart = source.indexOf('    /// Scans every bounded entry', previewStart);
+  assert.notEqual(previewStart, -1);
+  assert.ok(recoveryStart > previewStart);
+  const preview = source.slice(previewStart, recoveryStart);
+  const order = [
+    'load_verified_chain_for_preview(',
+    'loaded.checkpoint.bindings != request.bindings',
+    'preflight_application_preview(',
+    'preview-before-retained-projection',
+    'fold_selected_record_effects(',
+    'bind_supplied_workspace_facts(',
+    'bind_supplied_content_facts(',
+    'application_preview_digest(',
+  ].map((needle) => preview.indexOf(needle));
+  assert.equal(order.every((offset) => offset >= 0), true);
+  assert.deepEqual(order, [...order].sort((left, right) => left - right));
+  assert.doesNotMatch(
+    preview,
+    /fs::|remove_|write_|rename|set_len|create_new|Authorization|permission/iu,
+  );
+  assert.doesNotMatch(preview, /(?:checkpoint|loaded|request)\.lock_receipts/u);
+
+  assert.match(source, /fn charge_preview_chain_record_bytes\(/u);
+  assert.match(source, /fn charge_preview_chain_operations\(/u);
+  assert.match(source, /fn charge_preview_work\(/u);
+  assert.match(source, /fn charge_preview_path_bytes\(/u);
+  assert.match(source, /fn charge_preview_retained_bytes\(/u);
+  assert.match(source, /fn charge_preview_retained_path_projection\(/u);
+  assert.match(source, /fn content_projection_identity\(/u);
+  assert.match(source, /repository_path_key: sort_key\.0\.clone\(\)/u);
+  assert.match(source, /platform_path_key: sort_key\.1\.clone\(\)/u);
+  assert.match(source, /availability == Some\(SuppliedContentAvailability::Unavailable\)/u);
+  assert.match(source, /PreviewWorkspaceImpact::Obstructed/u);
+  assert.match(source, /preview-before-retained-projection/u);
+  assert.match(source, /application_preview_is_deterministic_read_only_and_exactly_bound/u);
+  assert.match(source, /replacement_intent_never_bypasses_obstruction_or_unavailable_content/u);
+  assert.match(source, /preview_rejects_binding_path_file_id_content_and_case_substitution/u);
+  assert.match(source, /preview_folds_copy_move_and_repeated_touch_to_final_record_effect/u);
+  assert.match(source, /preview_count_byte_work_memory_and_cancellation_bounds_are_exact/u);
 });
 
 test('ordinary local-checkpoint gates contain no public, restore, or scale campaign', async () => {

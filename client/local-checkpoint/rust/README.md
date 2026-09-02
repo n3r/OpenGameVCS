@@ -1,9 +1,10 @@
 # Private local-checkpoint metadata candidate
 
-This unpublished Rust 1.82 crate is the first bounded OGVCS-014
-implementation tranche. It provides local checkpoint creation, complete-only
-listing, show, metadata verification, and incomplete-creation recovery. It is
-not wired into the native CLI, a server route, or any public protocol.
+This unpublished Rust 1.82 crate is a bounded OGVCS-014 implementation
+candidate. It provides local checkpoint creation, complete-only
+listing, show, metadata verification, incomplete-creation recovery, and a
+bounded read-only selected-record application preview. It is not wired into
+the native CLI, a server route, or any public protocol.
 
 ## Boundary
 
@@ -38,6 +39,55 @@ missing parent, self-parent, cycle, duplicate/mismatched checkpoint identity,
 binding drift, or over-depth chain. Creation and recovery refuse to seal a
 child when its already-complete parent chain has 1,024 nodes, so the child can
 never become an admitted 1,025th node.
+
+## Read-only selected-record application preview
+
+`preview_checkpoint_application` loads the selected record only through the
+complete-manifest and complete-parent-chain verifier. The caller must repeat
+the exact repository, base snapshot, workspace, selection-spec, path-profile,
+and case-mode bindings. The function then folds the selected record's ordered
+operations into its final touched-path effects: add/modify/copy affect the
+destination, move affects its source and destination, and delete affects its
+source. Repeated touches retain their first/last ordinals and count while the
+last recorded effect wins. Repository and platform collision keys are
+re-derived, retained in each result, and aliases fail closed.
+
+This is intentionally narrower than checkpoint diff or restore. Ancestors are
+verified for completeness and binding continuity, but their operations and the
+base snapshot tree are not replayed. The preview therefore says only what the
+selected record says about the paths it touches. It cannot discover an
+untouched newer path, reconstruct a target tree, prove operation semantics, or
+declare a workspace restorable.
+
+The caller supplies an exact observation for every final affected path:
+absent, regular file with FileID/whole-file digest/logical length, directory,
+symlink/reparse, inaccessible, or unknown. It also supplies one exact content
+fact for every final content-bearing ordinal, binding that ordinal, FileID,
+manifest, whole-file digest, logical length, and ordered chunk projection.
+Content availability is reported only as `AvailableUnverified` or
+`Unavailable`. The former means the caller reported availability; this crate
+does not read, hash, authenticate, or pin a workspace/cache byte. Missing,
+extra, duplicate, colliding, or substituted facts fail closed.
+
+`PreviewReplacementIntent::PreserveCurrentWorkspace` is the default. A
+different known regular file is `ReplacementProtected` and a known regular
+file that the record would remove is `RemovalProtected`. The explicit
+`ReplaceRecordedPaths` value changes those two classifications to replacement
+or removal *intended*; it is not authorization or permission and performs no
+operation. It never bypasses directory, symlink/reparse, inaccessible, unknown,
+path-collision, or `Unavailable` content blockers. The preview method contains
+no ordinary-workspace/cache open and no create, write, rename, remove, or
+truncate path.
+
+The result has a domain-separated SHA-256 that binds the exact checkpoint ID
+and record digest, complete-chain depth, immutable bindings, selected-record
+operation count, replacement intent, sorted repository/platform collision
+keys, exact supplied workspace/content observations, folded result items, and
+the fixed `historical-untrusted-exclusivity-unverified` warning. Input order
+does not change the digest. It is a deterministic local comparison token, not
+authentication, authorization, lock authority, or a durable restore receipt.
+Historical lock receipts are not consulted and the result explicitly reports
+that fact.
 
 ## Immutable record and identity
 
@@ -150,6 +200,13 @@ files that survived a failed sync or a crash before directory persistence.
 | One canonical record | 64 MiB |
 | Raw complete-record bytes admitted by one list | 256 MiB |
 | Verified parent-chain depth | 1,024 |
+| Preview final/current paths | 20,000 |
+| Preview final content facts | 10,000 |
+| Preview operation/current-fact path bytes | 8 MiB |
+| Preview verified-chain raw record bytes | 256 MiB |
+| Preview verified-chain operations | 100,000 |
+| Preview work-unit ledger | 600,000 |
+| Preview retained-allocation ledger | 64 MiB |
 | One projected chunk length | 2 MiB |
 | Logical bytes per content projection | min(1 TiB, 100,000 × 2 MiB) = 209,715,200,000 bytes |
 
@@ -168,12 +225,22 @@ length is checked before reading past a ceiling, but serde-derived values and
 allocator overhead are not separately memory-accounted. That bounded-input
 model is not an exact peak-memory claim.
 
+Preview rejects aggregate chain bytes/operations and supplied count, path-byte,
+chunk-reference, work, and retained-allocation ledgers before allocating its
+maps or result vector. Cancellation is checked before record loading, at each
+bounded parent/operation/fact pass, and immediately before retained projection.
+The retained ledger conservatively charges fixed map/item overhead plus exact
+re-derived repository-key, platform-key, and canonical-path lengths at their
+maximum simultaneous copy counts. Per-record JSON decoding is still governed
+by the existing 64 MiB raw-record ceiling and is not an exact allocator peak.
+
 ## Residuals and nonclaims
 
 This candidate intentionally has no:
 
-- restore, diff, workspace overwrite, open-copy, delete, squash, retention,
-  grace-period, or mutable message operation;
+- full checkpoint/base-tree diff, restore, workspace overwrite, open-copy,
+  delete, squash, retention, grace-period, or mutable message operation; the
+  selected-record application preview is inspection only;
 - cache pin, eviction, availability, cache-read verification, transfer, or
   refetch implementation;
 - public CLI/JSON schema, route, auth/permission/grant check, publish handoff,
