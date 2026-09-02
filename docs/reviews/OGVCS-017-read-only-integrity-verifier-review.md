@@ -130,7 +130,52 @@ fail-closed classification prevents a false intact report.
 | Finding capacity exhausted | `INTEGRITY_FINDINGS_TRUNCATED`; any final report is explicitly non-intact |
 | Logical coverage sum overflows | Terminal `CoverageOverflow`; no report and no saturated value |
 
-The 65-test local Rust suite passes, as do 17 focused OGVCS-002 conformance
+## Read-only replica assessment follow-up
+
+The private crate now has a separate `assess_replica_set` seam. Its input is a
+bounded supplied replica set, not an inventory query or trusted health record.
+Before allocation or hashing it validates literal maxima for replica count,
+single and total bytes, work, result memory, and metadata decode memory. It
+rejects duplicate backend IDs and sorts the remaining fixed-width identifiers,
+so input order cannot select a different source.
+
+For present chunks it independently recomputes the exact OGVCS-002 chunk
+identity. For present metadata it recomputes the opaque object digest, parses
+canonical framing under the frozen decoder limits, validates the known schema,
+and checks the exact kind. Declared/observed length mismatch, digest mismatch,
+framing/schema mismatch, missing, ambiguity, and unavailability remain distinct
+closed outcomes. Supplied generation and expected length are commitment inputs;
+the function does not claim to have established their storage authority.
+
+Every copy gets an opaque observation commitment. A locally valid copy additionally
+gets a sealed local-validation commitment binding the supplied generation, exact
+object, backend, lengths, and raw-byte digest. Raw bytes and raw SHA-256 values
+are not exposed, and the local-validation commitment is not exported as
+backend provenance or freshness evidence. The assessment digest binds the sorted copies, set-level
+disposition, preferred verified source, and every quarantine/repair preview.
+Debug output redacts all backend IDs and commitments.
+
+`RepairCandidate` is emitted only for an unambiguous supplied set with at least
+one locally validated source and at least one corrupt or missing destination.
+`NoVerifiedSource` emits no repair preview. Ambiguous/unavailable observations
+and a cryptographic same-identity/different-bytes conflict suppress every
+preview. Differing corrupt copies receive
+`ReplicaDisagreementNoVerifiedSource`; one locally valid copy receives
+`SingleVerifiedCopy`, not replica agreement. A quarantine preview is still only evidence about an observed corrupt
+copy. These values are not storage-health, mutation, permission, audit,
+generation-fencing, read-routing, affected-root, or post-repair evidence.
+
+The focused twelve-case suite covers deterministic source selection and replay,
+good/corrupt and good/missing candidates, all-bad/no-source behavior,
+ambiguity/unavailability obstruction, chunk identity, metadata framing and kind
+substitution, declared/observed length precedence, duplicate backends, exact and
+maximum-plus-one count/byte/work/memory limits, multi-pass work charging,
+cancellation between bounded hash/compare phases, redacted Debug, corrupt-copy
+disagreement, and commitment substitution across supplied
+generation/object/backend/expected length. The metadata preflight also accepts
+its exact four-copy-plus-decode memory reservation and rejects one byte less.
+
+The 77-test local Rust suite passes, as do 17 focused OGVCS-002 conformance
 tests and 14 focused OGVCS-007 closure/golden tests. The fixture-derived golden
 closes four metadata objects and one chunk (1,132 unique verified bytes), three
 file/version entries, and six exact graph edges. One-object pages produce the
@@ -152,14 +197,20 @@ same final ledger, finding order, and transcript digest as a one-shot run.
   and atomic edge/work admission are tested. There is no sub-manifest resume,
   durable cursor/finding store, or concurrent-commit production campaign.
   This is not evidence for AC-04 full-scrub resumability.
-- **AC-02, AC-03, AC-05:** open. This tranche has no replicas, repair,
-  quarantine, degraded-root persistence, production SLO coupling, or scale
-  run.
+- **AC-02:** bounded candidate relevance only. One supplied good copy plus one
+  corrupt/missing copy produces an exact read-only disposition preview. There
+  is no authoritative inventory, read avoidance, quarantine/repair execution,
+  generation CAS, post-copy verification, or two-copy restoration campaign.
+- **AC-03:** bounded candidate relevance only. A supplied all-bad/missing set
+  produces `NoVerifiedSource` and no repair preview. There is no affected-root
+  query or durable degraded-snapshot state.
+- **AC-05:** open. There is no production SLO coupling or scale run.
 
 ## Residual work / nonclaims
 
-OGVCS-017 remains Todo. Replica comparison and verified-source repair,
-quarantine and forensic state, all-copies-lost degraded-root persistence,
+OGVCS-017 remains Todo. Authoritative replica inventory/comparison and
+verified-source repair, quarantine mutation and forensic state,
+all-copies-lost degraded-root persistence,
 affected-root queries, durable crash-safe findings/cursors, public commands,
 authentication/authorization/audit policy, scheduled sampling, full physical
 inventory scrub, concurrent upload/replication/retention/read rules, hosted

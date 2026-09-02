@@ -110,7 +110,19 @@ Deploy read-only reporting first, validate false-positive rate, then enable auto
   reread. Page versus object transfer, general versus fragment work, decode,
   index, resident-ledger, and charged-memory stops bind distinct private
   recovery classes; this is not a sub-manifest continuation claim.
-- Test and benchmark results: All 65 local Rust tests and 31 focused upstream
+  A second private read-only replica assessment accepts a bounded supplied
+  replica set and independently validates present chunk identity or metadata
+  identity/framing/schema/kind. It emits only typed outcomes and opaque,
+  redacted observation/local-validation commitments. Deterministic quarantine and
+  repair previews are emitted only for an unambiguous set with a verified
+  source; `NoVerifiedSource`, ambiguity, unavailability, or a same-identity
+  byte conflict cannot produce a repair preview. Supplied generation, expected
+  length, backend observations, and set completeness remain untrusted facts.
+  This is no storage-health, inventory, read-routing, permission, audit, or
+  mutation authority and performs no storage mutation. Local-validation
+  commitments are sealed inside the set assessment and are not backend
+  provenance or freshness evidence.
+- Test and benchmark results: All 77 local Rust tests and 31 focused upstream
   OGVCS-002/007 contract tests pass. The fixture-derived golden and fault suite
   covers one-shot/page-equivalent traversal; missing reference versus object;
   declared and file-size mismatch; rebound framing/version and whole-file
@@ -137,16 +149,24 @@ Deploy read-only reporting first, validate false-positive rate, then enable auto
   coverage is over unique object/entry definitions, not namespace-expanded
   path multiplicity. No hosted cross-OS, production-concurrency, or
   reference-scale campaign has run.
+  The focused replica-assessment suite adds twelve cases for deterministic
+  selection/replay, good/corrupt and good/missing previews, all-bad no-source
+  handling, ambiguity/unavailability obstruction, metadata framing/kind and
+  chunk identity, exact and plus-one resource limits, cancellation, redacted
+  Debug, corrupt-copy disagreement, and commitment substitutions.
 - Security/reliability review: See
   `docs/reviews/OGVCS-017-read-only-integrity-verifier-review.md`. Ambiguity
   never selects a copy; cancellation/source/limit/generation failures return no
-  report and retain the current metadata-boundary cursor. This is not authorization,
-  permission, audit, health-state, quarantine, or repair evidence.
+  report and retain the current metadata-boundary cursor. This is not
+  authorization, permission, audit, health-state, quarantine mutation, or
+  repair execution evidence. Replica previews bind only supplied observations
+  and contain no raw object or raw SHA-256 disclosure.
 - Documentation/runbooks: The private crate README defines validation order,
   ledger meanings, limits, and nonclaims. There is no operator runbook or
   public command because this candidate is not wired to a service or backend.
 - Rollout result: Not rolled out. OGVCS-017 remains Todo. Snapshot auxiliary
-  graphs and unreachable inventory, replicas, quarantine, repair,
+  graphs and unreachable inventory, authoritative replica inventory,
+  quarantine/repair execution,
   all-copies-lost degraded-root persistence, durable crash recovery,
   production concurrency, public commands, permission/audit semantics, hosted
   cross-OS evidence, and scale/SLO acceptance remain open.

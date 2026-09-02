@@ -1,6 +1,14 @@
 //! Bounded, read-only OGVCS-017 content-closure verifier candidate.
 #![forbid(unsafe_code)]
 
+mod replica_assessment;
+
+pub use replica_assessment::{
+    assess_replica_set, ReplicaAssessment, ReplicaAssessmentError, ReplicaAssessmentLimits,
+    ReplicaCandidate, ReplicaCandidateObservation, ReplicaCopyAssessment, ReplicaCopyOutcome,
+    ReplicaDisposition, ReplicaQuarantinePreview, ReplicaRepairPreview,
+};
+
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     sync::{

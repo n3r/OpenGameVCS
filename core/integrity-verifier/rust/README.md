@@ -74,10 +74,46 @@ OGVCS-007's nonrecoverable ledger-counter `CountExceeded` path is classified as
 `ManifestCorrupt`, not as a restartable verifier count limit. Increasing a
 candidate envelope cannot turn that overflow into valid closure evidence.
 
+## Read-only replica assessment follow-up
+
+The crate also contains a private, synchronous replica-assessment function. It
+accepts one exact object reference, a supplied generation and serialized-byte
+expectation, and at most 64 fixed-width backend observations. Count, per-copy
+bytes, aggregate bytes, work, result-memory, and decode-memory limits are
+preflighted before sorting, allocation, hashing, or parsing. Present chunk
+bytes must reproduce the exact chunk identity. Present metadata bytes must
+reproduce the domain-separated object identity and then pass canonical framing,
+known-schema, and exact-kind validation. Missing, ambiguous, and unavailable
+states remain supplied observations; the function has no way to establish that
+the supplied replica set is a complete physical inventory.
+
+The deterministic result is sorted by opaque backend ID. It returns only typed
+copy outcomes and opaque, domain-separated observation/local-validation
+commitments. Raw object bytes and raw SHA-256 values are not returned and Debug
+formatting redacts backend IDs and commitments. If one or more identical copies
+validate locally and the remaining supplied copies are missing or corrupt, the result may
+contain non-authoritative quarantine and repair previews bound to the exact
+source and destination observations. Ambiguity, unavailability, or two
+different byte strings that somehow validate as the same object identity
+suppress all previews. Differing corrupt copies receive a distinct replica-
+disagreement disposition without exposing their content hashes. With no
+locally validated source the result is `NoVerifiedSource` and no repair preview
+is produced. A lone valid observation is `SingleVerifiedCopy`, not agreement.
+
+These statuses describe only the supplied replica set. They are not a
+storage-health decision, affected-root finding, read-routing decision, repair
+permission, quarantine permission, or proof that a backend generation is
+current. The sealed local-validation commitment is not exported as backend
+provenance or freshness evidence. A future mutation boundary must independently authenticate and
+authorize the operation, prove inventory completeness where required, re-read
+and reverify source and destination state, compare-and-swap the exact backend
+generation, audit the disposition, and verify the post-copy bytes. This
+follow-up performs no storage mutation and does not satisfy AC-02 or AC-03.
+
 This tranche does **not** traverse snapshot parents, descriptor/change-set,
 asset-group, provenance, conflict, attestation, shelf, unreachable inventory,
-or replica topology. It does not quarantine, repair, durably persist degraded
-roots, findings, or cursors, arbitrate concurrent production mutation, expose
+or authoritative replica topology. It does not quarantine, repair, durably
+persist degraded roots, findings, or cursors, arbitrate concurrent production mutation, expose
 public commands, or claim hosted cross-OS or reference-scale evidence.
 OGVCS-017 remains Todo.
 

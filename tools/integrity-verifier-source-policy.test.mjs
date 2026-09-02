@@ -4,6 +4,7 @@ import test from 'node:test';
 
 const cargoPath = new URL('../core/integrity-verifier/rust/Cargo.toml', import.meta.url);
 const libPath = new URL('../core/integrity-verifier/rust/src/lib.rs', import.meta.url);
+const replicaPath = new URL('../core/integrity-verifier/rust/src/replica_assessment.rs', import.meta.url);
 const readmePath = new URL('../core/integrity-verifier/rust/README.md', import.meta.url);
 const reviewPath = new URL('../docs/reviews/OGVCS-017-read-only-integrity-verifier-review.md', import.meta.url);
 const prdPath = new URL('../prd/todo/OGVCS-017-integrity-verification-repair.md', import.meta.url);
@@ -15,7 +16,10 @@ test('private verifier composes the frozen object and chunk contracts', async ()
   assert.match(cargo, /ogvcs-chunking-manifest = \{ path = "\.\.\/\.\.\/chunking-manifest\/rust", version = "0\.1\.0" \}/);
   assert.doesNotMatch(cargo, /tokio|reqwest|axum|sqlx|aws-sdk|aws_sdk/);
 
-  const source = await readFile(libPath, 'utf8');
+  const [source, replica] = await Promise.all([
+    readFile(libPath, 'utf8'),
+    readFile(replicaPath, 'utf8'),
+  ]);
   assert.match(source, /opaque_object_digest/);
   assert.match(source, /scan_metadata/);
   assert.match(source, /validate_metadata_schema_with_limits/);
@@ -39,8 +43,39 @@ test('private verifier composes the frozen object and chunk contracts', async ()
   assert.match(source, /bytes\.capacity\(\)/);
   assert.match(source, /observed_bytes > maximum_bytes \|\| observed_capacity > maximum_bytes/);
   assert.match(source, /preflight_work/);
-  assert.doesNotMatch(source, /pub\s+(?:async\s+)?fn\s+(?:repair|quarantine|authorize|delete|publish)/);
+  assert.match(source, /mod replica_assessment/);
+  assert.doesNotMatch(source, /pub\s+(?:async\s+)?fn\s+(?:repair|quarantine|authorize|delete|publish)\s*\(/);
   assert.doesNotMatch(source, /std::net|TcpStream|UdpSocket|tokio|reqwest|axum|sqlx/);
+
+  for (const evidence of [
+    'OpenGameVCS replica assessment rc1\\0',
+    'OpenGameVCS replica observation rc1\\0',
+    'OpenGameVCS verified replica rc1\\0',
+    'pub fn assess_replica_set(',
+    'fn preflight(',
+    'ordered.sort_by_key(|candidate| candidate.backend)',
+    'ReplicaDisposition::VerifiedIdentityConflict',
+    'ReplicaDisposition::ReplicaDisagreementNoVerifiedSource',
+    'ReplicaDisposition::SingleVerifiedCopy',
+    'ReplicaDisposition::NoVerifiedSource',
+    'ReplicaCopyOutcome::Ambiguous | ReplicaCopyOutcome::Unavailable',
+    'SuppliedReplicaObservationCommitment([REDACTED])',
+    'SuppliedReplicaValidationCommitment([REDACTED])',
+    'validate_metadata_schema_with_limits',
+    'ObjectHashWriter::new(kind, maximum, maximum)',
+    'CHUNK_BYTE_PASSES',
+    'METADATA_BYTE_PASSES',
+    'cancellable_equal(first, bytes, control)?',
+    '.max_single_copy_bytes\n            .checked_mul(4)',
+  ]) assert.ok(replica.includes(evidence), `replica assessment evidence missing: ${evidence}`);
+  assert.ok(
+    replica.indexOf('preflight(reference, candidates, limits, control)?;')
+      < replica.indexOf('let mut ordered = candidates.to_vec();'),
+    'replica assessment allocates before the complete resource preflight',
+  );
+  assert.doesNotMatch(replica, /pub\s+(?:async\s+)?fn\s+(?:repair|quarantine|authorize|delete|publish)\s*\(/);
+  assert.doesNotMatch(replica, /std::fs|std::net|TcpStream|UdpSocket|tokio|reqwest|axum|sqlx/);
+  assert.doesNotMatch(replica, /pub\s+raw_sha256|observed_raw_sha256/);
 
   const report = source.match(/pub struct VerificationReport \{(?<body>[\s\S]*?)\n\}/u)?.groups?.body;
   assert.ok(report, 'VerificationReport declaration is present');
@@ -60,6 +95,8 @@ test('review and README retain the explicit unwired residual boundary', async ()
     assert.match(text, /scale/i);
     assert.match(text, /OGVCS-017 remains Todo/);
     assert.match(text, /not (?:evidence for )?AC-?04 full-scrub resumability/i);
+    assert.match(text, /supplied (?:replica set|observation)/i);
+    assert.match(text, /not\s+(?:a\s+)?storage-health/i);
   }
 });
 
@@ -75,6 +112,9 @@ test('PRD status and acceptance criteria remain unchanged while evidence is boun
   ];
   for (const criterion of criteria) assert.ok(prd.includes(criterion));
   assert.match(prd, /Bounded candidate relevance only/);
-  assert.match(prd, /replicas, quarantine, repair/i);
+  assert.match(prd, /authoritative replica inventory[\s\S]*quarantine\/repair execution/i);
   assert.match(prd, /hosted cross-OS/i);
+  assert.match(prd, /read-only replica assessment/i);
+  assert.match(prd, /NoVerifiedSource/);
+  assert.match(prd, /no storage mutation/i);
 });
