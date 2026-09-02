@@ -15,6 +15,10 @@ test('identity-policy workflow is pinned, three-host, Node 24, and bounded', asy
     readFile(packageUrl, 'utf8').then(JSON.parse),
   ]);
   assert.match(workflow, /matrix:\s*\n\s*os: \[ubuntu-latest, macos-latest, windows-latest\]/u);
+  assert.match(
+    workflow,
+    /push:\n    branches:\n      - main\n      - r1-foundation-integration\n      - "ogvcs-009\/\*\*"/u,
+  );
   assert.match(workflow, /node-version: 24/u);
   assert.doesNotMatch(workflow, /node-version: (?:20|22)(?:\D|$)/u);
   assert.match(workflow, /actions\/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7\.0\.1/u);

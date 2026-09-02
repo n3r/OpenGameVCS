@@ -27,6 +27,7 @@ on:
   push:
     branches:
       - main
+      - r1-foundation-integration
       - "ogvcs-009/**"
     paths:
       - ".github/workflows/identity-policy-audit.yml"
