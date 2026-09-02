@@ -111,8 +111,10 @@ Start with filesystem development backend and one supported S3 profile. New back
   authority is explicitly limited to signed sets of at most 4,096 objects;
   request-root closure remains unavailable. A route-less Rust follow-up binds
   an authenticated OGVCS-041 `object.put` control envelope to the current
-  OGVCS-009 explicit-set commit/reconciliation participant without registering
-  any public route. The canonical object limit remains 64 MiB.
+  OGVCS-009 explicit-set commit/reconciliation participant and returns only an
+  opaque receipt binding the control, exact set/target, and proof or authorized
+  unknown observation, without registering any public route. The canonical
+  object limit remains 64 MiB.
 - Test and benchmark results: local bounded runtime, generated/independently
   validated contract, workflow policy, and roadmap gates are recorded in the
   OGVCS-008 review. The offline 100-GiB logical-plan test proves 1,600
@@ -130,5 +132,5 @@ Start with filesystem development backend and one supported S3 profile. New back
   repository-metadata/identity lifecycle integration are complete. The
   route-less composition still lacks JavaScript-to-Rust invocation,
   multi-object OGVCS-003 grant issuance, and trusted production-subject mapping;
-  no public route backs it, and its explicit-set profile cannot justify
-  OGVCS-007 ratification.
+  the current JavaScript port cannot carry its composed receipt, no public route
+  backs it, and its explicit-set profile cannot justify OGVCS-007 ratification.

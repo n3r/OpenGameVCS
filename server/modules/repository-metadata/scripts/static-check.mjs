@@ -1150,8 +1150,42 @@ for (const evidence of [
   'Arc::ptr_eq(&self.0, &branded.origin)',
   'commit_in_transaction(',
   'reconcile_in_transaction(',
-  'pub fn candidate_projection(&self) -> Value',
+  'pub struct ContentManifestExplicitCompositionCommitReceipt',
+  'pub struct ContentManifestExplicitCompositionReconciliationReceipt',
+  'EXPLICIT_COMPOSITION_CONTROL_DOMAIN',
+  'EXPLICIT_COMPOSITION_OBJECT_SET_DOMAIN',
+  'EXPLICIT_COMPOSITION_COMMIT_RECEIPT_DOMAIN',
+  'EXPLICIT_COMPOSITION_RECONCILIATION_RECEIPT_DOMAIN',
+  'fn explicit_composition_control_commitment(',
+  'request.semantic_fingerprint().ok_or_else(denied_error)',
+  'canonical_json_bytes(request.negotiation_receipt())',
+  'fn explicit_composition_authority_commitment(',
+  'fn composition_commit_receipt(',
+  'fn composition_reconciliation_receipt(',
+  'ContentManifestExplicitCompositionReconciliationStatus::UnknownRecovering',
+  '.field("bindings", &"[REDACTED]")',
 ]) assert(contentManifestAdapter.includes(evidence), `content-manifest participant evidence missing: ${evidence}`);
+assert(
+  contentManifestAdapter.includes(') -> Result<ContentManifestExplicitCompositionCommitReceipt>')
+    && contentManifestAdapter.includes(') -> Result<ContentManifestExplicitCompositionReconciliationReceipt>'),
+  'route-less composition exposes an ordinary unbound v12 result',
+);
+const composedCommitReceipt = contentManifestAdapter.slice(
+  contentManifestAdapter.indexOf('pub struct ContentManifestExplicitCompositionCommitReceipt'),
+  contentManifestAdapter.indexOf('pub enum ContentManifestExplicitCompositionReconciliationStatus'),
+);
+const composedReconciliationReceipt = contentManifestAdapter.slice(
+  contentManifestAdapter.indexOf('pub struct ContentManifestExplicitCompositionReconciliationReceipt'),
+  contentManifestAdapter.indexOf('#[derive(Clone, Debug, Eq, PartialEq)]\npub struct ContentManifestCommittedProof'),
+);
+assert(
+  !composedCommitReceipt.includes('ContentManifestCommittedProof')
+    && !composedCommitReceipt.includes('serde')
+    && !composedReconciliationReceipt.includes('ContentManifestCommittedProof')
+    && !composedReconciliationReceipt.includes('ContentManifestAvailabilityReconciliation')
+    && !composedReconciliationReceipt.includes('serde'),
+  'opaque composition receipt retained or serialized an ordinary raw result',
+);
 assert(
   contentManifestAdapter.indexOf('let authorized = authorize_explicit_set(')
     < contentManifestAdapter.indexOf('if let Some(proof) = load_committed_proof(')
@@ -1169,6 +1203,7 @@ for (const forbiddenAuthority of [
   'request_root', 'reqwest::', 'aws_sdk_', 'std::fs::', 'tokio::net::',
   'remove_file', 'DELETE FROM ogvcs_metadata.object_lifecycle', 'pub fn transaction(',
   'MetadataResponseEnvelope', 'MetadataTransportRequest', 'CompactTransferGrant',
+  'pub fn candidate_projection(&self)',
 ]) assert(!contentManifestAdapter.includes(forbiddenAuthority), `content-manifest participant gained excluded authority: ${forbiddenAuthority}`);
 
 const atomicSubmitAdapter = await readFile(resolve(root, 'src/postgres/atomic_submit.rs'), 'utf8');

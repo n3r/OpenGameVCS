@@ -74,6 +74,19 @@ page, and it delegates the only mutation to the existing SERIALIZABLE v12
 transaction. Cross-instance handles, principal/scope substitutions, and exact
 set substitutions fail before protected state is consulted.
 
+The output boundary is separately closed. Commit and reconciliation return
+opaque, non-serializable composition receipts rather than an ordinary v12 proof
+or raw unknown-recovery observation. Their domain-separated digests bind the
+authenticated correlation, semantic fingerprint, self-dating idempotency and
+negotiation receipt/principal control commitment; explicit object-set and
+authorization-closure commitment; exact manifest/length/raw digest and private
+target; and the underlying committed proof or authorized observation. Commit
+new/replay state and reconciliation committed/unknown status are distinct hash
+inputs. Debug formatting redacts all commitments and evidence. Deterministic
+known answers and hostile post-call correlation, semantics, negotiation,
+set/closure, target, proof, and observation substitution tests freeze this
+boundary.
+
 This reuses the public OGVCS-041 request envelope only as authenticated internal
 control facts. `object.put` remains unregistered, the metadata route inventory
 remains empty, and no OGVCS-041 success envelope can be constructed by the
@@ -84,6 +97,11 @@ The self-dating OGVCS-041 idempotency carrier is revalidated for currentness at
 the database clock, but no public mutation is dispatched or stored. It is not
 equated to the existing private finalize fingerprint because those fingerprints
 are independently domain-separated and describe different commands.
+
+The existing JavaScript candidate schema cannot carry this composed receipt.
+Consequently the Rust composition deliberately exports no raw candidate
+projection: a future private host must preserve and verify the receipt while
+mapping the proof, and silently dropping it is not valid composition evidence.
 
 ## Exact non-claims
 

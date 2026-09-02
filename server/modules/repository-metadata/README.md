@@ -414,9 +414,16 @@ matches its correlation, tenant, repository, authority epoch, identity subject,
 manifest ObjectID, byte length, and raw SHA-256 to the v12 command, re-verifies
 the receipt at the database clock, and delegates commit or reconciliation only
 to the existing OGVCS-009-bound SERIALIZABLE participant. Composition handles
-are instance-branded, and a committed proof can be projected into the exact
-private object-transfer candidate shape without constructing an OGVCS-041
-success response.
+are instance-branded. Commit and reconciliation return only opaque composition
+receipts, never the ordinary v12 proof or raw unknown-recovery observation. A
+domain-separated receipt digest binds the exact correlation, semantic
+fingerprint, self-dating idempotency key, deadline, negotiation receipt and
+principal/session commitment; the explicit sorted object-set/authorization
+closure and authority facts; the expected manifest, length, raw digest and
+private command/lookup facts; and the underlying committed-proof or authorized
+observation digest. New/replayed commit state and committed/unknown recovery are
+also distinct receipt inputs. Receipt `Debug` output redacts every binding and
+evidence digest.
 
 That control envelope is deliberately route-less: `object.put` remains
 `networkRegistered=false`, and the OGVCS-041 public transfer carrier remains
@@ -430,13 +437,17 @@ JS-to-Rust invocation/transport, public endpoint, or multi-object grant issuer
 is added here. The OGVCS-041 self-dating idempotency carrier is reverified only
 for request currentness; because no public mutation is dispatched, it is not
 persisted and is not equated to the independently domain-separated private
-finalize fingerprint. The private JavaScript production-candidate port still
-derives the lifecycle receipt only after the branded chunking verifier receipt
-has been consumed; service input cannot select it. The older generic JavaScript
-lifecycle transaction participant keeps its separate predeclared
-content-manifest receipt convention; changing that OGVCS-007-owned publication
-contract is outside this route-less tranche and is not production-adoption
-evidence.
+finalize fingerprint. No raw candidate projection is exported from the
+composition: the current JavaScript production-candidate schema has no field
+for this new receipt, so silently dropping it would recreate a post-call
+misattribution path. A future private host must preserve and verify the composed
+receipt before adapting any underlying proof to that port. The private
+JavaScript production-candidate port still derives the lifecycle receipt only
+after the branded chunking verifier receipt has been consumed; service input
+cannot select it. The older generic JavaScript lifecycle transaction participant
+keeps its separate predeclared content-manifest receipt convention; changing
+that OGVCS-007-owned publication contract is outside this route-less tranche
+and is not production-adoption evidence.
 
 The v12 candidate is not a public object-transfer service. The later
 composition reuses an existing OGVCS-041 authentication carrier internally but

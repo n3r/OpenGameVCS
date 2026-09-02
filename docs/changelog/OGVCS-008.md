@@ -99,9 +99,14 @@ profile.
   commit and reconciliation only to the existing OGVCS-009-bound SERIALIZABLE
   participant. The complete sorted set remains capped at 4,096 and has no
   request-root field or expansion callback.
-- Added the exact private committed-proof projection needed by the existing
-  object-transfer acceptor, plus hostile brand/cross-instance, principal,
-  correlation, tenant, repository, epoch, and set-substitution coverage.
+- Added opaque, redacted composition receipts instead of returning the ordinary
+  v12 proof or unknown observation. Domain-separated digests bind the exact
+  OGVCS-041 correlation, semantic/idempotency and negotiation control
+  commitment, explicit authority/set closure, manifest/length/raw digest and
+  private target, and underlying proof/observation. Deterministic known answers
+  and hostile post-call control/set/target/evidence substitutions are covered.
+- Added hostile brand/cross-instance, principal, correlation, tenant,
+  repository, epoch, and input set-substitution coverage.
 - Kept `object.put` and every metadata route unregistered. The OGVCS-041 public
   transfer carrier remains request-root-only and continues to reject explicit
   object sets.
@@ -110,6 +115,9 @@ This follow-up still does not provide the JavaScript-to-Rust invocation,
 multi-object OGVCS-003 grant issuance, or the trusted mapping between the
 object-transfer production subject and OGVCS-009 identity subject. It is an
 additive fail-closed composition seam, not a public transfer route or rollout.
+The current JavaScript candidate port cannot carry the composed receipt, so no
+adapter may discard the receipt and treat its underlying v12 proof as composed
+evidence; that host mapping remains deliberately absent.
 
 ## Deliberate remaining work and open gates
 

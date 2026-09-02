@@ -83,10 +83,15 @@ each dependency inside the same transaction and lock or revalidate every exact
 dependency generation through commit. The Rust metadata module now has a
 route-less composition that binds an authenticated OGVCS-041 `object.put`
 control envelope to the existing OGVCS-009 explicit-set commit/reconciliation
-participant. It does not provide the JavaScript-to-Rust invocation, prove the
-grant-subject-to-identity mapping, issue multi-object grants, or register a
-public route. Without that private host composition, filesystem-local lifecycle
-therefore continues to leave content manifests staged.
+participant. Rust returns only an opaque composed receipt binding the exact
+authenticated control, explicit set, target, and committed proof or authorized
+unknown observation; it does not export a raw candidate projection. The current
+JavaScript port has no composed-receipt field, so a future private host must add
+and verify that binding rather than discard it. This does not provide the
+JavaScript-to-Rust invocation, prove the grant-subject-to-identity mapping,
+issue multi-object grants, or register a public route. Without that private host
+composition, filesystem-local lifecycle therefore continues to leave content
+manifests staged.
 
 Staging bytes, durable unique bytes, request rate, and transfer bytes are
 accounted separately. Durable reservations and commits survive response loss;

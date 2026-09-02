@@ -10,7 +10,7 @@ use ogvcs_identity_policy_audit_postgres::{
     TransactionAuthorizedView, TransactionBatchRecheck, MAXIMUM_BATCH_RESOURCES,
 };
 use serde::Serialize;
-use std::sync::Arc;
+use std::{fmt, sync::Arc};
 
 use crate::{
     service::metadata_negotiation_tenant_digest, MetadataNegotiationKeyRing, MetadataOperation,
@@ -48,6 +48,22 @@ const DECISION_CORRELATION_DOMAIN: &[u8] =
     b"OGVCS-OBJECT-TRANSFER-MANIFEST-DECISION-CORRELATION-V1";
 const RECONCILIATION_OBSERVATION_DOMAIN: &[u8] =
     b"OGVCS-OBJECT-TRANSFER-MANIFEST-RECONCILIATION-V1";
+const EXPLICIT_COMPOSITION_NEGOTIATION_RECEIPT_DOMAIN: &[u8] =
+    b"OGVCS-REPOSITORY-METADATA-EXPLICIT-COMPOSITION-NEGOTIATION-RECEIPT-V1";
+const EXPLICIT_COMPOSITION_CONTROL_DOMAIN: &[u8] =
+    b"OGVCS-REPOSITORY-METADATA-EXPLICIT-COMPOSITION-CONTROL-V1";
+const EXPLICIT_COMPOSITION_OBJECT_SET_DOMAIN: &[u8] =
+    b"OGVCS-REPOSITORY-METADATA-EXPLICIT-COMPOSITION-OBJECT-SET-V1";
+const EXPLICIT_COMPOSITION_AUTHORITY_DOMAIN: &[u8] =
+    b"OGVCS-REPOSITORY-METADATA-EXPLICIT-COMPOSITION-AUTHORITY-V1";
+const EXPLICIT_COMPOSITION_COMMIT_TARGET_DOMAIN: &[u8] =
+    b"OGVCS-REPOSITORY-METADATA-EXPLICIT-COMPOSITION-COMMIT-TARGET-V1";
+const EXPLICIT_COMPOSITION_RECONCILIATION_TARGET_DOMAIN: &[u8] =
+    b"OGVCS-REPOSITORY-METADATA-EXPLICIT-COMPOSITION-RECONCILIATION-TARGET-V1";
+const EXPLICIT_COMPOSITION_COMMIT_RECEIPT_DOMAIN: &[u8] =
+    b"OGVCS-REPOSITORY-METADATA-EXPLICIT-COMPOSITION-COMMIT-RECEIPT-V1";
+const EXPLICIT_COMPOSITION_RECONCILIATION_RECEIPT_DOMAIN: &[u8] =
+    b"OGVCS-REPOSITORY-METADATA-EXPLICIT-COMPOSITION-RECONCILIATION-RECEIPT-V1";
 
 /// Existing OGVCS-009 authority projected onto one exact sorted ObjectID set.
 /// There is intentionally no bounded-root field or expansion callback.
@@ -130,21 +146,34 @@ pub struct ContentManifestCommittedProofLookup<'a> {
 /// It cannot be constructed outside this module or replayed through a second
 /// composition instance.
 pub struct BoundContentManifestAvailabilityCommit<'a> {
-    binding: BrandedComposition<(
-        NegotiationVerifiedMetadataRequest,
-        ContentManifestAvailabilityCommitRequest<'a>,
-    )>,
+    binding: BrandedComposition<BoundCompositionCommit<'a>>,
 }
 
 /// Opaque composition brand for authenticated committed-proof reconciliation.
 /// The expected raw manifest SHA-256 is retained because the v12 lookup itself
 /// intentionally contains no public carrier fields.
 pub struct BoundContentManifestAvailabilityReconciliation<'a> {
-    binding: BrandedComposition<(
-        NegotiationVerifiedMetadataRequest,
-        ContentManifestCommittedProofLookup<'a>,
-        [u8; 32],
-    )>,
+    binding: BrandedComposition<BoundCompositionReconciliation<'a>>,
+}
+
+struct BoundCompositionCommit<'a> {
+    verified: NegotiationVerifiedMetadataRequest,
+    request: ContentManifestAvailabilityCommitRequest<'a>,
+    commitments: ExplicitCompositionInputCommitments,
+}
+
+struct BoundCompositionReconciliation<'a> {
+    verified: NegotiationVerifiedMetadataRequest,
+    lookup: ContentManifestCommittedProofLookup<'a>,
+    expected_manifest_sha256: [u8; 32],
+    commitments: ExplicitCompositionInputCommitments,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+struct ExplicitCompositionInputCommitments {
+    control: [u8; 32],
+    authority: [u8; 32],
+    target: [u8; 32],
 }
 
 /// Route-less production composition of the existing OGVCS-041 request brand,
@@ -163,6 +192,36 @@ struct ExplicitCompositionBrand(Arc<()>);
 struct BrandedComposition<T> {
     origin: Arc<()>,
     value: T,
+}
+
+/// Opaque evidence returned only after the authenticated control binding and
+/// the existing v12 mutation have both completed. The ordinary v12 proof is
+/// intentionally not exposed through this type.
+pub struct ContentManifestExplicitCompositionCommitReceipt {
+    control_commitment: [u8; 32],
+    authority_commitment: [u8; 32],
+    target_commitment: [u8; 32],
+    committed_proof_digest: [u8; 32],
+    proof_replayed: bool,
+    receipt_digest: [u8; 32],
+}
+
+/// Closed reconciliation outcome carried by the opaque composition receipt.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ContentManifestExplicitCompositionReconciliationStatus {
+    Committed,
+    UnknownRecovering,
+}
+
+/// Opaque reconciliation evidence. Both committed and unknown-recovering
+/// results bind the exact authenticated request and explicit authority input.
+pub struct ContentManifestExplicitCompositionReconciliationReceipt {
+    status: ContentManifestExplicitCompositionReconciliationStatus,
+    control_commitment: [u8; 32],
+    authority_commitment: [u8; 32],
+    target_commitment: [u8; 32],
+    underlying_evidence_digest: [u8; 32],
+    receipt_digest: [u8; 32],
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -218,20 +277,80 @@ impl ContentManifestCommittedProof {
     pub const fn replayed(&self) -> bool {
         self.replayed
     }
+}
 
-    /// Exact private projection consumed by the existing object-transfer
-    /// production-candidate port. This is not an OGVCS-041 response body and
-    /// cannot register or imply a public route.
-    pub fn candidate_projection(&self) -> Value {
-        let mut value = committed_proof_value(self);
-        value
-            .as_object_mut()
-            .expect("committed proof is an object")
-            .insert(
-                "proofSha256".to_owned(),
-                Value::String(hex_bytes(&self.proof_digest)),
-            );
-        value
+impl ContentManifestExplicitCompositionCommitReceipt {
+    pub const fn receipt_sha256(&self) -> &[u8; 32] {
+        &self.receipt_digest
+    }
+
+    pub const fn control_commitment_sha256(&self) -> &[u8; 32] {
+        &self.control_commitment
+    }
+
+    pub const fn authority_commitment_sha256(&self) -> &[u8; 32] {
+        &self.authority_commitment
+    }
+
+    pub const fn target_commitment_sha256(&self) -> &[u8; 32] {
+        &self.target_commitment
+    }
+
+    pub const fn committed_proof_sha256(&self) -> &[u8; 32] {
+        &self.committed_proof_digest
+    }
+
+    pub const fn proof_replayed(&self) -> bool {
+        self.proof_replayed
+    }
+}
+
+impl fmt::Debug for ContentManifestExplicitCompositionCommitReceipt {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ContentManifestExplicitCompositionCommitReceipt")
+            .field("bindings", &"[REDACTED]")
+            .field("committed_proof", &"[REDACTED]")
+            .field("receipt", &"[REDACTED]")
+            .finish()
+    }
+}
+
+impl ContentManifestExplicitCompositionReconciliationReceipt {
+    pub const fn status(&self) -> ContentManifestExplicitCompositionReconciliationStatus {
+        self.status
+    }
+
+    pub const fn receipt_sha256(&self) -> &[u8; 32] {
+        &self.receipt_digest
+    }
+
+    pub const fn control_commitment_sha256(&self) -> &[u8; 32] {
+        &self.control_commitment
+    }
+
+    pub const fn authority_commitment_sha256(&self) -> &[u8; 32] {
+        &self.authority_commitment
+    }
+
+    pub const fn target_commitment_sha256(&self) -> &[u8; 32] {
+        &self.target_commitment
+    }
+
+    pub const fn underlying_evidence_sha256(&self) -> &[u8; 32] {
+        &self.underlying_evidence_digest
+    }
+}
+
+impl fmt::Debug for ContentManifestExplicitCompositionReconciliationReceipt {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ContentManifestExplicitCompositionReconciliationReceipt")
+            .field("status", &self.status)
+            .field("bindings", &"[REDACTED]")
+            .field("underlying_evidence", &"[REDACTED]")
+            .field("receipt", &"[REDACTED]")
+            .finish()
     }
 }
 
@@ -483,18 +602,28 @@ impl PostgresContentManifestExplicitComposition {
             request.length,
             request.production_statement.manifest_sha256,
         )?;
+        let commitments = commit_composition_input_commitments(&verified, &request)?;
         Ok(BoundContentManifestAvailabilityCommit {
-            binding: self.brand.bind((verified, request)),
+            binding: self.brand.bind(BoundCompositionCommit {
+                verified,
+                request,
+                commitments,
+            }),
         })
     }
 
-    /// Re-verifies the carrier at the database clock, then delegates the only
-    /// mutation to the existing v12 OGVCS-009-bound transaction.
+    /// Re-verifies the carrier at the database clock, delegates the only
+    /// mutation to the existing v12 OGVCS-009-bound transaction, and returns
+    /// only an opaque receipt binding that proof to the authenticated input.
     pub fn commit(
         &mut self,
         bound: BoundContentManifestAvailabilityCommit<'_>,
-    ) -> Result<ContentManifestCommittedProof> {
-        let (verified, request) = self.brand.take(bound.binding)?;
+    ) -> Result<ContentManifestExplicitCompositionCommitReceipt> {
+        let BoundCompositionCommit {
+            verified,
+            request,
+            commitments,
+        } = self.brand.take(bound.binding)?;
         validate_commit_request(&request)?;
         validate_composition_control(
             &verified,
@@ -503,6 +632,9 @@ impl PostgresContentManifestExplicitComposition {
             request.length,
             request.production_statement.manifest_sha256,
         )?;
+        if commit_composition_input_commitments(&verified, &request)? != commitments {
+            return denied();
+        }
         crate::verify_schema_compatibility(&mut self.store.store.client)
             .map_err(|_| denied_error())?;
         let PostgresMetadataStore {
@@ -518,7 +650,7 @@ impl PostgresContentManifestExplicitComposition {
             .isolation_level(IsolationLevel::Serializable)
             .start()
             .map_err(|_| denied_error())?;
-        let result: Result<ContentManifestCommittedProof> = (|| {
+        let result: Result<ContentManifestExplicitCompositionCommitReceipt> = (|| {
             let now_unix_ms = composition_database_now_unix_ms(&mut transaction)?;
             reverify_composition_at_database_clock(
                 &verified,
@@ -532,17 +664,17 @@ impl PostgresContentManifestExplicitComposition {
                 TransferFault::default(),
             )?;
             proof.replayed = !wrote;
-            Ok(proof)
+            composition_commit_receipt(commitments, &request, proof)
         })();
-        let proof = match result {
-            Ok(proof) => proof,
+        let receipt = match result {
+            Ok(receipt) => receipt,
             Err(_) => {
                 let _ = transaction.rollback();
                 return denied();
             }
         };
         transaction.commit().map_err(|_| denied_error())?;
-        Ok(proof)
+        Ok(receipt)
     }
 
     /// Binds a committed-proof lookup to the same route-less public control
@@ -562,21 +694,35 @@ impl PostgresContentManifestExplicitComposition {
             lookup.length,
             expected_manifest_sha256,
         )?;
+        let commitments = reconciliation_composition_input_commitments(
+            &verified,
+            &lookup,
+            expected_manifest_sha256,
+        )?;
         Ok(BoundContentManifestAvailabilityReconciliation {
-            binding: self
-                .brand
-                .bind((verified, lookup, expected_manifest_sha256)),
+            binding: self.brand.bind(BoundCompositionReconciliation {
+                verified,
+                lookup,
+                expected_manifest_sha256,
+                commitments,
+            }),
         })
     }
 
     /// Re-verifies and reauthorizes the exact explicit set in one read-only
-    /// SERIALIZABLE transaction. A committed proof must also match the public
-    /// carrier's raw manifest digest before it is returned.
+    /// SERIALIZABLE transaction. The opaque output binds either an exact
+    /// committed proof or the authorized unknown observation to the public
+    /// carrier, including its raw manifest digest.
     pub fn reconcile(
         &mut self,
         bound: BoundContentManifestAvailabilityReconciliation<'_>,
-    ) -> Result<ContentManifestAvailabilityReconciliation> {
-        let (verified, lookup, expected_manifest_sha256) = self.brand.take(bound.binding)?;
+    ) -> Result<ContentManifestExplicitCompositionReconciliationReceipt> {
+        let BoundCompositionReconciliation {
+            verified,
+            lookup,
+            expected_manifest_sha256,
+            commitments,
+        } = self.brand.take(bound.binding)?;
         validate_lookup(&lookup)?;
         validate_composition_control(
             &verified,
@@ -585,6 +731,14 @@ impl PostgresContentManifestExplicitComposition {
             lookup.length,
             expected_manifest_sha256,
         )?;
+        if reconciliation_composition_input_commitments(
+            &verified,
+            &lookup,
+            expected_manifest_sha256,
+        )? != commitments
+        {
+            return denied();
+        }
         crate::verify_schema_compatibility(&mut self.store.store.client)
             .map_err(|_| denied_error())?;
         let PostgresMetadataStore {
@@ -600,7 +754,7 @@ impl PostgresContentManifestExplicitComposition {
             .isolation_level(IsolationLevel::Serializable)
             .start()
             .map_err(|_| denied_error())?;
-        let result: Result<ContentManifestAvailabilityReconciliation> = (|| {
+        let result: Result<ContentManifestExplicitCompositionReconciliationReceipt> = (|| {
             let now_unix_ms = composition_database_now_unix_ms(&mut transaction)?;
             reverify_composition_at_database_clock(
                 &verified,
@@ -613,7 +767,12 @@ impl PostgresContentManifestExplicitComposition {
                     return denied();
                 }
             }
-            Ok(result)
+            composition_reconciliation_receipt(
+                commitments,
+                &lookup,
+                expected_manifest_sha256,
+                result,
+            )
         })();
         let _ = transaction.rollback();
         result.map_err(|_| denied_error())
@@ -662,6 +821,279 @@ fn validate_composition_control(
         return denied();
     }
     Ok(())
+}
+
+fn commit_composition_input_commitments(
+    verified: &NegotiationVerifiedMetadataRequest,
+    request: &ContentManifestAvailabilityCommitRequest<'_>,
+) -> Result<ExplicitCompositionInputCommitments> {
+    Ok(ExplicitCompositionInputCommitments {
+        control: explicit_composition_control_commitment(verified)?,
+        authority: explicit_composition_authority_commitment(&request.authority)?,
+        target: explicit_composition_commit_target_commitment(request)?,
+    })
+}
+
+fn reconciliation_composition_input_commitments(
+    verified: &NegotiationVerifiedMetadataRequest,
+    lookup: &ContentManifestCommittedProofLookup<'_>,
+    expected_manifest_sha256: [u8; 32],
+) -> Result<ExplicitCompositionInputCommitments> {
+    Ok(ExplicitCompositionInputCommitments {
+        control: explicit_composition_control_commitment(verified)?,
+        authority: explicit_composition_authority_commitment(&lookup.authority)?,
+        target: explicit_composition_reconciliation_target_commitment(
+            lookup,
+            expected_manifest_sha256,
+        ),
+    })
+}
+
+fn explicit_composition_control_commitment(
+    verified: &NegotiationVerifiedMetadataRequest,
+) -> Result<[u8; 32]> {
+    let request = verified.request();
+    let semantic_fingerprint = request.semantic_fingerprint().ok_or_else(denied_error)?;
+    let idempotency_key = request.idempotency_key().ok_or_else(denied_error)?;
+    let negotiation_receipt = domain_digest(
+        EXPLICIT_COMPOSITION_NEGOTIATION_RECEIPT_DOMAIN,
+        &canonical_json_bytes(request.negotiation_receipt())?,
+    );
+    let principal = verified.principal();
+    let mut bytes = Vec::with_capacity(512);
+    receipt_field(&mut bytes, request.operation().name().as_bytes());
+    receipt_field(&mut bytes, request.correlation_id().as_bytes());
+    match request.deadline_unix_ms() {
+        Some(deadline) => {
+            receipt_field(&mut bytes, b"deadline-present");
+            receipt_field(&mut bytes, &deadline.to_be_bytes());
+        }
+        None => receipt_field(&mut bytes, b"deadline-absent"),
+    }
+    receipt_field(&mut bytes, idempotency_key.as_bytes());
+    receipt_field(&mut bytes, &semantic_fingerprint);
+    receipt_field(&mut bytes, &negotiation_receipt);
+    receipt_field(&mut bytes, principal.subject_digest());
+    receipt_field(&mut bytes, principal.tenant_digest());
+    receipt_field(&mut bytes, &principal.authority_epoch().to_be_bytes());
+    receipt_field(&mut bytes, principal.session_id.as_bytes());
+    Ok(domain_digest(EXPLICIT_COMPOSITION_CONTROL_DOMAIN, &bytes))
+}
+
+fn explicit_composition_object_set_commitment(object_set: &[ObjectRef]) -> Result<[u8; 32]> {
+    let count = u64::try_from(object_set.len()).map_err(|_| denied_error())?;
+    let mut bytes = Vec::with_capacity(object_set.len().saturating_mul(96));
+    receipt_field(&mut bytes, &count.to_be_bytes());
+    for object_ref in object_set {
+        receipt_field(&mut bytes, object_ref.to_string().as_bytes());
+    }
+    Ok(domain_digest(
+        EXPLICIT_COMPOSITION_OBJECT_SET_DOMAIN,
+        &bytes,
+    ))
+}
+
+fn explicit_composition_authority_commitment(
+    authority: &ContentManifestExplicitAuthority<'_>,
+) -> Result<[u8; 32]> {
+    validate_authority_set(authority)?;
+    let object_set = explicit_composition_object_set_commitment(authority.object_set)?;
+    let count = u64::try_from(authority.object_set.len()).map_err(|_| denied_error())?;
+    let mut bytes = Vec::with_capacity(384);
+    receipt_field(&mut bytes, authority.credentials.correlation_id.as_bytes());
+    receipt_field(&mut bytes, authority.tenant_id.as_bytes());
+    receipt_field(&mut bytes, authority.repository_id.as_bytes());
+    receipt_field(&mut bytes, &count.to_be_bytes());
+    receipt_field(&mut bytes, &object_set);
+    receipt_field(&mut bytes, &authority.authorization_closure_digest);
+    receipt_field(&mut bytes, &authority.identity_subject_digest);
+    receipt_field(&mut bytes, &authority.production_subject_digest);
+    receipt_field(&mut bytes, &authority.authority_epoch.to_be_bytes());
+    receipt_field(&mut bytes, &authority.tenant_scope_digest);
+    Ok(domain_digest(EXPLICIT_COMPOSITION_AUTHORITY_DOMAIN, &bytes))
+}
+
+fn explicit_composition_commit_target_commitment(
+    request: &ContentManifestAvailabilityCommitRequest<'_>,
+) -> Result<[u8; 32]> {
+    let dependency_count = u64::try_from(request.dependencies.len()).map_err(|_| denied_error())?;
+    let statement_digest = production_statement_digest(&request.production_statement)?;
+    let mut bytes = Vec::with_capacity(512);
+    receipt_field(&mut bytes, &request.opaque_key);
+    receipt_field(&mut bytes, request.object_ref.to_string().as_bytes());
+    receipt_field(&mut bytes, &request.length.to_be_bytes());
+    receipt_field(&mut bytes, &request.expected_generation.to_be_bytes());
+    receipt_field(&mut bytes, &request.authority_binding_digest);
+    receipt_field(&mut bytes, &request.backend_receipt_digest);
+    receipt_field(&mut bytes, &request.verification_receipt_digest);
+    receipt_field(&mut bytes, &request.finalize_semantic_fingerprint);
+    receipt_field(&mut bytes, &dependency_count.to_be_bytes());
+    receipt_field(&mut bytes, &request.dependency_generation_set_digest);
+    receipt_field(&mut bytes, &request.production_statement.manifest_sha256);
+    receipt_field(&mut bytes, &statement_digest);
+    Ok(domain_digest(
+        EXPLICIT_COMPOSITION_COMMIT_TARGET_DOMAIN,
+        &bytes,
+    ))
+}
+
+fn explicit_composition_reconciliation_target_commitment(
+    lookup: &ContentManifestCommittedProofLookup<'_>,
+    expected_manifest_sha256: [u8; 32],
+) -> [u8; 32] {
+    let mut bytes = Vec::with_capacity(384);
+    receipt_field(&mut bytes, &lookup.opaque_key);
+    receipt_field(&mut bytes, lookup.object_ref.to_string().as_bytes());
+    receipt_field(&mut bytes, &lookup.length.to_be_bytes());
+    receipt_field(&mut bytes, &lookup.authority_binding_digest);
+    receipt_field(&mut bytes, &lookup.backend_receipt_digest);
+    receipt_field(&mut bytes, &lookup.finalize_semantic_fingerprint);
+    receipt_field(&mut bytes, &expected_manifest_sha256);
+    domain_digest(EXPLICIT_COMPOSITION_RECONCILIATION_TARGET_DOMAIN, &bytes)
+}
+
+fn composition_commit_receipt(
+    commitments: ExplicitCompositionInputCommitments,
+    request: &ContentManifestAvailabilityCommitRequest<'_>,
+    proof: ContentManifestCommittedProof,
+) -> Result<ContentManifestExplicitCompositionCommitReceipt> {
+    if explicit_composition_authority_commitment(&request.authority)? != commitments.authority
+        || explicit_composition_commit_target_commitment(request)? != commitments.target
+    {
+        return denied();
+    }
+    let expected_generation = request
+        .expected_generation
+        .checked_add(1)
+        .ok_or_else(denied_error)?;
+    if proof.tenant_id != request.authority.tenant_id
+        || proof.repository_id != request.authority.repository_id
+        || proof.object_ref != request.object_ref
+        || proof.length != request.length
+        || proof.generation != expected_generation
+        || proof.authorization_closure_digest != request.authority.authorization_closure_digest
+        || proof.authority_binding_digest != request.authority_binding_digest
+        || proof.tenant_scope_digest != request.authority.tenant_scope_digest
+        || proof.identity_subject_digest != request.authority.identity_subject_digest
+        || proof.production_subject_digest != request.authority.production_subject_digest
+        || proof.backend_receipt_digest != request.backend_receipt_digest
+        || usize::from(proof.dependency_count) != request.dependencies.len()
+        || proof.dependency_generation_set_digest != request.dependency_generation_set_digest
+        || proof.verification_receipt_digest != request.verification_receipt_digest
+        || proof.finalize_semantic_fingerprint != request.finalize_semantic_fingerprint
+        || proof.production_statement != request.production_statement
+        || proof.production_statement_digest
+            != production_statement_digest(&request.production_statement)?
+        || proof.proof_digest != committed_proof_digest(&proof)?
+    {
+        return denied();
+    }
+    let receipt_digest =
+        explicit_composition_commit_receipt_digest(commitments, proof.proof_digest, proof.replayed);
+    Ok(ContentManifestExplicitCompositionCommitReceipt {
+        control_commitment: commitments.control,
+        authority_commitment: commitments.authority,
+        target_commitment: commitments.target,
+        committed_proof_digest: proof.proof_digest,
+        proof_replayed: proof.replayed,
+        receipt_digest,
+    })
+}
+
+fn explicit_composition_commit_receipt_digest(
+    commitments: ExplicitCompositionInputCommitments,
+    committed_proof_digest: [u8; 32],
+    proof_replayed: bool,
+) -> [u8; 32] {
+    let mut bytes = Vec::with_capacity(192);
+    receipt_field(&mut bytes, &commitments.control);
+    receipt_field(&mut bytes, &commitments.authority);
+    receipt_field(&mut bytes, &commitments.target);
+    receipt_field(&mut bytes, &committed_proof_digest);
+    receipt_field(
+        &mut bytes,
+        if proof_replayed { b"replayed" } else { b"new" },
+    );
+    domain_digest(EXPLICIT_COMPOSITION_COMMIT_RECEIPT_DOMAIN, &bytes)
+}
+
+fn composition_reconciliation_receipt(
+    commitments: ExplicitCompositionInputCommitments,
+    lookup: &ContentManifestCommittedProofLookup<'_>,
+    expected_manifest_sha256: [u8; 32],
+    result: ContentManifestAvailabilityReconciliation,
+) -> Result<ContentManifestExplicitCompositionReconciliationReceipt> {
+    if explicit_composition_authority_commitment(&lookup.authority)? != commitments.authority
+        || explicit_composition_reconciliation_target_commitment(lookup, expected_manifest_sha256)
+            != commitments.target
+    {
+        return denied();
+    }
+    let (status, underlying_evidence_digest) = match result {
+        ContentManifestAvailabilityReconciliation::Committed(proof) => {
+            if !proof.replayed
+                || proof.tenant_id != lookup.authority.tenant_id
+                || proof.repository_id != lookup.authority.repository_id
+                || proof.object_ref != lookup.object_ref
+                || proof.length != lookup.length
+                || proof.authorization_closure_digest
+                    != lookup.authority.authorization_closure_digest
+                || proof.authority_binding_digest != lookup.authority_binding_digest
+                || proof.tenant_scope_digest != lookup.authority.tenant_scope_digest
+                || proof.identity_subject_digest != lookup.authority.identity_subject_digest
+                || proof.production_subject_digest != lookup.authority.production_subject_digest
+                || proof.backend_receipt_digest != lookup.backend_receipt_digest
+                || proof.finalize_semantic_fingerprint != lookup.finalize_semantic_fingerprint
+                || proof.production_statement.manifest_sha256 != expected_manifest_sha256
+                || proof.proof_digest != committed_proof_digest(&proof)?
+            {
+                return denied();
+            }
+            (
+                ContentManifestExplicitCompositionReconciliationStatus::Committed,
+                proof.proof_digest,
+            )
+        }
+        ContentManifestAvailabilityReconciliation::UnknownRecovering { observation_digest } => (
+            ContentManifestExplicitCompositionReconciliationStatus::UnknownRecovering,
+            observation_digest,
+        ),
+    };
+    let receipt_digest = explicit_composition_reconciliation_receipt_digest(
+        commitments,
+        status,
+        underlying_evidence_digest,
+    );
+    Ok(ContentManifestExplicitCompositionReconciliationReceipt {
+        status,
+        control_commitment: commitments.control,
+        authority_commitment: commitments.authority,
+        target_commitment: commitments.target,
+        underlying_evidence_digest,
+        receipt_digest,
+    })
+}
+
+fn explicit_composition_reconciliation_receipt_digest(
+    commitments: ExplicitCompositionInputCommitments,
+    status: ContentManifestExplicitCompositionReconciliationStatus,
+    underlying_evidence_digest: [u8; 32],
+) -> [u8; 32] {
+    let mut bytes = Vec::with_capacity(192);
+    receipt_field(&mut bytes, &commitments.control);
+    receipt_field(&mut bytes, &commitments.authority);
+    receipt_field(&mut bytes, &commitments.target);
+    receipt_field(
+        &mut bytes,
+        match status {
+            ContentManifestExplicitCompositionReconciliationStatus::Committed => b"committed",
+            ContentManifestExplicitCompositionReconciliationStatus::UnknownRecovering => {
+                b"unknown-recovering"
+            }
+        },
+    );
+    receipt_field(&mut bytes, &underlying_evidence_digest);
+    domain_digest(EXPLICIT_COMPOSITION_RECONCILIATION_RECEIPT_DOMAIN, &bytes)
 }
 
 fn composition_database_now_unix_ms(transaction: &mut Transaction<'_>) -> Result<u64> {
@@ -983,6 +1415,14 @@ fn validate_authority(
     authority: &ContentManifestExplicitAuthority<'_>,
     manifest: ObjectRef,
 ) -> Result<()> {
+    validate_authority_set(authority)?;
+    if !authority.object_set.contains(&manifest) {
+        return denied();
+    }
+    Ok(())
+}
+
+fn validate_authority_set(authority: &ContentManifestExplicitAuthority<'_>) -> Result<()> {
     if authority.object_set.is_empty()
         || authority.object_set.len() > CONTENT_MANIFEST_EXPLICIT_OBJECTS_MAXIMUM
         || authority.authority_epoch == 0
@@ -991,7 +1431,6 @@ fn validate_authority(
             .object_set
             .windows(2)
             .any(|pair| pair[0].to_string() >= pair[1].to_string())
-        || !authority.object_set.contains(&manifest)
         || authority.object_set.iter().any(|reference| {
             !matches!(
                 reference.kind,
@@ -2370,14 +2809,6 @@ mod tests {
             proof.proof_digest,
             digest("3aa67a120438b8c5d35c87d838b1464a452dcfb8698f2368fdd9dc775b6ad6d2")
         );
-        let projection = proof.candidate_projection();
-        assert_eq!(projection["proofSha256"], hex_bytes(&proof.proof_digest));
-        assert_eq!(
-            projection["subjectDigestSha256"],
-            hex_bytes(&proof.production_subject_digest)
-        );
-        assert!(projection.get("identitySubjectSha256").is_none());
-        assert!(projection.get("replayed").is_none());
     }
 
     #[test]
@@ -2673,6 +3104,355 @@ mod tests {
         );
     }
 
+    #[test]
+    fn composition_outputs_bind_post_call_evidence_and_redact_debug() {
+        let tenant = TenantId::from_bytes(id("11111111-1111-4111-8111-111111111111"));
+        let repository = RepositoryId::from_bytes(id("22222222-2222-4222-8222-222222222222"));
+        let chunk = reference(ObjectKind::Chunk, 0x21);
+        let manifest = reference(ObjectKind::ContentManifest, 0x61);
+        let object_set = [chunk, manifest];
+        let identity_subject = [0x31; 32];
+        let manifest_sha256 = [0x41; 32];
+        let exact_authority = authority(
+            tenant,
+            repository,
+            &object_set,
+            identity_subject,
+            7,
+            "composition-correlation-0001",
+        );
+        let verified = verified_object_put(
+            tenant,
+            repository,
+            identity_subject,
+            7,
+            "composition-correlation-0001",
+            manifest,
+            141,
+            manifest_sha256,
+        );
+        let dependencies = [ContentManifestDependencyBinding {
+            opaque_key: [0x11; 32],
+            object_ref: chunk,
+            length: 56,
+            generation: 2,
+            authority_binding_digest: [0x44; 32],
+            backend_receipt_digest: [0x55; 32],
+        }];
+        let request = composition_commit_request(
+            exact_authority,
+            &dependencies,
+            manifest,
+            141,
+            manifest_sha256,
+        );
+        validate_commit_request(&request).unwrap();
+        let commitments = commit_composition_input_commitments(&verified, &request).unwrap();
+        let proof = composition_proof(&request, false);
+        let proof_digest = proof.proof_digest;
+        let commit_receipt = composition_commit_receipt(commitments, &request, proof).unwrap();
+        assert!(!commit_receipt.proof_replayed());
+        assert_eq!(commit_receipt.committed_proof_sha256(), &proof_digest);
+
+        let lookup = lookup_from_commit(&request);
+        let reconciliation_commitments =
+            reconciliation_composition_input_commitments(&verified, &lookup, manifest_sha256)
+                .unwrap();
+        let unknown_observation = [0x91; 32];
+        let unknown_receipt = composition_reconciliation_receipt(
+            reconciliation_commitments,
+            &lookup,
+            manifest_sha256,
+            ContentManifestAvailabilityReconciliation::UnknownRecovering {
+                observation_digest: unknown_observation,
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            unknown_receipt.status(),
+            ContentManifestExplicitCompositionReconciliationStatus::UnknownRecovering
+        );
+        assert_eq!(
+            unknown_receipt.underlying_evidence_sha256(),
+            &unknown_observation
+        );
+
+        let committed_receipt = composition_reconciliation_receipt(
+            reconciliation_commitments,
+            &lookup,
+            manifest_sha256,
+            ContentManifestAvailabilityReconciliation::Committed(Box::new(composition_proof(
+                &request, true,
+            ))),
+        )
+        .unwrap();
+        assert_eq!(
+            committed_receipt.status(),
+            ContentManifestExplicitCompositionReconciliationStatus::Committed
+        );
+
+        let known_answers = [
+            hex_bytes(commit_receipt.control_commitment_sha256()),
+            hex_bytes(commit_receipt.authority_commitment_sha256()),
+            hex_bytes(commit_receipt.target_commitment_sha256()),
+            hex_bytes(commit_receipt.receipt_sha256()),
+            hex_bytes(unknown_receipt.target_commitment_sha256()),
+            hex_bytes(unknown_receipt.receipt_sha256()),
+            hex_bytes(committed_receipt.receipt_sha256()),
+        ];
+        assert_eq!(
+            known_answers,
+            [
+                "c56a0bdc2560bfb33fe9331f8055f9b9ed824dec644672d9a9a537e3ce494347",
+                "79396991108969a477a4a38189378c45fa9da7711bf34f667a6af3644153c63b",
+                "9bbd0645b3a8f218779b9696c20f54fa6e3fdec7281bcca5b911461454224361",
+                "abb5bd04ebf35a619d01f9c315b2cabaa8824128488e288388fbd496a272cb74",
+                "62c00a55eeced1d47ac6c9217890c50fd563e10593198f1f82ed097bf27cecde",
+                "bd338ed0d35452b819e48ab578e0f6aef3aedf773d16eb539f8af5a3858dbb26",
+                "a83d9bdb2e64068ef76c22a447ac9bafc05e34dd8c700a9abaf559f89cb2cb30",
+            ],
+            "freeze deterministic composition commitments and receipts"
+        );
+
+        for rendered in [
+            format!("{commit_receipt:?}"),
+            format!("{unknown_receipt:?}"),
+            format!("{committed_receipt:?}"),
+        ] {
+            assert!(rendered.contains("[REDACTED]"));
+            assert!(!rendered.contains(&known_answers[0]));
+            assert!(!rendered.contains(&known_answers[3]));
+            assert!(!rendered.contains(&hex_bytes(&proof_digest)));
+            assert!(!rendered.contains(&hex_bytes(&unknown_observation)));
+        }
+
+        let changed_correlation = verified_object_put(
+            tenant,
+            repository,
+            identity_subject,
+            7,
+            "composition-correlation-0002",
+            manifest,
+            141,
+            manifest_sha256,
+        );
+        let changed_semantics = verified_object_put(
+            tenant,
+            repository,
+            identity_subject,
+            7,
+            "composition-correlation-0001",
+            manifest,
+            142,
+            manifest_sha256,
+        );
+        let changed_negotiation = verified_object_put_with_session(
+            tenant,
+            repository,
+            identity_subject,
+            7,
+            "composition-correlation-0001",
+            manifest,
+            141,
+            manifest_sha256,
+            "composition-session-0002",
+        );
+        for hostile_control in [
+            explicit_composition_control_commitment(&changed_correlation).unwrap(),
+            explicit_composition_control_commitment(&changed_semantics).unwrap(),
+            explicit_composition_control_commitment(&changed_negotiation).unwrap(),
+        ] {
+            assert_ne!(hostile_control, commitments.control);
+            let hostile = ExplicitCompositionInputCommitments {
+                control: hostile_control,
+                ..commitments
+            };
+            assert_ne!(
+                explicit_composition_commit_receipt_digest(hostile, proof_digest, false),
+                *commit_receipt.receipt_sha256()
+            );
+            assert_ne!(
+                explicit_composition_reconciliation_receipt_digest(
+                    hostile,
+                    ContentManifestExplicitCompositionReconciliationStatus::UnknownRecovering,
+                    unknown_observation,
+                ),
+                *unknown_receipt.receipt_sha256()
+            );
+        }
+
+        let substituted_set = [reference(ObjectKind::Chunk, 0x01), chunk, manifest];
+        let substituted_authority = authority(
+            tenant,
+            repository,
+            &substituted_set,
+            identity_subject,
+            7,
+            "composition-correlation-0001",
+        );
+        let hostile_authority =
+            explicit_composition_authority_commitment(&substituted_authority).unwrap();
+        assert_ne!(hostile_authority, commitments.authority);
+        assert_ne!(
+            explicit_composition_commit_receipt_digest(
+                ExplicitCompositionInputCommitments {
+                    authority: hostile_authority,
+                    ..commitments
+                },
+                proof_digest,
+                false,
+            ),
+            *commit_receipt.receipt_sha256()
+        );
+
+        let hostile_request =
+            composition_commit_request(exact_authority, &dependencies, manifest, 141, [0x42; 32]);
+        let hostile_length_request = composition_commit_request(
+            exact_authority,
+            &dependencies,
+            manifest,
+            142,
+            manifest_sha256,
+        );
+        let hostile_manifest_request = composition_commit_request(
+            exact_authority,
+            &dependencies,
+            reference(ObjectKind::ContentManifest, 0x62),
+            141,
+            manifest_sha256,
+        );
+        for hostile_target in [
+            explicit_composition_commit_target_commitment(&hostile_request).unwrap(),
+            explicit_composition_commit_target_commitment(&hostile_length_request).unwrap(),
+            explicit_composition_commit_target_commitment(&hostile_manifest_request).unwrap(),
+        ] {
+            assert_ne!(hostile_target, commitments.target);
+        }
+        for hostile_lookup in [
+            lookup_from_commit(&hostile_length_request),
+            lookup_from_commit(&hostile_manifest_request),
+        ] {
+            assert_ne!(
+                explicit_composition_reconciliation_target_commitment(
+                    &hostile_lookup,
+                    manifest_sha256,
+                ),
+                reconciliation_commitments.target
+            );
+        }
+        assert_eq!(
+            composition_reconciliation_receipt(
+                reconciliation_commitments,
+                &lookup,
+                [0x42; 32],
+                ContentManifestAvailabilityReconciliation::UnknownRecovering {
+                    observation_digest: unknown_observation,
+                },
+            )
+            .unwrap_err()
+            .code,
+            DomainErrorCode::MetadataNotFoundOrDenied
+        );
+
+        let mut substituted_proof = composition_proof(&request, false);
+        substituted_proof.length += 1;
+        substituted_proof.proof_digest = committed_proof_digest(&substituted_proof).unwrap();
+        assert_eq!(
+            composition_commit_receipt(commitments, &request, substituted_proof)
+                .unwrap_err()
+                .code,
+            DomainErrorCode::MetadataNotFoundOrDenied
+        );
+        assert_ne!(
+            explicit_composition_reconciliation_receipt_digest(
+                reconciliation_commitments,
+                ContentManifestExplicitCompositionReconciliationStatus::UnknownRecovering,
+                [0x92; 32],
+            ),
+            *unknown_receipt.receipt_sha256(),
+            "unknown recovery must bind the exact authorized observation"
+        );
+    }
+
+    fn composition_commit_request<'a>(
+        authority: ContentManifestExplicitAuthority<'a>,
+        dependencies: &'a [ContentManifestDependencyBinding],
+        manifest: ObjectRef,
+        length: u64,
+        manifest_sha256: [u8; 32],
+    ) -> ContentManifestAvailabilityCommitRequest<'a> {
+        let production_statement = ContentManifestProductionStatement {
+            boundary: CONTENT_MANIFEST_PRODUCTION_BOUNDARY.to_owned(),
+            logical_bytes: 56,
+            manifest_object_id: manifest,
+            manifest_sha256,
+            profile: CONTENT_MANIFEST_PRODUCTION_PROFILE.to_owned(),
+            verifier: CONTENT_MANIFEST_PRODUCTION_VERIFIER.to_owned(),
+            whole_file_sha256: [0x71; 32],
+        };
+        let production_statement_digest =
+            production_statement_digest(&production_statement).unwrap();
+        let verification_receipt_digest = lifecycle_verification_receipt_digest(
+            authority.tenant_id,
+            authority.repository_id,
+            [0x33; 32],
+            manifest,
+            3,
+            [0xaa; 32],
+            production_statement_digest,
+        )
+        .unwrap();
+        let mut request = ContentManifestAvailabilityCommitRequest {
+            authority,
+            opaque_key: [0x33; 32],
+            object_ref: manifest,
+            length,
+            expected_generation: 3,
+            authority_binding_digest: [0xaa; 32],
+            backend_receipt_digest: [0xee; 32],
+            verification_receipt_digest,
+            finalize_semantic_fingerprint: [0xff; 32],
+            dependencies,
+            dependency_generation_set_digest: [0; 32],
+            production_statement,
+        };
+        request.dependency_generation_set_digest =
+            dependency_generation_set_digest_from_input(&request).unwrap();
+        request
+    }
+
+    fn composition_proof(
+        request: &ContentManifestAvailabilityCommitRequest<'_>,
+        replayed: bool,
+    ) -> ContentManifestCommittedProof {
+        let mut proof = ContentManifestCommittedProof {
+            application_id: id("33333333-3333-4333-8333-333333333333"),
+            tenant_id: request.authority.tenant_id,
+            repository_id: request.authority.repository_id,
+            opaque_key: request.opaque_key,
+            object_ref: request.object_ref,
+            length: request.length,
+            generation: request.expected_generation + 1,
+            authorization_closure_digest: request.authority.authorization_closure_digest,
+            authority_binding_digest: request.authority_binding_digest,
+            tenant_scope_digest: request.authority.tenant_scope_digest,
+            identity_subject_digest: request.authority.identity_subject_digest,
+            production_subject_digest: request.authority.production_subject_digest,
+            backend_receipt_digest: request.backend_receipt_digest,
+            dependency_count: u16::try_from(request.dependencies.len()).unwrap(),
+            dependency_generation_set_digest: request.dependency_generation_set_digest,
+            verification_receipt_digest: request.verification_receipt_digest,
+            finalize_semantic_fingerprint: request.finalize_semantic_fingerprint,
+            production_statement: request.production_statement.clone(),
+            production_statement_digest: production_statement_digest(&request.production_statement)
+                .unwrap(),
+            proof_digest: [0; 32],
+            replayed,
+        };
+        proof.proof_digest = committed_proof_digest(&proof).unwrap();
+        proof
+    }
+
     fn authority<'a>(
         tenant_id: TenantId,
         repository_id: RepositoryId,
@@ -2710,6 +3490,31 @@ mod tests {
         length: u64,
         manifest_sha256: [u8; 32],
     ) -> NegotiationVerifiedMetadataRequest {
+        verified_object_put_with_session(
+            tenant_id,
+            repository_id,
+            subject_digest,
+            authority_epoch,
+            correlation_id,
+            manifest,
+            length,
+            manifest_sha256,
+            "composition-session-0001",
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn verified_object_put_with_session(
+        tenant_id: TenantId,
+        repository_id: RepositoryId,
+        subject_digest: [u8; 32],
+        authority_epoch: u64,
+        correlation_id: &str,
+        manifest: ObjectRef,
+        length: u64,
+        manifest_sha256: [u8; 32],
+        session_id: &str,
+    ) -> NegotiationVerifiedMetadataRequest {
         let key = [0x5a; 32];
         let claims = json!({
             "schemaVersion": "ogvcs.protocol/negotiation-receipt-claims/v1",
@@ -2717,7 +3522,7 @@ mod tests {
             "subjectDigest": hex_bytes(&subject_digest),
             "tenantDigest": hex_bytes(&metadata_negotiation_tenant_digest(tenant_id)),
             "authorityEpoch": authority_epoch,
-            "sessionId": "composition-session-0001",
+            "sessionId": session_id,
             "clientNonce": "AAAAAAAAAAAAAAAAAAAAAA",
             "serverNonce": "AQEBAQEBAQEBAQEBAQEBAQ",
             "issuedAtUnixMs": 1_000,
@@ -2781,7 +3586,7 @@ mod tests {
                     subject_digest,
                     tenant_digest: metadata_negotiation_tenant_digest(tenant_id),
                     authority_epoch,
-                    session_id: "composition-session-0001".to_owned(),
+                    session_id: session_id.to_owned(),
                     now_unix_ms: 1_500,
                 },
             )
