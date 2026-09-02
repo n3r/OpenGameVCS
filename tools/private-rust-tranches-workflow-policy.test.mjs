@@ -85,8 +85,8 @@ test('private Rust tranche workflow is pinned, path-scoped, and three-OS bounded
   assert.ok(workflow.indexOf(retainedFetch) < workflow.indexOf('Check private source and workflow policy'));
   assert.doesNotMatch(workflow, /fetch-depth:\s*0|persist-credentials:\s*true/u);
   assert.match(workflow, /node-version: 24/u);
-  assert.match(workflow, /# 1\.82\.0\n        with:\n          toolchain: 1\.82\.0/u);
-  assert.match(workflow, /components: clippy, rustfmt/u);
+  assert.match(workflow, /# 1\.82\.0\n        with:\n          components: clippy, rustfmt/u);
+  assert.doesNotMatch(workflow, /^\s+toolchain:/mu);
 });
 
 test('workflow directly runs every declared private source and Rust gate', async () => {
