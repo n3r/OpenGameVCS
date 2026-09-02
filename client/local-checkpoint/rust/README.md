@@ -154,11 +154,16 @@ The exact publication sequence is:
    directory.
 
 `PublicationBoundary` can stop after each of those seven file/directory
-durability points. The fault matrix proves that a prior complete checkpoint
+publication points. The fault matrix proves that a prior complete checkpoint
 remains readable at every point. A manifest visible after its file sync but
 before the directory sync is treated as complete by the deterministic
-in-process simulator; real power-loss durability is established only after
-the final directory sync.
+in-process simulator. On platforms that implement directory-handle sync,
+real power-loss durability is established only after the final directory sync.
+Windows can return the exact `ERROR_ACCESS_DENIED` capability result when
+`FlushFileBuffers` receives the already-opened, identity-checked read-only
+directory handle. Only that post-identity result is suppressed; file syncs and
+create-new name operations remain, but this candidate
+claims no directory-entry power-loss durability on Windows.
 
 There is no mutable “latest checkpoint” pointer or overwriteable catalog.
 Complete-only list/show discover immutable entry directories. An incomplete
@@ -185,7 +190,9 @@ unknown or extraneous entry artifact before sealing. At recovery start it
 re-syncs the entries directory; before sealing it syncs the exact intent and
 record, and before omitting an already-valid complete entry it re-syncs all
 three exact artifacts and their directory. These idempotent barriers reconcile
-files that survived a failed sync or a crash before directory persistence.
+files that survived a failed sync or a crash before directory persistence on
+platforms that implement directory-handle sync. The exact Windows capability
+classification above does not establish that directory-persistence guarantee.
 
 ## Bounds
 
@@ -255,10 +262,12 @@ Path checks and create-new writes narrow link and replacement attacks, but
 paths are reopened between checks. A malicious same-authority process can race
 the metadata namespace, including by replacing a checked path after a handle
 check; held-handle/dirfd-relative mutation and a process lock remain future
-hardening. The Windows reparse, by-handle hard-link, and directory-flush paths
-are source-covered but need hosted execution. Unix mode and link-count checks
-do not establish a complete ACL/ownership policy; Windows inherited ACL and
-owner policy are not independently verified. The supplied workspace/spec
+hardening. The Windows reparse and by-handle hard-link paths remain
+source-covered. The exact access-denied directory-flush capability
+classification still needs a hosted rerun and does not prove Windows power-loss
+behavior. Unix mode and link-count checks do not establish a complete
+ACL/ownership policy; Windows inherited ACL and owner policy are not
+independently verified. The supplied workspace/spec
 digests and repository/base references are not compared with an authenticated
 workspace metadata producer. Operation records omit entry kind, mode, policy,
 group transitions, restore semantics, and base-tree replay. These limits keep

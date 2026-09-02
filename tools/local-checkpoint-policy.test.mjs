@@ -63,6 +63,35 @@ test('private local checkpoint stays bounded, unwired, manifest-last, and Todo',
   assert.match(source, /sync_directory\(&self\.entries_root\)/u);
   assert.match(source, /PublicationBoundary::ManifestDirectorySynced/u);
 
+  const directorySyncStart = source.indexOf('fn sync_directory(path: &Path)');
+  const directorySyncEnd = source.indexOf('\nfn encode_hex(', directorySyncStart);
+  assert.notEqual(directorySyncStart, -1);
+  assert.ok(directorySyncEnd > directorySyncStart);
+  const directorySync = source.slice(directorySyncStart, directorySyncEnd);
+  const directorySyncOrder = [
+    '.open(path)',
+    '.metadata()',
+    'metadata.file_type().is_dir()',
+    'directory.sync_all()',
+    'windows_directory_sync_unsupported(&failure)',
+  ].map((needle) => directorySync.indexOf(needle));
+  assert.equal(directorySyncOrder.every((offset) => offset >= 0), true);
+  assert.deepEqual(
+    directorySyncOrder,
+    [...directorySyncOrder].sort((left, right) => left - right),
+  );
+  assert.match(source, /const WINDOWS_ERROR_ACCESS_DENIED: i32 = 5;/u);
+  assert.match(
+    source,
+    /fn windows_directory_sync_unsupported\(failure: &std::io::Error\) -> bool \{\n    failure\.raw_os_error\(\) == Some\(WINDOWS_ERROR_ACCESS_DENIED\)\n\}/u,
+  );
+  assert.match(
+    directorySync,
+    /#\[cfg\(windows\)\]\n        Err\(failure\) if windows_directory_sync_unsupported\(&failure\) => Ok\(\(\)\)/u,
+  );
+  assert.doesNotMatch(directorySync, /options\.write\(true\)/u);
+  assert.match(source, /windows_directory_sync_capability_classification_is_exact/u);
+
   const createStart = source.indexOf('    pub fn create(');
   const listStart = source.indexOf('    pub fn list(');
   assert.notEqual(createStart, -1);
@@ -95,6 +124,7 @@ test('private local checkpoint stays bounded, unwired, manifest-last, and Todo',
   assert.match(readme, /integrity framing, not caller\nauthentication/u);
   assert.match(readme, /Operation records omit entry kind, mode, policy/u);
   assert.match(readme, /real power-loss durability is established only after/u);
+  assert.match(readme, /no directory-entry power-loss durability on Windows/u);
   assert.match(readme, /intentionally narrower than checkpoint diff or restore/u);
   assert.match(readme, /AvailableUnverified[\s\S]+caller reported availability/u);
   assert.match(readme, /or removal \*intended\*; it is not authorization or permission/u);

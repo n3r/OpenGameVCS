@@ -109,7 +109,10 @@ and Windows reparse checks reject unsafe nodes; Unix directory creation applies
 the private mode in `mkdir`, and Unix/Windows artifact handles must report one
 hard link before bytes are admitted. Writes use create-new files.
 
-Publication has seven injected durability boundaries:
+Publication has seven injected file/directory publication boundaries. File
+barriers require `sync_all`; directory barriers require it where the platform
+implements directory-handle sync. The exact Windows post-identity access-denied
+capability result is not a directory-entry power-loss guarantee:
 
 1. entry directory created, synced, and then its parent synced;
 2. intent file synced;
@@ -140,8 +143,10 @@ directory before omitting a valid entry from the report.
 
 A manifest file visible to the injected simulator after its own `sync_all`
 but before the directory `sync_all` can be read as complete in that running
-process. The final barrier is established by boundary seven or an idempotent
-recovery re-sync; no actual power-loss campaign is claimed.
+process. On platforms that implement directory-handle sync, the final barrier
+is established by boundary seven or an idempotent recovery re-sync. The exact
+Windows access-denied capability result establishes no such barrier, and no
+actual power-loss campaign is claimed.
 
 ## Bounds and failure behavior
 
@@ -211,9 +216,11 @@ process can race the namespace between those checks, including after the
 single-link handle check; a held directory handle, dirfd/handle-relative
 mutation model, and process lock remain required. Unix mode/link checks do not
 establish complete ACL or owner policy; Windows inherited ACL/owner policy is
-not independently verified. Windows reparse, by-handle link-count, and
-directory-flush paths need hosted execution. No claim is made for hostile
-filesystem or power-loss behavior beyond this bounded source model.
+not independently verified. Windows reparse and by-handle link-count paths
+remain source-covered. The exact post-identity access-denied directory-flush
+classification needs a hosted rerun and establishes no Windows directory-entry
+power-loss guarantee. No claim is made for hostile filesystem or power-loss
+behavior beyond this bounded source model.
 
 Stored lock-receipt material is a digest-only historical snapshot. The only
 reported state is `historical-untrusted-exclusivity-unverified`; it cannot be

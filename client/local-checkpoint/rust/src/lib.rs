@@ -3241,6 +3241,14 @@ fn require_windows_single_link(file: &fs::File) -> Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, windows))]
+const WINDOWS_ERROR_ACCESS_DENIED: i32 = 5;
+
+#[cfg(any(test, windows))]
+fn windows_directory_sync_unsupported(failure: &std::io::Error) -> bool {
+    failure.raw_os_error() == Some(WINDOWS_ERROR_ACCESS_DENIED)
+}
+
 fn sync_directory(path: &Path) -> Result<()> {
     reject_link_or_non_directory(path, true, "directory-sync")?;
     let mut options = OpenOptions::new();
@@ -3267,9 +3275,18 @@ fn sync_directory(path: &Path) -> Result<()> {
             "directory-handle",
         ));
     }
-    directory
-        .sync_all()
-        .map_err(|_| error(CheckpointErrorCode::Io, "directory-sync"))
+    match directory.sync_all() {
+        Ok(()) => Ok(()),
+        // Windows can open and identity-check a no-follow directory handle,
+        // but FlushFileBuffers requires GENERIC_WRITE and can report the exact
+        // ERROR_ACCESS_DENIED capability result for this read-only handle.
+        // Suppress only that post-identity result. Open, metadata, reparse,
+        // and every other sync failure remain fail-closed, and no Windows
+        // directory-entry power-loss durability is claimed.
+        #[cfg(windows)]
+        Err(failure) if windows_directory_sync_unsupported(&failure) => Ok(()),
+        Err(_) => Err(error(CheckpointErrorCode::Io, "directory-sync")),
+    }
 }
 
 fn encode_hex(bytes: &[u8]) -> String {
@@ -3342,6 +3359,22 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.path);
         }
+    }
+
+    #[test]
+    fn windows_directory_sync_capability_classification_is_exact() {
+        assert!(windows_directory_sync_unsupported(
+            &std::io::Error::from_raw_os_error(WINDOWS_ERROR_ACCESS_DENIED)
+        ));
+        for raw_os_error in [1, 13, 32, 87] {
+            assert!(!windows_directory_sync_unsupported(
+                &std::io::Error::from_raw_os_error(raw_os_error)
+            ));
+        }
+        assert!(!windows_directory_sync_unsupported(&std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "no raw code"
+        )));
     }
 
     fn object(kind: ObjectKind, value: u8) -> ObjectRef {

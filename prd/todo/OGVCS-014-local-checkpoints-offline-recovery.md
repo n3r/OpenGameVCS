@@ -105,11 +105,14 @@ Enable after local format recovery tests. Workspace clients retain read support 
   message/time, and a digest-only historical lock-receipt snapshot whose only
   state is `historical-untrusted-exclusivity-unverified`. Fixed workspace-
   confined create-new files publish intent, record, and completion manifest
-  last with file and directory durability barriers. Complete-only list/show/
-  verify and deterministic incomplete recovery are local-library surfaces;
-  recovery seals only an exact reread intent+record or reports incomplete/
-  corrupt state without intentionally addressing ordinary workspace paths.
-  Recovery re-syncs surviving exact files/directories before trusting or
+  last with file sync barriers and directory sync barriers where the platform
+  implements them. The exact Windows post-identity `ERROR_ACCESS_DENIED`
+  capability classification establishes no directory-entry power-loss
+  guarantee. Complete-only list/show/verify and deterministic incomplete
+  recovery are local-library surfaces; recovery seals only an exact reread
+  intent+record or reports incomplete/corrupt state without intentionally
+  addressing ordinary workspace paths. Recovery re-syncs surviving exact
+  files and attempts the platform-scoped directory barrier before trusting or
   sealing them. A second private surface now verifies the selected complete
   record and its bounded ancestor chain, requires exact caller-supplied
   repository/base/workspace/spec/path bindings, and folds only that record's
@@ -153,10 +156,11 @@ Enable after local format recovery tests. Workspace clients retain read support 
   checks, so malicious same-authority namespace replacement remains an
   explicit residual.
 - **Documentation/runbooks:** the private crate README defines the exact
-  identity domain, namespace, seven durability points, recovery dispositions,
-  preview digest/observation/replacement-intent boundary, limits, lock warning,
-  gates, and nonclaims. There is no restore/publish/cache runbook because none
-  of those operations exists in this tranche.
+  identity domain, namespace, seven publication points, platform-scoped
+  directory-durability nonclaim, recovery dispositions, preview digest/
+  observation/replacement-intent boundary, limits, lock warning, gates, and
+  nonclaims. There is no restore/publish/cache runbook because none of those
+  operations exists in this tranche.
 - **Rollout result:** none. There is no public CLI/JSON command, route,
   authorization/permission/grant check, lock authority, cache pin/eviction
   mutation, telemetry upload, restore, delete/squash, or publish handoff.
@@ -178,8 +182,9 @@ Enable after local format recovery tests. Workspace clients retain read support 
   not allocation/lifetime authority. The supplied workspace/spec digest is not
   loaded from authenticated workspace metadata.
 - Same-authority path replacement, full Unix ACL/ownership policy, Windows
-  inherited-ACL/owner verification, hosted reparse/hard-link/directory-flush
-  execution, actual power loss, three-OS crash/corruption, scale, real
+  inherited-ACL/owner verification, hosted reparse/hard-link execution and the
+  corrected access-denied directory-flush classification rerun, actual power
+  loss, three-OS crash/corruption, scale, real
   filesystem/cache observation, complete restore obstruction, lock
   reconciliation, and cache-race campaigns remain unproved.
 - Public CLI/JSON/GUI integration, auth/permission/grant and request-root
