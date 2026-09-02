@@ -7,7 +7,7 @@
 **Depends on:** OGVCS-008, OGVCS-009, OGVCS-010, OGVCS-013, OGVCS-041  
 **Blocks:** OGVCS-022, OGVCS-023, OGVCS-025, OGVCS-028, OGVCS-031, OGVCS-034, OGVCS-036, OGVCS-042  
 **Source:** [OpenGameVCS proposal](../../GAME_DEV_VCS_ANALYSIS.md)  
-**Last updated:** 2026-08-14
+**Last updated:** 2026-09-02
 
 ## Outcome
 
@@ -98,8 +98,43 @@ Ship read-only snapshot APIs/client first, then events, then scoped submit/lock 
 
 ## Completion evidence
 
-- Implementation changes:
-- Test and benchmark results:
-- Security/reliability review:
-- Documentation/runbooks:
-- Rollout result:
+- Implementation changes: bounded private candidate relevance only. An
+  unpublished, unwired Rust 1.82 crate under `core/automation-events/rust`
+  binds supplied commit/outbox/authorization facts into deterministic private
+  event IDs, validates exact contiguous replay pages with scoped expiring HMAC
+  cursors, signs and verifies timestamped webhook projections with bounded key
+  rotation and duplicate-attempt state, and binds one immutable OGVCS-002
+  Snapshot plus selection/materialization/tool/input facts into a private build
+  provenance digest. It accepts no payload/path bytes and performs no I/O,
+  authorization, transaction, materialization, cache, delivery, or publication.
+- Test and benchmark results: local Rust tests cover deterministic known-answer
+  event, cursor, webhook and provenance binding, exhaustive field tamper,
+  OGVCS-002 Snapshot kind and zero-digest handling, contiguous/missing/additional/
+  reordered/cross-scope/causally-future replay, cursor
+  tamper/future-use/expiry/retention/
+  authority-epoch/generation/key rotation, webhook signature/body/time/key
+  rotation/exact duplicate/conflicting-attempt behavior, replay-guard
+  scope/pruning/capacity/
+  overflow atomicity and skew/retention coupling, and exact/max+1 event/
+  sequence/page/key/time/body/guard bounds. Rustfmt, debug/release,
+  warning-denied Clippy, package, Node policy,
+  roadmap, and upstream OGVCS-002 conformance are the candidate gate. No
+  hosted, fault, service, cross-OS materialization, or reference-scale campaign
+  is claimed.
+- Security/reliability review: see
+  [private automation-event boundary review](../../docs/reviews/OGVCS-019-automation-events-boundary-review.md).
+  Commit, outbox, authorization, storage-window and provenance inputs are
+  caller-supplied facts, not authority. Cursor integrity cannot prove a truthful
+  high watermark; the replay guard is scoped but volatile; non-copyable key
+  wrappers and all-zero secret rejection do not prove entropy, zeroization,
+  custody, separation, revocation, or rotation.
+- Documentation/runbooks: the crate README defines exact digest/MAC projections,
+  validation order, hard bounds, rotation/replay semantics and nonclaims. There
+  is no operator runbook because no service or external effect is wired.
+- Rollout result: not rolled out. OGVCS-019 remains Todo. No acceptance
+  criterion is closed. OGVCS-041 schemas/SDK, service identities, authenticated
+  snapshot resolution, ephemeral materialization, verified shared cache,
+  transactional outbox integration, durable replay/retention, authorization
+  filtering, webhook transport/retry/dead-letter operations, provenance-object
+  publication, telemetry/runbooks, hosted fault/security/scale evidence, and
+  rollout remain open.

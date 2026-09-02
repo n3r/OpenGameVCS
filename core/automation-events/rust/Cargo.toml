@@ -1,0 +1,24 @@
+[package]
+name = "ogvcs-automation-events"
+version = "0.1.0-rc.1"
+edition = "2021"
+rust-version = "1.82"
+license = "MIT"
+description = "Private bounded OpenGameVCS automation event and provenance contract candidate"
+readme = "README.md"
+publish = false
+include = [
+    "src/**",
+    "Cargo.toml",
+    "Cargo.lock",
+    "LICENSE",
+    "README.md",
+]
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+hmac = "=0.12.1"
+ogvcs-object-model = { path = "../../object-model/rust", version = "0.1.0" }
+sha2 = "=0.10.9"
