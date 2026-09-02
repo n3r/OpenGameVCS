@@ -61,7 +61,7 @@ jobs:
       - run: cargo test --manifest-path core/import-git-lfs/rust/Cargo.toml --locked --offline
       - run: cargo test --manifest-path core/import-git-lfs/rust/Cargo.toml --locked --offline --release
       - run: cargo clippy --manifest-path core/import-git-lfs/rust/Cargo.toml --locked --offline --all-targets -- -D warnings
-      - run: ./scripts/test-packed.sh
+      - run: sh ./scripts/test-packed.sh
         shell: bash
         working-directory: core/import-git-lfs/rust
       - name: Validate the open roadmap boundary

@@ -55,7 +55,7 @@ test('hosted portability workflow is pinned, path-scoped, and cross-platform', a
   assert.match(workflow, /cargo test --manifest-path core\/import-git-lfs\/rust\/Cargo\.toml --locked --offline\n/u);
   assert.match(workflow, /cargo test --manifest-path core\/import-git-lfs\/rust\/Cargo\.toml --locked --offline --release/u);
   assert.match(workflow, /cargo clippy --manifest-path core\/import-git-lfs\/rust\/Cargo\.toml --locked --offline --all-targets -- -D warnings/u);
-  assert.match(workflow, /run: \.\/scripts\/test-packed\.sh\n        shell: bash\n        working-directory: core\/import-git-lfs\/rust/u);
+  assert.match(workflow, /run: sh \.\/scripts\/test-packed\.sh\n        shell: bash\n        working-directory: core\/import-git-lfs\/rust/u);
   assert.match(workflow, /if: runner\.os == 'Linux'\n        run: node prd\/validate-roadmap\.mjs && node --test prd\/validate-roadmap\.test\.mjs/u);
 });
 
