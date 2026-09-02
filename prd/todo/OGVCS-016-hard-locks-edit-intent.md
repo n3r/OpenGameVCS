@@ -7,7 +7,7 @@
 **Depends on:** OGVCS-006, OGVCS-009, OGVCS-010, OGVCS-011, OGVCS-012  
 **Blocks:** OGVCS-022, OGVCS-023, OGVCS-024, OGVCS-025, OGVCS-028, OGVCS-029, OGVCS-031, OGVCS-032, OGVCS-042, OGVCS-043  
 **Source:** [Architecture ADR-0004](../../adr/0004-dr-authority-security-epochs.md)  
-**Last updated:** 2026-08-14
+**Last updated:** 2026-09-02
 
 ## Outcome
 
@@ -103,8 +103,44 @@ Start per repository with advisory-only visibility, then enable hard enforcement
 
 ## Completion evidence
 
-- Implementation changes:
-- Test and benchmark results:
-- Security/reliability review:
-- Documentation/runbooks:
-- Rollout result:
+This section records bounded candidate relevance only. It is not completion
+evidence sufficient to move this PRD out of Todo or close an acceptance
+criterion.
+
+- **Implementation changes:** `core/hard-lock/rust` is an unpublished,
+  unwired Rust 1.82 pure state model. It composes OGVCS-002 `FileId` and
+  snapshot references with OGVCS-004 path/prefix identity; normalizes bounded
+  FileID/prefix/asset-group targets; models supplied server-time lease,
+  generation and authority-epoch fencing; deterministically serializes
+  simultaneous requests; retains exact idempotency for acquire, renew,
+  release, transfer, break, expiry, wait and advisory intent; and exposes a
+  pure submit-fact validation seam with private OGVCS-010-shaped plan bindings.
+- **Test and benchmark results:** the bounded local suite covers simultaneous
+  acquisition, reorder/replay, move, delete/recreate, case/Unicode paths,
+  repository-root/nested prefix and FileID/group/prefix overlap, exact/max+1
+  target bytes and member bounds, stale epoch/generation, transfer/break
+  supplied facts and reasons, expiry/takeover plus historical replay,
+  nonreserving wait, advisory concurrency, configuration/time-bound
+  receipt/event/state commitments, cancellation/capacity rollback, exact
+  retained queue/batch/reason/work admission, submit proof matching, and exact
+  OGVCS-005 lock fault-boundary names. Rust 1.82 debug/release,
+  formatting, warning-denied Clippy, package, predecessor-focused, Node source
+  policy, and roadmap results are recorded only in the candidate worktree and
+  review; there is no hosted, scale, latency, partition, database crash, or
+  three-OS result.
+- **Security/reliability review:**
+  `docs/reviews/OGVCS-016-hard-lock-model-boundary-review.md` records that
+  permission decisions, asset-group expansion, submit requirements, domain,
+  epoch, and time are opaque supplied facts. Outcome shapes expose no owner,
+  path, FileID, group membership, reason, or conflict count, but commitments
+  may bind guessable values and are not safe unauthorized disclosure. The
+  crate has no authorization, request-root, visibility, storage, transaction,
+  or production enforcement brand.
+- **Documentation/runbooks:** the crate README documents transition order,
+  idempotency, target overlap, generation/epoch fencing, resource admission,
+  fault-harness alignment, and explicit nonclaims. It is candidate developer
+  documentation, not an operator runbook.
+- **Rollout result:** none. No public protocol, CLI/route, database adapter,
+  real clock, filesystem read-only hint, durable audit/outbox, notification
+  delivery, submit mutation, or cross-branch integration domain imports this
+  crate. OGVCS-016 remains Todo.

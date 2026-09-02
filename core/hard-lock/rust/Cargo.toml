@@ -1,0 +1,26 @@
+[package]
+name = "ogvcs-hard-lock-model"
+version = "0.1.0-rc.1"
+edition = "2021"
+rust-version = "1.82"
+license = "MIT"
+description = "Private bounded OpenGameVCS hard-lock and edit-intent state-model candidate"
+readme = "README.md"
+publish = false
+include = [
+    "src/**",
+    "tests/**",
+    "Cargo.toml",
+    "Cargo.lock",
+    "LICENSE",
+    "README.md",
+]
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+ogvcs-object-model = { path = "../../object-model/rust", version = "0.1.0" }
+ogvcs-path-contract = { path = "../../paths-filesystem/rust", version = "1.0.0" }
+sha2 = "=0.10.9"
+
