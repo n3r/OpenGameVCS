@@ -23,6 +23,9 @@ returns a closed quarantine report and poisons itself. The state layer persists
 only allowlisted diagnostic codes and SHA-256 resource fingerprints. Raw Docker
 identifiers, paths, labels, authority material, and command failure details do
 not enter shared evidence.
+The state boundary accepts only the six reconciliation codes emitted by this
+adapter plus its two service-local failure codes; every unregistered diagnostic
+is collapsed to `RECONCILIATION_CONTROL_UNPROVABLE` before persistence.
 
 This is fail-closed detection, not cleanup, and performs no orphan deletion.
 The reconciliation path issues only bounded list and inspect controls. Unit
@@ -52,8 +55,8 @@ exclusive whole-daemon inventory.
 On 2026-09-02, Node 24.9.0 `npm run test:sandbox` passed:
 
 - five contract and packed-package cases;
-- 53 runtime cases, with seven Linux-only cases skipped on macOS; and
-- two retained-evidence/workflow policy cases.
+- 54 of 61 runtime cases, with seven Linux-only cases skipped on macOS; and
+- three retained-evidence/workflow policy cases.
 
 The restart-focused runtime cases cover every modeled create/start/exit/cleanup
 topology, repeated detection, request-shape attacks, authority substitution,

@@ -892,6 +892,10 @@ referenceStateTest('daemon authority is stable, private, and quarantine never re
     const second = await store.daemonAuthority(); assert.equal(second.authorityId, authorityId); assert.equal(second.hmacKey.toString('hex'), keyHex);
     const rawIdentifier = 'b'.repeat(64); const rawMac = 'c'.repeat(64);
     await store.writeDaemonQuarantine({ diagnosticCodes: ['RESOURCE_AUTH_INVALID'], resourceFingerprints: [sha256(Buffer.from(rawIdentifier))] }, 1234);
+    await assert.rejects(
+      store.writeDaemonQuarantine({ diagnosticCodes: ['SECRET_CANARY_0123456789'], resourceFingerprints: [] }, 1234),
+      /daemon quarantine record is invalid/u,
+    );
     const quarantine = await readFile(join(root, 'quarantine', (await readdir(join(root, 'quarantine')))[0]), 'utf8');
     assert.equal(quarantine.includes(keyHex), false); assert.equal(quarantine.includes(rawIdentifier), false); assert.equal(quarantine.includes(rawMac), false); assert.equal(quarantine.includes('/home/runner'), false); assert.equal(quarantine.includes('/var/lib/docker'), false);
     second.hmacKey.fill(0); await store.close();
@@ -1589,6 +1593,30 @@ referenceStateTest('quarantined daemon report prevents local denial and persists
     const quarantine = await readFile(join(fixture.root, 'state/quarantine', daemonEntries[0]), 'utf8');
     assert.equal(quarantine.includes('RESOURCE_AUTH_INVALID'), true); assert.equal(quarantine.includes(fingerprint), true);
     assert.equal(quarantine.includes('daemon-resource-id-never-persisted'), false); assert.equal(quarantine.includes('SECRET='), false);
+  }, { adapter });
+});
+
+referenceStateTest('daemon quarantine rejects unregistered adapter diagnostics instead of persisting a bounded covert channel', async () => {
+  const secretCode = 'SECRET_CANARY_0123456789';
+  const adapter = new FakeContainerAdapter();
+  await withFixture(async (fixture) => {
+    const result = await fixture.service.run(fixture.jobFor('quarantine-code'), fixture.acquisition);
+    assert.equal(result.code, 'VALIDATED');
+    const jobPath = join(fixture.root, 'state/jobs/job.quarantine-code.json');
+    const record = JSON.parse(await readFile(jobPath, 'utf8'));
+    await writeFile(jobPath, `${canonicalJson({ ...record, state: 'running' })}\n`, { mode: 0o600 });
+    adapter.reconciliationReport = Object.freeze({
+      diagnosticCodes: Object.freeze([secretCode]),
+      resourceFingerprints: Object.freeze([]),
+      schemaVersion: 'ogvcs.untrusted-sandbox/daemon-reconciliation/v1',
+      status: 'quarantined',
+    });
+    await assert.rejects(fixture.restart(), /daemon orphan reconciliation failed/u);
+    const daemonEntries = (await readdir(join(fixture.root, 'state/quarantine'))).filter((name) => name.startsWith('daemon.'));
+    assert.equal(daemonEntries.length, 1);
+    const quarantine = await readFile(join(fixture.root, 'state/quarantine', daemonEntries[0]), 'utf8');
+    assert.equal(quarantine.includes(secretCode), false);
+    assert.equal(quarantine.includes('RECONCILIATION_CONTROL_UNPROVABLE'), true);
   }, { adapter });
 });
 

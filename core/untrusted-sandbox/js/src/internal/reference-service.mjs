@@ -17,6 +17,7 @@ import {
 } from './reference-contract.mjs';
 import { parseOutputFrame } from './output-frame.mjs';
 import {
+  isDaemonReconciliationDiagnosticCode,
   isPinnedFileOperationAborted,
   openPinnedImmutableFile,
   ReferenceStateStore,
@@ -221,7 +222,7 @@ const snapshotReconciliationReport = (source) => {
     || !Array.isArray(report.diagnosticCodes)
     || report.diagnosticCodes.length > 64
     || new Set(report.diagnosticCodes).size !== report.diagnosticCodes.length
-    || report.diagnosticCodes.some((code) => typeof code !== 'string' || !/^[A-Z][A-Z0-9_]{0,63}$/u.test(code))
+    || report.diagnosticCodes.some((code) => !isDaemonReconciliationDiagnosticCode(code))
     || !Array.isArray(report.resourceFingerprints)
     || report.resourceFingerprints.length > 128
     || new Set(report.resourceFingerprints).size !== report.resourceFingerprints.length

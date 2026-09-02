@@ -24,6 +24,11 @@ test('untrusted sandbox workflow pins portable protocol and live Linux isolation
   assert.equal(workflow.match(/actions\/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1/gu)?.length, 2);
   assert.equal(workflow.match(/actions\/setup-node@820762786026740c76f36085b0efc47a31fe5020/gu)?.length, 2);
   assert.equal(workflow.match(/actions\/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a/gu)?.length, 1);
+  for (const protectedPath of [
+    '"docs/evidence/OGVCS-045/**"',
+    '"docs/reviews/OGVCS-045-*.md"',
+    '"tools/untrusted-sandbox-retained-evidence.test.mjs"',
+  ]) assert.equal(workflow.split(protectedPath).length - 1, 2, `${protectedPath} must trigger pull-request and push gates`);
   assert.match(workflow, /cc -static -O2 -std=c17 -Wall -Wextra -Werror core\/untrusted-sandbox\/js\/linux\/output_shim\.c/u);
   assert.match(workflow, /cc -static -O2 -std=c17 -Wall -Wextra -Werror core\/untrusted-sandbox\/js\/linux\/volume_anchor\.c/u);
   const importStart = workflow.indexOf('      - name: Import the deterministic one-layer credential-free scratch runtime');

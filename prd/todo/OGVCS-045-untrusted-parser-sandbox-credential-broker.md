@@ -121,8 +121,8 @@ Enable only the dummy conformance tool, then one importer parser profile. Consum
   the same hosted candidate lane exercised signed-manifest and required-control
   admission plus prior/new-job revocation checks relevant to AC-04.
   Separately, a 2026-09-02 macOS/Node 24.9.0 local run of
-  `npm run test:sandbox` passed five contract/package cases, 53 of 60 runtime
-  cases with seven Linux-only cases skipped, and both retained/workflow policy
+  `npm run test:sandbox` passed five contract/package cases, 54 of 61 runtime
+  cases with seven Linux-only cases skipped, and three retained/workflow policy
   cases. That local run covers restart detection and quarantine models but is
   neither retained Linux Docker evidence nor hosted settlement proof.
 - Security/reliability review: the retained

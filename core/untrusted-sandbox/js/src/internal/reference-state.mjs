@@ -26,6 +26,19 @@ const MAXIMUM_STATE_FILES = 100_000;
 const MAXIMUM_INTERRUPTED_JOBS = 64;
 const MAXIMUM_DAEMON_AUTHORITY_BYTES = 512;
 const PINNED_ALIAS_COPY_BYTES = 64 * 1024;
+const DAEMON_RECONCILIATION_DIAGNOSTIC_CODES = Object.freeze([
+  'AUTHENTICATED_ORPHANS_REQUIRE_SETTLEMENT',
+  'DISCOVERY_UNPROVABLE',
+  'INSPECT_UNPROVABLE',
+  'RESOURCE_AUTH_INVALID',
+  'RESOURCE_GRAPH_INVALID',
+  'RESOURCE_JOB_UNBOUND',
+]);
+const DAEMON_QUARANTINE_DIAGNOSTIC_CODES = new Set([
+  ...DAEMON_RECONCILIATION_DIAGNOSTIC_CODES,
+  'DURABLE_JOB_BINDING_INVALID',
+  'RECONCILIATION_CONTROL_UNPROVABLE',
+]);
 const pinnedAliases = new WeakMap();
 const abortedPinnedFileOperations = new WeakSet();
 
@@ -248,6 +261,9 @@ export const isPinnedFileOperationAborted = (error) => {
   try { return abortedPinnedFileOperations.has(error); } catch { return false; }
 };
 
+export const isDaemonReconciliationDiagnosticCode = (value) => typeof value === 'string'
+  && DAEMON_RECONCILIATION_DIAGNOSTIC_CODES.includes(value);
+
 export const digestOpenFile = async (handle, maximumBytes = Number.MAX_SAFE_INTEGER, { continueRead = null } = {}) => {
   if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 0) throw new TypeError('open immutable file digest bound is invalid');
   const requireContinuation = continuationCheck(continueRead);
@@ -461,7 +477,7 @@ export class ReferenceStateStore {
       || diagnosticCodes.length < 1
       || diagnosticCodes.length > 64
       || new Set(diagnosticCodes).size !== diagnosticCodes.length
-      || diagnosticCodes.some((code) => !/^[A-Z][A-Z0-9_]{0,63}$/u.test(code))
+      || diagnosticCodes.some((code) => !DAEMON_QUARANTINE_DIAGNOSTIC_CODES.has(code))
       || !Array.isArray(resourceFingerprints)
       || resourceFingerprints.length > 128
       || new Set(resourceFingerprints).size !== resourceFingerprints.length
