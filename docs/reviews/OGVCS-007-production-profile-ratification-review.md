@@ -283,9 +283,11 @@ These tests do not change the profile tuple and do not require a large campaign:
    it; a future OGVCS-005 contract expansion would require separate PRD/change
    control rather than being smuggled into this tranche.
 5. Run the separate 100-GiB campaign as the final acceptance gate on that same
-   source revision. Both independently content-verified OGVCS-007 bundles, both
-   self-contained retained publications and validation records, and the
-   branded cross-language comparison must pass before any lifecycle mutation.
+   source revision, after the workflow preflight binds the manual input or exact
+   revision tag to its checkout. Both independently content-verified OGVCS-007
+   bundles, both self-contained retained publications and validation records,
+   and the branded cross-language comparison must pass before any lifecycle
+   mutation.
 6. Only then may maintainers accept ADR-0016 without changing its tuple, add the
    single ratified production-write-eligible OGVCS-007 registry row, regenerate
    every downstream authority in dependency order, and repeat the ordinary

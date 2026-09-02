@@ -1,7 +1,9 @@
 # OGVCS-007 bounded seven-workload authenticated selection evidence
 
 **Evidence date:** 2026-09-01
-**Status:** Current-source bounded authenticated evidence retained; production adoption, profile ratification, and the final-scale gate remain blocked
+**Status:** Authenticated bounded evidence retained for revision `b56e165`; a
+same-final-revision bounded rerun, production adoption, profile ratification,
+and the final-scale gate remain blocked
 
 This packet retains the bounded OGVCS-007 selection evidence used to close the
 P0-2 authenticated-benchmark finding without attempting the separately deferred
@@ -49,7 +51,7 @@ records
 Both record the same 14-file packed implementation identity
 `b2c779645ffd48a9c52b90dcc255224b393779160885821e5d4ebbac83d0d288`.
 
-## Current bounded hosted implementation proof
+## Retained bounded hosted implementation proof
 
 [Workflow run 33521316277](https://github.com/n3r/OpenGameVCS/actions/runs/33521316277)
 passed exact source revision
@@ -77,6 +79,12 @@ also retains GitHub's six archive digests, while explicitly declining to claim
 an independent hash of the transient ZIP representations discarded by the
 download CLI. The hosted workflow was bounded, defines zero scale jobs, and did
 not run the 100-GiB campaign.
+
+This run remains valid historical evidence for its exact revision. It does not
+satisfy the same-revision bounded prerequisite for a later exact-scale campaign
+after any source-bound workflow, runner, verifier, comparator, or package input
+changes; the six-leg bounded workflow must pass again at the final scale
+revision.
 
 ## What this evidence proves
 

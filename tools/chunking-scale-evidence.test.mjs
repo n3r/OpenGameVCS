@@ -198,6 +198,7 @@ test('current-source inventory covers the runner and transitive JS/Rust implemen
     'core/object-model/rust/src/lib.rs',
     'core/paths-filesystem/js/src/index.mjs',
     'foundation/benchmark-fault-harness/src/canonical.mjs',
+    'tools/chunking-scale-dispatch-guard.mjs',
   ]) assert.ok(paths.includes(path), path);
   assert.ok(inventory.every(({ bytes, sha256 }) => bytes > 1 && /^[0-9a-f]{64}$/u.test(sha256)));
 });

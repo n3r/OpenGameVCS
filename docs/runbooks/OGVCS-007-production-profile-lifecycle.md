@@ -44,10 +44,14 @@ revision satisfies every gate below.
    duplication. The independent OGVCS-007 verifier must accept each exact-scale
    implementation bundle, then the branded comparator must accept those two
    verified inputs. The OGVCS-005 verifier does not accept this distinct schema.
-   This campaign is not a PR check and is not replaced by the bounded packet. Dispatch
-   `.github/workflows/chunking-manifest-scale.yml` only with the explicit
-   confirmation or a reviewed `ogvcs-007-scale-*` release tag. Retain the two
-   implementation reports carrying the same workflow-supplied source
+   This campaign is not a PR check and is not replaced by the bounded packet.
+   Dispatch `.github/workflows/chunking-manifest-scale.yml` only after recording
+   the reviewed full source revision: use both the explicit confirmation and
+   matching `expected_source_revision` inputs, or push a reviewed
+   `ogvcs-007-scale-<same 40-character lowercase revision>` tag. The workflow
+   preflight rejects any checkout that differs from that revision, and every
+   execution/comparison job checks out the preflight output directly. Retain
+   the two implementation reports carrying the same workflow-supplied source
    revision, both self-contained flat publication records, both independent
    validation records, and the comparator output that binds their hashes and
    proves identical result projections. A prepared or
@@ -65,6 +69,32 @@ source-set projection survive artifact retention even if the floating Node 24
 patch later changes. This wiring has only bounded hostile dry-run proof; it has
 not been dispatched at 100 GiB. A bundle's `sourceRevision` remains explicitly
 `workflow-supplied-not-git-bound` and is not producer-origin authentication.
+
+## Exact-scale dispatch preflight
+
+Before incurring the release-only run, verify all of the following against one
+clean commit:
+
+1. The commit is reachable from the reviewed remote ref and contains the exact
+   scale workflow, runners, authority, verifier, and comparator being accepted.
+2. The bounded six-leg workflow and aggregate comparison passed that same full
+   commit. Evidence from an ancestor is predecessor evidence, not a substitute.
+3. The exact-scale authority generation check, independent validator, workflow
+   policy test, JavaScript package tests, and pinned Rust 1.82 format, test,
+   Clippy, and package checks pass locally without executing either scale runner.
+4. For manual dispatch, the workflow is registered on the default branch and
+   the reviewed full commit is supplied as `expected_source_revision`. Do not
+   replace or alias an unrelated registered workflow to bypass that boundary.
+   Before default-branch registration, only the exact-revision tag form above
+   is an authorized trigger.
+5. No registry ratification or production-write mutation is present in the
+   source under test. Preserve the run record, job/log metadata, GitHub artifact
+   digests, downloaded raw reports, both retained publications and validations,
+   and the comparison before the 30-day hosted artifacts expire.
+
+The standalone retained-publication verifier still cannot authenticate Git or
+the producer. Source-origin proof therefore requires the authenticated hosted
+run record in addition to the content-addressed publication files.
 
 ## Exact authority mutation
 

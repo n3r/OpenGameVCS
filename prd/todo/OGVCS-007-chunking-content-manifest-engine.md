@@ -106,11 +106,11 @@ Chunk algorithm is immutable per manifest version. New algorithms are read-befor
   adds the Rust no-payload manifest sink without changing the open scale or
   production gates.
 - Test and benchmark results: the
-  [current bounded evidence packet](../../docs/evidence/OGVCS-007/README.md)
+  [retained bounded evidence packet](../../docs/evidence/OGVCS-007/README.md)
   and [requirement matrix](../../docs/reviews/OGVCS-007-r1-completion-audit.md#requirement-matrix)
-  retain the completed non-scale results, including current-source
-  JavaScript/Rust replay on Linux, macOS, and Windows. Authenticated bounded
-  [run 33521316277](https://github.com/n3r/OpenGameVCS/actions/runs/33521316277)
+  retain the completed non-scale results for their exact source revision,
+  including JavaScript/Rust replay on Linux, macOS, and Windows. Authenticated
+  bounded [run 33521316277](https://github.com/n3r/OpenGameVCS/actions/runs/33521316277)
   passed exact source revision `b56e165eb3657288572ef16b0e5865a673877d4a`;
   its six downloaded reports independently match the retained deterministic
   blobs and all nine comparator cases. The workflow selected Node 24 and

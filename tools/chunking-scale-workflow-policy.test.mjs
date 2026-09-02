@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
+import { validateChunkingScaleDispatch } from './chunking-scale-dispatch-guard.mjs';
+
 const boundedPath = new URL('../.github/workflows/chunking-manifest-bounded.yml', import.meta.url);
 const scalePath = new URL('../.github/workflows/chunking-manifest-scale.yml', import.meta.url);
 const javascriptRunnerPath = new URL('../core/chunking-manifest/js/scripts/run-scale.mjs', import.meta.url);
@@ -23,6 +25,7 @@ test('exact 100-GiB work is isolated from ordinary and bounded checks', async ()
   assert.match(triggers, /confirm_exact_scale:/u);
   assert.match(triggers, /type: boolean/u);
   assert.match(triggers, /default: false/u);
+  assert.match(triggers, /expected_source_revision:\n\s+description:[^\n]+\n\s+required: true\n\s+type: string/u);
   assert.match(triggers, /push:\n\s+tags:\n\s+- ["']ogvcs-007-scale-\*["']/u);
   assert.doesNotMatch(triggers, /pull_request|schedule|branches/u);
 
@@ -62,15 +65,20 @@ test('exact 100-GiB work is isolated from ordinary and bounded checks', async ()
 
 test('release-only workflow runs both implementations independently before comparison', async () => {
   const scale = await readFile(scalePath, 'utf8');
+  assert.match(scale, /^  exact_scale_preflight:/mu);
+  assert.doesNotMatch(scale, /if: \$\{\{ github\.event_name == 'push' \|\| inputs\.confirm_exact_scale == true \}\}/u);
   assert.match(scale, /^  javascript-exact-scale:/mu);
   assert.match(scale, /^  rust-exact-scale:/mu);
   assert.match(scale, /^  compare-exact-scale:/mu);
   assert.equal(scale.match(/timeout-minutes: 360/gu)?.length, 2);
-  assert.match(scale, /needs:\n\s+- javascript-exact-scale\n\s+- rust-exact-scale/u);
+  assert.equal(scale.match(/needs: exact_scale_preflight/gu)?.length, 2);
+  assert.match(scale, /needs:\n\s+- exact_scale_preflight\n\s+- javascript-exact-scale\n\s+- rust-exact-scale/u);
   assert.match(scale, /node-version: 24/u);
   assert.match(scale, /# 1\.82\.0/u);
-  assert.equal(scale.match(/git rev-parse --verify HEAD/gu)?.length, 2);
-  assert.equal(scale.match(/OGVCS_SOURCE_REVISION: \$\{\{ steps\.source\.outputs\.revision \}\}/gu)?.length, 2);
+  assert.match(scale, /node tools\/chunking-scale-dispatch-guard\.mjs/u);
+  assert.equal(scale.match(/persist-credentials: false/gu)?.length, 4);
+  assert.equal(scale.match(/ref: \$\{\{ needs\.exact_scale_preflight\.outputs\.source_revision \}\}/gu)?.length, 3);
+  assert.equal(scale.match(/OGVCS_SOURCE_REVISION: \$\{\{ needs\.exact_scale_preflight\.outputs\.source_revision \}\}/gu)?.length, 2);
   assert.match(scale, /OGVCS_RUST_VERSION: 1\.82\.0/u);
   assert.match(scale, /node core\/chunking-manifest\/js\/scripts\/run-scale\.mjs/u);
   assert.match(scale, /--release --example run_scale/u);
@@ -81,6 +89,41 @@ test('release-only workflow runs both implementations independently before compa
     .map((match) => match[1])
     .filter((reference) => !/^[0-9a-f]{40}$/u.test(reference));
   assert.deepEqual(mutableOfficialActions, []);
+});
+
+test('dispatch guard accepts only an explicitly reviewed exact commit', () => {
+  const reviewed = 'a'.repeat(40);
+  const other = 'b'.repeat(40);
+  const manual = {
+    actualSourceRevision: reviewed,
+    confirmed: 'true',
+    eventName: 'workflow_dispatch',
+    expectedSourceRevision: reviewed,
+    refName: 'r1-foundation-integration',
+    refType: 'branch',
+  };
+  const tag = {
+    actualSourceRevision: reviewed,
+    confirmed: '',
+    eventName: 'push',
+    expectedSourceRevision: '',
+    refName: `ogvcs-007-scale-${reviewed}`,
+    refType: 'tag',
+  };
+  assert.equal(validateChunkingScaleDispatch(manual), reviewed);
+  assert.equal(validateChunkingScaleDispatch(tag), reviewed);
+
+  for (const candidate of [
+    { ...manual, confirmed: 'false' },
+    { ...manual, expectedSourceRevision: other },
+    { ...manual, expectedSourceRevision: reviewed.toUpperCase() },
+    { ...manual, actualSourceRevision: other },
+    { ...tag, refName: 'ogvcs-007-scale-release' },
+    { ...tag, refName: `ogvcs-007-scale-${reviewed}-extra` },
+    { ...tag, refName: `ogvcs-007-scale-${other}` },
+    { ...tag, refType: 'branch' },
+    { ...tag, eventName: 'pull_request' },
+  ]) assert.throws(() => validateChunkingScaleDispatch(candidate), /chunking exact-scale dispatch rejected/u);
 });
 
 test('the protected raw-report command publishes current-source-bound retained JSON before comparison', async () => {

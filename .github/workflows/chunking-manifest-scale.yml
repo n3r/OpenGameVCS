@@ -8,6 +8,10 @@ on:
         required: true
         type: boolean
         default: false
+      expected_source_revision:
+        description: "Exact reviewed 40-character commit to execute"
+        required: true
+        type: string
   push:
     tags:
       - "ogvcs-007-scale-*"
@@ -20,25 +24,47 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  exact_scale_preflight:
+    name: Bind exact-scale dispatch to the reviewed source
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      source_revision: ${{ steps.source.outputs.source_revision }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: Reject an unconfirmed or source-mismatched dispatch
+        id: source
+        env:
+          OGVCS_CONFIRM_EXACT_SCALE: ${{ inputs.confirm_exact_scale }}
+          OGVCS_EXPECTED_SOURCE_REVISION: ${{ inputs.expected_source_revision }}
+        run: |
+          revision="$(node tools/chunking-scale-dispatch-guard.mjs)"
+          printf 'source_revision=%s\n' "$revision" >> "$GITHUB_OUTPUT"
+
   javascript-exact-scale:
-    if: ${{ github.event_name == 'push' || inputs.confirm_exact_scale == true }}
+    needs: exact_scale_preflight
     name: JavaScript exact 100-GiB evidence (Linux)
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.exact_scale_preflight.outputs.source_revision }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           cache: npm
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: mkdir -p artifacts
-      - name: Bind evidence to the checked-out commit
-        id: source
-        run: echo "revision=$(git rev-parse --verify HEAD)" >> "$GITHUB_OUTPUT"
       - name: Stream exactly 100 GiB through JavaScript
         env:
-          OGVCS_SOURCE_REVISION: ${{ steps.source.outputs.revision }}
+          OGVCS_SOURCE_REVISION: ${{ needs.exact_scale_preflight.outputs.source_revision }}
           OGVCS_SCALE_REPORT_PATH: ${{ github.workspace }}/artifacts/javascript-scale.json
         run: node core/chunking-manifest/js/scripts/run-scale.mjs
       - name: Upload JavaScript exact-scale evidence
@@ -51,20 +77,20 @@ jobs:
           retention-days: 30
 
   rust-exact-scale:
-    if: ${{ github.event_name == 'push' || inputs.confirm_exact_scale == true }}
+    needs: exact_scale_preflight
     name: Rust exact 100-GiB evidence (Linux)
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.exact_scale_preflight.outputs.source_revision }}
       - uses: dtolnay/rust-toolchain@7d11e79e1714f6b6da93cac39ad8435666f5c337 # 1.82.0
       - run: mkdir -p artifacts
-      - name: Bind evidence to the checked-out commit
-        id: source
-        run: echo "revision=$(git rev-parse --verify HEAD)" >> "$GITHUB_OUTPUT"
       - name: Stream exactly 100 GiB through Rust
         env:
-          OGVCS_SOURCE_REVISION: ${{ steps.source.outputs.revision }}
+          OGVCS_SOURCE_REVISION: ${{ needs.exact_scale_preflight.outputs.source_revision }}
           OGVCS_SCALE_REPORT_PATH: ${{ github.workspace }}/artifacts/rust-scale.json
           OGVCS_RUST_VERSION: 1.82.0
         run: cargo run --manifest-path core/chunking-manifest/rust/Cargo.toml --locked --release --example run_scale
@@ -80,12 +106,16 @@ jobs:
   compare-exact-scale:
     name: Compare JavaScript and Rust exact 100-GiB evidence
     needs:
+      - exact_scale_preflight
       - javascript-exact-scale
       - rust-exact-scale
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.exact_scale_preflight.outputs.source_revision }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24

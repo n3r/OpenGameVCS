@@ -409,7 +409,7 @@ test('chunking publisher and verifier reject corpus-authority and metadata tampe
   assert.equal(firstEnvironment.configuration.harnessProfile, BUNDLE_PROFILE);
 });
 
-test('retained six-leg hosted reports match their run record and comparator', async () => {
+test('retained six-leg hosted reports and historical source bindings are internally consistent', async () => {
   const record = JSON.parse(await readFile(HOSTED_RECORD_PATH, 'utf8'));
   assert.equal(record.schemaVersion, 'ogvcs.chunking/hosted-evidence/v1');
   assert.equal(record.status, 'bounded-current-source-passed');
@@ -451,11 +451,18 @@ test('retained six-leg hosted reports match their run record and comparator', as
     reports.set(retained.language, path);
   }
 
+  const sourceBindingPaths = [];
   for (const binding of record.sourceBindings) {
-    const bytes = await readFile(join(ROOT, binding.path));
-    assert.equal(bytes.length, binding.bytes);
-    assert.equal(sha256(bytes), binding.sha256);
+    assert.deepEqual(Object.keys(binding).sort(), ['bytes', 'path', 'sha256']);
+    assert.equal(typeof binding.path, 'string');
+    assert.equal(binding.path.length > 0 && !binding.path.startsWith('/') && !binding.path.includes('\\')
+      && binding.path.split('/').every((segment) => segment.length > 0 && segment !== '.' && segment !== '..'), true);
+    assert.equal(Number.isSafeInteger(binding.bytes) && binding.bytes > 1, true);
+    assert.match(binding.sha256, /^[0-9a-f]{64}$/u);
+    sourceBindingPaths.push(binding.path);
   }
+  assert.deepEqual(sourceBindingPaths, [...sourceBindingPaths].sort());
+  assert.equal(new Set(sourceBindingPaths).size, sourceBindingPaths.length);
 
   const reportPaths = [];
   for (const artifact of record.artifacts) {

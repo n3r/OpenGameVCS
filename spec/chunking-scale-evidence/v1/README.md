@@ -8,7 +8,9 @@ predecessor or register an OGVCS-005 task/profile.
 
 Bundles are content-addressed and verified against the current source
 inventory; they do not attest producer identity or origin. The protected
-workflow supplies its checked-out revision, but this verifier does not
+workflow first requires a manual expected revision or an exact-revision tag,
+rejects a different checkout, and pins each downstream checkout to that
+preflight result. This verifier still does not
 independently bind that claim to Git, so `sourceRevision` remains explicitly
 `workflow-supplied-not-git-bound`. The machine-readable profile and every
 verified projection carry that limitation.

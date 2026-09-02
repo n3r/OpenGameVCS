@@ -49,10 +49,10 @@ snapshot and is never shipped as production authority.
 | FR-06 | Pass | `compareManifest()` accepts a local known-chunk index and reports exact logical, unique, repeated, reused, newly required bytes and unique chunks without remote access; conflicting known lengths reject. |
 | FR-07 | Pass in bounded suites | Generated 22-code authority, malformed vectors, overflow/count/resource admission, corrupt/short/long/missing delivery, conflicting metadata/index cases, repeated ordered references, callback/iterator failures, cancellation, scratch exhaustion, and hostile receipt/registry tests execute public APIs. |
 | FR-08 | Pass in bounded scope | The [current authenticated packet](../evidence/OGVCS-007/README.md) retains source-like, structured, already-compressed, encrypted/random, insertion, replacement, and append results separately. |
-| NFR-01 | Pass | JavaScript/Rust reports match nine golden cases. Hosted run 33521316277 replayed the current bounded source on Linux, macOS, and Windows, passed all six language/OS legs, and passed the aggregate six-report comparison. |
+| NFR-01 | Pass at retained revision | JavaScript/Rust reports match nine golden cases. Hosted run 33521316277 replayed bounded revision `b56e165` on Linux, macOS, and Windows, passed all six language/OS legs, and passed the aggregate six-report comparison. A later exact-scale source requires its own same-revision bounded pass. |
 | NFR-02 | Pending final gate | Bounded runs prove bounded admission and record observed child-process peaks, but only the deferred 100-GiB campaign can satisfy the required file-length-independent measured peak. |
 | NFR-03 | Pass | Report and independent verifier recompute `reused + newlyRequired = unique` and `unique + repeated = logical`; poor reuse is retained rather than hidden. |
-| AC-01 | Pass | Independent JavaScript and Rust implementations generated identical golden manifest bytes on the retained current-source six-leg matrix and passed the aggregate comparison. |
+| AC-01 | Pass at retained revision | Independent JavaScript and Rust implementations generated identical golden manifest bytes on the retained `b56e165` six-leg matrix and passed the aggregate comparison. |
 | AC-02 | Pass | Every golden corpus reconstructs exactly after shuffled lookup order; first/middle/last corruption and short/truncated/long/missing delivery reject. |
 | AC-03 | **Open final gate** | No 100-GiB campaign was run in this work. It must be the final acceptance run, not a per-PR job. |
 | AC-04 | Pass in authenticated bounded evidence | Insertion and replacement retain bounded post-mutation resynchronization; compressed and encrypted/random rows report zero observed reuse for the retained inputs. |
@@ -108,11 +108,14 @@ wall time, bounded ledger use, and scratch cleanup. The comparison job rejects
 different source revisions, runtime architectures, result projections, or
 declared-bound violations and binds both input report hashes into its output.
 
-The workflow is reachable only by an explicit boolean-confirmed dispatch or an
-`ogvcs-007-scale-*` release tag. It has no pull-request, branch, or scheduled
-trigger, and neither the ordinary package scripts nor the bounded workflow
-execute either 100-GiB runner. Preparing and testing this harness does not close
-AC-03, ratify the profile, or authorize production writes.
+The workflow is reachable only by an explicit boolean-confirmed dispatch that
+also supplies the exact reviewed source revision, or by an
+`ogvcs-007-scale-<same 40-character lowercase revision>` release tag. Its
+preflight rejects a mismatched checkout and pins all three downstream checkouts
+to the accepted commit. It has no pull-request, branch, or scheduled trigger,
+and neither the ordinary package scripts nor the bounded workflow executes
+either 100-GiB runner. Preparing and testing this harness does not close AC-03,
+ratify the profile, or authorize production writes.
 
 The pre-scale evidence-authority candidate now adds an OGVCS-007-owned
 `chunking-exact-scale` corpus, `chunking-exact-scale-verify` task,
