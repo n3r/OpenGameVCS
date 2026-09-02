@@ -1,11 +1,16 @@
 # OGVCS-021 private deployment-preflight boundary review
 
 **Decision:** SHIP only as a bounded, unpublished, unwired supplied-fact
-candidate. Do not treat it as installation, environment inspection, health
-authority, migration authorization, backup verification, administrator
-bootstrap, or completion of OGVCS-021.
+candidate, including the rc.3 conservative configuration-transition
+assessment. Do not treat either result as installation, environment inspection,
+health authority, reload permission, restart/upgrade sufficiency, migration
+authorization, backup verification, administrator bootstrap, or completion of
+OGVCS-021.
 
 **Source baseline:** `fa221451b6b12d80bf54e9a48c3641e591639844`
+
+**Transition assessment base:**
+`5e26b91a27793edf76a13baec5bdae9654cb05cc`
 
 ## Reviewed seam
 
@@ -23,10 +28,13 @@ The candidate owns only a deterministic pure evaluation boundary:
 5. reject schema downgrades and bind a supplied irreversible-migration gate to
    the exact deployment, artifact set, source/target schema, source-state
    generations, verified manifest subject, separate source/target claims,
-   evaluation time, and retention; and
+   evaluation time, and retention;
 6. return domain-separated configuration, observation, and structural-report
    commitments under an explicit caller-supplied observation-age fence plus
-   work, memory, and cancellation envelopes.
+   work, memory, and cancellation envelopes; and
+7. compare two independently validated, supplied configurations and return only
+   exact no-change, full-restart-required, or external-deployment-procedure-
+   required as a minimum handling class.
 
 The crate borrows caller records, checks exact cardinalities before traversal,
 admits the reachable 18/19-unit logical work charge before semantic validation,
@@ -35,6 +43,35 @@ admits a conservative 512–640-byte retained charge before result allocation.
 All accepted collections have fixed small cardinality. These properties are
 local deterministic accounting only, not exact allocator, CPU, latency,
 capacity, or reference-scale evidence.
+
+## Conservative configuration-transition assessment
+
+The rc.3 addition is a pure directional comparison, not a deployment-state
+transition. It validates both exact configuration shapes and their existing
+static safety rules. Exact equality is the only `NoChangeObserved` result. Any
+other classified same-deployment difference must also change the opaque
+configuration-generation commitment. Listener, secret-binding,
+service-account, or generation-only differences return
+`FullRestartRequired`; artifact or compatibility changes dominate and return
+`ExternalDeploymentProcedureRequired`. A changed deployment binding, reused
+generation, invalid side, unclassified difference, bound failure, or
+cancellation returns no assessment.
+
+The result intentionally has no reload-safe, apply-ready, mutation-ready, or
+authorized disposition. “Prior” and “replacement” are caller positions only.
+The assessment does not discover which configuration is installed, prove that
+one generation is newer, compose with readiness, control a service, or claim
+that restart or another procedure is sufficient. Both configurations, the
+fixed change set, directional disposition, and resource charges are bound into
+an unkeyed domain-separated structural checksum. As with the preflight report,
+a caller can fabricate or reseal it.
+
+The entry point checks exact 3/4/3 cardinalities before traversing either
+configuration, admits a fixed 21-unit logical charge, allocates no retained
+collection, and returns a fixed report after admitting a conservative 192-byte
+charge. It polls cancellation before shape inspection, between both validations
+and classification, after retained admission, and before return. Those are
+local logical bounds, not allocator, CPU, latency, restart, or host evidence.
 
 ## Independent adversarial hardening
 
@@ -76,6 +113,13 @@ dependency-state mappings, temporal boundaries, stable error precedence,
 complete configuration/observation/report projection mutation tests, backup
 source-binding mutations, final pre-allocation cancellation polling, and
 redacted logging checks.
+
+The transition tranche adds deterministic known-answer and direction-binding
+coverage; generation reuse, deployment/artifact/compatibility/listener/secret/
+principal substitutions; both-side invalid and noncanonical shapes; exact and
+maximum-plus-one resource limits; checked-overflow and every-checkpoint
+cancellation; report-field tampering; redacted debug; and packed-source policy
+coverage. These cases execute only the private evaluator.
 
 ## Security and authority review
 
@@ -135,12 +179,14 @@ migration.
 OGVCS-021 remains Todo and all acceptance criteria remain open. Supported
 versions and sizing, topology artifacts, prerequisite discovery, noninteractive
 installation, first-admin bootstrap, real secret providers, public versioned
-configuration, reload/restart behavior, migrations and ledger, OGVCS-017/018
-integration, backup/restore, public health/metrics/logging, diagnostics,
-repository creation, uninstall/reinstall, preserve/delete confirmation,
-offline and clean-host installed runs, hosted deployed-host evidence, operator
-runbooks, timed exercise, idempotency, scale/SLO proof, operations, rollout,
-and rollback remain unimplemented.
+configuration and parser, unknown-key rejection evidence, installed-config
+discovery, generation provenance/order, reload-safe classification, actual
+reload/restart/upgrade behavior or sufficiency, migrations and ledger,
+OGVCS-017/018 integration, backup/restore, public health/metrics/logging,
+diagnostics, repository creation, uninstall/reinstall, preserve/delete
+confirmation, offline and clean-host installed runs, hosted deployed-host
+evidence, operator runbooks, timed exercise, idempotency, scale/SLO proof,
+operations, rollout, and rollback remain unimplemented.
 
 The path-scoped hosted workflow is a pinned Linux/macOS/Windows source
 portability gate only. Exact run

@@ -99,7 +99,7 @@ Publish immutable prerelease artifacts and one reference topology. Every schema-
 ## Completion evidence
 
 - Implementation changes: Bounded candidate relevance only. The unpublished,
-  unwired Rust 1.82 rc.2 crate under `core/deployment-preflight/rust` evaluates
+  unwired Rust 1.82 rc.3 crate under `core/deployment-preflight/rust` evaluates
   one fixed caller-supplied topology and one fixed generation-bound set of
   metadata, object-storage, identity, verifier, backup, capacity, and schema
   observations. It rejects unsafe supplied listener/default/secret-reference/
@@ -110,9 +110,14 @@ Publish immutable prerelease artifacts and one reference topology. Every schema-
   generation, source and target schema, and current metadata, object-storage,
   verifier, backup, and schema observation generations. It also binds the
   verified manifest subject, distinct source/target claims, and retention
-  beyond evaluation. It performs no discovery, installation, bootstrap,
-  migration, backup,
-  restore, service operation, or durable mutation.
+  beyond evaluation. A pure addition compares two independently validated,
+  supplied configurations: exact equality reports no observed change; every
+  same-deployment difference requires a distinct opaque generation and at
+  least a full restart; artifact or compatibility changes require an external
+  deployment procedure. It offers no reload-safe or operational-permission
+  result. It performs no discovery, installation, bootstrap, migration,
+  backup, restore, reload, restart, upgrade, service operation, or durable
+  mutation.
 - Test and benchmark results: Local deterministic unit cases cover the healthy
   configuration/observation/report known answers and exhaustive projection
   binding; listener exposure/port negatives; distinct secret-reference and
@@ -121,9 +126,14 @@ Publish immutable prerelease artifacts and one reference topology. Every schema-
   irreversible migration scope/source/manifest/retention gating; stable error
   precedence; exact/max+1 fixed-shape, logical-work and conservative retained-
   charge limits; cancellation; redacted debug; and report-local structural
-  checks. Rust 1.82 debug/release, warning-denied Clippy, bounded package,
-  source-policy, and roadmap gates are the candidate's
-  local evidence. No clean-host, hosted cross-OS, dependency-fault, offline,
+  checks. Transition cases cover the deterministic checksum and direction;
+  configuration-generation reuse; deployment, artifact, compatibility,
+  listener, secret, and principal substitution; invalid prior/replacement
+  shapes; exact and max+1 work/retained bounds; checked overflow; every
+  cancellation checkpoint; report tampering; and redacted debug. Rust 1.82
+  debug/release, warning-denied Clippy, bounded and extracted package,
+  source-policy, and roadmap gates are the candidate's local evidence. No new
+  hosted transition run, clean-host, deployed dependency-fault, offline,
   timed-operator, scale, latency, or SLO campaign has run.
 - Security/reliability review: See
   `docs/reviews/OGVCS-021-deployment-preflight-boundary-review.md`. Secret and
@@ -133,17 +143,22 @@ Publish immutable prerelease artifacts and one reference topology. Every schema-
   cardinalities, pre-traversal 18/19-unit logical-work admission, allocation-
   free validation, fixed-buffer reason staging, pre-result-allocation 512–640
   byte conservative retained charging, and cooperative cancellation provide
-  only a bounded pure-evaluator boundary. There is deliberately no mutation-
-  authorization or `mutation_ready` result.
+  only a bounded pure-evaluator boundary. Transition comparison adds a fixed
+  21-unit logical charge and conservative 192-byte fixed-result charge. Its
+  directional checksum is likewise unauthenticated, it does not establish
+  installed state or generation order, and neither candidate result has a
+  mutation-authorization or `mutation_ready` field.
 - Documentation/runbooks: The private crate README documents the supplied-fact
-  topology, readiness and migration boundaries, resource behavior, and
-  nonclaims. There is no install, bootstrap, upgrade, recovery, backup/restore,
-  diagnostics, or uninstall operator runbook because none of those workflows
-  exists yet.
+  topology, readiness, migration, and conservative transition boundaries,
+  resource behavior, and nonclaims. There is no install, bootstrap, restart,
+  upgrade, recovery, backup/restore, diagnostics, or uninstall operator runbook
+  because none of those workflows exists yet.
 - Rollout result: Not rolled out. OGVCS-021 remains Todo and all five
   acceptance criteria remain open. Supported artifacts and versions,
   prerequisite discovery, installer/composition, real secret/TLS/identity/
-  storage integration, first-admin bootstrap, public configuration and health
-  interfaces, migration ledger/execution, OGVCS-017/018 invocation,
-  diagnostics, repository creation, uninstall/reinstall, clean recovery, and
-  operations evidence remain unimplemented.
+  storage integration, first-admin bootstrap, public configuration/parser and
+  health interfaces, installed-generation discovery/provenance, reload-safe
+  classification, actual restart/upgrade behavior, migration ledger/execution,
+  OGVCS-017/018 invocation, diagnostics, repository creation,
+  uninstall/reinstall, clean recovery, and operations evidence remain
+  unimplemented.

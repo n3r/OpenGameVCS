@@ -9,6 +9,10 @@ use std::{
 
 use sha2::{Digest as _, Sha256};
 
+mod transition;
+
+pub use transition::*;
+
 const _: () = assert!(usize::BITS <= u64::BITS);
 
 pub type Commitment = [u8; 32];
@@ -642,6 +646,14 @@ fn validate_input_shapes(
     config: &DeploymentConfig,
     observation: &PreflightObservation,
 ) -> Result<(), PreflightError> {
+    validate_config_shape(config)?;
+    if observation.dependencies.len() != DEPENDENCY_COUNT {
+        return Err(PreflightError::ObservationSet);
+    }
+    Ok(())
+}
+
+fn validate_config_shape(config: &DeploymentConfig) -> Result<(), PreflightError> {
     if config.listeners.len() != LISTENER_COUNT {
         return Err(PreflightError::ListenerSet);
     }
@@ -650,9 +662,6 @@ fn validate_input_shapes(
     }
     if config.service_accounts.len() != SERVICE_ACCOUNT_COUNT {
         return Err(PreflightError::ServiceAccountSet);
-    }
-    if observation.dependencies.len() != DEPENDENCY_COUNT {
-        return Err(PreflightError::ObservationSet);
     }
     Ok(())
 }

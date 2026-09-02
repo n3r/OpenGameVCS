@@ -6,13 +6,15 @@ const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 
 test('private deployment preflight stays pure, fixed-shape, and unwired', async () => {
-  const [cargo, source] = await Promise.all([
+  const [cargo, source, transition] = await Promise.all([
     read('core/deployment-preflight/rust/Cargo.toml'),
     read('core/deployment-preflight/rust/src/lib.rs'),
+    read('core/deployment-preflight/rust/src/transition.rs'),
   ]);
+  const rust = `${source}\n${transition}`;
 
   assert.match(cargo, /publish = false/u);
-  assert.match(cargo, /version = "0\.1\.0-rc\.2"/u);
+  assert.match(cargo, /version = "0\.1\.0-rc\.3"/u);
   assert.match(cargo, /rust-version = "1\.82"/u);
   assert.match(cargo, /sha2 = "=0\.10\.9"/u);
   assert.doesNotMatch(cargo, /tokio|reqwest|axum|sqlx|postgres|rusqlite|tonic|aws-sdk|aws_sdk|docker|kube/iu);
@@ -47,8 +49,8 @@ test('private deployment preflight stays pure, fixed-shape, and unwired', async 
   assert.match(source, /DEPLOYMENT_OBSERVATION_TIME_INVALID/u);
   assert.doesNotMatch(source, /mutation_ready/u);
   assert.doesNotMatch(source, /BTreeSet|HashSet/u);
-  assert.doesNotMatch(source, /std::(?:fs|net|process)|TcpListener|TcpStream|UdpSocket|SystemTime|Instant|Command::|tokio|reqwest|axum|sqlx|postgres|rusqlite/iu);
-  assert.doesNotMatch(source, /pub\s+(?:async\s+)?fn\s+(?:install|bootstrap|migrate|backup|restore|serve|listen|authorize|publish|uninstall)/u);
+  assert.doesNotMatch(rust, /std::(?:fs|net|process)|TcpListener|TcpStream|UdpSocket|SystemTime|Instant|Command::|tokio|reqwest|axum|sqlx|postgres|rusqlite/iu);
+  assert.doesNotMatch(rust, /pub\s+(?:async\s+)?fn\s+(?:install|bootstrap|migrate|backup|restore|serve|listen|authorize|publish|uninstall)/u);
 
   for (const name of ['SecretBinding', 'ServiceAccount', 'DependencyObservation']) {
     const body = source.match(new RegExp(`pub struct ${name} \\{(?<body>[\\s\\S]*?)\\n\\}`, 'u'))?.groups?.body;
@@ -68,6 +70,42 @@ test('private deployment preflight stays pure, fixed-shape, and unwired', async 
   assert.match(source, /field\("configuration", &"<redacted>"\)/u);
   assert.match(source, /field\("observation", &"<redacted>"\)/u);
   assert.match(source, /field\("evidence", &"<redacted>"\)/u);
+});
+
+test('configuration transition is conservative, bounded, directional, and non-authoritative', async () => {
+  const [source, transition, readme, review, prd] = await Promise.all([
+    read('core/deployment-preflight/rust/src/lib.rs'),
+    read('core/deployment-preflight/rust/src/transition.rs'),
+    read('core/deployment-preflight/rust/README.md'),
+    read('docs/reviews/OGVCS-021-deployment-preflight-boundary-review.md'),
+    read('prd/todo/OGVCS-021-starter-deployment-admin-bootstrap.md'),
+  ]);
+  const production = transition.split('#[cfg(test)]')[0];
+
+  assert.match(source, /mod transition;\s+\n\s*pub use transition::\*;/u);
+  assert.match(transition, /pub const TRANSITION_VERSION: u16 = 1;/u);
+  assert.match(transition, /OGVCS-PRIVATE-DEPLOYMENT-CONFIG-TRANSITION-V1/u);
+  assert.match(transition, /pub const TRANSITION_WORK_UNITS: u64 = 21;/u);
+  assert.match(transition, /pub const TRANSITION_RETAINED_BYTES: u64 = 192;/u);
+  assert.match(transition, /NoChangeObserved = 1,[\s\S]*FullRestartRequired = 2,[\s\S]*ExternalDeploymentProcedureRequired = 3/u);
+  assert.match(transition, /pub fn assess_deployment_config_transition\([\s\S]*prior: &DeploymentConfig,[\s\S]*replacement: &DeploymentConfig,[\s\S]*TransitionControl<'_>/u);
+  assert.match(transition, /validate_config_shape\(prior\)[\s\S]*validate_config_shape\(replacement\)[\s\S]*transition_work_units\(prior, replacement\)[\s\S]*validate_config\(prior\)[\s\S]*validate_config\(replacement\)/u);
+  assert.match(transition, /prior\.deployment != replacement\.deployment[\s\S]*DeploymentBindingChanged/u);
+  assert.match(transition, /!changes\.contains\(ConfigurationChange::ConfigurationGeneration\)[\s\S]*ConfigurationGenerationReused/u);
+  assert.match(transition, /requires_external_deployment_procedure[\s\S]*ExternalDeploymentProcedureRequired/u);
+  assert.match(transition, /Reconstructs only this assessment's structural checksum/u);
+  assert.match(transition, /field\("bindings", &"<redacted>"\)[\s\S]*field\("changes", &"<redacted>"\)/u);
+  assert.doesNotMatch(production, /ReloadSafe|ApplyReady|MutationReady|Authorized/u);
+  assert.doesNotMatch(production, /Vec<|VecDeque|BTree|HashMap|HashSet|\.collect\(|\.sort/u);
+  assert.doesNotMatch(production, /std::(?:fs|net|process)|SystemTime|Instant|Command::|tokio|reqwest|docker|kube/iu);
+
+  for (const text of [readme, review, prd]) {
+    assert.match(text, /caller|supplied/iu);
+    assert.match(text, /minimum|at\s+least/iu);
+    assert.match(text, /no reload-safe|reload-safe.*(?:no|remain|unimplemented)|no.*operational-permission/isu);
+    assert.match(text, /not a signature|unkeyed|unauthenticated/iu);
+    assert.match(text, /OGVCS-021 remains Todo/u);
+  }
 });
 
 test('hosted source-portability gate is pinned, path-scoped, and cross-platform', async () => {

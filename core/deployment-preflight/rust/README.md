@@ -1,10 +1,22 @@
-# OGVCS-021 private deployment-preflight rc.2
+# OGVCS-021 private deployment-preflight rc.3
 
 This unpublished Rust 1.82 crate is a bounded, deliberately unwired evaluator
 for a narrow part of OGVCS-021. It validates caller-supplied static deployment
 facts and caller-supplied health observations, then produces a deterministic
-liveness/readiness report. It performs no environment discovery, installation,
-bootstrap, migration, backup, restore, or service operation.
+liveness/readiness report. It also compares two supplied, independently valid
+configurations and returns a conservative minimum disruption class. It performs
+no environment discovery, installation, bootstrap, migration, backup, restore,
+reload, restart, upgrade, or other service operation.
+
+The rc.3 transition assessment never says that a change is reload-safe or that
+an operation is permitted. Exact equality returns `NoChangeObserved`. Any
+same-deployment change requires a distinct opaque configuration-generation
+commitment; runtime changes return `FullRestartRequired`, while an artifact-set
+or compatibility-set change returns `ExternalDeploymentProcedureRequired`.
+Changing the deployment binding, reusing a generation for another exact
+configuration, or presenting an invalid side fails without an assessment.
+These are minimum handling classes: neither restart nor an external procedure
+is claimed sufficient.
 
 The rc.2/V2 private contract adds exact artifact-set and target-schema binding
 to irreversible-migration evidence. V1 evidence and report digests are not
@@ -84,6 +96,31 @@ commitments. `has_valid_binding` checks only report-local structure and its
 recomputable checksum; it is not a signature, MAC, authentication result,
 authorization decision, freshness proof, or durable audit record.
 
+## Configuration-transition boundary
+
+The transition entry point borrows one prior and one replacement
+`DeploymentConfig`. It validates the exact three-listener, four-secret-reference,
+and three-service-account shape and all static safety rules on both sides before
+classification. It does not accept a preflight report as proof and does not
+combine its result with readiness. The terms “prior” and “replacement” describe
+caller positions only: the crate does not discover the installed configuration,
+authenticate either value, or prove that the replacement generation is newer.
+
+The fixed change set binds artifact, compatibility, configuration-generation,
+listener, secret-binding, and service-account differences. Exact configuration
+equality is the only no-change result. A changed artifact or compatibility set
+dominates other differences and requires an external deployment procedure.
+Every other classified difference requires a full restart at minimum. There is
+deliberately no reload-safe, apply-ready, mutation-ready, or authorization
+disposition.
+
+The assessment binds both directional configuration digests, the exact fixed
+change bitset, disposition, logical-work charge, and retained charge under the
+domain `OGVCS-PRIVATE-DEPLOYMENT-CONFIG-TRANSITION-V1`. Its
+`has_valid_binding` method reconstructs only that unkeyed structural checksum.
+A caller can fabricate or reseal it; it is not installed-state, ordering,
+freshness, operational-success, or authority evidence.
+
 ## Resource behavior
 
 Input cardinalities are checked before semantic traversal. The deterministic
@@ -104,6 +141,15 @@ accepted topology itself has fixed cardinality.
 
 This is deterministic accounting for the private evaluator, not an allocator,
 CPU, latency, capacity, or reference-scale measurement.
+
+Transition input cardinalities are likewise checked before semantic traversal.
+The transition charges one fixed unit plus the ten records on each side, for 21
+logical units, before validating values. Its allocation-free fixed report has a
+conservative 192-byte retained charge. Cancellation is checked before input
+shape inspection, between both validations and classification, after retained
+admission, and immediately before the result is returned. These charges do not
+measure caller-owned vectors, exact stack size, allocator use, CPU, latency, or
+service-restart resources.
 
 Error precedence is fixed: invalid configured limits, initial cancellation,
 exact input shapes, work admission, configuration, observation generation and
@@ -126,19 +172,23 @@ authorization.
 | Observation age policy | 300 seconds |
 | Logical work charge | 19 units |
 | Retained-memory charge | 640 bytes |
+| Transition logical work charge | 21 units |
+| Transition retained charge | 192 bytes |
 
 ## Explicit nonclaims
 
 There is no topology manifest, supported-version matrix, prerequisite probe,
 installer, package or container composition, database/object-store adapter,
 TLS termination, identity or first-admin bootstrap, one-time secret, public
-configuration schema, reload/restart classifier, migration ledger, resumable
-migration, backup/restore invocation, diagnostics bundle, logs/metrics server,
-public health endpoint, CLI, service, authentication, authorization, repository
-creation, uninstall/reinstall workflow, operator runbook, clean-host/offline
-exercise, hosted cross-OS evidence, timed usability run, scale/SLO campaign, or
-rollout. No OGVCS-021 acceptance criterion is satisfied. OGVCS-021 remains
-Todo.
+configuration schema, parser, unknown-key proof, installed-configuration
+discovery, generation provenance/order, reload-safe class, restart/upgrade
+execution or sufficiency, migration ledger, resumable migration, backup/restore
+invocation, diagnostics bundle, logs/metrics server, public health endpoint,
+CLI, service, authentication, authorization, repository creation,
+uninstall/reinstall workflow, operator runbook, clean-host/offline exercise,
+new hosted cross-OS transition evidence, timed usability run, scale/SLO
+campaign, or rollout. No OGVCS-021 acceptance criterion is satisfied.
+OGVCS-021 remains Todo.
 
 Local gates:
 
