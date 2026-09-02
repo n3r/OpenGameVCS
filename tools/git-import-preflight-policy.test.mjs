@@ -5,6 +5,60 @@ import test from 'node:test';
 const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 
+test('hosted portability workflow is pinned, path-scoped, and cross-platform', async () => {
+  const workflow = await read('.github/workflows/git-import-preflight.yml');
+  const watchedPaths = [
+    '.github/workflows/git-import-preflight.yml',
+    'core/import-git-lfs/rust/**',
+    'core/object-model/rust/**',
+    'core/paths-filesystem/rust/**',
+    'docs/reviews/OGVCS-020-git-import-preflight-boundary-review.md',
+    'prd/todo/OGVCS-020-git-lfs-importer.md',
+    'tools/git-import-preflight-policy.test.mjs',
+    'package.json',
+    'package-lock.json',
+  ];
+
+  const pullRequest = workflow.match(/on:\n  pull_request:\n    paths:\n(?<paths>(?:      - '[^']+'\n)+)  push:/u);
+  const push = workflow.match(/  push:\n    branches: \[main, r1-foundation-integration\]\n    paths:\n(?<paths>(?:      - '[^']+'\n)+)  workflow_dispatch:/u);
+  const decodePaths = (match) => match?.groups?.paths.trimEnd().split('\n').map((line) => line.slice(9, -1));
+  assert.deepEqual(decodePaths(pullRequest), watchedPaths);
+  assert.deepEqual(decodePaths(push), watchedPaths);
+  assert.match(workflow, /  workflow_dispatch:\n/u);
+  assert.match(workflow, /permissions:\n  contents: read/u);
+  assert.match(workflow, /cancel-in-progress: true/u);
+  assert.match(workflow, /timeout-minutes: 30/u);
+  const runners = [...workflow.matchAll(/^          - \{ runner: ([^,]+), label: ([^ }]+) \}$/gmu)]
+    .map((match) => ({ runner: match[1], label: match[2] }));
+  assert.deepEqual(runners, [
+    { runner: 'ubuntu-latest', label: 'Linux' },
+    { runner: 'macos-latest', label: 'macOS' },
+    { runner: 'windows-latest', label: 'Windows' },
+  ]);
+  assert.match(workflow, /runs-on: \$\{\{ matrix\.runner \}\}/u);
+
+  const actionUses = [...workflow.matchAll(/^\s*- uses: ([^\s#]+)/gmu)].map((match) => match[1]);
+  assert.deepEqual(actionUses, [
+    'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1',
+    'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020',
+    'dtolnay/rust-toolchain@7d11e79e1714f6b6da93cac39ad8435666f5c337',
+  ]);
+  for (const action of actionUses) assert.match(action, /@[0-9a-f]{40}$/u);
+  assert.match(workflow, /persist-credentials: false/u);
+  assert.match(workflow, /node-version: 24/u);
+  assert.match(workflow, /# 1\.82\.0/u);
+  assert.match(workflow, /components: clippy, rustfmt/u);
+
+  assert.match(workflow, /node --test tools\/git-import-preflight-policy\.test\.mjs/u);
+  assert.match(workflow, /cargo fetch --manifest-path core\/import-git-lfs\/rust\/Cargo\.toml --locked/u);
+  assert.match(workflow, /cargo fmt --manifest-path core\/import-git-lfs\/rust\/Cargo\.toml -- --check/u);
+  assert.match(workflow, /cargo test --manifest-path core\/import-git-lfs\/rust\/Cargo\.toml --locked --offline\n/u);
+  assert.match(workflow, /cargo test --manifest-path core\/import-git-lfs\/rust\/Cargo\.toml --locked --offline --release/u);
+  assert.match(workflow, /cargo clippy --manifest-path core\/import-git-lfs\/rust\/Cargo\.toml --locked --offline --all-targets -- -D warnings/u);
+  assert.match(workflow, /run: \.\/scripts\/test-packed\.sh\n        shell: bash\n        working-directory: core\/import-git-lfs\/rust/u);
+  assert.match(workflow, /if: runner\.os == 'Linux'\n        run: node prd\/validate-roadmap\.mjs && node --test prd\/validate-roadmap\.test\.mjs/u);
+});
+
 test('OGVCS-020 candidate remains private, bounded, unwired, and Todo', async () => {
   const [manifest, source, readme, review, packageValue, prd] = await Promise.all([
     read('core/import-git-lfs/rust/Cargo.toml'),
