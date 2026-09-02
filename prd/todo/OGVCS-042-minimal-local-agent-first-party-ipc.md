@@ -7,7 +7,7 @@
 **Depends on:** OGVCS-004, OGVCS-009, OGVCS-011, OGVCS-012, OGVCS-013, OGVCS-016, OGVCS-019, OGVCS-041  
 **Blocks:** OGVCS-023, OGVCS-031, OGVCS-038  
 **Source:** [Architecture ADR-0006](../../adr/0006-local-agent-security-boundary.md)  
-**Last updated:** 2026-08-14
+**Last updated:** 2026-09-02
 
 ## Outcome
 
@@ -100,9 +100,29 @@ Ship read/status first to first-party clients, then sync/start-edit and finally 
 
 ## Completion evidence
 
-- Implementation changes:
-- Test and benchmark results:
+- Implementation changes: bounded private/unpublished/unwired Rust 1.82
+  protocol-fact and in-memory-ledger candidate under `client/local-agent/rust`;
+  it composes the existing FileID, path, and protocol-baseline types and retains
+  only opaque facts owned by the future lock contract. It implements no agent
+  process, transport, credentials, workspace mutation, lock authority, or
+  public binding.
+- Test and benchmark results: 16 deterministic Rust contract tests plus the
+  Node source-policy gate cover negotiation, challenge replay, exact rotation,
+  consent-generation/scope fencing, operation idempotency after original time
+  windows, status/event bounds and backpressure, exact subscription-caller
+  facts, ledger-issued cursor expiry, lock-knowledge variants, single-use
+  handoff, redaction, cancellation, rollback, and selected
+  exact/maximum-plus-one envelopes. These are bounded model tests, not OS,
+  endpoint, fuzz, benchmark, or million-path evidence.
 - Security/reliability review:
-- Documentation/runbooks:
-- Rollout result:
-
+  `docs/reviews/OGVCS-042-local-agent-ipc-boundary-review.md` records the
+  independent authority/boundary audit, fail-closed fixes, residual risks, and
+  private-candidate-only verdict; it is not an external security assessment or
+  acceptance evidence for a hosted agent.
+- Documentation/runbooks: `client/local-agent/rust/README.md` documents exact
+  ordering, limits, known answers, composition boundaries, and nonclaims. No
+  operational runbook exists because there is no process or deployment in this
+  tranche.
+- Rollout result: none. The candidate is uncommitted, unpublished, and not wired
+  to a route, CLI, UI, engine integration, or production runtime; OGVCS-042
+  remains Todo and OGVCS-042-AC-01 through OGVCS-042-AC-05 remain open.
