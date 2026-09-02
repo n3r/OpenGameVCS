@@ -1,17 +1,23 @@
-# OGVCS-015 private history/diff kernel rc.1
+# OGVCS-015 private history/diff/text-merge kernel rc.1
 
-This unpublished Rust 1.82 crate is a bounded, read-only candidate for two
-small OGVCS-015 prerequisites:
+This unpublished Rust 1.82 crate is a bounded candidate for three small
+OGVCS-015 prerequisites:
 
 - deterministic traversal of the immutable OGVCS-002 Snapshot parent DAG; and
-- deterministic metadata diffing of two Snapshot root Trees by stable FileID.
+- deterministic metadata diffing of two Snapshot root Trees by stable FileID;
+  and
+- a pure, built-in, versioned three-way text-merge kernel over caller-supplied
+  bytes.
 
 It is deliberately unwired. It has no branch/reference lookup, network route,
 server database, workspace or checkpoint adapter, authorization decision,
-grant, audit event, mutation, publish, merge, merge-base, conflict resolution,
-revert, or content-payload output. The source boundary must already represent a
-caller-preauthorized immutable view. That statement is an integration
-precondition, not an authorization brand supplied by this crate.
+grant, audit event, mutation, publish, branch merge workflow, merge-base,
+conflict resolution, revert, durable conflict state, or repository content
+adapter. The text kernel is computation only: it is not a merge workflow and
+cannot write its result.
+The object source boundary must already represent a caller-preauthorized
+immutable view. That statement is an integration precondition, not an
+authorization brand supplied by this crate.
 
 ## Canonical input and generation boundary
 
@@ -91,6 +97,59 @@ This is not complete repository-graph/replay validation. Diff intentionally
 does not traverse Snapshot parents, ChangeSets, chunks, asset groups,
 provenance, or conflicts. Those remain predecessor or later OGVCS-015 work.
 
+## Built-in text merge
+
+`merge_text_three_way` is the private candidate identified by
+`ogvcs.text-merge/line-diff3@1`. Its closed rc.1 options are exact whitespace
+and exact LF line endings. Changing comparison, hunk alignment, tie-breaking,
+or output semantics requires a new algorithm version rather than silently
+changing this identifier.
+
+Each base/ours/theirs input is borrowed and carries a claimed SHA-256 digest.
+The kernel verifies those digests before retaining line state. Its deliberately
+narrow text profile accepts valid UTF-8, TAB, and LF; rejects NUL, DEL, all
+other Unicode control characters, CRLF, and bare CR; and preserves every byte,
+including whether the final line ends in LF. This is a fail-closed candidate
+text classifier, not a repository content-policy decision. Binary/default-
+nonmergeable selection, choose-one UX, and semantic/external drivers remain
+outside this crate.
+
+After whole-input validation, the kernel preflights literal hard ceilings
+before line-index, token, LCS-matrix, edit-script, conflict, candidate-fragment,
+or output allocation:
+
+| Boundary | rc.1 maximum |
+|---|---:|
+| each input | 1,048,576 bytes |
+| all three inputs | 3,145,728 bytes |
+| lines per input | 4,096 |
+| one exact line | 65,536 bytes |
+| one LCS matrix | 263,169 cells |
+| work | 24,000,000 charged units |
+| clean output | 3,145,728 bytes |
+| conflict spans | 128 |
+| conservatively admitted peak retained memory | 12,582,912 bytes |
+
+Line content is tokenized by SHA-256 and length, with exact byte comparison on
+every matching token bucket so a digest collision cannot silently equate two
+different lines. The two suffix-LCS matrices use a fixed delete-base-first tie
+break. Replacement hunks are deterministically line-aligned before diff3
+combination. Unchanged-side and identical-side shortcuts are byte exact;
+disjoint/adjacent edits combine; identical overlapping candidates are emitted
+once; and divergent overlapping edits return typed conflicts. Cancellation is
+fenced during input validation, indexing, tokenization, both LCS passes,
+combination, fragment hashing, and finalization. Any cancellation or limit
+failure returns no clean output or conflict set.
+
+A clean result owns sealed output bytes plus their SHA-256 and a domain-
+separated output commitment. A conflict result owns only bounded typed base
+line spans and base/ours/theirs fragment line counts, byte counts, and SHA-256
+digests. It never exposes a partial candidate file or manufactures conflict
+marker bytes. Both outcomes carry a request commitment over the algorithm
+version, closed options, exact input lengths, and verified input digests. These
+commitments are deterministic integrity/provenance facts, not object IDs,
+authorization receipts, conflict persistence, or permission to submit.
+
 ## Cursors and restart
 
 History and diff cursors are canonical private binary values with distinct
@@ -141,6 +200,13 @@ source reads/bytes, one object, work units, cursor bytes, charged memory, and
 OGVCS-002 decode working memory. Exceeding any bound returns a typed `Limit`
 outcome and no page.
 
+Text merge has a separate `TextMergeLedger`. It reports input bytes/lines, LCS
+cells, charged work, cancellation checks, and the conservative peak-memory
+admission. Borrowed input buffers, allocator metadata, the returned exact clean
+buffer, and caller-retained result clones are not claimed as allocator/RSS
+measurements; their bounded capacities are nevertheless included in the
+pre-allocation admission calculation.
+
 ## Explicit nonclaims and residuals
 
 This rc.1 does not satisfy an OGVCS-015 acceptance criterion. In particular it
@@ -149,8 +215,9 @@ does not implement or claim:
 - an authorized public branch/history/FileID/path view or hidden-history
   non-disclosure;
 - branch CRUD/protection, branch consistency tokens, or OGVCS-006 pagination;
-- merge-base policy, textual/binary/semantic merge, driver sandboxing,
-  conflicts, or merge submission;
+- merge-base policy, repository content-policy selection, binary/semantic
+  merge, external-driver execution or sandbox handoff, durable conflicts,
+  resolution workflow, or merge submission;
 - revert or any workspace/checkpoint/cache operation;
 - OGVCS-010 publication, current authorization/policy/lock validation,
   lifecycle fencing, receipts, audit, or outbox state;

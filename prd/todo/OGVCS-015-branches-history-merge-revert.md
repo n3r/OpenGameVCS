@@ -103,14 +103,27 @@ Start with built-in text and explicit binary choose-one; external drivers disabl
   rejects duplicate identity/path/shared-Tree ambiguity, and exposes only
   deterministic metadata records and same-FileID rename/move hints. It is not
   wired to a branch service, CLI, checkpoint, submit path, or public protocol.
+  A second private additive tranche provides the candidate-local
+  `ogvcs.text-merge/line-diff3@1` pure built-in merge. It verifies exact
+  base/ours/theirs digests, admits only a bounded UTF-8/TAB/LF text profile,
+  preserves final-newline bytes, uses deterministic bounded LCS/diff3, and
+  returns sealed clean output or bounded conflict span/digest commitments.
+  External drivers, binary policy, durable conflicts, workspace writes, and
+  branch merge orchestration remain absent.
 - Test and benchmark results: the candidate carries unit, independent JSON
   golden, adversarial/table, deterministic generated-property, pagination,
   fresh-instance restart, cursor mutation, generation/cancellation, corruption,
   collision, shared-subtree, and configured-resource tests. Rust 1.82 passes
-  43/43 tests in debug, 43/43 in release, and 43/43 from a packed fresh-consumer
-  extraction; format and warnings-denied Clippy are clean. The Node boundary
-  policy passes 2/2 and roadmap validation passes 8/8. No deep-DAG,
-  million-entry, latency, merge, or release-scale result is claimed here.
+  52/52 tests in debug, 52/52 in release, and 52/52 from a 20-file packed
+  fresh-consumer extraction; format and warnings-denied Clippy are clean. The
+  Node boundary policy passes 2/2 and roadmap validation passes 8/8. No deep-DAG,
+  million-entry, latency, branch-merge workflow, or release-scale result is
+  claimed here.
+  The text tranche adds independent JSON clean/conflict golden commitments,
+  shortcut/overlap/insertion/adjacency/delete-modify/final-newline/Unicode
+  cases, max/next-value and hostile text/digest rejection, deterministic replay,
+  and cancellation fences across every phase. These combined and packed counts
+  are evidence for this private candidate only, not AC closure.
 - Security/reliability review: the private
   [history/diff boundary review](../../docs/reviews/OGVCS-015-history-diff-kernel-boundary-review.md)
   records generation fencing, fail-closed ambiguity/corruption, cursor and
@@ -118,11 +131,16 @@ Start with built-in text and explicit binary choose-one; external drivers disabl
   residuals. The source is a caller-preauthorized-view precondition and never
   an authorization brand; mixed-visibility history non-disclosure remains
   unimplemented.
+  The separate
+  [private text-merge review](../../docs/reviews/OGVCS-015-private-text-merge-kernel-review.md)
+  records the candidate-local algorithm, literal input/LCS/work/memory limits,
+  exact conflict disclosure, allocation preflight, cancellation, and remaining
+  policy/driver/durability blockers.
 - Documentation/runbooks: the crate README documents canonical validation,
   DFS and full-diff semantics, exact conservative charge vocabulary, cursor
   integrity (not authority), package gates, and explicit nonclaims. The
-  candidate is read-only and has no operational mutation/rollback runbook.
+  candidate performs no operational mutation and has no rollback runbook.
 - Rollout result: none. No network route, server handler, branch mutation,
-  public cursor, merge/revert, workspace write, authorization/grant/audit, or
-  production reader exists. No OGVCS-015 acceptance criterion is closed and
-  the PRD remains Todo.
+  public cursor, branch merge/revert workflow, workspace write,
+  authorization/grant/audit, external driver, or production reader exists.
+  No OGVCS-015 acceptance criterion is closed and the PRD remains Todo.

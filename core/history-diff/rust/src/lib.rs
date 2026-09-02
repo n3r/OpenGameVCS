@@ -1,11 +1,14 @@
-//! Private bounded, read-only OGVCS-015 immutable history and snapshot-diff
-//! candidate. This crate is deliberately unpublished and unwired.
+//! Private bounded OGVCS-015 immutable-history, snapshot-diff, and pure
+//! built-in text-merge candidate. This crate is deliberately unpublished and
+//! unwired.
 #![forbid(unsafe_code)]
 
 mod cursor;
 mod model;
+mod text_merge;
 
 pub use model::*;
+pub use text_merge::*;
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 

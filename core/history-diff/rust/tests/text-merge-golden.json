@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "ogvcs.text-merge/private-golden/v1",
+  "cases": [
+    {
+      "id": "disjoint-line-edits-clean",
+      "base": "a\nb\nc\n",
+      "ours": "A\nb\nc\n",
+      "theirs": "a\nb\nC\n",
+      "outcome": "clean",
+      "output": "A\nb\nC\n",
+      "requestCommitmentSha256": "7e0f405d296872bcbdf5bc27e56ce16b29cd6444e9fa5e51435badc5f4ca2183",
+      "outputSha256": "627ab6a6aac99d0c41db06576428a6855fba130dd8398c48bd1473141ae293e5",
+      "outputCommitmentSha256": "fbac1dcb0256225244beaf47b946ed88554f622ddb20332cdbb9c5f371db5990"
+    },
+    {
+      "id": "same-boundary-insertion-conflict",
+      "base": "a\nb\n",
+      "ours": "a\nours\nb\n",
+      "theirs": "a\ntheirs\nb\n",
+      "outcome": "conflict",
+      "requestCommitmentSha256": "e70412caa3133f0d82e6fb6e046da9cc4896fee0634b8e8d0d16c84af30e4768",
+      "conflictCommitmentSha256": "74da3c65eaf42a03344599cd4fd9ac33fe36a26c58a98226515b46ac89a31715",
+      "conflicts": [
+        {
+          "kind": "concurrent-insertion",
+          "baseStartLine": 1,
+          "baseEndLine": 1,
+          "base": {
+            "lineCount": 0,
+            "byteCount": 0,
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "ours": {
+            "lineCount": 1,
+            "byteCount": 5,
+            "sha256": "13102ad5e68a577a21dbe1aa6b16189e93e979278d6b9917d7f279a9a3dabd16"
+          },
+          "theirs": {
+            "lineCount": 1,
+            "byteCount": 7,
+            "sha256": "ed9c86a61e05623abeb71f9eeda8780dab0e28a2f69bb54813f99a2ec4b3602f"
+          }
+        }
+      ]
+    }
+  ]
+}

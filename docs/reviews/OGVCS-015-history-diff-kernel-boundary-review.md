@@ -130,8 +130,11 @@ selects identity mismatch first.
   closure's ranked sibling-error policy. Shared Tree references are rejected
   more strictly here to avoid ambiguous expansion under multiple joined paths.
 - Merge-base selection, path/FileID history search, copy inference, sidecar
-  semantics, text/binary/semantic merge, durable conflicts, merge submit,
-  revert, checkpoint publication, protocol cursor authentication, scale, and
-  rollout remain unimplemented.
+  semantics, binary/semantic/external-driver merge, durable conflicts, merge
+  submit, revert, checkpoint publication, protocol cursor authentication,
+  scale, and rollout remain unimplemented. A later private built-in text-only
+  candidate is reviewed separately in
+  [OGVCS-015-private-text-merge-kernel-review.md](OGVCS-015-private-text-merge-kernel-review.md);
+  it does not change this read-side review's authority or acceptance verdict.
 
 Consequently OGVCS-015-AC-01 through AC-05 all remain open.
