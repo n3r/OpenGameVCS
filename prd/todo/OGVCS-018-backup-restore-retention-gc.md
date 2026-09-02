@@ -7,7 +7,7 @@
 **Depends on:** OGVCS-006, OGVCS-008, OGVCS-009, OGVCS-010, OGVCS-017  
 **Blocks:** OGVCS-021, OGVCS-025, OGVCS-028, OGVCS-032, OGVCS-033  
 **Source:** [Architecture ADR-0003](../../adr/0003-object-lifecycle-and-gc-fencing.md)  
-**Last updated:** 2026-08-14
+**Last updated:** 2026-09-02
 
 ## Outcome
 
@@ -101,8 +101,45 @@ Require a successful restore before enabling GC. Run GC dry-only, then quarantin
 
 ## Completion evidence
 
-- Implementation changes:
-- Test and benchmark results:
-- Security/reliability review:
-- Documentation/runbooks:
-- Rollout result:
+- Implementation changes: Bounded private candidate relevance only. The
+  unpublished, unwired Rust 1.82 crate under `core/backup-manifest/rust` binds
+  one opaque metadata/inventory generation, opaque branch/tag name commitments,
+  schema/protocol/configuration and mutable-state treatment, supplied
+  reachability/integrity commitments, a supplied sorted OGVCS-002 typed-
+  identity/declared-length inventory, and one supplied designated-target
+  copy-evidence row per object into a deterministic private manifest digest. It
+  does not prove name-commitment privacy, and it reads no payloads or storage
+  and performs no lifecycle mutation.
+- Test and benchmark results: All 26 local debug and release Rust tests pass.
+  The suite covers deterministic known-answer binding; missing/additional,
+  one-sided and two-sided lying-iterator, reordered, duplicate,
+  length-mismatched, target-mismatched and root-missing rows; duplicate logical
+  root keys; metadata-generation drift; malformed commitments and supplied
+  verification/retention evidence; source/target alias checks; OGVCS-002
+  per-kind hard byte ceilings and impossible zero metadata lengths; exact/max+1
+  object, aggregate byte, root, work, and retained-memory envelopes; caller
+  root-capacity normalization; full-`u64` retention ordering; cancellation
+  without polling the second stream after it becomes visible; every digest
+  projection and row field; canonical OGVCS-002 `ObjectRef` byte-order
+  equivalence; impossible aggregate/root-set preflight; and correctly resealed
+  work/memory/root substitution, with an explicit regression showing that
+  consumed-stream digests are bound but not reconstructible. The checksum is
+  not claimed as a signature or producer authentication. No hosted cross-OS,
+  production target, destructive restore, fault-resumption, concurrency, or
+  reference-scale campaign has run.
+- Security/reliability review: See
+  `docs/reviews/OGVCS-018-backup-completeness-manifest-review.md`. Opaque proof
+  commitments are data to bind, not trusted authority. Digest inequality does
+  not prove credential separation, independent storage/retention, encryption,
+  graph reachability, or payload verification. Every failure returns no
+  manifest.
+- Documentation/runbooks: The private crate README defines validation order,
+  streaming/accounting semantics, exact resource bounds, and nonclaims. There
+  is no operator runbook because no backup, restore, or GC operation is wired.
+- Rollout result: Not rolled out. OGVCS-018 remains Todo. No acceptance
+  criterion is closed. Authenticated capture/target adapters, independently
+  scoped credentials and keys, durable/resumable backup format, OGVCS-017 full
+  verification, clean-target restore and isolated activation, retention/pin/
+  hold authority, GC quarantine/deletion transactions, audit/outbox,
+  freshness/RPO/RTO, destructive drills, hosted evidence, and scale/SLO
+  acceptance remain open.

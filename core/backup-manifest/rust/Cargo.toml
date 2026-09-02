@@ -1,0 +1,22 @@
+[package]
+name = "ogvcs-backup-manifest"
+version = "0.1.0-rc.1"
+edition = "2021"
+rust-version = "1.82"
+license = "MIT"
+description = "Private bounded OpenGameVCS backup completeness manifest candidate"
+readme = "README.md"
+publish = false
+include = [
+    "src/**",
+    "Cargo.toml",
+    "Cargo.lock",
+    "LICENSE",
+    "README.md",
+]
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+ogvcs-object-model = { path = "../../object-model/rust", version = "0.1.0" }
