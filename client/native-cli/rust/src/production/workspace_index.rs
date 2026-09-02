@@ -2120,6 +2120,7 @@ pub fn rebuild_workspace_index(
 struct AuthorizedWorkspaceIndexBinding {
     root: PathBuf,
     metadata_sha256: String,
+    session_expires_at_unix_ms: u64,
 }
 
 fn validate_index_authentication_request(
@@ -2158,6 +2159,7 @@ fn authorize_workspace_index_binding(
     Ok(AuthorizedWorkspaceIndexBinding {
         root,
         metadata_sha256: json_digest(&metadata)?,
+        session_expires_at_unix_ms: session.expires_at_unix_ms,
     })
 }
 
@@ -2166,10 +2168,13 @@ fn validate_authorized_workspace_index_binding(
     root: &Path,
     metadata_sha256: &str,
 ) -> Result<(), CliError> {
-    if authorization.root != root || authorization.metadata_sha256 != metadata_sha256 {
+    if authorization.root != root
+        || authorization.metadata_sha256 != metadata_sha256
+        || authorization.session_expires_at_unix_ms <= now_unix_ms()?
+    {
         Err(index_error(
             "WORKSPACE_INDEX_AUTHORITY_STALE",
-            "The verified workspace binding changed after public authorization.",
+            "The verified workspace binding or session authority is no longer current.",
             "Reauthenticate and validate the current workspace binding before retrying.",
         ))
     } else {
@@ -6433,6 +6438,7 @@ mod tests {
         let stale = AuthorizedWorkspaceIndexBinding {
             root: validated_root(&root.0).unwrap(),
             metadata_sha256: "f".repeat(64),
+            session_expires_at_unix_ms: now_unix_ms().unwrap() + 3_600_000,
         };
         let mut stale_status_watcher = TestWatcher::default();
         let stale_status = workspace_status_page_fenced(
@@ -6459,6 +6465,37 @@ mod tests {
         assert_eq!(stale_repair.code, "WORKSPACE_INDEX_AUTHORITY_STALE");
         assert_eq!(stale_repair_watcher.begin_calls, 0);
         assert_eq!(fs::read(root.0.join("Game/clean.bin")).unwrap(), b"clean");
+
+        let (_, metadata, _, _, _, _) = load_active(&root.0, false).unwrap();
+        let expired = AuthorizedWorkspaceIndexBinding {
+            root: validated_root(&root.0).unwrap(),
+            metadata_sha256: json_digest(&metadata).unwrap(),
+            session_expires_at_unix_ms: now_unix_ms().unwrap().saturating_sub(1),
+        };
+        let mut expired_status_watcher = TestWatcher::default();
+        let expired_status = workspace_status_page_fenced(
+            &status_request(&root.0, 100),
+            &mut AuthorizedWorkspaceWatcher {
+                authorization: &expired,
+                delegate: &mut expired_status_watcher,
+            },
+        )
+        .unwrap_err();
+        assert_eq!(expired_status.code, "WORKSPACE_INDEX_AUTHORITY_STALE");
+        assert_eq!(expired_status_watcher.fence_calls, 0);
+
+        let mut expired_repair_watcher = TestWatcher::default();
+        let expired_repair = repair_workspace_index(
+            &root.0,
+            &mut AuthorizedWorkspaceWatcher {
+                authorization: &expired,
+                delegate: &mut expired_repair_watcher,
+            },
+            &NeverCancelled,
+        )
+        .unwrap_err();
+        assert_eq!(expired_repair.code, "WORKSPACE_INDEX_AUTHORITY_STALE");
+        assert_eq!(expired_repair_watcher.begin_calls, 0);
     }
 
     #[test]

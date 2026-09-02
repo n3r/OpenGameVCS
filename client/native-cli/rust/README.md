@@ -89,11 +89,12 @@ clean status is not publicly available. The library now exposes typed
 `workspace_status_page_authorized` and `repair_workspace_index_authorized`
 adapter facades: both authenticate the current subject and authority/security
 epochs and validate the public binding. Status rechecks the exact verified
-workspace metadata under its mutation lock before each watcher fence and index
-write. Repair checks it before watcher subscription and again under the lock
-before generation publication; a race after subscription still fails before
-index mutation. The first-party binary still installs the unavailable route,
-and corrupt sealed authority still has no discard/reseed operation. Direct
+workspace metadata and local session expiry under its mutation lock before
+each watcher fence and index write. Repair checks them before watcher
+subscription and again under the lock before generation publication; a race
+after subscription still fails before index mutation. The first-party binary
+still installs the unavailable route, and corrupt sealed authority still has
+no discard/reseed operation. Direct
 watcher-batch append is no longer a public crate surface; test fixtures retain
 it only to exercise the durable journal, while production adapters can deliver
 a batch solely through the exact session/cursor-bound status-fence sink.

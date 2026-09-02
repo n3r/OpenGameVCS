@@ -13,11 +13,11 @@ current binding validation before status or healthy repair can reach the
 watcher/index boundary. It verifies the authenticated subject plus authority
 and security epochs against the persisted workspace, asks the owning public
 route to validate that binding, and then compares the complete verified
-workspace-metadata digest under the mutation lock before each status fence,
-reader-lease publication, or index write. Repair also checks that digest before
-watcher subscription and again under the lock before generation publication;
-a reconfigure racing after subscription fails before index mutation. Subject
-substitution and an already-stale local binding fail before the watcher is
+workspace-metadata digest and local session expiry under the mutation lock
+before each status fence, reader-lease publication, or index write. Repair also
+checks both before watcher subscription and again under the lock before
+generation publication; a reconfigure racing after subscription fails before
+index mutation. Subject substitution and an already-stale local binding fail before the watcher is
 entered. This is an embeddable typed seam, not a first-party CLI/JSON route:
 `UnavailablePublicRoutes` remains the binary default, and no native watcher
 authority or corrupt-index discard/reseed authority is introduced. The

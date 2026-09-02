@@ -208,6 +208,7 @@ test('workspace-index public facades bind authority before watcher or repair mut
     workspaceIndex,
     /impl WorkspaceWatcherAuthority for AuthorizedWorkspaceWatcher<'_>[\s\S]+validate_authorized_workspace_index_binding\(/u,
   );
+  assert.match(workspaceIndex, /session_expires_at_unix_ms <= now_unix_ms\(\)\?/u);
 
   const status = workspaceIndex.slice(
     workspaceIndex.indexOf('fn workspace_status_page_fenced('),
@@ -222,14 +223,12 @@ test('workspace-index public facades bind authority before watcher or repair mut
     workspaceIndex.indexOf('pub fn repair_workspace_index('),
     workspaceIndex.indexOf('pub fn repair_workspace_index_authorized('),
   );
-  assert.ok(
-    repair.indexOf('validate_local_index_binding(') <
-      repair.indexOf('watcher.begin_reconciliation('),
-  );
-  assert.ok(
-    repair.lastIndexOf('validate_local_index_binding(') <
-      repair.indexOf('GenerationWriter::begin('),
-  );
+  const repairBindingChecks = [...repair.matchAll(/validate_local_index_binding\(/gu)]
+    .map((match) => match.index);
+  assert.equal(repairBindingChecks.length, 2);
+  assert.ok(repairBindingChecks[0] < repair.indexOf('watcher.begin_reconciliation('));
+  assert.ok(repairBindingChecks[1] > repair.indexOf('load_active(&root, false)'));
+  assert.ok(repairBindingChecks[1] < repair.indexOf('GenerationWriter::begin('));
   assert.match(workspaceIndex, /pub fn unsupported\(/u);
   assert.match(workspaceIndex, /#\[cfg\(test\)\]\nfn record_workspace_change_batch\(/u);
   assert.doesNotMatch(workspaceIndex, /pub fn (?:trusted|native|authoritative)[^(]*checkpoint/iu);
