@@ -40,6 +40,56 @@ fn offer(versions: Vec<ProtocolVersion>, capabilities: Vec<Capability>) -> Negot
     }
 }
 
+fn capability_wire_name(capability: Capability) -> &'static str {
+    match capability {
+        Capability::ReadStatus => "read-status",
+        Capability::SyncMaterialize => "sync-materialize",
+        Capability::StartEditLockFact => "start-edit-lock-fact",
+        Capability::CheckpointHandoff => "checkpoint-handoff",
+        Capability::RevertHandoff => "revert-handoff",
+        Capability::JobProgress => "job-progress",
+        Capability::WorkspaceEvents => "workspace-events",
+        Capability::TrustedClientHandoff => "trusted-client-handoff",
+    }
+}
+
+fn json_capabilities(capabilities: &[Capability]) -> String {
+    capabilities
+        .iter()
+        .map(|capability| format!("\"{}\"", capability_wire_name(*capability)))
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn client_hello_frame(offer: &NegotiationOffer, client_challenge: [u8; 32]) -> Vec<u8> {
+    let versions = offer
+        .versions
+        .iter()
+        .map(|version| {
+            format!(
+                "{{\"major\":{},\"minor\":{}}}",
+                version.major, version.minor
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    format!(
+        "{{\"schemaVersion\":\"{CLIENT_HELLO_SCHEMA_V1}\",\"publicProtocolManifestSha256\":\"{}\",\"versions\":[{versions}],\"requiredCapabilities\":[{}],\"optionalCapabilities\":[{}],\"clientChallengeHex\":\"{}\"}}",
+        offer.public_protocol_manifest.to_lower_hex(),
+        json_capabilities(&offer.required_capabilities),
+        json_capabilities(&offer.optional_capabilities),
+        Digest32::from_bytes(client_challenge).to_lower_hex(),
+    )
+    .into_bytes()
+}
+
+fn default_client_hello() -> Vec<u8> {
+    client_hello_frame(
+        &offer(vec![ProtocolVersion::new(1, 0)], all_capabilities()),
+        *digest(100).as_bytes(),
+    )
+}
+
 fn make_installation(generation: u64, id: u64) -> InstallationIdentity {
     InstallationIdentity {
         id: InstallationId::new(digest(id)),
@@ -86,21 +136,19 @@ fn scope(context: ScopeContext, inputs: &[PathScopeInput<'_>], label: &'static [
     PathScope::new(context, inputs, &RawFrame::new(label), &NeverCancel).expect("valid scope")
 }
 
-fn handshake(
+fn handshake_verification(
     installation: &InstallationIdentity,
     endpoint: &EndpointIdentity,
     integration: &IntegrationIdentity,
     session_id: SessionId,
     issued_at_ms: u64,
-) -> HandshakeFacts {
-    HandshakeFacts {
+    raw: &RawFrame<'_>,
+) -> HandshakeVerificationFacts {
+    HandshakeVerificationFacts {
         session_id,
         installation: installation.clone(),
         endpoint: endpoint.clone(),
         integration: integration.clone(),
-        client_offer: offer(vec![ProtocolVersion::new(1, 0)], all_capabilities()),
-        agent_offer: offer(vec![ProtocolVersion::new(1, 0)], all_capabilities()),
-        client_challenge: *digest(100).as_bytes(),
         agent_challenge: *digest(101).as_bytes(),
         verifier_key_generation: 1,
         issued_at_ms,
@@ -108,6 +156,7 @@ fn handshake(
         challenge_response: ExternalVerdict::Verified,
         transcript_signature: ExternalVerdict::Verified,
         anti_downgrade: ExternalVerdict::Verified,
+        verified_client_frame_commitment: raw.commitment().expect("bounded client hello"),
         crypto_adapter_commitment: digest(102),
     }
 }
@@ -153,11 +202,20 @@ fn fixture_with_scope_inputs(
         &NeverCancel,
     )
     .expect("ledger");
+    let hello = default_client_hello();
+    let raw_hello = RawFrame::new(&hello);
     let session_receipt = ledger
         .establish_session(
-            handshake(&installation, &endpoint, &integration, session_id, 1_000),
+            handshake_verification(
+                &installation,
+                &endpoint,
+                &integration,
+                session_id,
+                1_000,
+                &raw_hello,
+            ),
             1_000,
-            &RawFrame::new(b"handshake-frame"),
+            &raw_hello,
             &NeverCancel,
         )
         .expect("session");
@@ -266,13 +324,37 @@ fn negotiation_is_order_independent_bounded_and_pinned() {
             Capability::WorkspaceEvents,
         ],
     );
-    let selected = negotiate(
-        &client,
-        &agent,
-        &RawFrame::new(b"negotiation-known-answer"),
+    let installation = make_installation(1, 430);
+    let endpoint = make_endpoint(&installation, 1, 431);
+    let integration = make_integration(&installation, 432);
+    let hello = client_hello_frame(&client, *digest(100).as_bytes());
+    let raw_hello = RawFrame::new(&hello);
+    let mut ledger = LocalAgentLedger::new(
+        installation.clone(),
+        endpoint.clone(),
+        1,
+        agent,
+        1_000,
+        &RawFrame::new(b"negotiation-ledger"),
         &NeverCancel,
     )
-    .expect("selection");
+    .expect("ledger");
+    let selected = ledger
+        .establish_session(
+            handshake_verification(
+                &installation,
+                &endpoint,
+                &integration,
+                SessionId::new(digest(433)),
+                1_000,
+                &raw_hello,
+            ),
+            1_000,
+            &raw_hello,
+            &NeverCancel,
+        )
+        .expect("session")
+        .selection;
     assert_eq!(selected.version, ProtocolVersion::new(1, 2));
     assert_eq!(
         selected.capabilities,
@@ -284,47 +366,43 @@ fn negotiation_is_order_independent_bounded_and_pinned() {
     );
     assert_eq!(
         selected.selection_commitment.to_lower_hex(),
-        "1adab5f96e5d5cad26c6c08def87a30f1c86e7c37a92a13b5c868319b3d98f08"
+        "390e64ff2881afb6a978fec50720edd0beaed6dfb5407ff60177581c12d6835a"
     );
 
     let versions: Vec<_> = (0..VERSION_ITEMS_MAXIMUM)
         .map(|minor| ProtocolVersion::new(1, minor as u16))
         .collect();
     let maximum = offer(versions.clone(), vec![Capability::ReadStatus]);
+    let maximum_frame = client_hello_frame(&maximum, *digest(434).as_bytes());
     assert_eq!(
-        negotiate(
-            &maximum,
-            &maximum,
-            &RawFrame::new(&vec![0x41; RAW_INPUT_BYTES_MAXIMUM]),
-            &NeverCancel,
-        )
-        .expect("exact raw/version maximum")
-        .version,
-        ProtocolVersion::new(1, (VERSION_ITEMS_MAXIMUM - 1) as u16)
+        decode_client_hello(&RawFrame::new(&maximum_frame), &NeverCancel)
+            .expect("exact version maximum")
+            .offer()
+            .versions
+            .len(),
+        VERSION_ITEMS_MAXIMUM
     );
     let mut too_many_versions = versions;
     too_many_versions.push(ProtocolVersion::new(1, VERSION_ITEMS_MAXIMUM as u16));
     let too_many = offer(too_many_versions, vec![Capability::ReadStatus]);
     assert_eq!(
-        negotiate(
-            &too_many,
-            &maximum,
-            &RawFrame::new(b"too-many"),
-            &NeverCancel
+        decode_client_hello(
+            &RawFrame::new(&client_hello_frame(&too_many, *digest(435).as_bytes())),
+            &NeverCancel,
         )
         .expect_err("version maximum + 1")
         .code(),
         ErrorCode::ItemLimit
     );
+    let mut exact_frame = maximum_frame;
+    exact_frame.resize(CLIENT_HELLO_BYTES_MAXIMUM, b' ');
+    decode_client_hello(&RawFrame::new(&exact_frame), &NeverCancel)
+        .expect("exact client-hello byte maximum");
+    exact_frame.push(b' ');
     assert_eq!(
-        negotiate(
-            &maximum,
-            &maximum,
-            &RawFrame::new(&vec![0x41; RAW_INPUT_BYTES_MAXIMUM + 1]),
-            &NeverCancel,
-        )
-        .expect_err("raw maximum + 1")
-        .code(),
+        decode_client_hello(&RawFrame::new(&exact_frame), &NeverCancel)
+            .expect_err("client-hello byte maximum + 1")
+            .code(),
         ErrorCode::InputTooLarge
     );
 }
@@ -347,60 +425,86 @@ fn configured_agent_offer_external_verdicts_and_error_precedence_fail_closed() {
     .expect("ledger");
     let baseline = ledger.snapshot();
 
-    let mut substituted = handshake(&installation, &endpoint, &integration, session_id, 1_000);
-    substituted.agent_offer = offer(vec![ProtocolVersion::new(1, 1)], all_capabilities());
+    let hello = default_client_hello();
+    let raw_hello = RawFrame::new(&hello);
+    let substituted_bytes = format!(
+        "{{\"agentOffer\":{{}},{}",
+        std::str::from_utf8(&hello).expect("UTF-8 client hello")[1..].to_owned()
+    )
+    .into_bytes();
+    let substituted_raw = RawFrame::new(&substituted_bytes);
     assert_eq!(
         ledger
             .establish_session(
-                substituted,
+                handshake_verification(
+                    &installation,
+                    &endpoint,
+                    &integration,
+                    session_id,
+                    1_000,
+                    &substituted_raw,
+                ),
                 1_000,
-                &RawFrame::new(b"substituted-offer"),
+                &substituted_raw,
                 &NeverCancel,
             )
-            .expect_err("configured offer substitution")
+            .expect_err("the frame cannot supply an agent offer")
             .code(),
-        ErrorCode::UnsupportedVersion
+        ErrorCode::FrameInvalid
     );
     assert_eq!(ledger.snapshot(), baseline);
 
-    let mut unverified = handshake(&installation, &endpoint, &integration, session_id, 1_000);
+    let mut unverified = handshake_verification(
+        &installation,
+        &endpoint,
+        &integration,
+        session_id,
+        1_000,
+        &raw_hello,
+    );
     unverified.transcript_signature = ExternalVerdict::NotEvaluated;
     assert_eq!(
         ledger
-            .establish_session(
-                unverified,
-                1_000,
-                &RawFrame::new(b"unverified"),
-                &NeverCancel,
-            )
+            .establish_session(unverified, 1_000, &raw_hello, &NeverCancel,)
             .expect_err("unverified transcript")
             .code(),
         ErrorCode::TranscriptUnverified
     );
     assert_eq!(ledger.snapshot(), baseline);
 
-    let mut excessive_ttl = handshake(&installation, &endpoint, &integration, session_id, 1_000);
+    let mut excessive_ttl = handshake_verification(
+        &installation,
+        &endpoint,
+        &integration,
+        session_id,
+        1_000,
+        &raw_hello,
+    );
     excessive_ttl.expires_at_ms += 1;
     assert_eq!(
         ledger
-            .establish_session(
-                excessive_ttl,
-                1_000,
-                &RawFrame::new(b"ttl-over"),
-                &NeverCancel,
-            )
+            .establish_session(excessive_ttl, 1_000, &raw_hello, &NeverCancel,)
             .expect_err("session ttl maximum + 1")
             .code(),
         ErrorCode::InvalidFact
     );
     assert_eq!(ledger.snapshot(), baseline);
 
+    let oversized = vec![0u8; CLIENT_HELLO_BYTES_MAXIMUM + 1];
+    let oversized_raw = RawFrame::new(&oversized);
     assert_eq!(
         ledger
             .establish_session(
-                handshake(&installation, &endpoint, &integration, session_id, 1_000,),
+                handshake_verification(
+                    &installation,
+                    &endpoint,
+                    &integration,
+                    session_id,
+                    1_000,
+                    &oversized_raw,
+                ),
                 999,
-                &RawFrame::new(&vec![0u8; RAW_INPUT_BYTES_MAXIMUM + 1]),
+                &oversized_raw,
                 &NeverCancel,
             )
             .expect_err("raw bound precedes reordered time")
@@ -411,9 +515,16 @@ fn configured_agent_offer_external_verdicts_and_error_precedence_fail_closed() {
     assert_eq!(
         ledger
             .establish_session(
-                handshake(&installation, &endpoint, &integration, session_id, 1_000,),
+                handshake_verification(
+                    &installation,
+                    &endpoint,
+                    &integration,
+                    session_id,
+                    1_000,
+                    &raw_hello,
+                ),
                 999,
-                &RawFrame::new(b"time-only"),
+                &raw_hello,
                 &NeverCancel,
             )
             .expect_err("reordered time")
@@ -583,17 +694,24 @@ fn debug_output_redacts_paths_challenges_file_ids_and_digests() {
     let installation = make_installation(1, 553);
     let endpoint = make_endpoint(&installation, 1, 554);
     let integration = make_integration(&installation, 555);
-    let mut facts = handshake(
+    let hello = default_client_hello();
+    let raw_hello = RawFrame::new(&hello);
+    let mut facts = handshake_verification(
         &installation,
         &endpoint,
         &integration,
         SessionId::new(digest(556)),
         1_000,
+        &raw_hello,
     );
-    facts.client_challenge = [222; 32];
+    facts.agent_challenge = [222; 32];
     let handshake_debug = format!("{facts:?}");
     assert!(!handshake_debug.contains("222, 222"));
     assert!(handshake_debug.contains("<redacted>"));
+    let decoded = decode_client_hello(&raw_hello, &NeverCancel).expect("decoded client hello");
+    let decoded_debug = format!("{decoded:?}");
+    assert!(!decoded_debug.contains(&digest(100).to_lower_hex()));
+    assert!(decoded_debug.contains("<redacted>"));
     assert_eq!(format!("{:?}", digest(557)), "Digest32(<redacted>)");
 }
 
@@ -613,28 +731,27 @@ fn handshake_replay_reordered_time_rotation_and_retained_limits_fail_closed() {
         &NeverCancel,
     )
     .expect("ledger");
-    let facts = handshake(&installation, &endpoint, &integration, session_id, 10_000);
+    let hello = default_client_hello();
+    let raw_hello = RawFrame::new(&hello);
+    let facts = handshake_verification(
+        &installation,
+        &endpoint,
+        &integration,
+        session_id,
+        10_000,
+        &raw_hello,
+    );
     let receipt = ledger
-        .establish_session(
-            facts.clone(),
-            10_000,
-            &RawFrame::new(b"handshake"),
-            &NeverCancel,
-        )
+        .establish_session(facts.clone(), 10_000, &raw_hello, &NeverCancel)
         .expect("session");
     assert_eq!(
         receipt.transcript_commitment.to_lower_hex(),
-        "a56601e13932bd0bb6762e514074334a61b01100ac2999ded329ec1dce30db91"
+        "aac3285c13b07d9c5fa195d4574c5e24f562495fe19d376fa61bcb49cb4e3803"
     );
     let before_replay = ledger.snapshot();
     assert_eq!(
         ledger
-            .establish_session(
-                facts.clone(),
-                10_001,
-                &RawFrame::new(b"handshake"),
-                &NeverCancel,
-            )
+            .establish_session(facts.clone(), 10_001, &raw_hello, &NeverCancel,)
             .expect_err("transcript replay")
             .code(),
         ErrorCode::ReplayRejected
@@ -645,7 +762,7 @@ fn handshake_replay_reordered_time_rotation_and_retained_limits_fail_closed() {
             .establish_session(
                 facts.clone(),
                 10_001,
-                &RawFrame::new(b"handshake"),
+                &raw_hello,
                 &CancelAt(CancellationPoint::BeforeCommit),
             )
             .expect_err("replay admission precedes the final cancellation fence")
@@ -653,18 +770,19 @@ fn handshake_replay_reordered_time_rotation_and_retained_limits_fail_closed() {
         ErrorCode::ReplayRejected
     );
     assert_eq!(ledger.snapshot(), before_replay);
+    let mut different_frame = hello.clone();
+    different_frame.push(b' ');
+    let different_raw = RawFrame::new(&different_frame);
     let mut replayed_challenges = facts;
     replayed_challenges.session_id = SessionId::new(digest(699));
     replayed_challenges.issued_at_ms = 10_001;
     replayed_challenges.expires_at_ms = 10_001 + SESSION_TTL_MAXIMUM_MS;
+    replayed_challenges.verified_client_frame_commitment = different_raw
+        .commitment()
+        .expect("bounded alternate client hello");
     assert_eq!(
         ledger
-            .establish_session(
-                replayed_challenges,
-                10_001,
-                &RawFrame::new(b"different-frame-same-challenges"),
-                &NeverCancel,
-            )
+            .establish_session(replayed_challenges, 10_001, &different_raw, &NeverCancel,)
             .expect_err("challenge pair replay with a distinct transcript")
             .code(),
         ErrorCode::ReplayRejected
@@ -823,17 +941,20 @@ fn handshake_replay_reordered_time_rotation_and_retained_limits_fail_closed() {
         &NeverCancel,
     )
     .expect("ledger");
+    let first_hello = default_client_hello();
+    let first_raw = RawFrame::new(&first_hello);
     exact
         .establish_session(
-            handshake(
+            handshake_verification(
                 &installation,
                 &endpoint,
                 &integration,
                 SessionId::new(digest(613)),
                 1,
+                &first_raw,
             ),
             1,
-            &RawFrame::new(b"first-session"),
+            &first_raw,
             &NeverCancel,
         )
         .expect("exact retained maximum");
@@ -842,18 +963,23 @@ fn handshake_replay_reordered_time_rotation_and_retained_limits_fail_closed() {
         exact_session_retained
     );
     let before_overflow = exact.snapshot();
-    let mut second = handshake(
+    let second_hello = client_hello_frame(
+        &offer(vec![ProtocolVersion::new(1, 0)], all_capabilities()),
+        *digest(615).as_bytes(),
+    );
+    let second_raw = RawFrame::new(&second_hello);
+    let mut second = handshake_verification(
         &installation,
         &endpoint,
         &integration,
         SessionId::new(digest(614)),
         2,
+        &second_raw,
     );
-    second.client_challenge = *digest(615).as_bytes();
     second.agent_challenge = *digest(616).as_bytes();
     assert_eq!(
         exact
-            .establish_session(second, 2, &RawFrame::new(b"second-session"), &NeverCancel,)
+            .establish_session(second, 2, &second_raw, &NeverCancel,)
             .expect_err("retained maximum + one record")
             .code(),
         ErrorCode::RetainedLimit

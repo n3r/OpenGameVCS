@@ -5,10 +5,12 @@
 //! It validates caller-supplied facts and advances only an in-memory ledger.
 #![forbid(unsafe_code)]
 
+mod client_hello;
 mod commitment;
 mod model;
 mod state;
 
+pub use client_hello::*;
 pub use commitment::Digest32;
 pub use model::*;
 pub use state::*;

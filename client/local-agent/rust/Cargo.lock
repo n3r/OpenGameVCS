@@ -108,6 +108,8 @@ dependencies = [
  "ogvcs-object-model",
  "ogvcs-path-contract",
  "opengamevcs-protocol-v1",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

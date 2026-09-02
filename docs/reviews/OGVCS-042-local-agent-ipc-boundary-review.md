@@ -4,8 +4,10 @@
 
 Accept this exact tranche only as an unpublished, unwired, pure Rust 1.82
 protocol-fact and in-memory ledger candidate. It establishes deterministic
-negotiation, typed local identity commitments, external-verdict transcript
-binding, bounded replay/freshness/rotation state, consent and scope narrowing,
+negotiation from one strict, bounded, duplicate-rejecting private client-hello
+frame, typed local identity commitments, exact adapter/frame commitment
+matching, external-verdict transcript binding, bounded replay/freshness/
+rotation state, consent and scope narrowing,
 idempotent operation admission, status/event backpressure, explicit lock
 knowledge, and single-use handoff state. It does not implement the local agent
 described by OGVCS-042 and does not satisfy an acceptance criterion.
@@ -14,6 +16,11 @@ The isolated source audit began from exact base
 `0d0e455431379ffa829dbb6e9ab6c1311a53cfc9`. The candidate is now retained in
 integration history but remains unpublished and unwired. OGVCS-042 remains
 **Todo**, and OGVCS-042-AC-01 through AC-05 remain open.
+
+The later client-hello binding audit began from exact integration base
+`4b25ff447b81d0d8d7728b1b782a5c83852b2535`. It changes only the private
+source boundary and carries no new hosted, endpoint, authentication, rollout,
+or acceptance evidence.
 
 ## Review method and authority map
 
@@ -40,13 +47,25 @@ filesystem, credential, keyring, network, or clock API.
 
 ## Negotiation and identity review
 
+The sole decoded frame is the private candidate
+`ogvcs.local-agent/client-hello/v1` object. A custom streaming Serde visitor
+accepts at most 16 KiB, a fixed depth-three/six-member shape, 32 versions, and
+16 entries in each capability list. It rejects unknown and duplicate members,
+malformed UTF-8/JSON, trailing input, unknown capability names, and sequence
+maximum-plus-one without building an unrestricted JSON value tree. Member
+order and insignificant JSON whitespace do not change the semantic
+client-hello commitment, while the exact received bytes retain a distinct raw
+commitment.
+
 The OGVCS-041 generated manifest is parsed as exact lowercase SHA-256 and must
 match both offers. Versions are typed `(major, minor)` pairs; zero major,
 duplicates, oversize lists, missing intersections, and required-capability
 skew fail. The greatest common version and ordered capability intersection are
-deterministic. A ledger retains one configured agent offer and rejects a
-handshake that substitutes another offer, preventing the peer from defining
-both sides of negotiation after ledger construction.
+deterministic. A ledger retains one configured agent offer; no frame field or
+public typed session API can supply another. Session establishment decodes the
+client offer and challenge itself, exact-matches the external adapter's named
+raw-frame commitment, and binds raw and semantic commitments into the
+transcript.
 
 Installation, endpoint, and integration are separate typed identities.
 Endpoint locality/restrictive-access, integration registration, challenge
@@ -189,11 +208,13 @@ two retained maxima.
 
 Retained bytes are a deterministic logical ledger, including fixed reserved
 slots for optional revocation, consumption, and cursor-issuance fields, not
-allocator/RSS evidence. Raw frame length is measured from the actual slice,
-but typed facts are not decoded from that frame here. Temporary replacement
-maps during bounded reaping and Rust allocator overhead are outside the exact
-ledger. Poll and acknowledgement do not clone the whole event queue: they
-admit comparison work first and polling clones at most the bounded result page.
+allocator/RSS evidence. Raw frame length is measured from the actual slice.
+Only the client hello is decoded and semantically bound; later operation,
+status, event, consent, rotation, reaping, and handoff facts still arrive
+separately from their raw frames. Temporary replacement maps during bounded
+reaping and Rust allocator overhead are outside the exact ledger. Poll and
+acknowledgement do not clone the whole event queue: they admit comparison work
+first and polling clones at most the bounded result page.
 
 The review inspected each mutation boundary. All validation, checked
 arithmetic, replacement totals, receipt commitments, cancellation, and map
@@ -329,18 +350,26 @@ event reorder, consent-generation mismatch, and handoff reuse.
     so an unauthorized malformed request could observe different error order
     for present and absent keys. Both new and replay paths now authorize and
     bind the current grant before consulting the idempotency ledger.
+33. **Client-hello typed/raw ambiguity:** session establishment accepted a
+    typed client offer, typed client challenge, typed agent offer, and unrelated
+    raw bytes. The private entry point now decodes the client-owned offer and
+    challenge from one closed bounded frame, uses only the ledger-configured
+    agent offer, exact-matches the adapter's frame commitment, and has no public
+    typed/raw negotiation escape.
 
 No live P0/P1/P2 defect was identified after these fixes in the bounded source
 model. This statement is not an external security assessment. Pinned hosted
 run [33636845159](https://github.com/n3r/OpenGameVCS/actions/runs/33636845159)
-proves only that the private source/package gates pass on Linux, macOS, and
-Windows at exact revision `3563167763a54b97eb8166ded1db895aa3a5b7cd`.
+proves only that the earlier private source/package gates pass on Linux, macOS,
+and Windows at exact revision
+`3563167763a54b97eb8166ded1db895aa3a5b7cd`; it is not evidence for the later
+client-hello follow-on.
 
 ## Requirement and acceptance boundary
 
 | OGVCS-042 item | Candidate evidence | Remaining owner work |
 | --- | --- | --- |
-| FR-01 | negotiation, supplied handshake verdicts, replay, bounds, deadlines, cancellation, errors | real OS-local endpoint, permissions, authentication, codec and lifecycle |
+| FR-01 | one bounded client-hello decoder, negotiation, supplied handshake verdicts, replay, bounds, deadlines, cancellation, errors | remaining operation codecs, real OS-local endpoint, permissions, authentication and lifecycle |
 | FR-02 | no credential type or release path | secure storage, credential use and canary evidence |
 | FR-03 | manifest commitment, registration verdict, explicit consent/generation | real manifest discovery, consent UI/admin authority and revocation durability |
 | FR-04 | complete local operation commitment and idempotency ledger | execution and authoritative producer integration |
@@ -371,8 +400,9 @@ million-path workspace or latency/memory campaign. All five remain open.
   hosted process/endpoint isolation evidence, red-team result, same-user-malware defense, privacy or
   unguessability proof, scale/latency result, rollout, or package publication
   is claimed.
-- Raw frame bytes and typed facts are separately committed; no decoder or proof
-  of semantic equivalence connects them in this tranche.
+- Only the client-hello bytes are decoded into typed facts and bound to the
+  adapter commitment. Every later raw frame remains separately committed from
+  its typed facts with no general codec or semantic-equivalence proof.
 - Subscription caller-authentication verdicts and commitments are similarly
   external facts. The real channel adapter must derive them from the request;
   a fabricated `Verified` value defeats this pure model.

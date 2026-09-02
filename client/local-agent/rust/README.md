@@ -2,7 +2,7 @@
 
 This unpublished Rust 1.82 crate is a bounded first implementation tranche
 for OGVCS-042. It is a pure protocol-fact validator and in-memory state ledger.
-It is not an agent process, wire protocol, transport, authentication service,
+It is not an agent process, complete wire protocol, transport, authentication service,
 workspace engine, lock authority, or trusted desktop client. Nothing in this
 crate is wired into a public route, CLI, integration, or production runtime.
 OGVCS-042 remains **Todo**, and none of OGVCS-042-AC-01 through AC-05 is closed.
@@ -11,9 +11,13 @@ OGVCS-042 remains **Todo**, and none of OGVCS-042-AC-01 through AC-05 is closed.
 
 The candidate provides:
 
-- deterministic local protocol negotiation over typed major/minor versions
-  and a finite capability vocabulary, pinned to the generated OGVCS-041
-  protocol-manifest commitment;
+- a strict, duplicate-rejecting private candidate JSON decoder for the sole
+  `ogvcs.local-agent/client-hello/v1` frame, with a 16-KiB byte ceiling,
+  closed fields, bounded version/capability sequences, and no generic JSON
+  value tree;
+- deterministic local protocol negotiation over the decoded typed major/minor
+  versions and finite capability vocabulary, pinned to the generated
+  OGVCS-041 protocol-manifest commitment;
 - typed installation, local-endpoint, and integration identities;
 - a challenge/response transcript record whose locality, restrictive-access,
   registration, anti-downgrade, signature, and challenge verdicts are supplied
@@ -66,8 +70,13 @@ intersection of capabilities after satisfying both sides' required sets.
 Duplicate or zero-major versions, duplicate capabilities, missing required
 capabilities, and a protocol-manifest value different from the checked-in
 OGVCS-041 generated binding fail before a session is retained. A ledger freezes
-one configured agent offer; a handshake cannot substitute another offer.
-This does not decode, MAC-verify, or replace an OGVCS-041 negotiation receipt.
+one configured agent offer; the decoded client frame has no field or typed API
+through which it can substitute that offer. Session establishment accepts no
+separately supplied typed client offer or client challenge. The external
+adapter must name the exact decoded raw-frame commitment, and the transcript
+binds that commitment, the semantic client-hello commitment, both challenges,
+and the configured selection. This does not MAC-verify or replace an
+OGVCS-041 negotiation receipt.
 
 Lock knowledge is an imported fact only. Authority epoch, generation, lease,
 and proof fields remain owned by OGVCS-016 and its server-time state machine.
@@ -157,6 +166,8 @@ destructive recovery.
 | Resource | Hard maximum |
 | --- | ---: |
 | Raw bytes supplied to one entry point | 1,048,576 |
+| Private client-hello frame bytes | 16,384 |
+| Client-hello structural depth / root members | 3 / 6 |
 | Aggregate logical typed bytes in one path-scope or status entry point | 1,048,576 |
 | Generic collection items | 256 |
 | Offered versions per side | 32 |
@@ -183,22 +194,27 @@ may narrow retained bytes and record counts but cannot raise the hard maxima.
 The retained-byte ledger counts deterministic logical fields and stored path
 bytes, including reserved slots for bounded optional revocation, consumption,
 and issued-cursor facts; it does not count allocator overhead or exact resident
-memory. Raw-frame bytes are measured from the actual slice, while path-scope
-and status calls also bound their separately supplied aggregate typed path
-facts. This crate does not parse the frame or
-prove that external decoding produced the supplied typed facts. Those are
-explicit boundaries, not peak-memory or decoder-security claims.
+memory. Raw-frame bytes are measured from the actual slice. The custom Serde
+visitor parses only the closed client-hello candidate, stops version and
+capability sequences at their limits, rejects duplicate/unknown fields, and
+retains no raw bytes or unrestricted JSON graph. Every other entry point still
+receives separately supplied typed facts and raw bytes; the crate does not
+prove semantic equivalence for those frames. These are explicit boundaries,
+not peak-memory or general decoder-security claims.
 
 ## Known answers and tests
 
 The contract tests pin these deterministic SHA-256 answers:
 
 - negotiation selection:
-  `1adab5f96e5d5cad26c6c08def87a30f1c86e7c37a92a13b5c868319b3d98f08`;
+  `390e64ff2881afb6a978fec50720edd0beaed6dfb5407ff60177581c12d6835a`;
 - handshake transcript:
-  `a56601e13932bd0bb6762e514074334a61b01100ac2999ded329ec1dce30db91`.
+  `aac3285c13b07d9c5fa195d4574c5e24f562495fe19d376fa61bcb49cb4e3803`.
 
-Sixteen deterministic contract tests cover input/version/path/status/work/
+Nineteen deterministic Rust tests cover the closed client-hello shape,
+semantic/raw commitment separation, adapter-frame binding, malformed UTF-8,
+unknown/duplicate/missing/trailing fields, schema/baseline/challenge faults,
+numeric and sequence bounds, cancellation, input/version/path/status/work/
 retained/queue exact maxima and maximum-plus-one rejection,
 root/ancestor/key-equivalent duplicate scope
 normalization, negotiation ordering, configured-offer and manifest pins,
@@ -217,8 +233,8 @@ after failure.
 
 This candidate intentionally has no:
 
-- socket, named-pipe, loopback, endpoint discovery, service process, framing
-  codec, request router, transport security, or OS endpoint creation;
+- socket, named-pipe, loopback, endpoint discovery, service process, operation
+  frame codec, request router, transport security, or OS endpoint creation;
 - filesystem, workspace index, watcher, materialization, local mutation,
   checkpoint, revert, status producer, job executor, or million-path result;
 - OS ACL/ownership verifier, keyring, credential provider, server or object
@@ -234,8 +250,10 @@ This candidate intentionally has no:
 - confidentiality claim for SHA-256 commitments over low-entropy facts,
   privacy proof, bearer protection, identifier/cursor unguessability, or
   resistance to a caller that fabricates an external `Verified` verdict;
-  specifically, the caller-authentication commitment is not internally tied
-  to the raw frame or proved by this crate;
+  specifically, exact client-hello commitment equality is not proof that the
+  adapter actually performed its claimed OS or cryptographic verification,
+  and later caller-authentication commitments are not internally tied to their
+  raw frames;
 - hosted Windows/macOS/Linux endpoint evidence, red-team result, real-clock or
   key-rotation proof, performance/latency/scale evidence, acceptance-criterion
   evidence, or production-readiness claim.

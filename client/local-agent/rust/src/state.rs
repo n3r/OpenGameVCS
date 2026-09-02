@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
+use crate::client_hello::{decode_client_hello_after_preflight, preflight_client_hello};
 use crate::commitment::{CommitmentBuilder, Digest32};
 use crate::model::*;
 
@@ -576,27 +577,34 @@ impl LocalAgentLedger {
 
     pub fn establish_session(
         &mut self,
-        facts: HandshakeFacts,
+        verification: HandshakeVerificationFacts,
         now_ms: u64,
         raw: &RawFrame<'_>,
         cancellation: &dyn CancellationProbe,
     ) -> Result<SessionReceipt> {
-        self.preflight(now_ms, raw, cancellation)?;
-        facts.validate_shape()?;
-        facts.validate_time(now_ms)?;
-        if facts.installation != self.installation
-            || facts.endpoint != self.endpoint
-            || facts.integration.installation_id != self.installation.id
-            || facts.verifier_key_generation != self.verifier_key_generation
+        let raw_frame_commitment = preflight_client_hello(raw)?;
+        check_cancel(cancellation, CancellationPoint::Preflight)?;
+        if now_ms < self.last_supplied_time_ms {
+            return Err(Error::new(ErrorCode::TimeReordered));
+        }
+        let decoded = decode_client_hello_after_preflight(raw, raw_frame_commitment)?;
+        verification.validate_shape(&decoded)?;
+        verification.validate_time(now_ms)?;
+        if verification.installation != self.installation
+            || verification.endpoint != self.endpoint
+            || verification.integration.installation_id != self.installation.id
+            || verification.verifier_key_generation != self.verifier_key_generation
         {
             return Err(Error::new(ErrorCode::StaleGeneration));
         }
-        if facts.agent_offer != self.agent_support {
-            return Err(Error::new(ErrorCode::UnsupportedVersion));
-        }
-        // This entry point already ran the shared preflight cancellation check.
-        // Defer its only final fence until replay and admission checks complete.
-        let selection = negotiate(&facts.client_offer, &facts.agent_offer, raw, &NeverCancel)?;
+        let selection = negotiate_bound(
+            decoded.offer(),
+            &self.agent_support,
+            decoded.raw_frame_commitment(),
+        )?;
+        let facts =
+            HandshakeFacts::from_verified(verification, decoded, self.agent_support.clone());
+        facts.validate_shape()?;
         let transcript_commitment = facts.transcript_commitment(&selection);
         let challenge_replay_commitment = facts.challenge_replay_commitment();
         if self.sessions.contains_key(&facts.session_id)

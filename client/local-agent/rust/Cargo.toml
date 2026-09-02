@@ -25,3 +25,5 @@ path = "src/lib.rs"
 ogvcs-object-model = { version = "0.1.0", path = "../../../core/object-model/rust" }
 ogvcs-path-contract = { version = "1.0.0", path = "../../../core/paths-filesystem/rust" }
 opengamevcs-protocol-v1 = { version = "1.0.0-rc.1", path = "../../../foundation/protocol-baseline/bindings/rust" }
+serde = "=1.0.229"
+serde_json = "=1.0.151"

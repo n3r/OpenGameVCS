@@ -23,9 +23,10 @@ const workflowPaths = (workflow, event, nextEvent) => {
 };
 
 test('local-agent candidate is private, Rust 1.82, and composes owning types', async () => {
-  const [cargo, lib, model, state] = await Promise.all([
+  const [cargo, lib, clientHello, model, state] = await Promise.all([
     read('client/local-agent/rust/Cargo.toml'),
     read('client/local-agent/rust/src/lib.rs'),
+    read('client/local-agent/rust/src/client_hello.rs'),
     read('client/local-agent/rust/src/model.rs'),
     read('client/local-agent/rust/src/state.rs'),
   ]);
@@ -37,24 +38,54 @@ test('local-agent candidate is private, Rust 1.82, and composes owning types', a
     'ogvcs-object-model',
     'ogvcs-path-contract',
     'opengamevcs-protocol-v1',
+    'serde',
+    'serde_json',
   ]) {
     assert.match(cargo, new RegExp(`^${direct} =`, 'mu'));
   }
   assert.doesNotMatch(cargo, /tokio|reqwest|keyring|ring|openssl|server|native-cli/iu);
   assert.match(lib, /#!\[forbid\(unsafe_code\)\]/u);
+  assert.match(lib, /mod client_hello;/u);
+  assert.match(clientHello, /CLIENT_HELLO_SCHEMA_V1/u);
+  assert.match(clientHello, /DeserializeSeed/u);
+  assert.match(clientHello, /unknown_field/u);
+  assert.match(clientHello, /duplicate_field/u);
+  assert.match(clientHello, /decode_client_hello_after_preflight/u);
+  assert.doesNotMatch(clientHello, /serde_json::Value|from_value|to_value/iu);
   assert.match(model, /pub use ogvcs_object_model::FileId/u);
   assert.match(model, /repository_path_key, repository_prefix/u);
   assert.match(model, /opengamevcs_protocol_v1::CONTRACT_MANIFEST_SHA256/u);
+  assert.match(model, /pub\(crate\) fn negotiate_bound/u);
+  assert.doesNotMatch(model, /pub fn negotiate\s*\(/u);
+  assert.match(model, /pub struct HandshakeVerificationFacts/u);
+  assert.match(model, /pub\(crate\) struct HandshakeFacts/u);
   assert.match(state, /agent_support_commitment/u);
-  assert.match(state, /facts\.agent_offer != self\.agent_support/u);
+  assert.match(state, /decode_client_hello_after_preflight/u);
+  assert.match(state, /decoded\.offer\(\),\s*&self\.agent_support/u);
+  assert.doesNotMatch(state, /facts\.agent_offer != self\.agent_support/u);
 });
 
 test('all hard input, work, retained, queue, and time envelopes stay literal', async () => {
-  const [model, state, tests] = await Promise.all([
+  const [clientHello, model, state, tests, clientHelloTests] = await Promise.all([
+    read('client/local-agent/rust/src/client_hello.rs'),
     read('client/local-agent/rust/src/model.rs'),
     read('client/local-agent/rust/src/state.rs'),
     read('client/local-agent/rust/tests/contract.rs'),
+    read('client/local-agent/rust/tests/client_hello.rs'),
   ]);
+  assert.match(
+    clientHello,
+    /pub const CLIENT_HELLO_BYTES_MAXIMUM: usize = 16_384;/u,
+  );
+  assert.match(
+    clientHello,
+    /if raw\.len\(\) > CLIENT_HELLO_BYTES_MAXIMUM[\s\S]{0,160}validate_raw_frame\(raw\)/u,
+  );
+  assert.match(clientHello, /VERSION_ITEMS_MAXIMUM/u);
+  assert.match(clientHello, /CAPABILITY_ITEMS_MAXIMUM/u);
+  assert.match(clientHello, /size_hint\(\)[\s\S]{0,160}VERSION_ITEMS_MAXIMUM/u);
+  assert.match(clientHello, /versions\.len\(\) == VERSION_ITEMS_MAXIMUM/u);
+  assert.match(clientHello, /capabilities\.len\(\) == CAPABILITY_ITEMS_MAXIMUM/u);
   for (const [name, value] of [
     ['RAW_INPUT_BYTES_MAXIMUM', '1_048_576'],
     ['COLLECTION_ITEMS_MAXIMUM', '256'],
@@ -103,7 +134,7 @@ test('all hard input, work, retained, queue, and time envelopes stay literal', a
   assert.match(state, /ErrorCode::TimeReordered/u);
   assert.match(state, /check_cancel\(cancellation, CancellationPoint::BeforeCommit\)/u);
   assert.doesNotMatch(state, /get\(&cursor\.subscription_id\)[\s\S]{0,160}\.clone\(\)/u);
-  assert.match(tests, /RAW_INPUT_BYTES_MAXIMUM \+ 1/u);
+  assert.match(tests, /CLIENT_HELLO_BYTES_MAXIMUM \+ 1/u);
   assert.match(tests, /version maximum \+ 1/u);
   assert.match(tests, /PATH_SELECTORS_MAXIMUM \+ 1/u);
   assert.match(tests, /STATUS_ITEMS_MAXIMUM/u);
@@ -113,18 +144,23 @@ test('all hard input, work, retained, queue, and time envelopes stay literal', a
   assert.match(tests, /an intermediate event without an issued cursor/u);
   assert.match(tests, /RETAINED_RECORDS_MAXIMUM/u);
   assert.match(tests, /assert_eq!\(fixture\.ledger\.snapshot\(\), before_/u);
+  assert.match(clientHelloTests, /duplicate field/u);
+  assert.match(clientHelloTests, /invalid UTF-8/u);
+  assert.match(clientHelloTests, /capability maximum plus one/u);
+  assert.match(clientHelloTests, /adapter facts name another raw frame/u);
 });
 
 test('source has no transport, filesystem, credential, clock, crypto, or mutation implementation', async () => {
-  const [lib, commitment, model, state, readme, review] = await Promise.all([
+  const [lib, commitment, clientHello, model, state, readme, review] = await Promise.all([
     read('client/local-agent/rust/src/lib.rs'),
     read('client/local-agent/rust/src/commitment.rs'),
+    read('client/local-agent/rust/src/client_hello.rs'),
     read('client/local-agent/rust/src/model.rs'),
     read('client/local-agent/rust/src/state.rs'),
     read('client/local-agent/rust/README.md'),
     read('docs/reviews/OGVCS-042-local-agent-ipc-boundary-review.md'),
   ]);
-  const source = [lib, commitment, model, state].join('\n');
+  const source = [lib, commitment, clientHello, model, state].join('\n');
   for (const forbidden of [
     /std::net/iu,
     /std::fs/iu,
@@ -142,7 +178,7 @@ test('source has no transport, filesystem, credential, clock, crypto, or mutatio
   }
   for (const phrase of [
     'not an agent process',
-    'does not parse the frame',
+    'parses only the closed client-hello',
     'not\\s+authentication',
     'does not count allocator overhead',
     'same OS-user privileges',
@@ -153,7 +189,13 @@ test('source has no transport, filesystem, credential, clock, crypto, or mutatio
   assert.match(review, /SHIP only as a private, unpublished,/u);
   assert.match(review, /HOLD for any process, endpoint, authentication/u);
   assert.match(review, /No live P0\/P1\/P2 defect/u);
+  assert.match(
+    review,
+    /client-hello binding audit began from exact integration base\s+`4b25ff447b81d0d8d7728b1b782a5c83852b2535`/u,
+  );
   assert.match(commitment, /Digest32\(<redacted>\)/u);
+  assert.match(clientHello, /client_challenge.*<redacted>/su);
+  assert.match(model, /impl std::fmt::Debug for HandshakeVerificationFacts/u);
   assert.match(model, /impl std::fmt::Debug for HandshakeFacts/u);
   assert.match(model, /impl std::fmt::Debug for ValidatedScopePath/u);
 });

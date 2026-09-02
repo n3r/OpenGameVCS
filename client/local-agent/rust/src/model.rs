@@ -6,6 +6,7 @@ use ogvcs_path_contract::{
 };
 pub use ogvcs_path_contract::{CaseMode, PathProfile};
 
+use crate::client_hello::DecodedClientHello;
 use crate::commitment::{CommitmentBuilder, Digest32};
 
 pub const RAW_INPUT_BYTES_MAXIMUM: usize = 1_048_576;
@@ -39,6 +40,7 @@ pub const DEADLINE_HORIZON_MAXIMUM_MS: u64 = 300_000;
 pub enum ErrorCode {
     Cancelled,
     InputTooLarge,
+    FrameInvalid,
     ItemLimit,
     WorkLimit,
     RetainedLimit,
@@ -81,6 +83,7 @@ impl ErrorCode {
         match self {
             Self::Cancelled => "CANCELLED",
             Self::InputTooLarge => "INPUT_TOO_LARGE",
+            Self::FrameInvalid => "FRAME_INVALID",
             Self::ItemLimit => "ITEM_LIMIT",
             Self::WorkLimit => "WORK_LIMIT",
             Self::RetainedLimit => "RETAINED_LIMIT",
@@ -188,6 +191,10 @@ impl<'a> RawFrame<'a> {
 
     pub const fn is_empty(&self) -> bool {
         self.bytes.is_empty()
+    }
+
+    pub(crate) const fn bytes(&self) -> &'a [u8] {
+        self.bytes
     }
 
     pub fn commitment(&self) -> Result<Digest32> {
@@ -372,14 +379,11 @@ pub fn public_protocol_manifest_commitment() -> Result<Digest32> {
         .ok_or_else(|| Error::new(ErrorCode::InvariantViolation))
 }
 
-pub fn negotiate(
+pub(crate) fn negotiate_bound(
     client: &NegotiationOffer,
     agent: &NegotiationOffer,
-    raw: &RawFrame<'_>,
-    cancellation: &dyn CancellationProbe,
+    raw_frame_commitment: Digest32,
 ) -> Result<NegotiationSelection> {
-    let raw_frame_commitment = validate_raw_frame(raw)?;
-    check_cancel(cancellation, CancellationPoint::Preflight)?;
     let expected_manifest = public_protocol_manifest_commitment()?;
     if client.public_protocol_manifest != expected_manifest
         || agent.public_protocol_manifest != expected_manifest
@@ -433,7 +437,6 @@ pub fn negotiate(
         builder.u8(capability.code());
     }
     let selection_commitment = builder.finish();
-    check_cancel(cancellation, CancellationPoint::BeforeCommit)?;
     Ok(NegotiationSelection {
         version,
         capabilities,
@@ -1266,15 +1269,17 @@ fn commit_optional_u64(builder: &mut CommitmentBuilder, value: Option<u64>) {
     }
 }
 
+/// Facts established by the local endpoint/cryptographic adapter for one
+/// already received client-hello frame.
+///
+/// The verdicts remain external facts. This crate only checks that they name
+/// the exact frame it decoded and binds them into the retained transcript.
 #[derive(Clone, Eq, PartialEq)]
-pub struct HandshakeFacts {
+pub struct HandshakeVerificationFacts {
     pub session_id: SessionId,
     pub installation: InstallationIdentity,
     pub endpoint: EndpointIdentity,
     pub integration: IntegrationIdentity,
-    pub client_offer: NegotiationOffer,
-    pub agent_offer: NegotiationOffer,
-    pub client_challenge: [u8; 32],
     pub agent_challenge: [u8; 32],
     pub verifier_key_generation: u64,
     pub issued_at_ms: u64,
@@ -1282,20 +1287,18 @@ pub struct HandshakeFacts {
     pub challenge_response: ExternalVerdict,
     pub transcript_signature: ExternalVerdict,
     pub anti_downgrade: ExternalVerdict,
+    pub verified_client_frame_commitment: Digest32,
     pub crypto_adapter_commitment: Digest32,
 }
 
-impl std::fmt::Debug for HandshakeFacts {
+impl std::fmt::Debug for HandshakeVerificationFacts {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
-            .debug_struct("HandshakeFacts")
+            .debug_struct("HandshakeVerificationFacts")
             .field("session_id", &self.session_id)
             .field("installation", &self.installation)
             .field("endpoint", &self.endpoint)
             .field("integration", &self.integration)
-            .field("client_offer", &self.client_offer)
-            .field("agent_offer", &self.agent_offer)
-            .field("client_challenge", &"<redacted>")
             .field("agent_challenge", &"<redacted>")
             .field("verifier_key_generation", &self.verifier_key_generation)
             .field("issued_at_ms", &self.issued_at_ms)
@@ -1303,21 +1306,28 @@ impl std::fmt::Debug for HandshakeFacts {
             .field("challenge_response", &self.challenge_response)
             .field("transcript_signature", &self.transcript_signature)
             .field("anti_downgrade", &self.anti_downgrade)
+            .field(
+                "verified_client_frame_commitment",
+                &self.verified_client_frame_commitment,
+            )
             .field("crypto_adapter_commitment", &self.crypto_adapter_commitment)
             .finish()
     }
 }
 
-impl HandshakeFacts {
-    pub(crate) fn validate_shape(&self) -> Result<()> {
+impl HandshakeVerificationFacts {
+    pub(crate) fn validate_shape(&self, decoded: &DecodedClientHello) -> Result<()> {
         require_digest(self.session_id.digest())?;
         self.installation.validate()?;
         self.endpoint.validate()?;
         self.integration.validate()?;
+        require_digest(self.verified_client_frame_commitment)?;
         require_digest(self.crypto_adapter_commitment)?;
-        if self.client_challenge == [0; 32]
-            || self.agent_challenge == [0; 32]
-            || self.client_challenge == self.agent_challenge
+        if self.verified_client_frame_commitment != decoded.raw_frame_commitment() {
+            return Err(Error::new(ErrorCode::TranscriptUnverified));
+        }
+        if self.agent_challenge == [0; 32]
+            || decoded.client_challenge() == self.agent_challenge
             || self.verifier_key_generation == 0
         {
             return Err(Error::new(ErrorCode::InvalidFact));
@@ -1347,6 +1357,110 @@ impl HandshakeFacts {
         }
         Ok(())
     }
+}
+
+#[derive(Clone, Eq, PartialEq)]
+pub(crate) struct HandshakeFacts {
+    pub session_id: SessionId,
+    pub installation: InstallationIdentity,
+    pub endpoint: EndpointIdentity,
+    pub integration: IntegrationIdentity,
+    pub client_offer: NegotiationOffer,
+    pub agent_offer: NegotiationOffer,
+    pub client_challenge: [u8; 32],
+    pub agent_challenge: [u8; 32],
+    pub verifier_key_generation: u64,
+    pub issued_at_ms: u64,
+    pub expires_at_ms: u64,
+    pub challenge_response: ExternalVerdict,
+    pub transcript_signature: ExternalVerdict,
+    pub anti_downgrade: ExternalVerdict,
+    pub verified_client_frame_commitment: Digest32,
+    pub client_hello_semantic_commitment: Digest32,
+    pub crypto_adapter_commitment: Digest32,
+}
+
+impl std::fmt::Debug for HandshakeFacts {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("HandshakeFacts")
+            .field("session_id", &self.session_id)
+            .field("installation", &self.installation)
+            .field("endpoint", &self.endpoint)
+            .field("integration", &self.integration)
+            .field("client_offer", &self.client_offer)
+            .field("agent_offer", &self.agent_offer)
+            .field("client_challenge", &"<redacted>")
+            .field("agent_challenge", &"<redacted>")
+            .field("verifier_key_generation", &self.verifier_key_generation)
+            .field("issued_at_ms", &self.issued_at_ms)
+            .field("expires_at_ms", &self.expires_at_ms)
+            .field("challenge_response", &self.challenge_response)
+            .field("transcript_signature", &self.transcript_signature)
+            .field("anti_downgrade", &self.anti_downgrade)
+            .field(
+                "verified_client_frame_commitment",
+                &self.verified_client_frame_commitment,
+            )
+            .field(
+                "client_hello_semantic_commitment",
+                &self.client_hello_semantic_commitment,
+            )
+            .field("crypto_adapter_commitment", &self.crypto_adapter_commitment)
+            .finish()
+    }
+}
+
+impl HandshakeFacts {
+    pub(crate) fn from_verified(
+        verification: HandshakeVerificationFacts,
+        decoded: DecodedClientHello,
+        agent_offer: NegotiationOffer,
+    ) -> Self {
+        Self {
+            session_id: verification.session_id,
+            installation: verification.installation,
+            endpoint: verification.endpoint,
+            integration: verification.integration,
+            client_offer: decoded.offer().clone(),
+            agent_offer,
+            client_challenge: decoded.client_challenge(),
+            agent_challenge: verification.agent_challenge,
+            verifier_key_generation: verification.verifier_key_generation,
+            issued_at_ms: verification.issued_at_ms,
+            expires_at_ms: verification.expires_at_ms,
+            challenge_response: verification.challenge_response,
+            transcript_signature: verification.transcript_signature,
+            anti_downgrade: verification.anti_downgrade,
+            verified_client_frame_commitment: verification.verified_client_frame_commitment,
+            client_hello_semantic_commitment: decoded.semantic_commitment(),
+            crypto_adapter_commitment: verification.crypto_adapter_commitment,
+        }
+    }
+
+    pub(crate) fn validate_shape(&self) -> Result<()> {
+        require_digest(self.session_id.digest())?;
+        self.installation.validate()?;
+        self.endpoint.validate()?;
+        self.integration.validate()?;
+        require_digest(self.verified_client_frame_commitment)?;
+        require_digest(self.client_hello_semantic_commitment)?;
+        require_digest(self.crypto_adapter_commitment)?;
+        if self.client_challenge == [0; 32]
+            || self.agent_challenge == [0; 32]
+            || self.client_challenge == self.agent_challenge
+            || self.verifier_key_generation == 0
+        {
+            return Err(Error::new(ErrorCode::InvalidFact));
+        }
+        if !self.challenge_response.is_verified()
+            || !self.transcript_signature.is_verified()
+            || !self.anti_downgrade.is_verified()
+        {
+            return Err(Error::new(ErrorCode::TranscriptUnverified));
+        }
+        Ok(())
+    }
 
     pub(crate) fn transcript_commitment(&self, selection: &NegotiationSelection) -> Digest32 {
         let mut builder = CommitmentBuilder::new("handshake-transcript-v1");
@@ -1363,6 +1477,8 @@ impl HandshakeFacts {
         builder.u8(self.challenge_response.code());
         builder.u8(self.transcript_signature.code());
         builder.u8(self.anti_downgrade.code());
+        builder.digest(self.verified_client_frame_commitment);
+        builder.digest(self.client_hello_semantic_commitment);
         builder.digest(self.crypto_adapter_commitment);
         builder.finish()
     }

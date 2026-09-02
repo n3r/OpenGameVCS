@@ -103,11 +103,15 @@ Ship read/status first to first-party clients, then sync/start-edit and finally 
 - Implementation changes: bounded private/unpublished/unwired Rust 1.82
   protocol-fact and in-memory-ledger candidate under `client/local-agent/rust`;
   it composes the existing FileID, path, and protocol-baseline types and retains
-  only opaque facts owned by the future lock contract. It implements no agent
-  process, transport, credentials, workspace mutation, lock authority, or
-  public binding.
-- Test and benchmark results: 16 deterministic Rust contract tests plus the
-  Node source-policy gate cover negotiation, challenge replay, exact rotation,
+  only opaque facts owned by the future lock contract. Its sole parser is a
+  strict 16-KiB private client-hello candidate that binds decoded client facts
+  to the exact adapter-verified raw frame. It implements no agent process,
+  transport, credentials, workspace mutation, lock authority, operation
+  codec/router, or public binding.
+- Test and benchmark results: 19 deterministic Rust tests plus the Node
+  source-policy gate cover closed/duplicate-rejecting client-hello decoding,
+  semantic/raw and adapter/frame binding, malformed and bounded inputs,
+  negotiation, challenge replay, exact rotation,
   consent-generation/scope fencing, operation idempotency after original time
   windows, status/event bounds and backpressure, exact subscription-caller
   facts, ledger-issued cursor expiry, lock-knowledge variants, single-use
@@ -116,9 +120,9 @@ Ship read/status first to first-party clients, then sync/start-edit and finally 
   endpoint, fuzz, benchmark, or million-path evidence.
 - Security/reliability review:
   `docs/reviews/OGVCS-042-local-agent-ipc-boundary-review.md` records the
-  independent authority/boundary audit, fail-closed fixes, residual risks, and
-  private-candidate-only verdict; it is not an external security assessment or
-  acceptance evidence for a hosted agent.
+  authority/boundary audits, fail-closed fixes, residual risks, and the
+  private-candidate-only verdict; the follow-on has no new hosted evidence and
+  is not an external security assessment or acceptance evidence for an agent.
 - Documentation/runbooks: `client/local-agent/rust/README.md` documents exact
   ordering, limits, known answers, composition boundaries, and nonclaims. No
   operational runbook exists because there is no process or deployment in this
