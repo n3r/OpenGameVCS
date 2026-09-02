@@ -4380,15 +4380,17 @@ fn simulate_pre_v13_committed_mapping_absence(
     object_count: u64,
 ) {
     let mut client = Client::connect(database_url, NoTls).unwrap();
-    let mut transaction = client.transaction().unwrap();
-    transaction
-        .batch_execute(
-            "ALTER TABLE ogvcs_metadata.lifecycle_aggregate_identity_items
-                 DISABLE TRIGGER lifecycle_aggregate_identity_items_immutable_v13;
-             ALTER TABLE ogvcs_metadata.lifecycle_aggregate_identity_seals
-                 DISABLE TRIGGER lifecycle_aggregate_identity_seals_immutable_v13",
-        )
+    // v13 deliberately leaves already committed v11/v12 applications
+    // unmapped. Reproduce that migration boundary without changing durable
+    // trigger configuration: the disposable superuser connection suppresses
+    // origin triggers only for this session, then restores them before it is
+    // dropped. ALTER TABLE cannot be used here because the deletes create
+    // deferred trigger events that make re-enabling triggers in the same
+    // transaction invalid on PostgreSQL 15.
+    client
+        .batch_execute("SET session_replication_role = replica")
         .unwrap();
+    let mut transaction = client.transaction().unwrap();
     assert_eq!(
         transaction
             .execute(
@@ -4409,15 +4411,10 @@ fn simulate_pre_v13_committed_mapping_absence(
             .unwrap(),
         1
     );
-    transaction
-        .batch_execute(
-            "ALTER TABLE ogvcs_metadata.lifecycle_aggregate_identity_items
-                 ENABLE TRIGGER lifecycle_aggregate_identity_items_immutable_v13;
-             ALTER TABLE ogvcs_metadata.lifecycle_aggregate_identity_seals
-                 ENABLE TRIGGER lifecycle_aggregate_identity_seals_immutable_v13",
-        )
-        .unwrap();
     transaction.commit().unwrap();
+    client
+        .batch_execute("SET session_replication_role = origin")
+        .unwrap();
 }
 
 fn key_provider(key: [u8; 32]) -> Arc<HmacSha256KeyRing> {
