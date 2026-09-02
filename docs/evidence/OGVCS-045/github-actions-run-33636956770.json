@@ -1,0 +1,90 @@
+{
+  "schemaVersion": "ogvcs.untrusted-sandbox/hosted-evidence/v1",
+  "status": "restart-hardening-candidate-passed",
+  "completionClaimed": false,
+  "sourceRevision": "3563167763a54b97eb8166ded1db895aa3a5b7cd",
+  "workflow": {
+    "name": "Untrusted parser sandbox boundary",
+    "path": ".github/workflows/untrusted-sandbox.yml",
+    "branch": "r1-foundation-integration",
+    "runId": 33636956770,
+    "runAttempt": 1,
+    "event": "workflow_dispatch",
+    "createdAt": "2026-09-02T13:38:27Z",
+    "completedAt": "2026-09-02T13:39:33Z",
+    "url": "https://github.com/n3r/OpenGameVCS/actions/runs/33636956770"
+  },
+  "jobs": [
+    {
+      "id": 100270122963,
+      "name": "Linux reference isolation and hostile canaries",
+      "conclusion": "success",
+      "startedAt": "2026-09-02T13:38:32Z",
+      "completedAt": "2026-09-02T13:39:31Z"
+    },
+    {
+      "id": 100270123474,
+      "name": "Credential-free protocol (ubuntu-latest)",
+      "conclusion": "success",
+      "startedAt": "2026-09-02T13:38:32Z",
+      "completedAt": "2026-09-02T13:38:55Z"
+    },
+    {
+      "id": 100270123380,
+      "name": "Credential-free protocol (macos-latest)",
+      "conclusion": "success",
+      "startedAt": "2026-09-02T13:38:43Z",
+      "completedAt": "2026-09-02T13:39:05Z"
+    },
+    {
+      "id": 100270123494,
+      "name": "Credential-free protocol (windows-latest)",
+      "conclusion": "success",
+      "startedAt": "2026-09-02T13:38:32Z",
+      "completedAt": "2026-09-02T13:39:09Z"
+    }
+  ],
+  "artifact": {
+    "id": 9849210156,
+    "name": "untrusted-sandbox-linux-reference-1",
+    "archiveBytes": 840,
+    "archiveDigest": "sha256:fe6b57254b697ce9cf73e8f7e898a598db0fa2040df75963443e315a7a9d03d5",
+    "retainedPath": "docs/evidence/OGVCS-045/linux-reference-conformance-2026-09-02-run-33636956770.json",
+    "retainedBytes": 3621,
+    "retainedLines": 1,
+    "retainedSha256": "b3e292a64173ac76857c04545e3c41fb2a6b0a7c76e63b0271c380b050e7c472",
+    "outcome": "passed",
+    "caseCount": 43,
+    "resultCounts": {
+      "VALIDATED": 33,
+      "SANDBOX_VALIDATION_FAILED": 5,
+      "SANDBOX_TIMEOUT": 2,
+      "SANDBOX_RESOURCE_LIMIT": 2,
+      "SANDBOX_OUTPUT_LIMIT": 1
+    },
+    "runtimeDigest": "bf38726fc60cc07db34e002508747d90822390e6453d805eaa3f756902a6b2a7",
+    "seccompProfileSha256": "d25dfdd48dbfccb7fcb30e1468f0f2adb4974d26e3bd205231abac0bd062f1f0"
+  },
+  "candidateRegression": {
+    "nodeVersion": "24",
+    "contractAndPackageCases": 5,
+    "runtimeCases": 61,
+    "runtimePassed": 54,
+    "linuxOnlySkippedOnPortableHosts": 7,
+    "retainedAndWorkflowPolicyCases": 3
+  },
+  "claimBoundary": {
+    "privateCandidateOnly": true,
+    "automaticSettlement": false,
+    "publicConstructor": false,
+    "acceptanceCriterion": false,
+    "releaseEvidence": false
+  },
+  "remainingGates": [
+    "production-named and public sandbox constructor",
+    "exact deployed runc binary attestation",
+    "approved authenticated Docker daemon-orphan settlement",
+    "complete broker, runner, and output-validation hard-kill matrix",
+    "independent isolation review and consumer rollout"
+  ]
+}

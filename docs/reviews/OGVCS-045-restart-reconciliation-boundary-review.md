@@ -56,7 +56,7 @@ On 2026-09-02, Node 24.9.0 `npm run test:sandbox` passed:
 
 - five contract and packed-package cases;
 - 54 of 61 runtime cases, with seven Linux-only cases skipped on macOS; and
-- three retained-evidence/workflow policy cases.
+- four retained-evidence/workflow policy cases.
 
 The restart-focused runtime cases cover every modeled create/start/exit/cleanup
 topology, repeated detection, request-shape attacks, authority substitution,

@@ -110,19 +110,22 @@ Enable only the dummy conformance tool, then one importer parser profile. Consum
   resource discovery and inspection, closed hashed quarantine evidence, and
   restart ordering that refuses local job denial until daemon absence is
   proved. It deliberately performs no orphan deletion.
-- Test and benchmark results: [hosted run
-  33484044441](../../docs/evidence/OGVCS-045/github-actions-run-33484044441.json)
+- Test and benchmark results: exact-source [hosted run
+  33636956770](../../docs/evidence/OGVCS-045/github-actions-run-33636956770.json)
   passed the private Linux Docker/cgroup/seccomp lane and portable Node 24
-  lanes on Ubuntu, macOS, and Windows. Its retained 43-case [Linux
-  report](../../docs/evidence/OGVCS-045/linux-reference-conformance-2026-09-01.json)
-  is 3,620 bytes with SHA-256
-  `27ff15154b4a6cfadd6626fed323a359b9907b3dc2b3c3eb9ac43a3fbce0b0fb`.
+  lanes on Ubuntu, macOS, and Windows at integration revision
+  `3563167763a54b97eb8166ded1db895aa3a5b7cd`. Its retained 43-case [Linux
+  report](../../docs/evidence/OGVCS-045/linux-reference-conformance-2026-09-02-run-33636956770.json)
+  is 3,621 bytes with SHA-256
+  `b3e292a64173ac76857c04545e3c41fb2a6b0a7c76e63b0271c380b050e7c472`.
   It records bounded private candidate behavior relevant to AC-01 and AC-02;
   the same hosted candidate lane exercised signed-manifest and required-control
-  admission plus prior/new-job revocation checks relevant to AC-04.
+  admission, prior/new-job revocation, restart detection, and closed-diagnostic
+  checks relevant to AC-04. The historical initial candidate run remains
+  retained in the evidence packet.
   Separately, a 2026-09-02 macOS/Node 24.9.0 local run of
   `npm run test:sandbox` passed five contract/package cases, 54 of 61 runtime
-  cases with seven Linux-only cases skipped, and three retained/workflow policy
+  cases with seven Linux-only cases skipped, and four retained/workflow policy
   cases. That local run covers restart detection and quarantine models but is
   neither retained Linux Docker evidence nor hosted settlement proof.
 - Security/reliability review: the retained
