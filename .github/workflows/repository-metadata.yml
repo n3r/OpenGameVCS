@@ -13,11 +13,19 @@ on:
       - 'spec/object-transfer/v1/**'
       - 'spec/repository-metadata/v1/**'
       - 'docs/changelog/OGVCS-006.md'
+      - 'docs/changelog/OGVCS-008.md'
+      - 'docs/evidence/OGVCS-006/**'
+      - 'docs/evidence/OGVCS-008/**'
+      - 'docs/reviews/OGVCS-006-public-metadata-surface-audit.md'
+      - 'docs/reviews/OGVCS-008-content-manifest-production-acceptor-review.md'
+      - 'prd/todo/OGVCS-006-repository-metadata-snapshot-service.md'
+      - 'prd/todo/OGVCS-008-object-storage-transfer-service.md'
+      - 'tools/atomic-submit-retained-evidence.test.mjs'
       - 'tools/repository-metadata-workflow-policy.test.mjs'
       - 'package.json'
       - 'package-lock.json'
   push:
-    branches: [main]
+    branches: [main, r1-foundation-integration]
     paths:
       - '.github/workflows/repository-metadata.yml'
       - 'core/object-model/rust/**'
@@ -29,6 +37,14 @@ on:
       - 'spec/object-transfer/v1/**'
       - 'spec/repository-metadata/v1/**'
       - 'docs/changelog/OGVCS-006.md'
+      - 'docs/changelog/OGVCS-008.md'
+      - 'docs/evidence/OGVCS-006/**'
+      - 'docs/evidence/OGVCS-008/**'
+      - 'docs/reviews/OGVCS-006-public-metadata-surface-audit.md'
+      - 'docs/reviews/OGVCS-008-content-manifest-production-acceptor-review.md'
+      - 'prd/todo/OGVCS-006-repository-metadata-snapshot-service.md'
+      - 'prd/todo/OGVCS-008-object-storage-transfer-service.md'
+      - 'tools/atomic-submit-retained-evidence.test.mjs'
       - 'tools/repository-metadata-workflow-policy.test.mjs'
       - 'package.json'
       - 'package-lock.json'
@@ -54,6 +70,8 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
@@ -89,6 +107,8 @@ jobs:
           --health-retries 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
@@ -151,6 +171,8 @@ jobs:
         run: |
           mkdir -p artifacts
           node server/modules/repository-metadata/scripts/service-report.mjs | tee artifacts/repository-metadata-service-report.jsonl
+      - name: Validate the open roadmap boundary
+        run: node prd/validate-roadmap.mjs && node --test prd/validate-roadmap.test.mjs
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
@@ -180,6 +202,8 @@ jobs:
           --health-retries 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24

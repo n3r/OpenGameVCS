@@ -25,6 +25,7 @@ const aggregateLiveTestPath = new URL(
 test('repository metadata workflow pins the bounded three-host and PostgreSQL boundary', async () => {
   const workflow = await readFile(workflowPath, 'utf8');
   assert.match(workflow, /^name: Repository metadata bounded conformance$/mu);
+  assert.match(workflow, /branches: \[main, r1-foundation-integration\]/u);
   assert.match(workflow, /runner: macos-latest, label: macOS/u);
   assert.match(workflow, /runner: windows-latest, label: Windows/u);
   assert.match(workflow, /^  linux-postgres:$/mu);
@@ -35,6 +36,7 @@ test('repository metadata workflow pins the bounded three-host and PostgreSQL bo
     workflow.match(/actions\/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1/gu)?.length,
     3,
   );
+  assert.equal(workflow.match(/persist-credentials: false/gu)?.length, 3);
   assert.equal(
     workflow.match(/actions\/setup-node@820762786026740c76f36085b0efc47a31fe5020/gu)?.length,
     3,
@@ -60,6 +62,26 @@ test('repository metadata workflow pins the bounded three-host and PostgreSQL bo
   assert.equal(workflow.match(/spec\/benchmark-fault\/v1\/\*\*/gu)?.length, 2);
   assert.equal(workflow.match(/spec\/object-transfer\/v1\/\*\*/gu)?.length, 2);
   assert.equal(workflow.match(/docs\/changelog\/OGVCS-006\.md/gu)?.length, 2);
+  assert.equal(workflow.match(/docs\/changelog\/OGVCS-008\.md/gu)?.length, 2);
+  assert.equal(workflow.match(/docs\/evidence\/OGVCS-006\/\*\*/gu)?.length, 2);
+  assert.equal(workflow.match(/docs\/evidence\/OGVCS-008\/\*\*/gu)?.length, 2);
+  assert.equal(
+    workflow.match(/docs\/reviews\/OGVCS-006-public-metadata-surface-audit\.md/gu)?.length,
+    2,
+  );
+  assert.equal(
+    workflow.match(/docs\/reviews\/OGVCS-008-content-manifest-production-acceptor-review\.md/gu)?.length,
+    2,
+  );
+  assert.equal(
+    workflow.match(/prd\/todo\/OGVCS-006-repository-metadata-snapshot-service\.md/gu)?.length,
+    2,
+  );
+  assert.equal(
+    workflow.match(/prd\/todo\/OGVCS-008-object-storage-transfer-service\.md/gu)?.length,
+    2,
+  );
+  assert.equal(workflow.match(/tools\/atomic-submit-retained-evidence\.test\.mjs/gu)?.length, 2);
   assert.equal(workflow.match(/server\/migrations\/identity-policy-audit\/\*\*/gu)?.length, 2);
   assert.equal(workflow.match(/server\/modules\/identity-policy-audit\/\*\*/gu)?.length, 2);
   assert.match(workflow, /cargo clippy .* --locked --offline --all-targets -- -D warnings/u);
@@ -110,6 +132,10 @@ test('repository metadata workflow pins the bounded three-host and PostgreSQL bo
     /- name: Run the bounded live PostgreSQL report\n        shell: bash\n/u,
   );
   assert.match(workflow, /repository-metadata-service-report\.jsonl/u);
+  assert.match(
+    workflow,
+    /run: node prd\/validate-roadmap\.mjs && node --test prd\/validate-roadmap\.test\.mjs/u,
+  );
   assert.match(workflow, /^  postgres-hard-restart:$/mu);
   assert.match(workflow, /timeout-minutes: 35/u);
   assert.match(
