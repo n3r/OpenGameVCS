@@ -1,0 +1,136 @@
+name: R1 bounded private Rust tranche portability
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/private-rust-tranches.yml'
+      - 'client/local-checkpoint/rust/**'
+      - 'core/chunking-manifest/rust/**'
+      - 'core/history-diff/rust/**'
+      - 'core/integrity-verifier/rust/**'
+      - 'core/object-model/rust/**'
+      - 'core/paths-filesystem/rust/**'
+      - 'docs/evidence/OGVCS-014/**'
+      - 'docs/evidence/OGVCS-015/**'
+      - 'docs/evidence/OGVCS-017/**'
+      - 'docs/reviews/OGVCS-014-local-checkpoint-boundary-review.md'
+      - 'docs/reviews/OGVCS-015-history-diff-kernel-boundary-review.md'
+      - 'docs/reviews/OGVCS-015-private-text-merge-kernel-review.md'
+      - 'docs/reviews/OGVCS-017-read-only-integrity-verifier-review.md'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'prd/ROADMAP.md'
+      - 'prd/todo/OGVCS-014-local-checkpoints-offline-recovery.md'
+      - 'prd/todo/OGVCS-015-branches-history-merge-revert.md'
+      - 'prd/todo/OGVCS-017-integrity-verification-repair.md'
+      - 'prd/validate-roadmap.mjs'
+      - 'prd/validate-roadmap.test.mjs'
+      - 'tools/history-diff-kernel-policy.test.mjs'
+      - 'tools/integrity-verifier-source-policy.test.mjs'
+      - 'tools/local-checkpoint-policy.test.mjs'
+      - 'tools/private-rust-tranches-workflow-policy.test.mjs'
+  push:
+    branches: [main, r1-foundation-integration]
+    paths:
+      - '.github/workflows/private-rust-tranches.yml'
+      - 'client/local-checkpoint/rust/**'
+      - 'core/chunking-manifest/rust/**'
+      - 'core/history-diff/rust/**'
+      - 'core/integrity-verifier/rust/**'
+      - 'core/object-model/rust/**'
+      - 'core/paths-filesystem/rust/**'
+      - 'docs/evidence/OGVCS-014/**'
+      - 'docs/evidence/OGVCS-015/**'
+      - 'docs/evidence/OGVCS-017/**'
+      - 'docs/reviews/OGVCS-014-local-checkpoint-boundary-review.md'
+      - 'docs/reviews/OGVCS-015-history-diff-kernel-boundary-review.md'
+      - 'docs/reviews/OGVCS-015-private-text-merge-kernel-review.md'
+      - 'docs/reviews/OGVCS-017-read-only-integrity-verifier-review.md'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'prd/ROADMAP.md'
+      - 'prd/todo/OGVCS-014-local-checkpoints-offline-recovery.md'
+      - 'prd/todo/OGVCS-015-branches-history-merge-revert.md'
+      - 'prd/todo/OGVCS-017-integrity-verification-repair.md'
+      - 'prd/validate-roadmap.mjs'
+      - 'prd/validate-roadmap.test.mjs'
+      - 'tools/history-diff-kernel-policy.test.mjs'
+      - 'tools/integrity-verifier-source-policy.test.mjs'
+      - 'tools/local-checkpoint-policy.test.mjs'
+      - 'tools/private-rust-tranches-workflow-policy.test.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: private-rust-tranches-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  portability:
+    name: Private Rust tranches (${{ matrix.label }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-latest, label: Linux }
+          - { runner: macos-latest, label: macOS }
+          - { runner: windows-latest, label: Windows }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - uses: dtolnay/rust-toolchain@7d11e79e1714f6b6da93cac39ad8435666f5c337 # 1.82.0
+        with:
+          toolchain: 1.82.0
+          components: clippy, rustfmt
+      - name: Check private source and workflow policy
+        run: >-
+          node --test
+          tools/local-checkpoint-policy.test.mjs
+          tools/history-diff-kernel-policy.test.mjs
+          tools/integrity-verifier-source-policy.test.mjs
+          tools/private-rust-tranches-workflow-policy.test.mjs
+      - name: Prefetch exact locked Rust dependency closures
+        run: |
+          cargo fetch --manifest-path client/local-checkpoint/rust/Cargo.toml --locked
+          cargo fetch --manifest-path core/history-diff/rust/Cargo.toml --locked
+          cargo fetch --manifest-path core/integrity-verifier/rust/Cargo.toml --locked
+      - name: Check Rust formatting
+        run: |
+          cargo fmt --manifest-path client/local-checkpoint/rust/Cargo.toml -- --check
+          cargo fmt --manifest-path core/history-diff/rust/Cargo.toml -- --check
+          cargo fmt --manifest-path core/integrity-verifier/rust/Cargo.toml -- --check
+      - name: Test OGVCS-014 local checkpoint
+        run: cargo test --manifest-path client/local-checkpoint/rust/Cargo.toml --locked --offline
+      - name: Test OGVCS-015 history and text merge
+        run: cargo test --manifest-path core/history-diff/rust/Cargo.toml --locked --offline
+      - name: Test OGVCS-015 history and text merge in release mode
+        run: cargo test --manifest-path core/history-diff/rust/Cargo.toml --locked --offline --release
+      - name: Test OGVCS-017 integrity verifier
+        run: cargo test --manifest-path core/integrity-verifier/rust/Cargo.toml --locked --offline
+      - name: Lint OGVCS-014 local checkpoint
+        run: cargo clippy --manifest-path client/local-checkpoint/rust/Cargo.toml --locked --offline --all-targets -- -D warnings
+      - name: Lint OGVCS-015 history and text merge
+        run: cargo clippy --manifest-path core/history-diff/rust/Cargo.toml --locked --offline --all-targets -- -D warnings
+      - name: Lint OGVCS-017 integrity verifier
+        run: cargo clippy --manifest-path core/integrity-verifier/rust/Cargo.toml --locked --offline --all-targets -- -D warnings
+      - name: Test the packed OGVCS-014 crate
+        shell: bash
+        run: sh client/local-checkpoint/rust/scripts/test-packed.sh
+      - name: Test the packed OGVCS-015 crate
+        shell: bash
+        run: sh core/history-diff/rust/scripts/test-packed.sh
+      - name: Build the bounded OGVCS-017 package archive
+        run: >-
+          cargo package --manifest-path core/integrity-verifier/rust/Cargo.toml
+          --locked --offline --allow-dirty --no-verify
+      - name: Validate the open roadmap boundary
+        if: runner.os == 'Linux'
+        run: node prd/validate-roadmap.mjs && node --test prd/validate-roadmap.test.mjs
