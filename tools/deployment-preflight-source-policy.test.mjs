@@ -12,10 +12,15 @@ test('private deployment preflight stays pure, fixed-shape, and unwired', async 
   ]);
 
   assert.match(cargo, /publish = false/u);
+  assert.match(cargo, /version = "0\.1\.0-rc\.2"/u);
   assert.match(cargo, /rust-version = "1\.82"/u);
   assert.match(cargo, /sha2 = "=0\.10\.9"/u);
   assert.doesNotMatch(cargo, /tokio|reqwest|axum|sqlx|postgres|rusqlite|tonic|aws-sdk|aws_sdk|docker|kube/iu);
 
+  assert.match(source, /pub const PREFLIGHT_VERSION: u16 = 2;/u);
+  assert.match(source, /OGVCS-PRIVATE-DEPLOYMENT-CONFIG-V2/u);
+  assert.match(source, /OGVCS-PRIVATE-DEPLOYMENT-OBSERVATION-V2/u);
+  assert.match(source, /OGVCS-PRIVATE-DEPLOYMENT-PREFLIGHT-REPORT-V2/u);
   assert.match(source, /pub const LISTENER_COUNT: usize = 3;/u);
   assert.match(source, /pub const SECRET_COUNT: usize = 4;/u);
   assert.match(source, /pub const SERVICE_ACCOUNT_COUNT: usize = 3;/u);
@@ -30,7 +35,9 @@ test('private deployment preflight stays pure, fixed-shape, and unwired', async 
   assert.match(source, /checkpoint\(CancellationStage::BeforeResultAllocation\);\s+control\.check\(\)\?;\s+let reasons = reasons\.to_vec\(\);/u);
   assert.match(source, /MigrationClass::Irreversible/u);
   assert.match(source, /BackupGateEvidence/u);
+  assert.match(source, /backup\.artifact_set != config\.artifact_set/u);
   assert.match(source, /backup\.source_schema != observation\.migration\.current_schema/u);
+  assert.match(source, /backup\.target_schema != observation\.migration\.target_schema/u);
   assert.match(source, /backup\.verified_backup_manifest != backup\.backup_manifest/u);
   assert.match(source, /backup\.retention_until_unix_seconds <= evaluation\.evaluated_at_unix_seconds/u);
   assert.match(source, /backup\.source_storage == backup\.target_storage/u);
@@ -61,6 +68,58 @@ test('private deployment preflight stays pure, fixed-shape, and unwired', async 
   assert.match(source, /field\("configuration", &"<redacted>"\)/u);
   assert.match(source, /field\("observation", &"<redacted>"\)/u);
   assert.match(source, /field\("evidence", &"<redacted>"\)/u);
+});
+
+test('hosted source-portability gate is pinned, path-scoped, and cross-platform', async () => {
+  const workflow = await read('.github/workflows/deployment-preflight.yml');
+  const watchedPaths = [
+    '.github/workflows/deployment-preflight.yml',
+    'core/deployment-preflight/rust/**',
+    'docs/reviews/OGVCS-021-deployment-preflight-boundary-review.md',
+    'prd/todo/OGVCS-021-starter-deployment-admin-bootstrap.md',
+    'tools/deployment-preflight-source-policy.test.mjs',
+    'package.json',
+    'package-lock.json',
+  ];
+  const pullRequest = workflow.match(/on:\n  pull_request:\n    paths:\n(?<paths>(?:      - '[^']+'\n)+)  push:/u);
+  const push = workflow.match(/  push:\n    branches: \[main, r1-foundation-integration\]\n    paths:\n(?<paths>(?:      - '[^']+'\n)+)  workflow_dispatch:/u);
+  const decodePaths = (match) => match?.groups?.paths.trimEnd().split('\n').map((line) => line.slice(9, -1));
+  assert.deepEqual(decodePaths(pullRequest), watchedPaths);
+  assert.deepEqual(decodePaths(push), watchedPaths);
+  assert.match(workflow, /  workflow_dispatch:\n/u);
+  assert.match(workflow, /permissions:\n  contents: read/u);
+  assert.match(workflow, /cancel-in-progress: true/u);
+  assert.match(workflow, /timeout-minutes: 30/u);
+  const runners = [...workflow.matchAll(/^          - \{ runner: ([^,]+), label: ([^ }]+) \}$/gmu)]
+    .map((match) => ({ runner: match[1], label: match[2] }));
+  assert.deepEqual(runners, [
+    { runner: 'ubuntu-latest', label: 'Linux' },
+    { runner: 'macos-latest', label: 'macOS' },
+    { runner: 'windows-latest', label: 'Windows' },
+  ]);
+  assert.match(workflow, /runs-on: \$\{\{ matrix\.runner \}\}/u);
+
+  const actionUses = [...workflow.matchAll(/^\s*- uses: ([^\s#]+)/gmu)].map((match) => match[1]);
+  assert.deepEqual(actionUses, [
+    'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1',
+    'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020',
+    'dtolnay/rust-toolchain@7d11e79e1714f6b6da93cac39ad8435666f5c337',
+  ]);
+  for (const action of actionUses) assert.match(action, /@[0-9a-f]{40}$/u);
+  assert.match(workflow, /persist-credentials: false/u);
+  assert.match(workflow, /node-version: 24/u);
+  assert.match(workflow, /# 1\.82\.0/u);
+  assert.match(workflow, /components: clippy, rustfmt/u);
+  assert.match(workflow, /node --test tools\/deployment-preflight-source-policy\.test\.mjs/u);
+  assert.match(workflow, /cargo fetch --manifest-path core\/deployment-preflight\/rust\/Cargo\.toml --locked/u);
+  assert.match(workflow, /cargo fmt --manifest-path core\/deployment-preflight\/rust\/Cargo\.toml -- --check/u);
+  assert.match(workflow, /cargo test --manifest-path core\/deployment-preflight\/rust\/Cargo\.toml --locked --offline\n/u);
+  assert.match(workflow, /cargo test --manifest-path core\/deployment-preflight\/rust\/Cargo\.toml --locked --offline --release/u);
+  assert.match(workflow, /cargo clippy --manifest-path core\/deployment-preflight\/rust\/Cargo\.toml --locked --offline --all-targets -- -D warnings/u);
+  assert.match(workflow, /cargo package --manifest-path core\/deployment-preflight\/rust\/Cargo\.toml --locked --offline\n/u);
+  assert.doesNotMatch(workflow, /cargo package[^\n]*--no-verify/u);
+  assert.match(workflow, /if: runner\.os == 'Linux'\n        run: node prd\/validate-roadmap\.mjs && node --test prd\/validate-roadmap\.test\.mjs/u);
+  assert.doesNotMatch(workflow, /pull_request_target|schedule:|docker|kubectl|helm|terraform/iu);
 });
 
 test('safe defaults, readiness classes, and report-local checksum remain explicit', async () => {

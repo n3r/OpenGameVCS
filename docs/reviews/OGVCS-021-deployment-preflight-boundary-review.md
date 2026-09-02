@@ -21,8 +21,9 @@ The candidate owns only a deterministic pure evaluation boundary:
 4. distinguish supplied process liveness from dependency readiness using only
    closed safe reason codes;
 5. reject schema downgrades and bind a supplied irreversible-migration gate to
-   the exact deployment, source schema/state generations, verified manifest
-   subject, separate source/target claims, evaluation time, and retention; and
+   the exact deployment, artifact set, source/target schema, source-state
+   generations, verified manifest subject, separate source/target claims,
+   evaluation time, and retention; and
 6. return domain-separated configuration, observation, and structural-report
    commitments under an explicit caller-supplied observation-age fence plus
    work, memory, and cancellation envelopes.
@@ -62,6 +63,14 @@ bounded defects:
 - default debug derives exposed listener, secret-reference, principal,
   generation, backup, and report commitments.
 
+The independent integration audit also found that otherwise matching backup
+evidence could be replayed across a different artifact set or irreversible
+target schema. The private gate now binds and validates both fields, with
+projection and mismatch regressions. The security-relevant shape change is
+versioned as private rc.2 with V2 digest domains; V1 evidence/reports are not
+accepted. This remains supplied evidence and does not make the gate mutation
+authority.
+
 The repair adds exact/max+1 cardinality and resource regressions, all 28
 dependency-state mappings, temporal boundaries, stable error precedence,
 complete configuration/observation/report projection mutation tests, backup
@@ -92,8 +101,9 @@ to deliberate private callers.
 ## Migration and predecessor review
 
 The private irreversible-migration gate rejects absent, zero, future-captured,
-expired-at-evaluation, wrong-scope/source-generation, manifest-subject,
-source/target-alias, or non-irreversible backup facts. Matching these supplied
+expired-at-evaluation, wrong-artifact/scope/source-or-target-schema/source-
+generation, manifest-subject, source/target-alias, or non-irreversible backup
+facts. Matching these supplied
 fields does not prove that a backup contains the migration source state, that
 the verification report was issued by OGVCS-017, that the manifest is complete
 under OGVCS-018, that storage or credentials are actually separate, that
@@ -131,3 +141,8 @@ repository creation, uninstall/reinstall, preserve/delete confirmation,
 offline and clean-host runs, hosted cross-OS evidence, operator runbooks, timed
 exercise, idempotency, scale/SLO proof, operations, rollout, and rollback remain
 unimplemented.
+
+The path-scoped hosted workflow is a pinned Linux/macOS/Windows source
+portability gate only. Until an exact run is retained it is not evidence, and
+even a green run is not deployment, clean-host, offline-runtime, upgrade,
+rollback, recovery, or operator evidence.

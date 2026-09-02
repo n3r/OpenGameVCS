@@ -1,0 +1,63 @@
+name: R1 deployment preflight source portability
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/deployment-preflight.yml'
+      - 'core/deployment-preflight/rust/**'
+      - 'docs/reviews/OGVCS-021-deployment-preflight-boundary-review.md'
+      - 'prd/todo/OGVCS-021-starter-deployment-admin-bootstrap.md'
+      - 'tools/deployment-preflight-source-policy.test.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+  push:
+    branches: [main, r1-foundation-integration]
+    paths:
+      - '.github/workflows/deployment-preflight.yml'
+      - 'core/deployment-preflight/rust/**'
+      - 'docs/reviews/OGVCS-021-deployment-preflight-boundary-review.md'
+      - 'prd/todo/OGVCS-021-starter-deployment-admin-bootstrap.md'
+      - 'tools/deployment-preflight-source-policy.test.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deployment-preflight-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-portability:
+    name: Private preflight portability (${{ matrix.label }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-latest, label: Linux }
+          - { runner: macos-latest, label: macOS }
+          - { runner: windows-latest, label: Windows }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - uses: dtolnay/rust-toolchain@7d11e79e1714f6b6da93cac39ad8435666f5c337 # 1.82.0
+        with:
+          components: clippy, rustfmt
+      - run: node --test tools/deployment-preflight-source-policy.test.mjs
+      - run: cargo fetch --manifest-path core/deployment-preflight/rust/Cargo.toml --locked
+      - run: cargo fmt --manifest-path core/deployment-preflight/rust/Cargo.toml -- --check
+      - run: cargo test --manifest-path core/deployment-preflight/rust/Cargo.toml --locked --offline
+      - run: cargo test --manifest-path core/deployment-preflight/rust/Cargo.toml --locked --offline --release
+      - run: cargo clippy --manifest-path core/deployment-preflight/rust/Cargo.toml --locked --offline --all-targets -- -D warnings
+      - run: cargo package --manifest-path core/deployment-preflight/rust/Cargo.toml --locked --offline
+      - name: Validate the open roadmap boundary
+        if: runner.os == 'Linux'
+        run: node prd/validate-roadmap.mjs && node --test prd/validate-roadmap.test.mjs

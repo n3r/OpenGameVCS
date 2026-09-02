@@ -99,15 +99,16 @@ Publish immutable prerelease artifacts and one reference topology. Every schema-
 ## Completion evidence
 
 - Implementation changes: Bounded candidate relevance only. The unpublished,
-  unwired Rust 1.82 rc.1 crate under `core/deployment-preflight/rust` evaluates
+  unwired Rust 1.82 rc.2 crate under `core/deployment-preflight/rust` evaluates
   one fixed caller-supplied topology and one fixed generation-bound set of
   metadata, object-storage, identity, verifier, backup, capacity, and schema
   observations. It rejects unsafe supplied listener/default/secret-reference/
   service-principal shapes, separates liveness from readiness with closed safe
   reasons, rejects schema downgrade, applies a supplied maximum-300-second
   observation-age fence, and requires opaque irreversible-migration evidence
-  bound to the deployment, source schema, and current metadata,
-  object-storage, verifier, backup, and schema observation generations,
+  bound to the deployment, exact artifact set, compatibility and configuration
+  generation, source and target schema, and current metadata, object-storage,
+  verifier, backup, and schema observation generations. It also binds the
   verified manifest subject, distinct source/target claims, and retention
   beyond evaluation. It performs no discovery, installation, bootstrap,
   migration, backup,

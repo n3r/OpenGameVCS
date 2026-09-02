@@ -1,10 +1,15 @@
-# OGVCS-021 private deployment-preflight rc.1
+# OGVCS-021 private deployment-preflight rc.2
 
 This unpublished Rust 1.82 crate is a bounded, deliberately unwired evaluator
 for a narrow part of OGVCS-021. It validates caller-supplied static deployment
 facts and caller-supplied health observations, then produces a deterministic
 liveness/readiness report. It performs no environment discovery, installation,
 bootstrap, migration, backup, restore, or service operation.
+
+The rc.2/V2 private contract adds exact artifact-set and target-schema binding
+to irreversible-migration evidence. V1 evidence and report digests are not
+accepted as V2; there is no compatibility adapter because neither revision was
+published or wired.
 
 ## Supplied configuration boundary
 
@@ -53,9 +58,10 @@ action.
 
 Schema intent rejects zero versions, downgrades, class/version inconsistency,
 and backup-gate evidence attached to a non-irreversible intent. An irreversible
-upgrade requires nonzero evidence bound to the deployment, compatibility and
-configuration generation, source schema, and current metadata, object-storage,
-verifier, backup, and schema observation generations. It also binds a backup
+upgrade requires nonzero evidence bound to the deployment, exact artifact set,
+compatibility and configuration generation, source and target schema, and
+current metadata, object-storage, verifier, backup, and schema observation
+generations. It also binds a backup
 manifest, the manifest named as the verification subject, verifier report,
 distinct source/target storage and credential-scope commitments, retention and
 encryption policy commitments, capture time, and retention strictly beyond the
@@ -141,10 +147,14 @@ cargo +1.82.0 fmt --manifest-path core/deployment-preflight/rust/Cargo.toml -- -
 cargo +1.82.0 test --manifest-path core/deployment-preflight/rust/Cargo.toml --locked --offline
 cargo +1.82.0 test --manifest-path core/deployment-preflight/rust/Cargo.toml --locked --offline --release
 cargo +1.82.0 clippy --manifest-path core/deployment-preflight/rust/Cargo.toml --locked --offline --all-targets -- -D warnings
-cargo +1.82.0 package --manifest-path core/deployment-preflight/rust/Cargo.toml --locked --offline --allow-dirty --no-verify
+cargo +1.82.0 package --manifest-path core/deployment-preflight/rust/Cargo.toml --locked --offline --allow-dirty
 node --test tools/deployment-preflight-source-policy.test.mjs
 npm run test:roadmap
 ```
 
-The package command proves only this private crate's declared bounded archive;
-it is not hosted install or deployment evidence.
+The package command proves only that this private crate's bounded archive
+recompiles from packed source;
+it is not hosted install or deployment evidence. The path-scoped hosted
+workflow repeats these source-only gates on Linux, macOS, and Windows; a green
+run establishes source portability for its exact revision only, not a clean-host
+install, dependency probe, upgrade, rollback, or operator exercise.

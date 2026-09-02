@@ -13,7 +13,7 @@ const _: () = assert!(usize::BITS <= u64::BITS);
 
 pub type Commitment = [u8; 32];
 
-pub const PREFLIGHT_VERSION: u16 = 1;
+pub const PREFLIGHT_VERSION: u16 = 2;
 pub const LISTENER_COUNT: usize = 3;
 pub const SECRET_COUNT: usize = 4;
 pub const SERVICE_ACCOUNT_COUNT: usize = 3;
@@ -25,9 +25,9 @@ pub const OBSERVATION_AGE_SECONDS_HARD_MAXIMUM: u64 = 300;
 const RETAINED_BASE_CHARGE: u64 = 512;
 const RETAINED_REASON_CHARGE: u64 = 16;
 const WORK_UNITS_WITHOUT_BACKUP_GATE: u64 = 18;
-const CONFIG_DOMAIN: &[u8] = b"OGVCS-PRIVATE-DEPLOYMENT-CONFIG-V1";
-const OBSERVATION_DOMAIN: &[u8] = b"OGVCS-PRIVATE-DEPLOYMENT-OBSERVATION-V1";
-const REPORT_DOMAIN: &[u8] = b"OGVCS-PRIVATE-DEPLOYMENT-PREFLIGHT-REPORT-V1";
+const CONFIG_DOMAIN: &[u8] = b"OGVCS-PRIVATE-DEPLOYMENT-CONFIG-V2";
+const OBSERVATION_DOMAIN: &[u8] = b"OGVCS-PRIVATE-DEPLOYMENT-OBSERVATION-V2";
+const REPORT_DOMAIN: &[u8] = b"OGVCS-PRIVATE-DEPLOYMENT-PREFLIGHT-REPORT-V2";
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 #[repr(u8)]
@@ -267,9 +267,11 @@ pub struct MigrationIntent {
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub struct BackupGateEvidence {
     pub deployment: Commitment,
+    pub artifact_set: Commitment,
     pub compatibility_set: Commitment,
     pub configuration_generation: Commitment,
     pub source_schema: u64,
+    pub target_schema: u64,
     pub metadata_generation: Commitment,
     pub object_storage_generation: Commitment,
     pub verifier_generation: Commitment,
@@ -824,6 +826,7 @@ fn validate_observation(
     if let Some(backup) = observation.backup_gate {
         let commitments = [
             backup.deployment,
+            backup.artifact_set,
             backup.compatibility_set,
             backup.configuration_generation,
             backup.metadata_generation,
@@ -843,9 +846,11 @@ fn validate_observation(
         ];
         if commitments.iter().any(|value| *value == [0; 32])
             || backup.deployment != config.deployment
+            || backup.artifact_set != config.artifact_set
             || backup.compatibility_set != config.compatibility_set
             || backup.configuration_generation != config.configuration_generation
             || backup.source_schema != observation.migration.current_schema
+            || backup.target_schema != observation.migration.target_schema
             || backup.metadata_generation != observation.dependencies[0].generation_commitment
             || backup.object_storage_generation != observation.dependencies[1].generation_commitment
             || backup.verifier_generation != observation.dependencies[3].generation_commitment
@@ -998,9 +1003,11 @@ fn digest_observation(observation: &PreflightObservation) -> Commitment {
     writer.boolean(observation.backup_gate.is_some());
     if let Some(backup) = observation.backup_gate {
         writer.field(&backup.deployment);
+        writer.field(&backup.artifact_set);
         writer.field(&backup.compatibility_set);
         writer.field(&backup.configuration_generation);
         writer.u64(backup.source_schema);
+        writer.u64(backup.target_schema);
         writer.field(&backup.metadata_generation);
         writer.field(&backup.object_storage_generation);
         writer.field(&backup.verifier_generation);
@@ -1206,9 +1213,11 @@ mod tests {
     fn backup_gate() -> BackupGateEvidence {
         BackupGateEvidence {
             deployment: [1; 32],
+            artifact_set: [2; 32],
             compatibility_set: [3; 32],
             configuration_generation: [4; 32],
             source_schema: 9,
+            target_schema: 10,
             metadata_generation: [30; 32],
             object_storage_generation: [31; 32],
             verifier_generation: [33; 32],
@@ -1317,25 +1326,48 @@ mod tests {
         assert_eq!(
             first.configuration_digest,
             [
-                129, 81, 118, 103, 48, 97, 59, 79, 206, 255, 205, 234, 162, 186, 125, 1, 24, 253,
-                58, 176, 217, 115, 0, 80, 180, 189, 111, 178, 121, 182, 103, 90,
+                98, 93, 130, 32, 87, 217, 44, 124, 220, 237, 83, 64, 83, 230, 93, 129, 0, 126, 204,
+                146, 222, 247, 44, 82, 219, 187, 61, 161, 108, 89, 103, 247,
             ]
         );
         assert_eq!(
             first.observation_digest,
             [
-                184, 27, 71, 146, 137, 82, 232, 200, 49, 85, 101, 97, 103, 172, 57, 82, 118, 81,
-                106, 215, 195, 159, 168, 248, 217, 145, 96, 234, 73, 44, 106, 231,
+                106, 81, 245, 57, 4, 43, 77, 125, 176, 167, 217, 198, 99, 213, 17, 102, 13, 9, 89,
+                54, 221, 119, 209, 194, 71, 16, 111, 93, 215, 127, 119, 127,
             ]
         );
         assert_eq!(
             first.report_digest,
             [
-                21, 206, 202, 114, 31, 33, 15, 95, 74, 166, 18, 40, 190, 235, 240, 211, 70, 188,
-                17, 140, 115, 56, 66, 237, 123, 185, 16, 214, 48, 111, 36, 246,
+                209, 36, 32, 64, 22, 29, 229, 169, 248, 65, 245, 206, 153, 227, 241, 28, 112, 184,
+                253, 183, 109, 81, 180, 212, 42, 90, 238, 135, 83, 27, 7, 55,
             ]
         );
         assert!(first.has_valid_binding());
+    }
+
+    #[test]
+    fn irreversible_gate_has_a_v2_deterministic_known_answer() {
+        let report = build(config(), irreversible_observation()).unwrap();
+        assert!(report.ready);
+        assert!(report.backup_gate_evidence_present);
+        assert_eq!(report.work_units, WORK_UNITS_HARD_MAXIMUM);
+        assert_eq!(
+            report.observation_digest,
+            [
+                28, 156, 174, 249, 154, 189, 35, 38, 84, 221, 54, 116, 234, 166, 230, 39, 208, 116,
+                188, 211, 12, 134, 104, 147, 113, 124, 185, 55, 168, 122, 177, 227,
+            ]
+        );
+        assert_eq!(
+            report.report_digest,
+            [
+                119, 162, 220, 241, 160, 110, 215, 196, 1, 229, 134, 62, 114, 11, 19, 166, 225, 6,
+                194, 186, 75, 71, 163, 154, 182, 98, 60, 156, 206, 26, 163, 162,
+            ]
+        );
+        assert!(report.has_valid_binding());
     }
 
     #[test]
@@ -1651,9 +1683,11 @@ mod tests {
         }
 
         reject_gate_change!(deployment, [90; 32]);
+        reject_gate_change!(artifact_set, [90; 32]);
         reject_gate_change!(compatibility_set, [90; 32]);
         reject_gate_change!(configuration_generation, [90; 32]);
         reject_gate_change!(source_schema, 8);
+        reject_gate_change!(target_schema, 11);
         reject_gate_change!(metadata_generation, [90; 32]);
         reject_gate_change!(object_storage_generation, [90; 32]);
         reject_gate_change!(verifier_generation, [90; 32]);
@@ -2068,9 +2102,11 @@ mod tests {
             }};
         }
         assert_backup_projection!(deployment, [70; 32]);
+        assert_backup_projection!(artifact_set, [70; 32]);
         assert_backup_projection!(compatibility_set, [70; 32]);
         assert_backup_projection!(configuration_generation, [70; 32]);
         assert_backup_projection!(source_schema, 8);
+        assert_backup_projection!(target_schema, 11);
         assert_backup_projection!(metadata_generation, [70; 32]);
         assert_backup_projection!(object_storage_generation, [70; 32]);
         assert_backup_projection!(verifier_generation, [70; 32]);
