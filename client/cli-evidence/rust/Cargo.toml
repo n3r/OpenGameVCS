@@ -1,6 +1,6 @@
 [package]
 name = "ogvcs-cli-evidence-validator"
-version = "0.1.0-rc.1"
+version = "0.1.0-rc.2"
 edition = "2021"
 rust-version = "1.82"
 license = "MIT"
@@ -23,5 +23,6 @@ include = [
 path = "src/lib.rs"
 
 [dependencies]
+ogvcs-deployment-preflight = { path = "../../../core/deployment-preflight/rust", version = "0.1.0-rc.3" }
 ogvcs-object-model = { path = "../../../core/object-model/rust", version = "0.1.0" }
 sha2 = "=0.10.9"

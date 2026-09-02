@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/cli-evidence-validator.yml'
       - 'client/cli-evidence/rust/**'
+      - 'core/deployment-preflight/rust/**'
       - 'core/object-model/rust/**'
       - 'docs/evidence/OGVCS-043/**'
       - 'docs/reviews/OGVCS-043-cli-evidence-validator-boundary-review.md'
@@ -17,6 +18,7 @@ on:
     paths:
       - '.github/workflows/cli-evidence-validator.yml'
       - 'client/cli-evidence/rust/**'
+      - 'core/deployment-preflight/rust/**'
       - 'core/object-model/rust/**'
       - 'docs/evidence/OGVCS-043/**'
       - 'docs/reviews/OGVCS-043-cli-evidence-validator-boundary-review.md'
@@ -47,12 +49,16 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
       - uses: dtolnay/rust-toolchain@7d11e79e1714f6b6da93cac39ad8435666f5c337 # 1.82.0
         with:
           components: clippy, rustfmt
+      - name: Fetch the retained evidence revision
+        run: git fetch --no-tags --depth=1 origin c7049fd5063adaf40f6ad2f694104713966ed6c6
       - run: node --test tools/cli-evidence-validator-policy.test.mjs
       - run: cargo fmt --manifest-path client/cli-evidence/rust/Cargo.toml -- --check
       - run: cargo test --manifest-path client/cli-evidence/rust/Cargo.toml --locked

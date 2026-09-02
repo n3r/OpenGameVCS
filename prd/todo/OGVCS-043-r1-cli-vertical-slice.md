@@ -102,14 +102,25 @@ Run against isolated repositories first, then design-partner test deployments. T
   compatibility/evidence transcript validator is retained under
   `client/cli-evidence/rust`; the bounded implementation inventory is recorded
   in [`docs/evidence/OGVCS-043`](../../docs/evidence/OGVCS-043/README.md). It is
-  unwired and performs no CLI execution or product operation.
-- Test and benchmark results: The bounded source evidence records 67/67 debug,
-  67/67 release, and 67/67 freshly extracted package integration tests plus
-  format, Clippy, package, policy, roadmap, and focused OGVCS-002 gates in
-  [`docs/evidence/OGVCS-043`](../../docs/evidence/OGVCS-043/README.md). Exact
-  integrated commit `c7049fd5063adaf40f6ad2f694104713966ed6c6` passed those
-  private source gates on hosted Linux, Windows, and macOS; no benchmark,
-  clean-host installed-artifact, or end-to-end journey result is claimed.
+  unwired and performs no CLI execution or product operation. An additive
+  route-less source seam calls the OGVCS-021 supplied-fact deployment-preflight
+  builder directly and retains only a fixed-width ready projection; it accepts
+  no prebuilt report and creates no compatibility record, scenario step,
+  public route, credential carrier, authorization fact, request-root proof, or
+  mutation capability. Its 17 private fields have read-only getters, and a
+  compile-fail doctest freezes the rule that only the owning composition module
+  can construct it after executing and rechecking OGVCS-021.
+- Test and benchmark results: The retained original source evidence records
+  67/67 debug, release, and extracted-package tests, and exact integrated
+  commit `c7049fd5063adaf40f6ad2f694104713966ed6c6` passed those private
+  source gates on hosted Linux, Windows, and macOS. The additive route-less
+  candidate passes 75/75 debug, 75/75 release, and 75/75 freshly extracted
+  package tests plus its 1/1 source and 1/1 extracted-package compile-fail
+  doctest, format, warnings-denied Clippy, package, 6/6 policy, roadmap, and
+  roadmap-regression gates in
+  [`docs/evidence/OGVCS-043`](../../docs/evidence/OGVCS-043/README.md). No
+  hosted run covers the additive bytes, and no benchmark, clean-host installed-
+  artifact, or end-to-end journey result is claimed.
 - Security/reliability review: The
   [private validator boundary review](../../docs/reviews/OGVCS-043-cli-evidence-validator-boundary-review.md)
   records caller-assertion, redaction, resource, cancellation, unkeyed-digest,
@@ -119,5 +130,6 @@ Run against isolated repositories first, then design-partner test deployments. T
   source-evidence note document the fixed inventory/scenario and explicit
   nonclaims; no operator walkthrough or clean-host runbook exists.
 - Rollout result: Not rolled out. The validator remains private and unwired;
-  no artifact was installed or published, OGVCS-043 remains Todo, and
+  the route-less projection is also private supplied-fact source only. No
+  artifact was installed or published, OGVCS-043 remains Todo, and
   OGVCS-043-AC-01 through OGVCS-043-AC-05 all remain open.

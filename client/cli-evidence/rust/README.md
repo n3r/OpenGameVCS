@@ -92,6 +92,50 @@ one identical reference across completed phases. It does not fetch, decode,
 authorize, prove availability of, or otherwise validate the referenced
 Snapshot object.
 
+## Route-less starter-deployment source projection
+
+The private rc.2 crate also exposes
+`compose_starter_deployment_preflight`. It calls the OGVCS-021
+`build_deployment_preflight` function directly over the caller-supplied exact
+deployment configuration, dependency observations, evaluation-time fence, and
+the same atomic cancellation flag. It never accepts a prebuilt or resealed
+preflight report. Only a structurally self-bound, live, ready result with no
+safe reason codes produces `StarterDeploymentPreflightProjection`; every
+error, not-ready result, or cancellation returns no projection.
+
+The fixed-width projection binds the opaque deployment, artifact-set,
+compatibility-set, and configuration-generation commitments to the exact
+OGVCS-021 configuration, observation, and result digests. A separate request
+commitment uses
+`OpenGameVCS R1 CLI starter deployment preflight request\0v1\0`; the final
+projection uses
+`OpenGameVCS R1 CLI starter deployment composition\0v1\0`. Both use fixed tags
+and big-endian integers. Default debug output redacts every commitment.
+The projection's private fields are exposed only through read-only getters,
+so safe downstream Rust cannot construct or alter a projection around the
+owning composition call. A compile-fail doctest freezes that construction
+boundary. This type seal protects source-composition integrity; it is not a
+signature, authority, or proof that the supplied facts are true.
+
+The composition layer reserves 12 logical work units and 512 modeled retained
+bytes in addition to OGVCS-021. A successful ordinary ready preflight therefore
+uses 30 work units and 1,024 modeled retained bytes; an irreversible-migration
+preflight with the predecessor's supplied backup gate uses 31 work units. The
+hard 1,152-byte envelope also admits the predecessor's bounded eight-reason
+not-ready result before this layer discards it. Limits above 31 units or 1,152
+bytes fail before predecessor traversal. The same cancellation flag is polled
+by OGVCS-021 and at every composition/release fence.
+
+This route-less source projection does not create a compatibility record or
+scenario step and has no conversion into either type. In particular, it
+cannot populate artifact-verification, protocol, format, capability, public-
+route, or mutation-capability facts. The OGVCS-021 inputs contain opaque
+secret-reference commitments but no credential bytes. The projection neither
+discovers a deployment nor proves that any supplied fact, artifact, checksum,
+provenance, compatibility set, observation time, or dependency state is true.
+It is a compile-time and deterministic source-composition seam for a future
+public evidence owner, not evidence that an OGVCS-043 phase ran.
+
 ## Digest and bounds
 
 Successful validation returns a deterministic SHA-256 digest under
@@ -124,10 +168,12 @@ other I/O, authentication, authorization, repository/workspace creation,
 sync, status, lock, submit, idempotency lookup, fetch, content verification,
 clean-host provisioning, private adapter access, persistence, diagnostics
 collection, signing, packaging, OS coverage, fault injection, or hosted
-scenario execution. Caller commitments are opaque assertions; possession of a
-valid transcript does not prove their truth. In a safe incomplete result,
-context and compatibility commitments remain predeclared caller inputs and
-must not be read as observations of phases marked not run.
+scenario execution. The starter-deployment projection also performs no route
+call, configuration discovery, artifact inspection, installation, reload, or
+restart. Caller commitments are opaque assertions; possession of a valid
+transcript or projection does not prove their truth. In a safe incomplete
+result, context and compatibility commitments remain predeclared caller inputs
+and must not be read as observations of phases marked not run.
 
 The returned `AllStepsSucceededOrRecovered` label means only that all sixteen
 supplied records passed this private structural validator. It is not an

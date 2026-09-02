@@ -3,9 +3,12 @@
 - **Review date:** 2026-09-02
 - **Source boundary:** uncommitted candidate based exactly on
   `101d5673252290de362844f381b5176ad33c470d`
+- **Route-less projection base:** exact integration
+  `8b6c55259bfad367e4d9c67598f561d957f19d35`
 - **Candidate verdict:** **SHIP** for integration only as this bounded private,
-  unpublished, unwired validator seam; **HOLD** for product evidence, release
-  evidence, or any OGVCS-043 completion claim
+  unpublished, unwired validator and route-less starter-deployment source
+  projection; **HOLD** for product evidence, release evidence, or any OGVCS-043
+  completion claim
 - **PRD verdict:** OGVCS-043 remains Todo; AC-01 through AC-05 remain open
 
 ## Owned boundary
@@ -21,6 +24,41 @@ dependencies: OGVCS-021, OGVCS-041, OGVCS-011, OGVCS-012, OGVCS-013,
 OGVCS-016, and OGVCS-010. The fixed scenario preserves the PRD journey order,
 including artifact/compatibility preflight before a declared mutation and the
 second-workspace fetch/verification boundary.
+
+### Route-less starter-deployment preflight projection
+
+The additive rc.2 source seam calls OGVCS-021's pure
+`build_deployment_preflight` directly over its exact supplied configuration,
+observation, evaluation fence, resource limits, and shared atomic cancellation
+flag. It accepts no `DeploymentPreflightReport` input. Only the report returned
+by that call may be projected, and only when its structural binding rechecks,
+the supplied process is live, every supplied dependency is healthy, and the
+ready reason set is empty.
+
+The output is a fixed-width source projection. It binds the OGVCS-021
+deployment, artifact-set, compatibility-set, and configuration-generation
+commitments to the predecessor's configuration, observation, and report
+digests under separate request and projection domains. It cannot convert into
+the validator's `CompatibilityEvidence` or `StepEvidence`. Consequently it
+does not assert checksum/provenance verification, shared protocol/format
+compatibility, capability negotiation, a public route, a completed scenario
+phase, or permission to mutate.
+
+The projection's private fields are sealed. Safe downstream code receives read-only
+copies through one getter per field and has no constructor, setter, mutable
+view, or functional-update path. A compile-fail doctest attempts to replace a
+trusted projection digest through Rust struct-update syntax and proves that
+the compiler rejects the forgery. Only this owning module constructs the
+projection after executing and rechecking OGVCS-021. This source type seal is
+not cryptographic authentication and does not establish the truth of any
+supplied fact.
+
+This is stronger than accepting an independently supplied report because the
+composition call executes the exact bounded predecessor builder. It remains a
+supplied-fact calculation: the predecessor does not inspect a host, artifact,
+secret provider, dependency, or clock. No preflight fact is authenticated or
+authorized, and the resulting unkeyed commitments are not receipts or bearer
+capabilities.
 
 ## Enforced properties
 
@@ -104,6 +142,12 @@ the future public adapters and hermetic/hosted evidence owner. On an incomplete
 result, predeclared context and compatibility commitments are not evidence
 that skipped phases ran.
 
+The starter-deployment projection likewise performs no install, configuration
+discovery, health probe, public-route call, reload, restart, migration,
+credential access, request-root authorization, or mutation. OGVCS-021's opaque
+secret-reference commitments are not credential bytes. A returned source
+projection does not prove that a starter deployment or its artifacts exist.
+
 There is no language-neutral schema, public CLI output contract, evidence
 signature, diagnostics bundle, product package provenance verifier, fault
 schedule, clean-host installed-CLI runner, release artifact, private adapter,
@@ -138,3 +182,25 @@ through AC-05 and cannot advance the R1 release gate.
 All gates ran from the uncommitted branch `r1-cli-evidence-v1` at exact HEAD
 `101d5673252290de362844f381b5176ad33c470d` with build targets confined to
 `/private/tmp`.
+
+### Additive rc.2 local source gates
+
+The route-less projection candidate based on exact integration parent
+`8b6c55259bfad367e4d9c67598f561d957f19d35` passed 75/75 locked/offline
+Rust 1.82 tests in debug, 75/75 in release, and 75/75 after fresh extraction
+from its package. The private-field boundary's compile-fail doctest passed 1/1
+against both the source crate and freshly extracted package. The original
+67-test transcript suite and stable report-v1 known answer remained unchanged.
+Format, warnings-denied all-target Clippy, the 13-entry validator package, the
+separately packaged OGVCS-021 predecessor, 6/6 Node v24.9.0 boundary-policy
+tests, the 46-PRD/898-ID roadmap, and 8/8 roadmap regressions also passed. Build
+and package targets were confined to `/private/tmp`.
+
+No hosted run covers the additive rc.2 bytes yet. The historical three-OS run
+remains bound to its original Git blobs; the current workflow now performs one
+credential-free, tag-free, depth-one fetch of exact retained revision
+`c7049fd5063adaf40f6ad2f694104713966ed6c6` so policy can continue verifying
+those exact historical byte lengths and SHA-256 values after source evolution.
+It does not fetch full repository history. A new exact-revision
+Linux/macOS/Windows run is required before making even a current-source
+portability claim for this projection.

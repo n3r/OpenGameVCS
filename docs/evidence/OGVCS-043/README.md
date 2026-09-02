@@ -45,3 +45,38 @@ acceptance-criterion closure. OGVCS-043 remains in `prd/todo`; its completion
 evidence records only this bounded source tranche and explicit non-rollout.
 The full acceptance-criteria section remains byte-for-byte unchanged, and
 AC-01 through AC-05 remain open.
+
+## Additive route-less starter-deployment composition
+
+The later private rc.2 candidate, based on exact integration parent
+`8b6c55259bfad367e4d9c67598f561d957f19d35`, adds a fixed-width
+`StarterDeploymentPreflightProjection`. It invokes OGVCS-021's bounded
+supplied-fact builder directly and returns a projection only for a structurally
+bound, live, ready result. It accepts no prebuilt report and creates no
+compatibility record, scenario step, public route, credential carrier,
+authorization fact, request-root proof, or mutation capability. The original
+report-v1 transcript and known-answer digest remain unchanged.
+
+The projection's 17 private fields have read-only getters. It has no
+public constructor, setter, or mutable view; a compile-fail doctest proves safe
+downstream code cannot replace a binding with Rust struct-update syntax. Only
+the owning composition module can construct it after the predecessor checks.
+This seal is a source-integrity boundary, not a signature, authority, or proof
+of the caller-supplied facts.
+
+The historical hosted run above predates and therefore does not cover this
+additive source. A new exact-revision three-OS source-portability run is
+required after integration. Until then this section records local source and
+package verification only; it is not hosted, deployed, clean-host, product,
+release, or acceptance evidence. OGVCS-043 remains **Todo**, and AC-01 through
+AC-05 remain open.
+
+The local bounded gates passed 75/75 debug tests, 75/75 release tests, and
+75/75 tests from a freshly extracted 13-entry validator package, plus the
+private-field compile-fail doctest 1/1 against both source and extracted
+package. Rust format, warnings-denied all-target Clippy, separate packaging of
+the OGVCS-021 predecessor, 6/6 Node v24.9.0 boundary-policy tests, the
+46-PRD/898-ID roadmap, and 8/8 roadmap regressions also passed. These results
+were produced in an isolated clone with build/package targets under
+`/private/tmp`; they are source verification, not execution of an OGVCS-043
+journey.
