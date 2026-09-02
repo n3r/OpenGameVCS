@@ -11,6 +11,39 @@ approximation. The binding pins the exact OGVCS-004 v1 manifest and Unicode
 post-fold normalization, accepts all four ratified profiles, and compares
 component-bound `ogvcs-path-key-v1` repository keys.
 
+The same participant also exposes a private bounded authorized-page primitive.
+It accepts at most 100,000 server-derived candidates in stable query order,
+where each candidate carries its exact resource, reference, and snapshot
+context. One sealed `TransactionAuthorizedView` currentness reconstruction
+feeds the complete in-memory scan: policy denials become internal visibility
+bits, while malformed contexts, evaluator faults, duplicate contexts, storage
+faults, and more than 1,000 authorized results fail and poison the transaction.
+The scan never canonical-sorts candidates and always visits the complete
+bounded set before returning a candidate-dependent result.
+
+`TransactionAuthorizedPage` is an opaque, non-serializable in-process carrier.
+Its HMAC-SHA-256 fingerprint binds the PostgreSQL transaction, every neutral
+authorized-view field (including credential evidence, authenticated scope,
+authority epoch, and policy generation), the typed query-context digest, the
+ordered candidate-context digest, and the authorized ordinal/decision set.
+Raw commitments and ordinals have no public getter. A caller receives candidate
+references only from `verify_authorized_page`, which repeats view/currentness
+and exact query/candidate/HMAC checks against the live transaction. The
+returned witness holds the mutable transaction borrow, and item references
+reborrow the witness, so commit, rollback, and other mutable use cannot occur
+while either remains live. A trusted caller may explicitly derive owned
+in-process decisions, drop the witness, and continue that same transaction;
+those owned values are not portable authorization proof and cannot replace
+reverification in a later transaction. The primitive is not wired to repository
+metadata or any route.
+
+The semantic query digest is currently supplied by the trusted metadata owner
+and is not independently reconstructed here. This crate does not yet derive it
+from an OGVCS-041 negotiation session, and the negotiation `sessionId` is still
+not linked to credential presentation. There is no cursor, metadata dispatcher,
+public route, PostgreSQL live page test, latency/timing non-disclosure evidence,
+or cross-platform hosted evidence in this cut.
+
 Migration v3 adds a separate aggregate participant with an exact 100,000-item
 ceiling. `begin_plan` derives current credential, subject, scope, authority,
 policy, repository-settings, and signer facts on the server. Callers then use
@@ -97,7 +130,13 @@ cargo clippy --manifest-path core/paths-filesystem/rust/Cargo.toml --locked --al
 cargo fmt --manifest-path server/modules/identity-policy-audit/Cargo.toml -- --check
 cargo test --manifest-path server/modules/identity-policy-audit/Cargo.toml --locked
 cargo clippy --manifest-path server/modules/identity-policy-audit/Cargo.toml --locked --all-targets -- -D warnings
+sh server/modules/identity-policy-audit/scripts/test-packed.sh
 ```
+
+The packed check packages both Rust crates, then reconstructs the participant's
+declared workspace-relative migration and neutral-vector inputs in an isolated
+temporary hierarchy before running all packed targets offline. This is a
+bounded package-consumer proof, not hosted scale evidence.
 
 The root aliases are `npm run test:identity:rust` and, with
 `OGVCS_IDENTITY_POLICY_DATABASE_URL` set to a disposable database,

@@ -10,18 +10,29 @@ use crate::canonical::{
     IDENTITY_SUBJECT_DOMAIN,
 };
 use crate::migration_runner::verify_schema_in_transaction;
-use crate::model::{BoundRequest, TransactionBinding, ViewParts};
+use crate::model::{BoundRequest, NeutralAuthorizedView, TransactionBinding, ViewParts};
 use crate::policy::{evaluate_allow, validate_policy, ActorFacts, RequestFacts};
 use crate::{
     AuthorizationResource, AuthorizedResourceBatch, CredentialScope, DecisionChainVerification,
     DecisionCommitmentRequest, ParticipantError, ParticipantErrorCode, PolicyDocument, Result,
-    TransactionAuthorizationRequest, TransactionAuthorizedView, TransactionBatchRecheck,
-    TransactionCredentialEvidence, TransactionDecisionCommitment, MAXIMUM_BATCH_RESOURCES,
-    MAXIMUM_DECISION_CHAIN_SCAN, MAXIMUM_DECISION_RESULT_BYTES,
+    TransactionAuthorizationPageCandidate, TransactionAuthorizationRequest,
+    TransactionAuthorizedPage, TransactionAuthorizedPageRequest, TransactionAuthorizedView,
+    TransactionBatchRecheck, TransactionCredentialEvidence, TransactionDecisionCommitment,
+    VerifiedTransactionAuthorizedPage, MAXIMUM_AUTHORIZATION_PAGE_CANDIDATES,
+    MAXIMUM_AUTHORIZED_PAGE_RESULTS, MAXIMUM_BATCH_RESOURCES, MAXIMUM_DECISION_CHAIN_SCAN,
+    MAXIMUM_DECISION_RESULT_BYTES, TRANSACTION_AUTHORIZED_PAGE_SCHEMA,
     TRANSACTION_CREDENTIAL_EVIDENCE_SCHEMA, TRANSACTION_DECISION_COMMITMENT_SCHEMA,
 };
 
 const VIEW_SEAL_DOMAIN: &[u8] = b"OGVCS-IDENTITY-TRANSACTION-VIEW-SEAL-V1\0";
+const PAGE_CANDIDATE_CONTEXT_DOMAIN: &[u8] = b"OGVCS-IDENTITY-AUTHORIZED-PAGE-CANDIDATE-V1\0";
+const PAGE_CANDIDATE_CHAIN_DOMAIN: &[u8] = b"OGVCS-IDENTITY-AUTHORIZED-PAGE-CANDIDATE-CHAIN-V1\0";
+const PAGE_CANDIDATE_SET_DOMAIN: &[u8] = b"OGVCS-IDENTITY-AUTHORIZED-PAGE-CANDIDATE-SET-V1\0";
+const PAGE_AUTHORIZED_DECISION_SET_DOMAIN: &[u8] =
+    b"OGVCS-IDENTITY-AUTHORIZED-PAGE-DECISION-SET-V1\0";
+const PAGE_AUTHORIZED_ORDINAL_SET_DOMAIN: &[u8] =
+    b"OGVCS-IDENTITY-AUTHORIZED-PAGE-ORDINAL-SET-V1\0";
+const PAGE_FINGERPRINT_DOMAIN: &[u8] = b"OGVCS-IDENTITY-AUTHORIZED-PAGE-FINGERPRINT-V1\0";
 const COMMITMENT_ID_DOMAIN: &[u8] = b"OGVCS-IDENTITY-DECISION-COMMITMENT-ID-V1\0";
 
 pub trait TransactionAuthorizationParticipant {
@@ -37,6 +48,21 @@ pub trait TransactionAuthorizationParticipant {
         view: &TransactionAuthorizedView,
         request: &TransactionBatchRecheck<'_>,
     ) -> Result<AuthorizedResourceBatch>;
+
+    fn authorize_page(
+        &self,
+        transaction: &mut Transaction<'_>,
+        view: &TransactionAuthorizedView,
+        request: &TransactionAuthorizedPageRequest<'_>,
+    ) -> Result<TransactionAuthorizedPage>;
+
+    fn verify_authorized_page<'transaction, 'page>(
+        &self,
+        transaction: &'transaction mut Transaction<'_>,
+        view: &TransactionAuthorizedView,
+        request: &TransactionAuthorizedPageRequest<'page>,
+        page: &'page TransactionAuthorizedPage,
+    ) -> Result<VerifiedTransactionAuthorizedPage<'transaction, 'page>>;
 
     fn append_decision_commitment(
         &self,
@@ -199,6 +225,145 @@ impl PostgresTransactionAuthorizationParticipant {
             resource_set_digest,
             decision_digests,
         ))
+    }
+
+    fn authorize_page_inner(
+        &self,
+        transaction: &mut Transaction<'_>,
+        view: &TransactionAuthorizedView,
+        request: &TransactionAuthorizedPageRequest<'_>,
+    ) -> Result<TransactionAuthorizedPage> {
+        verify_schema_in_transaction(transaction)?;
+        self.verify_view_binding(transaction, view)?;
+
+        // One currentness reconstruction feeds the complete in-memory scan.
+        // No candidate can trigger a credential, policy, or database lookup.
+        let current = self.revalidate_view(transaction, view)?;
+        let query_context_digest = hex(&digest_json(request.query)?);
+        let evaluation = evaluate_authorized_page_candidates(request.candidates, |candidate| {
+            let decision = evaluate_allow(
+                &current.policy.document,
+                &current.credential.actor,
+                &current.credential.scope,
+                RequestFacts {
+                    request_id: &view.request.request_id,
+                    tenant: view.tenant(),
+                    repository: view.repository(),
+                    permission: view.permission(),
+                    reason: view.request.reason.as_deref(),
+                    resource: candidate.resource(),
+                    reference: candidate.reference(),
+                    snapshot: candidate.snapshot(),
+                },
+                false,
+            )?;
+            if view
+                .request
+                .reference
+                .as_deref()
+                .is_some_and(|reference| candidate.reference() != Some(reference))
+                || view
+                    .request
+                    .snapshot
+                    .as_deref()
+                    .is_some_and(|snapshot| candidate.snapshot() != Some(snapshot))
+            {
+                return Err(ParticipantError::new(
+                    ParticipantErrorCode::AuthenticationDenied,
+                ));
+            }
+            Ok(decision.decision_digest)
+        })?;
+        let authorized_set_digest = authorized_page_set_digest(&evaluation.authorized)?;
+        let authorized_ordinals = evaluation
+            .authorized
+            .iter()
+            .map(|item| item.ordinal)
+            .collect::<Vec<_>>();
+        let authorized_ordinals_digest = authorized_page_ordinals_digest(&authorized_ordinals)?;
+        let fingerprint = self.authorized_page_fingerprint(
+            view,
+            &query_context_digest,
+            &evaluation.candidate_set_digest,
+            &authorized_set_digest,
+            &authorized_ordinals_digest,
+        )?;
+        Ok(TransactionAuthorizedPage::new(
+            view.transaction_id().to_owned(),
+            query_context_digest,
+            evaluation.candidate_set_digest,
+            authorized_set_digest,
+            authorized_ordinals_digest,
+            fingerprint,
+            authorized_ordinals,
+        ))
+    }
+
+    fn verify_authorized_page_inner(
+        &self,
+        transaction: &mut Transaction<'_>,
+        view: &TransactionAuthorizedView,
+        request: &TransactionAuthorizedPageRequest<'_>,
+        page: &TransactionAuthorizedPage,
+    ) -> Result<()> {
+        verify_schema_in_transaction(transaction)?;
+        self.verify_view_binding(transaction, view)?;
+        self.revalidate_view(transaction, view)?;
+        self.verify_authorized_page_proof(view, request, page)
+    }
+
+    fn verify_authorized_page_proof(
+        &self,
+        view: &TransactionAuthorizedView,
+        request: &TransactionAuthorizedPageRequest<'_>,
+        page: &TransactionAuthorizedPage,
+    ) -> Result<()> {
+        if page.transaction_id() != view.transaction_id() {
+            return Err(ParticipantError::new(
+                ParticipantErrorCode::TransactionMismatch,
+            ));
+        }
+
+        let query_context_digest = hex(&digest_json(request.query)?);
+        let candidate_set_digest = evaluate_authorized_page_candidates(request.candidates, |_| {
+            Err(ParticipantError::new(
+                ParticipantErrorCode::AuthenticationDenied,
+            ))
+        })?
+        .candidate_set_digest;
+        let authorized_ordinals_digest =
+            authorized_page_ordinals_digest(page.authorized_ordinals())?;
+        if page
+            .authorized_ordinals()
+            .windows(2)
+            .any(|pair| pair[0] >= pair[1])
+            || page.authorized_ordinals().iter().any(|ordinal| {
+                usize::try_from(*ordinal).map_or(true, |value| value >= request.candidates.len())
+            })
+            || !same_digest(page.query_context_digest(), &query_context_digest)?
+            || !same_digest(page.candidate_set_digest(), &candidate_set_digest)?
+            || !same_digest(
+                page.authorized_ordinals_digest(),
+                &authorized_ordinals_digest,
+            )?
+        {
+            return Err(ParticipantError::new(
+                ParticipantErrorCode::AuthenticationDenied,
+            ));
+        }
+        let expected = self.authorized_page_fingerprint(
+            view,
+            &query_context_digest,
+            &candidate_set_digest,
+            page.authorized_set_digest(),
+            &authorized_ordinals_digest,
+        )?;
+        if !same_digest(page.authorized_set_fingerprint(), &expected)? {
+            return Err(ParticipantError::new(
+                ParticipantErrorCode::AuthenticationDenied,
+            ));
+        }
+        Ok(())
     }
 
     fn append_decision_commitment_inner(
@@ -417,6 +582,31 @@ impl PostgresTransactionAuthorizationParticipant {
         ]))
     }
 
+    fn authorized_page_fingerprint(
+        &self,
+        view: &TransactionAuthorizedView,
+        query_context_digest: &str,
+        candidate_set_digest: &str,
+        authorized_set_digest: &str,
+        authorized_ordinals_digest: &str,
+    ) -> Result<String> {
+        let core = AuthorizedPageFingerprintCore {
+            schema_version: TRANSACTION_AUTHORIZED_PAGE_SCHEMA,
+            view: view.neutral_clone(),
+            backend_pid: view.binding.backend_pid,
+            transaction_xid: view.binding.transaction_xid,
+            query_context_digest,
+            candidate_set_digest,
+            authorized_set_digest,
+            authorized_ordinals_digest,
+        };
+        let neutral = canonical_bytes(&core)?;
+        let mut message = Vec::with_capacity(PAGE_FINGERPRINT_DOMAIN.len() + neutral.len());
+        message.extend_from_slice(PAGE_FINGERPRINT_DOMAIN);
+        message.extend_from_slice(&neutral);
+        Ok(hex(&hmac_sha256(&self.instance_key, &message)))
+    }
+
     /// The transaction identity is minted by this authority and sealed to the
     /// database transaction.  Callers supply neither an ID nor the database
     /// binding, so they cannot transplant an authorized view between writes.
@@ -518,6 +708,31 @@ impl TransactionAuthorizationParticipant for PostgresTransactionAuthorizationPar
     ) -> Result<AuthorizedResourceBatch> {
         let result = self.recheck_batch_inner(transaction, view, request);
         poison_on_error(transaction, result)
+    }
+
+    fn authorize_page(
+        &self,
+        transaction: &mut Transaction<'_>,
+        view: &TransactionAuthorizedView,
+        request: &TransactionAuthorizedPageRequest<'_>,
+    ) -> Result<TransactionAuthorizedPage> {
+        let result = self.authorize_page_inner(transaction, view, request);
+        poison_on_error(transaction, result)
+    }
+
+    fn verify_authorized_page<'transaction, 'page>(
+        &self,
+        transaction: &'transaction mut Transaction<'_>,
+        view: &TransactionAuthorizedView,
+        request: &TransactionAuthorizedPageRequest<'page>,
+        page: &'page TransactionAuthorizedPage,
+    ) -> Result<VerifiedTransactionAuthorizedPage<'transaction, 'page>> {
+        let result = self.verify_authorized_page_inner(transaction, view, request, page);
+        poison_on_error(transaction, result)?;
+        Ok(VerifiedTransactionAuthorizedPage::new(
+            page,
+            request.candidates,
+        ))
     }
 
     fn append_decision_commitment(
@@ -871,6 +1086,141 @@ fn evaluate_complete_set<T, E>(
     }
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AuthorizedPageDecision {
+    ordinal: u32,
+    decision_digest: String,
+}
+
+#[derive(Debug)]
+struct AuthorizedPageEvaluation {
+    candidate_set_digest: String,
+    authorized: Vec<AuthorizedPageDecision>,
+}
+
+fn evaluate_authorized_page_candidates(
+    candidates: &[TransactionAuthorizationPageCandidate],
+    mut evaluate: impl FnMut(&TransactionAuthorizationPageCandidate) -> Result<String>,
+) -> Result<AuthorizedPageEvaluation> {
+    if candidates.len() > MAXIMUM_AUTHORIZATION_PAGE_CANDIDATES {
+        return Err(ParticipantError::new(ParticipantErrorCode::LimitExceeded));
+    }
+
+    let mut candidate_chain = sha256(&[PAGE_CANDIDATE_SET_DOMAIN]);
+    let mut candidate_digests = HashSet::with_capacity(candidates.len());
+    let mut authorized = Vec::with_capacity(candidates.len().min(MAXIMUM_AUTHORIZED_PAGE_RESULTS));
+    let mut authorized_overflow = false;
+    let mut first_fault = None;
+
+    for (index, candidate) in candidates.iter().enumerate() {
+        let ordinal = u32::try_from(index)
+            .map_err(|_| ParticipantError::new(ParticipantErrorCode::LimitExceeded))?;
+        let context_digest = match canonical_bytes(candidate) {
+            Ok(bytes) => {
+                let digest = sha256(&[PAGE_CANDIDATE_CONTEXT_DOMAIN, &bytes]);
+                if !candidate_digests.insert(digest) && first_fault.is_none() {
+                    first_fault = Some(ParticipantError::new(ParticipantErrorCode::InputInvalid));
+                }
+                digest
+            }
+            Err(error) => {
+                if first_fault.is_none() {
+                    first_fault = Some(error);
+                }
+                [0_u8; 32]
+            }
+        };
+        candidate_chain = sha256(&[
+            PAGE_CANDIDATE_CHAIN_DOMAIN,
+            &candidate_chain,
+            &u64::from(ordinal).to_be_bytes(),
+            &context_digest,
+        ]);
+
+        match evaluate(candidate) {
+            Ok(decision_digest) => {
+                if authorized.len() < MAXIMUM_AUTHORIZED_PAGE_RESULTS {
+                    authorized.push(AuthorizedPageDecision {
+                        ordinal,
+                        decision_digest,
+                    });
+                } else {
+                    authorized_overflow = true;
+                }
+            }
+            Err(error) if error.code() == ParticipantErrorCode::AuthenticationDenied => {}
+            Err(error) => {
+                if first_fault.is_none() {
+                    first_fault = Some(error);
+                }
+            }
+        }
+    }
+
+    if let Some(error) = first_fault {
+        return Err(error);
+    }
+    if authorized_overflow {
+        return Err(ParticipantError::new(ParticipantErrorCode::LimitExceeded));
+    }
+    let count = u64::try_from(candidates.len())
+        .map_err(|_| ParticipantError::new(ParticipantErrorCode::LimitExceeded))?;
+    let candidate_set_digest = hex(&sha256(&[
+        PAGE_CANDIDATE_SET_DOMAIN,
+        &count.to_be_bytes(),
+        &candidate_chain,
+    ]));
+    Ok(AuthorizedPageEvaluation {
+        candidate_set_digest,
+        authorized,
+    })
+}
+
+fn authorized_page_set_digest(authorized: &[AuthorizedPageDecision]) -> Result<String> {
+    Ok(hex(&sha256(&[
+        PAGE_AUTHORIZED_DECISION_SET_DOMAIN,
+        &canonical_bytes(&authorized)?,
+    ])))
+}
+
+fn authorized_page_ordinals_digest(ordinals: &[u32]) -> Result<String> {
+    Ok(hex(&sha256(&[
+        PAGE_AUTHORIZED_ORDINAL_SET_DOMAIN,
+        &canonical_bytes(&ordinals)?,
+    ])))
+}
+
+fn same_digest(left: &str, right: &str) -> Result<bool> {
+    let left = decode_digest(left)?;
+    let right = decode_digest(right)?;
+    Ok(digest_matches(&left, &right))
+}
+
+fn hmac_sha256(key: &[u8; 32], message: &[u8]) -> [u8; 32] {
+    let mut inner_pad = [0x36_u8; 64];
+    let mut outer_pad = [0x5c_u8; 64];
+    for (index, value) in key.iter().enumerate() {
+        inner_pad[index] ^= value;
+        outer_pad[index] ^= value;
+    }
+    let inner = sha256(&[&inner_pad, message]);
+    sha256(&[&outer_pad, &inner])
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AuthorizedPageFingerprintCore<'a> {
+    schema_version: &'static str,
+    view: NeutralAuthorizedView<'a>,
+    backend_pid: i32,
+    transaction_xid: i64,
+    query_context_digest: &'a str,
+    candidate_set_digest: &'a str,
+    authorized_set_digest: &'a str,
+    authorized_ordinals_digest: &'a str,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CommitmentCore<'a> {
@@ -1015,16 +1365,87 @@ pub(crate) fn poison_on_error<T>(
 #[cfg(test)]
 mod tests {
     use super::{
-        batch_reference, canonical_resource_set, digest_json, evaluate_complete_set, hex,
-        validate_batch_size,
+        authorized_page_set_digest, batch_reference, canonical_resource_set, digest_json,
+        evaluate_authorized_page_candidates, evaluate_complete_set, hex, validate_batch_size,
+        PostgresTransactionAuthorizationParticipant,
     };
     use crate::model::{BoundRequest, TransactionBinding, ViewParts};
     use crate::{
-        AuthorizationResource, AuthorizedResourceBatch, TransactionAuthorizedView,
-        TransactionCredentialEvidence, TransactionDecisionCommitment,
-        AUTHORIZED_RESOURCE_BATCH_SCHEMA, TRANSACTION_CREDENTIAL_EVIDENCE_SCHEMA,
-        TRANSACTION_DECISION_COMMITMENT_SCHEMA,
+        AuthorizationResource, AuthorizedResourceBatch, ParticipantError, ParticipantErrorCode,
+        TransactionAuthorizationPageCandidate, TransactionAuthorizedPage,
+        TransactionAuthorizedPageQuery, TransactionAuthorizedPageRequest,
+        TransactionAuthorizedView, TransactionCredentialEvidence, TransactionDecisionCommitment,
+        VerifiedTransactionAuthorizedPage, AUTHORIZED_RESOURCE_BATCH_SCHEMA,
+        MAXIMUM_AUTHORIZATION_PAGE_CANDIDATES, MAXIMUM_AUTHORIZED_PAGE_RESULTS,
+        TRANSACTION_CREDENTIAL_EVIDENCE_SCHEMA, TRANSACTION_DECISION_COMMITMENT_SCHEMA,
     };
+
+    fn page_candidate(
+        index: usize,
+        reference: Option<&str>,
+        snapshot: Option<&str>,
+    ) -> TransactionAuthorizationPageCandidate {
+        TransactionAuthorizationPageCandidate::new(
+            AuthorizationResource {
+                resource_type: "path".to_owned(),
+                path: Some(format!("Game/{index}.asset")),
+                file_id: None,
+                object_id: None,
+                name: None,
+            },
+            reference.map(str::to_owned),
+            snapshot.map(str::to_owned),
+        )
+    }
+
+    fn test_view() -> TransactionAuthorizedView {
+        let evidence = TransactionCredentialEvidence {
+            schema_version: TRANSACTION_CREDENTIAL_EVIDENCE_SCHEMA,
+            presentation_digest: "a".repeat(64),
+            credential_id: "credential".to_owned(),
+            credential_generation: 4,
+            subject_digest: "b".repeat(64),
+            tenant: "studio".to_owned(),
+            authority_epoch: 2,
+            policy_generation: 3,
+            issued_at: 1,
+            expires_at: 2,
+            authenticated_scope_digest: "c".repeat(64),
+        };
+        TransactionAuthorizedView::from_parts(ViewParts {
+            transaction_id: "tx.page".to_owned(),
+            evidence_digest: "d".repeat(64),
+            subject_digest: evidence.subject_digest().to_owned(),
+            authenticated_scope_digest: evidence.authenticated_scope_digest().to_owned(),
+            request_fingerprint: "e".repeat(64),
+            decision_digest: "f".repeat(64),
+            tenant: "studio".to_owned(),
+            repository: "game".to_owned(),
+            permission: "metadata.read".to_owned(),
+            authority_epoch: 2,
+            credential_generation: 4,
+            policy_generation: 3,
+            expires_at: 2,
+            evidence,
+            request: BoundRequest {
+                request_id: "request.page".to_owned(),
+                reason: None,
+                reference: Some("main".to_owned()),
+                snapshot: Some("snapshot.main".to_owned()),
+                resource: AuthorizationResource {
+                    resource_type: "tree".to_owned(),
+                    path: Some("Game".to_owned()),
+                    file_id: None,
+                    object_id: None,
+                    name: None,
+                },
+            },
+            binding: TransactionBinding {
+                backend_pid: 7,
+                transaction_xid: 11,
+            },
+        })
+    }
 
     #[test]
     fn resource_batches_are_canonical_and_duplicates_fail_closed() {
@@ -1080,6 +1501,393 @@ mod tests {
             });
         assert_eq!(result, Err(0));
         assert_eq!(visited, vec![0, 1, 2, 3]);
+    }
+
+    #[test]
+    fn authorized_page_preserves_server_order_and_keeps_denials_internal() {
+        let candidates = (0..4)
+            .map(|index| page_candidate(index, Some("main"), Some("snapshot.main")))
+            .collect::<Vec<_>>();
+        let mut visited = Vec::new();
+        let evaluation = evaluate_authorized_page_candidates(&candidates, |candidate| {
+            let index = candidate
+                .resource()
+                .path
+                .as_deref()
+                .unwrap()
+                .strip_prefix("Game/")
+                .unwrap()
+                .strip_suffix(".asset")
+                .unwrap()
+                .parse::<usize>()
+                .unwrap();
+            visited.push(index);
+            if index == 1 || index == 3 {
+                Err(ParticipantError::new(
+                    ParticipantErrorCode::AuthenticationDenied,
+                ))
+            } else {
+                Ok(format!("decision.{index}"))
+            }
+        })
+        .unwrap();
+        assert_eq!(visited, vec![0, 1, 2, 3]);
+        assert_eq!(
+            evaluation
+                .authorized
+                .iter()
+                .map(|item| item.ordinal)
+                .collect::<Vec<_>>(),
+            vec![0, 2]
+        );
+        assert_eq!(evaluation.candidate_set_digest.len(), 64);
+    }
+
+    #[test]
+    fn authorized_page_scans_every_candidate_before_fault_or_result_overflow() {
+        let candidates = (0..4)
+            .map(|index| page_candidate(index, Some("main"), None))
+            .collect::<Vec<_>>();
+        let mut visited = Vec::new();
+        let error = evaluate_authorized_page_candidates(&candidates, |candidate| {
+            let index = candidate
+                .resource()
+                .path
+                .as_deref()
+                .unwrap()
+                .strip_prefix("Game/")
+                .unwrap()
+                .strip_suffix(".asset")
+                .unwrap()
+                .parse::<usize>()
+                .unwrap();
+            visited.push(index);
+            if index == 1 {
+                Err(ParticipantError::new(ParticipantErrorCode::InputInvalid))
+            } else {
+                Ok(format!("decision.{index}"))
+            }
+        })
+        .unwrap_err();
+        assert_eq!(error.code(), ParticipantErrorCode::InputInvalid);
+        assert_eq!(visited, vec![0, 1, 2, 3]);
+
+        let overflow = (0..=MAXIMUM_AUTHORIZED_PAGE_RESULTS)
+            .map(|index| page_candidate(index, Some("main"), None))
+            .collect::<Vec<_>>();
+        let mut overflow_visits = 0;
+        let error = evaluate_authorized_page_candidates(&overflow, |_| {
+            overflow_visits += 1;
+            Ok("decision.allow".to_owned())
+        })
+        .unwrap_err();
+        assert_eq!(overflow_visits, overflow.len());
+        assert_eq!(error.code(), ParticipantErrorCode::LimitExceeded);
+
+        let exact_limit = (0..MAXIMUM_AUTHORIZED_PAGE_RESULTS)
+            .map(|index| page_candidate(index, Some("main"), None))
+            .collect::<Vec<_>>();
+        let evaluation =
+            evaluate_authorized_page_candidates(&exact_limit, |_| Ok("decision.allow".to_owned()))
+                .unwrap();
+        assert_eq!(evaluation.authorized.len(), MAXIMUM_AUTHORIZED_PAGE_RESULTS);
+    }
+
+    #[test]
+    fn authorized_page_duplicate_contexts_fail_after_the_complete_scan() {
+        let duplicate = page_candidate(1, Some("main"), Some("snapshot.main"));
+        let candidates = vec![
+            page_candidate(0, Some("main"), Some("snapshot.main")),
+            duplicate.clone(),
+            page_candidate(2, Some("main"), Some("snapshot.main")),
+            duplicate,
+        ];
+        let mut visits = 0;
+        let error = evaluate_authorized_page_candidates(&candidates, |_| {
+            visits += 1;
+            Err(ParticipantError::new(
+                ParticipantErrorCode::AuthenticationDenied,
+            ))
+        })
+        .unwrap_err();
+        assert_eq!(visits, candidates.len());
+        assert_eq!(error.code(), ParticipantErrorCode::InputInvalid);
+    }
+
+    #[test]
+    fn authorized_page_exact_candidate_ceiling_is_bounded_and_executable() {
+        let candidates = (0..MAXIMUM_AUTHORIZATION_PAGE_CANDIDATES)
+            .map(|index| page_candidate(index, Some("main"), None))
+            .collect::<Vec<_>>();
+        let mut visits = 0;
+        let evaluation = evaluate_authorized_page_candidates(&candidates, |_| {
+            visits += 1;
+            Err(ParticipantError::new(
+                ParticipantErrorCode::AuthenticationDenied,
+            ))
+        })
+        .unwrap();
+        assert_eq!(visits, MAXIMUM_AUTHORIZATION_PAGE_CANDIDATES);
+        assert!(evaluation.authorized.is_empty());
+
+        let mut over_limit = candidates;
+        over_limit.push(page_candidate(
+            MAXIMUM_AUTHORIZATION_PAGE_CANDIDATES,
+            Some("main"),
+            None,
+        ));
+        let mut invoked = false;
+        let error = evaluate_authorized_page_candidates(&over_limit, |_| {
+            invoked = true;
+            Ok("unreachable".to_owned())
+        })
+        .unwrap_err();
+        assert!(!invoked);
+        assert_eq!(error.code(), ParticipantErrorCode::LimitExceeded);
+    }
+
+    #[test]
+    fn authorized_page_keyed_fingerprint_binds_view_transaction_query_and_sets() {
+        let participant = PostgresTransactionAuthorizationParticipant {
+            instance_key: [0x5a; 32],
+        };
+        let view = test_view();
+        let baseline = participant
+            .authorized_page_fingerprint(
+                &view,
+                &"1".repeat(64),
+                &"2".repeat(64),
+                &"3".repeat(64),
+                &"4".repeat(64),
+            )
+            .unwrap();
+        assert_eq!(baseline.len(), 64);
+        for changed in [
+            participant.authorized_page_fingerprint(
+                &view,
+                &"4".repeat(64),
+                &"2".repeat(64),
+                &"3".repeat(64),
+                &"4".repeat(64),
+            ),
+            participant.authorized_page_fingerprint(
+                &view,
+                &"1".repeat(64),
+                &"4".repeat(64),
+                &"3".repeat(64),
+                &"4".repeat(64),
+            ),
+            participant.authorized_page_fingerprint(
+                &view,
+                &"1".repeat(64),
+                &"2".repeat(64),
+                &"5".repeat(64),
+                &"4".repeat(64),
+            ),
+            participant.authorized_page_fingerprint(
+                &view,
+                &"1".repeat(64),
+                &"2".repeat(64),
+                &"3".repeat(64),
+                &"5".repeat(64),
+            ),
+        ] {
+            assert_ne!(changed.unwrap(), baseline);
+        }
+        let mut rebound = test_view();
+        rebound.binding.transaction_xid += 1;
+        assert_ne!(
+            participant
+                .authorized_page_fingerprint(
+                    &rebound,
+                    &"1".repeat(64),
+                    &"2".repeat(64),
+                    &"3".repeat(64),
+                    &"4".repeat(64),
+                )
+                .unwrap(),
+            baseline
+        );
+
+        let page = TransactionAuthorizedPage::new(
+            "tx.page".to_owned(),
+            "1".repeat(64),
+            "2".repeat(64),
+            "3".repeat(64),
+            "4".repeat(64),
+            baseline,
+            vec![0, 4, 9],
+        );
+        assert_eq!(page.authorized_ordinals(), &[0, 4, 9]);
+        let debug = format!("{page:?}");
+        assert!(!debug.contains("ordinal"));
+        assert!(!debug.contains("[0, 4, 9]"));
+        assert!(!debug.contains("tx.page"));
+    }
+
+    #[test]
+    fn authorized_page_hmac_matches_an_independent_sha256_vector() {
+        assert_eq!(
+            hex(&super::hmac_sha256(&[0x0b; 32], b"Hi There")),
+            "198a607eb44bfbc69903a0f1cf2bbdc5ba0aa3f3d9ae3c1c7a3b1696a0b68cf7"
+        );
+    }
+
+    #[test]
+    fn authorized_page_proof_must_match_the_exact_query_candidates_and_ordinals() {
+        let participant = PostgresTransactionAuthorizationParticipant {
+            instance_key: [0x5a; 32],
+        };
+        let view = test_view();
+        let query = TransactionAuthorizedPageQuery::new("tree.page", [0x11; 32]).unwrap();
+        let candidates = (0..4)
+            .map(|index| page_candidate(index, Some("main"), Some("snapshot.main")))
+            .collect::<Vec<_>>();
+        let request = TransactionAuthorizedPageRequest {
+            query: &query,
+            candidates: &candidates,
+        };
+        let evaluation = evaluate_authorized_page_candidates(&candidates, |candidate| {
+            if candidate.resource().path.as_deref() == Some("Game/1.asset") {
+                Err(ParticipantError::new(
+                    ParticipantErrorCode::AuthenticationDenied,
+                ))
+            } else {
+                Ok(format!(
+                    "decision.{}",
+                    candidate.resource().path.as_deref().unwrap()
+                ))
+            }
+        })
+        .unwrap();
+        let query_digest = hex(&digest_json(&query).unwrap());
+        let authorized_set_digest = authorized_page_set_digest(&evaluation.authorized).unwrap();
+        let ordinals = evaluation
+            .authorized
+            .iter()
+            .map(|item| item.ordinal)
+            .collect::<Vec<_>>();
+        let ordinals_digest = super::authorized_page_ordinals_digest(&ordinals).unwrap();
+        let fingerprint = participant
+            .authorized_page_fingerprint(
+                &view,
+                &query_digest,
+                &evaluation.candidate_set_digest,
+                &authorized_set_digest,
+                &ordinals_digest,
+            )
+            .unwrap();
+        let page = TransactionAuthorizedPage::new(
+            view.transaction_id().to_owned(),
+            query_digest,
+            evaluation.candidate_set_digest,
+            authorized_set_digest,
+            ordinals_digest,
+            fingerprint,
+            ordinals,
+        );
+        participant
+            .verify_authorized_page_proof(&view, &request, &page)
+            .unwrap();
+        let verified = VerifiedTransactionAuthorizedPage::new(&page, &candidates);
+        assert_eq!(
+            verified
+                .authorized_items()
+                .map(|(ordinal, candidate)| (ordinal, candidate.resource().path.as_deref()))
+                .collect::<Vec<_>>(),
+            vec![
+                (0, Some("Game/0.asset")),
+                (2, Some("Game/2.asset")),
+                (3, Some("Game/3.asset")),
+            ]
+        );
+
+        let other_query =
+            TransactionAuthorizedPageQuery::new("history.path-page", [0x11; 32]).unwrap();
+        assert_eq!(
+            participant
+                .verify_authorized_page_proof(
+                    &view,
+                    &TransactionAuthorizedPageRequest {
+                        query: &other_query,
+                        candidates: &candidates,
+                    },
+                    &page,
+                )
+                .unwrap_err()
+                .code(),
+            ParticipantErrorCode::AuthenticationDenied
+        );
+        let mut reversed = candidates.clone();
+        reversed.reverse();
+        assert_eq!(
+            participant
+                .verify_authorized_page_proof(
+                    &view,
+                    &TransactionAuthorizedPageRequest {
+                        query: &query,
+                        candidates: &reversed,
+                    },
+                    &page,
+                )
+                .unwrap_err()
+                .code(),
+            ParticipantErrorCode::AuthenticationDenied
+        );
+        let mut rebound = test_view();
+        rebound.binding.transaction_xid += 1;
+        assert_eq!(
+            participant
+                .verify_authorized_page_proof(&rebound, &request, &page)
+                .unwrap_err()
+                .code(),
+            ParticipantErrorCode::AuthenticationDenied
+        );
+    }
+
+    #[test]
+    fn authorized_page_context_digest_binds_order_reference_and_snapshot() {
+        let baseline = vec![
+            page_candidate(0, Some("main"), Some("snapshot.main")),
+            page_candidate(1, Some("main"), Some("snapshot.main")),
+        ];
+        let digest = |candidates: &[TransactionAuthorizationPageCandidate]| {
+            evaluate_authorized_page_candidates(candidates, |_| {
+                Err(ParticipantError::new(
+                    ParticipantErrorCode::AuthenticationDenied,
+                ))
+            })
+            .unwrap()
+            .candidate_set_digest
+        };
+        let baseline_digest = digest(&baseline);
+        let mut reversed = baseline.clone();
+        reversed.reverse();
+        assert_ne!(digest(&reversed), baseline_digest);
+        let changed_reference = vec![
+            page_candidate(0, Some("other"), Some("snapshot.main")),
+            baseline[1].clone(),
+        ];
+        assert_ne!(digest(&changed_reference), baseline_digest);
+        let changed_snapshot = vec![
+            page_candidate(0, Some("main"), Some("snapshot.other")),
+            baseline[1].clone(),
+        ];
+        assert_ne!(digest(&changed_snapshot), baseline_digest);
+
+        let visible =
+            evaluate_authorized_page_candidates(&baseline, |_| Ok("decision.allow".to_owned()))
+                .unwrap();
+        let denied = evaluate_authorized_page_candidates(&baseline, |_| {
+            Err(ParticipantError::new(
+                ParticipantErrorCode::AuthenticationDenied,
+            ))
+        })
+        .unwrap();
+        assert_ne!(
+            authorized_page_set_digest(&visible.authorized).unwrap(),
+            authorized_page_set_digest(&denied.authorized).unwrap()
+        );
     }
 
     #[test]

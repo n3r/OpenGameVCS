@@ -1,5 +1,10 @@
+use std::marker::PhantomData;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+use crate::canonical::{hex, valid_id};
+use crate::{ParticipantError, ParticipantErrorCode, Result};
 
 pub const TRANSACTION_CREDENTIAL_EVIDENCE_SCHEMA: &str =
     "ogvcs.identity-policy/transaction-credential-evidence/v1";
@@ -7,11 +12,17 @@ pub const TRANSACTION_AUTHORIZED_VIEW_SCHEMA: &str =
     "ogvcs.identity-policy/transaction-authorized-view/v1";
 pub const AUTHORIZED_RESOURCE_BATCH_SCHEMA: &str =
     "ogvcs.identity-policy/authorized-resource-batch/v1";
+pub const TRANSACTION_AUTHORIZED_PAGE_QUERY_SCHEMA: &str =
+    "ogvcs.identity-policy/transaction-authorized-page-query/v1";
+pub const TRANSACTION_AUTHORIZED_PAGE_SCHEMA: &str =
+    "ogvcs.identity-policy/transaction-authorized-page/v1";
 pub const TRANSACTION_DECISION_COMMITMENT_SCHEMA: &str =
     "ogvcs.identity-policy/transaction-decision-commitment/v1";
 pub const PRIVILEGED_AUDIT_EVENT_SCHEMA: &str = "ogvcs.authorization/audit-event/v1";
 
 pub const MAXIMUM_BATCH_RESOURCES: usize = 1_000;
+pub const MAXIMUM_AUTHORIZATION_PAGE_CANDIDATES: usize = 100_000;
+pub const MAXIMUM_AUTHORIZED_PAGE_RESULTS: usize = 1_000;
 pub const MAXIMUM_DECISION_CHAIN_SCAN: usize = 10_000;
 pub const MAXIMUM_DECISION_RESULT_BYTES: usize = 2_048;
 
@@ -359,6 +370,258 @@ pub struct DecisionCommitmentRequest<'a> {
     pub result: &'a Value,
 }
 
+/// A typed digest of a server-owned metadata query.
+///
+/// The semantic digest is computed by the metadata owner over its canonical
+/// query before this type is constructed.  This participant additionally
+/// binds the operation name and schema when it derives the query-context
+/// digest used by an authorized-page proof.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransactionAuthorizedPageQuery {
+    #[serde(rename = "schemaVersion")]
+    schema_version: &'static str,
+    operation: String,
+    semantic_query_digest: String,
+}
+
+impl TransactionAuthorizedPageQuery {
+    pub fn new(operation: impl Into<String>, semantic_query_digest: [u8; 32]) -> Result<Self> {
+        let operation = operation.into();
+        if !valid_id(&operation) {
+            return Err(ParticipantError::new(ParticipantErrorCode::InputInvalid));
+        }
+        Ok(Self {
+            schema_version: TRANSACTION_AUTHORIZED_PAGE_QUERY_SCHEMA,
+            operation,
+            semantic_query_digest: hex(&semantic_query_digest),
+        })
+    }
+
+    pub const fn schema_version() -> &'static str {
+        TRANSACTION_AUTHORIZED_PAGE_QUERY_SCHEMA
+    }
+
+    pub fn operation(&self) -> &str {
+        &self.operation
+    }
+
+    pub fn semantic_query_digest(&self) -> &str {
+        &self.semantic_query_digest
+    }
+}
+
+/// One server-derived authorization context in stable query order.
+///
+/// The fields remain private so a consumer cannot rewrite a context after it
+/// has been assembled.  The participant validates every field under the
+/// current policy profile while evaluating the complete candidate set.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransactionAuthorizationPageCandidate {
+    resource: AuthorizationResource,
+    reference: Option<String>,
+    snapshot: Option<String>,
+}
+
+impl TransactionAuthorizationPageCandidate {
+    pub fn new(
+        resource: AuthorizationResource,
+        reference: Option<String>,
+        snapshot: Option<String>,
+    ) -> Self {
+        Self {
+            resource,
+            reference,
+            snapshot,
+        }
+    }
+
+    pub const fn resource(&self) -> &AuthorizationResource {
+        &self.resource
+    }
+
+    pub fn reference(&self) -> Option<&str> {
+        self.reference.as_deref()
+    }
+
+    pub fn snapshot(&self) -> Option<&str> {
+        self.snapshot.as_deref()
+    }
+}
+
+pub struct TransactionAuthorizedPageRequest<'a> {
+    pub query: &'a TransactionAuthorizedPageQuery,
+    pub candidates: &'a [TransactionAuthorizationPageCandidate],
+}
+
+/// Internal authorization carrier for one bounded metadata page.
+///
+/// This type intentionally has no serialization implementation.  Its only
+/// disclosure is an opaque transaction-unique keyed fingerprint plus the
+/// authorized ordinals needed by the protected in-process metadata consumer.
+/// Candidate/query commitments remain inside the keyed proof so a digest of a
+/// small hidden set cannot become an enumeration oracle.
+///
+/// ```compile_fail
+/// use ogvcs_identity_policy_audit_postgres::TransactionAuthorizedPage;
+///
+/// fn expose(page: &TransactionAuthorizedPage) {
+///     let _ = serde_json::to_vec(page).unwrap();
+///     let _ = page.authorized_ordinals();
+/// }
+/// ```
+#[derive(Clone, Eq, PartialEq)]
+pub struct TransactionAuthorizedPage {
+    schema_version: &'static str,
+    transaction_id: String,
+    query_context_digest: String,
+    candidate_set_digest: String,
+    authorized_set_digest: String,
+    authorized_ordinals_digest: String,
+    authorized_set_fingerprint: String,
+    authorized_ordinals: Vec<u32>,
+}
+
+impl std::fmt::Debug for TransactionAuthorizedPage {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("TransactionAuthorizedPage")
+            .field("schema_version", &self.schema_version)
+            .field(
+                "authorized_set_fingerprint",
+                &self.authorized_set_fingerprint,
+            )
+            .finish_non_exhaustive()
+    }
+}
+
+impl TransactionAuthorizedPage {
+    pub const fn schema_version() -> &'static str {
+        TRANSACTION_AUTHORIZED_PAGE_SCHEMA
+    }
+
+    pub(crate) fn transaction_id(&self) -> &str {
+        &self.transaction_id
+    }
+
+    pub fn authorized_set_fingerprint(&self) -> &str {
+        &self.authorized_set_fingerprint
+    }
+
+    pub(crate) fn query_context_digest(&self) -> &str {
+        &self.query_context_digest
+    }
+
+    pub(crate) fn candidate_set_digest(&self) -> &str {
+        &self.candidate_set_digest
+    }
+
+    pub(crate) fn authorized_set_digest(&self) -> &str {
+        &self.authorized_set_digest
+    }
+
+    pub(crate) fn authorized_ordinals_digest(&self) -> &str {
+        &self.authorized_ordinals_digest
+    }
+
+    pub(crate) fn authorized_ordinals(&self) -> &[u32] {
+        &self.authorized_ordinals
+    }
+}
+
+/// A page reverified against its exact live transaction and candidate slice.
+///
+/// The verifier returns authorized candidate references rather than a naked
+/// ordinal vector, keeping each ordinal tied to the slice whose ordered digest
+/// was checked by the participant. The witness holds the mutable-transaction
+/// borrow for its entire lifetime. Authorized item references are reborrowed
+/// from the witness, so neither the witness nor a borrowed item can survive a
+/// commit, rollback, or another mutable use of that transaction.
+///
+/// Consumers may deliberately derive owned decisions while the witness is
+/// live, drop the witness, and then continue the same transaction. Such owned
+/// data is trusted in-process state, not a portable authorization carrier; a
+/// page must be reverified before a later transaction may use it.
+///
+/// ```compile_fail
+/// use ogvcs_identity_policy_audit_postgres::{
+///     PostgresTransactionAuthorizationParticipant, TransactionAuthorizationParticipant,
+///     TransactionAuthorizedPage, TransactionAuthorizedPageRequest, TransactionAuthorizedView,
+/// };
+/// use postgres::Transaction;
+///
+/// fn use_after_commit<'connection, 'page>(
+///     participant: &PostgresTransactionAuthorizationParticipant,
+///     mut transaction: Transaction<'connection>,
+///     view: &TransactionAuthorizedView,
+///     request: &TransactionAuthorizedPageRequest<'page>,
+///     page: &'page TransactionAuthorizedPage,
+/// ) {
+///     let verified = participant
+///         .verify_authorized_page(&mut transaction, view, request, page)
+///         .unwrap();
+///     transaction.commit().unwrap();
+///     let _ = verified.authorized_items().count();
+/// }
+/// ```
+///
+/// ```compile_fail
+/// use ogvcs_identity_policy_audit_postgres::{
+///     PostgresTransactionAuthorizationParticipant, TransactionAuthorizationParticipant,
+///     TransactionAuthorizedPage, TransactionAuthorizedPageRequest, TransactionAuthorizedView,
+/// };
+/// use postgres::Transaction;
+///
+/// fn retain_item_after_commit<'connection, 'page>(
+///     participant: &PostgresTransactionAuthorizationParticipant,
+///     mut transaction: Transaction<'connection>,
+///     view: &TransactionAuthorizedView,
+///     request: &TransactionAuthorizedPageRequest<'page>,
+///     page: &'page TransactionAuthorizedPage,
+/// ) {
+///     let verified = participant
+///         .verify_authorized_page(&mut transaction, view, request, page)
+///         .unwrap();
+///     let (_, retained) = verified.authorized_items().next().unwrap();
+///     drop(verified);
+///     transaction.commit().unwrap();
+///     let _ = retained.resource();
+/// }
+/// ```
+pub struct VerifiedTransactionAuthorizedPage<'transaction, 'page> {
+    page: &'page TransactionAuthorizedPage,
+    candidates: &'page [TransactionAuthorizationPageCandidate],
+    transaction_borrow: PhantomData<&'transaction mut ()>,
+}
+
+impl std::fmt::Debug for VerifiedTransactionAuthorizedPage<'_, '_> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("VerifiedTransactionAuthorizedPage")
+            .field(
+                "authorized_set_fingerprint",
+                &self.page.authorized_set_fingerprint,
+            )
+            .finish_non_exhaustive()
+    }
+}
+
+impl VerifiedTransactionAuthorizedPage<'_, '_> {
+    pub fn authorized_items(
+        &self,
+    ) -> impl Iterator<Item = (u32, &TransactionAuthorizationPageCandidate)> + '_ {
+        self.page
+            .authorized_ordinals
+            .iter()
+            .map(|ordinal| (*ordinal, &self.candidates[*ordinal as usize]))
+    }
+
+    pub fn authorized_set_fingerprint(&self) -> &str {
+        &self.page.authorized_set_fingerprint
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AuthorizedResourceBatch {
@@ -390,6 +653,42 @@ impl AuthorizedResourceBatch {
 
     pub fn items(&self) -> &[AuthorizedResourceBatchItem] {
         &self.items
+    }
+}
+
+impl TransactionAuthorizedPage {
+    pub(crate) fn new(
+        transaction_id: String,
+        query_context_digest: String,
+        candidate_set_digest: String,
+        authorized_set_digest: String,
+        authorized_ordinals_digest: String,
+        authorized_set_fingerprint: String,
+        authorized_ordinals: Vec<u32>,
+    ) -> Self {
+        Self {
+            schema_version: TRANSACTION_AUTHORIZED_PAGE_SCHEMA,
+            transaction_id,
+            query_context_digest,
+            candidate_set_digest,
+            authorized_set_digest,
+            authorized_ordinals_digest,
+            authorized_set_fingerprint,
+            authorized_ordinals,
+        }
+    }
+}
+
+impl<'transaction, 'page> VerifiedTransactionAuthorizedPage<'transaction, 'page> {
+    pub(crate) fn new(
+        page: &'page TransactionAuthorizedPage,
+        candidates: &'page [TransactionAuthorizationPageCandidate],
+    ) -> Self {
+        Self {
+            page,
+            candidates,
+            transaction_borrow: PhantomData,
+        }
     }
 }
 

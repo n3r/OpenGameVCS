@@ -7,7 +7,7 @@
 **Depends on:** OGVCS-003, OGVCS-006, OGVCS-041  
 **Blocks:** OGVCS-010, OGVCS-011, OGVCS-013, OGVCS-016, OGVCS-018, OGVCS-019, OGVCS-021, OGVCS-025, OGVCS-026, OGVCS-027, OGVCS-028, OGVCS-032, OGVCS-033, OGVCS-035, OGVCS-036, OGVCS-042, OGVCS-045  
 **Source:** [Architecture ADR-0004](../../adr/0004-dr-authority-security-epochs.md)  
-**Last updated:** 2026-08-31
+**Last updated:** 2026-09-02
 
 ## Outcome
 
@@ -111,7 +111,13 @@ Policies deploy in monitor/dry-run mode against captured authorized test request
   sealed adapter-internal metadata read dispatcher additionally covers exactly
   `repository.get-settings` and `reference.read`: it reverifies negotiation at
   the database clock, authorizes the exact resource before existence lookup,
-  and retains the decision through same-transaction commitment and commit.
+  and retains the decision through same-transaction commitment and commit. A
+  separate source-only transaction-authorized page prerequisite now filters an
+  ordered, server-derived candidate set after one sealed-view currentness
+  reconstruction and exposes checked candidate references only after an exact
+  live-transaction/query/candidate HMAC verification. The verified witness and
+  its borrowed items cannot outlive the mutable transaction borrow. It is not
+  wired into the metadata dispatcher.
 - Test and benchmark results: 30 bounded contract vectors, 60 JavaScript
   runtime tests, independent mutation/package gates, and bounded hosted
   three-OS evidence are present. Local PostgreSQL 16 evidence covers exact
@@ -119,7 +125,12 @@ Policies deploy in monitor/dry-run mode against captured authorized test request
   bridge. A fresh PostgreSQL dispatcher test covers valid cross-subject token
   substitution, hidden/missing/cross-tenant/stale authority equivalence,
   attacker-key negotiation forgery, and post-decision commit rollback; the
-  final combined hosted scale/latency campaign remains open.
+  final combined hosted scale/latency campaign remains open. Bounded Rust unit
+  and external contract tests cover the page primitive's complete-scan,
+  duplicate, exact 100,000/100,001 candidate, 1,000-result, ordering, context,
+  transaction, and HMAC boundaries without claiming a PostgreSQL live page
+  run. Compile-fail probes additionally reject witness or borrowed-item reuse
+  after the transaction boundary.
 - Security/reliability review: caller-selected checkpoints, rate identities,
   transaction identities, policy preview, device-flow outage retry, and
   ambiguous decision commits fail closed.
@@ -131,4 +142,8 @@ Policies deploy in monitor/dry-run mode against captured authorized test request
   carriers, the remaining metadata operations, and an end-to-end rollout
   remain completion gates. The dispatcher-private tenant/reference projections
   are not OGVCS-041 protocol mappings; every public metadata route remains
-  unregistered.
+  unregistered. The page semantic-query digest is metadata-owner supplied and
+  is not independently reconstructed here; negotiation `sessionId` is still
+  not linked to credential presentation. No cursor or page dispatcher exists.
+  Timing and non-disclosure acceptance remains open; every other acceptance
+  criterion remains open as well.

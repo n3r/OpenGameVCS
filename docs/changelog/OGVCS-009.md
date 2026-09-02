@@ -2,7 +2,41 @@
 
 **Status:** In development
 **Candidate packages:** `@opengamevcs/identity-policy-audit-contract-v1` 0.2.0 and `@opengamevcs/identity-policy-audit` 0.2.0
-**Date:** 2026-09-01
+**Date:** 2026-09-02
+
+## 2026-09-02 bounded transaction-authorized page prerequisite
+
+- Added a private Rust authorized-page primitive on the existing sealed
+  PostgreSQL transaction view. It evaluates at most 100,000 server-derived
+  candidate resource/reference/snapshot contexts in original order after one
+  current credential/policy reconstruction, retaining at most 1,000 authorized
+  ordinals.
+- Policy denial is an internal visibility bit. The implementation still scans
+  the complete bounded set, while duplicate contexts, malformed inputs,
+  evaluator/storage faults, stale currentness, proof mismatch, and authorized
+  result overflow fail closed and poison the live transaction.
+- Added an opaque non-serializable carrier and participant-owned verification.
+  Its HMAC-SHA-256 proof binds the exact transaction and all neutral view
+  currentness fields, typed query context, ordered candidate set, authorized
+  decisions, and ordinals. Raw candidate/query commitments and naked ordinals
+  are not publicly exposed. The verified witness holds the mutable PostgreSQL
+  transaction borrow, and its item references are reborrowed from that witness,
+  so neither can outlive the live verification boundary. A trusted consumer may
+  deliberately derive owned in-process decisions, drop the witness, and then
+  continue the same transaction; those owned values are not portable proof.
+- Added bounded unit, external consumer-contract, and isolated packed-workspace
+  tests, including complete scan on early/middle faults, duplicates, result
+  overflow, exact 100,000 and 100,001 candidate boundaries,
+  order/reference/snapshot substitutions, and query/transaction/fingerprint
+  changes. The exact 100,000 case is a bounded unit proof, not hosted scale
+  evidence.
+- This is only the identity prerequisite for authorization-safe metadata
+  paging. The semantic query digest remains supplied by the trusted metadata
+  owner rather than independently reconstructed here, and negotiation
+  `sessionId` is not linked to credential presentation. No cursor, metadata
+  dispatcher, public route, object transfer, mutation, PostgreSQL live page
+  proof, hosted page evidence, or timing/non-disclosure acceptance evidence is
+  added, and every OGVCS-009 acceptance criterion remains open.
 
 ## 2026-09-01 aggregate authorization and durable PostgreSQL v3
 

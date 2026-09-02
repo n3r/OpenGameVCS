@@ -9,6 +9,7 @@ on:
       - "server/migrations/identity-policy-audit/**"
       - "server/modules/identity-policy-audit/**"
       - "docs/changelog/OGVCS-009.md"
+      - "docs/reviews/OGVCS-009-transaction-authorized-page-boundary-review.md"
       - "docs/runbooks/identity-policy-operations.md"
       - "package.json"
       - "package-lock.json"
@@ -34,6 +35,7 @@ on:
       - "server/migrations/identity-policy-audit/**"
       - "server/modules/identity-policy-audit/**"
       - "docs/changelog/OGVCS-009.md"
+      - "docs/reviews/OGVCS-009-transaction-authorized-page-boundary-review.md"
       - "docs/runbooks/identity-policy-operations.md"
       - "package.json"
       - "package-lock.json"
@@ -114,6 +116,8 @@ jobs:
         run: |
           cargo clippy --manifest-path core/paths-filesystem/rust/Cargo.toml --locked --offline --all-targets -- -D warnings
           cargo clippy --manifest-path server/modules/identity-policy-audit/Cargo.toml --locked --offline --all-targets -- -D warnings
+      - name: Test the packed identity participant
+        run: sh server/modules/identity-policy-audit/scripts/test-packed.sh
 
   postgres-live:
     name: Rust 1.82 and guarded PostgreSQL 15 participant
@@ -159,6 +163,8 @@ jobs:
           cargo fmt --manifest-path server/modules/identity-policy-audit/Cargo.toml -- --check
           cargo test --manifest-path server/modules/identity-policy-audit/Cargo.toml --locked --offline
           cargo clippy --manifest-path server/modules/identity-policy-audit/Cargo.toml --locked --offline --all-targets -- -D warnings
+      - name: Test the packed identity participant
+        run: sh server/modules/identity-policy-audit/scripts/test-packed.sh
       - name: Exercise checked migrations and fail-closed PostgreSQL boundaries
         env:
           CARGO_NET_OFFLINE: 'true'

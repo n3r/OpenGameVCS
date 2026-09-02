@@ -2,9 +2,11 @@
 //!
 //! The production boundary borrows a caller-owned live `postgres::Transaction`
 //! for authorization, exact batch recheck, and ordinary decision commitment.
-//! It never returns or owns that transaction. Any denial, validation failure,
-//! currentness failure, or storage error deliberately aborts the PostgreSQL
-//! transaction so a caller can only roll it back.
+//! It never returns or owns that transaction. Any operation-level denial,
+//! validation failure, currentness failure, or storage error deliberately
+//! aborts the PostgreSQL transaction so a caller can only roll it back. The
+//! authorized-page primitive treats per-candidate policy denial as a private
+//! visibility bit; every other page fault still poisons the transaction.
 #![forbid(unsafe_code)]
 
 mod aggregate;
@@ -36,10 +38,15 @@ pub use model::{
     AuthorizationResource, AuthorizedResourceBatch, AuthorizedResourceBatchItem,
     CredentialRevocation, CredentialScope, DecisionChainVerification, DecisionCommitmentRequest,
     EpochPromotion, PolicyDocument, PolicyReplacement, PolicyRule, PrivilegedAuditContext,
-    PrivilegedAuditDetails, PrivilegedAuditEvent, RuleSubjects, TransactionAuthorizationRequest,
+    PrivilegedAuditDetails, PrivilegedAuditEvent, RuleSubjects,
+    TransactionAuthorizationPageCandidate, TransactionAuthorizationRequest,
+    TransactionAuthorizedPage, TransactionAuthorizedPageQuery, TransactionAuthorizedPageRequest,
     TransactionAuthorizedView, TransactionBatchRecheck, TransactionCredentialEvidence,
-    TransactionDecisionCommitment, AUTHORIZED_RESOURCE_BATCH_SCHEMA, MAXIMUM_BATCH_RESOURCES,
-    MAXIMUM_DECISION_CHAIN_SCAN, MAXIMUM_DECISION_RESULT_BYTES, PRIVILEGED_AUDIT_EVENT_SCHEMA,
+    TransactionDecisionCommitment, VerifiedTransactionAuthorizedPage,
+    AUTHORIZED_RESOURCE_BATCH_SCHEMA, MAXIMUM_AUTHORIZATION_PAGE_CANDIDATES,
+    MAXIMUM_AUTHORIZED_PAGE_RESULTS, MAXIMUM_BATCH_RESOURCES, MAXIMUM_DECISION_CHAIN_SCAN,
+    MAXIMUM_DECISION_RESULT_BYTES, PRIVILEGED_AUDIT_EVENT_SCHEMA,
+    TRANSACTION_AUTHORIZED_PAGE_QUERY_SCHEMA, TRANSACTION_AUTHORIZED_PAGE_SCHEMA,
     TRANSACTION_AUTHORIZED_VIEW_SCHEMA, TRANSACTION_CREDENTIAL_EVIDENCE_SCHEMA,
     TRANSACTION_DECISION_COMMITMENT_SCHEMA,
 };
