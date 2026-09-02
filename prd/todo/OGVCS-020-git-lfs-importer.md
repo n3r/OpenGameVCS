@@ -7,7 +7,7 @@
 **Depends on:** OGVCS-002, OGVCS-007, OGVCS-008, OGVCS-010, OGVCS-015, OGVCS-017, OGVCS-045  
 **Blocks:** OGVCS-029, OGVCS-033, OGVCS-034  
 **Source:** [OpenGameVCS proposal](../../GAME_DEV_VCS_ANALYSIS.md)  
-**Last updated:** 2026-08-14
+**Last updated:** 2026-09-02
 
 ## Outcome
 
@@ -103,8 +103,8 @@ Release as an offline/admin tool with dry-run mandatory by default. Publication 
 
 ## Completion evidence
 
-- Implementation changes:
-- Test and benchmark results:
-- Security/reliability review:
-- Documentation/runbooks:
-- Rollout result:
+- Implementation changes: private, unpublished, unwired Rust 1.82 source-projection preflight candidate in `core/import-git-lfs/rust`; it composes OGVCS-002 mapping/FileID types and OGVCS-004 path collision rules, separates unique Git blob objects from path occurrences/gitlinks, requires one path-bound mapping per non-gitlink occurrence, binds an explicit unauthenticated ordinary/required LFS disposition per occurrence, preserves symlink and ordinary-path bytes, classifies required canonical Git LFS v1 pointers with the official 1024-byte cutoff, verifies already-staged LFS bytes through a bounded no-I/O trait, and digest-binds a fully bounded in-memory report. It does not parse Git or `.gitattributes`, acquire source data, authenticate the opaque source-identity or LFS-disposition associations, convert history, persist mappings, or publish refs.
+- Test and benchmark results: Rust 1.82 debug, release, and packed fresh-consumer runs each pass 79 tests (47 preflight, 20 LFS, 10 typed-ID, and 2 known-answer); Clippy and formatting pass; Node source policy passes 2 tests; roadmap validation passes 8 tests; focused OGVCS-002 import predecessor checks pass 2 tests and OGVCS-004 path vectors pass 3 tests. Regressions cover the official oversized-blob and marker matcher rules, reference-compatible extension case/underscore/suffix behavior, pointer-looking ordinary regular files, symlink filter bypass, one blob with different per-path LFS dispositions, null/sentinel commitments, same-blob/two-path distinct FileIDs and one-time byte charging, repeated-object conflicts, under/over/duplicate mappings, retry/new-state forgery, pre-source declaration admission, raw field capacity/length, all configurable hard ceilings, missing-finding precedence, LFS size/digest/EOF, generation drift, final cancellation, exhaustive limit/report binding including independently varied measured work and peak retention, and terminal failure. No Git repository conversion, large-history benchmark, performance target, or scale evidence is claimed.
+- Security/reliability review: `docs/reviews/OGVCS-020-git-import-preflight-boundary-review.md` records the pure staged-input boundary, official Git object/LFS semantics used, read-only mapping lookup, conservative work/memory ledgers, terminal-error atomicity, fixture-only importer profile, unauthenticated opaque source-identity association, and unresolved broker/sandbox/parser/credential/persistence/publication work.
+- Documentation/runbooks: `core/import-git-lfs/rust/README.md` documents strict Git LFS semantics, unique-object/occurrence accounting, OGVCS-002 composition/nonclaims, limits, error precedence, residuals, and local gates. This is not an operator runbook or versioned production import format.
+- Rollout result: none. The candidate remains private and unwired; OGVCS-020 remains Todo and OGVCS-020-AC-01 through OGVCS-020-AC-07 remain open.
