@@ -1,7 +1,7 @@
 # OGVCS-020 private Git import preflight boundary review
 
-**Review date:** 2026-09-02  
-**Reviewed slice:** `core/import-git-lfs/rust` private `0.1.0-rc.1` candidate  
+**Review date:** 2026-09-02
+**Reviewed slice:** `core/import-git-lfs/rust` private `0.1.0-rc.1` candidate
 **PRD state:** Todo; OGVCS-020-AC-01 through OGVCS-020-AC-07 remain open
 
 ## Decision

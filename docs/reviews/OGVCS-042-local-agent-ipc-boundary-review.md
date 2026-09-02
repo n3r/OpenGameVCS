@@ -10,10 +10,10 @@ idempotent operation admission, status/event backpressure, explicit lock
 knowledge, and single-use handoff state. It does not implement the local agent
 described by OGVCS-042 and does not satisfy an acceptance criterion.
 
-The exact base before this tranche is
-`0d0e455431379ffa829dbb6e9ab6c1311a53cfc9`. The worktree is intentionally
-uncommitted. OGVCS-042 remains **Todo**, and OGVCS-042-AC-01 through AC-05
-remain open.
+The isolated source audit began from exact base
+`0d0e455431379ffa829dbb6e9ab6c1311a53cfc9`. The candidate is now retained in
+integration history but remains unpublished and unwired. OGVCS-042 remains
+**Todo**, and OGVCS-042-AC-01 through AC-05 remain open.
 
 ## Review method and authority map
 

@@ -123,6 +123,7 @@ Ship read/status first to first-party clients, then sync/start-edit and finally 
   ordering, limits, known answers, composition boundaries, and nonclaims. No
   operational runbook exists because there is no process or deployment in this
   tranche.
-- Rollout result: none. The candidate is uncommitted, unpublished, and not wired
-  to a route, CLI, UI, engine integration, or production runtime; OGVCS-042
+- Rollout result: none. The candidate is retained only in integration history,
+  remains unpublished, and is not wired to a route, CLI, UI, engine integration,
+  or production runtime; OGVCS-042
   remains Todo and OGVCS-042-AC-01 through OGVCS-042-AC-05 remain open.
