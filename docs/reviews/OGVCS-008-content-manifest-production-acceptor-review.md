@@ -61,6 +61,30 @@ revalidates every exact recorded field at commit. No generic lifecycle CAS is
 opened by this candidate; the frozen rc.6 transaction participant and semantic
 vectors are unchanged.
 
+## Route-less explicit composition follow-up
+
+The Rust repository-metadata module now exposes an instance-branded composition
+around the existing v12 participant. It accepts only an already
+negotiation-verified OGVCS-041 `object.put` request brand and matches its
+correlation, tenant, repository, authority epoch, identity subject, manifest
+ObjectID, canonical byte length, and raw stream SHA-256 to the complete
+explicit-set commit or reconciliation input. It re-verifies the negotiation
+receipt at the database clock before the OGVCS-009 participant authorizes every
+page, and it delegates the only mutation to the existing SERIALIZABLE v12
+transaction. Cross-instance handles, principal/scope substitutions, and exact
+set substitutions fail before protected state is consulted.
+
+This reuses the public OGVCS-041 request envelope only as authenticated internal
+control facts. `object.put` remains unregistered, the metadata route inventory
+remains empty, and no OGVCS-041 success envelope can be constructed by the
+composition. The public transfer carrier is still request-root-only and rejects
+explicit object sets, so it is intentionally not used or changed.
+
+The self-dating OGVCS-041 idempotency carrier is revalidated for currentness at
+the database clock, but no public mutation is dispatched or stored. It is not
+equated to the existing private finalize fingerprint because those fingerprints
+are independently domain-separated and describe different commands.
+
 ## Exact non-claims
 
 The capability profile is `explicit-grant-object-set/v1`: at most 4,096 unique
@@ -71,6 +95,7 @@ principal and the real OGVCS-003/006/009 adapter; attempting to infer or swap
 that authority locally would weaken the session binding. Therefore this
 candidate is non-scale and cannot satisfy gate 3 for OGVCS-007 ratification.
 
-No JS-to-Rust/PostgreSQL production transport, public route, shared-registry
-ratification, hosted production deployment, or exact 100-GiB run exists in this
-change. OGVCS-008 remains Todo.
+No JS-to-Rust/PostgreSQL invocation transport, grant-subject-to-identity
+mapping authority, multi-object grant issuer, public route, shared-registry
+ratification, hosted composition evidence, production deployment, or exact
+100-GiB run exists in this change. OGVCS-008 remains Todo.

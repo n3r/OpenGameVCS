@@ -121,16 +121,18 @@ pub use postgres::PostgresLifecyclePlanWriter;
 pub use postgres::{AggregateIdentityMappingFaultForTest, ContentManifestAvailabilityFaultForTest};
 pub use postgres::{
     AggregateLifecycleApplicationReceipt, AggregateLifecycleApplyRequest,
+    BoundContentManifestAvailabilityCommit, BoundContentManifestAvailabilityReconciliation,
     ContentManifestAvailabilityCommitRequest, ContentManifestAvailabilityReconciliation,
     ContentManifestAvailabilityTransaction, ContentManifestCommittedProof,
     ContentManifestCommittedProofLookup, ContentManifestDependencyBinding,
     ContentManifestExplicitAuthority, ContentManifestProductionStatement,
     IdentityBoundPostgresMetadataStore, IdentityMetadataAuthorizedView,
-    PostgresMetadataReadDispatcher, PostgresMetadataStore, PostgresMetadataTransaction,
-    PreallocatedCreationSubmitFinalizeRequest, PreallocatedCreationSubmitIntent,
-    PreallocatedCreationSubmitIntentRequest, PreallocatedCreationSubmitOutcome,
-    PreallocatedCreationSubmitPreflight, PreallocatedCreationSubmitPreflightRequest,
-    PreallocatedCreationSubmitReconciliation, CONTENT_MANIFEST_EXPLICIT_OBJECTS_MAXIMUM,
+    PostgresContentManifestExplicitComposition, PostgresMetadataReadDispatcher,
+    PostgresMetadataStore, PostgresMetadataTransaction, PreallocatedCreationSubmitFinalizeRequest,
+    PreallocatedCreationSubmitIntent, PreallocatedCreationSubmitIntentRequest,
+    PreallocatedCreationSubmitOutcome, PreallocatedCreationSubmitPreflight,
+    PreallocatedCreationSubmitPreflightRequest, PreallocatedCreationSubmitReconciliation,
+    CONTENT_MANIFEST_EXPLICIT_COMPOSITION_OPERATION, CONTENT_MANIFEST_EXPLICIT_OBJECTS_MAXIMUM,
     CONTENT_MANIFEST_PRODUCTION_BOUNDARY, CONTENT_MANIFEST_PRODUCTION_PROFILE,
     CONTENT_MANIFEST_PRODUCTION_VERIFIER,
 };

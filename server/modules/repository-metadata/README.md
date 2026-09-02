@@ -408,31 +408,46 @@ and committed-proof digests.
 The OGVCS-009 identity subject and the object-transfer production-subject
 digest are deliberately separate fields. The former is checked against every
 identity view and the lifecycle application; the latter preserves the existing
-JavaScript committed-proof projection. This participant does not prove that a
-production grant issuer/subject maps to that OGVCS-009 identity. The missing
-private JavaScript-to-Rust mapping layer owns that relationship. The transfer
-`tenantScopeSha256` and `authorityBindingSha256` values are likewise opaque
-inputs from that missing layer: this module exact-matches them to current
-lifecycle/proof state but does not derive either from the OGVCS-009 credential
-scope. An independent JavaScript/Rust known-answer vector freezes only the
-existing committed-proof projection, not the absent mapping authority.
-The private JavaScript production-candidate port derives the lifecycle receipt
-only after the branded chunking verifier receipt has been consumed; service
-input cannot select it. Persisting that receipt and mapping the private JS
-authority into the sealed Rust participant remain unimplemented production
-adapter work. The older generic JavaScript lifecycle transaction participant
-still has its separate predeclared content-manifest receipt convention; changing
-that OGVCS-007-owned publication contract is outside this route-less tranche and
-it is not production-adoption evidence for this candidate.
+JavaScript committed-proof projection. The additive explicit composition now
+requires an already negotiation-verified OGVCS-041 `object.put` request brand,
+matches its correlation, tenant, repository, authority epoch, identity subject,
+manifest ObjectID, byte length, and raw SHA-256 to the v12 command, re-verifies
+the receipt at the database clock, and delegates commit or reconciliation only
+to the existing OGVCS-009-bound SERIALIZABLE participant. Composition handles
+are instance-branded, and a committed proof can be projected into the exact
+private object-transfer candidate shape without constructing an OGVCS-041
+success response.
 
-The v12 candidate is not a public object-transfer service. It adds no route,
-transport or authentication carrier; no request-root issuance, expansion or
-ratification; no S3/MinIO production composition; no GC/delete authority; and
-no selective-sync or sandbox behavior. Its 4,096-object bound is not 100 GiB
-evidence and is not an OGVCS-008 completion claim. Local PostgreSQL 16 execution
-is syntax/liveness evidence only. The pinned PostgreSQL 15 workflow passed the
-exact v12 source in run 33500174865 and the v13 successor source in run
-33506824950; neither run is production deployment or exact-scale evidence.
+That control envelope is deliberately route-less: `object.put` remains
+`networkRegistered=false`, and the OGVCS-041 public transfer carrier remains
+request-root-only and rejects explicit object lists. The composition therefore
+does not prove that an object-transfer grant issuer/subject maps to the
+OGVCS-009 identity. The private JavaScript host must still present the exact
+already-verified explicit-set mapping; `tenantScopeSha256`,
+`authorityBindingSha256`, and the production-subject digest remain opaque and
+are exact-matched rather than derived from the OGVCS-009 credential scope. No
+JS-to-Rust invocation/transport, public endpoint, or multi-object grant issuer
+is added here. The OGVCS-041 self-dating idempotency carrier is reverified only
+for request currentness; because no public mutation is dispatched, it is not
+persisted and is not equated to the independently domain-separated private
+finalize fingerprint. The private JavaScript production-candidate port still
+derives the lifecycle receipt only after the branded chunking verifier receipt
+has been consumed; service input cannot select it. The older generic JavaScript
+lifecycle transaction participant keeps its separate predeclared
+content-manifest receipt convention; changing that OGVCS-007-owned publication
+contract is outside this route-less tranche and is not production-adoption
+evidence.
+
+The v12 candidate is not a public object-transfer service. The later
+composition reuses an existing OGVCS-041 authentication carrier internally but
+adds no route, method/path assignment, response carrier, request-root issuance,
+expansion or ratification, S3/MinIO production composition, GC/delete authority,
+selective-sync behavior, or sandbox behavior. Its 4,096-object bound is not
+100 GiB evidence and is not an OGVCS-008 completion claim. Local PostgreSQL 16
+execution is syntax/liveness evidence only. The pinned PostgreSQL 15 workflow
+passed the exact v12 source in run 33500174865 and the v13 successor source in
+run 33506824950; neither run covers this later composition, production
+deployment, or exact-scale evidence.
 
 Production persistence deployment evidence, public API/HTTP bindings, external chunk-store
 composition, and hosted production-service evidence remain deferred. The

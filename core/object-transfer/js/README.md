@@ -80,9 +80,13 @@ This candidate authorizes dependencies only from the signed explicit grant
 object set: at most 4,096 unique objects including the manifest. Its advertised
 `requestRootDependencyClosure` is `false`. The metadata adapter must authorize
 each dependency inside the same transaction and lock or revalidate every exact
-dependency generation through commit. No real OGVCS-003/006/009 adapter or
-public route supplies that capability yet; filesystem-local lifecycle therefore
-continues to leave content manifests staged.
+dependency generation through commit. The Rust metadata module now has a
+route-less composition that binds an authenticated OGVCS-041 `object.put`
+control envelope to the existing OGVCS-009 explicit-set commit/reconciliation
+participant. It does not provide the JavaScript-to-Rust invocation, prove the
+grant-subject-to-identity mapping, issue multi-object grants, or register a
+public route. Without that private host composition, filesystem-local lifecycle
+therefore continues to leave content manifests staged.
 
 Staging bytes, durable unique bytes, request rate, and transfer bytes are
 accounted separately. Durable reservations and commits survive response loss;

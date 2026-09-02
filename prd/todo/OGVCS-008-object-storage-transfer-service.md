@@ -7,7 +7,7 @@
 **Depends on:** OGVCS-003, OGVCS-007, OGVCS-041  
 **Blocks:** OGVCS-010, OGVCS-011, OGVCS-013, OGVCS-017, OGVCS-018, OGVCS-019, OGVCS-020, OGVCS-021, OGVCS-027, OGVCS-028, OGVCS-036, OGVCS-037  
 **Source:** [Architecture ADR-0003](../../adr/0003-object-lifecycle-and-gc-fencing.md)  
-**Last updated:** 2026-09-01
+**Last updated:** 2026-09-02
 
 ## Outcome
 
@@ -109,8 +109,10 @@ Start with filesystem development backend and one supported S3 profile. New back
   candidate verifies durable manifests/chunks and enters atomic metadata
   availability only through the package production callback. Its dependency
   authority is explicitly limited to signed sets of at most 4,096 objects;
-  request-root closure remains unavailable. The canonical object limit remains
-  64 MiB.
+  request-root closure remains unavailable. A route-less Rust follow-up binds
+  an authenticated OGVCS-041 `object.put` control envelope to the current
+  OGVCS-009 explicit-set commit/reconciliation participant without registering
+  any public route. The canonical object limit remains 64 MiB.
 - Test and benchmark results: local bounded runtime, generated/independently
   validated contract, workflow policy, and roadmap gates are recorded in the
   OGVCS-008 review. The offline 100-GiB logical-plan test proves 1,600
@@ -124,7 +126,9 @@ Start with filesystem development backend and one supported S3 profile. New back
   review record, pinned MinIO provenance policy, and manual exact-scale workflow.
 - Rollout result: not performed. Pinned loopback MinIO conformance is retained
   with current-source Linux/macOS/Windows evidence. The PRD remains Todo until
-  the exact 100-GiB interrupted throughput/memory result and separately owned
-  repository-metadata/identity lifecycle integration are complete. No real
-  OGVCS-003/006/009 production adapter or public route currently backs the new
-  acceptor, and its explicit-set profile cannot justify OGVCS-007 ratification.
+  the exact 100-GiB interrupted throughput/memory result and remaining
+  repository-metadata/identity lifecycle integration are complete. The
+  route-less composition still lacks JavaScript-to-Rust invocation,
+  multi-object OGVCS-003 grant issuance, and trusted production-subject mapping;
+  no public route backs it, and its explicit-set profile cannot justify
+  OGVCS-007 ratification.

@@ -82,10 +82,34 @@ codes, transition assignments, and public/wire route ownership are unchanged.
   including hostile getters/proxies/non-Error values, map to fixed
   non-secret-bearing transfer errors.
 
-This is not a contract ratification or deployment claim. No real OGVCS-003,
-OGVCS-006, or OGVCS-009 adapter and no public route currently implements the
-candidate port. Its explicit 4,096-object ceiling cannot support the OGVCS-007
-100-GiB request-root profile, so it must not be used to ratify that profile.
+This initial acceptor was not a contract ratification or deployment claim. It
+had no real OGVCS-003/006/009 composition or public route. Its explicit
+4,096-object ceiling cannot support the OGVCS-007 100-GiB request-root profile,
+so neither it nor the route-less follow-up below may be used to ratify that
+profile.
+
+## Route-less explicit-set production composition candidate
+
+- Added an instance-branded Rust composition that requires an already
+  negotiation-verified OGVCS-041 `object.put` request and exact-matches its
+  principal, correlation, tenant/repository, authority epoch, manifest
+  ObjectID, canonical byte length, and raw SHA-256 to the existing v12
+  explicit-set command.
+- Re-verifies the OGVCS-041 receipt at the PostgreSQL clock, then delegates
+  commit and reconciliation only to the existing OGVCS-009-bound SERIALIZABLE
+  participant. The complete sorted set remains capped at 4,096 and has no
+  request-root field or expansion callback.
+- Added the exact private committed-proof projection needed by the existing
+  object-transfer acceptor, plus hostile brand/cross-instance, principal,
+  correlation, tenant, repository, epoch, and set-substitution coverage.
+- Kept `object.put` and every metadata route unregistered. The OGVCS-041 public
+  transfer carrier remains request-root-only and continues to reject explicit
+  object sets.
+
+This follow-up still does not provide the JavaScript-to-Rust invocation,
+multi-object OGVCS-003 grant issuance, or the trusted mapping between the
+object-transfer production subject and OGVCS-009 identity subject. It is an
+additive fail-closed composition seam, not a public transfer route or rollout.
 
 ## Deliberate remaining work and open gates
 

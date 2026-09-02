@@ -10,12 +10,22 @@ use ogvcs_identity_policy_audit_postgres::{
     TransactionAuthorizedView, TransactionBatchRecheck, MAXIMUM_BATCH_RESOURCES,
 };
 use serde::Serialize;
+use std::sync::Arc;
+
+use crate::{
+    service::metadata_negotiation_tenant_digest, MetadataNegotiationKeyRing, MetadataOperation,
+    MetadataOperationExposure, NegotiationVerifiedMetadataRequest,
+};
 
 pub const CONTENT_MANIFEST_EXPLICIT_OBJECTS_MAXIMUM: usize = 4_096;
 pub const CONTENT_MANIFEST_PRODUCTION_BOUNDARY: &str =
     "ogvcs.chunking-manifest/production-boundary@1";
 pub const CONTENT_MANIFEST_PRODUCTION_PROFILE: &str = "chunking.opengamevcs/gear-fastcdc-1m@1";
 pub const CONTENT_MANIFEST_PRODUCTION_VERIFIER: &str = "ogvcs.chunking-manifest/verifier@1";
+/// Existing OGVCS-041 control-envelope assignment used only as authenticated,
+/// route-less composition facts. It is not registered as an object-transfer
+/// route and does not change the request-root-only public transfer carrier.
+pub const CONTENT_MANIFEST_EXPLICIT_COMPOSITION_OPERATION: &str = "object.put";
 
 // v12 persists at most five fixed-width OGVCS-009 authorization pages. A
 // future identity participant width change therefore requires a new metadata
@@ -115,6 +125,46 @@ pub struct ContentManifestCommittedProofLookup<'a> {
     pub finalize_semantic_fingerprint: [u8; 32],
 }
 
+/// Opaque composition brand produced after one exact OGVCS-041 `object.put`
+/// request has been matched to the complete explicit-set availability command.
+/// It cannot be constructed outside this module or replayed through a second
+/// composition instance.
+pub struct BoundContentManifestAvailabilityCommit<'a> {
+    binding: BrandedComposition<(
+        NegotiationVerifiedMetadataRequest,
+        ContentManifestAvailabilityCommitRequest<'a>,
+    )>,
+}
+
+/// Opaque composition brand for authenticated committed-proof reconciliation.
+/// The expected raw manifest SHA-256 is retained because the v12 lookup itself
+/// intentionally contains no public carrier fields.
+pub struct BoundContentManifestAvailabilityReconciliation<'a> {
+    binding: BrandedComposition<(
+        NegotiationVerifiedMetadataRequest,
+        ContentManifestCommittedProofLookup<'a>,
+        [u8; 32],
+    )>,
+}
+
+/// Route-less production composition of the existing OGVCS-041 request brand,
+/// OGVCS-009 transaction participant, and v12 explicit-set availability seam.
+/// No HTTP router, generic transfer route, or request-root expansion surface is
+/// exposed by this type.
+pub struct PostgresContentManifestExplicitComposition {
+    store: IdentityBoundPostgresMetadataStore<DenyAllAuthorization, ProductionObjectValidator>,
+    negotiation_keys: Arc<MetadataNegotiationKeyRing>,
+    brand: ExplicitCompositionBrand,
+}
+
+#[derive(Clone)]
+struct ExplicitCompositionBrand(Arc<()>);
+
+struct BrandedComposition<T> {
+    origin: Arc<()>,
+    value: T,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ContentManifestCommittedProof {
     application_id: [u8; 16],
@@ -167,6 +217,21 @@ impl ContentManifestCommittedProof {
 
     pub const fn replayed(&self) -> bool {
         self.replayed
+    }
+
+    /// Exact private projection consumed by the existing object-transfer
+    /// production-candidate port. This is not an OGVCS-041 response body and
+    /// cannot register or imply a public route.
+    pub fn candidate_projection(&self) -> Value {
+        let mut value = committed_proof_value(self);
+        value
+            .as_object_mut()
+            .expect("committed proof is an object")
+            .insert(
+                "proofSha256".to_owned(),
+                Value::String(hex_bytes(&self.proof_digest)),
+            );
+        value
     }
 }
 
@@ -329,29 +394,307 @@ impl<A, V> IdentityBoundPostgresMetadataStore<A, V> {
             .isolation_level(IsolationLevel::Serializable)
             .start()
             .map_err(database_error)?;
-        let result: Result<ContentManifestAvailabilityReconciliation> = (|| {
-            let authorized = authorize_explicit_set(
+        let result = reconcile_in_transaction(&mut transaction, participant, &lookup);
+        let _ = transaction.rollback();
+        result.map_err(|_| denied_error())
+    }
+}
+
+fn reconcile_in_transaction(
+    transaction: &mut Transaction<'_>,
+    participant: &PostgresTransactionAuthorizationParticipant,
+    lookup: &ContentManifestCommittedProofLookup<'_>,
+) -> Result<ContentManifestAvailabilityReconciliation> {
+    let authorized = authorize_explicit_set(
+        transaction,
+        participant,
+        &lookup.authority,
+        lookup.object_ref,
+    )?;
+    let proof = load_committed_proof(transaction, lookup, false)?;
+    let observation_digest = reconciliation_observation_digest(lookup, authorized.primary_view()?)?;
+    Ok(match proof {
+        Some(mut proof) => {
+            proof.replayed = true;
+            ContentManifestAvailabilityReconciliation::Committed(Box::new(proof))
+        }
+        None => ContentManifestAvailabilityReconciliation::UnknownRecovering { observation_digest },
+    })
+}
+
+impl ExplicitCompositionBrand {
+    fn new() -> Self {
+        Self(Arc::new(()))
+    }
+
+    fn bind<T>(&self, value: T) -> BrandedComposition<T> {
+        BrandedComposition {
+            origin: Arc::clone(&self.0),
+            value,
+        }
+    }
+
+    fn take<T>(&self, branded: BrandedComposition<T>) -> Result<T> {
+        if !Arc::ptr_eq(&self.0, &branded.origin) {
+            return denied();
+        }
+        Ok(branded.value)
+    }
+}
+
+impl PostgresContentManifestExplicitComposition {
+    /// Opens the route-less composition with both OGVCS-009 and OGVCS-041
+    /// verifier authorities installed before it becomes observable.
+    pub fn connect(
+        database_url: &str,
+        participant: PostgresTransactionAuthorizationParticipant,
+        negotiation_keys: Arc<MetadataNegotiationKeyRing>,
+    ) -> Result<Self> {
+        Ok(Self::from_store(
+            IdentityBoundPostgresMetadataStore::connect(database_url, participant)?,
+            negotiation_keys,
+        ))
+    }
+
+    pub fn from_store(
+        store: IdentityBoundPostgresMetadataStore<DenyAllAuthorization, ProductionObjectValidator>,
+        negotiation_keys: Arc<MetadataNegotiationKeyRing>,
+    ) -> Self {
+        Self {
+            store,
+            negotiation_keys,
+            brand: ExplicitCompositionBrand::new(),
+        }
+    }
+
+    /// Matches an already negotiation-verified OGVCS-041 `object.put`
+    /// envelope to the complete explicit-set command without performing a
+    /// database lookup or mutation.
+    pub fn bind_commit<'a>(
+        &self,
+        verified: NegotiationVerifiedMetadataRequest,
+        request: ContentManifestAvailabilityCommitRequest<'a>,
+    ) -> Result<BoundContentManifestAvailabilityCommit<'a>> {
+        validate_commit_request(&request)?;
+        validate_composition_control(
+            &verified,
+            &request.authority,
+            request.object_ref,
+            request.length,
+            request.production_statement.manifest_sha256,
+        )?;
+        Ok(BoundContentManifestAvailabilityCommit {
+            binding: self.brand.bind((verified, request)),
+        })
+    }
+
+    /// Re-verifies the carrier at the database clock, then delegates the only
+    /// mutation to the existing v12 OGVCS-009-bound transaction.
+    pub fn commit(
+        &mut self,
+        bound: BoundContentManifestAvailabilityCommit<'_>,
+    ) -> Result<ContentManifestCommittedProof> {
+        let (verified, request) = self.brand.take(bound.binding)?;
+        validate_commit_request(&request)?;
+        validate_composition_control(
+            &verified,
+            &request.authority,
+            request.object_ref,
+            request.length,
+            request.production_statement.manifest_sha256,
+        )?;
+        crate::verify_schema_compatibility(&mut self.store.store.client)
+            .map_err(|_| denied_error())?;
+        let PostgresMetadataStore {
+            client,
+            transaction_authorization,
+            ..
+        } = &mut self.store.store;
+        let participant = transaction_authorization
+            .as_ref()
+            .ok_or_else(denied_error)?;
+        let mut transaction = client
+            .build_transaction()
+            .isolation_level(IsolationLevel::Serializable)
+            .start()
+            .map_err(|_| denied_error())?;
+        let result: Result<ContentManifestCommittedProof> = (|| {
+            let now_unix_ms = composition_database_now_unix_ms(&mut transaction)?;
+            reverify_composition_at_database_clock(
+                &verified,
+                self.negotiation_keys.as_ref(),
+                now_unix_ms,
+            )?;
+            let (mut proof, wrote) = commit_in_transaction(
                 &mut transaction,
                 participant,
-                &lookup.authority,
-                lookup.object_ref,
+                &request,
+                TransferFault::default(),
             )?;
-            let proof = load_committed_proof(&mut transaction, &lookup, false)?;
-            let observation_digest =
-                reconciliation_observation_digest(&lookup, authorized.primary_view()?)?;
-            Ok(match proof {
-                Some(mut proof) => {
-                    proof.replayed = true;
-                    ContentManifestAvailabilityReconciliation::Committed(Box::new(proof))
+            proof.replayed = !wrote;
+            Ok(proof)
+        })();
+        let proof = match result {
+            Ok(proof) => proof,
+            Err(_) => {
+                let _ = transaction.rollback();
+                return denied();
+            }
+        };
+        transaction.commit().map_err(|_| denied_error())?;
+        Ok(proof)
+    }
+
+    /// Binds a committed-proof lookup to the same route-less public control
+    /// facts. The raw manifest digest is explicit because v12 intentionally
+    /// keeps it outside the stable lookup identity.
+    pub fn bind_reconciliation<'a>(
+        &self,
+        verified: NegotiationVerifiedMetadataRequest,
+        lookup: ContentManifestCommittedProofLookup<'a>,
+        expected_manifest_sha256: [u8; 32],
+    ) -> Result<BoundContentManifestAvailabilityReconciliation<'a>> {
+        validate_lookup(&lookup)?;
+        validate_composition_control(
+            &verified,
+            &lookup.authority,
+            lookup.object_ref,
+            lookup.length,
+            expected_manifest_sha256,
+        )?;
+        Ok(BoundContentManifestAvailabilityReconciliation {
+            binding: self
+                .brand
+                .bind((verified, lookup, expected_manifest_sha256)),
+        })
+    }
+
+    /// Re-verifies and reauthorizes the exact explicit set in one read-only
+    /// SERIALIZABLE transaction. A committed proof must also match the public
+    /// carrier's raw manifest digest before it is returned.
+    pub fn reconcile(
+        &mut self,
+        bound: BoundContentManifestAvailabilityReconciliation<'_>,
+    ) -> Result<ContentManifestAvailabilityReconciliation> {
+        let (verified, lookup, expected_manifest_sha256) = self.brand.take(bound.binding)?;
+        validate_lookup(&lookup)?;
+        validate_composition_control(
+            &verified,
+            &lookup.authority,
+            lookup.object_ref,
+            lookup.length,
+            expected_manifest_sha256,
+        )?;
+        crate::verify_schema_compatibility(&mut self.store.store.client)
+            .map_err(|_| denied_error())?;
+        let PostgresMetadataStore {
+            client,
+            transaction_authorization,
+            ..
+        } = &mut self.store.store;
+        let participant = transaction_authorization
+            .as_ref()
+            .ok_or_else(denied_error)?;
+        let mut transaction = client
+            .build_transaction()
+            .isolation_level(IsolationLevel::Serializable)
+            .start()
+            .map_err(|_| denied_error())?;
+        let result: Result<ContentManifestAvailabilityReconciliation> = (|| {
+            let now_unix_ms = composition_database_now_unix_ms(&mut transaction)?;
+            reverify_composition_at_database_clock(
+                &verified,
+                self.negotiation_keys.as_ref(),
+                now_unix_ms,
+            )?;
+            let result = reconcile_in_transaction(&mut transaction, participant, &lookup)?;
+            if let ContentManifestAvailabilityReconciliation::Committed(proof) = &result {
+                if proof.production_statement.manifest_sha256 != expected_manifest_sha256 {
+                    return denied();
                 }
-                None => ContentManifestAvailabilityReconciliation::UnknownRecovering {
-                    observation_digest,
-                },
-            })
+            }
+            Ok(result)
         })();
         let _ = transaction.rollback();
         result.map_err(|_| denied_error())
     }
+}
+
+fn validate_composition_control(
+    verified: &NegotiationVerifiedMetadataRequest,
+    authority: &ContentManifestExplicitAuthority<'_>,
+    manifest: ObjectRef,
+    length: u64,
+    manifest_sha256: [u8; 32],
+) -> Result<()> {
+    validate_authority(authority, manifest)?;
+    let request = verified.request();
+    let body = request.body().as_object().ok_or_else(denied_error)?;
+    if request.operation() != MetadataOperation::ObjectPut
+        || request.operation().name() != CONTENT_MANIFEST_EXPLICIT_COMPOSITION_OPERATION
+        || request.exposure() != MetadataOperationExposure::StreamCarrierRequired
+        || request
+            .operation()
+            .transport_descriptor()
+            .network_registered
+        || request.semantic_fingerprint().is_none()
+        || request.tenant_id() != Some(authority.tenant_id)
+        || request.repository_id() != Some(authority.repository_id)
+        || authority.credentials.correlation_id != request.correlation_id()
+        || verified.principal().authority_epoch() != authority.authority_epoch
+        || !bool::from(
+            verified
+                .principal()
+                .subject_digest()
+                .ct_eq(&authority.identity_subject_digest),
+        )
+        || !bool::from(
+            verified
+                .principal()
+                .tenant_digest()
+                .ct_eq(&metadata_negotiation_tenant_digest(authority.tenant_id)),
+        )
+        || body.get("objectRef").and_then(Value::as_str) != Some(manifest.to_string().as_str())
+        || body.get("canonicalByteLength").and_then(Value::as_u64) != Some(length)
+        || body.get("streamDigestSha256").and_then(Value::as_str)
+            != Some(hex_bytes(&manifest_sha256).as_str())
+    {
+        return denied();
+    }
+    Ok(())
+}
+
+fn composition_database_now_unix_ms(transaction: &mut Transaction<'_>) -> Result<u64> {
+    let value: i64 = transaction
+        .query_one(
+            "SELECT floor(extract(epoch FROM clock_timestamp()) * 1000)::bigint",
+            &[],
+        )
+        .map_err(database_error)?
+        .get(0);
+    u64::try_from(value).map_err(|_| denied_error())
+}
+
+fn reverify_composition_at_database_clock(
+    verified: &NegotiationVerifiedMetadataRequest,
+    keys: &MetadataNegotiationKeyRing,
+    now_unix_ms: u64,
+) -> Result<()> {
+    verified
+        .reverify_at(keys, now_unix_ms)
+        .map_err(|_| denied_error())?;
+    let now = SystemTime::UNIX_EPOCH
+        .checked_add(Duration::from_millis(now_unix_ms))
+        .ok_or_else(denied_error)?;
+    if verified
+        .request()
+        .idempotency_reservation_at(now)
+        .map_err(|_| denied_error())?
+        .is_none()
+    {
+        return denied();
+    }
+    Ok(())
 }
 
 impl ContentManifestAvailabilityTransaction<'_> {
@@ -1826,6 +2169,11 @@ fn fail_at(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        MetadataNegotiationPrincipal, MetadataOperationRequest, METADATA_SERVICE_REQUEST_SCHEMA,
+        OGVCS_041_NEGOTIATION_REGISTRY_SET_SHA256,
+    };
+    use hmac::{Hmac, Mac};
 
     fn reference(kind: ObjectKind, byte: u8) -> ObjectRef {
         ObjectRef {
@@ -2022,6 +2370,14 @@ mod tests {
             proof.proof_digest,
             digest("3aa67a120438b8c5d35c87d838b1464a452dcfb8698f2368fdd9dc775b6ad6d2")
         );
+        let projection = proof.candidate_projection();
+        assert_eq!(projection["proofSha256"], hex_bytes(&proof.proof_digest));
+        assert_eq!(
+            projection["subjectDigestSha256"],
+            hex_bytes(&proof.production_subject_digest)
+        );
+        assert!(projection.get("identitySubjectSha256").is_none());
+        assert!(projection.get("replayed").is_none());
     }
 
     #[test]
@@ -2085,5 +2441,369 @@ mod tests {
                 .code,
             DomainErrorCode::MetadataNotFoundOrDenied
         );
+    }
+
+    #[test]
+    fn composition_brand_is_instance_exact_and_unforgeable_by_shape() {
+        let first = ExplicitCompositionBrand::new();
+        let second = ExplicitCompositionBrand::new();
+        let cross_instance = first.bind(7_u8);
+        assert_eq!(
+            second.take(cross_instance).unwrap_err().code,
+            DomainErrorCode::MetadataNotFoundOrDenied
+        );
+        let forged = BrandedComposition {
+            origin: Arc::new(()),
+            value: 9_u8,
+        };
+        assert_eq!(
+            first.take(forged).unwrap_err().code,
+            DomainErrorCode::MetadataNotFoundOrDenied
+        );
+        assert_eq!(first.take(first.bind(11_u8)).unwrap(), 11);
+    }
+
+    #[test]
+    fn composition_binds_exact_public_facts_without_registering_a_route() {
+        let tenant = TenantId::from_bytes(id("11111111-1111-4111-8111-111111111111"));
+        let repository = RepositoryId::from_bytes(id("22222222-2222-4222-8222-222222222222"));
+        let manifest = reference(ObjectKind::ContentManifest, 0x61);
+        let object_set = [manifest];
+        let identity_subject = [0x31; 32];
+        let manifest_sha256 = [0x41; 32];
+        let authority = authority(
+            tenant,
+            repository,
+            &object_set,
+            identity_subject,
+            7,
+            "composition-correlation-0001",
+        );
+        let verified = verified_object_put(
+            tenant,
+            repository,
+            identity_subject,
+            7,
+            "composition-correlation-0001",
+            manifest,
+            141,
+            manifest_sha256,
+        );
+        validate_composition_control(&verified, &authority, manifest, 141, manifest_sha256)
+            .unwrap();
+        let keys =
+            MetadataNegotiationKeyRing::new(vec![("composition-key@1".to_owned(), vec![0x5a; 32])])
+                .unwrap();
+        reverify_composition_at_database_clock(&verified, &keys, 1_500).unwrap();
+        assert_eq!(
+            reverify_composition_at_database_clock(&verified, &keys, 2_000)
+                .unwrap_err()
+                .code,
+            DomainErrorCode::MetadataNotFoundOrDenied,
+            "the public mutation idempotency window must be current at the database clock"
+        );
+        assert!(
+            !MetadataOperation::ObjectPut
+                .transport_descriptor()
+                .network_registered
+        );
+        assert_eq!(crate::network_transport_descriptors().count(), 0);
+    }
+
+    #[test]
+    fn composition_rejects_principal_scope_and_explicit_set_substitution() {
+        let tenant = TenantId::from_bytes(id("11111111-1111-4111-8111-111111111111"));
+        let other_tenant = TenantId::from_bytes(id("11111111-1111-4111-8111-111111111112"));
+        let repository = RepositoryId::from_bytes(id("22222222-2222-4222-8222-222222222222"));
+        let other_repository = RepositoryId::from_bytes(id("22222222-2222-4222-8222-222222222223"));
+        let manifest = reference(ObjectKind::ContentManifest, 0x61);
+        let object_set = [manifest];
+        let identity_subject = [0x31; 32];
+        let manifest_sha256 = [0x41; 32];
+        let exact = authority(
+            tenant,
+            repository,
+            &object_set,
+            identity_subject,
+            7,
+            "composition-correlation-0001",
+        );
+        let denied = |verified: NegotiationVerifiedMetadataRequest,
+                      authority: &ContentManifestExplicitAuthority<'_>| {
+            assert_eq!(
+                validate_composition_control(&verified, authority, manifest, 141, manifest_sha256,)
+                    .unwrap_err()
+                    .code,
+                DomainErrorCode::MetadataNotFoundOrDenied
+            );
+        };
+
+        denied(
+            verified_object_put(
+                tenant,
+                repository,
+                [0x32; 32],
+                7,
+                "composition-correlation-0001",
+                manifest,
+                141,
+                manifest_sha256,
+            ),
+            &exact,
+        );
+        denied(
+            verified_object_put(
+                other_tenant,
+                repository,
+                identity_subject,
+                7,
+                "composition-correlation-0001",
+                manifest,
+                141,
+                manifest_sha256,
+            ),
+            &exact,
+        );
+        denied(
+            verified_object_put(
+                tenant,
+                other_repository,
+                identity_subject,
+                7,
+                "composition-correlation-0001",
+                manifest,
+                141,
+                manifest_sha256,
+            ),
+            &exact,
+        );
+        denied(
+            verified_object_put(
+                tenant,
+                repository,
+                identity_subject,
+                8,
+                "composition-correlation-0001",
+                manifest,
+                141,
+                manifest_sha256,
+            ),
+            &exact,
+        );
+
+        let wrong_correlation = ContentManifestExplicitAuthority {
+            credentials: TransactionCredentialRequest {
+                correlation_id: "composition-correlation-0002",
+                ..exact.credentials
+            },
+            ..exact
+        };
+        denied(
+            verified_object_put(
+                tenant,
+                repository,
+                identity_subject,
+                7,
+                "composition-correlation-0001",
+                manifest,
+                141,
+                manifest_sha256,
+            ),
+            &wrong_correlation,
+        );
+
+        denied(
+            verified_object_put(
+                tenant,
+                repository,
+                identity_subject,
+                7,
+                "composition-correlation-0001",
+                reference(ObjectKind::ContentManifest, 0x62),
+                141,
+                manifest_sha256,
+            ),
+            &exact,
+        );
+        denied(
+            verified_object_put(
+                tenant,
+                repository,
+                identity_subject,
+                7,
+                "composition-correlation-0001",
+                manifest,
+                142,
+                manifest_sha256,
+            ),
+            &exact,
+        );
+        denied(
+            verified_object_put(
+                tenant,
+                repository,
+                identity_subject,
+                7,
+                "composition-correlation-0001",
+                manifest,
+                141,
+                [0x42; 32],
+            ),
+            &exact,
+        );
+
+        let substituted_set = [reference(ObjectKind::Chunk, 0x01), manifest];
+        let substituted = ContentManifestExplicitAuthority {
+            object_set: &substituted_set,
+            authorization_closure_digest: exact.authorization_closure_digest,
+            ..exact
+        };
+        denied(
+            verified_object_put(
+                tenant,
+                repository,
+                identity_subject,
+                7,
+                "composition-correlation-0001",
+                manifest,
+                141,
+                manifest_sha256,
+            ),
+            &substituted,
+        );
+    }
+
+    fn authority<'a>(
+        tenant_id: TenantId,
+        repository_id: RepositoryId,
+        object_set: &'a [ObjectRef],
+        identity_subject_digest: [u8; 32],
+        authority_epoch: u64,
+        correlation_id: &'a str,
+    ) -> ContentManifestExplicitAuthority<'a> {
+        ContentManifestExplicitAuthority {
+            credentials: TransactionCredentialRequest {
+                request_id: correlation_id,
+                correlation_id,
+                credential_presentation: "credential-presentation",
+                reason: None,
+            },
+            tenant_id,
+            repository_id,
+            object_set,
+            identity_subject_digest,
+            production_subject_digest: [0x51; 32],
+            authority_epoch,
+            authorization_closure_digest: authorization_closure_digest(object_set).unwrap(),
+            tenant_scope_digest: [0x61; 32],
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn verified_object_put(
+        tenant_id: TenantId,
+        repository_id: RepositoryId,
+        subject_digest: [u8; 32],
+        authority_epoch: u64,
+        correlation_id: &str,
+        manifest: ObjectRef,
+        length: u64,
+        manifest_sha256: [u8; 32],
+    ) -> NegotiationVerifiedMetadataRequest {
+        let key = [0x5a; 32];
+        let claims = json!({
+            "schemaVersion": "ogvcs.protocol/negotiation-receipt-claims/v1",
+            "selection": negotiation_selection(),
+            "subjectDigest": hex_bytes(&subject_digest),
+            "tenantDigest": hex_bytes(&metadata_negotiation_tenant_digest(tenant_id)),
+            "authorityEpoch": authority_epoch,
+            "sessionId": "composition-session-0001",
+            "clientNonce": "AAAAAAAAAAAAAAAAAAAAAA",
+            "serverNonce": "AQEBAQEBAQEBAQEBAQEBAQ",
+            "issuedAtUnixMs": 1_000,
+            "expiresAtUnixMs": 301_000,
+        });
+        let mut receipt = json!({
+            "algorithm": "HMAC-SHA-256",
+            "keyId": "composition-key@1",
+            "claims": claims,
+            "mac": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        });
+        let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(&key).unwrap();
+        mac.update(b"OGVCS-PROTOCOL-NEGOTIATION-RECEIPT-V1\0");
+        mac.update(b"composition-key@1\0");
+        mac.update(&canonical_json_bytes(&receipt["claims"]).unwrap());
+        receipt["mac"] = Value::String(URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes()));
+
+        let body = json!({
+            "tenantId": uuid(tenant_id).to_string(),
+            "repositoryId": uuid(repository_id).to_string(),
+            "objectRef": manifest.to_string(),
+            "canonicalByteLength": length,
+            "streamDigestSha256": hex_bytes(&manifest_sha256),
+        });
+        let extensions = json!({});
+        let projection = json!({
+            "schemaVersion": METADATA_SERVICE_REQUEST_SCHEMA,
+            "operation": CONTENT_MANIFEST_EXPLICIT_COMPOSITION_OPERATION,
+            "body": body,
+            "extensions": extensions,
+        });
+        let mut fingerprint = Sha256::new();
+        fingerprint.update(b"ogvcs.protocol/idempotency/v1\0");
+        fingerprint.update(canonical_json_bytes(&projection).unwrap());
+        let fingerprint: [u8; 32] = fingerprint.finalize().into();
+        let request = json!({
+            "schemaVersion": METADATA_SERVICE_REQUEST_SCHEMA,
+            "operation": CONTENT_MANIFEST_EXPLICIT_COMPOSITION_OPERATION,
+            "correlationId": correlation_id,
+            "negotiationReceipt": receipt,
+            "idempotency": {
+                "key": "ik1.1000.2000.AAAAAAAAAAAAAAAAAAAAAA",
+                "algorithm": "OGVCS-SEMANTIC-JCS-SHA-256",
+                "projectionVersion": "ogvcs.protocol/fingerprint-projection@1",
+                "fingerprint": hex_bytes(&fingerprint),
+                "issuedAtUnixMs": 1_000,
+                "expiresAtUnixMs": 2_000,
+            },
+            "body": body,
+            "extensions": extensions,
+        });
+        let parsed = MetadataOperationRequest::parse(&serde_json::to_vec(&request).unwrap())
+            .unwrap_or_else(|error| panic!("composition request parse failed: {error:?}"));
+        let keys =
+            MetadataNegotiationKeyRing::new(vec![("composition-key@1".to_owned(), key.to_vec())])
+                .unwrap();
+        parsed
+            .verify_negotiation(
+                &keys,
+                &MetadataNegotiationPrincipal {
+                    subject_digest,
+                    tenant_digest: metadata_negotiation_tenant_digest(tenant_id),
+                    authority_epoch,
+                    session_id: "composition-session-0001".to_owned(),
+                    now_unix_ms: 1_500,
+                },
+            )
+            .unwrap()
+    }
+
+    fn negotiation_selection() -> Value {
+        json!({
+            "schemaVersion": "ogvcs.protocol/negotiation-selection/v1",
+            "protocolVersion": "ogvcs.control.https-json@1",
+            "messageSchemaVersion": "ogvcs.protocol.schema@1",
+            "repositoryFormat": "ogvcs.repository-format@1",
+            "authorizationContract": "ogvcs.authorization@1",
+            "authorizationRegistrySha256": "293f9ab0be023a9ded33326d04a8314080bda56e7c70dd18d0cca38b70bed9cc",
+            "pathContract": "ogvcs.path-filesystem@1",
+            "pathProfile": "path.opengamevcs/portable@1",
+            "pathRegistrySha256": "bbabdd95d78cfe0dd9751ab67ccbd9dfa5565bf8c049468aea3129bec787bd42",
+            "eventVersion": "ogvcs.events.base@1",
+            "transferProfile": "ogvcs.transfer.range-resume-probe@1",
+            "extensions": [],
+            "protocolRegistrySetSha256": OGVCS_041_NEGOTIATION_REGISTRY_SET_SHA256,
+            "repositoryRegistrySha256": "6ca55f10d2cd20139e77a19ae0d297757a0f05b0acd3a3b38a6ee473e2bf84c6",
+        })
     }
 }

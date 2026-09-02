@@ -44,10 +44,12 @@ pub use atomic_submit::{
 #[cfg(feature = "legacy-test-adapter")]
 pub use content_manifest_transfer::ContentManifestAvailabilityFaultForTest;
 pub use content_manifest_transfer::{
+    BoundContentManifestAvailabilityCommit, BoundContentManifestAvailabilityReconciliation,
     ContentManifestAvailabilityCommitRequest, ContentManifestAvailabilityReconciliation,
     ContentManifestAvailabilityTransaction, ContentManifestCommittedProof,
     ContentManifestCommittedProofLookup, ContentManifestDependencyBinding,
     ContentManifestExplicitAuthority, ContentManifestProductionStatement,
+    PostgresContentManifestExplicitComposition, CONTENT_MANIFEST_EXPLICIT_COMPOSITION_OPERATION,
     CONTENT_MANIFEST_EXPLICIT_OBJECTS_MAXIMUM, CONTENT_MANIFEST_PRODUCTION_BOUNDARY,
     CONTENT_MANIFEST_PRODUCTION_PROFILE, CONTENT_MANIFEST_PRODUCTION_VERIFIER,
 };

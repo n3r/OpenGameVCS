@@ -1138,6 +1138,19 @@ for (const evidence of [
   'request.verification_receipt_digest != expected_verification_receipt',
   'lifecycle.object_length = proof.object_length',
   'lifecycle.tenant_scope_digest = proof.tenant_scope_digest',
+  'pub struct PostgresContentManifestExplicitComposition',
+  'pub struct BoundContentManifestAvailabilityCommit',
+  'pub struct BoundContentManifestAvailabilityReconciliation',
+  'CONTENT_MANIFEST_EXPLICIT_COMPOSITION_OPERATION: &str = "object.put"',
+  'NegotiationVerifiedMetadataRequest',
+  'fn validate_composition_control(',
+  'metadata_negotiation_tenant_digest(authority.tenant_id)',
+  'fn reverify_composition_at_database_clock(',
+  '.idempotency_reservation_at(now)',
+  'Arc::ptr_eq(&self.0, &branded.origin)',
+  'commit_in_transaction(',
+  'reconcile_in_transaction(',
+  'pub fn candidate_projection(&self) -> Value',
 ]) assert(contentManifestAdapter.includes(evidence), `content-manifest participant evidence missing: ${evidence}`);
 assert(
   contentManifestAdapter.indexOf('let authorized = authorize_explicit_set(')
@@ -1155,6 +1168,7 @@ assert(
 for (const forbiddenAuthority of [
   'request_root', 'reqwest::', 'aws_sdk_', 'std::fs::', 'tokio::net::',
   'remove_file', 'DELETE FROM ogvcs_metadata.object_lifecycle', 'pub fn transaction(',
+  'MetadataResponseEnvelope', 'MetadataTransportRequest', 'CompactTransferGrant',
 ]) assert(!contentManifestAdapter.includes(forbiddenAuthority), `content-manifest participant gained excluded authority: ${forbiddenAuthority}`);
 
 const atomicSubmitAdapter = await readFile(resolve(root, 'src/postgres/atomic_submit.rs'), 'utf8');
