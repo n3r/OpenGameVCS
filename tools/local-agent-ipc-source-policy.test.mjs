@@ -5,6 +5,23 @@ import test from 'node:test';
 const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 
+const workflowPaths = (workflow, event, nextEvent) => {
+  const startToken = `  ${event}:\n`;
+  const start = workflow.indexOf(startToken);
+  assert.notEqual(start, -1, `${event} trigger exists`);
+  const end = workflow.indexOf(`\n  ${nextEvent}:`, start + startToken.length);
+  assert.notEqual(end, -1, `${event} trigger has a following event boundary`);
+  const block = workflow.slice(start + startToken.length, end);
+  const pathsToken = '    paths:\n';
+  const pathsStart = block.indexOf(pathsToken);
+  assert.notEqual(pathsStart, -1, `${event} trigger is path scoped`);
+  const pathLines = block.slice(pathsStart + pathsToken.length).trimEnd().split('\n');
+  for (const line of pathLines) {
+    assert.match(line, /^      - '[^']+'$/u, `${event} contains only explicit path entries`);
+  }
+  return pathLines.map((line) => line.match(/^      - '([^']+)'$/u)[1]);
+};
+
 test('local-agent candidate is private, Rust 1.82, and composes owning types', async () => {
   const [cargo, lib, model, state] = await Promise.all([
     read('client/local-agent/rust/Cargo.toml'),
@@ -162,4 +179,107 @@ test('package hook exists while OGVCS-042 and every acceptance criterion remain 
   assert.match(readme, /none of OGVCS-042-AC-01 through AC-05 is closed/u);
   assert.match(review, /AC-01 has no published schemas/u);
   assert.match(review, /All five remain open/u);
+});
+
+test('hosted portability workflow is pinned, path-complete, and preserves the private gate', async () => {
+  const workflow = await read('.github/workflows/local-agent-ipc.yml');
+  const expectedPaths = [
+    '.github/workflows/local-agent-ipc.yml',
+    'client/local-agent/rust/**',
+    'core/object-model/rust/**',
+    'core/paths-filesystem/rust/**',
+    'foundation/protocol-baseline/bindings/rust/**',
+    'docs/reviews/OGVCS-042-local-agent-ipc-boundary-review.md',
+    'prd/todo/OGVCS-042-minimal-local-agent-first-party-ipc.md',
+    'tools/local-agent-ipc-source-policy.test.mjs',
+    'package.json',
+    'package-lock.json',
+  ];
+
+  assert.match(workflow, /^name: R1 local-agent IPC candidate$/mu);
+  assert.deepEqual(workflowPaths(workflow, 'pull_request', 'push'), expectedPaths);
+  assert.deepEqual(workflowPaths(workflow, 'push', 'workflow_dispatch'), expectedPaths);
+  assert.deepEqual(
+    [...workflow.matchAll(/^    branches: (.+)$/gmu)].map((match) => match[1]),
+    ['[main, r1-foundation-integration]'],
+  );
+  assert.match(workflow, /^  workflow_dispatch:\s*$/mu);
+  assert.match(workflow, /^permissions:\n  contents: read\n\nconcurrency:$/mu);
+  assert.match(
+    workflow,
+    /^  group: local-agent-ipc-\$\{\{ github\.workflow \}\}-\$\{\{ github\.ref \}\}$/mu,
+  );
+  assert.match(workflow, /cancel-in-progress: true/u);
+  assert.deepEqual(
+    [...workflow.slice(workflow.indexOf('jobs:\n')).matchAll(/^  ([a-z][a-z0-9-]+):$/gmu)]
+      .map((match) => match[1]),
+    ['portability'],
+  );
+  assert.match(workflow, /fail-fast: false/u);
+  assert.match(workflow, /timeout-minutes: 30/u);
+  assert.deepEqual(
+    [...workflow.matchAll(/^          - \{ runner: ([^,]+), label: ([^ }]+) \}$/gmu)]
+      .map((match) => ({ runner: match[1], label: match[2] })),
+    [
+      { runner: 'ubuntu-latest', label: 'Linux' },
+      { runner: 'macos-latest', label: 'macOS' },
+      { runner: 'windows-latest', label: 'Windows' },
+    ],
+  );
+
+  assert.deepEqual(
+    [...workflow.matchAll(/^      - uses: (\S+)(?:\s+#.*)?$/gmu)].map((match) => match[1]),
+    [
+      'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1',
+      'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020',
+      'dtolnay/rust-toolchain@7d11e79e1714f6b6da93cac39ad8435666f5c337',
+    ],
+  );
+  assert.deepEqual(
+    [...workflow.matchAll(/^          persist-credentials: (.+)$/gmu)].map((match) => match[1]),
+    ['false'],
+  );
+  assert.match(
+    workflow,
+    /actions\/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7\.0\.1\n        with:\n          persist-credentials: false\n      - uses: actions\/setup-node@/u,
+  );
+  assert.deepEqual(
+    [...workflow.matchAll(/^          node-version: (.+)$/gmu)].map((match) => match[1]),
+    ['24'],
+  );
+  assert.match(workflow, /# 1\.82\.0/u);
+  assert.deepEqual(
+    [...workflow.matchAll(/^          components: (.+)$/gmu)].map((match) => match[1]),
+    ['clippy, rustfmt'],
+  );
+  assert.deepEqual(
+    [...workflow.matchAll(/^\s+(?:- )?run: (.+)$/gmu)]
+      .map((match) => match[1]),
+    [
+      'node --test tools/local-agent-ipc-source-policy.test.mjs',
+      'cargo fetch --manifest-path client/local-agent/rust/Cargo.toml --locked',
+      'cargo fmt --manifest-path client/local-agent/rust/Cargo.toml -- --check',
+      'cargo test --manifest-path client/local-agent/rust/Cargo.toml --locked --offline',
+      'cargo test --manifest-path client/local-agent/rust/Cargo.toml --locked --offline --release',
+      'cargo clippy --manifest-path client/local-agent/rust/Cargo.toml --locked --offline --all-targets -- -D warnings',
+      'sh ./scripts/test-packed.sh',
+      'node prd/validate-roadmap.mjs && node --test prd/validate-roadmap.test.mjs',
+    ],
+  );
+  assert.match(
+    workflow,
+    /- run: node --test tools\/local-agent-ipc-source-policy\.test\.mjs\n      - run: cargo fetch --manifest-path client\/local-agent\/rust\/Cargo\.toml --locked\n      - run: cargo fmt --manifest-path client\/local-agent\/rust\/Cargo\.toml -- --check/u,
+  );
+  assert.match(
+    workflow,
+    /- run: sh \.\/scripts\/test-packed\.sh\n        shell: bash\n        working-directory: client\/local-agent\/rust/u,
+  );
+  assert.match(
+    workflow,
+    /- name: Validate the open roadmap boundary\n        if: runner\.os == 'Linux'\n        run: node prd\/validate-roadmap\.mjs && node --test prd\/validate-roadmap\.test\.mjs/u,
+  );
+  assert.doesNotMatch(
+    workflow,
+    /continue-on-error|actions\/upload-artifact|\b(?:cargo|npm) publish\b|cosign|sigstore|pull_request_target/iu,
+  );
 });
