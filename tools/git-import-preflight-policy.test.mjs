@@ -13,6 +13,7 @@ test('hosted portability workflow is pinned, path-scoped, and cross-platform', a
     'core/object-model/rust/**',
     'core/paths-filesystem/rust/**',
     'docs/reviews/OGVCS-020-git-import-preflight-boundary-review.md',
+    'docs/evidence/OGVCS-020/**',
     'prd/todo/OGVCS-020-git-lfs-importer.md',
     'tools/git-import-preflight-policy.test.mjs',
     'package.json',
@@ -57,6 +58,45 @@ test('hosted portability workflow is pinned, path-scoped, and cross-platform', a
   assert.match(workflow, /cargo clippy --manifest-path core\/import-git-lfs\/rust\/Cargo\.toml --locked --offline --all-targets -- -D warnings/u);
   assert.match(workflow, /run: sh \.\/scripts\/test-packed\.sh\n        shell: bash\n        working-directory: core\/import-git-lfs\/rust/u);
   assert.match(workflow, /if: runner\.os == 'Linux'\n        run: node prd\/validate-roadmap\.mjs && node --test prd\/validate-roadmap\.test\.mjs/u);
+});
+
+test('retained hosted result is exact and bounded to private preflight portability', async () => {
+  const [evidence, evidenceReadme] = await Promise.all([
+    read('docs/evidence/OGVCS-020/hosted-source-run-33638102757.json').then(JSON.parse),
+    read('docs/evidence/OGVCS-020/README.md'),
+  ]);
+
+  assert.equal(evidence.schemaVersion, 'ogvcs.import/hosted-source-run/v1');
+  assert.deepEqual(evidence.run, {
+    id: 33638102757,
+    event: 'push',
+    branch: 'r1-foundation-integration',
+    headSha: '0e714329a903573c7aa0d16a58adda8bf67e1088',
+    status: 'completed',
+    conclusion: 'success',
+    createdAt: '2026-09-02T13:49:28Z',
+    completedAt: '2026-09-02T13:51:57Z',
+    url: 'https://github.com/n3r/OpenGameVCS/actions/runs/33638102757',
+  });
+  assert.deepEqual(
+    evidence.jobs.map(({ id, name, conclusion }) => ({ id, name, conclusion })),
+    [
+      { id: 100273965526, name: 'Private preflight portability (Linux)', conclusion: 'success' },
+      { id: 100273965786, name: 'Private preflight portability (Windows)', conclusion: 'success' },
+      { id: 100273965832, name: 'Private preflight portability (macOS)', conclusion: 'success' },
+    ],
+  );
+  assert.deepEqual(evidence.claimBoundary, {
+    privatePreflightOnly: true,
+    gitParser: false,
+    conversion: false,
+    authenticatedImport: false,
+    acceptanceCriterion: false,
+    releaseEvidence: false,
+  });
+  assert.match(evidenceReadme, /source-portability evidence only/iu);
+  assert.match(evidenceReadme, /OGVCS-020 remains\s+\*\*Todo\*\*/u);
+  assert.match(evidenceReadme, /AC-01 through AC-07 remain open/u);
 });
 
 test('OGVCS-020 candidate remains private, bounded, unwired, and Todo', async () => {

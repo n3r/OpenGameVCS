@@ -138,11 +138,13 @@ installation, first-admin bootstrap, real secret providers, public versioned
 configuration, reload/restart behavior, migrations and ledger, OGVCS-017/018
 integration, backup/restore, public health/metrics/logging, diagnostics,
 repository creation, uninstall/reinstall, preserve/delete confirmation,
-offline and clean-host runs, hosted cross-OS evidence, operator runbooks, timed
-exercise, idempotency, scale/SLO proof, operations, rollout, and rollback remain
-unimplemented.
+offline and clean-host installed runs, hosted deployed-host evidence, operator
+runbooks, timed exercise, idempotency, scale/SLO proof, operations, rollout,
+and rollback remain unimplemented.
 
 The path-scoped hosted workflow is a pinned Linux/macOS/Windows source
-portability gate only. Until an exact run is retained it is not evidence, and
-even a green run is not deployment, clean-host, offline-runtime, upgrade,
+portability gate only. Exact run
+[33636845283](https://github.com/n3r/OpenGameVCS/actions/runs/33636845283)
+is retained for revision `3563167763a54b97eb8166ded1db895aa3a5b7cd`.
+That green run is not deployment, clean-host, offline-runtime, upgrade,
 rollback, recovery, or operator evidence.

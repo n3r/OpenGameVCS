@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "ogvcs.import/hosted-source-run/v1",
+  "run": {
+    "id": 33638102757,
+    "event": "push",
+    "branch": "r1-foundation-integration",
+    "headSha": "0e714329a903573c7aa0d16a58adda8bf67e1088",
+    "status": "completed",
+    "conclusion": "success",
+    "createdAt": "2026-09-02T13:49:28Z",
+    "completedAt": "2026-09-02T13:51:57Z",
+    "url": "https://github.com/n3r/OpenGameVCS/actions/runs/33638102757"
+  },
+  "jobs": [
+    { "id": 100273965526, "name": "Private preflight portability (Linux)", "conclusion": "success" },
+    { "id": 100273965786, "name": "Private preflight portability (Windows)", "conclusion": "success" },
+    { "id": 100273965832, "name": "Private preflight portability (macOS)", "conclusion": "success" }
+  ],
+  "successfulStepsOnEveryHost": [
+    "Node source/package/PRD/workflow policy",
+    "Rust format check",
+    "Rust debug tests",
+    "Rust release tests",
+    "Rust warnings-denied Clippy",
+    "freshly extracted package tests"
+  ],
+  "claimBoundary": {
+    "privatePreflightOnly": true,
+    "gitParser": false,
+    "conversion": false,
+    "authenticatedImport": false,
+    "acceptanceCriterion": false,
+    "releaseEvidence": false
+  }
+}

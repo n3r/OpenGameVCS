@@ -76,6 +76,7 @@ test('hosted source-portability gate is pinned, path-scoped, and cross-platform'
     '.github/workflows/deployment-preflight.yml',
     'core/deployment-preflight/rust/**',
     'docs/reviews/OGVCS-021-deployment-preflight-boundary-review.md',
+    'docs/evidence/OGVCS-021/**',
     'prd/todo/OGVCS-021-starter-deployment-admin-bootstrap.md',
     'tools/deployment-preflight-source-policy.test.mjs',
     'package.json',
@@ -120,6 +121,45 @@ test('hosted source-portability gate is pinned, path-scoped, and cross-platform'
   assert.doesNotMatch(workflow, /cargo package[^\n]*--no-verify/u);
   assert.match(workflow, /if: runner\.os == 'Linux'\n        run: node prd\/validate-roadmap\.mjs && node --test prd\/validate-roadmap\.test\.mjs/u);
   assert.doesNotMatch(workflow, /pull_request_target|schedule:|docker|kubectl|helm|terraform/iu);
+});
+
+test('retained hosted result is exact and bounded to private source portability', async () => {
+  const [evidence, evidenceReadme] = await Promise.all([
+    read('docs/evidence/OGVCS-021/hosted-source-run-33636845283.json').then(JSON.parse),
+    read('docs/evidence/OGVCS-021/README.md'),
+  ]);
+
+  assert.equal(evidence.schemaVersion, 'ogvcs.deployment-preflight/hosted-source-run/v1');
+  assert.deepEqual(evidence.run, {
+    id: 33636845283,
+    event: 'push',
+    branch: 'r1-foundation-integration',
+    headSha: '3563167763a54b97eb8166ded1db895aa3a5b7cd',
+    status: 'completed',
+    conclusion: 'success',
+    createdAt: '2026-09-02T13:37:21Z',
+    completedAt: '2026-09-02T13:38:21Z',
+    url: 'https://github.com/n3r/OpenGameVCS/actions/runs/33636845283',
+  });
+  assert.deepEqual(
+    evidence.jobs.map(({ id, name, conclusion }) => ({ id, name, conclusion })),
+    [
+      { id: 100269733465, name: 'Private preflight portability (Windows)', conclusion: 'success' },
+      { id: 100269733691, name: 'Private preflight portability (Linux)', conclusion: 'success' },
+      { id: 100269733912, name: 'Private preflight portability (macOS)', conclusion: 'success' },
+    ],
+  );
+  assert.deepEqual(evidence.claimBoundary, {
+    privatePreflightOnly: true,
+    installedDeployment: false,
+    cleanHost: false,
+    backupRestore: false,
+    acceptanceCriterion: false,
+    releaseEvidence: false,
+  });
+  assert.match(evidenceReadme, /source-portability evidence only/iu);
+  assert.match(evidenceReadme, /OGVCS-021 remains\s+\*\*Todo\*\*/u);
+  assert.match(evidenceReadme, /AC-01 through AC-05 remain open/u);
 });
 
 test('safe defaults, readiness classes, and report-local checksum remain explicit', async () => {
@@ -186,7 +226,7 @@ test('README and review retain supplied-fact and nonclaim boundaries', async () 
     assert.match(text, /backup\/restore/iu);
     assert.match(text, /300|observation-age|observation age/iu);
     assert.match(text, /conservative/iu);
-    assert.match(text, /hosted cross-OS/iu);
+    assert.match(text, /hosted (?:cross-OS|deployed-host)/iu);
     assert.match(text, /scale\/SLO|scale.*SLO/isu);
     assert.match(text, /OGVCS-021 remains\s+Todo/u);
   }

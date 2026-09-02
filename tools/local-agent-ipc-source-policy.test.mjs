@@ -190,6 +190,7 @@ test('hosted portability workflow is pinned, path-complete, and preserves the pr
     'core/paths-filesystem/rust/**',
     'foundation/protocol-baseline/bindings/rust/**',
     'docs/reviews/OGVCS-042-local-agent-ipc-boundary-review.md',
+    'docs/evidence/OGVCS-042/**',
     'prd/todo/OGVCS-042-minimal-local-agent-first-party-ipc.md',
     'tools/local-agent-ipc-source-policy.test.mjs',
     'package.json',
@@ -282,4 +283,43 @@ test('hosted portability workflow is pinned, path-complete, and preserves the pr
     workflow,
     /continue-on-error|actions\/upload-artifact|\b(?:cargo|npm) publish\b|cosign|sigstore|pull_request_target/iu,
   );
+});
+
+test('retained hosted result is exact and bounded to private IPC source portability', async () => {
+  const [evidence, evidenceReadme] = await Promise.all([
+    read('docs/evidence/OGVCS-042/hosted-source-run-33636845159.json').then(JSON.parse),
+    read('docs/evidence/OGVCS-042/README.md'),
+  ]);
+
+  assert.equal(evidence.schemaVersion, 'ogvcs.local-agent/hosted-source-run/v1');
+  assert.deepEqual(evidence.run, {
+    id: 33636845159,
+    event: 'push',
+    branch: 'r1-foundation-integration',
+    headSha: '3563167763a54b97eb8166ded1db895aa3a5b7cd',
+    status: 'completed',
+    conclusion: 'success',
+    createdAt: '2026-09-02T13:37:21Z',
+    completedAt: '2026-09-02T13:40:23Z',
+    url: 'https://github.com/n3r/OpenGameVCS/actions/runs/33636845159',
+  });
+  assert.deepEqual(
+    evidence.jobs.map(({ id, name, conclusion }) => ({ id, name, conclusion })),
+    [
+      { id: 100269732676, name: 'Private IPC source portability (Windows)', conclusion: 'success' },
+      { id: 100269732991, name: 'Private IPC source portability (macOS)', conclusion: 'success' },
+      { id: 100269733202, name: 'Private IPC source portability (Linux)', conclusion: 'success' },
+    ],
+  );
+  assert.deepEqual(evidence.claimBoundary, {
+    privateSourcePortabilityOnly: true,
+    agentProcess: false,
+    osEndpoint: false,
+    authenticatedJourney: false,
+    acceptanceCriterion: false,
+    releaseEvidence: false,
+  });
+  assert.match(evidenceReadme, /source-portability evidence only/iu);
+  assert.match(evidenceReadme, /OGVCS-042 remains\s+\*\*Todo\*\*/u);
+  assert.match(evidenceReadme, /AC-01 through AC-05 remain open/u);
 });

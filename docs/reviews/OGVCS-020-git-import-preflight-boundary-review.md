@@ -147,6 +147,13 @@ Those residuals keep OGVCS-020 Todo and every acceptance criterion open. This
 review must be repeated if the crate gains any I/O, production profile,
 serialization, authorization meaning, persistence, conversion, or wiring.
 
+Pinned GitHub Actions run
+[33638102757](https://github.com/n3r/OpenGameVCS/actions/runs/33638102757)
+passed this private source/package gate on Linux, macOS, and Windows for exact
+revision `0e714329a903573c7aa0d16a58adda8bf67e1088`. Its retained machine
+record is source-portability evidence only; it is not a Git parser, converted
+repository, authenticated import journey, scale result, or acceptance evidence.
+
 Normative sources reviewed for this boundary are Git's official
 [`gitdatamodel`](https://git-scm.com/docs/gitdatamodel.html) documentation
 (blobs are reusable content objects; mode `160000` gitlinks name commits),

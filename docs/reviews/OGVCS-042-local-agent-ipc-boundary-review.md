@@ -331,7 +331,10 @@ event reorder, consent-generation mismatch, and handoff reuse.
     bind the current grant before consulting the idempotency ledger.
 
 No live P0/P1/P2 defect was identified after these fixes in the bounded source
-model. This statement is not an external security assessment or hosted proof.
+model. This statement is not an external security assessment. Pinned hosted
+run [33636845159](https://github.com/n3r/OpenGameVCS/actions/runs/33636845159)
+proves only that the private source/package gates pass on Linux, macOS, and
+Windows at exact revision `3563167763a54b97eb8166ded1db895aa3a5b7cd`.
 
 ## Requirement and acceptance boundary
 
@@ -365,7 +368,7 @@ million-path workspace or latency/memory campaign. All five remain open.
   lock renewal, checkpoint/revert, job, submit/review/destructive operation,
   publication, or recovery mutation exists.
 - No public protocol or route, CLI, UI, trusted deep link, C++/C# binding,
-  hosted OS evidence, red-team result, same-user-malware defense, privacy or
+  hosted process/endpoint isolation evidence, red-team result, same-user-malware defense, privacy or
   unguessability proof, scale/latency result, rollout, or package publication
   is claimed.
 - Raw frame bytes and typed facts are separately committed; no decoder or proof

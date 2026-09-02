@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "ogvcs.local-agent/hosted-source-run/v1",
+  "run": {
+    "id": 33636845159,
+    "event": "push",
+    "branch": "r1-foundation-integration",
+    "headSha": "3563167763a54b97eb8166ded1db895aa3a5b7cd",
+    "status": "completed",
+    "conclusion": "success",
+    "createdAt": "2026-09-02T13:37:21Z",
+    "completedAt": "2026-09-02T13:40:23Z",
+    "url": "https://github.com/n3r/OpenGameVCS/actions/runs/33636845159"
+  },
+  "jobs": [
+    { "id": 100269732676, "name": "Private IPC source portability (Windows)", "conclusion": "success" },
+    { "id": 100269732991, "name": "Private IPC source portability (macOS)", "conclusion": "success" },
+    { "id": 100269733202, "name": "Private IPC source portability (Linux)", "conclusion": "success" }
+  ],
+  "successfulStepsOnEveryHost": [
+    "Node source/package/PRD/workflow policy",
+    "Rust format check",
+    "Rust debug tests",
+    "Rust release tests",
+    "Rust warnings-denied Clippy",
+    "freshly extracted package tests"
+  ],
+  "claimBoundary": {
+    "privateSourcePortabilityOnly": true,
+    "agentProcess": false,
+    "osEndpoint": false,
+    "authenticatedJourney": false,
+    "acceptanceCriterion": false,
+    "releaseEvidence": false
+  }
+}
