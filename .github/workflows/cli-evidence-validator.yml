@@ -1,0 +1,66 @@
+name: R1 CLI evidence validator
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/cli-evidence-validator.yml'
+      - 'client/cli-evidence/rust/**'
+      - 'core/object-model/rust/**'
+      - 'docs/evidence/OGVCS-043/**'
+      - 'docs/reviews/OGVCS-043-cli-evidence-validator-boundary-review.md'
+      - 'prd/todo/OGVCS-043-r1-cli-vertical-slice.md'
+      - 'tools/cli-evidence-validator-policy.test.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+  push:
+    branches: [main, r1-foundation-integration]
+    paths:
+      - '.github/workflows/cli-evidence-validator.yml'
+      - 'client/cli-evidence/rust/**'
+      - 'core/object-model/rust/**'
+      - 'docs/evidence/OGVCS-043/**'
+      - 'docs/reviews/OGVCS-043-cli-evidence-validator-boundary-review.md'
+      - 'prd/todo/OGVCS-043-r1-cli-vertical-slice.md'
+      - 'tools/cli-evidence-validator-policy.test.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cli-evidence-validator-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-regression:
+    name: Private source regression (${{ matrix.label }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-latest, label: Linux }
+          - { runner: macos-latest, label: macOS }
+          - { runner: windows-latest, label: Windows }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - uses: dtolnay/rust-toolchain@7d11e79e1714f6b6da93cac39ad8435666f5c337 # 1.82.0
+        with:
+          components: clippy, rustfmt
+      - run: node --test tools/cli-evidence-validator-policy.test.mjs
+      - run: cargo fmt --manifest-path client/cli-evidence/rust/Cargo.toml -- --check
+      - run: cargo test --manifest-path client/cli-evidence/rust/Cargo.toml --locked
+      - run: cargo test --manifest-path client/cli-evidence/rust/Cargo.toml --locked --release
+      - run: cargo clippy --manifest-path client/cli-evidence/rust/Cargo.toml --locked --all-targets -- -D warnings
+      - run: ./scripts/test-packed.sh
+        shell: bash
+        working-directory: client/cli-evidence/rust
+      - name: Validate the open roadmap boundary
+        if: runner.os == 'Linux'
+        run: node prd/validate-roadmap.mjs && node --test prd/validate-roadmap.test.mjs

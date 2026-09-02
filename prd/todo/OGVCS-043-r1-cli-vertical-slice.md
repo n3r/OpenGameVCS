@@ -7,7 +7,7 @@
 **Depends on:** OGVCS-010, OGVCS-011, OGVCS-012, OGVCS-013, OGVCS-016, OGVCS-021, OGVCS-041  
 **Blocks:** OGVCS-022, OGVCS-030  
 **Source:** [OpenGameVCS delivery roadmap](../ROADMAP.md)  
-**Last updated:** 2026-08-14
+**Last updated:** 2026-09-02
 
 ## Outcome
 
@@ -98,8 +98,24 @@ Run against isolated repositories first, then design-partner test deployments. T
 
 ## Completion evidence
 
-- Implementation changes:
-- Test and benchmark results:
-- Security/reliability review:
-- Documentation/runbooks:
-- Rollout result:
+- Implementation changes: A private, unpublished Rust 1.82
+  compatibility/evidence transcript validator is retained under
+  `client/cli-evidence/rust`; the bounded implementation inventory is recorded
+  in [`docs/evidence/OGVCS-043`](../../docs/evidence/OGVCS-043/README.md). It is
+  unwired and performs no CLI execution or product operation.
+- Test and benchmark results: The bounded source evidence records 67/67 debug,
+  67/67 release, and 67/67 freshly extracted package integration tests plus
+  format, Clippy, package, policy, roadmap, and focused OGVCS-002 gates in
+  [`docs/evidence/OGVCS-043`](../../docs/evidence/OGVCS-043/README.md); no
+  benchmark, clean-host, three-OS, or end-to-end result is claimed.
+- Security/reliability review: The
+  [private validator boundary review](../../docs/reviews/OGVCS-043-cli-evidence-validator-boundary-review.md)
+  records caller-assertion, redaction, resource, cancellation, unkeyed-digest,
+  no-I/O, no-private-fallback, and no-authority boundaries.
+- Documentation/runbooks: The crate README at
+  `client/cli-evidence/rust/README.md`, boundary review, and bounded
+  source-evidence note document the fixed inventory/scenario and explicit
+  nonclaims; no operator walkthrough or clean-host runbook exists.
+- Rollout result: Not rolled out. The validator remains private and unwired;
+  no artifact was installed or published, OGVCS-043 remains Todo, and
+  OGVCS-043-AC-01 through OGVCS-043-AC-05 all remain open.

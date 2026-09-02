@@ -1,0 +1,27 @@
+[package]
+name = "ogvcs-cli-evidence-validator"
+version = "0.1.0-rc.1"
+edition = "2021"
+rust-version = "1.82"
+license = "MIT"
+description = "Private bounded validator for supplied OpenGameVCS R1 CLI evidence transcripts"
+readme = "README.md"
+repository = "https://github.com/n3r/OpenGameVCS"
+homepage = "https://github.com/n3r/OpenGameVCS"
+publish = false
+include = [
+    "src/**",
+    "scripts/**",
+    "tests/**",
+    "Cargo.toml",
+    "Cargo.lock",
+    "LICENSE",
+    "README.md",
+]
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+ogvcs-object-model = { path = "../../../core/object-model/rust", version = "0.1.0" }
+sha2 = "=0.10.9"
