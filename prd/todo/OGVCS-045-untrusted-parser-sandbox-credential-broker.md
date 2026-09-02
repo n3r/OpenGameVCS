@@ -7,7 +7,7 @@
 **Depends on:** OGVCS-003, OGVCS-004, OGVCS-009  
 **Blocks:** OGVCS-020, OGVCS-026, OGVCS-029, OGVCS-031  
 **Source:** [OpenGameVCS architecture](../../architecture.md)  
-**Last updated:** 2026-08-14
+**Last updated:** 2026-09-02
 
 ## Outcome
 
@@ -104,7 +104,12 @@ Enable only the dummy conformance tool, then one importer parser profile. Consum
   [`8e863b503bf2c0ebc66d1f80cf7935e1575575d0`](https://github.com/n3r/OpenGameVCS/commit/8e863b503bf2c0ebc66d1f80cf7935e1575575d0)
   provides a private candidate-named Linux reference worker and portable
   credential-free protocol boundary; it is not a production or public
-  constructor.
+  constructor. The later local-only restart tranche at
+  [`3049f81880712cb1aead1e7634001f82b08ae76d`](https://github.com/n3r/OpenGameVCS/commit/3049f81880712cb1aead1e7634001f82b08ae76d)
+  adds state-root-scoped daemon authority, authenticated current-authority
+  resource discovery and inspection, closed hashed quarantine evidence, and
+  restart ordering that refuses local job denial until daemon absence is
+  proved. It deliberately performs no orphan deletion.
 - Test and benchmark results: [hosted run
   33484044441](../../docs/evidence/OGVCS-045/github-actions-run-33484044441.json)
   passed the private Linux Docker/cgroup/seccomp lane and portable Node 24
@@ -115,16 +120,26 @@ Enable only the dummy conformance tool, then one importer parser profile. Consum
   It records bounded private candidate behavior relevant to AC-01 and AC-02;
   the same hosted candidate lane exercised signed-manifest and required-control
   admission plus prior/new-job revocation checks relevant to AC-04.
+  Separately, a 2026-09-02 macOS/Node 24.9.0 local run of
+  `npm run test:sandbox` passed five contract/package cases, 53 of 60 runtime
+  cases with seven Linux-only cases skipped, and both retained/workflow policy
+  cases. That local run covers restart detection and quarantine models but is
+  neither retained Linux Docker evidence nor hosted settlement proof.
 - Security/reliability review: the retained
   [evidence packet](../../docs/evidence/OGVCS-045/README.md) is explicitly
-  non-completion evidence. AC-03 and AC-05 remain open, as do exact deployed
-  runtime attestation, authenticated daemon-orphan handling, the complete
-  broker/runner/output-validator kill matrix, independent isolation review,
-  public conformance admission, and production broker/runner integration.
+  non-completion evidence. The narrow
+  [restart-reconciliation boundary review](../../docs/reviews/OGVCS-045-restart-reconciliation-boundary-review.md)
+  accepts only current-authority detection and quarantine. AC-03 and AC-05
+  remain open, as do exact deployed runtime attestation, approved and hosted
+  daemon-orphan settlement, the complete broker/runner/output-validator kill
+  matrix, independent full isolation review, public conformance admission, and
+  production broker/runner integration.
 - Documentation/runbooks: the evidence packet and
   [`docs/changelog/OGVCS-045.md`](../../docs/changelog/OGVCS-045.md) document
   the private boundary and its fail-closed nonclaims; no production operations
   or cleanup runbook is claimed.
-- Rollout result: none. OGVCS-045 remains Todo. Consumer rollout and all
-  production, restart-orphan, and authoritative sandbox cleanup behavior remain
-  open; the retained run does not close any acceptance criterion.
+- Rollout result: none. OGVCS-045 remains Todo and all five acceptance criteria
+  remain open. Consumer rollout, authoritative container/tmpfs cleanup,
+  foreign, legacy, or ambiguous-resource operations, and production restart
+  behavior remain open; neither the retained run nor the local detection
+  tranche closes a criterion.

@@ -5,6 +5,11 @@ import test from 'node:test';
 const workflowUrl = new URL('../.github/workflows/untrusted-sandbox.yml', import.meta.url);
 const packageUrl = new URL('../package.json', import.meta.url);
 const conformanceUrl = new URL('../core/untrusted-sandbox/js/scripts/linux-conformance.mjs', import.meta.url);
+const dockerReferenceUrl = new URL('../core/untrusted-sandbox/js/src/internal/docker-reference.mjs', import.meta.url);
+const referenceWorkerTestUrl = new URL('../core/untrusted-sandbox/js/test/reference-worker.test.mjs', import.meta.url);
+const readmeUrl = new URL('../core/untrusted-sandbox/js/README.md', import.meta.url);
+const restartReviewUrl = new URL('../docs/reviews/OGVCS-045-restart-reconciliation-boundary-review.md', import.meta.url);
+const prdUrl = new URL('../prd/todo/OGVCS-045-untrusted-parser-sandbox-credential-broker.md', import.meta.url);
 
 test('untrusted sandbox workflow pins portable protocol and live Linux isolation lanes', async () => {
   const [workflow, rootPackage, conformance] = await Promise.all([
@@ -53,4 +58,29 @@ test('untrusted sandbox workflow pins portable protocol and live Linux isolation
   assert.match(conformance, /buildLinuxConformanceReport\(\{ cases: \[\], failure, outcome: 'failed'/u);
   assert.match(conformance, /if \(!reportRetained\)[\s\S]+writeFile\(reportPath, reportBytes, \{ flag: 'wx', mode: 0o600 \}\)/u);
   assert.doesNotMatch(conformance, /failure\s*:\s*error|diagnostic\s*:\s*error\.(?:message|stack)|process\.stderr\.write\(error/iu);
+});
+
+test('restart reconciliation remains current-authority detection without cleanup authority', async () => {
+  const [source, runtimeTests, readme, review, prd] = await Promise.all([
+    readFile(dockerReferenceUrl, 'utf8'),
+    readFile(referenceWorkerTestUrl, 'utf8'),
+    readFile(readmeUrl, 'utf8'),
+    readFile(restartReviewUrl, 'utf8'),
+    readFile(prdUrl, 'utf8'),
+  ]);
+
+  assert.match(source, /async reconcileDaemonOrphans\(requestSource\)/u);
+  assert.match(source, /label=\$\{AUTHORITY_LABEL\}=\$\{authorityId\}/u);
+  assert.match(source, /AUTHENTICATED_ORPHANS_REQUIRE_SETTLEMENT/u);
+  assert.match(source, /return reconciliationReport\('quarantined'/u);
+  assert.match(runtimeTests, /destructiveCalls, \[\]/u);
+  assert.match(runtimeTests, /quarantines without deleting before settlement approval/u);
+  for (const text of [readme, review, prd]) {
+    assert.match(text, /detection-and-quarantine|detection and quarantine|detection tranche/iu);
+    assert.match(text, /no orphan deletion|does not yet\s+delete|performs no orphan deletion|not cleanup/iu);
+    assert.match(text, /foreign|legacy/iu);
+    assert.match(text, /OGVCS-045\s+(?:stays|remains)\s+Todo/iu);
+  }
+  assert.match(review, /requires explicit approval/iu);
+  assert.match(prd, /all five acceptance criteria\s+remain open/iu);
 });
