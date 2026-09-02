@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "ogvcs.history-diff/private-golden/v1",
+  "cases": [
+    {
+      "fileId": "00000000000000000000000000000001",
+      "presence": "added",
+      "changes": 0,
+      "moveHint": "none",
+      "beforePath": null,
+      "afterPath": "added.bin"
+    },
+    {
+      "fileId": "00000000000000000000000000000002",
+      "presence": "retained",
+      "changes": 97,
+      "moveHint": "rename",
+      "beforePath": "old.txt",
+      "afterPath": "new.txt"
+    },
+    {
+      "fileId": "00000000000000000000000000000003",
+      "presence": "deleted",
+      "changes": 0,
+      "moveHint": "none",
+      "beforePath": "deleted.bin",
+      "afterPath": null
+    }
+  ]
+}

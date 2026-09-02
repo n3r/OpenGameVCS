@@ -7,7 +7,7 @@
 **Depends on:** OGVCS-006, OGVCS-010, OGVCS-011, OGVCS-014  
 **Blocks:** OGVCS-020, OGVCS-022, OGVCS-024, OGVCS-025, OGVCS-029, OGVCS-031, OGVCS-034  
 **Source:** [OpenGameVCS proposal](../../GAME_DEV_VCS_ANALYSIS.md)  
-**Last updated:** 2026-08-14
+**Last updated:** 2026-09-02
 
 ## Outcome
 
@@ -96,8 +96,33 @@ Start with built-in text and explicit binary choose-one; external drivers disabl
 
 ## Completion evidence
 
-- Implementation changes:
-- Test and benchmark results:
-- Security/reliability review:
-- Documentation/runbooks:
-- Rollout result:
+- Implementation changes: a private, unpublished Rust 1.82 history/diff kernel
+  candidate now provides generation-pinned, cursor-resumable Snapshot-parent
+  traversal and fully prevalidated two-Snapshot root-Tree diffing. It reuses
+  OGVCS-002 canonical object validation and OGVCS-004 path/collision validation,
+  rejects duplicate identity/path/shared-Tree ambiguity, and exposes only
+  deterministic metadata records and same-FileID rename/move hints. It is not
+  wired to a branch service, CLI, checkpoint, submit path, or public protocol.
+- Test and benchmark results: the candidate carries unit, independent JSON
+  golden, adversarial/table, deterministic generated-property, pagination,
+  fresh-instance restart, cursor mutation, generation/cancellation, corruption,
+  collision, shared-subtree, and configured-resource tests. Rust 1.82 passes
+  43/43 tests in debug, 43/43 in release, and 43/43 from a packed fresh-consumer
+  extraction; format and warnings-denied Clippy are clean. The Node boundary
+  policy passes 2/2 and roadmap validation passes 8/8. No deep-DAG,
+  million-entry, latency, merge, or release-scale result is claimed here.
+- Security/reliability review: the private
+  [history/diff boundary review](../../docs/reviews/OGVCS-015-history-diff-kernel-boundary-review.md)
+  records generation fencing, fail-closed ambiguity/corruption, cursor and
+  accounting boundaries, the OGVCS-002 production-profile gap, and all
+  residuals. The source is a caller-preauthorized-view precondition and never
+  an authorization brand; mixed-visibility history non-disclosure remains
+  unimplemented.
+- Documentation/runbooks: the crate README documents canonical validation,
+  DFS and full-diff semantics, exact conservative charge vocabulary, cursor
+  integrity (not authority), package gates, and explicit nonclaims. The
+  candidate is read-only and has no operational mutation/rollback runbook.
+- Rollout result: none. No network route, server handler, branch mutation,
+  public cursor, merge/revert, workspace write, authorization/grant/audit, or
+  production reader exists. No OGVCS-015 acceptance criterion is closed and
+  the PRD remains Todo.
