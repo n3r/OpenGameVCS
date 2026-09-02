@@ -120,9 +120,12 @@ through AC-05 and cannot advance the R1 release gate.
 - Locked/offline validator tests: 67/67 debug and 67/67 release.
 - Cargo package verification: 11 packaged entries; unpublished manifest.
 - Freshly extracted package integration tests: 67/67.
-- Node v24.9.0 source/package/PRD/workflow policy: 4/4.
+- Node v24.9.0 source/package/PRD/workflow/evidence policy: 5/5.
 - A path-scoped Node 24/Rust 1.82 Linux/macOS/Windows source-regression
-  workflow is retained; this frozen packet claims no hosted run result.
+  workflow is retained. Push run `33629145724` passed all three jobs for exact
+  integrated commit `c7049fd5063adaf40f6ad2f694104713966ed6c6`; its job IDs
+  and ten exact workflow/crate input hashes are retained under
+  `docs/evidence/OGVCS-043`. This is private source portability evidence only.
 - Roadmap: 46 PRDs (39 Todo, 7 Done), 898 IDs; validator tests 8/8.
 - Focused OGVCS-002 predecessor checks: conformance 17/17 and repository
   27/27, including typed references and Snapshot/repository semantics.

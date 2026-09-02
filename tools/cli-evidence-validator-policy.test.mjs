@@ -61,7 +61,7 @@ test('documentation and package hooks preserve the exact open PRD boundary', asy
   assert.match(readme, /AC-01 through AC-05\s+remain open/u);
   assert.match(review, /based exactly on\s+`101d5673252290de362844f381b5176ad33c470d`/u);
   assert.match(review, /cannot satisfy any part of OGVCS-043-AC-01/u);
-  assert.match(evidence, /not a clean-host run/iu);
+  assert.match(evidence, /not a clean-host installed-CLI run/iu);
   assert.equal(
     packageValue.scripts['test:cli-evidence'],
     'node --test tools/cli-evidence-validator-policy.test.mjs',
@@ -120,4 +120,61 @@ test('path-scoped hosted regression keeps the private source gate pinned', async
   assert.match(workflow, /actions\/checkout@[0-9a-f]{40}/u);
   assert.match(workflow, /actions\/setup-node@[0-9a-f]{40}/u);
   assert.match(workflow, /dtolnay\/rust-toolchain@[0-9a-f]{40}/u);
+});
+
+test('retained hosted result is exact and bounded to private source portability', async () => {
+  const evidence = JSON.parse(
+    await read('docs/evidence/OGVCS-043/hosted-source-run-33629145724.json'),
+  );
+
+  assert.equal(evidence.schemaVersion, 'ogvcs.cli-evidence/hosted-source-run/v1');
+  assert.deepEqual(evidence.run, {
+    id: 33629145724,
+    event: 'push',
+    branch: 'r1-foundation-integration',
+    headSha: 'c7049fd5063adaf40f6ad2f694104713966ed6c6',
+    status: 'completed',
+    conclusion: 'success',
+    createdAt: '2026-09-02T12:17:55Z',
+    completedAt: '2026-09-02T12:20:45Z',
+    url: 'https://github.com/n3r/OpenGameVCS/actions/runs/33629145724',
+  });
+  assert.deepEqual(
+    evidence.jobs.map(({ id, name, conclusion }) => ({ id, name, conclusion })),
+    [
+      {
+        id: 100243980763,
+        name: 'Private source regression (Linux)',
+        conclusion: 'success',
+      },
+      {
+        id: 100243981138,
+        name: 'Private source regression (Windows)',
+        conclusion: 'success',
+      },
+      {
+        id: 100243981173,
+        name: 'Private source regression (macOS)',
+        conclusion: 'success',
+      },
+    ],
+  );
+  assert.deepEqual(evidence.claimBoundary, {
+    privateSourcePortabilityOnly: true,
+    installedCli: false,
+    cleanHost: false,
+    authenticatedJourney: false,
+    acceptanceCriterion: false,
+    releaseEvidence: false,
+  });
+  assert.equal(evidence.sourceFiles.length, 10);
+  for (const expected of evidence.sourceFiles) {
+    const bytes = await readFile(new URL(expected.path, root));
+    assert.equal(bytes.byteLength, expected.bytes, `${expected.path}: byte length`);
+    assert.equal(
+      createHash('sha256').update(bytes).digest('hex'),
+      expected.sha256,
+      `${expected.path}: SHA-256`,
+    );
+  }
 });

@@ -106,8 +106,10 @@ Run against isolated repositories first, then design-partner test deployments. T
 - Test and benchmark results: The bounded source evidence records 67/67 debug,
   67/67 release, and 67/67 freshly extracted package integration tests plus
   format, Clippy, package, policy, roadmap, and focused OGVCS-002 gates in
-  [`docs/evidence/OGVCS-043`](../../docs/evidence/OGVCS-043/README.md); no
-  benchmark, clean-host, three-OS, or end-to-end result is claimed.
+  [`docs/evidence/OGVCS-043`](../../docs/evidence/OGVCS-043/README.md). Exact
+  integrated commit `c7049fd5063adaf40f6ad2f694104713966ed6c6` passed those
+  private source gates on hosted Linux, Windows, and macOS; no benchmark,
+  clean-host installed-artifact, or end-to-end journey result is claimed.
 - Security/reliability review: The
   [private validator boundary review](../../docs/reviews/OGVCS-043-cli-evidence-validator-boundary-review.md)
   records caller-assertion, redaction, resource, cancellation, unkeyed-digest,

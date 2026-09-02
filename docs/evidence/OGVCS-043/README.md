@@ -19,22 +19,28 @@ produced:
 - clean Rust format and warnings-denied all-target Clippy;
 - an 11-entry Cargo package and 67/67 packaged integration tests from a
   freshly extracted crate with the packed OGVCS-002 dependency;
-- 4/4 Node v24.9.0 source/package/PRD/workflow policy tests;
+- 5/5 Node v24.9.0 source/package/PRD/workflow/evidence policy tests;
 - a valid roadmap containing 46 PRDs (39 Todo and 7 Done) and 898 IDs, plus
   8/8 roadmap validator regressions;
 - focused OGVCS-002 conformance 17/17 and repository 27/27; and
 - a clean `git diff --check` at exact HEAD
   `101d5673252290de362844f381b5176ad33c470d`.
 
-Generated build output is intentionally not retained here. A path-scoped
-Node 24/Rust 1.82 three-OS workflow keeps this private source boundary under
-regression, but this packet records no hosted result. The bounded verdict is
+Generated build output is intentionally not retained here. Hosted push run
+[33629145724](https://github.com/n3r/OpenGameVCS/actions/runs/33629145724)
+passed the path-scoped Node 24/Rust 1.82 source regression on Linux, Windows,
+and macOS for exact integrated commit
+`c7049fd5063adaf40f6ad2f694104713966ed6c6`. The retained
+[`hosted-source-run-33629145724.json`](hosted-source-run-33629145724.json)
+binds all three successful job IDs and the exact bytes/SHA-256 digests of the
+workflow and private crate source/package/test inputs. The bounded verdict is
 SHIP for integration only as private, unpublished, unwired source and HOLD for
 product evidence, release evidence, or PRD completion.
 
-This is not a clean-host run, installed CLI run, artifact provenance result,
-three-OS result, authenticated workflow, sync/lock/submit/fetch proof,
-exact-byte observation, redaction audit, signed evidence bundle, rollout, or
+This is three-OS portability evidence for the private validator source only.
+It is not a clean-host installed-CLI run, preview-artifact provenance result,
+authenticated workflow, sync/lock/submit/fetch proof, workspace exact-byte
+observation, redaction audit, signed evidence bundle, rollout, or
 acceptance-criterion closure. OGVCS-043 remains in `prd/todo`; its completion
 evidence records only this bounded source tranche and explicit non-rollout.
 The full acceptance-criteria section remains byte-for-byte unchanged, and

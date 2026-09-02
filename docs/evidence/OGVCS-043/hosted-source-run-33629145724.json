@@ -1,0 +1,102 @@
+{
+  "schemaVersion": "ogvcs.cli-evidence/hosted-source-run/v1",
+  "run": {
+    "id": 33629145724,
+    "event": "push",
+    "branch": "r1-foundation-integration",
+    "headSha": "c7049fd5063adaf40f6ad2f694104713966ed6c6",
+    "status": "completed",
+    "conclusion": "success",
+    "createdAt": "2026-09-02T12:17:55Z",
+    "completedAt": "2026-09-02T12:20:45Z",
+    "url": "https://github.com/n3r/OpenGameVCS/actions/runs/33629145724"
+  },
+  "jobs": [
+    {
+      "id": 100243980763,
+      "name": "Private source regression (Linux)",
+      "conclusion": "success",
+      "roadmapStep": "success"
+    },
+    {
+      "id": 100243981138,
+      "name": "Private source regression (Windows)",
+      "conclusion": "success",
+      "roadmapStep": "skipped"
+    },
+    {
+      "id": 100243981173,
+      "name": "Private source regression (macOS)",
+      "conclusion": "success",
+      "roadmapStep": "skipped"
+    }
+  ],
+  "successfulStepsOnEveryHost": [
+    "Node source/package/PRD/workflow policy",
+    "Rust format check",
+    "Rust debug tests",
+    "Rust release tests",
+    "Rust warnings-denied Clippy",
+    "freshly extracted package tests"
+  ],
+  "sourceFiles": [
+    {
+      "path": ".github/workflows/cli-evidence-validator.yml",
+      "bytes": 2556,
+      "sha256": "b4058f97cbda4bb4e7327f3ea1593a36cfd57043a5e01584e7dc593dda973cf3"
+    },
+    {
+      "path": "client/cli-evidence/rust/Cargo.lock",
+      "bytes": 7908,
+      "sha256": "71c5d394f90d24fe5b8793dd3b3807b14c1836c41a5b9b756092a8749e455298"
+    },
+    {
+      "path": "client/cli-evidence/rust/Cargo.toml",
+      "bytes": 631,
+      "sha256": "1bbf7220fe0eaf1d164031c86d69d2bcb36158ff318db801b8362d5bee268639"
+    },
+    {
+      "path": "client/cli-evidence/rust/README.md",
+      "bytes": 7529,
+      "sha256": "dc4c8dab3546479da1256f94aa5c2c1373f16e29778d99db0947cc21125b8d70"
+    },
+    {
+      "path": "client/cli-evidence/rust/scripts/test-packed.sh",
+      "bytes": 1694,
+      "sha256": "34f29f23b3a73bbd16c31b84e0924901d1c3e83cb033910fa318b2f2ad077e8c"
+    },
+    {
+      "path": "client/cli-evidence/rust/src/lib.rs",
+      "bytes": 1000,
+      "sha256": "5256388b1c1eaf4de1785784ce10b46bbe9c65c35e32b6a05426d50da9e9aff4"
+    },
+    {
+      "path": "client/cli-evidence/rust/src/model.rs",
+      "bytes": 10618,
+      "sha256": "9563d4c49a0aea36d92462715bc977eaadbf62c943dcf84e433264ec3a21f21a"
+    },
+    {
+      "path": "client/cli-evidence/rust/src/transcript.rs",
+      "bytes": 2031,
+      "sha256": "024a7ce6392a2c8f8e4e853067f37a0151a19339070a2f76818f488a1890edbd"
+    },
+    {
+      "path": "client/cli-evidence/rust/src/validate.rs",
+      "bytes": 21279,
+      "sha256": "044bdd77510defc2f6fe7a6980b7dabe5bfa2980ec8a1e7cb15b02330744a4f7"
+    },
+    {
+      "path": "client/cli-evidence/rust/tests/validator.rs",
+      "bytes": 43043,
+      "sha256": "4d16dc750bb58da1828c9db28da71e004648c778463c1a8f12be6806d74dba27"
+    }
+  ],
+  "claimBoundary": {
+    "privateSourcePortabilityOnly": true,
+    "installedCli": false,
+    "cleanHost": false,
+    "authenticatedJourney": false,
+    "acceptanceCriterion": false,
+    "releaseEvidence": false
+  }
+}
