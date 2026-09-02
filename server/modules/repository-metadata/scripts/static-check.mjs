@@ -789,6 +789,7 @@ for (const evidence of [
   'pub fn transport_response',
   'pub fn problem_transport_response',
   '.transport_response(expected_operation.transport_descriptor())?',
+  '.field("control_bytes", &self.control.len())',
   'pub fn verify_negotiation',
   'OGVCS_041_NEGOTIATION_REGISTRY_SET_SHA256',
 ]) assert(serviceSource.includes(evidence), `public service boundary evidence missing: ${evidence}`);

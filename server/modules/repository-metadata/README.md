@@ -68,7 +68,9 @@ one-MiB control-message limit. The sealed read dispatcher validates that full
 canonical envelope before committing its OGVCS-009 decision, so an individually
 valid result body cannot become an unencodable post-commit response. This
 carrier does not register HTTP, authenticate a principal, or map a metadata
-domain error into OGVCS-041.
+domain error into OGVCS-041. Its default debug representation reports only the
+status, media type, and byte count; it does not duplicate authorized control
+bytes into logs.
 
 Two adapter-private versioned projections close otherwise-unassigned joins:
 the raw metadata `TenantId` is domain-hashed to the negotiation receipt's

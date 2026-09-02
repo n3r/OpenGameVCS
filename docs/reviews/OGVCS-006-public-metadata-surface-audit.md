@@ -18,9 +18,11 @@ This tranche adds only a framework-neutral response carrier. It emits the exact
 RFC 8785 canonical `ResponseEnvelope`, binds success status/media and operation
 carrier to the selected static descriptor, derives failure status from the
 closed OGVCS-041 problem entry, and enforces the full one-MiB control limit
-before the sealed read dispatcher commits its decision. It does not create a
-trusted authentication principal, install HTTP, reinterpret OGVCS-009, map any
-unassigned metadata domain error, or enable request-root authorization.
+before the sealed read dispatcher commits its decision. The carrier's debug
+view exposes only status, media type, and byte count, not control bytes. It
+does not create a trusted authentication principal, install HTTP, reinterpret
+OGVCS-009, map any unassigned metadata domain error, or enable request-root
+authorization.
 
 ## Exact route matrix
 

@@ -366,7 +366,7 @@ pub struct MetadataResponseEnvelope {
 /// selected control profile. This type does not register a route: callers
 /// must still install only descriptors returned by
 /// [`network_transport_descriptors`].
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct MetadataTransportResponse {
     status: u16,
     media_type: &'static str,
@@ -628,6 +628,17 @@ impl MetadataTransportResponse {
 
     pub fn control(&self) -> &[u8] {
         &self.control
+    }
+}
+
+impl fmt::Debug for MetadataTransportResponse {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("MetadataTransportResponse")
+            .field("status", &self.status)
+            .field("media_type", &self.media_type)
+            .field("control_bytes", &self.control.len())
+            .finish()
     }
 }
 
@@ -3742,6 +3753,10 @@ mod tests {
                 "\"success\":true}"
             )
         );
+        let transport_debug = format!("{transport:?}");
+        assert!(transport_debug.contains("control_bytes"));
+        assert!(!transport_debug.contains("correlation-0001"));
+        assert!(!transport_debug.contains("settingsGeneration"));
         let response = serde_json::to_value(response).unwrap();
         assert_eq!(
             response,
