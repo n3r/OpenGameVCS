@@ -7,7 +7,7 @@
 **Depends on:** OGVCS-006, OGVCS-008, OGVCS-009, OGVCS-017, OGVCS-018  
 **Blocks:** OGVCS-028, OGVCS-030, OGVCS-032, OGVCS-043  
 **Source:** [OpenGameVCS proposal](../../GAME_DEV_VCS_ANALYSIS.md)  
-**Last updated:** 2026-08-14
+**Last updated:** 2026-09-02
 
 ## Outcome
 
@@ -98,8 +98,51 @@ Publish immutable prerelease artifacts and one reference topology. Every schema-
 
 ## Completion evidence
 
-- Implementation changes:
-- Test and benchmark results:
-- Security/reliability review:
-- Documentation/runbooks:
-- Rollout result:
+- Implementation changes: Bounded candidate relevance only. The unpublished,
+  unwired Rust 1.82 rc.1 crate under `core/deployment-preflight/rust` evaluates
+  one fixed caller-supplied topology and one fixed generation-bound set of
+  metadata, object-storage, identity, verifier, backup, capacity, and schema
+  observations. It rejects unsafe supplied listener/default/secret-reference/
+  service-principal shapes, separates liveness from readiness with closed safe
+  reasons, rejects schema downgrade, applies a supplied maximum-300-second
+  observation-age fence, and requires opaque irreversible-migration evidence
+  bound to the deployment, source schema, and current metadata,
+  object-storage, verifier, backup, and schema observation generations,
+  verified manifest subject, distinct source/target claims, and retention
+  beyond evaluation. It performs no discovery, installation, bootstrap,
+  migration, backup,
+  restore, service operation, or durable mutation.
+- Test and benchmark results: Local deterministic unit cases cover the healthy
+  configuration/observation/report known answers and exhaustive projection
+  binding; listener exposure/port negatives; distinct secret-reference and
+  service-principal shapes; generation, compatibility, observation order and
+  temporal edges; all seven dependency classes and 28 unhealthy states;
+  irreversible migration scope/source/manifest/retention gating; stable error
+  precedence; exact/max+1 fixed-shape, logical-work and conservative retained-
+  charge limits; cancellation; redacted debug; and report-local structural
+  checks. Rust 1.82 debug/release, warning-denied Clippy, bounded package,
+  source-policy, and roadmap gates are the candidate's
+  local evidence. No clean-host, hosted cross-OS, dependency-fault, offline,
+  timed-operator, scale, latency, or SLO campaign has run.
+- Security/reliability review: See
+  `docs/reviews/OGVCS-021-deployment-preflight-boundary-review.md`. Secret and
+  principal values are opaque commitments and every access/permission/health/
+  time field remains a supplied fact. The report checksum is not
+  authentication, authorization, freshness, or audit evidence. Exact input
+  cardinalities, pre-traversal 18/19-unit logical-work admission, allocation-
+  free validation, fixed-buffer reason staging, pre-result-allocation 512–640
+  byte conservative retained charging, and cooperative cancellation provide
+  only a bounded pure-evaluator boundary. There is deliberately no mutation-
+  authorization or `mutation_ready` result.
+- Documentation/runbooks: The private crate README documents the supplied-fact
+  topology, readiness and migration boundaries, resource behavior, and
+  nonclaims. There is no install, bootstrap, upgrade, recovery, backup/restore,
+  diagnostics, or uninstall operator runbook because none of those workflows
+  exists yet.
+- Rollout result: Not rolled out. OGVCS-021 remains Todo and all five
+  acceptance criteria remain open. Supported artifacts and versions,
+  prerequisite discovery, installer/composition, real secret/TLS/identity/
+  storage integration, first-admin bootstrap, public configuration and health
+  interfaces, migration ledger/execution, OGVCS-017/018 invocation,
+  diagnostics, repository creation, uninstall/reinstall, clean recovery, and
+  operations evidence remain unimplemented.

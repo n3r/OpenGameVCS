@@ -1,0 +1,22 @@
+[package]
+name = "ogvcs-deployment-preflight"
+version = "0.1.0-rc.1"
+edition = "2021"
+rust-version = "1.82"
+license = "MIT"
+description = "Private bounded OpenGameVCS starter-deployment preflight candidate"
+readme = "README.md"
+publish = false
+include = [
+    "src/**",
+    "Cargo.toml",
+    "Cargo.lock",
+    "LICENSE",
+    "README.md",
+]
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+sha2 = "=0.10.9"
