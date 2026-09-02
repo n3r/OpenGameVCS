@@ -7,7 +7,7 @@
 **Depends on:** OGVCS-006, OGVCS-008, OGVCS-009  
 **Blocks:** OGVCS-015, OGVCS-016, OGVCS-017, OGVCS-018, OGVCS-019, OGVCS-020, OGVCS-025, OGVCS-028, OGVCS-029, OGVCS-032, OGVCS-043  
 **Source:** [Architecture ADR-0003](../../adr/0003-object-lifecycle-and-gc-fencing.md)  
-**Last updated:** 2026-08-14
+**Last updated:** 2026-09-02
 
 ## Outcome
 
@@ -112,13 +112,15 @@ Developer preview allows writes only to test repositories until invariant scans 
   recorded by
   [hosted run 33506824950](../../docs/evidence/OGVCS-006/github-actions-run-33506824950.json).
 - Test and benchmark results: [hosted run
-  33479805287](../../docs/evidence/OGVCS-006/github-actions-run-33479805287.json)
-  passed 13 private PostgreSQL 15 `SIGKILL` boundaries. The retained
-  [restart report](../../docs/evidence/OGVCS-006/atomic-submit-hard-restart-report-2026-09-01.jsonl)
+  33579298064](../../docs/evidence/OGVCS-010/github-actions-run-33579298064.json)
+  passed macOS, Windows, live PostgreSQL 15.19, and the separate 13-boundary
+  PostgreSQL `SIGKILL` job at exact source `3d79338`. The retained
+  [restart report](../../docs/evidence/OGVCS-010/atomic-submit-hard-restart-report-2026-09-02.jsonl)
   is 10,094 bytes with SHA-256
-  `85b36ec4c7f30c9864d5b3ffc7d25594a891ad038a3850cc339b872703df32ca`.
-  This is bounded subset evidence, not the complete OGVCS-005 fault matrix,
-  the 100-finalizer race, or a scale result.
+  `ac29199527a8c0d2c44f03b8d57e0a6cc400f652dd0dbfea8421cc0d1e8a74e1`.
+  It proves only the restricted plan-binding, lock-order, and restart matrix;
+  it is not the complete OGVCS-005 fault matrix, the 100-finalizer race, or an
+  exact-scale result.
 - Security/reliability review: the
   [candidate-evidence reconciliation](../../docs/reviews/OGVCS-010-contract-boundary-review.md#2026-09-01-private-candidate-evidence-reconciliation)
   records which original transaction and recovery gaps have private
@@ -126,8 +128,8 @@ Developer preview allows writes only to test repositories until invariant scans 
   policy/lock revalidation, server-derived closure, complete lifecycle/GC
   fencing, and DR receipt semantics remain blocked.
 - Documentation/runbooks: the bounded
-  [OGVCS-006 evidence packet](../../docs/evidence/OGVCS-006/README.md) and the
-  contract-boundary review record exact sources, runs, retained artifacts, and
-  nonclaims.
+  [OGVCS-010 evidence packet](../../docs/evidence/OGVCS-010/README.md), its
+  machine-checked retained report, and the contract-boundary review record
+  exact sources, runs, artifacts, and nonclaims.
 - Rollout result: none. OGVCS-010 remains Todo; no acceptance criterion is
   closed, and no public or production submit/finalize route is registered.

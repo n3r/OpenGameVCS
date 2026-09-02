@@ -55,7 +55,7 @@
     "test:checkpoint": "node --test tools/local-checkpoint-policy.test.mjs",
     "test:checkpoint:rust": "cargo +1.82.0 fmt --manifest-path client/local-checkpoint/rust/Cargo.toml -- --check && cargo +1.82.0 test --manifest-path client/local-checkpoint/rust/Cargo.toml --locked --offline && cargo +1.82.0 clippy --manifest-path client/local-checkpoint/rust/Cargo.toml --locked --offline --all-targets -- -D warnings",
     "test:metadata:spec": "npm run test --workspace @opengamevcs/repository-metadata-contract-v1",
-    "test:metadata": "node server/modules/repository-metadata/scripts/static-check.mjs && node server/modules/repository-metadata/scripts/service-report.mjs --check && node --test tools/repository-metadata-workflow-policy.test.mjs",
+    "test:metadata": "node server/modules/repository-metadata/scripts/static-check.mjs && node server/modules/repository-metadata/scripts/service-report.mjs --check && node --test tools/repository-metadata-workflow-policy.test.mjs tools/atomic-submit-retained-evidence.test.mjs",
     "test:cli-workspace:spec": "node spec/cli-workspace/v1/scripts/generate.mjs --check && node client/native-cli/rust/scripts/sync-contract.mjs --check && npm run test --workspace @opengamevcs/cli-workspace-contract-v1 && node --test spec/cli-workspace/v1/test/*.test.mjs tools/native-cli-workflow-policy.test.mjs",
     "test:transfer": "npm run test --workspace @opengamevcs/object-transfer && node --test tools/object-transfer-workflow-policy.test.mjs",
     "test:transfer:spec": "npm run test --workspace @opengamevcs/object-transfer-contract-v1",
