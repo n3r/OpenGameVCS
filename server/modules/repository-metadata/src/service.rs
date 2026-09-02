@@ -360,13 +360,29 @@ pub struct MetadataResponseEnvelope {
     problem: Option<MetadataProtocolProblem>,
 }
 
+/// Framework-neutral OGVCS-041 HTTP response carrier.
+///
+/// The control bytes are RFC 8785 canonical JSON and remain bounded by the
+/// selected control profile. This type does not register a route: callers
+/// must still install only descriptors returned by
+/// [`network_transport_descriptors`].
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MetadataTransportResponse {
+    status: u16,
+    media_type: &'static str,
+    control: Box<[u8]>,
+}
+
 pub(crate) struct PreparedMetadataDispatchSuccess {
-    body: Value,
+    envelope: MetadataResponseEnvelope,
 }
 
 impl PreparedMetadataDispatchSuccess {
-    pub(crate) const fn decision_result(&self) -> &Value {
-        &self.body
+    pub(crate) fn decision_result(&self) -> &Value {
+        self.envelope
+            .body
+            .as_ref()
+            .expect("prepared metadata success always has a body")
     }
 }
 
@@ -498,8 +514,13 @@ impl MetadataResponseEnvelope {
     }
 
     pub(crate) fn prepare_authorized_dispatch(
+        correlation_id: &str,
+        expected_operation: MetadataOperation,
         result: MetadataHttpResponse,
     ) -> BoundaryResult<PreparedMetadataDispatchSuccess> {
+        if result.operation() != expected_operation.name() {
+            return input_invalid();
+        }
         let body =
             serde_json::to_value(result).map_err(|_| MetadataServiceBoundaryError::InputInvalid)?;
         inspect_protocol_json_value(
@@ -507,21 +528,26 @@ impl MetadataResponseEnvelope {
             PROTOCOL_JSON_VALUE_DEPTH_MAXIMUM,
             PROTOCOL_JSON_VALUE_NODES_MAXIMUM,
         )?;
-        Ok(PreparedMetadataDispatchSuccess { body })
+        // Validate the complete canonical envelope before committing the
+        // authorization decision. An individually bounded result body can
+        // still exceed the OGVCS-041 control limit once the envelope and
+        // correlation ID are added.
+        let envelope = Self {
+            schema_version: METADATA_SERVICE_RESPONSE_SCHEMA,
+            correlation_id: correlation_id.to_owned(),
+            success: true,
+            body: Some(body),
+            problem: None,
+        };
+        envelope.transport_response(expected_operation.transport_descriptor())?;
+        Ok(PreparedMetadataDispatchSuccess { envelope })
     }
 
     pub(crate) fn success_for_committed_dispatch(
         _committed: crate::postgres::CommittedMetadataReadDispatch,
-        correlation_id: &str,
         prepared: PreparedMetadataDispatchSuccess,
     ) -> Self {
-        Self {
-            schema_version: METADATA_SERVICE_RESPONSE_SCHEMA,
-            correlation_id: correlation_id.to_owned(),
-            success: true,
-            body: Some(prepared.body),
-            problem: None,
-        }
+        prepared.envelope
     }
 
     pub const fn schema_version(&self) -> &'static str {
@@ -543,6 +569,113 @@ impl MetadataResponseEnvelope {
     pub const fn problem(&self) -> Option<&MetadataProtocolProblem> {
         self.problem.as_ref()
     }
+
+    /// Encodes an admitted route response using its exact registered status
+    /// and media assignment. A success body must name the same operation and
+    /// carrier as the descriptor. This does not make an unregistered
+    /// descriptor network-eligible.
+    pub fn transport_response(
+        &self,
+        descriptor: &'static MetadataTransportDescriptor,
+    ) -> BoundaryResult<MetadataTransportResponse> {
+        if descriptor != descriptor.operation.transport_descriptor() {
+            return input_invalid();
+        }
+        if self.success {
+            validate_success_transport_body(self, descriptor)?;
+            self.encode_transport(descriptor.success_status, descriptor.success_media_type)
+        } else {
+            let problem = validate_problem_transport_body(self)?;
+            self.encode_transport(problem.status(), descriptor.error_media_type)
+        }
+    }
+
+    /// Encodes a failure that occurred before a route descriptor could be
+    /// selected. Only a closed OGVCS-041 problem envelope can enter this path.
+    pub fn problem_transport_response(&self) -> BoundaryResult<MetadataTransportResponse> {
+        let problem = validate_problem_transport_body(self)?;
+        self.encode_transport(problem.status(), METADATA_RESPONSE_MEDIA_TYPE)
+    }
+
+    fn encode_transport(
+        &self,
+        status: u16,
+        media_type: &'static str,
+    ) -> BoundaryResult<MetadataTransportResponse> {
+        let value =
+            serde_json::to_value(self).map_err(|_| MetadataServiceBoundaryError::InputInvalid)?;
+        inspect_json(&value)?;
+        let control = canonical_json_bytes(&value)?;
+        if control.len() > CONTROL_MESSAGE_BYTES_MAXIMUM {
+            return Err(MetadataServiceBoundaryError::LimitExceeded);
+        }
+        Ok(MetadataTransportResponse {
+            status,
+            media_type,
+            control: control.into_boxed_slice(),
+        })
+    }
+}
+
+impl MetadataTransportResponse {
+    pub const fn status(&self) -> u16 {
+        self.status
+    }
+
+    pub const fn media_type(&self) -> &'static str {
+        self.media_type
+    }
+
+    pub fn control(&self) -> &[u8] {
+        &self.control
+    }
+}
+
+fn validate_success_transport_body(
+    envelope: &MetadataResponseEnvelope,
+    descriptor: &MetadataTransportDescriptor,
+) -> BoundaryResult<()> {
+    if envelope.problem.is_some() {
+        return input_invalid();
+    }
+    let body = envelope
+        .body
+        .as_ref()
+        .and_then(Value::as_object)
+        .ok_or(MetadataServiceBoundaryError::InputInvalid)?;
+    let expected_carrier = if descriptor.operation.is_page() {
+        "page-result"
+    } else if descriptor.operation == MetadataOperation::ObjectGet {
+        "canonical-metadata-byte-stream"
+    } else {
+        "json"
+    };
+    if body.get("schemaVersion").and_then(Value::as_str)
+        != Some(METADATA_SERVICE_RESULT_BODY_SCHEMA)
+        || body.get("operation").and_then(Value::as_str) != Some(descriptor.operation.name())
+        || body.get("outcome").and_then(Value::as_str) != Some("success")
+        || body.get("carrier").and_then(Value::as_str) != Some(expected_carrier)
+        || body.get("body").is_none()
+    {
+        return input_invalid();
+    }
+    Ok(())
+}
+
+fn validate_problem_transport_body(
+    envelope: &MetadataResponseEnvelope,
+) -> BoundaryResult<&MetadataProtocolProblem> {
+    if envelope.success || envelope.body.is_some() {
+        return input_invalid();
+    }
+    let problem = envelope
+        .problem
+        .as_ref()
+        .ok_or(MetadataServiceBoundaryError::InputInvalid)?;
+    if problem.correlation_id != envelope.correlation_id {
+        return input_invalid();
+    }
+    Ok(problem)
 }
 
 impl MetadataProtocolProblem {
@@ -3582,11 +3715,32 @@ mod tests {
             serde_json::json!({"settingsGeneration": 1}),
         )
         .unwrap();
-        let prepared = MetadataResponseEnvelope::prepare_authorized_dispatch(result).unwrap();
+        let prepared = MetadataResponseEnvelope::prepare_authorized_dispatch(
+            "correlation-0001",
+            MetadataOperation::RepositoryGetSettings,
+            result,
+        )
+        .unwrap();
         let response = MetadataResponseEnvelope::success_for_committed_dispatch(
             crate::postgres::committed_metadata_read_dispatch_for_test(),
-            "correlation-0001",
             prepared,
+        );
+        let transport = response
+            .transport_response(MetadataOperation::RepositoryGetSettings.transport_descriptor())
+            .unwrap();
+        assert_eq!(transport.status(), 200);
+        assert_eq!(transport.media_type(), "application/json");
+        assert_eq!(
+            std::str::from_utf8(transport.control()).unwrap(),
+            concat!(
+                "{\"body\":{\"body\":{\"settingsGeneration\":1},",
+                "\"carrier\":\"json\",\"operation\":\"repository.get-settings\",",
+                "\"outcome\":\"success\",\"schemaVersion\":",
+                "\"ogvcs.repository-metadata/result-body/v1\"},",
+                "\"correlationId\":\"correlation-0001\",",
+                "\"schemaVersion\":\"ogvcs.protocol/response-envelope/v1\",",
+                "\"success\":true}"
+            )
         );
         let response = serde_json::to_value(response).unwrap();
         assert_eq!(
@@ -3603,6 +3757,150 @@ mod tests {
                     "body": {"settingsGeneration": 1},
                 },
             })
+        );
+    }
+
+    #[test]
+    fn complete_transport_envelope_is_bounded_before_commit() {
+        let result = MetadataHttpResponse::success_json(
+            MetadataOperation::RepositoryGetSettings,
+            serde_json::json!({"value": "x".repeat(CONTROL_MESSAGE_BYTES_MAXIMUM)}),
+        );
+        assert!(
+            result.is_err(),
+            "inner result limit must reject an oversized value"
+        );
+
+        // This body remains under the internal result limit, but the complete
+        // OGVCS-041 envelope crosses the one-MiB control-message ceiling.
+        let result = MetadataHttpResponse::success_json(
+            MetadataOperation::RepositoryGetSettings,
+            serde_json::json!({
+                "values": vec!["x".repeat(65_532); 16],
+            }),
+        )
+        .unwrap();
+        assert!(matches!(
+            MetadataResponseEnvelope::prepare_authorized_dispatch(
+                "correlation-0001",
+                MetadataOperation::RepositoryGetSettings,
+                result,
+            ),
+            Err(MetadataServiceBoundaryError::LimitExceeded)
+        ));
+    }
+
+    #[test]
+    fn prepared_transport_rejects_descriptor_body_and_status_substitution() {
+        let wrong_result = MetadataHttpResponse::success_json(
+            MetadataOperation::ReferenceRead,
+            serde_json::json!({"referenceName": "main"}),
+        )
+        .unwrap();
+        assert!(matches!(
+            MetadataResponseEnvelope::prepare_authorized_dispatch(
+                "correlation-original",
+                MetadataOperation::RepositoryGetSettings,
+                wrong_result,
+            ),
+            Err(MetadataServiceBoundaryError::InputInvalid)
+        ));
+
+        let result = MetadataHttpResponse::success_json(
+            MetadataOperation::RepositoryGetSettings,
+            serde_json::json!({"settingsGeneration": 1}),
+        )
+        .unwrap();
+        let prepared = MetadataResponseEnvelope::prepare_authorized_dispatch(
+            "correlation-original",
+            MetadataOperation::RepositoryGetSettings,
+            result,
+        )
+        .unwrap();
+        let response = MetadataResponseEnvelope::success_for_committed_dispatch(
+            crate::postgres::committed_metadata_read_dispatch_for_test(),
+            prepared,
+        );
+        assert_eq!(response.correlation_id(), "correlation-original");
+
+        assert_eq!(
+            response.transport_response(MetadataOperation::ReferenceRead.transport_descriptor()),
+            Err(MetadataServiceBoundaryError::InputInvalid),
+            "a different canonical route cannot carry the committed body"
+        );
+
+        const HOSTILE_DESCRIPTOR: MetadataTransportDescriptor = MetadataTransportDescriptor {
+            operation: MetadataOperation::RepositoryGetSettings,
+            method: "POST",
+            path: "/v1/repository-metadata/operations/repository.get-settings",
+            request_media_type: "application/json",
+            success_status: 299,
+            success_media_type: "application/hostile+json",
+            error_media_type: "application/hostile+problem",
+            stream: MetadataStreamBinding::None,
+            exposure: MetadataOperationExposure::IdentityBound,
+            network_registered: false,
+        };
+        assert_eq!(
+            response.transport_response(&HOSTILE_DESCRIPTOR),
+            Err(MetadataServiceBoundaryError::InputInvalid),
+            "caller-constructed status/media descriptors are not authority"
+        );
+
+        let descriptor = MetadataOperation::RepositoryGetSettings.transport_descriptor();
+        let mut changed_operation = response.clone();
+        changed_operation.body.as_mut().unwrap()["operation"] =
+            Value::String("reference.read".to_owned());
+        assert_eq!(
+            changed_operation.transport_response(descriptor),
+            Err(MetadataServiceBoundaryError::InputInvalid)
+        );
+
+        let mut changed_carrier = response.clone();
+        changed_carrier.body.as_mut().unwrap()["carrier"] = Value::String("page-result".to_owned());
+        assert_eq!(
+            changed_carrier.transport_response(descriptor),
+            Err(MetadataServiceBoundaryError::InputInvalid)
+        );
+
+        let mut missing_body = response;
+        missing_body
+            .body
+            .as_mut()
+            .unwrap()
+            .as_object_mut()
+            .unwrap()
+            .remove("body");
+        assert_eq!(
+            missing_body.transport_response(descriptor),
+            Err(MetadataServiceBoundaryError::InputInvalid)
+        );
+
+        let problem = MetadataResponseEnvelope {
+            schema_version: METADATA_SERVICE_RESPONSE_SCHEMA,
+            correlation_id: "correlation-problem".to_owned(),
+            success: false,
+            body: None,
+            problem: Some(MetadataProtocolProblem::registered(
+                MetadataTransportError::AuthorizationDenied,
+                "correlation-problem",
+            )),
+        };
+        let transport = problem.transport_response(descriptor).unwrap();
+        assert_eq!(transport.status(), 403);
+        assert_eq!(transport.media_type(), "application/json");
+        assert_eq!(
+            problem.transport_response(&HOSTILE_DESCRIPTOR),
+            Err(MetadataServiceBoundaryError::InputInvalid),
+            "problem status/media also require the canonical descriptor"
+        );
+
+        let mut mismatched_problem = problem;
+        mismatched_problem.problem.as_mut().unwrap().correlation_id =
+            "correlation-substituted".to_owned();
+        assert_eq!(
+            mismatched_problem.problem_transport_response(),
+            Err(MetadataServiceBoundaryError::InputInvalid)
         );
     }
 

@@ -51,13 +51,10 @@ impl PostgresMetadataReadDispatcher {
         verified: NegotiationVerifiedMetadataRequest,
         credentials: TransactionCredentialRequest<'_>,
     ) -> MetadataResponseEnvelope {
-        let correlation_id = verified.request().correlation_id().to_owned();
         match self.dispatch_verified_read_inner(&verified, credentials) {
-            Ok((prepared, committed)) => MetadataResponseEnvelope::success_for_committed_dispatch(
-                committed,
-                &correlation_id,
-                prepared,
-            ),
+            Ok((prepared, committed)) => {
+                MetadataResponseEnvelope::success_for_committed_dispatch(committed, prepared)
+            }
             Err(_) => verified
                 .request()
                 .problem_response(MetadataTransportError::AuthorizationDenied),
@@ -209,8 +206,12 @@ impl PostgresMetadataReadDispatcher {
             }
             _ => return denied(),
         };
-        let prepared = MetadataResponseEnvelope::prepare_authorized_dispatch(response)
-            .map_err(|_| denied_error())?;
+        let prepared = MetadataResponseEnvelope::prepare_authorized_dispatch(
+            request.correlation_id(),
+            request.operation(),
+            response,
+        )
+        .map_err(|_| denied_error())?;
         finalize_identity_decision(
             participant,
             &mut transaction,

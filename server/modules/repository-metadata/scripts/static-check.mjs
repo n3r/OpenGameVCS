@@ -739,9 +739,35 @@ for (const privateTransferSymbol of [
     `private object-transfer participant entered service routing: ${privateTransferSymbol}`,
   );
 }
-for (const operation of JSON.parse(await readFile(resolve(workspace, 'spec/repository-metadata/v1/registries/operations.json'))).entries) {
+const metadataOperations = JSON.parse(
+  await readFile(resolve(workspace, 'spec/repository-metadata/v1/registries/operations.json')),
+).entries;
+const publicSurfaceAudit = await readFile(
+  resolve(workspace, 'docs/reviews/OGVCS-006-public-metadata-surface-audit.md'),
+  'utf8',
+);
+const auditedRouteRows = [...publicSurfaceAudit.matchAll(/^\| (\d+) \| `([^`]+)` \|/gmu)]
+  .map((match) => `${match[1]}:${match[2]}`);
+assert(
+  JSON.stringify(auditedRouteRows)
+    === JSON.stringify(metadataOperations.map((operation) => `${operation.code}:${operation.name}`)),
+  'public metadata audit matrix is not the exact ordered 22-operation registry',
+);
+for (const operation of metadataOperations) {
   assert(serviceSource.includes(`"${operation.name}"`), `service operation missing: ${operation.name}`);
+  assert(
+    publicSurfaceAudit.includes(`| ${operation.code} | \`${operation.name}\` |`),
+    `public metadata audit matrix missing: ${operation.name}`,
+  );
 }
+for (const blocker of [
+  'networkRoutes: []',
+  'networkRegistered: false',
+  'trusted principal/session',
+  'domain errors',
+  'authorized page construction',
+  'request-root authorization is unchanged',
+]) assert(publicSurfaceAudit.includes(blocker), `public metadata audit blocker missing: ${blocker}`);
 for (const evidence of [
   'pub const PUBLIC_PAGE_ITEMS_MAXIMUM: u16 = 10_000',
   'pub fn parse(bytes: &[u8])',
@@ -759,6 +785,10 @@ for (const evidence of [
   'PERSISTED_IDENTIFIER_BYTES_MAXIMUM',
   'BoundedJsonBuffer',
   'pub fn problem_response',
+  'pub struct MetadataTransportResponse',
+  'pub fn transport_response',
+  'pub fn problem_transport_response',
+  '.transport_response(expected_operation.transport_descriptor())?',
   'pub fn verify_negotiation',
   'OGVCS_041_NEGOTIATION_REGISTRY_SET_SHA256',
 ]) assert(serviceSource.includes(evidence), `public service boundary evidence missing: ${evidence}`);
@@ -802,6 +832,7 @@ for (const requiredBinding of [
   'verified.principal().subject_digest()',
   'view.authenticated_scope_digest()',
   'request.minimum_consistency_token()',
+  'prepare_authorized_dispatch(',
   'finalize_identity_decision(',
   'transaction.commit()',
   'CommittedMetadataReadDispatch { _sealed: () }',
@@ -813,6 +844,7 @@ const orderedDispatchSteps = [
   'SELECT tenant_id FROM ogvcs_metadata.repositories',
   'require_dispatch_consistency(',
   'load_repository_settings(',
+  'prepare_authorized_dispatch(',
   'finalize_identity_decision(',
   'transaction.commit()',
   'CommittedMetadataReadDispatch { _sealed: () }',
@@ -849,6 +881,17 @@ assert(
   serviceSource.includes('pub(crate) fn success_for_committed_dispatch(')
     && serviceSource.includes('_committed: crate::postgres::CommittedMetadataReadDispatch'),
   'metadata success construction is not sealed behind a committed dispatch brand',
+);
+const committedResponseStart = serviceSource.indexOf('    pub(crate) fn success_for_committed_dispatch(');
+const committedResponseEnd = serviceSource.indexOf('\n    pub const fn schema_version(', committedResponseStart);
+const committedResponse = serviceSource.slice(committedResponseStart, committedResponseEnd);
+assert(
+  committedResponseStart >= 0
+    && committedResponseEnd > committedResponseStart
+    && committedResponse.includes('prepared.envelope')
+    && !committedResponse.includes('correlation_id:')
+    && !committedResponse.includes('body:'),
+  'post-decision response construction can substitute precommitted envelope facts',
 );
 assert(
   serviceSource.includes('pub(crate) fn metadata_negotiation_tenant_digest(')

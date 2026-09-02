@@ -1676,6 +1676,16 @@ fn negotiation_receipt_verification_is_mac_first_current_and_problem_exact() {
     );
 
     let problem = admitted.problem_response(MetadataTransportError::AuthorizationDenied);
+    let problem_transport = problem
+        .transport_response(MetadataOperation::RepositoryGetSettings.transport_descriptor())
+        .unwrap();
+    assert_eq!(problem_transport.status(), 403);
+    assert_eq!(problem_transport.media_type(), METADATA_RESPONSE_MEDIA_TYPE);
+    assert_eq!(problem_transport.control().first(), Some(&b'{'));
+    assert_eq!(problem_transport.control().last(), Some(&b'}'));
+    assert!(std::str::from_utf8(problem_transport.control())
+        .unwrap()
+        .starts_with("{\"correlationId\":\"correlation-0001\",\"problem\":"));
     let problem_json = serde_json::to_value(&problem).unwrap();
     assert_eq!(
         problem_json["schemaVersion"],
@@ -1703,6 +1713,12 @@ fn negotiation_receipt_verification_is_mac_first_current_and_problem_exact() {
         MetadataTransportError::Malformed,
     )
     .unwrap();
+    let preparse_transport = preparse.problem_transport_response().unwrap();
+    assert_eq!(preparse_transport.status(), 400);
+    assert_eq!(
+        preparse_transport.media_type(),
+        METADATA_RESPONSE_MEDIA_TYPE
+    );
     let preparse = serde_json::to_value(preparse).unwrap();
     assert_eq!(preparse["correlationId"], server_correlation.as_str());
     assert_eq!(preparse["problem"]["code"], "PROTOCOL_MALFORMED");

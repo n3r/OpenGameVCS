@@ -59,6 +59,17 @@ cross-subject, cross-tenant, invalid-token, and commit-fault cases all produce
 the same registered authorization failure without logging adapter/database or
 protected identity details.
 
+The framework-neutral `MetadataTransportResponse` now closes one narrower
+carrier gap without opening a route. It derives the HTTP status and media type
+from the exact static descriptor (or the registered problem for a pre-route
+failure), emits RFC 8785 canonical response-envelope bytes, rejects a success
+whose operation/carrier differs from the descriptor, and enforces the complete
+one-MiB control-message limit. The sealed read dispatcher validates that full
+canonical envelope before committing its OGVCS-009 decision, so an individually
+valid result body cannot become an unencodable post-commit response. This
+carrier does not register HTTP, authenticate a principal, or map a metadata
+domain error into OGVCS-041.
+
 Two adapter-private versioned projections close otherwise-unassigned joins:
 the raw metadata `TenantId` is domain-hashed to the negotiation receipt's
 opaque `tenantDigest`, and the exact reference kind plus UTF-8 name is
