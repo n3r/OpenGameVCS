@@ -492,8 +492,11 @@ hard-kills PostgreSQL thirteen times, so it must never be pointed at a shared or
 production database service. A database is removed only after this invocation
 successfully created that exact random name. The workflow lane is the
 authoritative execution environment. The exact v13 integration source passed
-that hosted lane in run 33506824950; this remains bounded candidate evidence,
-not a production supervisor or deployment claim.
+that hosted lane in run 33506824950. The later exact-plan-binding and lock-order
+hardening passed all four jobs, including the live PostgreSQL 15.19 matrix and
+the thirteen-boundary restart lane, at exact source `3d79338` in run
+33579298064. These remain bounded candidate proofs, not a production supervisor
+or deployment claim.
 
 ```sh
 OGVCS_METADATA_RESTART_POSTGRES_CONTAINER=<exact-disposable-container-id> \

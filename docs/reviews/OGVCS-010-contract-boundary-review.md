@@ -46,6 +46,18 @@ report](../evidence/OGVCS-006/atomic-submit-hard-restart-report-2026-09-01.jsonl
 is 10,094 bytes with SHA-256
 `85b36ec4c7f30c9864d5b3ffc7d25594a891ad038a3850cc339b872703df32ca`.
 
+The later lock-order and exact-plan-binding hardening is recorded by [hosted
+run 33579298064](../evidence/OGVCS-010/github-actions-run-33579298064.json).
+At exact source `3d79338`, macOS, Windows, live PostgreSQL 15.19, and the
+separate thirteen-boundary hard-restart job all passed. Fresh intent,
+preflight, finalize, and unknown-result reconciliation now require the exact
+v13 identity-plan ID, decision digest, and resource-projection digest; pending
+unmapped work fails closed, while historical committed replay remains bound to
+its immutable stored plan and consumption. Advisory create/preflight reads no
+longer reserve branch or FileID rows, and the live regression proves progress
+behind concurrent publication locks. These are private implementation proofs,
+not a ratified public contract or authorization closure.
+
 This evidence narrows implementation uncertainty around B1, B2, and the
 restricted lost-response portion of B5. It does not supply their required
 public/versioned contracts, a general server-derived submit planner, the

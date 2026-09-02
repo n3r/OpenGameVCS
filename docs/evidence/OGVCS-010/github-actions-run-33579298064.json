@@ -1,0 +1,124 @@
+{
+  "schemaVersion": "ogvcs.atomic-submit/hosted-evidence/v1",
+  "status": "bounded-exact-plan-binding-passed",
+  "exactScaleExecuted": false,
+  "implementationRevisions": {
+    "planBindingAndLockOrder": "986761a95e42baf24377208f17fc0034572407ce",
+    "postgres15FixtureCorrection": "3d793383c0289ddf0b3acc5887a79bc006b93e55"
+  },
+  "sourceRevision": "3d793383c0289ddf0b3acc5887a79bc006b93e55",
+  "workflow": {
+    "name": "Repository metadata bounded conformance",
+    "path": ".github/workflows/repository-metadata.yml",
+    "runId": 33579298064,
+    "runAttempt": 1,
+    "event": "workflow_dispatch",
+    "headBranch": "r1-foundation-integration",
+    "createdAt": "2026-09-02T01:25:03Z",
+    "completedAt": "2026-09-02T01:27:46Z",
+    "url": "https://github.com/n3r/OpenGameVCS/actions/runs/33579298064"
+  },
+  "toolchains": {
+    "nodeRequested": "24",
+    "nodeActual": {
+      "macOS": "24.18.0",
+      "ubuntu": "24.19.0",
+      "windows": "24.19.0",
+      "hardRestartUbuntu": "24.19.0"
+    },
+    "rust": "1.82.0"
+  },
+  "jobs": [
+    {
+      "id": 100089974265,
+      "name": "Locked bounded checks (macOS)",
+      "conclusion": "success",
+      "startedAt": "2026-09-02T01:25:08Z",
+      "completedAt": "2026-09-02T01:26:14Z"
+    },
+    {
+      "id": 100089974404,
+      "name": "Locked bounded checks and PostgreSQL 15",
+      "conclusion": "success",
+      "startedAt": "2026-09-02T01:25:07Z",
+      "completedAt": "2026-09-02T01:27:45Z"
+    },
+    {
+      "id": 100089974431,
+      "name": "Locked bounded checks (Windows)",
+      "conclusion": "success",
+      "startedAt": "2026-09-02T01:25:09Z",
+      "completedAt": "2026-09-02T01:27:03Z"
+    },
+    {
+      "id": 100089974639,
+      "name": "Private atomic submit hard-restart proof (PostgreSQL 15)",
+      "conclusion": "success",
+      "startedAt": "2026-09-02T01:25:08Z",
+      "completedAt": "2026-09-02T01:27:12Z"
+    }
+  ],
+  "artifacts": [
+    {
+      "id": 9827846893,
+      "name": "repository-metadata-postgres-Linux",
+      "archiveBytes": 586,
+      "githubDigest": "sha256:f517dec418f013ec4847d2a34f653dbff2e908399b2a5d1898b57223374dc48c",
+      "expiresAt": "2026-09-16T01:27:41Z",
+      "reportBytes": 1001,
+      "reportSha256": "e8dae7794e0c71205c94f610fb7a99a8c6a1c8caea2ae57cf0f8a787f9747f40",
+      "deduplicatedAs": "../OGVCS-006/repository-metadata-service-report-2026-09-01.jsonl"
+    },
+    {
+      "id": 9827833705,
+      "name": "repository-metadata-atomic-submit-restart-PG15",
+      "archiveBytes": 1459,
+      "githubDigest": "sha256:d68b6609ea6679c6519f58ae3f17acb3673bb9dfc9fee8fc3a6b47826a23a255",
+      "expiresAt": "2026-09-16T01:27:09Z",
+      "retainedReport": "atomic-submit-hard-restart-report-2026-09-02.jsonl",
+      "reportBytes": 10094,
+      "reportSha256": "ac29199527a8c0d2c44f03b8d57e0a6cc400f652dd0dbfea8421cc0d1e8a74e1",
+      "caseCount": 13
+    }
+  ],
+  "result": {
+    "status": "passed",
+    "postgresImage": "postgres@sha256:5d1d70e254e3c5d7d76847a9deebb18478cd518df37abf6b278d4bdb1fe5d96c",
+    "postgresVersion": "150019",
+    "exactAggregatePlanBinding": "passed",
+    "receiptSubstitutionAndRequestReuseRejection": "passed",
+    "historicalCommittedReplayWithoutV13Mapping": "passed",
+    "advisoryObservationLockProgress": "passed",
+    "aggregateAndIdentityMappingMatrix": "passed",
+    "routeLessContentManifestAvailability": "passed",
+    "hardRestartCaseCount": 13,
+    "portableCompilationAndContracts": "passed on Windows, macOS, and Ubuntu",
+    "serviceReportSha256": "e8dae7794e0c71205c94f610fb7a99a8c6a1c8caea2ae57cf0f8a787f9747f40"
+  },
+  "supersededFailedAttempt": {
+    "runId": 33557680481,
+    "sourceRevision": "986761a95e42baf24377208f17fc0034572407ce",
+    "conclusion": "failure",
+    "cause": "PostgreSQL 15 rejected test-helper ALTER TABLE while deferred trigger events were pending",
+    "productionSourceDefect": false,
+    "countedAsSuccessEvidence": false
+  },
+  "nonClaims": [
+    "no public atomic-submit contract or route",
+    "no request-root issuance, expansion, or ratification",
+    "no general operation-set planner or authorization",
+    "no production JavaScript-to-Rust subject or scope mapper",
+    "no production lock, review, or check authority",
+    "no public disaster-recovery receipt",
+    "no 100-finalizer concurrency campaign",
+    "no exact-scale execution"
+  ],
+  "remainingGates": [
+    "ratified language-neutral atomic-submit contract and public transport",
+    "request-root and exact operation-set authorization",
+    "production subject, scope, policy, lock, review, and check composition",
+    "durable public recovery-boundary receipt and current-scope reauthentication",
+    "100-finalizer concurrency and required fault campaigns",
+    "authorized release-only exact-scale campaigns"
+  ]
+}
