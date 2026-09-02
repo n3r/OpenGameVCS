@@ -1,10 +1,12 @@
-# OGVCS-020 private Git import preflight candidate
+# OGVCS-020 private Git import preflight and tree-frame candidate
 
 This unpublished Rust 1.82 crate is a pure, bounded preflight over a
-caller-supplied, already-staged Git inventory projection. It is private and
-unwired. It has no Git pack parser, filesystem access, network client, broker,
-credential handling, authorization decision, persistence, converter,
-checkpoint, publication path, public CLI, or service route.
+caller-supplied, already-staged Git inventory projection plus a strict decoder
+for one already-inflated Git tree frame. It is private and unwired. It has no
+Git pack, compressed loose-object, zlib, or archive parser; filesystem access;
+network client; broker; credential handling; authorization decision;
+persistence; converter; checkpoint; publication path; public CLI; or service
+route.
 
 The projection contains canonical-order ref, commit, tree, proposed target
 entry, and OGVCS-002 mapping-request records. Entry occurrences and Git blob
@@ -22,6 +24,76 @@ operational limits, measured work, and conservative peak retention—with
 domain-separated SHA-256 transcripts. `ready` means only that this narrow
 projection produced no local preflight blockers; it is not import,
 authorization, fidelity, verification, or publication approval.
+
+## Inflated Git tree-frame boundary
+
+`decode_git_tree_frame` identifies its private algorithm as
+`ogvcs.git-tree-frame/strict@1`. It accepts borrowed bytes in Git's inflated
+`tree <canonical-decimal-size> NUL <payload>` representation, a claimed staging
+SHA-256, and a typed SHA-1 or SHA-256 repository object format. The staging
+digest is recomputed before parsing. It binds immutable input bytes but is not
+the Git object ID: this tranche deliberately does not implement SHA-1,
+collision detection, pack/loose-object acquisition, or the Git object-ID
+preimage association.
+
+Each payload entry must use exactly one canonical mode spelling: `40000`,
+`100644`, `100755`, `120000`, or `160000`. Names are bounded Git byte names,
+not UTF-8 text. Empty names, `.`, `..`, `/`, literal `.git`, and the HFS/NTFS
+aliases that Git's tree checker treats as `.git` are rejected. Child IDs are
+exactly 20 or 32 nonzero bytes according to the selected object format. Entries
+must be globally unique and strictly ordered by Git's tree comparator,
+including the special `/` comparison byte for a tree name at a shared prefix.
+The global duplicate check covers names separated by intervening prefix entries
+such as file `foo`, file `foo.bar`, and tree `foo`. Unsupported modes fail
+closed; this candidate defines no transform policy.
+
+The decoder performs an allocation-free digest/header/structural shape pass.
+That pass charges a conservative protected-name recognizer, computes exact
+counts, and admits all remaining work plus conservative peak retention before
+allocation. A second pass uses an exact-capacity, eight-byte-per-entry stack of
+borrowed-name offsets to validate full Git ordering and non-consecutive
+duplicates. The scratch stack is dropped before a third pass materializes only
+the validated entries into exact-capacity output storage. Errors and
+cancellation drop all internal state and expose no partial entry list. A final
+cancellation fence follows the projection commitment. Input, effective limits,
+object format, ordered entries, conservative charged work, cancellation checks,
+and retained charge are bound by domain-separated SHA-256 commitments. Entry
+and projection `Debug` output redacts names and object IDs; explicit accessors
+remain caller-visible by design.
+
+| Tree decoder resource | Hard maximum |
+|---|---:|
+| inflated frame bytes | 1,048,576 |
+| entries | 4,096 |
+| one name | 4,096 bytes |
+| aggregate name bytes | 1,048,576 |
+| charged work | 16,777,216 units |
+| conservative retained bytes | 2,097,152 |
+
+Callers may only narrow these maxima, and the effective limits are request-
+commitment inputs. The retained model charges 1,024 fixed bytes and takes the
+maximum of two non-overlapping states: an exact-capacity duplicate-candidate
+stack charged at eight bytes per entry, or output charged at 64 bytes per entry
+plus exact retained name bytes. Both entry charges have compile-time size
+assertions. The model includes exact logical vector/name capacities but excludes
+borrowed frame storage, allocator metadata, hashing stack state, and caller
+clones; it is not an RSS measurement.
+
+This decoder is not connected to `preflight_git_import`. It does not recurse,
+join paths, discover `.gitattributes`, derive `LfsDisposition`, or prove that a
+claimed `ImportRecord::Tree` names these bytes. A future OGVCS-045
+credential-free worker and authenticated acquisition boundary must establish
+that association before the output can replace the current adapter projection.
+It also does not implement Git fsck's separate policy findings for symlinked
+HFS/NTFS aliases of `.gitmodules`, `.gitattributes`, `.gitignore`, or `.mailmap`;
+the authenticated importer must enforce those repository-wide rules before
+conversion.
+
+The tree-order and protected-name rules are derived from Git's official
+[`fsck.c`](https://github.com/git/git/blob/master/fsck.c),
+[`tree.c`](https://github.com/git/git/blob/master/tree.c),
+[`path.c`](https://github.com/git/git/blob/master/path.c), and
+[`utf8.c`](https://github.com/git/git/blob/master/utf8.c) sources.
 
 ## OGVCS-002 composition
 
@@ -156,16 +228,18 @@ plan, entry, or cursor exists.
 
 ## Explicit residuals and nonclaims
 
-The inventory is an untrusted adapter projection, not evidence that Git packs,
-loose objects, refs, reachability, commit parents/order, trees, messages,
-authors, timestamps, modes, `.gitattributes`, submodules, symlinks, or all
-history were parsed completely. `LfsDisposition` is a bound adapter claim, not
-authenticated `.gitattributes` evaluation. The unique-object/entry-occurrence split
-follows Git's data model, but adapter declarations are not proof that object
-types or reachability were parsed faithfully. Commit/tree relationship counts are declared
-work charges, not DAG proof. Proposed target paths are not a raw historical
-tree stream. Source identity digests are opaque caller claims; this crate does
-not infer rename, move, copy, delete/recreate, or original identity.
+The inventory remains an untrusted adapter projection, not evidence that Git
+packs, loose objects, refs, reachability, commit parents/order, recursive trees,
+messages, authors, timestamps, `.gitattributes`, submodules, symlinks, or all
+history were parsed completely. The isolated tree decoder validates only bytes
+passed directly to it and is not wired to inventory records. `LfsDisposition`
+is a bound adapter claim, not authenticated `.gitattributes` evaluation. The
+unique-object/entry-occurrence split follows Git's data model, but adapter
+declarations are not proof that object types or reachability were parsed
+faithfully. Commit/tree relationship counts are declared work charges, not DAG
+proof. Proposed target paths are not a raw historical tree stream. Source
+identity digests are opaque caller claims; this crate does not infer rename,
+move, copy, delete/recreate, or original identity.
 
 There is no remote LFS acquisition, credential classification, sandbox,
 decompression, Git object hash recomputation, conversion, target object/root,

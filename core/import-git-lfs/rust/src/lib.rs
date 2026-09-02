@@ -4,10 +4,18 @@
 //! object, or publish repository state.
 #![forbid(unsafe_code)]
 
+mod git_tree;
 mod lfs;
 mod oid;
 mod preflight;
 
+pub use git_tree::{
+    decode_git_tree_frame, GitObjectFormat, GitTreeEntry, GitTreeEntryMode, GitTreeError,
+    GitTreeErrorCode, GitTreeFrame, GitTreeLedger, GitTreeLimits, GitTreeProjection, GitTreeResult,
+    GIT_TREE_ALGORITHM_VERSION, GIT_TREE_ENTRIES_HARD_MAXIMUM, GIT_TREE_FRAME_BYTES_HARD_MAXIMUM,
+    GIT_TREE_NAME_BYTES_HARD_MAXIMUM, GIT_TREE_RETAINED_BYTES_HARD_MAXIMUM,
+    GIT_TREE_TOTAL_NAME_BYTES_HARD_MAXIMUM, GIT_TREE_WORK_UNITS_HARD_MAXIMUM,
+};
 pub use lfs::{
     classify_lfs_pointer, LfsExtension, LfsObjectId, LfsPointer, PointerClassification,
     PointerError, PointerErrorCode, GIT_LFS_POINTER_BYTES_MAXIMUM,

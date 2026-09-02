@@ -123,10 +123,14 @@ canonical pointer-looking ordinary-path substitution.
 
 ## Residual risks and required future work
 
-- No Git pack/loose-object/archive parser or Git object hashing exists. The
-  adapter can omit or misdescribe refs, reachability, parent order, tree
-  contents, `.gitattributes`, identities, timestamps, encodings, or modes. The
-  supplied LFS disposition is not authenticated attribute evidence.
+- No Git pack/compressed-loose-object/archive parser or Git object hashing
+  exists. A later private decoder validates one caller-supplied inflated tree
+  frame and is reviewed separately in
+  [OGVCS-020-git-tree-frame-boundary-review.md](OGVCS-020-git-tree-frame-boundary-review.md),
+  but it is not wired to this projection. The adapter can still omit or
+  misdescribe refs, reachability, parent order, tree associations,
+  `.gitattributes`, identities, timestamps, encodings, or modes. The supplied
+  LFS disposition is not authenticated attribute evidence.
 - No selected-ref policy, commit DAG preservation, merge/empty-commit policy,
   tag/remote-ref policy, or source Git-ID lookup metadata exists.
 - Proposed entries are a bounded target projection, not a complete historical

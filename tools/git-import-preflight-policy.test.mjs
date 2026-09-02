@@ -13,6 +13,7 @@ test('hosted portability workflow is pinned, path-scoped, and cross-platform', a
     'core/object-model/rust/**',
     'core/paths-filesystem/rust/**',
     'docs/reviews/OGVCS-020-git-import-preflight-boundary-review.md',
+    'docs/reviews/OGVCS-020-git-tree-frame-boundary-review.md',
     'docs/evidence/OGVCS-020/**',
     'prd/todo/OGVCS-020-git-lfs-importer.md',
     'tools/git-import-preflight-policy.test.mjs',
@@ -100,7 +101,7 @@ test('retained hosted result is exact and bounded to private preflight portabili
 });
 
 test('OGVCS-020 candidate remains private, bounded, unwired, and Todo', async () => {
-  const [manifest, source, readme, review, packageValue, prd] = await Promise.all([
+  const [manifest, source, treeSource, readme, review, treeReview, treeGolden, packageValue, prd] = await Promise.all([
     read('core/import-git-lfs/rust/Cargo.toml'),
     Promise.all([
       read('core/import-git-lfs/rust/src/lib.rs'),
@@ -108,8 +109,11 @@ test('OGVCS-020 candidate remains private, bounded, unwired, and Todo', async ()
       read('core/import-git-lfs/rust/src/oid.rs'),
       read('core/import-git-lfs/rust/src/preflight.rs'),
     ]).then((parts) => parts.join('\n')),
+    read('core/import-git-lfs/rust/src/git_tree.rs'),
     read('core/import-git-lfs/rust/README.md'),
     read('docs/reviews/OGVCS-020-git-import-preflight-boundary-review.md'),
+    read('docs/reviews/OGVCS-020-git-tree-frame-boundary-review.md'),
+    read('core/import-git-lfs/rust/tests/git-tree-golden.json').then(JSON.parse),
     read('package.json').then(JSON.parse),
     read('prd/todo/OGVCS-020-git-lfs-importer.md'),
   ]);
@@ -118,7 +122,8 @@ test('OGVCS-020 candidate remains private, bounded, unwired, and Todo', async ()
   assert.match(manifest, /publish = false/u);
   assert.match(manifest, /ogvcs-object-model/u);
   assert.match(manifest, /ogvcs-path-contract/u);
-  assert.doesNotMatch(source, /std::fs|TcpListener|UdpSocket|reqwest|git2|Command::new|AuthorizationContext|TransactionAuthorized/iu);
+  assert.doesNotMatch(manifest, /^\s*(?:flate2|git2|sha1|zlib)\s*=/imu);
+  assert.doesNotMatch(`${source}\n${treeSource}`, /std::fs|std::net|std::process|TcpListener|UdpSocket|reqwest|git2|Command::new|AuthorizationContext|TransactionAuthorized|request[_-]?root/iu);
   assert.match(source, /pub const ITEMS_HARD_MAXIMUM: u64 = 1_000_000;/u);
   assert.match(source, /pub const WORK_UNITS_HARD_MAXIMUM: u64 = 64_000_000;/u);
   assert.match(source, /pub const READ_CHUNK_BYTES_HARD_MAXIMUM: usize = 65_536;/u);
@@ -140,7 +145,34 @@ test('OGVCS-020 candidate remains private, bounded, unwired, and Todo', async ()
   assert.match(source, /import_mapping_key/u);
   assert.match(source, /ImportMapping/u);
   assert.doesNotMatch(source, /permit_lfs_extensions/iu);
-  assert.match(readme, /no Git pack parser/iu);
+  assert.match(treeSource, /GIT_TREE_ALGORITHM_VERSION: &str = "ogvcs\.git-tree-frame\/strict@1"/u);
+  assert.match(treeSource, /GIT_TREE_FRAME_BYTES_HARD_MAXIMUM: u64 = 1_048_576/u);
+  assert.match(treeSource, /GIT_TREE_ENTRIES_HARD_MAXIMUM: u64 = 4_096/u);
+  assert.match(treeSource, /GIT_TREE_NAME_BYTES_HARD_MAXIMUM: u64 = 4_096/u);
+  assert.match(treeSource, /GIT_TREE_WORK_UNITS_HARD_MAXIMUM: u64 = 16_777_216/u);
+  assert.match(treeSource, /GIT_TREE_RETAINED_BYTES_HARD_MAXIMUM: u64 = 2_097_152/u);
+  assert.match(treeSource, /DUPLICATE_CANDIDATE_RETAINED_BYTES: u64 = 8/u);
+  assert.match(treeSource, /PROTECTED_NAME_WORK_MULTIPLIER: u64 = 3/u);
+  assert.match(treeSource, /REQUEST_COMMITMENT_WORK: u64 = 192/u);
+  assert.match(treeSource, /PROJECTION_FIXED_WORK: u64 = 192/u);
+  assert.match(treeSource, /bytes\.get\(\.\.4\) != Some\(&b"tree"\[\.\.\]\)/u);
+  assert.match(treeSource, /scan_payload_shape[\s\S]*validate_payload_order[\s\S]*materialize_entries/u);
+  assert.match(treeSource, /comparison\.same_name/u);
+  assert.match(treeSource, /if left\.mode\.is_tree\(\)[\s\S]*b'\/'/u);
+  assert.match(treeSource, /struct DuplicateCandidate[\s\S]*name_start: u32,[\s\S]*name_len: u32/u);
+  assert.match(treeSource, /size_of::<DuplicateCandidate>\(\)[\s\S]*DUPLICATE_CANDIDATE_RETAINED_BYTES/u);
+  assert.match(treeSource, /Vec<DuplicateCandidate> = Vec::with_capacity\(capacity\)/u);
+  assert.match(treeSource, /track_nonconsecutive_duplicate/u);
+  assert.match(treeSource, /budget\.check_cancel\(GitTreePhase::Order\)/u);
+  assert.match(treeSource, /is_hfs_dotgit\(entry\.name\) \|\| is_ntfs_dotgit\(entry\.name\)/u);
+  assert.match(treeSource, /NameGitMetadataAlias => "GIT_TREE_NAME_GIT_METADATA_ALIAS"/u);
+  assert.match(treeSource, /order_work_bound[\s\S]*budget\.ensure_work[\s\S]*actual_order_work/u);
+  assert.doesNotMatch(treeSource, /networkRoutes|networkRegistered|registerRoute|routeDispatcher/iu);
+  assert.doesNotMatch(
+    treeSource,
+    /sha1::|\bflate2\b|\blibz\b|\bzlib\b|\bpackfile\b|<<<<<<<|>>>>>>>/iu,
+  );
+  assert.match(readme, /no\s+Git pack, compressed loose-object, zlib, or archive parser/iu);
   assert.match(readme, /not allocator or\s+RSS measurement/iu);
   assert.match(readme, /opaque caller claim/iu);
   assert.match(readme, /at or above 1024 bytes is\s+unconditionally `NotPointer`/iu);
@@ -150,10 +182,19 @@ test('OGVCS-020 candidate remains private, bounded, unwired, and Todo', async ()
   assert.match(readme, /does not attest correct attribute discovery/iu);
   assert.match(readme, /No OGVCS-020\s+acceptance criterion is satisfied or closed/iu);
   assert.match(review, /OGVCS-020-AC-01 through OGVCS-020-AC-07 remain open/u);
-  assert.match(review, /No Git pack\/loose-object\/archive parser/u);
+  assert.match(review, /No Git pack\/compressed-loose-object\/archive parser/u);
   assert.match(review, /git-scm\.com\/docs\/gitdatamodel\.html/u);
   assert.match(review, /github\.com\/git\/git\/blob\/master\/entry\.c/u);
   assert.match(review, /There is intentionally no derivation or authentication relationship/u);
+  assert.match(treeReview, /Exact integration base:\*\* `9b2e4ce18b0d246ee5a84b946686e670a68a01fa`/u);
+  assert.match(treeReview, /does \*\*not\*\* recompute a Git SHA-1 object ID/iu);
+  assert.match(treeReview, /non-consecutive\s+file\/directory duplicate rule/iu);
+  assert.match(treeReview, /HFS and NTFS `\.git` recognizers/iu);
+  assert.match(treeReview, /three-entry counterexample|`foo`, `foo\.bar`, then tree `foo`/iu);
+  assert.match(treeReview, /OGVCS-020 remains Todo; AC-01 through AC-07 remain open/u);
+  assert.match(treeReview, /request-root authorization/iu);
+  assert.equal(treeGolden.schemaVersion, 'ogvcs.git-tree-frame/private-golden/v1');
+  assert.deepEqual(treeGolden.cases.map(({ objectFormat }) => objectFormat), ['sha1', 'sha256']);
   assert.equal(packageValue.engines.node, '>=22');
   assert.equal(packageValue.scripts['test:git-import-preflight'], 'node --test tools/git-import-preflight-policy.test.mjs');
   assert.match(packageValue.scripts['test:git-import-preflight:rust'], /cargo \+1\.82\.0/u);
@@ -165,11 +206,12 @@ test('OGVCS-020 candidate remains private, bounded, unwired, and Todo', async ()
   }
 });
 
-test('packed source includes tests, golden vector, docs, and no route declaration', async () => {
-  const [manifest, packed, golden, readme] = await Promise.all([
+test('packed source includes tests, golden vectors, docs, and no route declaration', async () => {
+  const [manifest, packed, golden, treeGolden, readme] = await Promise.all([
     read('core/import-git-lfs/rust/Cargo.toml'),
     read('core/import-git-lfs/rust/scripts/test-packed.sh'),
     read('core/import-git-lfs/rust/tests/golden.json').then(JSON.parse),
+    read('core/import-git-lfs/rust/tests/git-tree-golden.json').then(JSON.parse),
     read('core/import-git-lfs/rust/README.md'),
   ]);
   assert.match(manifest, /"tests\/\*\*"/u);
@@ -177,5 +219,6 @@ test('packed source includes tests, golden vector, docs, and no route declaratio
   assert.match(packed, /cargo package/u);
   assert.match(packed, /cargo test --locked --offline/u);
   assert.equal(golden.lfsContentSha256, '5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03');
+  assert.equal(treeGolden.cases.length, 2);
   assert.doesNotMatch(readme, /production-ready|hosted importer|public API/iu);
 });

@@ -419,8 +419,12 @@ impl OperationControl {
         self.cancellation.store(true, Ordering::Release);
     }
 
+    pub(crate) fn is_cancelled(&self) -> bool {
+        self.cancellation.load(Ordering::Acquire)
+    }
+
     fn check(&self) -> Result<(), ImportPreflightError> {
-        if self.cancellation.load(Ordering::Acquire) {
+        if self.is_cancelled() {
             Err(ImportPreflightError::new(
                 ImportPreflightErrorCode::Cancelled,
             ))

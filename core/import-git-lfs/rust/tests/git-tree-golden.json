@@ -1,0 +1,58 @@
+{
+  "schemaVersion": "ogvcs.git-tree-frame/private-golden/v1",
+  "cases": [
+    {
+      "id": "sha1-two-entry",
+      "objectFormat": "sha1",
+      "frameHex": "747265652036340031303036343420616c70686100111111111111111111111111111111111111111134303030302062657461002222222222222222222222222222222222222222",
+      "stagedSha256": "290bbe49869f2b2934eccb6b4433e0c465351cc9b995be975a6632bcdc5c74fb",
+      "requestCommitmentSha256": "0d8c53db214a4a1762d6a344d64ef9fad2e87c8283da668a56753a27fd3aa8cf",
+      "projectionCommitmentSha256": "b47a256be437245ca6fa41b816fac646cfb09ff511d9dd3c57cb962675e24987",
+      "ledger": {
+        "frameBytes": 72,
+        "payloadBytes": 64,
+        "entries": 2,
+        "nameBytes": 9,
+        "workUnits": 808,
+        "cancellationChecks": 14,
+        "admittedRetainedBytes": 1161
+      },
+      "entries": [
+        {
+          "mode": "100644",
+          "nameHex": "616c706861",
+          "objectId": "sha1:1111111111111111111111111111111111111111"
+        },
+        {
+          "mode": "40000",
+          "nameHex": "62657461",
+          "objectId": "sha1:2222222222222222222222222222222222222222"
+        }
+      ]
+    },
+    {
+      "id": "sha256-non-utf8",
+      "objectFormat": "sha256",
+      "frameHex": "747265652034320031303037353520ff7a003333333333333333333333333333333333333333333333333333333333333333",
+      "stagedSha256": "c61bc19f61fa6389d64181f96733e1f147febe1e0aa80ca4362356811cb63d53",
+      "requestCommitmentSha256": "39ad4195b9137c1abcce7b93d268ec5eab1b1689e055eb0b364c82400b233aea",
+      "projectionCommitmentSha256": "e989cc71b5754effdac34e5cea6ac1026b72c01df649ffb8746428abb35bacaa",
+      "ledger": {
+        "frameBytes": 50,
+        "payloadBytes": 42,
+        "entries": 1,
+        "nameBytes": 2,
+        "workUnits": 641,
+        "cancellationChecks": 11,
+        "admittedRetainedBytes": 1090
+      },
+      "entries": [
+        {
+          "mode": "100755",
+          "nameHex": "ff7a",
+          "objectId": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+        }
+      ]
+    }
+  ]
+}
