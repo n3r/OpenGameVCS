@@ -1,12 +1,31 @@
 # OGVCS-012 durable workspace-index candidate boundary review
 
-- **Candidate base before this tranche:** `32ca99c7d35c4ffc949b1c21b76719a949e47a33`
+- **Candidate base before this tranche:** `3563167763a54b97eb8166ded1db895aa3a5b7cd`
 - **Private candidate contract:** `client/native-cli/rust/contracts/workspace-index/v1`
   version `0.1.0-rc.4` (generation bytes remain `0.1.0-rc.1`)
 - **Verdict:** useful fail-closed native implementation slice; OGVCS-012
   remains Todo.
 
 ## What this candidate establishes
+
+The additive public-adapter facade now requires authentication and exact
+current binding validation before status or healthy repair can reach the
+watcher/index boundary. It verifies the authenticated subject plus authority
+and security epochs against the persisted workspace, asks the owning public
+route to validate that binding, and then compares the complete verified
+workspace-metadata digest under the mutation lock before each status fence,
+reader-lease publication, or index write. Repair also checks that digest before
+watcher subscription and again under the lock before generation publication;
+a reconfigure racing after subscription fails before index mutation. Subject
+substitution and an already-stale local binding fail before the watcher is
+entered. This is an embeddable typed seam, not a first-party CLI/JSON route:
+`UnavailablePublicRoutes` remains the binary default, and no native watcher
+authority or corrupt-index discard/reseed authority is introduced. The
+formerly re-exported direct watcher-batch append helper had no production
+caller and bypassed the watcher-authority object, so it is now test-only.
+Production batch admission remains available only through the exact
+session/prior-cursor-bound sink passed to a status fence; an external adapter
+still cannot construct a continuity-proving checkpoint.
 
 The Rust participant can ingest an authenticated immutable baseline through a
 bounded sink and publish a locally durable index without accepting a
@@ -234,7 +253,7 @@ Two explicit bounded release tests produced this local candidate evidence:
 | 1,000 changed files | 1,000 modified items, every content verified, 210 ms | one local debug test run; not p95 |
 | 100,000 watcher events | 100 chunks × 1,000, full-chain verification, event 100,001 rejected before append, 11.619 s | one local debug test run; not a million-path benchmark |
 
-The current isolated source passed 72 Rust 1.82 library tests with the two
+The current isolated source passed 74 Rust 1.82 library tests with the two
 exact bounded-release tests explicitly ignored, 2 binary unit tests, 3 CLI
 contract tests, 2 contract-vector tests, and 12 production-foundation
 integration tests. Rustfmt, all-target Clippy with warnings denied, the
@@ -264,12 +283,12 @@ pins the manifest artifact set.
 
 | Residual | Candidate behavior | Completion condition |
 | --- | --- | --- |
-| Public baseline/status/compaction route | `UnavailablePublicRoutes` fails before index publication; compaction is private local API only | Publish and authenticate the owning baseline/status adapter and CLI/JSON contract, with bounded operations |
+| Public baseline/status/compaction route | Typed authenticated status and healthy-repair facades fail before watcher/index mutation on subject, epoch, route, or under-lock metadata mismatch; `UnavailablePublicRoutes` remains the first-party binary default and compaction is private local API only | Publish the owning baseline/status adapter and CLI/JSON contract, with bounded operations |
 | Native watcher authority | No production constructor can mint continuity; portable watcher is always degraded | Implement and prove USN, FSEvents, and inotify adapters including resume/overflow/unclean shutdown |
 | Million-path SLO | No exact one-million warm p95 result | Pass the reference p95 target without a full walk/hash on every supported OS profile |
 | Full status state machine | The bounded same-path and staged-overlap tranche is covered, including exact incompatible outgoing edges, directly observable source reoccupation, and immutable-source FileID mismatch; broader multi-hop rename/reoccupation, case-only rename, and FileID semantics or repository-lifetime uniqueness without local immutable authority remain outside this tranche | Pass rename-cycle, broader multi-hop and case-only rename/reoccupation, remaining FileID semantic binding and uniqueness, directory/file replacement, locked-open, ignore transition, native-fault, and remaining revert combinations |
 | Staging/watcher causal order | Staging binds no watcher cursor or sequence, so every covered non-commutative reset/lineage intersection fails closed | Durably bind each staging transition to watcher ordering before assigning definitive post-stage reset semantics |
-| Repair equivalence | A bounded test-only independent full scan matches every page after healthy repair and reconstructible watcher/event rebuild; corrupt sealed baseline/history/control authority fails closed without changing the captured workspace bytes, node types, modification times, read-only states, or portable modes | Add a safe public discard/reseed operation for non-reconstructible private authority and retain the complete cross-OS corruption/fault matrix |
+| Repair equivalence | Authenticated healthy repair now revalidates its exact public binding before subscription and under lock; a bounded test-only independent full scan matches every page after healthy repair and reconstructible watcher/event rebuild; corrupt sealed baseline/history/control authority fails closed without changing the captured workspace bytes, node types, modification times, read-only states, or portable modes | Add a safe public discard/reseed operation for non-reconstructible private authority and retain the complete cross-OS corruption/fault matrix |
 | Product operations | No public explain, repair, compaction, telemetry, rollout, or downgrade surface | Integrate bounded public commands and operational evidence |
 
 The private reader-safe compactor closes the earlier unbounded-retention

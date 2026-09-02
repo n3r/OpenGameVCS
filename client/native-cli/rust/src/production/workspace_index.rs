@@ -219,6 +219,14 @@ pub trait WorkspaceWatchBatchSink {
 /// must subscribe before reconciliation, stream every queued event through the
 /// bounded sink, and return a durable cursor only after its native barrier.
 pub trait WorkspaceWatcherAuthority {
+    /// Optional local binding guard invoked before a status/repair path can
+    /// mutate private watcher or index state. The authenticated public facade
+    /// wraps the native authority and checks the exact verified metadata
+    /// digest here; the neutral default does not mint watcher continuity.
+    fn validate_local_index_binding(&mut self, _: &Path, _: &str) -> Result<(), CliError> {
+        Ok(())
+    }
+
     fn begin_reconciliation(
         &mut self,
         root: &Path,
@@ -360,6 +368,28 @@ pub struct WorkspaceStatusPageRequest {
     pub cursor: Option<String>,
     pub limit: usize,
     pub filter: WorkspaceStatusFilter,
+}
+
+/// Public-adapter request for one authenticated status page.
+///
+/// Authentication and binding validation complete before the watcher or
+/// private index can be mutated. The exact verified workspace metadata is
+/// then rechecked under the mutation lock, so a route cannot authorize one
+/// binding and accidentally serve another after a concurrent reconfigure.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AuthorizedWorkspaceStatusPageRequest {
+    pub page: WorkspaceStatusPageRequest,
+    pub authentication: AuthenticationRequest,
+}
+
+/// Public-adapter request for authenticated repair of a healthy sealed
+/// baseline. This does not discard corrupt authority; non-reconstructible
+/// private state remains fail-closed until a separately specified reseed
+/// contract exists.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AuthorizedWorkspaceIndexRepairRequest {
+    pub root: PathBuf,
+    pub authentication: AuthenticationRequest,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -2041,12 +2071,7 @@ pub fn rebuild_workspace_index(
     cancellation: &dyn Cancellation,
     progress: &mut dyn ProgressSink,
 ) -> Result<WorkspaceIndexReport, CliError> {
-    if request.authentication.endpoint.len() > 512
-        || request.authentication.profile.is_empty()
-        || request.authentication.profile.len() > 64
-    {
-        return Err(input_error());
-    }
+    validate_index_authentication_request(&request.authentication)?;
     let root = validated_root(&request.root)?;
     let initial_metadata = read_ready_metadata(&root)?;
     let session = provider.invoke(
@@ -2089,6 +2114,110 @@ pub fn rebuild_workspace_index(
     let checkpoint = watcher.finish_reconciliation(&watcher_start, &mut writer)?;
     validate_watcher_checkpoint(&watcher_start, &checkpoint)?;
     writer.finish(prepared, checkpoint)
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct AuthorizedWorkspaceIndexBinding {
+    root: PathBuf,
+    metadata_sha256: String,
+}
+
+fn validate_index_authentication_request(
+    authentication: &AuthenticationRequest,
+) -> Result<(), CliError> {
+    if authentication.endpoint.len() > 512
+        || authentication.profile.is_empty()
+        || authentication.profile.len() > 64
+    {
+        Err(input_error())
+    } else {
+        Ok(())
+    }
+}
+
+fn authorize_workspace_index_binding(
+    root: &Path,
+    authentication: &AuthenticationRequest,
+    provider: &dyn SecureCredentialProvider,
+    routes: &mut dyn RepositoryPublicRoutes,
+    cancellation: &dyn Cancellation,
+) -> Result<AuthorizedWorkspaceIndexBinding, CliError> {
+    validate_index_authentication_request(authentication)?;
+    let root = validated_root(root)?;
+    let metadata = read_ready_metadata(&root)?;
+    cancellation.check("before-workspace-index-authentication")?;
+    let session = provider.invoke(
+        authentication,
+        routes.authentication_transport(),
+        cancellation,
+    )?;
+    validate_authentication_session(&session)?;
+    validate_index_session(&session, &metadata.binding)?;
+    routes.validate_binding(&session, &metadata.binding, cancellation)?;
+    cancellation.check("after-workspace-index-binding-validation")?;
+    Ok(AuthorizedWorkspaceIndexBinding {
+        root,
+        metadata_sha256: json_digest(&metadata)?,
+    })
+}
+
+fn validate_authorized_workspace_index_binding(
+    authorization: &AuthorizedWorkspaceIndexBinding,
+    root: &Path,
+    metadata_sha256: &str,
+) -> Result<(), CliError> {
+    if authorization.root != root || authorization.metadata_sha256 != metadata_sha256 {
+        Err(index_error(
+            "WORKSPACE_INDEX_AUTHORITY_STALE",
+            "The verified workspace binding changed after public authorization.",
+            "Reauthenticate and validate the current workspace binding before retrying.",
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+struct AuthorizedWorkspaceWatcher<'a> {
+    authorization: &'a AuthorizedWorkspaceIndexBinding,
+    delegate: &'a mut dyn WorkspaceWatcherAuthority,
+}
+
+impl WorkspaceWatcherAuthority for AuthorizedWorkspaceWatcher<'_> {
+    fn validate_local_index_binding(
+        &mut self,
+        root: &Path,
+        metadata_sha256: &str,
+    ) -> Result<(), CliError> {
+        validate_authorized_workspace_index_binding(self.authorization, root, metadata_sha256)?;
+        self.delegate
+            .validate_local_index_binding(root, metadata_sha256)
+    }
+
+    fn begin_reconciliation(
+        &mut self,
+        root: &Path,
+        binding: &VerifiedBinding,
+    ) -> Result<WorkspaceWatcherStart, CliError> {
+        self.delegate.begin_reconciliation(root, binding)
+    }
+
+    fn finish_reconciliation(
+        &mut self,
+        start: &WorkspaceWatcherStart,
+        sink: &mut dyn WorkspaceWatchEventSink,
+    ) -> Result<WorkspaceWatcherCheckpoint, CliError> {
+        self.delegate.finish_reconciliation(start, sink)
+    }
+
+    fn fence_status(
+        &mut self,
+        root: &Path,
+        binding: &VerifiedBinding,
+        start: &WorkspaceWatcherStart,
+        sink: &mut dyn WorkspaceWatchBatchSink,
+    ) -> Result<WorkspaceWatcherCheckpoint, CliError> {
+        self.delegate.fence_status(root, binding, start, sink)
+    }
 }
 
 fn validate_index_session(
@@ -2486,6 +2615,7 @@ fn revalidate_status_snapshot(
             "Restart status from its first page against the current sealed generation.",
         ));
     }
+    authority.validate_local_index_binding(root, &json_digest(&current_metadata)?)?;
     if current_active.payload.generation != snapshot.active.payload.generation
         || current_active.payload.generation_id != snapshot.active.payload.generation_id
         || current_active.payload_sha256 != snapshot.active.payload_sha256
@@ -2577,7 +2707,8 @@ fn open_events_append(path: &Path) -> Result<File, CliError> {
     Ok(file)
 }
 
-pub fn record_workspace_change_batch(
+#[cfg(test)]
+fn record_workspace_change_batch(
     root: &Path,
     batch: &WorkspaceWatchBatch,
 ) -> Result<WorkspaceIndexReport, CliError> {
@@ -2919,6 +3050,29 @@ pub fn workspace_status_page(
     workspace_status_page_fenced(request, &mut watcher)
 }
 
+pub fn workspace_status_page_authorized(
+    request: &AuthorizedWorkspaceStatusPageRequest,
+    provider: &dyn SecureCredentialProvider,
+    routes: &mut dyn RepositoryPublicRoutes,
+    watcher_authority: &mut dyn WorkspaceWatcherAuthority,
+    cancellation: &dyn Cancellation,
+) -> Result<WorkspaceStatusPage, CliError> {
+    let authorization = authorize_workspace_index_binding(
+        &request.page.root,
+        &request.authentication,
+        provider,
+        routes,
+        cancellation,
+    )?;
+    workspace_status_page_fenced(
+        &request.page,
+        &mut AuthorizedWorkspaceWatcher {
+            authorization: &authorization,
+            delegate: watcher_authority,
+        },
+    )
+}
+
 fn workspace_status_page_fenced(
     request: &WorkspaceStatusPageRequest,
     watcher_authority: &mut dyn WorkspaceWatcherAuthority,
@@ -2935,6 +3089,7 @@ fn workspace_status_page_fenced(
     let (index, metadata, active, seal, mut watcher, ignores, staging, _lease) = {
         let _lock = MutationLock::acquire(&root)?;
         let (index, metadata, active, seal, mut watcher, ignores) = load_active(&root, false)?;
+        watcher_authority.validate_local_index_binding(&root, &json_digest(&metadata)?)?;
         // This is the sole active-generation writer lease for the fence. Every
         // appended batch is journal-sync/state-published under MutationLock,
         // and pre-existing readers detect it through final payload revalidation.
@@ -3987,10 +4142,12 @@ pub fn repair_workspace_index(
 ) -> Result<WorkspaceIndexReport, CliError> {
     let root = validated_root(root)?;
     let metadata_before = read_ready_metadata(&root)?;
+    watcher.validate_local_index_binding(&root, &json_digest(&metadata_before)?)?;
     let watcher_start = watcher.begin_reconciliation(&root, &metadata_before.binding)?;
     validate_watcher_start(&watcher_start)?;
     let _lock = MutationLock::acquire(&root)?;
     let (index, metadata, old_active, old_seal, old_watcher, ignores) = load_active(&root, false)?;
+    watcher.validate_local_index_binding(&root, &json_digest(&metadata)?)?;
     if json_digest(&metadata_before)? != json_digest(&metadata)? {
         return Err(index_error(
             "WORKSPACE_INDEX_BINDING_STALE",
@@ -4057,6 +4214,30 @@ pub fn repair_workspace_index(
     let checkpoint = watcher.finish_reconciliation(&watcher_start, &mut writer)?;
     validate_watcher_checkpoint(&watcher_start, &checkpoint)?;
     writer.finish(prepared, checkpoint)
+}
+
+pub fn repair_workspace_index_authorized(
+    request: &AuthorizedWorkspaceIndexRepairRequest,
+    provider: &dyn SecureCredentialProvider,
+    routes: &mut dyn RepositoryPublicRoutes,
+    watcher: &mut dyn WorkspaceWatcherAuthority,
+    cancellation: &dyn Cancellation,
+) -> Result<WorkspaceIndexReport, CliError> {
+    let authorization = authorize_workspace_index_binding(
+        &request.root,
+        &request.authentication,
+        provider,
+        routes,
+        cancellation,
+    )?;
+    repair_workspace_index(
+        &request.root,
+        &mut AuthorizedWorkspaceWatcher {
+            authorization: &authorization,
+            delegate: watcher,
+        },
+        cancellation,
+    )
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -4543,6 +4724,27 @@ mod tests {
         }
     }
 
+    struct FixedSessionProvider(AuthenticationSession);
+
+    impl SecureCredentialProvider for FixedSessionProvider {
+        fn kind(&self) -> &'static str {
+            "test-fixed-session"
+        }
+
+        fn status(&self) -> CredentialStatus {
+            CredentialStatus::Available
+        }
+
+        fn invoke(
+            &self,
+            _: &AuthenticationRequest,
+            _: &mut dyn AuthenticationTransport,
+            _: &dyn Cancellation,
+        ) -> Result<AuthenticationSession, CliError> {
+            Ok(self.0.clone())
+        }
+    }
+
     struct TestRoutes {
         entries: Vec<WorkspaceBaselineEntry>,
         repository_rules: Vec<WorkspaceIgnoreRule>,
@@ -4550,6 +4752,7 @@ mod tests {
         entered: Option<Arc<Barrier>>,
         release: Option<Arc<Barrier>>,
         resolved_file_id_override: Option<String>,
+        binding_calls: usize,
     }
 
     impl TestRoutes {
@@ -4562,6 +4765,7 @@ mod tests {
                 entered: None,
                 release: None,
                 resolved_file_id_override: None,
+                binding_calls: 0,
             }
         }
 
@@ -4614,6 +4818,7 @@ mod tests {
             actual: &VerifiedBinding,
             _: &dyn Cancellation,
         ) -> Result<(), CliError> {
+            self.binding_calls += 1;
             assert_eq!(actual.repository_id_hex, binding().repository_id_hex);
             Ok(())
         }
@@ -4697,6 +4902,8 @@ mod tests {
         fence_session_id: Option<String>,
         fence_cursor: Option<String>,
         fence_error: bool,
+        begin_calls: usize,
+        fence_calls: usize,
     }
 
     impl Default for TestWatcher {
@@ -4709,6 +4916,8 @@ mod tests {
                 fence_session_id: None,
                 fence_cursor: None,
                 fence_error: false,
+                begin_calls: 0,
+                fence_calls: 0,
             }
         }
     }
@@ -4719,6 +4928,7 @@ mod tests {
             _: &Path,
             _: &VerifiedBinding,
         ) -> Result<WorkspaceWatcherStart, CliError> {
+            self.begin_calls += 1;
             Ok(WorkspaceWatcherStart {
                 adapter: host_adapter().to_owned(),
                 session_id: "session.1".to_owned(),
@@ -4750,6 +4960,7 @@ mod tests {
             start: &WorkspaceWatcherStart,
             sink: &mut dyn WorkspaceWatchBatchSink,
         ) -> Result<WorkspaceWatcherCheckpoint, CliError> {
+            self.fence_calls += 1;
             if self.fence_error {
                 return Err(index_invalid());
             }
@@ -5065,6 +5276,23 @@ mod tests {
             cursor: None,
             limit,
             filter: WorkspaceStatusFilter::default(),
+        }
+    }
+
+    fn authorized_status_request(
+        root: &Path,
+        limit: usize,
+    ) -> AuthorizedWorkspaceStatusPageRequest {
+        AuthorizedWorkspaceStatusPageRequest {
+            page: status_request(root, limit),
+            authentication: request(root).authentication,
+        }
+    }
+
+    fn authorized_repair_request(root: &Path) -> AuthorizedWorkspaceIndexRepairRequest {
+        AuthorizedWorkspaceIndexRepairRequest {
+            root: root.to_path_buf(),
+            authentication: request(root).authentication,
         }
     }
 
@@ -6095,6 +6323,142 @@ mod tests {
         let status = test_status_page(&status_request(&root.0, 100)).unwrap();
         assert!(!status.complete);
         assert!(!status.authoritative_clean);
+    }
+
+    #[test]
+    fn public_status_and_repair_facades_require_exact_current_authority() {
+        let root = TestRoot::new("authorized-status-repair");
+        root.write("Game/clean.bin", b"clean");
+        initialize_workspace(&root.0);
+        let entry = baseline_entry(1, "Game/clean.bin", b"clean", BaselineMaterialization::Full);
+        build(
+            &root.0,
+            &mut TestRoutes::new(vec![entry.clone()]),
+            &mut TestWatcher::default(),
+        );
+
+        let mut status_routes = TestRoutes::new(vec![entry.clone()]);
+        let mut status_watcher = TestWatcher::default();
+        let page = workspace_status_page_authorized(
+            &authorized_status_request(&root.0, 100),
+            &TestProvider,
+            &mut status_routes,
+            &mut status_watcher,
+            &NeverCancelled,
+        )
+        .unwrap();
+        assert!(page.complete);
+        assert!(page.authoritative_clean);
+        assert_eq!(status_routes.binding_calls, 1);
+        assert_eq!(status_watcher.begin_calls, 0);
+        assert_eq!(status_watcher.fence_calls, 2);
+
+        let before = fs::read(root.0.join("Game/clean.bin")).unwrap();
+        let mut repair_routes = TestRoutes::new(vec![entry]);
+        let mut repair_watcher = TestWatcher::default();
+        let repaired = repair_workspace_index_authorized(
+            &authorized_repair_request(&root.0),
+            &TestProvider,
+            &mut repair_routes,
+            &mut repair_watcher,
+            &NeverCancelled,
+        )
+        .unwrap();
+        assert_eq!(repaired.generation, 2);
+        assert_eq!(repair_routes.binding_calls, 1);
+        assert_eq!(repair_watcher.begin_calls, 1);
+        assert_eq!(fs::read(root.0.join("Game/clean.bin")).unwrap(), before);
+    }
+
+    #[test]
+    fn substituted_or_stale_authority_fails_before_watcher_or_index_mutation() {
+        let root = TestRoot::new("rejected-status-repair-authority");
+        root.write("Game/clean.bin", b"clean");
+        initialize_workspace(&root.0);
+        let entry = baseline_entry(1, "Game/clean.bin", b"clean", BaselineMaterialization::Full);
+        build(
+            &root.0,
+            &mut TestRoutes::new(vec![entry.clone()]),
+            &mut TestWatcher::default(),
+        );
+        let (index, _, active, _, _, _) = load_active(&root.0, false).unwrap();
+        let watcher_path = index.join(format!("watcher-{}.v1", active.payload.generation_id));
+        let watcher_before = fs::read(&watcher_path).unwrap();
+
+        let mut substituted = session();
+        substituted.subject_digest = "9".repeat(64);
+        let provider = FixedSessionProvider(substituted);
+        let mut routes = TestRoutes::new(vec![entry]);
+        let mut status_watcher = TestWatcher::default();
+        let status_error = workspace_status_page_authorized(
+            &authorized_status_request(&root.0, 100),
+            &provider,
+            &mut routes,
+            &mut status_watcher,
+            &NeverCancelled,
+        )
+        .unwrap_err();
+        assert_eq!(status_error.code, "WORKSPACE_INDEX_AUTHORITY_STALE");
+        assert_eq!(routes.binding_calls, 0);
+        assert_eq!(status_watcher.fence_calls, 0);
+        assert_eq!(fs::read(&watcher_path).unwrap(), watcher_before);
+
+        let mut unavailable_routes = super::super::UnavailablePublicRoutes;
+        let mut unavailable_watcher = TestWatcher::default();
+        let unavailable_error = workspace_status_page_authorized(
+            &authorized_status_request(&root.0, 100),
+            &TestProvider,
+            &mut unavailable_routes,
+            &mut unavailable_watcher,
+            &NeverCancelled,
+        )
+        .unwrap_err();
+        assert_eq!(unavailable_error.code, "PUBLIC_ROUTE_UNAVAILABLE");
+        assert_eq!(unavailable_watcher.fence_calls, 0);
+        assert_eq!(fs::read(&watcher_path).unwrap(), watcher_before);
+
+        let mut repair_watcher = TestWatcher::default();
+        let repair_error = repair_workspace_index_authorized(
+            &authorized_repair_request(&root.0),
+            &provider,
+            &mut routes,
+            &mut repair_watcher,
+            &NeverCancelled,
+        )
+        .unwrap_err();
+        assert_eq!(repair_error.code, "WORKSPACE_INDEX_AUTHORITY_STALE");
+        assert_eq!(repair_watcher.begin_calls, 0);
+        assert_eq!(verify_workspace_index(&root.0).unwrap().generation, 1);
+
+        let stale = AuthorizedWorkspaceIndexBinding {
+            root: validated_root(&root.0).unwrap(),
+            metadata_sha256: "f".repeat(64),
+        };
+        let mut stale_status_watcher = TestWatcher::default();
+        let stale_status = workspace_status_page_fenced(
+            &status_request(&root.0, 100),
+            &mut AuthorizedWorkspaceWatcher {
+                authorization: &stale,
+                delegate: &mut stale_status_watcher,
+            },
+        )
+        .unwrap_err();
+        assert_eq!(stale_status.code, "WORKSPACE_INDEX_AUTHORITY_STALE");
+        assert_eq!(stale_status_watcher.fence_calls, 0);
+
+        let mut stale_repair_watcher = TestWatcher::default();
+        let stale_repair = repair_workspace_index(
+            &root.0,
+            &mut AuthorizedWorkspaceWatcher {
+                authorization: &stale,
+                delegate: &mut stale_repair_watcher,
+            },
+            &NeverCancelled,
+        )
+        .unwrap_err();
+        assert_eq!(stale_repair.code, "WORKSPACE_INDEX_AUTHORITY_STALE");
+        assert_eq!(stale_repair_watcher.begin_calls, 0);
+        assert_eq!(fs::read(root.0.join("Game/clean.bin")).unwrap(), b"clean");
     }
 
     #[test]

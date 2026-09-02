@@ -28,10 +28,11 @@ use std::sync::Arc;
 mod workspace_index;
 
 pub use workspace_index::{
-    compact_workspace_index, rebuild_workspace_index, record_workspace_change_batch,
-    recover_workspace_index, repair_workspace_index, verify_workspace_index, workspace_status_page,
-    BaselineMaterialization, IgnoreAction, IgnorePatternKind, IgnoreSource,
-    UnavailableWorkspaceWatcher, WorkspaceBaselineEntry, WorkspaceBaselineReceipt,
+    compact_workspace_index, rebuild_workspace_index, recover_workspace_index,
+    repair_workspace_index, repair_workspace_index_authorized, verify_workspace_index,
+    workspace_status_page, workspace_status_page_authorized, AuthorizedWorkspaceIndexRepairRequest,
+    AuthorizedWorkspaceStatusPageRequest, BaselineMaterialization, IgnoreAction, IgnorePatternKind,
+    IgnoreSource, UnavailableWorkspaceWatcher, WorkspaceBaselineEntry, WorkspaceBaselineReceipt,
     WorkspaceBaselineSink, WorkspaceIgnoreRule, WorkspaceIndexBuildRequest,
     WorkspaceIndexCompactionReport, WorkspaceIndexReport, WorkspaceStatus, WorkspaceStatusFilter,
     WorkspaceStatusItem, WorkspaceStatusPage, WorkspaceStatusPageRequest, WorkspaceWatchBatch,

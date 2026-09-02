@@ -85,14 +85,25 @@ The private workspace-index candidate adds:
 No production-callable adapter can currently mint a native watcher continuity
 proof: the only public checkpoint constructor is degraded. The first-party
 binary also has no authenticated workspace-baseline route, so authoritative
-clean status is not publicly available. Compaction likewise has no public CLI
-route. A lease covers only one status call/page: after that call returns, its
-cursor remains authenticated but a later page fails stale if its generation,
-watcher authority/event transcript, or staging snapshot changed. Only the old
-payload digest/cursor may drift under an exact stable authority and transcript;
-they remain authenticated predecessor audit bindings. Cursor-only
-idle advances are rebound on the next returned page and do not force an
-unbounded restart. The active generation remains
+clean status is not publicly available. The library now exposes typed
+`workspace_status_page_authorized` and `repair_workspace_index_authorized`
+adapter facades: both authenticate the current subject and authority/security
+epochs and validate the public binding. Status rechecks the exact verified
+workspace metadata under its mutation lock before each watcher fence and index
+write. Repair checks it before watcher subscription and again under the lock
+before generation publication; a race after subscription still fails before
+index mutation. The first-party binary still installs the unavailable route,
+and corrupt sealed authority still has no discard/reseed operation. Direct
+watcher-batch append is no longer a public crate surface; test fixtures retain
+it only to exercise the durable journal, while production adapters can deliver
+a batch solely through the exact session/cursor-bound status-fence sink.
+Compaction likewise has no public CLI route. A lease covers only one status
+call/page: after that call returns, its cursor remains authenticated but a later
+page fails stale if its generation, watcher authority/event transcript, or
+staging snapshot changed. Only the old payload digest/cursor may drift under an
+exact stable authority and transcript; they remain authenticated predecessor
+audit bindings. Cursor-only idle advances are rebound on the next returned page
+and do not force an unbounded restart. The active generation remains
 byte-compatible with the `0.1.0-rc.1` generation format; the additive rc.2
 retention controls, rc.3 reconciliation/cursor semantics, and rc.4 bounded
 state-matrix/staging validation are private local metadata. The stable

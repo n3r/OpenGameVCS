@@ -6,6 +6,12 @@ import test from 'node:test';
 const workflowUrl = new URL('../.github/workflows/native-cli-local-candidate.yml', import.meta.url);
 const packageUrl = new URL('../package.json', import.meta.url);
 const cargoUrl = new URL('../client/native-cli/rust/Cargo.toml', import.meta.url);
+const productionUrl = new URL('../client/native-cli/rust/src/production.rs', import.meta.url);
+const cliLibraryUrl = new URL('../client/native-cli/rust/src/lib.rs', import.meta.url);
+const workspaceIndexUrl = new URL(
+  '../client/native-cli/rust/src/production/workspace_index.rs',
+  import.meta.url,
+);
 const gateUrl = new URL('../client/native-cli/rust/scripts/test-hermetic.mjs', import.meta.url);
 const fixtureUrl = new URL(
   '../client/native-cli/rust/tests/support/hermetic_fixture.rs',
@@ -169,6 +175,65 @@ test('recovery and signal claims are exact and fail closed', async () => {
   assert.match(gate, /result\.status === expectedStatus && result\.signal === null/u);
   assert.doesNotMatch(gate, /SIGKILL[\s\S]{0,160}assertCancellationResult/u);
   assert.doesNotMatch(gate, /https?:\/\/|fetch\(|curl|gh |git |workflow_dispatch|upload-artifact/iu);
+});
+
+test('workspace-index public facades bind authority before watcher or repair mutation', async () => {
+  const [production, cliLibrary, workspaceIndex] = await Promise.all([
+    readFile(productionUrl, 'utf8'),
+    readFile(cliLibraryUrl, 'utf8'),
+    readFile(workspaceIndexUrl, 'utf8'),
+  ]);
+
+  assert.match(production, /repair_workspace_index_authorized/u);
+  assert.match(production, /workspace_status_page_authorized/u);
+  assert.match(production, /AuthorizedWorkspaceIndexRepairRequest/u);
+  assert.match(production, /AuthorizedWorkspaceStatusPageRequest/u);
+  assert.doesNotMatch(production, /record_workspace_change_batch/u);
+
+  const authorization = workspaceIndex.slice(
+    workspaceIndex.indexOf('fn authorize_workspace_index_binding('),
+    workspaceIndex.indexOf('fn validate_authorized_workspace_index_binding('),
+  );
+  const authorizationOrder = [
+    'read_ready_metadata(&root)',
+    'provider.invoke(',
+    'validate_authentication_session(&session)',
+    'validate_index_session(&session, &metadata.binding)',
+    'routes.validate_binding(&session, &metadata.binding, cancellation)',
+    'metadata_sha256: json_digest(&metadata)',
+  ].map((needle) => authorization.indexOf(needle));
+  assert.equal(authorizationOrder.every((offset) => offset >= 0), true);
+  assert.deepEqual(authorizationOrder, [...authorizationOrder].sort((left, right) => left - right));
+  assert.match(
+    workspaceIndex,
+    /impl WorkspaceWatcherAuthority for AuthorizedWorkspaceWatcher<'_>[\s\S]+validate_authorized_workspace_index_binding\(/u,
+  );
+
+  const status = workspaceIndex.slice(
+    workspaceIndex.indexOf('fn workspace_status_page_fenced('),
+    workspaceIndex.indexOf('fn watcher_cursor_authority_digest('),
+  );
+  assert.ok(
+    status.indexOf('.validate_local_index_binding(') <
+      status.indexOf('fence_status_locked('),
+  );
+
+  const repair = workspaceIndex.slice(
+    workspaceIndex.indexOf('pub fn repair_workspace_index('),
+    workspaceIndex.indexOf('pub fn repair_workspace_index_authorized('),
+  );
+  assert.ok(
+    repair.indexOf('validate_local_index_binding(') <
+      repair.indexOf('watcher.begin_reconciliation('),
+  );
+  assert.ok(
+    repair.lastIndexOf('validate_local_index_binding(') <
+      repair.indexOf('GenerationWriter::begin('),
+  );
+  assert.match(workspaceIndex, /pub fn unsupported\(/u);
+  assert.match(workspaceIndex, /#\[cfg\(test\)\]\nfn record_workspace_change_batch\(/u);
+  assert.doesNotMatch(workspaceIndex, /pub fn (?:trusted|native|authoritative)[^(]*checkpoint/iu);
+  assert.match(cliLibrary, /"unsupported": \["sync", "submit", "status", "locks", "upload"\]/u);
 });
 
 test('exact three-OS accessibility evidence remains source-bound and candid', async () => {
