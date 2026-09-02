@@ -18,10 +18,12 @@ test('untrusted sandbox workflow pins portable protocol and live Linux isolation
     readFile(conformanceUrl, 'utf8'),
   ]);
   assert.match(workflow, /^name: Untrusted parser sandbox boundary$/mu);
+  assert.match(workflow, /push:\n    branches: \[main, r1-foundation-integration, "ogvcs-045\/\*\*", "ogvcs045-\*", "r1-ogvcs045", "r1-sandbox-worker-v1"\]/u);
   assert.match(workflow, /os: \[ubuntu-latest, macos-latest, windows-latest\]/u);
   assert.match(workflow, /linux-reference-conformance:\n    name: Linux reference isolation and hostile canaries\n    runs-on: ubuntu-latest/u);
   assert.equal(workflow.match(/node-version: 24/gu)?.length, 2);
   assert.equal(workflow.match(/actions\/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1/gu)?.length, 2);
+  assert.equal(workflow.match(/persist-credentials: false/gu)?.length, 2);
   assert.equal(workflow.match(/actions\/setup-node@820762786026740c76f36085b0efc47a31fe5020/gu)?.length, 2);
   assert.equal(workflow.match(/actions\/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a/gu)?.length, 1);
   for (const protectedPath of [
