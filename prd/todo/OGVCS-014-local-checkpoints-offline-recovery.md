@@ -7,7 +7,7 @@
 **Depends on:** OGVCS-007, OGVCS-011, OGVCS-012, OGVCS-013  
 **Blocks:** OGVCS-015, OGVCS-022  
 **Source:** [OpenGameVCS proposal](../../GAME_DEV_VCS_ANALYSIS.md)  
-**Last updated:** 2026-08-14
+**Last updated:** 2026-09-02
 
 ## Outcome
 
@@ -96,8 +96,68 @@ Enable after local format recovery tests. Workspace clients retain read support 
 
 ## Completion evidence
 
-- Implementation changes:
-- Test and benchmark results:
-- Security/reliability review:
-- Documentation/runbooks:
-- Rollout result:
+- **Implementation changes:** an unpublished, unwired Rust 1.82 candidate now
+  records a bounded immutable local checkpoint with a content-derived ID,
+  complete local parent, exact caller-supplied repository/base/workspace/spec/
+  path bindings, contiguous add/modify/copy/move/delete operations, OGVCS-002
+  FileID/manifest/chunk references, consistent same-identity projections and
+  the OGVCS-007 2 MiB chunk maximum,
+  message/time, and a digest-only historical lock-receipt snapshot whose only
+  state is `historical-untrusted-exclusivity-unverified`. Fixed workspace-
+  confined create-new files publish intent, record, and completion manifest
+  last with file and directory durability barriers. Complete-only list/show/
+  verify and deterministic incomplete recovery are local-library surfaces;
+  recovery seals only an exact reread intent+record or reports incomplete/
+  corrupt state without intentionally addressing ordinary workspace paths.
+  Recovery re-syncs surviving exact files/directories before trusting or
+  sealing them.
+- **Test and benchmark results:** bounded Rust tests cover deterministic
+  identity, list/show/verify, all seven create publication boundaries,
+  preservation of a prior complete checkpoint and a newer workspace sentinel,
+  corruption, unknown artifacts, substituted intent-only metadata, corrupt
+  complete ancestry, missing/binding-mismatched parents, store/depth/path/
+  object/count/byte/chunk/logical exact and max+1 bounds, same-identity
+  manifest/chunk conflicts, safe arbitrary-name reporting, abstract self/
+  cycle/missing/duplicate-ID/over-depth graphs, and Unix symlinks/hard links.
+  Rustfmt, warning-denied Clippy, exact offline packed-crate, Node source-policy,
+  Windows cross-compilation, and roadmap gates are the candidate acceptance
+  boundary. No scale, hosted three-OS, or real power-cut result is claimed.
+- **Security/reliability review:**
+  [private local-checkpoint boundary review](../../docs/reviews/OGVCS-014-local-checkpoint-boundary-review.md).
+  The unkeyed intent integrity frame binds expected record ID/digest/length
+  without authenticating its local producer; recovery repeats that
+  verification immediately before create-new manifest publication and rejects
+  extraneous artifacts. Prospective-child depth and store-count admission occur
+  before sealing/entry creation; regular artifact handles must be single-link.
+  Manifest/chunk/cache inputs remain untrusted caller projections. Pathnames
+  are reopened between checks, so malicious same-authority namespace replacement
+  remains an explicit residual.
+- **Documentation/runbooks:** the private crate README defines the exact
+  identity domain, namespace, seven durability points, recovery dispositions,
+  limits, lock warning, gates, and nonclaims. There is no restore/publish/cache
+  runbook because none of those operations exists in this tranche.
+- **Rollout result:** none. There is no public CLI/JSON command, route,
+  authorization/permission/grant check, lock authority, cache pin/eviction
+  mutation, telemetry upload, restore, delete/squash, or publish handoff.
+  OGVCS-014 remains **Todo** and no acceptance criterion is claimed.
+
+### Candidate residuals blocking completion
+
+- Diff, restore/open-copy, exact obstruction preview, overwrite confirmation,
+  delete, squash, retention/grace, mutable messages, broader DAG operations,
+  and publish conversion are absent.
+- Shared-cache pins, eviction/selection/workspace-removal races, cache-byte
+  availability and corruption verification, transfer/refetch, and recovery
+  grace are absent; this candidate neither reads nor re-encodes content.
+- The operation/manifest/chunk projection is not authenticated by a server or
+  cache producer. The operation shapes omit entry kind/mode/policy, group and
+  restore data, are not replayed against the base tree, and stored FileIDs are
+  not allocation/lifetime authority. The supplied workspace/spec digest is not
+  loaded from authenticated workspace metadata.
+- Same-authority path replacement, full Unix ACL/ownership policy, Windows
+  inherited-ACL/owner verification, hosted reparse/hard-link/directory-flush
+  execution, actual power loss, three-OS crash/corruption, scale, restore
+  obstruction, lock reconciliation, and cache-race campaigns remain unproved.
+- Public CLI/JSON/GUI integration, auth/permission/grant and request-root
+  checks, lock validation, telemetry consent/upload, support diagnostics,
+  rollout/rollback, and every OGVCS-014 acceptance criterion remain open.
