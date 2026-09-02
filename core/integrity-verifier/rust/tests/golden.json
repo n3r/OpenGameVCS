@@ -1,0 +1,16 @@
+{
+  "chunkBytes": 46,
+  "chunkObjects": 1,
+  "fileVersions": 3,
+  "graphEdges": 6,
+  "logicalFileBytes": 138,
+  "manifestParts": 1,
+  "metadataBytes": 1086,
+  "metadataObjects": 4,
+  "objectBytes": 1132,
+  "objectCount": 5,
+  "sourceBytes": 1132,
+  "sourceReads": 5,
+  "transcriptDigest": "73222fdab5c9de00f9bb000d455b0ac0edf613d61d879a254d60dff9fb579a0a",
+  "workUnits": 12
+}

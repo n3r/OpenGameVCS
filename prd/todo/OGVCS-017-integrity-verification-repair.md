@@ -7,7 +7,7 @@
 **Depends on:** OGVCS-002, OGVCS-007, OGVCS-008, OGVCS-010  
 **Blocks:** OGVCS-018, OGVCS-020, OGVCS-021, OGVCS-027, OGVCS-028, OGVCS-029, OGVCS-033, OGVCS-037  
 **Source:** [OpenGameVCS proposal](../../GAME_DEV_VCS_ANALYSIS.md)  
-**Last updated:** 2026-08-14
+**Last updated:** 2026-09-02
 
 ## Outcome
 
@@ -98,8 +98,55 @@ Deploy read-only reporting first, validate false-positive rate, then enable auto
 
 ## Completion evidence
 
-- Implementation changes:
-- Test and benchmark results:
-- Security/reliability review:
-- Documentation/runbooks:
-- Rollout result:
+- Implementation changes: Bounded candidate relevance only. The unpublished,
+  unwired Rust rc.1 crate under `core/integrity-verifier/rust` pins an immutable
+  supplied generation and traverses the content-only Snapshot root Tree →
+  file/version entry → ContentManifest → Chunk closure. It composes the
+  OGVCS-002 canonical identity/framing/schema codec with the OGVCS-007
+  discard-only manifest/chunk verifier, emits no payload, and returns typed
+  findings plus an opaque generation-bound metadata-page cursor and exact
+  coverage/work ledger. A manifest is indivisible: a sub-closure limit returns
+  `ManifestRestartRequired`, and the same/lower relevant envelope performs no
+  reread. Page versus object transfer, general versus fragment work, decode,
+  index, resident-ledger, and charged-memory stops bind distinct private
+  recovery classes; this is not a sub-manifest continuation claim.
+- Test and benchmark results: All 65 local Rust tests and 31 focused upstream
+  OGVCS-002/007 contract tests pass. The fixture-derived golden and fault suite
+  covers one-shot/page-equivalent traversal; missing reference versus object;
+  declared and file-size mismatch; rebound framing/version and whole-file
+  digest corruption; one-bit flips at snapshot, tree, manifest, and chunk
+  layers; source/backend ambiguity; source and generation failure;
+  cancellation; deterministic ordering; explicit count, byte, work, and
+  charged-memory limits; and a multi-chunk sub-closure budget that cannot
+  livelock on same-envelope retry, including after cancellation. Regression
+  cases also cover complete cursor-state digest binding, fail-closed finding
+  truncation, checked logical-byte overflow, terminal classification of the
+  nonrecoverable OGVCS-007 ledger-counter overflow, precise
+  declared-versus-observed chunk size evidence, pre-allocation source caps, and
+  simultaneous manifest-plus-chunk memory admission. Additional cases prove
+  index/ledger/decode-specific same-envelope no-reread and correct-limit
+  recovery, charged-memory readmission of enlarged manifest reservations,
+  page/object transfer and general/fragment work recovery specificity, atomic
+  graph-edge and work admission, initial-root admission, in-read and
+  manifest-parser cancellation, exact returned-payload effort under generation
+  drift, unsupported-profile classification, simultaneous cursor/report
+  finding-buffer admission, invalid-resume cursor preservation, and
+  length/capacity enforcement for metadata and chunk source buffers. The
+  bounded golden verifies 5 unique objects / 1,132
+  bytes and 6 graph edges. No durable/full-scrub resumability. Shared subtree
+  coverage is over unique object/entry definitions, not namespace-expanded
+  path multiplicity. No hosted cross-OS, production-concurrency, or
+  reference-scale campaign has run.
+- Security/reliability review: See
+  `docs/reviews/OGVCS-017-read-only-integrity-verifier-review.md`. Ambiguity
+  never selects a copy; cancellation/source/limit/generation failures return no
+  report and retain the current metadata-boundary cursor. This is not authorization,
+  permission, audit, health-state, quarantine, or repair evidence.
+- Documentation/runbooks: The private crate README defines validation order,
+  ledger meanings, limits, and nonclaims. There is no operator runbook or
+  public command because this candidate is not wired to a service or backend.
+- Rollout result: Not rolled out. OGVCS-017 remains Todo. Snapshot auxiliary
+  graphs and unreachable inventory, replicas, quarantine, repair,
+  all-copies-lost degraded-root persistence, durable crash recovery,
+  production concurrency, public commands, permission/audit semantics, hosted
+  cross-OS evidence, and scale/SLO acceptance remain open.
