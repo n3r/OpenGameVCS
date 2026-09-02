@@ -189,8 +189,12 @@ evidence, operator runbooks, timed exercise, idempotency, scale/SLO proof,
 operations, rollout, and rollback remain unimplemented.
 
 The path-scoped hosted workflow is a pinned Linux/macOS/Windows source
-portability gate only. Exact run
+portability gate only. Original run
 [33636845283](https://github.com/n3r/OpenGameVCS/actions/runs/33636845283)
-is retained for revision `3563167763a54b97eb8166ded1db895aa3a5b7cd`.
-That green run is not deployment, clean-host, offline-runtime, upgrade,
+is retained for revision `3563167763a54b97eb8166ded1db895aa3a5b7cd`;
+follow-on [run 33664922198](https://github.com/n3r/OpenGameVCS/actions/runs/33664922198)
+passed the configuration-transition source/package gates on all three hosts for
+exact revision `fa61786b272a019b82f4e96eaaa47dbef60c5b6c`. The retained
+[machine records](../evidence/OGVCS-021/README.md) preserve both boundaries.
+These green runs are not deployment, clean-host, offline-runtime, upgrade,
 rollback, recovery, or operator evidence.

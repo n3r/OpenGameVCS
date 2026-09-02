@@ -11,6 +11,7 @@ on:
       - 'docs/reviews/OGVCS-043-cli-evidence-validator-boundary-review.md'
       - 'prd/todo/OGVCS-043-r1-cli-vertical-slice.md'
       - 'tools/cli-evidence-validator-policy.test.mjs'
+      - 'tools/retained-source-evidence.mjs'
       - 'package.json'
       - 'package-lock.json'
   push:
@@ -24,6 +25,7 @@ on:
       - 'docs/reviews/OGVCS-043-cli-evidence-validator-boundary-review.md'
       - 'prd/todo/OGVCS-043-r1-cli-vertical-slice.md'
       - 'tools/cli-evidence-validator-policy.test.mjs'
+      - 'tools/retained-source-evidence.mjs'
       - 'package.json'
       - 'package-lock.json'
   workflow_dispatch:
@@ -57,8 +59,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@7d11e79e1714f6b6da93cac39ad8435666f5c337 # 1.82.0
         with:
           components: clippy, rustfmt
-      - name: Fetch the retained evidence revision
-        run: git fetch --no-tags --depth=1 origin c7049fd5063adaf40f6ad2f694104713966ed6c6
+      - name: Fetch the retained evidence revisions
+        run: |
+          git fetch --no-tags --depth=1 origin c7049fd5063adaf40f6ad2f694104713966ed6c6
+          git fetch --no-tags --depth=1 origin fa61786b272a019b82f4e96eaaa47dbef60c5b6c
       - run: node --test tools/cli-evidence-validator-policy.test.mjs
       - run: cargo fmt --manifest-path client/cli-evidence/rust/Cargo.toml -- --check
       - run: cargo test --manifest-path client/cli-evidence/rust/Cargo.toml --locked

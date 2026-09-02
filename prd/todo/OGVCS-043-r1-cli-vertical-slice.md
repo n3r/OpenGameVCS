@@ -118,9 +118,12 @@ Run against isolated repositories first, then design-partner test deployments. T
   package tests plus its 1/1 source and 1/1 extracted-package compile-fail
   doctest, format, warnings-denied Clippy, package, 6/6 policy, roadmap, and
   roadmap-regression gates in
-  [`docs/evidence/OGVCS-043`](../../docs/evidence/OGVCS-043/README.md). No
-  hosted run covers the additive bytes, and no benchmark, clean-host installed-
-  artifact, or end-to-end journey result is claimed.
+  [`docs/evidence/OGVCS-043`](../../docs/evidence/OGVCS-043/README.md). Exact
+  revision `fa61786b272a019b82f4e96eaaa47dbef60c5b6c` passed that additive
+  source/package boundary on hosted Linux, macOS, and Windows in
+  [run 33664922248](https://github.com/n3r/OpenGameVCS/actions/runs/33664922248).
+  This is source portability only; no benchmark, clean-host installed-artifact,
+  or end-to-end journey result is claimed.
 - Security/reliability review: The
   [private validator boundary review](../../docs/reviews/OGVCS-043-cli-evidence-validator-boundary-review.md)
   records caller-assertion, redaction, resource, cancellation, unkeyed-digest,

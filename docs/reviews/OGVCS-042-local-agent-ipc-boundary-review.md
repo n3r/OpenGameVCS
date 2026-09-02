@@ -19,8 +19,9 @@ integration history but remains unpublished and unwired. OGVCS-042 remains
 
 The later client-hello binding audit began from exact integration base
 `4b25ff447b81d0d8d7728b1b782a5c83852b2535`. It changes only the private
-source boundary and carries no new hosted, endpoint, authentication, rollout,
-or acceptance evidence.
+source boundary. Exact revision `fa61786b272a019b82f4e96eaaa47dbef60c5b6c`
+later passed its source/package gate on hosted Linux, macOS, and Windows; this
+carries no endpoint, authentication, rollout, or acceptance evidence.
 
 ## Review method and authority map
 
@@ -362,8 +363,13 @@ model. This statement is not an external security assessment. Pinned hosted
 run [33636845159](https://github.com/n3r/OpenGameVCS/actions/runs/33636845159)
 proves only that the earlier private source/package gates pass on Linux, macOS,
 and Windows at exact revision
-`3563167763a54b97eb8166ded1db895aa3a5b7cd`; it is not evidence for the later
-client-hello follow-on.
+`3563167763a54b97eb8166ded1db895aa3a5b7cd`. Follow-on
+[run 33664922199](https://github.com/n3r/OpenGameVCS/actions/runs/33664922199)
+proves the same bounded source portability for the strict client-hello bytes at
+exact revision `fa61786b272a019b82f4e96eaaa47dbef60c5b6c`; its exact
+workflow/crate inputs are retained under
+[`docs/evidence/OGVCS-042`](../evidence/OGVCS-042/README.md). Neither run is
+process, endpoint, authentication, or external security evidence.
 
 ## Requirement and acceptance boundary
 

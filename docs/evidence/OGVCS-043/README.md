@@ -64,12 +64,20 @@ the owning composition module can construct it after the predecessor checks.
 This seal is a source-integrity boundary, not a signature, authority, or proof
 of the caller-supplied facts.
 
-The historical hosted run above predates and therefore does not cover this
-additive source. A new exact-revision three-OS source-portability run is
-required after integration. Until then this section records local source and
-package verification only; it is not hosted, deployed, clean-host, product,
-release, or acceptance evidence. OGVCS-043 remains **Todo**, and AC-01 through
-AC-05 remain open.
+Follow-on push run [33664922248](https://github.com/n3r/OpenGameVCS/actions/runs/33664922248)
+passed the additive rc.2 source/package gate on Linux, macOS, and Windows for
+exact revision `fa61786b272a019b82f4e96eaaa47dbef60c5b6c`. The retained
+[`hosted-source-run-33664922248.json`](hosted-source-run-33664922248.json)
+binds all three job identities and the exact workflow/crate source, package,
+and test bytes, including the route-less projection. Public GitHub Actions
+HTML supplied the creation time and displayed duration, so the recorded
+completion time is their sum rather than an API-returned timestamp; public XHR
+matrix fragments supplied the job identities, conclusions, and roadmap-step
+dispositions.
+
+This follow-on is exact-revision source portability only; it is not deployed,
+clean-host, product, release, or acceptance evidence. OGVCS-043 remains
+**Todo**, and AC-01 through AC-05 remain open.
 
 The local bounded gates passed 75/75 debug tests, 75/75 release tests, and
 75/75 tests from a freshly extracted 13-entry validator package, plus the

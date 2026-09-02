@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { verifyRetainedSourceFiles } from './retained-source-evidence.mjs';
 
 const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
@@ -17,6 +18,7 @@ test('hosted portability workflow is pinned, path-scoped, and cross-platform', a
     'docs/evidence/OGVCS-020/**',
     'prd/todo/OGVCS-020-git-lfs-importer.md',
     'tools/git-import-preflight-policy.test.mjs',
+    'tools/retained-source-evidence.mjs',
     'package.json',
     'package-lock.json',
   ];
@@ -47,6 +49,12 @@ test('hosted portability workflow is pinned, path-scoped, and cross-platform', a
   ]);
   for (const action of actionUses) assert.match(action, /@[0-9a-f]{40}$/u);
   assert.match(workflow, /persist-credentials: false/u);
+  const retainedFetch = 'git fetch --no-tags --depth=1 origin fa61786b272a019b82f4e96eaaa47dbef60c5b6c';
+  assert.equal([...workflow.matchAll(/git fetch\b/gu)].length, 1);
+  assert.equal(workflow.split(retainedFetch).length - 1, 1);
+  assert.ok(workflow.indexOf('persist-credentials: false') < workflow.indexOf(retainedFetch));
+  assert.ok(workflow.indexOf(retainedFetch) < workflow.indexOf('node --test tools/git-import-preflight-policy.test.mjs'));
+  assert.doesNotMatch(workflow, /fetch-depth:\s*0|persist-credentials:\s*true/u);
   assert.match(workflow, /node-version: 24/u);
   assert.match(workflow, /# 1\.82\.0/u);
   assert.match(workflow, /components: clippy, rustfmt/u);
@@ -62,13 +70,14 @@ test('hosted portability workflow is pinned, path-scoped, and cross-platform', a
 });
 
 test('retained hosted result is exact and bounded to private preflight portability', async () => {
-  const [evidence, evidenceReadme] = await Promise.all([
+  const [historicalEvidence, evidence, evidenceReadme] = await Promise.all([
     read('docs/evidence/OGVCS-020/hosted-source-run-33638102757.json').then(JSON.parse),
+    read('docs/evidence/OGVCS-020/hosted-source-run-33664922211.json').then(JSON.parse),
     read('docs/evidence/OGVCS-020/README.md'),
   ]);
 
-  assert.equal(evidence.schemaVersion, 'ogvcs.import/hosted-source-run/v1');
-  assert.deepEqual(evidence.run, {
+  assert.equal(historicalEvidence.schemaVersion, 'ogvcs.import/hosted-source-run/v1');
+  assert.deepEqual(historicalEvidence.run, {
     id: 33638102757,
     event: 'push',
     branch: 'r1-foundation-integration',
@@ -80,14 +89,14 @@ test('retained hosted result is exact and bounded to private preflight portabili
     url: 'https://github.com/n3r/OpenGameVCS/actions/runs/33638102757',
   });
   assert.deepEqual(
-    evidence.jobs.map(({ id, name, conclusion }) => ({ id, name, conclusion })),
+    historicalEvidence.jobs.map(({ id, name, conclusion }) => ({ id, name, conclusion })),
     [
       { id: 100273965526, name: 'Private preflight portability (Linux)', conclusion: 'success' },
       { id: 100273965786, name: 'Private preflight portability (Windows)', conclusion: 'success' },
       { id: 100273965832, name: 'Private preflight portability (macOS)', conclusion: 'success' },
     ],
   );
-  assert.deepEqual(evidence.claimBoundary, {
+  assert.deepEqual(historicalEvidence.claimBoundary, {
     privatePreflightOnly: true,
     gitParser: false,
     conversion: false,
@@ -95,9 +104,88 @@ test('retained hosted result is exact and bounded to private preflight portabili
     acceptanceCriterion: false,
     releaseEvidence: false,
   });
+
+  assert.deepEqual(Object.keys(evidence), [
+    'schemaVersion',
+    'run',
+    'evidenceCollection',
+    'jobs',
+    'successfulStepsOnEveryHost',
+    'sourceFiles',
+    'claimBoundary',
+  ]);
+  assert.equal(evidence.schemaVersion, 'ogvcs.import/hosted-source-run/v1');
+  assert.deepEqual(evidence.run, {
+    id: 33664922211,
+    event: 'push',
+    branch: 'r1-foundation-integration',
+    headSha: 'fa61786b272a019b82f4e96eaaa47dbef60c5b6c',
+    status: 'completed',
+    conclusion: 'success',
+    createdAt: '2026-09-02T18:03:59Z',
+    completedAt: '2026-09-02T18:06:47Z',
+    url: 'https://github.com/n3r/OpenGameVCS/actions/runs/33664922211',
+  });
+  assert.deepEqual(evidence.evidenceCollection, {
+    runAndDurationSource: 'public GitHub Actions HTML',
+    jobSource: 'public GitHub Actions XHR matrix',
+    completedAtDerivation: 'createdAt plus the displayed total duration',
+    completedAtIsInferred: true,
+    apiUnavailableReason: 'unauthenticated public API quota exhausted',
+  });
+  assert.deepEqual(evidence.jobs, [
+    { id: 100364184134, name: 'Private preflight portability (macOS)', conclusion: 'success' },
+    { id: 100364184431, name: 'Private preflight portability (Windows)', conclusion: 'success' },
+    { id: 100364184514, name: 'Private preflight portability (Linux)', conclusion: 'success' },
+  ]);
+  assert.deepEqual(evidence.successfulStepsOnEveryHost, [
+    'Node source/package/PRD/workflow policy',
+    'Rust format check',
+    'Rust debug tests',
+    'Rust release tests',
+    'Rust warnings-denied Clippy',
+    'freshly extracted package tests',
+  ]);
+  assert.deepEqual(evidence.claimBoundary, {
+    privatePreflightAndTreeFrameOnly: true,
+    fullRepositoryParser: false,
+    repositoryTraversal: false,
+    conversion: false,
+    authenticatedImport: false,
+    acceptanceCriterion: false,
+    releaseEvidence: false,
+  });
+  await verifyRetainedSourceFiles({
+    root,
+    evidence,
+    revision: 'fa61786b272a019b82f4e96eaaa47dbef60c5b6c',
+    paths: [
+      '.github/workflows/git-import-preflight.yml',
+      'core/import-git-lfs/rust/Cargo.lock',
+      'core/import-git-lfs/rust/Cargo.toml',
+      'core/import-git-lfs/rust/LICENSE',
+      'core/import-git-lfs/rust/README.md',
+      'core/import-git-lfs/rust/scripts/test-packed.sh',
+      'core/import-git-lfs/rust/src/git_tree.rs',
+      'core/import-git-lfs/rust/src/lfs.rs',
+      'core/import-git-lfs/rust/src/lib.rs',
+      'core/import-git-lfs/rust/src/oid.rs',
+      'core/import-git-lfs/rust/src/preflight.rs',
+      'core/import-git-lfs/rust/tests/git-tree-golden.json',
+      'core/import-git-lfs/rust/tests/git_tree.rs',
+      'core/import-git-lfs/rust/tests/git_tree_golden.rs',
+      'core/import-git-lfs/rust/tests/golden.json',
+      'core/import-git-lfs/rust/tests/golden.rs',
+      'core/import-git-lfs/rust/tests/lfs.rs',
+      'core/import-git-lfs/rust/tests/oid.rs',
+      'core/import-git-lfs/rust/tests/preflight.rs',
+      'core/import-git-lfs/rust/tests/support/mod.rs',
+    ],
+  });
   assert.match(evidenceReadme, /source-portability evidence only/iu);
+  assert.match(evidenceReadme, /fa61786b272a019b82f4e96eaaa47dbef60c5b6c/u);
   assert.match(evidenceReadme, /OGVCS-020 remains\s+\*\*Todo\*\*/u);
-  assert.match(evidenceReadme, /AC-01 through AC-07 remain open/u);
+  assert.match(evidenceReadme, /AC-01 through AC-07\s+remain open/u);
 });
 
 test('OGVCS-020 candidate remains private, bounded, unwired, and Todo', async () => {

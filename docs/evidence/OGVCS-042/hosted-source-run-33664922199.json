@@ -1,0 +1,57 @@
+{
+  "schemaVersion": "ogvcs.local-agent/hosted-source-run/v1",
+  "run": {
+    "id": 33664922199,
+    "event": "push",
+    "branch": "r1-foundation-integration",
+    "headSha": "fa61786b272a019b82f4e96eaaa47dbef60c5b6c",
+    "status": "completed",
+    "conclusion": "success",
+    "createdAt": "2026-09-02T18:03:59Z",
+    "completedAt": "2026-09-02T18:06:55Z",
+    "url": "https://github.com/n3r/OpenGameVCS/actions/runs/33664922199"
+  },
+  "evidenceCollection": {
+    "runAndDurationSource": "public GitHub Actions HTML",
+    "jobSource": "public GitHub Actions XHR matrix",
+    "completedAtDerivation": "createdAt plus the displayed total duration",
+    "completedAtIsInferred": true,
+    "apiUnavailableReason": "unauthenticated public API quota exhausted"
+  },
+  "jobs": [
+    { "id": 100364184468, "name": "Private IPC source portability (Linux)", "conclusion": "success" },
+    { "id": 100364184676, "name": "Private IPC source portability (Windows)", "conclusion": "success" },
+    { "id": 100364184740, "name": "Private IPC source portability (macOS)", "conclusion": "success" }
+  ],
+  "successfulStepsOnEveryHost": [
+    "Node source/package/PRD/workflow policy",
+    "Rust format check",
+    "Rust debug tests",
+    "Rust release tests",
+    "Rust warnings-denied Clippy",
+    "freshly extracted package tests"
+  ],
+  "sourceFiles": [
+    { "path": ".github/workflows/local-agent-ipc.yml", "bytes": 2905, "sha256": "c6ee5370036c32f2c1f01d72b0940b9faffd328a3327071906eadc8ce203fd8b" },
+    { "path": "client/local-agent/rust/Cargo.lock", "bytes": 8143, "sha256": "0e60452c65006408ed2832e3063124cac5da3efa27a6a80c94877fd2e7c7cb1d" },
+    { "path": "client/local-agent/rust/Cargo.toml", "bytes": 798, "sha256": "c532a6c38035e0d281a6b9be356d5e7f959d5247557292abe9248d10765b2023" },
+    { "path": "client/local-agent/rust/LICENSE", "bytes": 1081, "sha256": "6f0f22f485ae8614870468a48f2c084eaf800fe02c5a2c4d9a91d34bc7f58eb4" },
+    { "path": "client/local-agent/rust/README.md", "bytes": 16123, "sha256": "8115378d1088980784d691861774a646a76be1eee8da6a356dbdea907a6c7860" },
+    { "path": "client/local-agent/rust/scripts/test-packed.sh", "bytes": 3085, "sha256": "eb3dc91567c5f780c5ef63d88f3844b1808b12d2cea8a60799edf870fd7f8d17" },
+    { "path": "client/local-agent/rust/src/client_hello.rs", "bytes": 21831, "sha256": "211e8d23ae6501b8ad9d6fcedaad09b70b7ebd3a314d30c89bbf47f23d0cab46" },
+    { "path": "client/local-agent/rust/src/commitment.rs", "bytes": 3864, "sha256": "7b3a8d941a6da206a7b37c58e8bfe76b0053bf53c9da5fed058eabc0a36068d0" },
+    { "path": "client/local-agent/rust/src/lib.rs", "bytes": 476, "sha256": "671ce9fcc4a4f5757ef20753de8f53ebd814c024e37c2c39ac941f298201adc8" },
+    { "path": "client/local-agent/rust/src/model.rs", "bytes": 79547, "sha256": "e3cb4c24b8126168b84b54daf0c9f73a3f74eb9dca515f3053be6fe217c60c10" },
+    { "path": "client/local-agent/rust/src/state.rs", "bytes": 76077, "sha256": "aa4f4ba4146e525fad746499e6f1c5b5b148e0fbf925f2d7655de79b15667687" },
+    { "path": "client/local-agent/rust/tests/client_hello.rs", "bytes": 11987, "sha256": "5bb84f37fd3d7a1dfea933e84f80fb7956d78772f6463b4904893c1e741f2da1" },
+    { "path": "client/local-agent/rust/tests/contract.rs", "bytes": 79471, "sha256": "b48c8be9e5673f883bcfa3c2262f6f835e38f3c47cbad743afe87a8c676fed44" }
+  ],
+  "claimBoundary": {
+    "privateSourcePortabilityOnly": true,
+    "agentProcess": false,
+    "osEndpoint": false,
+    "authenticatedJourney": false,
+    "acceptanceCriterion": false,
+    "releaseEvidence": false
+  }
+}

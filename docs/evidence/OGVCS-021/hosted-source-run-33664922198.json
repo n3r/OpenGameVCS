@@ -1,0 +1,51 @@
+{
+  "schemaVersion": "ogvcs.deployment-preflight/hosted-source-run/v1",
+  "run": {
+    "id": 33664922198,
+    "event": "push",
+    "branch": "r1-foundation-integration",
+    "headSha": "fa61786b272a019b82f4e96eaaa47dbef60c5b6c",
+    "status": "completed",
+    "conclusion": "success",
+    "createdAt": "2026-09-02T18:03:59Z",
+    "completedAt": "2026-09-02T18:04:57Z",
+    "url": "https://github.com/n3r/OpenGameVCS/actions/runs/33664922198"
+  },
+  "evidenceCollection": {
+    "runAndDurationSource": "public GitHub Actions HTML",
+    "jobSource": "public GitHub Actions XHR matrix",
+    "completedAtDerivation": "createdAt plus the displayed total duration",
+    "completedAtIsInferred": true,
+    "apiUnavailableReason": "unauthenticated public API quota exhausted"
+  },
+  "jobs": [
+    { "id": 100364184464, "name": "Private preflight portability (Linux)", "conclusion": "success" },
+    { "id": 100364184781, "name": "Private preflight portability (Windows)", "conclusion": "success" },
+    { "id": 100364185511, "name": "Private preflight portability (macOS)", "conclusion": "success" }
+  ],
+  "successfulStepsOnEveryHost": [
+    "Node source/package/PRD/workflow policy",
+    "Rust format check",
+    "Rust debug tests",
+    "Rust release tests",
+    "Rust warnings-denied Clippy",
+    "verified Cargo package"
+  ],
+  "sourceFiles": [
+    { "path": ".github/workflows/deployment-preflight.yml", "bytes": 2740, "sha256": "a1ff33add2ddb9a8ab4861e9f3f99cdef50f6bef077033af2b1ac411189fd208" },
+    { "path": "core/deployment-preflight/rust/Cargo.lock", "bytes": 2414, "sha256": "fa8dc751e622b27537c970c73de86bf8127f4bb23c4db1c716b65c5bfb1ccb3a" },
+    { "path": "core/deployment-preflight/rust/Cargo.toml", "bytes": 400, "sha256": "41bca02bbcb78e3e2eec8e3dd822988983d73e6cbea2590b7a2e48b9e389139d" },
+    { "path": "core/deployment-preflight/rust/LICENSE", "bytes": 1081, "sha256": "6f0f22f485ae8614870468a48f2c084eaf800fe02c5a2c4d9a91d34bc7f58eb4" },
+    { "path": "core/deployment-preflight/rust/README.md", "bytes": 11786, "sha256": "7fc03fead249a15073277e947f9729c006b3978129acc8f1085387ace78a85e7" },
+    { "path": "core/deployment-preflight/rust/src/lib.rs", "bytes": 78112, "sha256": "c7669a32088e3973475369849085b489912ca37edaa9dbe34eef6ba5d6e935f7" },
+    { "path": "core/deployment-preflight/rust/src/transition.rs", "bytes": 33820, "sha256": "b3eaf5896220b373ddfc09188bfd80f546198c2049f871b0a0aa4f885c2ca3ca" }
+  ],
+  "claimBoundary": {
+    "privatePreflightOnly": true,
+    "installedDeployment": false,
+    "cleanHost": false,
+    "backupRestore": false,
+    "acceptanceCriterion": false,
+    "releaseEvidence": false
+  }
+}

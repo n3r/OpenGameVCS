@@ -196,11 +196,13 @@ separately packaged OGVCS-021 predecessor, 6/6 Node v24.9.0 boundary-policy
 tests, the 46-PRD/898-ID roadmap, and 8/8 roadmap regressions also passed. Build
 and package targets were confined to `/private/tmp`.
 
-No hosted run covers the additive rc.2 bytes yet. The historical three-OS run
-remains bound to its original Git blobs; the current workflow now performs one
-credential-free, tag-free, depth-one fetch of exact retained revision
-`c7049fd5063adaf40f6ad2f694104713966ed6c6` so policy can continue verifying
-those exact historical byte lengths and SHA-256 values after source evolution.
-It does not fetch full repository history. A new exact-revision
-Linux/macOS/Windows run is required before making even a current-source
-portability claim for this projection.
+The historical three-OS run remains bound to its original Git blobs. Follow-on
+[run 33664922248](https://github.com/n3r/OpenGameVCS/actions/runs/33664922248)
+passed the additive rc.2 source/package gate on Linux, macOS, and Windows for
+exact revision `fa61786b272a019b82f4e96eaaa47dbef60c5b6c`; the retained
+[machine record](../evidence/OGVCS-043/hosted-source-run-33664922248.json)
+binds that result to the exact workflow/crate bytes. The workflow uses
+credential-free, tag-free, depth-one fetches for both retained revisions and
+does not fetch full repository history. This is current-source portability for
+the projection only, not a clean-host CLI, deployment, authenticated journey,
+release, or acceptance result.

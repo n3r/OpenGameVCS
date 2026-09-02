@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { verifyRetainedSourceFiles } from './retained-source-evidence.mjs';
 
 const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
@@ -40,6 +41,7 @@ test('private Rust tranche workflow is pinned, path-scoped, and three-OS bounded
     'tools/integrity-verifier-source-policy.test.mjs',
     'tools/local-checkpoint-policy.test.mjs',
     'tools/private-rust-tranches-workflow-policy.test.mjs',
+    'tools/retained-source-evidence.mjs',
   ];
   const pullRequest = workflow.match(
     /on:\n  pull_request:\n    paths:\n(?<paths>(?:      - '[^']+'\n)+)  push:/u,
@@ -76,6 +78,12 @@ test('private Rust tranche workflow is pinned, path-scoped, and three-OS bounded
   ]);
   for (const action of actionUses) assert.match(action, /@[0-9a-f]{40}$/u);
   assert.match(workflow, /persist-credentials: false/u);
+  const retainedFetch = 'git fetch --no-tags --depth=1 origin fa61786b272a019b82f4e96eaaa47dbef60c5b6c';
+  assert.equal([...workflow.matchAll(/git fetch\b/gu)].length, 1);
+  assert.equal(workflow.split(retainedFetch).length - 1, 1);
+  assert.ok(workflow.indexOf('persist-credentials: false') < workflow.indexOf(retainedFetch));
+  assert.ok(workflow.indexOf(retainedFetch) < workflow.indexOf('Check private source and workflow policy'));
+  assert.doesNotMatch(workflow, /fetch-depth:\s*0|persist-credentials:\s*true/u);
   assert.match(workflow, /node-version: 24/u);
   assert.match(workflow, /# 1\.82\.0\n        with:\n          toolchain: 1\.82\.0/u);
   assert.match(workflow, /components: clippy, rustfmt/u);
@@ -132,10 +140,14 @@ test('ordinary hosted gate cannot acquire mutation authority or turn into scale 
 });
 
 test('hosted portability leaves all three PRDs Todo with acceptance work open', async () => {
-  const prds = await Promise.all([
-    read('prd/todo/OGVCS-014-local-checkpoints-offline-recovery.md'),
-    read('prd/todo/OGVCS-015-branches-history-merge-revert.md'),
-    read('prd/todo/OGVCS-017-integrity-verification-repair.md'),
+  const [prds, evidence, evidenceReadme] = await Promise.all([
+    Promise.all([
+      read('prd/todo/OGVCS-014-local-checkpoints-offline-recovery.md'),
+      read('prd/todo/OGVCS-015-branches-history-merge-revert.md'),
+      read('prd/todo/OGVCS-017-integrity-verification-repair.md'),
+    ]),
+    read('docs/evidence/OGVCS-014/hosted-source-run-33664922225.json').then(JSON.parse),
+    read('docs/evidence/OGVCS-014/README.md'),
   ]);
   for (const prd of prds) {
     assert.match(prd, /^\*\*Status:\*\* Todo\s*$/mu);
@@ -144,4 +156,71 @@ test('hosted portability leaves all three PRDs Todo with acceptance work open', 
   assert.match(prds[0], /no acceptance criterion is claimed/iu);
   assert.match(prds[1], /No OGVCS-015 acceptance criterion is closed/u);
   assert.match(prds[2], /OGVCS-017 remains Todo/u);
+
+  assert.deepEqual(Object.keys(evidence), [
+    'schemaVersion',
+    'run',
+    'evidenceCollection',
+    'jobs',
+    'successfulStepsOnEveryHost',
+    'sourceFiles',
+    'claimBoundary',
+  ]);
+  assert.equal(evidence.schemaVersion, 'ogvcs.local-checkpoint/hosted-source-run/v1');
+  assert.deepEqual(evidence.run, {
+    id: 33664922225,
+    event: 'push',
+    branch: 'r1-foundation-integration',
+    headSha: 'fa61786b272a019b82f4e96eaaa47dbef60c5b6c',
+    status: 'completed',
+    conclusion: 'success',
+    createdAt: '2026-09-02T18:03:59Z',
+    completedAt: '2026-09-02T18:11:00Z',
+    url: 'https://github.com/n3r/OpenGameVCS/actions/runs/33664922225',
+  });
+  assert.deepEqual(evidence.evidenceCollection, {
+    runAndDurationSource: 'public GitHub Actions HTML',
+    jobSource: 'public GitHub Actions XHR matrix',
+    completedAtDerivation: 'createdAt plus the displayed total duration',
+    completedAtIsInferred: true,
+    apiUnavailableReason: 'unauthenticated public API quota exhausted',
+  });
+  assert.deepEqual(evidence.jobs, [
+    { id: 100364185739, name: 'Private Rust tranches (macOS)', conclusion: 'success' },
+    { id: 100364185892, name: 'Private Rust tranches (Windows)', conclusion: 'success' },
+    { id: 100364185952, name: 'Private Rust tranches (Linux)', conclusion: 'success' },
+  ]);
+  assert.deepEqual(evidence.successfulStepsOnEveryHost, [
+    'private source and workflow policy',
+    'exact locked Rust dependency closure',
+    'Rust format check',
+    'OGVCS-014 local-checkpoint tests',
+    'OGVCS-014 warnings-denied Clippy',
+    'freshly extracted OGVCS-014 package tests',
+  ]);
+  assert.deepEqual(evidence.claimBoundary, {
+    privateSourcePortabilityOnly: true,
+    checkpointCreation: false,
+    checkpointRestore: false,
+    crashCorruptionMatrix: false,
+    acceptanceCriterion: false,
+    releaseEvidence: false,
+  });
+  await verifyRetainedSourceFiles({
+    root,
+    evidence,
+    revision: 'fa61786b272a019b82f4e96eaaa47dbef60c5b6c',
+    paths: [
+      '.github/workflows/private-rust-tranches.yml',
+      'client/local-checkpoint/rust/Cargo.lock',
+      'client/local-checkpoint/rust/Cargo.toml',
+      'client/local-checkpoint/rust/LICENSE',
+      'client/local-checkpoint/rust/README.md',
+      'client/local-checkpoint/rust/scripts/test-packed.sh',
+      'client/local-checkpoint/rust/src/lib.rs',
+    ],
+  });
+  assert.match(evidenceReadme, /source-portability evidence only/iu);
+  assert.match(evidenceReadme, /OGVCS-014 remains \*\*Todo\*\*/u);
+  assert.match(evidenceReadme, /AC-01\s+through AC-05 remain open/u);
 });

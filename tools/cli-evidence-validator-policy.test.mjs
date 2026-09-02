@@ -1,14 +1,11 @@
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
-import { promisify } from 'node:util';
+import { verifyRetainedSourceFiles } from './retained-source-evidence.mjs';
 
 const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
-const execFileAsync = promisify(execFile);
 
 test('private OGVCS-043 validator remains pure, bounded, unwired, and unpublished', async () => {
   const sourceNames = await readdir(new URL('../client/cli-evidence/rust/src/', import.meta.url));
@@ -189,6 +186,27 @@ test('documentation and package hooks preserve the exact open PRD boundary', asy
   assert.doesNotMatch(evidence, /9b2e4ce18b0d246ee5a84b946686e670a68a01fa/u);
   assert.match(evidence, /private fields/u);
   assert.match(evidence, /compile-fail/u);
+  assert.match(
+    evidence,
+    /Follow-on push run \[33664922248\]\(https:\/\/github\.com\/n3r\/OpenGameVCS\/actions\/runs\/33664922248\)/u,
+  );
+  assert.match(evidence, /exact revision `fa61786b272a019b82f4e96eaaa47dbef60c5b6c`/u);
+  assert.match(
+    evidence,
+    /hosted-source-run-33664922248\.json[\s\S]{0,180}binds all three job identities and the exact workflow\/crate source, package,\s+and test bytes/u,
+  );
+  assert.match(
+    evidence,
+    /creation time and displayed duration[\s\S]{0,160}completion time is their sum rather than an API-returned timestamp/u,
+  );
+  assert.match(
+    evidence,
+    /public XHR\s+matrix fragments supplied the job identities, conclusions, and roadmap-step\s+dispositions/u,
+  );
+  assert.match(
+    evidence,
+    /This follow-on is exact-revision source portability only;[\s\S]{0,180}OGVCS-043 remains\s+\*\*Todo\*\*, and AC-01 through AC-05 remain open\./u,
+  );
   assert.equal(
     packageValue.scripts['test:cli-evidence'],
     'node --test tools/cli-evidence-validator-policy.test.mjs',
@@ -228,29 +246,59 @@ test('crate package boundary contains only its offline validator sources', async
 
 test('path-scoped hosted regression keeps the private source gate pinned', async () => {
   const workflow = await read('.github/workflows/cli-evidence-validator.yml');
+  const watchedPaths = [
+    '.github/workflows/cli-evidence-validator.yml',
+    'client/cli-evidence/rust/**',
+    'core/deployment-preflight/rust/**',
+    'core/object-model/rust/**',
+    'docs/evidence/OGVCS-043/**',
+    'docs/reviews/OGVCS-043-cli-evidence-validator-boundary-review.md',
+    'prd/todo/OGVCS-043-r1-cli-vertical-slice.md',
+    'tools/cli-evidence-validator-policy.test.mjs',
+    'tools/retained-source-evidence.mjs',
+    'package.json',
+    'package-lock.json',
+  ];
+  const pullRequest = workflow.match(
+    /on:\n  pull_request:\n    paths:\n(?<paths>(?:      - '[^']+'\n)+)  push:/u,
+  );
+  const push = workflow.match(
+    /  push:\n    branches: \[main, r1-foundation-integration\]\n    paths:\n(?<paths>(?:      - '[^']+'\n)+)  workflow_dispatch:/u,
+  );
+  const decodePaths = (match) => match?.groups?.paths
+    .trimEnd()
+    .split('\n')
+    .map((line) => line.slice(9, -1));
 
   assert.match(workflow, /^name: R1 CLI evidence validator$/mu);
-  assert.match(workflow, /branches: \[main, r1-foundation-integration\]/u);
-  assert.match(workflow, /client\/cli-evidence\/rust\/\*\*/u);
-  assert.match(workflow, /core\/deployment-preflight\/rust\/\*\*/u);
+  assert.deepEqual(decodePaths(pullRequest), watchedPaths);
+  assert.deepEqual(decodePaths(push), watchedPaths);
+  assert.match(workflow, /  workflow_dispatch:\n\npermissions:/u);
   assert.doesNotMatch(workflow, /fetch-depth:\s*0/u);
   assert.equal([...workflow.matchAll(/persist-credentials:\s*false/gu)].length, 1);
   assert.doesNotMatch(workflow, /persist-credentials:\s*true/u);
-  const retainedFetch = 'git fetch --no-tags --depth=1 origin c7049fd5063adaf40f6ad2f694104713966ed6c6';
-  assert.equal([...workflow.matchAll(/git fetch\b/gu)].length, 1);
-  assert.equal(workflow.split(retainedFetch).length - 1, 1);
+  const retainedFetches = [
+    'git fetch --no-tags --depth=1 origin c7049fd5063adaf40f6ad2f694104713966ed6c6',
+    'git fetch --no-tags --depth=1 origin fa61786b272a019b82f4e96eaaa47dbef60c5b6c',
+  ];
+  assert.equal([...workflow.matchAll(/git fetch\b/gu)].length, retainedFetches.length);
+  for (const retainedFetch of retainedFetches) {
+    assert.equal(workflow.split(retainedFetch).length - 1, 1);
+  }
   assert.match(
     workflow,
     /- uses: actions\/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7\.0\.1\s+with:\s+persist-credentials: false/u,
   );
   const checkoutIndex = workflow.indexOf('actions/checkout@');
   const credentialIndex = workflow.indexOf('persist-credentials: false');
-  const retainedFetchIndex = workflow.indexOf(retainedFetch);
+  const retainedFetchIndexes = retainedFetches.map((command) => workflow.indexOf(command));
   const policyIndex = workflow.indexOf('node --test tools/cli-evidence-validator-policy.test.mjs');
   assert.ok(checkoutIndex < credentialIndex);
-  assert.ok(credentialIndex < retainedFetchIndex);
-  assert.ok(retainedFetchIndex < policyIndex);
+  assert.ok(credentialIndex < retainedFetchIndexes[0]);
+  assert.ok(retainedFetchIndexes[0] < retainedFetchIndexes[1]);
+  assert.ok(retainedFetchIndexes[1] < policyIndex);
   assert.match(workflow, /tools\/cli-evidence-validator-policy\.test\.mjs/u);
+  assert.match(workflow, /tools\/retained-source-evidence\.mjs/u);
   assert.match(workflow, /permissions:\s+contents: read/u);
   assert.match(workflow, /node-version: 24/u);
   assert.match(workflow, /# 1\.82\.0/u);
@@ -268,12 +316,13 @@ test('path-scoped hosted regression keeps the private source gate pinned', async
 });
 
 test('retained hosted result is exact and bounded to private source portability', async () => {
-  const evidence = JSON.parse(
-    await read('docs/evidence/OGVCS-043/hosted-source-run-33629145724.json'),
-  );
+  const [historicalEvidence, evidence] = await Promise.all([
+    read('docs/evidence/OGVCS-043/hosted-source-run-33629145724.json').then(JSON.parse),
+    read('docs/evidence/OGVCS-043/hosted-source-run-33664922248.json').then(JSON.parse),
+  ]);
 
-  assert.equal(evidence.schemaVersion, 'ogvcs.cli-evidence/hosted-source-run/v1');
-  assert.deepEqual(evidence.run, {
+  assert.equal(historicalEvidence.schemaVersion, 'ogvcs.cli-evidence/hosted-source-run/v1');
+  assert.deepEqual(historicalEvidence.run, {
     id: 33629145724,
     event: 'push',
     branch: 'r1-foundation-integration',
@@ -285,7 +334,7 @@ test('retained hosted result is exact and bounded to private source portability'
     url: 'https://github.com/n3r/OpenGameVCS/actions/runs/33629145724',
   });
   assert.deepEqual(
-    evidence.jobs.map(({ id, name, conclusion }) => ({ id, name, conclusion })),
+    historicalEvidence.jobs.map(({ id, name, conclusion }) => ({ id, name, conclusion })),
     [
       {
         id: 100243980763,
@@ -304,7 +353,7 @@ test('retained hosted result is exact and bounded to private source portability'
       },
     ],
   );
-  assert.deepEqual(evidence.claimBoundary, {
+  assert.deepEqual(historicalEvidence.claimBoundary, {
     privateSourcePortabilityOnly: true,
     installedCli: false,
     cleanHost: false,
@@ -312,22 +361,99 @@ test('retained hosted result is exact and bounded to private source portability'
     acceptanceCriterion: false,
     releaseEvidence: false,
   });
-  assert.equal(evidence.sourceFiles.length, 10);
-  for (const expected of evidence.sourceFiles) {
-    const { stdout: bytes } = await execFileAsync(
-      'git',
-      ['show', `${evidence.run.headSha}:${expected.path}`],
-      {
-        cwd: fileURLToPath(root),
-        encoding: null,
-        maxBuffer: 16 * 1024 * 1024,
-      },
-    );
-    assert.equal(bytes.byteLength, expected.bytes, `${expected.path}: byte length`);
-    assert.equal(
-      createHash('sha256').update(bytes).digest('hex'),
-      expected.sha256,
-      `${expected.path}: SHA-256`,
-    );
-  }
+  await verifyRetainedSourceFiles({
+    root,
+    evidence: historicalEvidence,
+    revision: 'c7049fd5063adaf40f6ad2f694104713966ed6c6',
+    paths: [
+      '.github/workflows/cli-evidence-validator.yml',
+      'client/cli-evidence/rust/Cargo.lock',
+      'client/cli-evidence/rust/Cargo.toml',
+      'client/cli-evidence/rust/README.md',
+      'client/cli-evidence/rust/scripts/test-packed.sh',
+      'client/cli-evidence/rust/src/lib.rs',
+      'client/cli-evidence/rust/src/model.rs',
+      'client/cli-evidence/rust/src/transcript.rs',
+      'client/cli-evidence/rust/src/validate.rs',
+      'client/cli-evidence/rust/tests/validator.rs',
+    ],
+  });
+
+  assert.deepEqual(Object.keys(evidence), [
+    'schemaVersion',
+    'run',
+    'evidenceCollection',
+    'jobs',
+    'successfulStepsOnEveryHost',
+    'sourceFiles',
+    'claimBoundary',
+  ]);
+  assert.equal(evidence.schemaVersion, 'ogvcs.cli-evidence/hosted-source-run/v1');
+  assert.deepEqual(evidence.run, {
+    id: 33664922248,
+    event: 'push',
+    branch: 'r1-foundation-integration',
+    headSha: 'fa61786b272a019b82f4e96eaaa47dbef60c5b6c',
+    status: 'completed',
+    conclusion: 'success',
+    createdAt: '2026-09-02T18:03:59Z',
+    completedAt: '2026-09-02T18:06:30Z',
+    url: 'https://github.com/n3r/OpenGameVCS/actions/runs/33664922248',
+  });
+  assert.deepEqual(evidence.evidenceCollection, {
+    runAndDurationSource: 'public GitHub Actions HTML',
+    jobSource: 'public GitHub Actions XHR matrix',
+    completedAtDerivation: 'createdAt plus the displayed total duration',
+    completedAtIsInferred: true,
+    apiUnavailableReason: 'unauthenticated public API quota exhausted',
+  });
+  assert.deepEqual(evidence.jobs, [
+    {
+      id: 100364184772,
+      name: 'Private source regression (Linux)',
+      conclusion: 'success',
+      roadmapStep: 'success',
+    },
+    {
+      id: 100364184894,
+      name: 'Private source regression (macOS)',
+      conclusion: 'success',
+      roadmapStep: 'skipped',
+    },
+    {
+      id: 100364184914,
+      name: 'Private source regression (Windows)',
+      conclusion: 'success',
+      roadmapStep: 'skipped',
+    },
+  ]);
+  assert.deepEqual(evidence.successfulStepsOnEveryHost, [
+    'Node source/package/PRD/workflow policy',
+    'Rust format check',
+    'Rust debug tests',
+    'Rust release tests',
+    'Rust warnings-denied Clippy',
+    'freshly extracted package tests',
+  ]);
+  assert.deepEqual(evidence.claimBoundary, historicalEvidence.claimBoundary);
+  await verifyRetainedSourceFiles({
+    root,
+    evidence,
+    revision: 'fa61786b272a019b82f4e96eaaa47dbef60c5b6c',
+    paths: [
+      '.github/workflows/cli-evidence-validator.yml',
+      'client/cli-evidence/rust/Cargo.lock',
+      'client/cli-evidence/rust/Cargo.toml',
+      'client/cli-evidence/rust/LICENSE',
+      'client/cli-evidence/rust/README.md',
+      'client/cli-evidence/rust/scripts/test-packed.sh',
+      'client/cli-evidence/rust/src/lib.rs',
+      'client/cli-evidence/rust/src/model.rs',
+      'client/cli-evidence/rust/src/starter_preflight.rs',
+      'client/cli-evidence/rust/src/transcript.rs',
+      'client/cli-evidence/rust/src/validate.rs',
+      'client/cli-evidence/rust/tests/starter_preflight.rs',
+      'client/cli-evidence/rust/tests/validator.rs',
+    ],
+  });
 });

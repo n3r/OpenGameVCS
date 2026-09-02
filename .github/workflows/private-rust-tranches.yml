@@ -29,6 +29,7 @@ on:
       - 'tools/integrity-verifier-source-policy.test.mjs'
       - 'tools/local-checkpoint-policy.test.mjs'
       - 'tools/private-rust-tranches-workflow-policy.test.mjs'
+      - 'tools/retained-source-evidence.mjs'
   push:
     branches: [main, r1-foundation-integration]
     paths:
@@ -58,6 +59,7 @@ on:
       - 'tools/integrity-verifier-source-policy.test.mjs'
       - 'tools/local-checkpoint-policy.test.mjs'
       - 'tools/private-rust-tranches-workflow-policy.test.mjs'
+      - 'tools/retained-source-evidence.mjs'
   workflow_dispatch:
 
 permissions:
@@ -90,6 +92,8 @@ jobs:
         with:
           toolchain: 1.82.0
           components: clippy, rustfmt
+      - name: Fetch the retained source revision
+        run: git fetch --no-tags --depth=1 origin fa61786b272a019b82f4e96eaaa47dbef60c5b6c
       - name: Check private source and workflow policy
         run: >-
           node --test

@@ -153,10 +153,15 @@ serialization, authorization meaning, persistence, conversion, or wiring.
 
 Pinned GitHub Actions run
 [33638102757](https://github.com/n3r/OpenGameVCS/actions/runs/33638102757)
-passed this private source/package gate on Linux, macOS, and Windows for exact
-revision `0e714329a903573c7aa0d16a58adda8bf67e1088`. Its retained machine
-record is source-portability evidence only; it is not a Git parser, converted
-repository, authenticated import journey, scale result, or acceptance evidence.
+passed the original private preflight gate on all three operating systems.
+Follow-on [run 33664922211](https://github.com/n3r/OpenGameVCS/actions/runs/33664922211)
+passed the expanded preflight plus strict tree-frame source/package gate on
+Linux, macOS, and Windows for exact revision
+`fa61786b272a019b82f4e96eaaa47dbef60c5b6c`. The retained
+[machine records](../evidence/OGVCS-020/README.md) bind both results to their
+exact source boundaries. This is source-portability evidence only; it is not a
+converted repository, authenticated import journey, scale result, or
+acceptance evidence.
 
 Normative sources reviewed for this boundary are Git's official
 [`gitdatamodel`](https://git-scm.com/docs/gitdatamodel.html) documentation

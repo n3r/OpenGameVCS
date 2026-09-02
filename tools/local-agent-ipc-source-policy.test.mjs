@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { verifyRetainedSourceFiles } from './retained-source-evidence.mjs';
 
 const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
@@ -235,6 +236,7 @@ test('hosted portability workflow is pinned, path-complete, and preserves the pr
     'docs/evidence/OGVCS-042/**',
     'prd/todo/OGVCS-042-minimal-local-agent-first-party-ipc.md',
     'tools/local-agent-ipc-source-policy.test.mjs',
+    'tools/retained-source-evidence.mjs',
     'package.json',
     'package-lock.json',
   ];
@@ -295,10 +297,16 @@ test('hosted portability workflow is pinned, path-complete, and preserves the pr
     [...workflow.matchAll(/^          components: (.+)$/gmu)].map((match) => match[1]),
     ['clippy, rustfmt'],
   );
+  const retainedFetch = 'git fetch --no-tags --depth=1 origin fa61786b272a019b82f4e96eaaa47dbef60c5b6c';
+  assert.equal([...workflow.matchAll(/git fetch\b/gu)].length, 1);
+  assert.equal(workflow.split(retainedFetch).length - 1, 1);
+  assert.ok(workflow.indexOf('persist-credentials: false') < workflow.indexOf(retainedFetch));
+  assert.doesNotMatch(workflow, /fetch-depth:\s*0|persist-credentials:\s*true/u);
   assert.deepEqual(
     [...workflow.matchAll(/^\s+(?:- )?run: (.+)$/gmu)]
       .map((match) => match[1]),
     [
+      retainedFetch,
       'node --test tools/local-agent-ipc-source-policy.test.mjs',
       'cargo fetch --manifest-path client/local-agent/rust/Cargo.toml --locked',
       'cargo fmt --manifest-path client/local-agent/rust/Cargo.toml -- --check',
@@ -311,7 +319,7 @@ test('hosted portability workflow is pinned, path-complete, and preserves the pr
   );
   assert.match(
     workflow,
-    /- run: node --test tools\/local-agent-ipc-source-policy\.test\.mjs\n      - run: cargo fetch --manifest-path client\/local-agent\/rust\/Cargo\.toml --locked\n      - run: cargo fmt --manifest-path client\/local-agent\/rust\/Cargo\.toml -- --check/u,
+    /run: git fetch --no-tags --depth=1 origin fa61786b272a019b82f4e96eaaa47dbef60c5b6c\n      - run: node --test tools\/local-agent-ipc-source-policy\.test\.mjs\n      - run: cargo fetch --manifest-path client\/local-agent\/rust\/Cargo\.toml --locked\n      - run: cargo fmt --manifest-path client\/local-agent\/rust\/Cargo\.toml -- --check/u,
   );
   assert.match(
     workflow,
@@ -328,13 +336,14 @@ test('hosted portability workflow is pinned, path-complete, and preserves the pr
 });
 
 test('retained hosted result is exact and bounded to private IPC source portability', async () => {
-  const [evidence, evidenceReadme] = await Promise.all([
+  const [historicalEvidence, evidence, evidenceReadme] = await Promise.all([
     read('docs/evidence/OGVCS-042/hosted-source-run-33636845159.json').then(JSON.parse),
+    read('docs/evidence/OGVCS-042/hosted-source-run-33664922199.json').then(JSON.parse),
     read('docs/evidence/OGVCS-042/README.md'),
   ]);
 
-  assert.equal(evidence.schemaVersion, 'ogvcs.local-agent/hosted-source-run/v1');
-  assert.deepEqual(evidence.run, {
+  assert.equal(historicalEvidence.schemaVersion, 'ogvcs.local-agent/hosted-source-run/v1');
+  assert.deepEqual(historicalEvidence.run, {
     id: 33636845159,
     event: 'push',
     branch: 'r1-foundation-integration',
@@ -346,14 +355,14 @@ test('retained hosted result is exact and bounded to private IPC source portabil
     url: 'https://github.com/n3r/OpenGameVCS/actions/runs/33636845159',
   });
   assert.deepEqual(
-    evidence.jobs.map(({ id, name, conclusion }) => ({ id, name, conclusion })),
+    historicalEvidence.jobs.map(({ id, name, conclusion }) => ({ id, name, conclusion })),
     [
       { id: 100269732676, name: 'Private IPC source portability (Windows)', conclusion: 'success' },
       { id: 100269732991, name: 'Private IPC source portability (macOS)', conclusion: 'success' },
       { id: 100269733202, name: 'Private IPC source portability (Linux)', conclusion: 'success' },
     ],
   );
-  assert.deepEqual(evidence.claimBoundary, {
+  assert.deepEqual(historicalEvidence.claimBoundary, {
     privateSourcePortabilityOnly: true,
     agentProcess: false,
     osEndpoint: false,
@@ -361,7 +370,71 @@ test('retained hosted result is exact and bounded to private IPC source portabil
     acceptanceCriterion: false,
     releaseEvidence: false,
   });
+
+  assert.deepEqual(Object.keys(evidence), [
+    'schemaVersion',
+    'run',
+    'evidenceCollection',
+    'jobs',
+    'successfulStepsOnEveryHost',
+    'sourceFiles',
+    'claimBoundary',
+  ]);
+  assert.equal(evidence.schemaVersion, 'ogvcs.local-agent/hosted-source-run/v1');
+  assert.deepEqual(evidence.run, {
+    id: 33664922199,
+    event: 'push',
+    branch: 'r1-foundation-integration',
+    headSha: 'fa61786b272a019b82f4e96eaaa47dbef60c5b6c',
+    status: 'completed',
+    conclusion: 'success',
+    createdAt: '2026-09-02T18:03:59Z',
+    completedAt: '2026-09-02T18:06:55Z',
+    url: 'https://github.com/n3r/OpenGameVCS/actions/runs/33664922199',
+  });
+  assert.deepEqual(evidence.evidenceCollection, {
+    runAndDurationSource: 'public GitHub Actions HTML',
+    jobSource: 'public GitHub Actions XHR matrix',
+    completedAtDerivation: 'createdAt plus the displayed total duration',
+    completedAtIsInferred: true,
+    apiUnavailableReason: 'unauthenticated public API quota exhausted',
+  });
+  assert.deepEqual(evidence.jobs, [
+    { id: 100364184468, name: 'Private IPC source portability (Linux)', conclusion: 'success' },
+    { id: 100364184676, name: 'Private IPC source portability (Windows)', conclusion: 'success' },
+    { id: 100364184740, name: 'Private IPC source portability (macOS)', conclusion: 'success' },
+  ]);
+  assert.deepEqual(evidence.successfulStepsOnEveryHost, [
+    'Node source/package/PRD/workflow policy',
+    'Rust format check',
+    'Rust debug tests',
+    'Rust release tests',
+    'Rust warnings-denied Clippy',
+    'freshly extracted package tests',
+  ]);
+  assert.deepEqual(evidence.claimBoundary, historicalEvidence.claimBoundary);
+  await verifyRetainedSourceFiles({
+    root,
+    evidence,
+    revision: 'fa61786b272a019b82f4e96eaaa47dbef60c5b6c',
+    paths: [
+      '.github/workflows/local-agent-ipc.yml',
+      'client/local-agent/rust/Cargo.lock',
+      'client/local-agent/rust/Cargo.toml',
+      'client/local-agent/rust/LICENSE',
+      'client/local-agent/rust/README.md',
+      'client/local-agent/rust/scripts/test-packed.sh',
+      'client/local-agent/rust/src/client_hello.rs',
+      'client/local-agent/rust/src/commitment.rs',
+      'client/local-agent/rust/src/lib.rs',
+      'client/local-agent/rust/src/model.rs',
+      'client/local-agent/rust/src/state.rs',
+      'client/local-agent/rust/tests/client_hello.rs',
+      'client/local-agent/rust/tests/contract.rs',
+    ],
+  });
   assert.match(evidenceReadme, /source-portability evidence only/iu);
+  assert.match(evidenceReadme, /fa61786b272a019b82f4e96eaaa47dbef60c5b6c/u);
   assert.match(evidenceReadme, /OGVCS-042 remains\s+\*\*Todo\*\*/u);
   assert.match(evidenceReadme, /AC-01 through AC-05 remain open/u);
 });

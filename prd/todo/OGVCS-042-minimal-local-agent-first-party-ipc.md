@@ -121,8 +121,12 @@ Ship read/status first to first-party clients, then sync/start-edit and finally 
 - Security/reliability review:
   `docs/reviews/OGVCS-042-local-agent-ipc-boundary-review.md` records the
   authority/boundary audits, fail-closed fixes, residual risks, and the
-  private-candidate-only verdict; the follow-on has no new hosted evidence and
-  is not an external security assessment or acceptance evidence for an agent.
+  private-candidate-only verdict. Exact revision
+  `fa61786b272a019b82f4e96eaaa47dbef60c5b6c` passed the bounded follow-on
+  source/package gate on hosted Linux, macOS, and Windows in
+  [run 33664922199](https://github.com/n3r/OpenGameVCS/actions/runs/33664922199).
+  This is not process/endpoint evidence, an external security assessment, or
+  acceptance evidence for an agent.
 - Documentation/runbooks: `client/local-agent/rust/README.md` documents exact
   ordering, limits, known answers, composition boundaries, and nonclaims. No
   operational runbook exists because there is no process or deployment in this

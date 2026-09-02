@@ -140,9 +140,14 @@ object-model and path-contract patches, and the fresh packed-consumer gate
 passes the same 90 tests. The private source policy passes 4 tests; roadmap
 validation reports 46 PRDs and its regression suite passes 8 tests.
 
-Those gates prove only deterministic private-source behavior for their exact
-revision. They are not Git repository conversion, hosted portability for this
-new decoder, OGVCS-045 isolation, performance, or acceptance evidence.
+Those local gates prove deterministic private-source behavior. Exact revision
+`fa61786b272a019b82f4e96eaaa47dbef60c5b6c` also passed the source/package gate
+on hosted Linux, macOS, and Windows in
+[run 33664922211](https://github.com/n3r/OpenGameVCS/actions/runs/33664922211),
+with its exact workflow/crate bytes retained under
+[`docs/evidence/OGVCS-020`](../evidence/OGVCS-020/README.md). That is source
+portability only, not Git repository conversion, OGVCS-045 isolation,
+performance, or acceptance evidence.
 
 ## Residuals and acceptance boundary
 
@@ -164,8 +169,7 @@ new decoder, OGVCS-045 isolation, performance, or acceptance evidence.
   namespace verification, reconciliation, and atomic ref publication remain
   unimplemented.
 - No public interface, operator workflow, broker/sandbox canary, kill/restart
-  matrix, hosted source run, large-history result, or scale/latency claim is
-  added.
+  or conversion matrix, large-history result, or scale/latency claim is added.
 
 Consequently AC-01 has no complete DAG/LFS conversion; AC-02 has no selected
 transform policy; AC-03 has no resume or publication; AC-04 has no source-tip

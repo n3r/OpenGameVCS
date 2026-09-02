@@ -9,6 +9,7 @@ on:
       - 'docs/evidence/OGVCS-021/**'
       - 'prd/todo/OGVCS-021-starter-deployment-admin-bootstrap.md'
       - 'tools/deployment-preflight-source-policy.test.mjs'
+      - 'tools/retained-source-evidence.mjs'
       - 'package.json'
       - 'package-lock.json'
   push:
@@ -20,6 +21,7 @@ on:
       - 'docs/evidence/OGVCS-021/**'
       - 'prd/todo/OGVCS-021-starter-deployment-admin-bootstrap.md'
       - 'tools/deployment-preflight-source-policy.test.mjs'
+      - 'tools/retained-source-evidence.mjs'
       - 'package.json'
       - 'package-lock.json'
   workflow_dispatch:
@@ -53,6 +55,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@7d11e79e1714f6b6da93cac39ad8435666f5c337 # 1.82.0
         with:
           components: clippy, rustfmt
+      - name: Fetch the retained source revision
+        run: git fetch --no-tags --depth=1 origin fa61786b272a019b82f4e96eaaa47dbef60c5b6c
       - run: node --test tools/deployment-preflight-source-policy.test.mjs
       - run: cargo fetch --manifest-path core/deployment-preflight/rust/Cargo.toml --locked
       - run: cargo fmt --manifest-path core/deployment-preflight/rust/Cargo.toml -- --check

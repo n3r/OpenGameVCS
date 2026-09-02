@@ -132,9 +132,12 @@ Publish immutable prerelease artifacts and one reference topology. Every schema-
   shapes; exact and max+1 work/retained bounds; checked overflow; every
   cancellation checkpoint; report tampering; and redacted debug. Rust 1.82
   debug/release, warning-denied Clippy, bounded and extracted package,
-  source-policy, and roadmap gates are the candidate's local evidence. No new
-  hosted transition run, clean-host, deployed dependency-fault, offline,
-  timed-operator, scale, latency, or SLO campaign has run.
+  source-policy, and roadmap gates are the candidate's local evidence. Exact
+  revision `fa61786b272a019b82f4e96eaaa47dbef60c5b6c` also passed this
+  source/package boundary on hosted Linux, macOS, and Windows in
+  [run 33664922198](https://github.com/n3r/OpenGameVCS/actions/runs/33664922198).
+  That is source portability only; no clean-host, deployed dependency-fault,
+  offline-runtime, timed-operator, scale, latency, or SLO campaign has run.
 - Security/reliability review: See
   `docs/reviews/OGVCS-021-deployment-preflight-boundary-review.md`. Secret and
   principal values are opaque commitments and every access/permission/health/

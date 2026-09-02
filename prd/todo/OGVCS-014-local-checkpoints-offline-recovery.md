@@ -141,8 +141,12 @@ Enable after local format recovery tests. Workspace clients retain read support 
   projection. The test sentinel remains unchanged under both replacement
   intents.
   Rustfmt, warning-denied Clippy, exact offline packed-crate, Node source-policy,
-  Windows cross-compilation, and roadmap gates are the candidate acceptance
-  boundary. No scale, hosted three-OS, or real power-cut result is claimed.
+  Windows cross-compilation, and roadmap gates are the local candidate boundary.
+  Exact revision `fa61786b272a019b82f4e96eaaa47dbef60c5b6c` also passed the
+  bounded source/package gates on hosted Linux, macOS, and Windows in
+  [run 33664922225](https://github.com/n3r/OpenGameVCS/actions/runs/33664922225).
+  This is source portability only; no scale, three-OS crash/corruption, or real
+  power-cut result is claimed.
 - **Security/reliability review:**
   [private local-checkpoint boundary review](../../docs/reviews/OGVCS-014-local-checkpoint-boundary-review.md).
   The unkeyed intent integrity frame binds expected record ID/digest/length
@@ -182,9 +186,8 @@ Enable after local format recovery tests. Workspace clients retain read support 
   not allocation/lifetime authority. The supplied workspace/spec digest is not
   loaded from authenticated workspace metadata.
 - Same-authority path replacement, full Unix ACL/ownership policy, Windows
-  inherited-ACL/owner verification, hosted reparse/hard-link execution and the
-  corrected access-denied directory-flush classification rerun, actual power
-  loss, three-OS crash/corruption, scale, real
+  inherited-ACL/owner verification, real reparse/hard-link fault execution,
+  actual power loss, three-OS crash/corruption, scale, real
   filesystem/cache observation, complete restore obstruction, lock
   reconciliation, and cache-race campaigns remain unproved.
 - Public CLI/JSON/GUI integration, auth/permission/grant and request-root

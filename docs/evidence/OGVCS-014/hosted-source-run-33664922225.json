@@ -1,0 +1,51 @@
+{
+  "schemaVersion": "ogvcs.local-checkpoint/hosted-source-run/v1",
+  "run": {
+    "id": 33664922225,
+    "event": "push",
+    "branch": "r1-foundation-integration",
+    "headSha": "fa61786b272a019b82f4e96eaaa47dbef60c5b6c",
+    "status": "completed",
+    "conclusion": "success",
+    "createdAt": "2026-09-02T18:03:59Z",
+    "completedAt": "2026-09-02T18:11:00Z",
+    "url": "https://github.com/n3r/OpenGameVCS/actions/runs/33664922225"
+  },
+  "evidenceCollection": {
+    "runAndDurationSource": "public GitHub Actions HTML",
+    "jobSource": "public GitHub Actions XHR matrix",
+    "completedAtDerivation": "createdAt plus the displayed total duration",
+    "completedAtIsInferred": true,
+    "apiUnavailableReason": "unauthenticated public API quota exhausted"
+  },
+  "jobs": [
+    { "id": 100364185739, "name": "Private Rust tranches (macOS)", "conclusion": "success" },
+    { "id": 100364185892, "name": "Private Rust tranches (Windows)", "conclusion": "success" },
+    { "id": 100364185952, "name": "Private Rust tranches (Linux)", "conclusion": "success" }
+  ],
+  "successfulStepsOnEveryHost": [
+    "private source and workflow policy",
+    "exact locked Rust dependency closure",
+    "Rust format check",
+    "OGVCS-014 local-checkpoint tests",
+    "OGVCS-014 warnings-denied Clippy",
+    "freshly extracted OGVCS-014 package tests"
+  ],
+  "sourceFiles": [
+    { "path": ".github/workflows/private-rust-tranches.yml", "bytes": 6335, "sha256": "68418e79b189cbc27dd9385ff6e418d42dc2f5abde5a23a06f0bdd504c4f67db" },
+    { "path": "client/local-checkpoint/rust/Cargo.lock", "bytes": 8237, "sha256": "8808254392960aed01861d5b7a088625e1120c94bd1b0fdbb7da9534984edd58" },
+    { "path": "client/local-checkpoint/rust/Cargo.toml", "bytes": 925, "sha256": "2f7324a76420ac980db2aebbf6b29c942e67499e1eec40ecdb57b2eaffae6b14" },
+    { "path": "client/local-checkpoint/rust/LICENSE", "bytes": 1081, "sha256": "6f0f22f485ae8614870468a48f2c084eaf800fe02c5a2c4d9a91d34bc7f58eb4" },
+    { "path": "client/local-checkpoint/rust/README.md", "bytes": 15154, "sha256": "3cced9da1dabd60efd9de67362e9b62ed636abbda4994f8fdfea6080df6ad5fb" },
+    { "path": "client/local-checkpoint/rust/scripts/test-packed.sh", "bytes": 3139, "sha256": "c0e0b215b6aa4c5a821d95e54251c161682150efcc9aae94c9d82855aefb3199" },
+    { "path": "client/local-checkpoint/rust/src/lib.rs", "bytes": 184977, "sha256": "65f63ffcd98f67838ad4288ece11efb2fe93d1a5087b2e001da27f73a7efbe55" }
+  ],
+  "claimBoundary": {
+    "privateSourcePortabilityOnly": true,
+    "checkpointCreation": false,
+    "checkpointRestore": false,
+    "crashCorruptionMatrix": false,
+    "acceptanceCriterion": false,
+    "releaseEvidence": false
+  }
+}
