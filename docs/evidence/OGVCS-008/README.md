@@ -4,6 +4,25 @@ This packet preserves bounded hosted evidence for the object-transfer rc.6
 candidate. It is not completion evidence for OGVCS-008 and does not change the
 PRD's **Todo** status.
 
+## Exact integration bounded revalidation
+
+- Source: [`0ac2c8253ff5d96b5ab49cfc13428f04fd430d25`](https://github.com/n3r/OpenGameVCS/commit/0ac2c8253ff5d96b5ab49cfc13428f04fd430d25)
+- Object-transfer workflow: [run 33654187922](https://github.com/n3r/OpenGameVCS/actions/runs/33654187922), completed successfully on 2026-09-02
+- Metadata composition workflow: [run 33654046435](https://github.com/n3r/OpenGameVCS/actions/runs/33654046435), completed successfully on 2026-09-02
+- Machine records: [`github-actions-run-33654187922.json`](github-actions-run-33654187922.json) and [`../OGVCS-006/github-actions-run-33654046435.json`](../OGVCS-006/github-actions-run-33654046435.json)
+
+The exact pushed integration revision passed the bounded JavaScript contract,
+runtime, and packed-consumer lanes on Linux, macOS, and Windows plus the shared
+backend suite against checksum-pinned ephemeral loopback MinIO. The separate
+metadata run passed the route-less PostgreSQL explicit-composition regression,
+both Clippy profiles, all three host platforms, and the hard-restart matrix.
+
+These runs directly cover the bounded package and private composition seams;
+they do not establish public routing, request-root closure, a production
+JavaScript-to-Rust subject mapper, health/GC/delete authority, authenticated
+submit consumption, production deployment, or the release-only 100-GiB
+campaign. OGVCS-008 remains **Todo**.
+
 ## Current integration bounded revalidation
 
 - Product source: [`70ef689187d7d7749e33348e472d9310b4bd0828`](https://github.com/n3r/OpenGameVCS/commit/70ef689187d7d7749e33348e472d9310b4bd0828)

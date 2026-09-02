@@ -1,0 +1,139 @@
+{
+  "schemaVersion": "ogvcs.repository-metadata/hosted-evidence/v1",
+  "status": "bounded-explicit-manifest-composition-passed",
+  "exactScaleExecuted": false,
+  "implementationRevision": "0ac2c8253ff5d96b5ab49cfc13428f04fd430d25",
+  "sourceRevision": "0ac2c8253ff5d96b5ab49cfc13428f04fd430d25",
+  "workflow": {
+    "name": "Repository metadata bounded conformance",
+    "path": ".github/workflows/repository-metadata.yml",
+    "runId": 33654046435,
+    "runAttempt": 1,
+    "event": "push",
+    "headBranch": "r1-foundation-integration",
+    "status": "completed",
+    "conclusion": "success",
+    "createdAt": "2026-09-02T16:17:57Z",
+    "completedAt": "2026-09-02T16:21:39Z",
+    "url": "https://github.com/n3r/OpenGameVCS/actions/runs/33654046435"
+  },
+  "toolchains": {
+    "node": "24",
+    "rust": "1.82.0"
+  },
+  "jobs": [
+    {
+      "id": 100328012206,
+      "name": "Locked bounded checks and PostgreSQL 15",
+      "conclusion": "success",
+      "startedAt": "2026-09-02T16:18:01Z",
+      "completedAt": "2026-09-02T16:21:38Z"
+    },
+    {
+      "id": 100328012490,
+      "name": "Locked bounded checks (macOS)",
+      "conclusion": "success",
+      "startedAt": "2026-09-02T16:18:03Z",
+      "completedAt": "2026-09-02T16:19:29Z"
+    },
+    {
+      "id": 100328012572,
+      "name": "Private atomic submit hard-restart proof (PostgreSQL 15)",
+      "conclusion": "success",
+      "startedAt": "2026-09-02T16:18:01Z",
+      "completedAt": "2026-09-02T16:20:43Z"
+    },
+    {
+      "id": 100328012598,
+      "name": "Locked bounded checks (Windows)",
+      "conclusion": "success",
+      "startedAt": "2026-09-02T16:18:03Z",
+      "completedAt": "2026-09-02T16:19:58Z"
+    }
+  ],
+  "artifacts": [
+    {
+      "id": 9856085738,
+      "name": "repository-metadata-postgres-Linux",
+      "archiveBytes": 586,
+      "githubDigest": "sha256:8313f47877d97b229454511095204e2e9b3525d313f8acb3887d8bf15e22bcfc",
+      "expiresAt": "2026-09-16T16:21:33Z",
+      "archiveDownloaded": true,
+      "localArchiveSha256Verified": false,
+      "extractedFile": "repository-metadata-service-report.jsonl",
+      "extractedFileBytes": 1001,
+      "extractedFileSha256": "e8dae7794e0c71205c94f610fb7a99a8c6a1c8caea2ae57cf0f8a787f9747f40",
+      "extractedContentValidated": true,
+      "artifactContentEquivalenceVerified": true
+    },
+    {
+      "id": 9856047486,
+      "name": "repository-metadata-atomic-submit-restart-PG15",
+      "archiveBytes": 1457,
+      "githubDigest": "sha256:29a45eeb5ee6adf844a35d246a2682bcb8efe1411559ea6bc7ca0dc5395bfa95",
+      "expiresAt": "2026-09-16T16:20:39Z",
+      "archiveDownloaded": true,
+      "localArchiveSha256Verified": false,
+      "extractedFile": "repository-metadata-atomic-submit-restart.jsonl",
+      "extractedFileBytes": 10094,
+      "extractedFileSha256": "da4128255328ecd573f8417a5825221b46dd76d1fb94a41904c432de95e681c3",
+      "extractedJsonLineCount": 14,
+      "extractedRestartCaseCount": 13,
+      "extractedContentValidated": true,
+      "artifactContentEquivalenceVerified": false
+    }
+  ],
+  "sourceBindings": [
+    {
+      "path": ".github/workflows/repository-metadata.yml",
+      "bytes": 11438,
+      "sha256": "ab7e29beac05339a3bca15356e6e2193c4caf1749fa0860adde406820fba09eb"
+    },
+    {
+      "path": "server/modules/repository-metadata/src/postgres.rs",
+      "bytes": 329854,
+      "sha256": "cc8445ff6bfa6aff7f39bdaaec4a9bf8d2c802fbf2208cb719cae8a62039fc41"
+    },
+    {
+      "path": "server/modules/repository-metadata/tests/content_manifest_transfer_postgres_live.rs",
+      "bytes": 56559,
+      "sha256": "1bcefc2fb74bbcf5d9ba87250238c7a5fe1ded4a22547d455c5636363913c539"
+    },
+    {
+      "path": "server/modules/repository-metadata/scripts/static-check.mjs",
+      "bytes": 82513,
+      "sha256": "6b14314584da5cf713a6328cd0f1b83d2845cf0f1ac45b152632114f72c83fbd"
+    }
+  ],
+  "result": {
+    "status": "passed",
+    "postgresImage": "postgres@sha256:5d1d70e254e3c5d7d76847a9deebb18478cd518df37abf6b278d4bdb1fe5d96c",
+    "postgresVersion": "150019",
+    "routeLessExplicitManifestComposition": "passed against a fresh PostgreSQL database",
+    "portableCompilationAndContracts": "passed on Windows, macOS, and Ubuntu",
+    "hardRestartCaseCount": 13,
+    "serviceReportSha256": "e8dae7794e0c71205c94f610fb7a99a8c6a1c8caea2ae57cf0f8a787f9747f40",
+    "serviceReportByteEqualityVerified": true
+  },
+  "evidenceBasis": [
+    "the public GitHub run, job, and artifact records were verified for the exact head revision, success conclusions, archive sizes, and GitHub-reported digests",
+    "authenticated gh run download extracted both artifacts on 2026-09-02; the service report is byte-identical to the retained deterministic report and every restart JSON line parses with passed status",
+    "the download CLI did not retain the ZIP bytes, so GitHub-reported archive digests were not independently rehashed"
+  ],
+  "nonClaims": [
+    "no public OGVCS-041 metadata, submit, or object-transfer route",
+    "no request-root issuance, expansion, or ratification",
+    "no production JavaScript-to-Rust identity-subject or authority mapper",
+    "no production S3 or MinIO composition",
+    "no OGVCS-006-AC-04 million-entry pagination execution",
+    "no exact 100000-object or 100-GiB campaign"
+  ],
+  "remainingGates": [
+    "production identity-to-lifecycle mapping writer and closure planner",
+    "production JavaScript-to-Rust identity-subject, tenant-scope, and authority mapper",
+    "public authenticated aggregate coordinator and transfer routes",
+    "request-root issuance, expansion, and ratification",
+    "production object-store and lifecycle composition",
+    "release-only exact-scale campaigns including OGVCS-006-AC-04"
+  ]
+}

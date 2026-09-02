@@ -4,6 +4,34 @@ This packet preserves bounded hosted evidence for the internal PostgreSQL
 metadata adapter. It is not completion evidence for OGVCS-006 and does not
 change the PRD's **In development** status.
 
+## Exact explicit-manifest composition revalidation
+
+- Source: [`0ac2c8253ff5d96b5ab49cfc13428f04fd430d25`](https://github.com/n3r/OpenGameVCS/commit/0ac2c8253ff5d96b5ab49cfc13428f04fd430d25)
+- Workflow: [run 33654046435](https://github.com/n3r/OpenGameVCS/actions/runs/33654046435), completed successfully on 2026-09-02
+- Machine record: [`github-actions-run-33654046435.json`](github-actions-run-33654046435.json)
+
+The exact integration source passed all four locked jobs: PostgreSQL 15 on
+Linux, its separate thirteen-boundary hard-restart proof, macOS, and Windows.
+The Linux job directly ran the route-less explicit content-manifest composition
+matrix against a fresh database after both default and legacy-profile Clippy.
+That matrix binds the OGVCS-041 control facts, exact explicit authority set and
+target, and the underlying proof or authorized-unknown observation without
+exporting a detachable validation brand or registering a public route.
+
+Authenticated acquisition extracted both hosted artifacts. The 1,001-byte
+service report has SHA-256
+`e8dae7794e0c71205c94f610fb7a99a8c6a1c8caea2ae57cf0f8a787f9747f40`
+and is byte-identical to the retained deterministic report. The 10,094-byte
+restart JSONL has SHA-256
+`da4128255328ecd573f8417a5825221b46dd76d1fb94a41904c432de95e681c3`;
+all fourteen lines parse and pass, including the thirteen-case summary. GitHub's
+archive digests are retained in the machine record, but the transient ZIP bytes
+were not retained for independent rehashing.
+
+This is bounded private composition evidence. It adds no public route,
+request-root authority, production subject mapper, object-store service, or
+exact-scale result. OGVCS-006 remains **In development**.
+
 ## Root-scoped publication-candidate acquisition hosted update
 
 - Source: [`2a56e3a7ee6c15cebf535c84b025a289abb079a9`](https://github.com/n3r/OpenGameVCS/commit/2a56e3a7ee6c15cebf535c84b025a289abb079a9)

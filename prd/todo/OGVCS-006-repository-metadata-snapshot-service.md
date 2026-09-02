@@ -126,7 +126,14 @@ Ship behind a developer-preview API version. Apply expand/migrate/contract schem
   archive digests were not independently rehashed. `exactScaleExecuted`
   remains `false`: this evidence does not execute the OGVCS-006-AC-04
   million-entry case, an exact 100,000-object candidate campaign, or any new
-  scale campaign.
+  scale campaign. Exact integration source
+  [`0ac2c82`](https://github.com/n3r/OpenGameVCS/commit/0ac2c8253ff5d96b5ab49cfc13428f04fd430d25)
+  subsequently passed all four jobs in hosted [run
+  33654046435](https://github.com/n3r/OpenGameVCS/actions/runs/33654046435),
+  including the route-less explicit content-manifest composition matrix and
+  thirteen-boundary hard-restart proof. The extracted report is byte-identical
+  to the retained deterministic report; current run and artifact bindings are
+  recorded in the OGVCS-006 evidence packet.
 - Security/reliability review: negotiation verification is explicitly not an
   OGVCS-009 authorization brand. The first sealed PostgreSQL dispatcher now
   accepts only negotiation-verified `repository.get-settings` and

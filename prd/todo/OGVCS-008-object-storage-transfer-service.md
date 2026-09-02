@@ -119,7 +119,16 @@ Start with filesystem development backend and one supported S3 profile. New back
   validated contract, workflow policy, and roadmap gates are recorded in the
   OGVCS-008 review. The offline 100-GiB logical-plan test proves 1,600
   descriptors in seven pages without allocating payload bytes. It is not the
-  exact-byte acceptance run.
+  exact-byte acceptance run. Exact integration source
+  [`0ac2c82`](https://github.com/n3r/OpenGameVCS/commit/0ac2c8253ff5d96b5ab49cfc13428f04fd430d25)
+  passed bounded object-transfer [run
+  33654187922](https://github.com/n3r/OpenGameVCS/actions/runs/33654187922)
+  on Linux, macOS, and Windows plus checksum-pinned loopback MinIO. The same
+  exact source passed the route-less PostgreSQL explicit-composition and
+  hard-restart jobs in metadata [run
+  33654046435](https://github.com/n3r/OpenGameVCS/actions/runs/33654046435).
+  Machine records are retained in the OGVCS-006/008 evidence packets; neither
+  run executed release scale.
 - Security/reliability review: hostile review covers adapter forgery,
   conditional-put races/response loss, acknowledgement-before-durability,
   corrupt metadata/body/range, pagination, redaction/deadlines, stale fences,

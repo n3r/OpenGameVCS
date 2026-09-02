@@ -1,0 +1,87 @@
+{
+  "schemaVersion": "ogvcs.object-transfer/hosted-evidence/v1",
+  "status": "exact-integration-bounded-candidate-passed",
+  "exactScaleExecuted": false,
+  "sourceRevision": "0ac2c8253ff5d96b5ab49cfc13428f04fd430d25",
+  "workflow": {
+    "name": "Object transfer bounded conformance",
+    "path": ".github/workflows/object-transfer.yml",
+    "dispatchBranch": "r1-foundation-integration",
+    "runId": 33654187922,
+    "runAttempt": 1,
+    "event": "workflow_dispatch",
+    "createdAt": "2026-09-02T16:19:20Z",
+    "completedAt": "2026-09-02T16:21:44Z",
+    "url": "https://github.com/n3r/OpenGameVCS/actions/runs/33654187922"
+  },
+  "toolchains": {
+    "node": "24"
+  },
+  "jobs": [
+    {
+      "id": 100328503161,
+      "name": "JavaScript bounded (Windows)",
+      "conclusion": "success",
+      "startedAt": "2026-09-02T16:19:26Z",
+      "completedAt": "2026-09-02T16:21:43Z"
+    },
+    {
+      "id": 100328503550,
+      "name": "JavaScript bounded (macOS)",
+      "conclusion": "success",
+      "startedAt": "2026-09-02T16:19:26Z",
+      "completedAt": "2026-09-02T16:20:13Z"
+    },
+    {
+      "id": 100328503606,
+      "name": "JavaScript bounded (Linux)",
+      "conclusion": "success",
+      "startedAt": "2026-09-02T16:19:25Z",
+      "completedAt": "2026-09-02T16:20:09Z"
+    },
+    {
+      "id": 100328503607,
+      "name": "Pinned MinIO shared backend conformance (Linux)",
+      "conclusion": "success",
+      "startedAt": "2026-09-02T16:19:25Z",
+      "completedAt": "2026-09-02T16:19:35Z"
+    }
+  ],
+  "sourceBindings": {
+    "coreObjectTransferTree": "3366b509f692cf25c80dd4ecd054d18f5a163203",
+    "coreChunkingManifestTree": "8ed3bdc7d77d02f5cbdf1f16632a8a65f3c129a0",
+    "specObjectTransferTree": "7e39472126f71503c1a6f4456b0ba2d73ba5586e",
+    "repositoryMetadataTree": "115158eb9d9dd577d7a6c6ef6b7300d21f0b9d86"
+  },
+  "contract": {
+    "version": "0.1.0-rc.6",
+    "manifestSha256": "6748334b4cbc9b155941d8382b6a67c348f0612432a9555cfa215f62681af1d3",
+    "artifactSetSha256": "8e96a6fc57aeabb9c3bd8a363b4bbb70b2bfc4832206b20c1581e92e463bec38",
+    "artifactCount": 40
+  },
+  "minio": {
+    "release": "RELEASE.2025-09-07T16-13-09Z",
+    "sha256": "7c5bd8512c6e966455b1d198209358b2d191c77a83ab377c4073281065fb855f",
+    "transport": "loopback HTTP inside the isolated hosted runner"
+  },
+  "result": {
+    "status": "passed",
+    "javascriptContractRuntimeAndPackedConsumer": "passed on Windows, macOS, and Ubuntu",
+    "sharedBackendConformance": "passed against checksum-pinned ephemeral MinIO on Ubuntu",
+    "roadmapBoundary": "passed on Ubuntu"
+  },
+  "evidenceBasis": [
+    "the public GitHub run and job records were verified for the exact integration head and four successful conclusions",
+    "the workflow fetched the pinned MinIO binary, verified its SHA-256, and used only a loopback endpoint with disposable conformance credentials"
+  ],
+  "remainingGates": [
+    "production JavaScript-to-Rust identity-subject, tenant-scope, epoch, and authority mapper",
+    "public OGVCS-041 object-transfer routes",
+    "request-root issuance, expansion, and ratification",
+    "production S3 or MinIO composition with authenticated repository lifecycle persistence",
+    "health, reachability, garbage-collection, and delete authority",
+    "authenticated OGVCS-010 publication consumption",
+    "release-only exact 100-GiB interrupted transfer and reconstruction campaign",
+    "hosted production deployment and rollout"
+  ]
+}
