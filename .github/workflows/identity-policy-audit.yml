@@ -9,6 +9,7 @@ on:
       - "server/migrations/identity-policy-audit/**"
       - "server/modules/identity-policy-audit/**"
       - "docs/changelog/OGVCS-009.md"
+      - "docs/evidence/OGVCS-009/**"
       - "docs/reviews/OGVCS-009-transaction-authorized-page-boundary-review.md"
       - "docs/runbooks/identity-policy-operations.md"
       - "package.json"
@@ -24,6 +25,7 @@ on:
       - "spec/protocols/v1/**"
       - "spec/repository-metadata/v1/**"
       - "tools/identity-policy-workflow-policy.test.mjs"
+      - "tools/retained-source-evidence.mjs"
   push:
     branches:
       - main
@@ -36,6 +38,7 @@ on:
       - "server/migrations/identity-policy-audit/**"
       - "server/modules/identity-policy-audit/**"
       - "docs/changelog/OGVCS-009.md"
+      - "docs/evidence/OGVCS-009/**"
       - "docs/reviews/OGVCS-009-transaction-authorized-page-boundary-review.md"
       - "docs/runbooks/identity-policy-operations.md"
       - "package.json"
@@ -51,6 +54,7 @@ on:
       - "spec/protocols/v1/**"
       - "spec/repository-metadata/v1/**"
       - "tools/identity-policy-workflow-policy.test.mjs"
+      - "tools/retained-source-evidence.mjs"
   workflow_dispatch:
 
 permissions:
@@ -71,6 +75,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
@@ -79,6 +85,8 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Validate the language-neutral candidate contract
         run: npm run test:identity:spec
+      - name: Fetch the retained authorized-page source revision
+        run: git fetch --no-tags --depth=1 origin ab05950d4c231538ea61965a8efa1ee04feda79f
       - name: Test runtime security and the offline packed consumer
         run: npm run test:identity
       - name: Validate roadmap lifecycle

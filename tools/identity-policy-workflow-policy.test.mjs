@@ -36,6 +36,15 @@ test('identity-policy workflow is pinned, three-host, Node 24, and bounded', asy
   assert.match(workflow, /--test aggregate_postgres_live -- --nocapture/u);
   assert.equal((workflow.match(/server\/modules\/identity-policy-audit\/scripts\/test-packed\.sh/gu) ?? []).length, 2);
   assert.match(workflow, /- "core\/paths-filesystem\/rust\/\*\*"/u);
+  assert.match(workflow, /- "docs\/evidence\/OGVCS-009\/\*\*"/u);
+  assert.match(workflow, /- "tools\/retained-source-evidence\.mjs"/u);
+  assert.equal((workflow.match(/git fetch\b/gu) ?? []).length, 1);
+  assert.match(
+    workflow,
+    /git fetch --no-tags --depth=1 origin ab05950d4c231538ea61965a8efa1ee04feda79f/u,
+  );
+  assert.doesNotMatch(workflow, /fetch-depth:\s*0/u);
+  assert.match(workflow, /persist-credentials:\s*false/u);
   assert.doesNotMatch(workflow, /(?:test:scale|exact[-_: ]scale|100\s*(?:GiB|GB)|1\s*TiB|1,?000,?000)/iu);
   assert.doesNotMatch(workflow, /^\s*schedule:/mu);
   assert.match(rootPackage.scripts['test:identity'], /identity-policy-workflow-policy\.test\.mjs/u);
