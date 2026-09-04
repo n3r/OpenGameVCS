@@ -110,6 +110,16 @@ Enable only the dummy conformance tool, then one importer parser profile. Consum
   resource discovery and inspection, closed hashed quarantine evidence, and
   restart ordering that refuses local job denial until daemon absence is
   proved. It deliberately performs no orphan deletion.
+- Source-only conformance boundary: local revision
+  `123bddf53e4ff647eba872ea96bb3cf7568509a5`, based on
+  `4b25ff447b81d0d8d7728b1b782a5c83852b2535`, adds exact checked-out source
+  binding, private importer/converter models, a closed Linux v2 schema, and 13
+  test-only hard-kill hooks. Its [non-hosted model
+  packet](../../docs/evidence/OGVCS-045/source-only-v2/README.md) and
+  [boundary review](../../docs/reviews/OGVCS-045-conformance-closure-boundary-review.md)
+  make no live-Docker, complete controller-observation, exact OCI binary,
+  Linux restart-execution, hosted retention, public admission, cleanup, or
+  rollout claim. The historical v1 upload remains unchanged.
 - Test and benchmark results: exact-source [hosted run
   33636956770](../../docs/evidence/OGVCS-045/github-actions-run-33636956770.json)
   passed the private Linux Docker/cgroup/seccomp lane and portable Node 24
@@ -128,6 +138,11 @@ Enable only the dummy conformance tool, then one importer parser profile. Consum
   cases with seven Linux-only cases skipped, and four retained/workflow policy
   cases. That local run covers restart detection and quarantine models but is
   neither retained Linux Docker evidence nor hosted settlement proof.
+  For the source-only tranche, macOS/Node 24.9.0 additionally observed all 13
+  test children self-`SIGKILL` before the parent watchdog with the expected
+  durable pre-restart state. The Linux-only restart-disposition test was
+  skipped, no hosted job was dispatched, and the committed kill document is
+  explicitly a non-executed model.
 - Security/reliability review: the retained
   [evidence packet](../../docs/evidence/OGVCS-045/README.md) is explicitly
   non-completion evidence. The narrow

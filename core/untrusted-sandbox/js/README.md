@@ -94,6 +94,26 @@ quarantine and prevent the service from accepting work.
 
 ## Evidence and nonclaims
 
+The source-only conformance tranche adds a canonical revision/source-set
+snapshot, a private two-case importer/converter runner, and exact test-only
+hard-kill hooks at 13 durable service boundaries. Portable reports are declared
+target models: they require Node 24 and two `VALIDATED` results with no broker
+credential or publication capability, but they do not claim host isolation.
+The hard-kill child can run on POSIX hosts; restart-disposition conformance is
+Linux-only because stale service-lease recovery depends on authenticated boot
+ID, PID, and `/proc` start ticks. macOS therefore proves only child self-kill and
+durable pre-restart state, while Windows skips POSIX `SIGKILL` cases.
+
+The Linux v2 report schema accepts only allowlisted control facts and always
+records `runtimeBinaryBinding` as `unproven`; a relative daemon runtime name is
+not an exact OCI binary identity. The committed v2 document is a synthetic,
+non-hosted schema fixture because the historical run has no retained exact runc
+version/commit or complete controller observation. Likewise, the committed kill
+document is an explicitly non-executed disposition model. Genuine three-OS,
+live-Docker v2, and Linux restart reports still require a future authorized run
+and retention decision. The historical v1 script and sole upload payload are
+unchanged.
+
 The Ubuntu hosted lane deterministically archives only the pinned trusted output
 shim and volume anchor and imports that exact two-file rootfs as a one-layer
 Linux/amd64 image with an empty image-authored environment and the exact runtime

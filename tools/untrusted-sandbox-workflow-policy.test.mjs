@@ -35,10 +35,17 @@ test('untrusted sandbox workflow pins portable protocol and live Linux isolation
   ]) assert.equal(workflow.split(protectedPath).length - 1, 2, `${protectedPath} must trigger pull-request and push gates`);
   assert.match(workflow, /Exercise source-bound private portable evidence locally[\s\S]+--output "\$\{\{ runner\.temp \}\}\/untrusted-sandbox-portable-\$\{\{ runner\.os \}\}\.json"[\s\S]+--source-revision "\$\{\{ github\.sha \}\}"/u);
   assert.match(workflow, /Exercise test-only hard-kill boundaries locally[\s\S]+--output "\$\{\{ runner\.temp \}\}\/untrusted-sandbox-kill-boundaries\.json"[\s\S]+--source-revision "\$\{\{ github\.sha \}\}"/u);
-  assert.equal(workflow.match(/actions\/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a/gu)?.length, 1);
   const retainedUpload = workflow.slice(workflow.indexOf('      - name: Retain Linux reference evidence'));
-  assert.match(retainedUpload, /path: artifacts\/untrusted-sandbox-linux-reference\.json/u);
-  assert.doesNotMatch(retainedUpload, /portable|kill-boundar|source-revision|sourceFiles|sourceSetSha256/iu);
+  assert.equal(retainedUpload, `      - name: Retain Linux reference evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: untrusted-sandbox-linux-reference-\${{ github.run_attempt }}
+          path: artifacts/untrusted-sandbox-linux-reference.json
+          if-no-files-found: error
+          retention-days: 14
+`);
+  assert.doesNotMatch(retainedUpload, /portable|kill-boundar|source-revision|sourceRevision|sourceFiles|sourceSetSha256|runtimeBinaryBinding|controlFacts|report-v2|\/v2\b/iu);
   assert.doesNotMatch(workflow, /OGVCS_SANDBOX_SOURCE_REVISION/u);
   assert.match(workflow, /cc -static -O2 -std=c17 -Wall -Wextra -Werror core\/untrusted-sandbox\/js\/linux\/output_shim\.c/u);
   assert.match(workflow, /cc -static -O2 -std=c17 -Wall -Wextra -Werror core\/untrusted-sandbox\/js\/linux\/volume_anchor\.c/u);

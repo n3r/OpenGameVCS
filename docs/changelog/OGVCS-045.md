@@ -31,3 +31,20 @@ preventing accessor execution and raw launcher errors from crossing the result
 boundary. Packed contract checks are self-contained, predecessor verification
 is an explicit source gate, and independent semantic validation now rejects
 reauthenticated required-field or constraint drift.
+
+The source-only conformance tranche at
+`123bddf53e4ff647eba872ea96bb3cf7568509a5` adds exact checked-out-revision and
+bounded source-set binding, a repo-private importer/converter model, a hardened
+three-target comparator, a closed Linux report-v2 builder, and 13 one-shot
+test-only child hard-kill hooks. All 13 children self-`SIGKILL` before the parent
+watchdog on the local macOS/Node 24 gate. Restart disposition remains Linux-only;
+the committed kill document is a non-executed model, and the committed Linux v2
+document is a synthetic schema fixture with `runtimeBinaryBinding: "unproven"`.
+
+No new artifact is uploaded. Workflow policy pins the sole historical v1 upload
+step byte-for-byte and rejects a second upload or v2/kill/source metadata in its
+payload. Genuine retained Linux/macOS/Windows reports, a live-Docker v2 report,
+and a Linux restart report remain unexecuted pending explicit disclosure
+authorization. This tranche adds no public runner, production broker, automatic
+daemon cleanup, exact OCI runtime-binary claim, or acceptance completion.
+OGVCS-045 remains Todo and AC-01 through AC-05 remain open.

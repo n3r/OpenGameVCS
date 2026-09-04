@@ -1,15 +1,30 @@
 import assert from 'node:assert/strict';
-import { readFile, stat } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { readFile, readdir, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import { promisify } from 'node:util';
 import test from 'node:test';
 
 import {
   SANDBOX_CONFORMANCE_SOURCE_PATHS,
+  comparePortableConformanceReports,
   snapshotSourceEvidence,
 } from '../core/untrusted-sandbox/js/src/internal/conformance-evidence.mjs';
-import { sha256 } from '../core/untrusted-sandbox/js/src/internal/reference-contract.mjs';
+import { canonicalJson, sha256 } from '../core/untrusted-sandbox/js/src/internal/reference-contract.mjs';
+import { REFERENCE_SERVICE_HARD_KILL_BOUNDARIES } from '../core/untrusted-sandbox/js/src/internal/reference-service.mjs';
 
 const root = resolve(import.meta.dirname, '..');
+const modelRoot = join(root, 'docs/evidence/OGVCS-045/source-only-v2');
+const execFileAsync = promisify(execFile);
+const retainedSourceRevision = '123bddf53e4ff647eba872ea96bb3cf7568509a5';
+const retainedSourceSetSha256 = '1da7498056c57498052e5130d06bb7b99b60a3c0800bca79062af2b778f2ea0b';
+
+const readCanonical = async (path) => {
+  const bytes = await readFile(path);
+  const value = JSON.parse(bytes.toString('utf8'));
+  assert.equal(bytes.toString('utf8'), `${canonicalJson(value)}\n`, path);
+  return value;
+};
 
 test('source-only conformance inventory is frozen, sorted, unique, present, and bounded', async () => {
   assert.equal(Object.isFrozen(SANDBOX_CONFORMANCE_SOURCE_PATHS), true);
@@ -38,4 +53,126 @@ test('source-only generators have no upload, dispatch, or public-admission chann
     const source = await readFile(join(root, path), 'utf8');
     assert.doesNotMatch(source, /actions\/upload-artifact|workflow_dispatch|repository_dispatch|\bfetch\s*\(|https?:\/\//u, path);
   }
+});
+
+test('committed portable target models are exact, equal, source-bound, and explicitly not hosted', async () => {
+  const expectedFiles = [
+    'kill-boundary-source-model.json',
+    'linux-v2-source-only-schema-fixture.json',
+    'portable-linux-source-model.json',
+    'portable-macos-source-model.json',
+    'portable-source-model-comparison.json',
+    'portable-windows-source-model.json',
+  ];
+  assert.deepEqual((await readdir(modelRoot)).filter((name) => name.endsWith('.json')).sort(), expectedFiles);
+  const reports = await Promise.all(['linux', 'macos', 'windows'].map((platform) => readCanonical(join(modelRoot, `portable-${platform}-source-model.json`))));
+  const comparison = comparePortableConformanceReports(reports);
+  assert.deepEqual(await readCanonical(join(modelRoot, 'portable-source-model-comparison.json')), comparison);
+  assert.equal(reports.every((report) => report.evidenceKind === 'source-only-model'
+    && report.retentionStatus === 'not-hosted'
+    && report.platformBinding === 'declared-target-only'
+    && report.claimBoundary.hostIsolation === false
+    && report.claimBoundary.productionBroker === false
+    && report.claimBoundary.publicAdmission === false
+    && report.claimBoundary.repositoryPublication === false), true);
+  assert.equal(comparison.sourceRevision, retainedSourceRevision);
+  assert.equal(comparison.sourceSetSha256, retainedSourceSetSha256);
+  assert.deepEqual(reports[0].sourceFiles.map(({ path }) => path), SANDBOX_CONFORMANCE_SOURCE_PATHS);
+  for (const file of reports[0].sourceFiles) {
+    const { stdout } = await execFileAsync('git', ['show', `${comparison.sourceRevision}:${file.path}`], {
+      cwd: root,
+      encoding: null,
+      maxBuffer: 16 * 1024 * 1024,
+      windowsHide: true,
+    });
+    const bytes = Buffer.from(stdout);
+    assert.equal(file.bytes, bytes.length, file.path);
+    assert.equal(file.sha256, sha256(bytes), file.path);
+  }
+});
+
+test('Linux v2 fixture preserves historical v1 cases and digests without inventing live runtime observations', async () => {
+  const fixture = await readCanonical(join(modelRoot, 'linux-v2-source-only-schema-fixture.json'));
+  assert.deepEqual(Object.keys(fixture).sort(), ['claimBoundary', 'evidenceKind', 'historicalV1', 'report', 'schemaVersion']);
+  assert.equal(fixture.schemaVersion, 'ogvcs.untrusted-sandbox/linux-conformance-v2-schema-fixture/v1');
+  assert.equal(fixture.evidenceKind, 'synthetic-source-only-schema-fixture');
+  assert.deepEqual(fixture.claimBoundary, {
+    completeControllerObservation: false,
+    dockerExecution: false,
+    hostedRetention: false,
+    liveRuntimeObservation: false,
+    publicAdmission: false,
+  });
+  const historicalPath = join(root, fixture.historicalV1.path);
+  const historicalBytes = await readFile(historicalPath);
+  const historical = JSON.parse(historicalBytes.toString('utf8'));
+  assert.equal(fixture.historicalV1.sha256, sha256(historicalBytes));
+  assert.equal(fixture.report.schemaVersion, 'ogvcs.untrusted-sandbox/linux-conformance-report/v2');
+  assert.deepEqual(fixture.report.cases, historical.cases);
+  assert.equal(fixture.report.failure, historical.failure);
+  assert.equal(fixture.report.outcome, historical.outcome);
+  assert.equal(fixture.report.runtimeDigest, historical.runtimeDigest);
+  assert.equal(fixture.report.seccompProfileSha256, historical.seccompProfileSha256);
+  assert.deepEqual(fixture.report.controls, {
+    architecture: 'amd64',
+    availableControllers: ['cpu', 'memory', 'pids'],
+    cgroupNamespace: true,
+    cgroupVersion: 2,
+    operatingSystem: 'linux',
+    rootless: false,
+    runtimeBinaryBinding: 'unproven',
+    runtimeCommit: 'unobserved',
+    runtimeName: 'runc',
+    runtimePathKind: 'relative-name',
+    runtimeVersion: 'unobserved',
+    seccomp: true,
+  });
+  const source = snapshotSourceEvidence({ sourceFiles: fixture.report.sourceFiles, sourceRevision: fixture.report.sourceRevision });
+  assert.equal(fixture.report.sourceSetSha256, source.sourceSetSha256);
+  assert.equal(fixture.report.sourceRevision, retainedSourceRevision);
+  assert.equal(fixture.report.sourceSetSha256, retainedSourceSetSha256);
+});
+
+test('kill-boundary model is exact, non-executed, quarantine-only for represented resources, and claims zero cleanup', async () => {
+  const model = await readCanonical(join(modelRoot, 'kill-boundary-source-model.json'));
+  assert.deepEqual(Object.keys(model).sort(), ['cases', 'claimBoundary', 'evidenceKind', 'outcome', 'retentionStatus', 'schemaVersion', 'sourceFiles', 'sourceRevision', 'sourceSetSha256']);
+  assert.equal(model.schemaVersion, 'ogvcs.untrusted-sandbox/kill-boundary-conformance-model/v1');
+  assert.equal(model.evidenceKind, 'non-executed-source-model');
+  assert.equal(model.outcome, 'not-executed');
+  assert.equal(model.retentionStatus, 'not-hosted');
+  assert.deepEqual(model.claimBoundary, { childExecution: false, dockerExecution: false, hostedRetention: false, publicAdmission: false });
+  assert.deepEqual(model.cases.map(({ boundary }) => boundary), REFERENCE_SERVICE_HARD_KILL_BOUNDARIES);
+  const quarantined = new Set(['after-worker', 'after-validating-state']);
+  const committed = new Set(['after-output-commit', 'after-result-commit']);
+  for (const entry of model.cases) {
+    assert.deepEqual(Object.keys(entry).sort(), ['automaticDaemonCleanup', 'boundary', 'destructiveCalls', 'expectedDisposition', 'expectedOutputBeforeRestart', 'representedResource']);
+    assert.equal(entry.automaticDaemonCleanup, false);
+    assert.equal(entry.destructiveCalls, 0);
+    assert.equal(entry.representedResource, quarantined.has(entry.boundary));
+    assert.equal(entry.expectedOutputBeforeRestart, committed.has(entry.boundary));
+    assert.equal(entry.expectedDisposition, quarantined.has(entry.boundary)
+      ? 'quarantined-nonterminal'
+      : entry.boundary === 'after-result-commit' ? 'replayed-validated' : 'recovered-denied');
+  }
+  const source = snapshotSourceEvidence({ sourceFiles: model.sourceFiles, sourceRevision: model.sourceRevision });
+  assert.equal(model.sourceSetSha256, source.sourceSetSha256);
+  assert.equal(model.sourceRevision, retainedSourceRevision);
+  assert.equal(model.sourceSetSha256, retainedSourceSetSha256);
+});
+
+test('documentation keeps Linux restart, hosted retention, runtime identity, and every acceptance criterion open', async () => {
+  const [modelReadme, review, prd] = await Promise.all([
+    readFile(join(modelRoot, 'README.md'), 'utf8'),
+    readFile(join(root, 'docs/reviews/OGVCS-045-conformance-closure-boundary-review.md'), 'utf8'),
+    readFile(join(root, 'prd/todo/OGVCS-045-untrusted-parser-sandbox-credential-broker.md'), 'utf8'),
+  ]);
+  assert.match(modelReadme, /not a new hosted run, live-Docker evidence/u);
+  assert.match(modelReadme, /runtimeBinaryBinding: "unproven"/u);
+  assert.match(modelReadme, /Uploading or retaining those new reports remains unexecuted pending/u);
+  assert.match(review, /Restart execution is Linux-only/u);
+  assert.match(review, /no\s+such run was dispatched or retained/u);
+  assert.match(review, /OGVCS-045 stays Todo and AC-01 through AC-05 remain open/u);
+  assert.match(prd, /^\*\*Status:\*\* Todo\s*$/mu);
+  for (let index = 1; index <= 5; index += 1) assert.match(prd, new RegExp(`OGVCS-045-AC-0${index}:`, 'u'));
+  assert.match(prd, /The Linux-only restart-disposition test was\s+skipped/u);
 });

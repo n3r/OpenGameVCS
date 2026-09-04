@@ -30,6 +30,24 @@ it contains 3,621 bytes and no failure payload. The portable lanes also execute
 the restart-detection and closed-diagnostic regressions; the workflow does not
 perform authenticated orphan settlement.
 
+## Non-hosted source-only v2 models
+
+The [`source-only-v2`](source-only-v2/README.md) directory records deterministic
+models bound to source revision
+`123bddf53e4ff647eba872ea96bb3cf7568509a5` and source-set SHA-256
+`1da7498056c57498052e5130d06bb7b99b60a3c0800bca79062af2b778f2ea0b`.
+It contains declared-target Linux/macOS/Windows portable reports and their
+comparison, a Linux v2 schema fixture that preserves the existing v1 cases and
+digests, and a non-executed 13-boundary restart-disposition model.
+
+These files were not produced by a new hosted run. They explicitly deny host
+isolation, live Docker, exact runtime observation, child execution where
+applicable, public admission, publication authority, and hosted retention. The
+Linux fixture uses synthetic `unobserved` runtime facts and records
+`runtimeBinaryBinding: "unproven"`; the historical run's exact runc
+version/commit and complete controller set are unknown. The existing v1 reports
+above remain unchanged.
+
 ## Deliberately unclaimed
 
 The exported constructor remains candidate-named and is not a production or
