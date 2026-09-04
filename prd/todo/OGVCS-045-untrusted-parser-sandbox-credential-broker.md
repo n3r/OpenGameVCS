@@ -111,8 +111,8 @@ Enable only the dummy conformance tool, then one importer parser profile. Consum
   restart ordering that refuses local job denial until daemon absence is
   proved. It deliberately performs no orphan deletion.
 - Source-only conformance boundary: local revision
-  `f857d91164730c79dd9c32273050d9f3ec7a6f94`, replayed onto integration
-  `e32f0e26eef7a168994d31d9b89c434b11501a99` from the original
+  `22a6b801b6d32283dca8a6f8ca57a4d91a91296f`, based on integration
+  `a04213062cc81ad2ac40f00303cea5f2549eb18f` after replay from the original
   `4b25ff447b81d0d8d7728b1b782a5c83852b2535` base, adds exact checked-out
   source binding, private importer/converter models, a closed Linux v2 schema,
   and 13 test-only hard-kill hooks. Its [non-hosted model

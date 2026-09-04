@@ -34,8 +34,8 @@ perform authenticated orphan settlement.
 
 The [`source-only-v2`](source-only-v2/README.md) directory records deterministic
 models bound to source revision
-`f857d91164730c79dd9c32273050d9f3ec7a6f94` and source-set SHA-256
-`8b7da806652596f3fc17c8eb711cf155cce5fc3c1376db975b0582ae431f3548`.
+`22a6b801b6d32283dca8a6f8ca57a4d91a91296f` and source-set SHA-256
+`2baa1c704468812d689783e95e0d07113c761b11cc42a9a0ecff493d49df0c98`.
 It contains declared-target Linux/macOS/Windows portable reports and their
 comparison, a Linux v2 schema fixture that preserves the existing v1 cases and
 digests, and a non-executed 13-boundary restart-disposition model.

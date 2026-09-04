@@ -5,9 +5,9 @@ every live-v2, retained kill-matrix, public-admission, cleanup, production, and
 acceptance-criterion claim.
 
 **Reviewed source:**
-`f857d91164730c79dd9c32273050d9f3ec7a6f94`, on integration revision
-`e32f0e26eef7a168994d31d9b89c434b11501a99` after the four exact original
-source-only patches were replayed from base
+`22a6b801b6d32283dca8a6f8ca57a4d91a91296f`, on integration revision
+`a04213062cc81ad2ac40f00303cea5f2549eb18f` after the four exact original
+source-only patches and source-trust hardening were replayed from base
 `4b25ff447b81d0d8d7728b1b782a5c83852b2535`.
 
 ## Accepted source boundary
@@ -28,6 +28,13 @@ bytes. The three-platform comparator snapshots every closed record and array,
 requires Node 24 and exactly importer/converter, and rejects forged empty or
 merely self-consistent reports against source evidence read independently from
 the exact checked-out revision.
+
+The first hosted source check exposed one test-only portability defect: a
+local clone inherited the workflow's shallow boundary, so `HEAD^` did not
+exist. The reviewed source tests an exact alternate 40-hex revision without
+assuming parent history. This preserves the same HEAD-mismatch assertion on
+shallow and full clones; the source-only models were regenerated against that
+exact fix.
 
 The Linux v2 builder closes operating system, architecture, cgroup v2,
 complete recognized controller inventory, seccomp, cgroup namespace,

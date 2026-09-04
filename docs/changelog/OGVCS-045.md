@@ -41,6 +41,13 @@ watchdog on the local macOS/Node 24 gate. Restart disposition remains Linux-only
 the committed kill document is a non-executed model, and the committed Linux v2
 document is a synthetic schema fixture with `runtimeBinaryBinding: "unproven"`.
 
+Hosted run 33930476335 then exposed a test-only shallow-checkout assumption:
+the source-binding regression tried to resolve `HEAD^` from a one-commit local
+clone. Revision `22a6b801b6d32283dca8a6f8ca57a4d91a91296f` preserves the exact
+HEAD-mismatch assertion with a distinct 40-hex revision that needs no parent
+history. The non-hosted source models were regenerated for that exact source;
+no runtime behavior, upload channel, or claim boundary changed.
+
 No new artifact is uploaded. Workflow policy pins the sole historical v1 upload
 step byte-for-byte and rejects a second upload or v2/kill/source metadata in its
 payload. Genuine retained Linux/macOS/Windows reports, a live-Docker v2 report,
