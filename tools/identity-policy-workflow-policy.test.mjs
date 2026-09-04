@@ -2,12 +2,16 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
+import { verifyRetainedSourceFiles } from './retained-source-evidence.mjs';
+
+const root = new URL('../', import.meta.url);
 const workflowUrl = new URL('../.github/workflows/identity-policy-audit.yml', import.meta.url);
 const packageUrl = new URL('../package.json', import.meta.url);
 const modelUrl = new URL('../server/modules/identity-policy-audit/src/model.rs', import.meta.url);
 const participantUrl = new URL('../server/modules/identity-policy-audit/src/participant.rs', import.meta.url);
 const metadataUrl = new URL('../server/modules/repository-metadata/src/postgres.rs', import.meta.url);
 const pageReviewUrl = new URL('../docs/reviews/OGVCS-009-transaction-authorized-page-boundary-review.md', import.meta.url);
+const pageEvidenceUrl = new URL('../docs/evidence/OGVCS-009/hosted-source-run-33672888522.json', import.meta.url);
 
 test('identity-policy workflow is pinned, three-host, Node 24, and bounded', async () => {
   const [workflow, rootPackage] = await Promise.all([
@@ -81,4 +85,76 @@ test('transaction-authorized page source is bounded, opaque, fully scanned, and 
     'witness retains the mutable transaction borrow',
     'item references reborrow',
   ]) assert.ok(review.includes(boundary), `authorized-page review missing boundary: ${boundary}`);
+});
+
+test('transaction-authorized page hosted evidence is exact and makes no product claim', async () => {
+  const evidence = JSON.parse(await readFile(pageEvidenceUrl, 'utf8'));
+  const revision = 'ab05950d4c231538ea61965a8efa1ee04feda79f';
+
+  assert.deepEqual(Object.keys(evidence), [
+    'schemaVersion',
+    'run',
+    'evidenceCollection',
+    'jobs',
+    'successfulGates',
+    'sourceFiles',
+    'claimBoundary',
+  ]);
+  assert.equal(evidence.schemaVersion, 'ogvcs.identity-policy/hosted-source-run/v1');
+  assert.deepEqual(evidence.run, {
+    id: 33672888522,
+    attempt: 1,
+    event: 'push',
+    branch: 'r1-foundation-integration',
+    headSha: revision,
+    treeSha: '7e4e3e3fb78377393013f4771b79183af366865d',
+    status: 'completed',
+    conclusion: 'success',
+    createdAt: '2026-09-02T19:22:15Z',
+    completedAt: '2026-09-02T19:24:55Z',
+    url: 'https://github.com/n3r/OpenGameVCS/actions/runs/33672888522',
+  });
+  assert.equal(evidence.jobs.length, 6);
+  assert.ok(evidence.jobs.every(({ conclusion }) => conclusion === 'success'));
+  assert.deepEqual(
+    new Set(evidence.jobs.map(({ runnerLabel }) => runnerLabel)),
+    new Set(['ubuntu-latest', 'macos-latest', 'windows-latest']),
+  );
+  assert.deepEqual(evidence.claimBoundary, {
+    transactionAuthorizedPageSourceOnly: true,
+    metadataDispatcherWired: false,
+    postgresLivePageExecuted: false,
+    publicRoute: false,
+    timingOrNondisclosureAcceptance: false,
+    acceptanceCriterion: false,
+    releaseEvidence: false,
+  });
+  await verifyRetainedSourceFiles({
+    root,
+    evidence,
+    revision,
+    paths: [
+      '.github/workflows/identity-policy-audit.yml',
+      'package.json',
+      'server/modules/identity-policy-audit/Cargo.lock',
+      'server/modules/identity-policy-audit/Cargo.toml',
+      'server/modules/identity-policy-audit/README.md',
+      'server/modules/identity-policy-audit/scripts/test-packed.sh',
+      'server/modules/identity-policy-audit/src/aggregate.rs',
+      'server/modules/identity-policy-audit/src/canonical.rs',
+      'server/modules/identity-policy-audit/src/error.rs',
+      'server/modules/identity-policy-audit/src/lib.rs',
+      'server/modules/identity-policy-audit/src/migration.rs',
+      'server/modules/identity-policy-audit/src/migration_runner.rs',
+      'server/modules/identity-policy-audit/src/model.rs',
+      'server/modules/identity-policy-audit/src/participant.rs',
+      'server/modules/identity-policy-audit/src/policy.rs',
+      'server/modules/identity-policy-audit/tests/aggregate_postgres_live.rs',
+      'server/modules/identity-policy-audit/tests/authorized_page_contract.rs',
+      'server/modules/identity-policy-audit/tests/migration_contract.rs',
+      'server/modules/identity-policy-audit/tests/postgres_live.rs',
+      'tools/identity-policy-workflow-policy.test.mjs',
+      'docs/reviews/OGVCS-009-transaction-authorized-page-boundary-review.md',
+    ],
+  });
 });

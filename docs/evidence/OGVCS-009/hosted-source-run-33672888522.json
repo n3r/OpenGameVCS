@@ -1,0 +1,115 @@
+{
+  "schemaVersion": "ogvcs.identity-policy/hosted-source-run/v1",
+  "run": {
+    "id": 33672888522,
+    "attempt": 1,
+    "event": "push",
+    "branch": "r1-foundation-integration",
+    "headSha": "ab05950d4c231538ea61965a8efa1ee04feda79f",
+    "treeSha": "7e4e3e3fb78377393013f4771b79183af366865d",
+    "status": "completed",
+    "conclusion": "success",
+    "createdAt": "2026-09-02T19:22:15Z",
+    "completedAt": "2026-09-02T19:24:55Z",
+    "url": "https://github.com/n3r/OpenGameVCS/actions/runs/33672888522"
+  },
+  "evidenceCollection": {
+    "runSource": "public GitHub Actions REST API",
+    "jobSource": "public GitHub Actions REST API",
+    "retrievedOn": "2026-09-05",
+    "publicSummaryStatus": "Success",
+    "publicSummaryDuration": "2m 40s",
+    "publicSummaryArtifacts": 0
+  },
+  "jobs": [
+    {
+      "id": 100390531089,
+      "name": "Bounded conformance (macos-latest)",
+      "runnerLabel": "macos-latest",
+      "conclusion": "success",
+      "startedAt": "2026-09-02T19:22:20Z",
+      "completedAt": "2026-09-02T19:22:44Z"
+    },
+    {
+      "id": 100390531330,
+      "name": "Rust 1.82 bounded checks (windows-latest)",
+      "runnerLabel": "windows-latest",
+      "conclusion": "success",
+      "startedAt": "2026-09-02T19:22:19Z",
+      "completedAt": "2026-09-02T19:24:54Z"
+    },
+    {
+      "id": 100390531376,
+      "name": "Rust 1.82 and guarded PostgreSQL 15 participant",
+      "runnerLabel": "ubuntu-latest",
+      "conclusion": "success",
+      "startedAt": "2026-09-02T19:22:19Z",
+      "completedAt": "2026-09-02T19:24:24Z"
+    },
+    {
+      "id": 100390531496,
+      "name": "Bounded conformance (ubuntu-latest)",
+      "runnerLabel": "ubuntu-latest",
+      "conclusion": "success",
+      "startedAt": "2026-09-02T19:22:19Z",
+      "completedAt": "2026-09-02T19:22:40Z"
+    },
+    {
+      "id": 100390531651,
+      "name": "Rust 1.82 bounded checks (macos-latest)",
+      "runnerLabel": "macos-latest",
+      "conclusion": "success",
+      "startedAt": "2026-09-02T19:22:26Z",
+      "completedAt": "2026-09-02T19:24:21Z"
+    },
+    {
+      "id": 100390531664,
+      "name": "Bounded conformance (windows-latest)",
+      "runnerLabel": "windows-latest",
+      "conclusion": "success",
+      "startedAt": "2026-09-02T19:22:19Z",
+      "completedAt": "2026-09-02T19:23:11Z"
+    }
+  ],
+  "successfulGates": [
+    "Node 24 neutral-contract validation on Linux, macOS, and Windows",
+    "Node 24 runtime security and offline package tests on Linux, macOS, and Windows",
+    "Rust 1.82 format, debug tests, and warnings-denied Clippy on macOS and Windows",
+    "freshly extracted Rust package tests and compile-fail doctests on macOS and Windows",
+    "Rust 1.82 format, debug tests, warnings-denied Clippy, and packed tests on Linux",
+    "guarded PostgreSQL 15 migration, participant, and aggregate tests on Linux",
+    "roadmap lifecycle validation on Linux"
+  ],
+  "sourceFiles": [
+    { "path": ".github/workflows/identity-policy-audit.yml", "bytes": 7717, "sha256": "b5ae18c52a9ae2464923564d85702ea09795e73898e503031ff0b65594d634ec" },
+    { "path": "package.json", "bytes": 11491, "sha256": "a05c9d309a03922b6d671e1e0dffe1f5f4e29832313194a23afeed1a1d0ea805" },
+    { "path": "server/modules/identity-policy-audit/Cargo.lock", "bytes": 24295, "sha256": "19c0008e7dd4ccb05e80a5b73e8eb328c2a6a905c5feb43565d604cb6f2853cc" },
+    { "path": "server/modules/identity-policy-audit/Cargo.toml", "bytes": 569, "sha256": "ca1bf383dc713669348e96c71f59c75a09a96b35eb5fe00a3fc09446a5b9aa33" },
+    { "path": "server/modules/identity-policy-audit/README.md", "bytes": 9906, "sha256": "e21e720a2a3e0c1a4052b9ebacad009d7a62acbe977ef0dac400eb9c0bb46b42" },
+    { "path": "server/modules/identity-policy-audit/scripts/test-packed.sh", "bytes": 2335, "sha256": "7a84c01f0881285186f0b4c67c91dc610d0941b47caabed54eb94c5647cf03a8" },
+    { "path": "server/modules/identity-policy-audit/src/aggregate.rs", "bytes": 147652, "sha256": "31aad14ed7b0631e4c2a0e475174d8fa31e372a2b1a9ba64262c4cc08e1c93c5" },
+    { "path": "server/modules/identity-policy-audit/src/canonical.rs", "bytes": 6705, "sha256": "37167c6c9b5cbc68034980a1238f5adf59d463255a57cdc1dab77f59e9be319a" },
+    { "path": "server/modules/identity-policy-audit/src/error.rs", "bytes": 977, "sha256": "e653fd96332a56c2788199a1e0d44647e6f0c46ef6ce2cd3a778427462c3c068" },
+    { "path": "server/modules/identity-policy-audit/src/lib.rs", "bytes": 3012, "sha256": "9064b1fefed98f92a614ed00199fe61512ef34c2e1bb64f3bf497476520b93ba" },
+    { "path": "server/modules/identity-policy-audit/src/migration.rs", "bytes": 4626, "sha256": "6017d0d52a97c2c935031f417216a389d37d47c2cc9636288a51be9f5f370ca9" },
+    { "path": "server/modules/identity-policy-audit/src/migration_runner.rs", "bytes": 10119, "sha256": "1b01e9679743772046954aa5f12e3657a791cf1ec9013edb9cd0525636a92575" },
+    { "path": "server/modules/identity-policy-audit/src/model.rs", "bytes": 27483, "sha256": "1980bd06fb77f64b995ceecea631402f5b9e7af3a9de498e4fafd904e78b81ed" },
+    { "path": "server/modules/identity-policy-audit/src/participant.rs", "bytes": 78311, "sha256": "9270854a4d24a93cd339b3ffe3dcc98dfa3e00b09d3417443bcfd2ceec7e62c4" },
+    { "path": "server/modules/identity-policy-audit/src/policy.rs", "bytes": 19561, "sha256": "47650e39cb4056c7b18efb12ef2ae8fcbea32eaed471af208c1ec24645050749" },
+    { "path": "server/modules/identity-policy-audit/tests/aggregate_postgres_live.rs", "bytes": 34767, "sha256": "6a1c9828b9562120723c67de261994b8d8b1b0cb02a28e31f41c88ee3887ac33" },
+    { "path": "server/modules/identity-policy-audit/tests/authorized_page_contract.rs", "bytes": 2701, "sha256": "16b8796dddea734924e38047eadf76a2ee8b22e7041467617871bc2f42621430" },
+    { "path": "server/modules/identity-policy-audit/tests/migration_contract.rs", "bytes": 3991, "sha256": "b4a649b3a9f2097508b1f291893f6e89fc7822632271a7876702acbe3bfb26ab" },
+    { "path": "server/modules/identity-policy-audit/tests/postgres_live.rs", "bytes": 18307, "sha256": "25cafd4d797e7c2f29a0cff42ec1da47adba4e243a408efcbfe613bef19f629c" },
+    { "path": "tools/identity-policy-workflow-policy.test.mjs", "bytes": 5887, "sha256": "62832b0a9a6089175bd49c151084759171322a074b6d7453c71aae59691ffdb1" },
+    { "path": "docs/reviews/OGVCS-009-transaction-authorized-page-boundary-review.md", "bytes": 5707, "sha256": "64ae4fa7cefd4f704edd33cefbe89f35747aaa29b9bf0a5fad88a76d9b7eb0b8" }
+  ],
+  "claimBoundary": {
+    "transactionAuthorizedPageSourceOnly": true,
+    "metadataDispatcherWired": false,
+    "postgresLivePageExecuted": false,
+    "publicRoute": false,
+    "timingOrNondisclosureAcceptance": false,
+    "acceptanceCriterion": false,
+    "releaseEvidence": false
+  }
+}

@@ -33,3 +33,22 @@ and KMS providers, external checkpoint/root authority, public-route adapters,
 deployment SLO/fault evidence, and an end-to-end rollout remain open. The opaque
 aggregate receipt is an internal authorization handoff, not an OGVCS-010
 disaster-recovery or publication receipt.
+
+## Transaction-authorized page source follow-up
+
+Push run [33672888522](https://github.com/n3r/OpenGameVCS/actions/runs/33672888522)
+passed at exact integration revision
+`ab05950d4c231538ea61965a8efa1ee04feda79f`. Its six jobs cover Node 24
+conformance on Linux, macOS, and Windows; Rust 1.82 checks and freshly packed
+consumer tests on macOS and Windows; and the guarded PostgreSQL 15 participant
+lane on Linux. The retained
+[`hosted-source-run-33672888522.json`](hosted-source-run-33672888522.json)
+binds the run, all six job identities, and the exact transaction-authorized
+page crate, workflow, policy, and boundary-review source bytes.
+
+This evidence proves only bounded source portability for the internal page
+primitive. The hosted PostgreSQL lane exercised the pre-existing participant
+and aggregate tests, not a live metadata page. The primitive is not wired into
+the repository-metadata dispatcher or a public route, and it does not close
+timing/non-disclosure acceptance, any OGVCS-009 acceptance criterion, or the
+R1 release gate. OGVCS-009 remains **Todo**.
