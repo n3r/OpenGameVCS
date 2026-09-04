@@ -1,4 +1,6 @@
 import { execFile } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { types } from 'node:util';
 import { promisify } from 'node:util';
 
@@ -141,22 +143,20 @@ export const readGitSourceEvidence = async (requestSource) => {
     windowsHide: true,
   });
   if (headOutput !== `${sourceRevision}\n`) throw new Error('sandbox conformance source revision is not the checked-out HEAD');
-  await execFileAsync('git', ['diff', '--quiet', '--no-ext-diff', sourceRevision, '--', ...sourcePaths], {
-    cwd: repositoryRoot,
-    encoding: 'utf8',
-    maxBuffer: 1024,
-    windowsHide: true,
-  }).catch(() => { throw new Error('sandbox conformance executing source differs from the checked-out revision'); });
   const sourceFiles = [];
   for (const path of sourcePaths) {
-    const { stdout } = await execFileAsync('git', ['show', `${sourceRevision}:${path}`], {
-      cwd: repositoryRoot,
-      encoding: null,
-      maxBuffer: MAXIMUM_SOURCE_FILE_BYTES,
-      windowsHide: true,
-    });
-    const bytes = Buffer.from(stdout);
-    sourceFiles.push(Object.freeze({ bytes: bytes.length, path, sha256: sha256(bytes) }));
+    const [{ stdout }, executingBytes] = await Promise.all([
+      execFileAsync('git', ['show', `${sourceRevision}:${path}`], {
+        cwd: repositoryRoot,
+        encoding: null,
+        maxBuffer: MAXIMUM_SOURCE_FILE_BYTES,
+        windowsHide: true,
+      }),
+      readFile(join(repositoryRoot, path)),
+    ]);
+    const committedBytes = Buffer.from(stdout);
+    if (!committedBytes.equals(executingBytes)) throw new Error('sandbox conformance executing source differs from the checked-out revision');
+    sourceFiles.push(Object.freeze({ bytes: committedBytes.length, path, sha256: sha256(committedBytes) }));
   }
   return snapshotSourceEvidence({ sourceFiles, sourceRevision });
 };
@@ -266,9 +266,16 @@ export const runPrivatePortableConformance = async (requestSource) => {
   });
 };
 
-export const comparePortableConformanceReports = (reportSources) => {
+export const comparePortableConformanceReports = (reportSources, expectedSourceValue) => {
   const reportEntries = exactArray(reportSources, 3, 3);
-  if (!reportEntries) throw new TypeError('portable sandbox comparison input is invalid');
+  const expectedSourceRecord = exactRecord(expectedSourceValue, ['sourceFiles', 'sourceRevision', 'sourceSetSha256']);
+  const expectedSource = expectedSourceRecord && snapshotSourceEvidence({
+    sourceFiles: expectedSourceRecord.sourceFiles,
+    sourceRevision: expectedSourceRecord.sourceRevision,
+  });
+  if (!reportEntries
+    || !expectedSource
+    || expectedSourceRecord.sourceSetSha256 !== expectedSource.sourceSetSha256) throw new TypeError('portable sandbox comparison input is invalid');
   const rank = Object.freeze({ linux: 0, macos: 1, windows: 2 });
   const reports = [];
   for (const source of reportEntries) {
@@ -305,6 +312,9 @@ export const comparePortableConformanceReports = (reportSources) => {
       || !caseEntries) throw new Error('portable sandbox conformance report is invalid');
     const sourceEvidence = snapshotSourceEvidence({ sourceFiles: report.sourceFiles, sourceRevision: report.sourceRevision });
     if (report.sourceSetSha256 !== sourceEvidence.sourceSetSha256) throw new Error('portable sandbox conformance source binding differs');
+    if (sourceEvidence.sourceRevision !== expectedSource.sourceRevision
+      || sourceEvidence.sourceSetSha256 !== expectedSource.sourceSetSha256
+      || canonicalJson(sourceEvidence.sourceFiles) !== canonicalJson(expectedSource.sourceFiles)) throw new Error('portable sandbox conformance expected source differs');
     const cases = [];
     for (const [index, caseSource] of caseEntries.entries()) {
       const entry = exactRecord(caseSource, ['credentialCanaryAbsent', 'publicationCapabilityPresent', 'requestKeys', 'resultCode', 'toolClass']);

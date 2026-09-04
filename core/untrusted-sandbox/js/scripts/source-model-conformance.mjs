@@ -52,7 +52,7 @@ for (const platform of ['linux', 'macos', 'windows']) {
   portableReports.push(report);
   await writeCanonical(join(outputDirectory, `portable-${platform}-source-model.json`), report);
 }
-const comparison = comparePortableConformanceReports(portableReports);
+const comparison = comparePortableConformanceReports(portableReports, source);
 await writeCanonical(join(outputDirectory, 'portable-source-model-comparison.json'), comparison);
 
 const historicalPath = join(repositoryRoot, historicalV1Path);

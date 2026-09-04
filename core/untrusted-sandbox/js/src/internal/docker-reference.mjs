@@ -21,7 +21,8 @@ const RECONCILIATION_REPORT_SCHEMA = 'ogvcs.untrusted-sandbox/daemon-reconciliat
 const MAXIMUM_RECONCILIATION_RESOURCES = 16;
 const MAXIMUM_RECONCILIATION_INSPECT_BYTES = 8 * 1024 * 1024;
 const KNOWN_CGROUP_V2_CONTROLLERS = Object.freeze(['cpu', 'cpuset', 'dmem', 'hugetlb', 'io', 'memory', 'misc', 'pids', 'rdma']);
-const SANITIZED_RUNTIME_COMPONENT = /^[A-Za-z0-9._+-]{1,128}$/u;
+const RUNTIME_VERSION = /^(?:0|[1-9][0-9]{0,2})\.(?:0|[1-9][0-9]{0,2})\.(?:0|[1-9][0-9]{0,2})(?:-rc\.(?:0|[1-9][0-9]{0,2}))?$/u;
+const RUNTIME_COMMIT = /^(?:v(?:0|[1-9][0-9]{0,2})\.(?:0|[1-9][0-9]{0,2})\.(?:0|[1-9][0-9]{0,2})(?:-rc\.(?:0|[1-9][0-9]{0,2}))?-[0-9]{1,6}-g)?[0-9a-f]{7,64}$/u;
 const CONTAINER_ROLES = Object.freeze(['output-shim', 'parser', 'volume-anchor']);
 const RECONCILIATION_JOB_KEYS = Object.freeze(['jobId', 'resourcePolicy', 'runtimeContractSha256', 'runtimeImage']);
 const RECONCILIATION_REQUEST_KEYS = Object.freeze(['authority', 'interruptedJobs', 'stateRoot']);
@@ -296,8 +297,8 @@ const dockerControlFacts = (server, details, controllersText) => {
       ? 'absolute-path'
       : runtimePath === OCI_RUNTIME ? 'relative-name' : null;
     if (runtimePathKind === null
-      || !SANITIZED_RUNTIME_COMPONENT.test(runtimeVersion ?? '')
-      || !SANITIZED_RUNTIME_COMPONENT.test(runtimeCommit ?? '')) return null;
+      || !RUNTIME_VERSION.test(runtimeVersion ?? '')
+      || !RUNTIME_COMMIT.test(runtimeCommit ?? '')) return null;
     return Object.freeze({
       architecture: 'amd64',
       availableControllers: Object.freeze(KNOWN_CGROUP_V2_CONTROLLERS.filter((controller) => availableControllers.has(controller))),

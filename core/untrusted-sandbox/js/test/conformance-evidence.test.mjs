@@ -79,21 +79,32 @@ test('private portable runner executes exactly importer and converter without cr
     assert.deepEqual(report.claimBoundary, { hostIsolation: false, productionBroker: false, publicAdmission: false, repositoryPublication: false });
     reports.push(report);
   }
-  assert.deepEqual(comparePortableConformanceReports(reports).platforms, ['linux', 'macos', 'windows']);
+  assert.deepEqual(comparePortableConformanceReports(reports, source).platforms, ['linux', 'macos', 'windows']);
   await assert.rejects(runPrivatePortableConformance({ platform: 'linux', sourceFiles, sourceRevision: revision, publish: () => {} }), TypeError);
 });
 
 test('portable comparison rejects identical forged, partial, and structurally hostile reports', async () => {
   const valid = await Promise.all(['linux', 'macos', 'windows'].map((platform) => runPrivatePortableConformance({ platform, sourceFiles, sourceRevision: revision })));
+  assert.throws(() => comparePortableConformanceReports(valid), TypeError);
   const empty = valid.map((report) => ({ ...report, cases: [] }));
-  assert.throws(() => comparePortableConformanceReports(empty), /report is invalid/u);
-  assert.throws(() => comparePortableConformanceReports(valid.map((report) => ({ ...report, sourceSetSha256: 'f'.repeat(64) }))), /source binding differs/u);
-  assert.throws(() => comparePortableConformanceReports(valid.map((report) => ({ ...report, claimBoundary: { ...report.claimBoundary, hostIsolation: true } }))), /report is invalid/u);
-  assert.throws(() => comparePortableConformanceReports([valid[0], valid[0], valid[0]]), /reports differ/u);
+  assert.throws(() => comparePortableConformanceReports(empty, source), /report is invalid/u);
+  assert.throws(() => comparePortableConformanceReports(valid.map((report) => ({ ...report, sourceSetSha256: 'f'.repeat(64) })), source), /source binding differs/u);
+  assert.throws(() => comparePortableConformanceReports(valid.map((report) => ({ ...report, claimBoundary: { ...report.claimBoundary, hostIsolation: true } })), source), /report is invalid/u);
+  assert.throws(() => comparePortableConformanceReports([valid[0], valid[0], valid[0]], source), /reports differ/u);
+  const forgedSource = snapshotSourceEvidence({
+    sourceFiles: Object.freeze([Object.freeze({ bytes: 1, path: 'source/forged.mjs', sha256: 'f'.repeat(64) })]),
+    sourceRevision: 'f'.repeat(40),
+  });
+  const identicallyForged = await Promise.all(['linux', 'macos', 'windows'].map((platform) => runPrivatePortableConformance({
+    platform,
+    sourceFiles: forgedSource.sourceFiles,
+    sourceRevision: forgedSource.sourceRevision,
+  })));
+  assert.throws(() => comparePortableConformanceReports(identicallyForged, source), /expected source differs/u);
   const extendedCases = [...valid[0].cases];
   extendedCases.extra = true;
-  assert.throws(() => comparePortableConformanceReports([{ ...valid[0], cases: extendedCases }, valid[1], valid[2]]), /report is invalid/u);
-  assert.throws(() => comparePortableConformanceReports(new Proxy(valid, {})), TypeError);
+  assert.throws(() => comparePortableConformanceReports([{ ...valid[0], cases: extendedCases }, valid[1], valid[2]], source), /report is invalid/u);
+  assert.throws(() => comparePortableConformanceReports(new Proxy(valid, {}), source), TypeError);
 });
 
 test('Linux report v2 binds closed controls and source inventory while v1 remains unchanged', () => {
@@ -123,6 +134,8 @@ test('Linux report v2 binds closed controls and source inventory while v1 remain
     { runtimeBinaryBinding: 'proven' },
     { runtimePathKind: '/usr/bin/runc' },
     { runtimeCommit: 'SECRET=/private/runc' },
+    { runtimeCommit: 'secretCanary123' },
+    { runtimeVersion: 'secretCanary123' },
     { availableControllers: ['cpu', 'memory'] },
   ]) assert.throws(() => buildLinuxConformanceReportV2({
     cases: legacy.cases,
@@ -155,6 +168,8 @@ test('Docker facts retain only allowlisted controls and never claim daemon runti
   assert.equal(dockerControlFactsForTesting(server, details, 'cpu io memory pids future-secret'), null);
   assert.equal(dockerControlFactsForTesting(server, { ...details, Runtimes: { runc: { path: '../runc' } } }, 'cpu memory pids'), null);
   assert.equal(dockerControlFactsForTesting({ ...server, Components: [{ ...server.Components[0], Version: '/private/runc' }] }, details, 'cpu memory pids'), null);
+  assert.equal(dockerControlFactsForTesting({ ...server, Components: [{ ...server.Components[0], Version: 'secretCanary123' }] }, details, 'cpu memory pids'), null);
+  assert.equal(dockerControlFactsForTesting({ ...server, Components: [{ ...server.Components[0], Details: { GitCommit: 'secretCanary123' } }] }, details, 'cpu memory pids'), null);
   const absolute = dockerControlFactsForTesting(server, { ...details, Runtimes: { runc: { path: '/usr/bin/runc' } } }, 'cpu memory pids');
   assert.equal(absolute.runtimePathKind, 'absolute-path');
   assert.equal(absolute.runtimeBinaryBinding, 'unproven');
@@ -256,6 +271,8 @@ test('git source evidence requires exact checked-out HEAD and exact executing by
   await assert.rejects(readGitSourceEvidence({ repositoryRoot: clone, sourceRevision: 'refs/heads/ogvcs-source-binding' }), TypeError);
   const { stdout: parentOutput } = await execFileAsync('git', ['rev-parse', 'HEAD^'], { cwd: clone, encoding: 'utf8', windowsHide: true });
   await assert.rejects(readGitSourceEvidence({ repositoryRoot: clone, sourceRevision: parentOutput.trim() }), /not the checked-out HEAD/u);
-  await appendFile(join(clone, 'core/untrusted-sandbox/js/src/internal/capability.mjs'), '\n');
+  const changedPath = 'core/untrusted-sandbox/js/src/internal/capability.mjs';
+  await execFileAsync('git', ['update-index', '--assume-unchanged', changedPath], { cwd: clone, windowsHide: true });
+  await appendFile(join(clone, changedPath), '\n');
   await assert.rejects(readGitSourceEvidence({ repositoryRoot: clone, sourceRevision: head }), /executing source differs/u);
 });

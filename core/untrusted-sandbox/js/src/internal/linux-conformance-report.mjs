@@ -46,7 +46,8 @@ const CONTROL_KEYS = Object.freeze([
   'seccomp',
 ]);
 const KNOWN_CONTROLLERS = Object.freeze(['cpu', 'cpuset', 'dmem', 'hugetlb', 'io', 'memory', 'misc', 'pids', 'rdma']);
-const SANITIZED_RUNTIME_COMPONENT = /^[A-Za-z0-9._+-]{1,128}$/u;
+const RUNTIME_VERSION = /^(?:unobserved|(?:0|[1-9][0-9]{0,2})\.(?:0|[1-9][0-9]{0,2})\.(?:0|[1-9][0-9]{0,2})(?:-rc\.(?:0|[1-9][0-9]{0,2}))?)$/u;
+const RUNTIME_COMMIT = /^(?:unobserved|(?:v(?:0|[1-9][0-9]{0,2})\.(?:0|[1-9][0-9]{0,2})\.(?:0|[1-9][0-9]{0,2})(?:-rc\.(?:0|[1-9][0-9]{0,2}))?-[0-9]{1,6}-g)?[0-9a-f]{7,64})$/u;
 
 const exactRecord = (source, keys) => {
   try {
@@ -146,8 +147,8 @@ const closeControls = (source) => {
     || value.runtimeName !== 'runc'
     || !['absolute-path', 'relative-name'].includes(value.runtimePathKind)
     || value.runtimeBinaryBinding !== 'unproven'
-    || !SANITIZED_RUNTIME_COMPONENT.test(value.runtimeVersion ?? '')
-    || !SANITIZED_RUNTIME_COMPONENT.test(value.runtimeCommit ?? '')
+    || !RUNTIME_VERSION.test(value.runtimeVersion ?? '')
+    || !RUNTIME_COMMIT.test(value.runtimeCommit ?? '')
     || !availableControllers
     || availableControllers.some((controller) => typeof controller !== 'string' || !KNOWN_CONTROLLERS.includes(controller))
     || new Set(availableControllers).size !== availableControllers.length

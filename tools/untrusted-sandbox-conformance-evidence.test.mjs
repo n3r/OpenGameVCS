@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, readdir, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
@@ -9,6 +9,8 @@ import test from 'node:test';
 import {
   SANDBOX_CONFORMANCE_SOURCE_PATHS,
   comparePortableConformanceReports,
+  readGitSourceEvidence,
+  runPrivatePortableConformance,
   snapshotSourceEvidence,
 } from '../core/untrusted-sandbox/js/src/internal/conformance-evidence.mjs';
 import { canonicalJson, sha256 } from '../core/untrusted-sandbox/js/src/internal/reference-contract.mjs';
@@ -17,8 +19,6 @@ import { REFERENCE_SERVICE_HARD_KILL_BOUNDARIES } from '../core/untrusted-sandbo
 const root = resolve(import.meta.dirname, '..');
 const modelRoot = join(root, 'docs/evidence/OGVCS-045/source-only-v2');
 const execFileAsync = promisify(execFile);
-const retainedSourceRevision = '123bddf53e4ff647eba872ea96bb3cf7568509a5';
-const retainedSourceSetSha256 = '1da7498056c57498052e5130d06bb7b99b60a3c0800bca79062af2b778f2ea0b';
 
 const readCanonical = async (path) => {
   const bytes = await readFile(path);
@@ -67,7 +67,8 @@ test('committed portable target models are exact, equal, source-bound, and expli
   ];
   assert.deepEqual((await readdir(modelRoot)).filter((name) => name.endsWith('.json')).sort(), expectedFiles);
   const reports = await Promise.all(['linux', 'macos', 'windows'].map((platform) => readCanonical(join(modelRoot, `portable-${platform}-source-model.json`))));
-  const comparison = comparePortableConformanceReports(reports);
+  const retainedSource = snapshotSourceEvidence({ sourceFiles: reports[0].sourceFiles, sourceRevision: reports[0].sourceRevision });
+  const comparison = comparePortableConformanceReports(reports, retainedSource);
   assert.deepEqual(await readCanonical(join(modelRoot, 'portable-source-model-comparison.json')), comparison);
   assert.equal(reports.every((report) => report.evidenceKind === 'source-only-model'
     && report.retentionStatus === 'not-hosted'
@@ -76,36 +77,66 @@ test('committed portable target models are exact, equal, source-bound, and expli
     && report.claimBoundary.productionBroker === false
     && report.claimBoundary.publicAdmission === false
     && report.claimBoundary.repositoryPublication === false), true);
-  assert.equal(comparison.sourceRevision, retainedSourceRevision);
-  assert.equal(comparison.sourceSetSha256, retainedSourceSetSha256);
+  assert.match(comparison.sourceRevision, /^[0-9a-f]{40}$/u);
+  assert.equal(comparison.sourceSetSha256, retainedSource.sourceSetSha256);
+  const { stdout: retainedCommit } = await execFileAsync('git', ['rev-parse', '--verify', `${comparison.sourceRevision}^{commit}`], {
+    cwd: root,
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  assert.equal(retainedCommit, `${comparison.sourceRevision}\n`);
+  await execFileAsync('git', ['merge-base', '--is-ancestor', comparison.sourceRevision, 'HEAD'], { cwd: root, windowsHide: true });
+  await execFileAsync('git', ['diff', '--quiet', '--no-ext-diff', comparison.sourceRevision, 'HEAD', '--', ...SANDBOX_CONFORMANCE_SOURCE_PATHS], {
+    cwd: root,
+    windowsHide: true,
+  });
   assert.deepEqual(reports[0].sourceFiles.map(({ path }) => path), SANDBOX_CONFORMANCE_SOURCE_PATHS);
   for (const file of reports[0].sourceFiles) {
-    const { stdout } = await execFileAsync('git', ['show', `${comparison.sourceRevision}:${file.path}`], {
-      cwd: root,
-      encoding: null,
-      maxBuffer: 16 * 1024 * 1024,
-      windowsHide: true,
-    });
-    const bytes = Buffer.from(stdout);
+    const bytes = await readFile(join(root, file.path));
     assert.equal(file.bytes, bytes.length, file.path);
     assert.equal(file.sha256, sha256(bytes), file.path);
   }
 });
 
-test('portable comparison CLI reads three paths and writes one closed report', async () => {
+test('portable comparison CLI binds three paths to the exact checked-out source before writing one closed report', async () => {
   const scratch = await mkdtemp(join(tmpdir(), 'ogvcs-portable-compare-'));
   const output = join(scratch, 'comparison.json');
+  const { stdout: headOutput } = await execFileAsync('git', ['rev-parse', '--verify', 'HEAD'], { cwd: root, encoding: 'utf8', windowsHide: true });
+  const sourceRevision = headOutput.trim();
+  const source = await readGitSourceEvidence({ repositoryRoot: root, sourceRevision });
+  for (const platform of ['linux', 'macos', 'windows']) {
+    const report = await runPrivatePortableConformance({ platform, sourceFiles: source.sourceFiles, sourceRevision });
+    await writeFile(join(scratch, `${platform}.json`), Buffer.from(`${canonicalJson(report)}\n`, 'utf8'), { flag: 'wx', mode: 0o600 });
+  }
   const { stdout } = await execFileAsync(process.execPath, [
     join(root, 'tools/compare-untrusted-sandbox-conformance.mjs'),
-    '--linux', join(modelRoot, 'portable-linux-source-model.json'),
-    '--macos', join(modelRoot, 'portable-macos-source-model.json'),
-    '--windows', join(modelRoot, 'portable-windows-source-model.json'),
+    '--linux', join(scratch, 'linux.json'),
+    '--macos', join(scratch, 'macos.json'),
+    '--windows', join(scratch, 'windows.json'),
+    '--source-revision', sourceRevision,
     '--output', output,
   ], { cwd: root, encoding: 'utf8', maxBuffer: 1024 * 1024, windowsHide: true });
   const comparison = await readCanonical(output);
   assert.equal(comparison.result, 'equal');
-  assert.equal(comparison.sourceRevision, retainedSourceRevision);
-  assert.equal(stdout, `${canonicalJson({ output, result: 'equal', sourceRevision: retainedSourceRevision })}\n`);
+  assert.equal(comparison.sourceRevision, sourceRevision);
+  assert.equal(stdout, `${canonicalJson({ output, result: 'equal', sourceRevision })}\n`);
+
+  const forgedSource = snapshotSourceEvidence({
+    sourceFiles: [{ bytes: 1, path: 'source/forged.mjs', sha256: 'f'.repeat(64) }],
+    sourceRevision: 'f'.repeat(40),
+  });
+  for (const platform of ['linux', 'macos', 'windows']) {
+    const report = await runPrivatePortableConformance({ platform, sourceFiles: forgedSource.sourceFiles, sourceRevision: forgedSource.sourceRevision });
+    await writeFile(join(scratch, `forged-${platform}.json`), Buffer.from(`${canonicalJson(report)}\n`, 'utf8'), { flag: 'wx', mode: 0o600 });
+  }
+  await assert.rejects(execFileAsync(process.execPath, [
+    join(root, 'tools/compare-untrusted-sandbox-conformance.mjs'),
+    '--linux', join(scratch, 'forged-linux.json'),
+    '--macos', join(scratch, 'forged-macos.json'),
+    '--windows', join(scratch, 'forged-windows.json'),
+    '--source-revision', sourceRevision,
+    '--output', join(scratch, 'forged-comparison.json'),
+  ], { cwd: root, encoding: 'utf8', maxBuffer: 1024 * 1024, windowsHide: true }), /expected source differs/u);
 });
 
 test('Linux v2 fixture preserves historical v1 cases and digests without inventing live runtime observations', async () => {
@@ -146,8 +177,9 @@ test('Linux v2 fixture preserves historical v1 cases and digests without inventi
   });
   const source = snapshotSourceEvidence({ sourceFiles: fixture.report.sourceFiles, sourceRevision: fixture.report.sourceRevision });
   assert.equal(fixture.report.sourceSetSha256, source.sourceSetSha256);
-  assert.equal(fixture.report.sourceRevision, retainedSourceRevision);
-  assert.equal(fixture.report.sourceSetSha256, retainedSourceSetSha256);
+  const comparison = await readCanonical(join(modelRoot, 'portable-source-model-comparison.json'));
+  assert.equal(fixture.report.sourceRevision, comparison.sourceRevision);
+  assert.equal(fixture.report.sourceSetSha256, comparison.sourceSetSha256);
 });
 
 test('kill-boundary model is exact, non-executed, quarantine-only for represented resources, and claims zero cleanup', async () => {
@@ -173,8 +205,9 @@ test('kill-boundary model is exact, non-executed, quarantine-only for represente
   }
   const source = snapshotSourceEvidence({ sourceFiles: model.sourceFiles, sourceRevision: model.sourceRevision });
   assert.equal(model.sourceSetSha256, source.sourceSetSha256);
-  assert.equal(model.sourceRevision, retainedSourceRevision);
-  assert.equal(model.sourceSetSha256, retainedSourceSetSha256);
+  const comparison = await readCanonical(join(modelRoot, 'portable-source-model-comparison.json'));
+  assert.equal(model.sourceRevision, comparison.sourceRevision);
+  assert.equal(model.sourceSetSha256, comparison.sourceSetSha256);
 });
 
 test('documentation keeps Linux restart, hosted retention, runtime identity, and every acceptance criterion open', async () => {
