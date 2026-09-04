@@ -992,6 +992,7 @@ referenceStateTest('restart discovery authenticates every crash-boundary topolog
       ['after-anchor-cleanup', [], [volume]],
       ['after-volume-cleanup', [], []],
     ];
+    assert.equal(snapshots.length, 16, 'crash topology inventory must remain exact');
     for (const [stage, containers, volumes] of snapshots) {
       for (const container of containers) {
         const expected = daemonContainerExpectations.get(container);

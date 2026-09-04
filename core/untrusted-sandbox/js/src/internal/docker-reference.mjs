@@ -20,6 +20,8 @@ const RESOURCE_BINDING_SCHEMA = 'ogvcs.untrusted-sandbox/daemon-resource-binding
 const RECONCILIATION_REPORT_SCHEMA = 'ogvcs.untrusted-sandbox/daemon-reconciliation/v1';
 const MAXIMUM_RECONCILIATION_RESOURCES = 16;
 const MAXIMUM_RECONCILIATION_INSPECT_BYTES = 8 * 1024 * 1024;
+const KNOWN_CGROUP_V2_CONTROLLERS = Object.freeze(['cpu', 'cpuset', 'dmem', 'hugetlb', 'io', 'memory', 'misc', 'pids', 'rdma']);
+const SANITIZED_RUNTIME_COMPONENT = /^[A-Za-z0-9._+-]{1,128}$/u;
 const CONTAINER_ROLES = Object.freeze(['output-shim', 'parser', 'volume-anchor']);
 const RECONCILIATION_JOB_KEYS = Object.freeze(['jobId', 'resourcePolicy', 'runtimeContractSha256', 'runtimeImage']);
 const RECONCILIATION_REQUEST_KEYS = Object.freeze(['authority', 'interruptedJobs', 'stateRoot']);
@@ -246,6 +248,71 @@ const safeExecutable = async (source) => {
   const owner = typeof process.geteuid === 'function' ? process.geteuid() : details.uid;
   if (!details.isFile() || details.isSymbolicLink() || (details.mode & 0o111) === 0 || (details.mode & 0o022) !== 0 || ![0, owner].includes(details.uid)) throw new Error('docker binary ownership or mode is unsafe');
   return path;
+};
+
+const dockerControlFacts = (server, details, controllersText) => {
+  try {
+    if (server === null || typeof server !== 'object' || Array.isArray(server) || types.isProxy(server)
+      || details === null || typeof details !== 'object' || Array.isArray(details) || types.isProxy(details)
+      || typeof controllersText !== 'string') return null;
+    const controllerEntries = controllersText.trim().split(/\s+/u).filter(Boolean);
+    const availableControllers = new Set(controllerEntries);
+    const security = Array.isArray(details.SecurityOptions) && !types.isProxy(details.SecurityOptions)
+      ? details.SecurityOptions.filter((value) => typeof value === 'string') : [];
+    const seccomp = security.some((value) => value === 'name=seccomp' || value.startsWith('name=seccomp,'));
+    const cgroupNamespace = security.some((value) => value === 'name=cgroupns' || value.startsWith('name=cgroupns,'));
+    const rootless = security.some((value) => value === 'name=rootless' || value.startsWith('name=rootless,'));
+    const runtimes = details.Runtimes;
+    if (server.Os !== 'linux'
+      || server.Arch !== 'amd64'
+      || details.OSType !== 'linux'
+      || String(details.CgroupVersion) !== '2'
+      || controllerEntries.length !== availableControllers.size
+      || controllerEntries.some((controller) => !KNOWN_CGROUP_V2_CONTROLLERS.includes(controller))
+      || !['cpu', 'memory', 'pids'].every((controller) => availableControllers.has(controller))
+      || !seccomp
+      || !cgroupNamespace
+      || rootless
+      || runtimes === null
+      || typeof runtimes !== 'object'
+      || Array.isArray(runtimes)
+      || types.isProxy(runtimes)
+      || !Object.hasOwn(runtimes, OCI_RUNTIME)) return null;
+    const runtime = runtimes[OCI_RUNTIME];
+    if (runtime === null || typeof runtime !== 'object' || Array.isArray(runtime) || types.isProxy(runtime)) return null;
+    const runtimePath = runtime.path;
+    const components = server.Components;
+    if (!Array.isArray(components) || types.isProxy(components) || components.length > 64) return null;
+    const matching = components.filter((candidate) => candidate !== null
+      && typeof candidate === 'object'
+      && !Array.isArray(candidate)
+      && !types.isProxy(candidate)
+      && candidate.Name === OCI_RUNTIME);
+    if (matching.length !== 1) return null;
+    const component = matching[0];
+    const runtimeVersion = component.Version;
+    const runtimeCommit = component.Details?.GitCommit;
+    const runtimePathKind = typeof runtimePath === 'string' && isAbsolute(runtimePath)
+      ? 'absolute-path'
+      : runtimePath === OCI_RUNTIME ? 'relative-name' : null;
+    if (runtimePathKind === null
+      || !SANITIZED_RUNTIME_COMPONENT.test(runtimeVersion ?? '')
+      || !SANITIZED_RUNTIME_COMPONENT.test(runtimeCommit ?? '')) return null;
+    return Object.freeze({
+      architecture: 'amd64',
+      availableControllers: Object.freeze(KNOWN_CGROUP_V2_CONTROLLERS.filter((controller) => availableControllers.has(controller))),
+      cgroupNamespace: true,
+      cgroupVersion: 2,
+      operatingSystem: 'linux',
+      rootless: false,
+      runtimeBinaryBinding: 'unproven',
+      runtimeCommit,
+      runtimeName: OCI_RUNTIME,
+      runtimePathKind,
+      runtimeVersion,
+      seccomp: true,
+    });
+  } catch { return null; }
 };
 
 const hardeningArguments = ({ bindingMac, authorityId, jobId, name, policy, role, seccompPath }) => [
@@ -763,6 +830,7 @@ export class DockerReferenceAdapter {
   #seccompCanonical;
   #authority = null;
   #poisoned = false;
+  #controlFacts = null;
 
   static async open({ dockerBinary, seccompProfilePath, expectedSeccompSha256 }) {
     if (process.platform !== 'linux' || process.arch !== 'x64') throw new Error('Linux reference worker requires Linux x86_64');
@@ -787,6 +855,10 @@ export class DockerReferenceAdapter {
   }
 
   get seccompDigest() { return this.#seccompDigest; }
+  get conformanceControlFacts() {
+    if (this.#controlFacts === null) throw new Error('Docker conformance control facts are unavailable');
+    return this.#controlFacts;
+  }
 
   #authenticatedContainerExpected(expected) {
     if (this.#authority === null) throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED');
@@ -980,6 +1052,7 @@ export class DockerReferenceAdapter {
     const availableControllers = new Set(controllers.trim().split(/\s+/u));
     const runtimes = details?.Runtimes;
     if (server?.Os !== 'linux' || server?.Arch !== 'amd64' || details?.OSType !== 'linux' || String(details?.CgroupVersion) !== '2' || !['cpu', 'memory', 'pids'].every((controller) => availableControllers.has(controller)) || !security.includes('name=seccomp') || !security.includes('name=cgroupns') || security.includes('name=rootless') || runtimes === null || typeof runtimes !== 'object' || Array.isArray(runtimes) || !Object.hasOwn(runtimes, OCI_RUNTIME)) throw new Error('Docker required Linux security controls are unavailable');
+    this.#controlFacts = dockerControlFacts(server, details, controllers);
   }
 
   async verifyRuntimeImage(runtimeImage, runtimeContractSha256) {
@@ -1308,6 +1381,7 @@ export const createDockerReferenceAdapterForTesting = (executeCommand, seccompCa
   adapterTestFaults.set(adapter, faults);
   return adapter;
 };
+export const dockerControlFactsForTesting = dockerControlFacts;
 export const detachedStartResultMatchesForTesting = detachedStartResultMatches;
 export const isRegularPinnedFileHandleForTesting = async (handle, options = {}) => {
   try { await statePinnedFileSource(handle, options); return true; } catch { return false; }

@@ -1,4 +1,24 @@
-import { createTestingLauncherCapability } from './internal/capability.mjs';
+import { types } from 'node:util';
+
+import {
+  createReferenceServiceTestHookCapability,
+  createTestingLauncherCapability,
+  REFERENCE_SERVICE_HARD_KILL_BOUNDARIES,
+} from './internal/capability.mjs';
+
+export const createReferenceServiceHardKillHookForTesting = (boundary, beforeKill) => {
+  if (!REFERENCE_SERVICE_HARD_KILL_BOUNDARIES.includes(boundary) || typeof beforeKill !== 'function' || types.isProxy(beforeKill)) throw new TypeError('hard-kill hook configuration is invalid');
+  let fired = false;
+  return createReferenceServiceTestHookCapability((actualBoundary) => {
+    if (actualBoundary !== boundary) return;
+    if (fired) throw new Error('hard-kill test hook already fired');
+    fired = true;
+    beforeKill(actualBoundary);
+    process.kill(process.pid, 'SIGKILL');
+  });
+};
+
+export const referenceServiceHardKillBoundariesForTesting = () => REFERENCE_SERVICE_HARD_KILL_BOUNDARIES;
 
 export const requiredControls = () => Object.freeze({ networkDenied: true, credentialFree: true, readOnlyInput: true, isolatedScratch: true, cpuLimited: true, memoryLimited: true, processLimited: true });
 const iterable = (chunks) => (async function* () { for await (const chunk of chunks) yield Buffer.isBuffer(chunk) ? Buffer.from(chunk) : Buffer.from(chunk, 'utf8'); }());

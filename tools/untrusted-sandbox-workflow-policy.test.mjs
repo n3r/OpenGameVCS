@@ -29,8 +29,17 @@ test('untrusted sandbox workflow pins portable protocol and live Linux isolation
   for (const protectedPath of [
     '"docs/evidence/OGVCS-045/**"',
     '"docs/reviews/OGVCS-045-*.md"',
+    '"tools/compare-untrusted-sandbox-conformance.mjs"',
+    '"tools/untrusted-sandbox-conformance-evidence.test.mjs"',
     '"tools/untrusted-sandbox-retained-evidence.test.mjs"',
   ]) assert.equal(workflow.split(protectedPath).length - 1, 2, `${protectedPath} must trigger pull-request and push gates`);
+  assert.match(workflow, /Exercise source-bound private portable evidence locally[\s\S]+--output "\$\{\{ runner\.temp \}\}\/untrusted-sandbox-portable-\$\{\{ runner\.os \}\}\.json"[\s\S]+--source-revision "\$\{\{ github\.sha \}\}"/u);
+  assert.match(workflow, /Exercise test-only hard-kill boundaries locally[\s\S]+--output "\$\{\{ runner\.temp \}\}\/untrusted-sandbox-kill-boundaries\.json"[\s\S]+--source-revision "\$\{\{ github\.sha \}\}"/u);
+  assert.equal(workflow.match(/actions\/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a/gu)?.length, 1);
+  const retainedUpload = workflow.slice(workflow.indexOf('      - name: Retain Linux reference evidence'));
+  assert.match(retainedUpload, /path: artifacts\/untrusted-sandbox-linux-reference\.json/u);
+  assert.doesNotMatch(retainedUpload, /portable|kill-boundar|source-revision|sourceFiles|sourceSetSha256/iu);
+  assert.doesNotMatch(workflow, /OGVCS_SANDBOX_SOURCE_REVISION/u);
   assert.match(workflow, /cc -static -O2 -std=c17 -Wall -Wextra -Werror core\/untrusted-sandbox\/js\/linux\/output_shim\.c/u);
   assert.match(workflow, /cc -static -O2 -std=c17 -Wall -Wextra -Werror core\/untrusted-sandbox\/js\/linux\/volume_anchor\.c/u);
   const importStart = workflow.indexOf('      - name: Import the deterministic one-layer credential-free scratch runtime');

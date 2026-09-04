@@ -17,6 +17,10 @@ import {
 } from './reference-contract.mjs';
 import { parseOutputFrame } from './output-frame.mjs';
 import {
+  referenceServiceTestHook,
+  REFERENCE_SERVICE_HARD_KILL_BOUNDARIES,
+} from './capability.mjs';
+import {
   isDaemonReconciliationDiagnosticCode,
   isPinnedFileOperationAborted,
   openPinnedImmutableFile,
@@ -137,6 +141,7 @@ const PROVENANCE_KEYS = Object.freeze([
   'validationCode',
 ]);
 const services = new WeakSet();
+export { REFERENCE_SERVICE_HARD_KILL_BOUNDARIES } from './capability.mjs';
 
 const exactRecord = (source, keys) => {
   if (source === null || typeof source !== 'object' || Array.isArray(source) || types.isProxy(source)) return null;
@@ -336,10 +341,12 @@ export class ReferenceSandboxService {
   #poisoned = false;
   #closed = false;
   #faults;
+  #testHook;
   #metrics = { cancelled: 0, denied: 0, resourceKills: 0, securityViolations: 0, validated: 0 };
 
-  static async open({ adapter, stateRoot, manifestCatalog, trustedManifestKeys, acquisitionSources, evidenceHmacKey, evidenceHmacKeyId, clock = Date.now, faults = null }) {
-    if (!adapter || typeof adapter.verifyRuntimeImage !== 'function' || typeof adapter.runTool !== 'function' || typeof adapter.collectOutput !== 'function' || typeof adapter.discardVolume !== 'function' || typeof adapter.reconcileDaemonOrphans !== 'function' || typeof adapter.releaseDaemonAuthority !== 'function' || !isDigest(adapter.seccompDigest) || typeof clock !== 'function' || types.isProxy(clock) || !Buffer.isBuffer(evidenceHmacKey) || Object.getPrototypeOf(evidenceHmacKey) !== Buffer.prototype || evidenceHmacKey.length !== 32 || !isId(evidenceHmacKeyId)) throw new TypeError('reference sandbox service configuration is invalid');
+  static async open({ adapter, stateRoot, manifestCatalog, trustedManifestKeys, acquisitionSources, evidenceHmacKey, evidenceHmacKeyId, clock = Date.now, faults = null, testHookCapability = null }) {
+    const testHook = testHookCapability === null ? null : referenceServiceTestHook(testHookCapability);
+    if (!adapter || typeof adapter.verifyRuntimeImage !== 'function' || typeof adapter.runTool !== 'function' || typeof adapter.collectOutput !== 'function' || typeof adapter.discardVolume !== 'function' || typeof adapter.reconcileDaemonOrphans !== 'function' || typeof adapter.releaseDaemonAuthority !== 'function' || !isDigest(adapter.seccompDigest) || typeof clock !== 'function' || types.isProxy(clock) || !Buffer.isBuffer(evidenceHmacKey) || Object.getPrototypeOf(evidenceHmacKey) !== Buffer.prototype || evidenceHmacKey.length !== 32 || !isId(evidenceHmacKeyId) || (testHookCapability !== null && testHook === null)) throw new TypeError('reference sandbox service configuration is invalid');
     const nowUnixMs = clock();
     if (!Number.isSafeInteger(nowUnixMs) || nowUnixMs < 0) throw new TypeError('reference sandbox clock is invalid');
     const trustedKeys = snapshotTrustedManifestKeys(trustedManifestKeys);
@@ -384,7 +391,7 @@ export class ReferenceSandboxService {
         await pinned.handle.close();
         if (!await adapter.verifyRuntimeImage(entry.manifest.runtimeImage, entry.manifest.runtimeContractSha256)) throw new Error('signed runtime image is unavailable or differs');
       }
-      const service = new ReferenceSandboxService({ adapter, catalog, trustedKeys, sources, state, clock, evidenceHmacKey, evidenceHmacKeyId, faults });
+      const service = new ReferenceSandboxService({ adapter, catalog, trustedKeys, sources, state, clock, evidenceHmacKey, evidenceHmacKeyId, faults, testHook });
       services.add(service);
       return service;
     } catch (error) {
@@ -395,8 +402,8 @@ export class ReferenceSandboxService {
     }
   }
 
-  constructor({ adapter, catalog, trustedKeys, sources, state, clock, evidenceHmacKey, evidenceHmacKeyId, faults }) {
-    this.#adapter = adapter; this.#catalog = catalog; this.#trustedKeys = trustedKeys; this.#sources = sources; this.#state = state; this.#clock = clock; this.#evidenceKey = Buffer.from(evidenceHmacKey); this.#evidenceKeyId = evidenceHmacKeyId; this.#faults = faults;
+  constructor({ adapter, catalog, trustedKeys, sources, state, clock, evidenceHmacKey, evidenceHmacKeyId, faults, testHook }) {
+    this.#adapter = adapter; this.#catalog = catalog; this.#trustedKeys = trustedKeys; this.#sources = sources; this.#state = state; this.#clock = clock; this.#evidenceKey = Buffer.from(evidenceHmacKey); this.#evidenceKeyId = evidenceHmacKeyId; this.#faults = faults; this.#testHook = testHook;
   }
 
   #now() {
@@ -406,6 +413,8 @@ export class ReferenceSandboxService {
   }
 
   #fault(name) {
+    if (!REFERENCE_SERVICE_HARD_KILL_BOUNDARIES.includes(name)) throw new Error('reference sandbox test hook is invalid');
+    if (this.#testHook !== null) this.#testHook(name);
     if (this.#faults?.has(name)) {
       this.#faults.delete(name);
       throw new Error(`injected-${name}`);
@@ -475,6 +484,7 @@ export class ReferenceSandboxService {
     } else if (outputTemporary) await rm(outputTemporary, { recursive: true, force: true });
     const result = safeResult({ jobId: base.jobId, code, outputDigest: output?.outputDigest ?? null, provenanceDigest, cleanupReceiptDigest: cleanupDigest });
     await this.#state.writeJob({ ...base, completedAtUnixMs, result, securityEvents: [...securityEvents].sort(), state: code === 'VALIDATED' ? 'validated' : 'denied' });
+    this.#fault('after-result-commit');
     if (code === 'VALIDATED') this.#metrics.validated += 1; else this.#metrics.denied += 1;
     if (code === 'SANDBOX_CANCELLED') this.#metrics.cancelled += 1;
     if (['SANDBOX_OUTPUT_LIMIT', 'SANDBOX_RESOURCE_LIMIT', 'SANDBOX_TIMEOUT'].includes(code)) this.#metrics.resourceKills += 1;
@@ -495,6 +505,7 @@ export class ReferenceSandboxService {
       const source = this.#sources.get(acquisition.sourceId);
       if (!source || acquisition.maximumBytes > source.maximumBytes) return await this.#finalize({ base, code: 'SANDBOX_PROTOCOL_INVALID', securityEvents: ['ACQUISITION_SOURCE_DENIED'], startedAtUnixMs });
       await this.#state.writeJob({ ...base, startedAtUnixMs, state: 'acquiring' });
+      this.#fault('after-acquisition-state');
       const remaining = Math.max(1, Math.min(job.deadlineUnixMs - this.#now(), manifest.resourcePolicy.elapsedMilliseconds));
       const acquired = await boundedAcquisition({
         controller,
@@ -512,6 +523,7 @@ export class ReferenceSandboxService {
       if (acquired.containmentFailure) { this.#poisoned = true; throw new Error('SANDBOX_SETTLEMENT_UNCONFIRMED'); }
       if (acquired.failed || acquired.timedOut || controller.signal.aborted) return await this.#finalize({ base, code: controller.signal.aborted ? 'SANDBOX_CANCELLED' : 'SANDBOX_TIMEOUT', securityEvents: ['ACQUISITION_ABORTED'], startedAtUnixMs });
       const staged = acquired.value;
+      this.#fault('after-input-stage');
       await this.#state.writeJob({ ...base, stagedBytes: staged.bytes, startedAtUnixMs, state: 'staged' });
       this.#fault('after-stage');
       const current = await this.#currentManifest(entry);
@@ -556,6 +568,7 @@ export class ReferenceSandboxService {
         aliases.push(toolAlias);
         if (controller.signal.aborted || job.deadlineUnixMs <= this.#now()) return await this.#finalize({ base, code: controller.signal.aborted ? 'SANDBOX_CANCELLED' : 'SANDBOX_TIMEOUT', securityEvents: ['ALIAS_MATERIALIZATION_ABORTED'], startedAtUnixMs });
         await this.#state.writeJob({ ...base, stagedBytes: staged.bytes, startedAtUnixMs, state: 'running' });
+        this.#fault('after-running-state');
         const run = await this.#adapter.runTool({ runtimeImage: current.runtimeImage, policy: current.resourcePolicy, inputHandle: inputAlias.handle, jobHandle: jobAlias.handle, jobId: job.jobId, toolHandle: toolAlias.handle, signal: controller.signal });
         volume = run.volume;
         let aliasesValid = true;
@@ -596,6 +609,7 @@ export class ReferenceSandboxService {
       }
       this.#fault('after-worker');
       await this.#state.writeJob({ ...base, stagedBytes: staged.bytes, startedAtUnixMs, state: 'validating' });
+      this.#fault('after-validating-state');
       const channelSecret = randomBytes(32);
       const bindingDigest = channelSecret.toString('hex');
       const bindingBytes = Buffer.from(bindingDigest, 'ascii');
@@ -629,6 +643,7 @@ export class ReferenceSandboxService {
           // without issuing a second Docker cleanup.
           const collected = await this.#adapter.collectOutput({ runtimeImage: current.runtimeImage, policy: current.resourcePolicy, volume, bindingHandle: bindingAlias.handle, framePath, jobId: job.jobId, maximumFrameBytes });
           volume = null;
+          this.#fault('after-output-collection');
           let bindingValid = true;
           let bindingVerificationAborted = false;
           try { bindingValid = (await this.#state.verifyPinnedAlias(bindingAlias.handle, bindingAliasDigest, 1024 * 1024, { continueRead: continuePinnedFileOperation })).digest === bindingAliasDigest; } catch (error) { bindingVerificationAborted = isPinnedFileOperationAborted(error); bindingValid = false; }
@@ -663,6 +678,7 @@ export class ReferenceSandboxService {
       }
       this.#fault('after-validation');
       await this.#state.writeJob({ ...base, stagedBytes: staged.bytes, startedAtUnixMs, state: 'committing' });
+      this.#fault('after-committing-state');
       return await this.#state.serial(async () => {
         const finalManifest = await this.#currentManifest(entry);
         if (!finalManifest || !validateJobManifestBinding(job, finalManifest) || await this.#revoked(finalManifest)) {
@@ -731,6 +747,7 @@ export class ReferenceSandboxService {
       });
       await this.#state.writeJob({ ...base, queuedAtUnixMs: nowUnixMs, state: 'queued' });
       await this.#state.writeIdempotency(job.idempotencyKey, { fingerprint, jobId: job.jobId, schemaVersion: 'ogvcs.untrusted-sandbox/idempotency/v1' });
+      this.#fault('after-admission');
       const controller = new AbortController();
       let resolvePromise; let rejectPromise;
       const promise = new Promise((resolve, reject) => { resolvePromise = resolve; rejectPromise = reject; });

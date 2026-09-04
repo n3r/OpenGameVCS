@@ -1,4 +1,5 @@
 import { types } from 'node:util';
+import { snapshotSourceEvidence } from './conformance-evidence.mjs';
 import { isDigest } from './reference-contract.mjs';
 
 const RESULT_CODES = Object.freeze([
@@ -30,6 +31,22 @@ const RESULT_DIAGNOSTICS = Object.freeze([
   ].map((value) => `PRESTART_INSPECT_${value.replaceAll('-', '_').toUpperCase()}`),
   ...['ACTIVATION_CONTROL', 'CONTROL', 'ENTRYPOINT', 'INPUT_READ', 'NONZERO', 'OUTPUT_WRITE', 'STDERR', 'STDOUT', 'TOOL_EXITED'].map((value) => `WORKER_FAILED:${value}`),
 ]);
+const CONTROL_KEYS = Object.freeze([
+  'architecture',
+  'availableControllers',
+  'cgroupNamespace',
+  'cgroupVersion',
+  'operatingSystem',
+  'rootless',
+  'runtimeBinaryBinding',
+  'runtimeCommit',
+  'runtimeName',
+  'runtimePathKind',
+  'runtimeVersion',
+  'seccomp',
+]);
+const KNOWN_CONTROLLERS = Object.freeze(['cpu', 'cpuset', 'dmem', 'hugetlb', 'io', 'memory', 'misc', 'pids', 'rdma']);
+const SANITIZED_RUNTIME_COMPONENT = /^[A-Za-z0-9._+-]{1,128}$/u;
 
 const exactRecord = (source, keys) => {
   try {
@@ -37,9 +54,38 @@ const exactRecord = (source, keys) => {
     const prototype = Object.getPrototypeOf(source);
     if (prototype !== Object.prototype && prototype !== null) return null;
     const descriptors = Object.getOwnPropertyDescriptors(source);
-    if (Object.keys(descriptors).sort().join('\0') !== [...keys].sort().join('\0')
+    if (Reflect.ownKeys(descriptors).length !== keys.length
+      || Object.keys(descriptors).sort().join('\0') !== [...keys].sort().join('\0')
       || Object.values(descriptors).some((descriptor) => !descriptor.enumerable || !Object.hasOwn(descriptor, 'value') || Object.hasOwn(descriptor, 'get') || Object.hasOwn(descriptor, 'set'))) return null;
     return Object.fromEntries(keys.map((key) => [key, descriptors[key].value]));
+  } catch { return null; }
+};
+
+const exactArray = (source, minimum, maximum) => {
+  try {
+    if (!Array.isArray(source)
+      || types.isProxy(source)
+      || Object.getPrototypeOf(source) !== Array.prototype
+      || !Number.isSafeInteger(source.length)
+      || source.length < minimum
+      || source.length > maximum) return null;
+    const descriptors = Object.getOwnPropertyDescriptors(source);
+    const expectedKeys = [];
+    for (let index = 0; index < source.length; index += 1) expectedKeys.push(String(index));
+    expectedKeys.push('length');
+    if (Reflect.ownKeys(descriptors).some((key) => typeof key !== 'string')
+      || Reflect.ownKeys(descriptors).join('\0') !== expectedKeys.join('\0')) return null;
+    const values = [];
+    for (let index = 0; index < source.length; index += 1) {
+      const descriptor = descriptors[index];
+      if (!descriptor
+        || !descriptor.enumerable
+        || !Object.hasOwn(descriptor, 'value')
+        || Object.hasOwn(descriptor, 'get')
+        || Object.hasOwn(descriptor, 'set')) return null;
+      values.push(descriptor.value);
+    }
+    return values;
   } catch { return null; }
 };
 
@@ -84,6 +130,58 @@ export const buildLinuxConformanceReport = (source) => {
     runtimeDigest: value.runtimeDigest,
     schemaVersion: 'ogvcs.untrusted-sandbox/linux-conformance-report/v1',
     seccompProfileSha256: value.seccompProfileSha256,
+  });
+};
+
+const closeControls = (source) => {
+  const value = exactRecord(source, CONTROL_KEYS);
+  const availableControllers = value && exactArray(value.availableControllers, 3, KNOWN_CONTROLLERS.length);
+  if (!value
+    || value.architecture !== 'amd64'
+    || value.operatingSystem !== 'linux'
+    || value.cgroupVersion !== 2
+    || value.cgroupNamespace !== true
+    || value.seccomp !== true
+    || value.rootless !== false
+    || value.runtimeName !== 'runc'
+    || !['absolute-path', 'relative-name'].includes(value.runtimePathKind)
+    || value.runtimeBinaryBinding !== 'unproven'
+    || !SANITIZED_RUNTIME_COMPONENT.test(value.runtimeVersion ?? '')
+    || !SANITIZED_RUNTIME_COMPONENT.test(value.runtimeCommit ?? '')
+    || !availableControllers
+    || availableControllers.some((controller) => typeof controller !== 'string' || !KNOWN_CONTROLLERS.includes(controller))
+    || new Set(availableControllers).size !== availableControllers.length
+    || availableControllers.join('\0') !== [...availableControllers].sort().join('\0')
+    || !['cpu', 'memory', 'pids'].every((controller) => availableControllers.includes(controller))) return null;
+  return Object.freeze({
+    ...value,
+    availableControllers: Object.freeze(availableControllers),
+  });
+};
+
+export const buildLinuxConformanceReportV2 = (source) => {
+  const value = exactRecord(source, ['cases', 'controls', 'failure', 'outcome', 'runtimeDigest', 'seccompProfileSha256', 'sourceFiles', 'sourceRevision']);
+  const controls = value && closeControls(value.controls);
+  const cases = value && exactArray(value.cases, 0, 128);
+  if (!value || !controls || !cases) throw new TypeError('Linux conformance report v2 input is invalid');
+  const legacy = buildLinuxConformanceReport({
+    cases,
+    failure: value.failure,
+    outcome: value.outcome,
+    runtimeDigest: value.runtimeDigest,
+    seccompProfileSha256: value.seccompProfileSha256,
+  });
+  const sourceEvidence = snapshotSourceEvidence({ sourceFiles: value.sourceFiles, sourceRevision: value.sourceRevision });
+  return Object.freeze({
+    cases: legacy.cases,
+    controls,
+    failure: legacy.failure,
+    outcome: legacy.outcome,
+    profile: legacy.profile,
+    runtimeDigest: legacy.runtimeDigest,
+    schemaVersion: 'ogvcs.untrusted-sandbox/linux-conformance-report/v2',
+    seccompProfileSha256: legacy.seccompProfileSha256,
+    ...sourceEvidence,
   });
 };
 

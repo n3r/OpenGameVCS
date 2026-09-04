@@ -7,7 +7,9 @@ on:
       - "core/untrusted-sandbox/**"
       - "spec/untrusted-sandbox/**"
       - "tools/untrusted-sandbox-retained-evidence.test.mjs"
+      - "tools/untrusted-sandbox-conformance-evidence.test.mjs"
       - "tools/untrusted-sandbox-workflow-policy.test.mjs"
+      - "tools/compare-untrusted-sandbox-conformance.mjs"
       - "core/paths-filesystem/js/**"
       - "docs/changelog/OGVCS-045.md"
       - "docs/evidence/OGVCS-045/**"
@@ -26,7 +28,9 @@ on:
       - "core/untrusted-sandbox/**"
       - "spec/untrusted-sandbox/**"
       - "tools/untrusted-sandbox-retained-evidence.test.mjs"
+      - "tools/untrusted-sandbox-conformance-evidence.test.mjs"
       - "tools/untrusted-sandbox-workflow-policy.test.mjs"
+      - "tools/compare-untrusted-sandbox-conformance.mjs"
       - "core/paths-filesystem/js/**"
       - "docs/changelog/OGVCS-045.md"
       - "docs/evidence/OGVCS-045/**"
@@ -68,6 +72,11 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Run closed protocol and secret-canary vectors
         run: npm run test:sandbox
+      - name: Exercise source-bound private portable evidence locally
+        run: >-
+          node core/untrusted-sandbox/js/scripts/portable-conformance.mjs
+          --output "${{ runner.temp }}/untrusted-sandbox-portable-${{ runner.os }}.json"
+          --source-revision "${{ github.sha }}"
       - name: Validate candidate lifecycle
         if: runner.os == 'Linux'
         run: npm run test:roadmap
@@ -86,6 +95,11 @@ jobs:
           cache: npm
       - name: Install exact workspace dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Exercise test-only hard-kill boundaries locally
+        run: >-
+          node core/untrusted-sandbox/js/scripts/kill-boundary-conformance.mjs
+          --output "${{ runner.temp }}/untrusted-sandbox-kill-boundaries.json"
+          --source-revision "${{ github.sha }}"
       - name: Compile the pinned trusted runtime binaries and hostile tool
         run: |
           cc -static -O2 -std=c17 -Wall -Wextra -Werror core/untrusted-sandbox/js/linux/output_shim.c -o core/untrusted-sandbox/js/linux/output-shim
