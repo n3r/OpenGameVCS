@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { readFile, readdir, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, stat } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import test from 'node:test';
@@ -89,6 +90,22 @@ test('committed portable target models are exact, equal, source-bound, and expli
     assert.equal(file.bytes, bytes.length, file.path);
     assert.equal(file.sha256, sha256(bytes), file.path);
   }
+});
+
+test('portable comparison CLI reads three paths and writes one closed report', async () => {
+  const scratch = await mkdtemp(join(tmpdir(), 'ogvcs-portable-compare-'));
+  const output = join(scratch, 'comparison.json');
+  const { stdout } = await execFileAsync(process.execPath, [
+    join(root, 'tools/compare-untrusted-sandbox-conformance.mjs'),
+    '--linux', join(modelRoot, 'portable-linux-source-model.json'),
+    '--macos', join(modelRoot, 'portable-macos-source-model.json'),
+    '--windows', join(modelRoot, 'portable-windows-source-model.json'),
+    '--output', output,
+  ], { cwd: root, encoding: 'utf8', maxBuffer: 1024 * 1024, windowsHide: true });
+  const comparison = await readCanonical(output);
+  assert.equal(comparison.result, 'equal');
+  assert.equal(comparison.sourceRevision, retainedSourceRevision);
+  assert.equal(stdout, `${canonicalJson({ output, result: 'equal', sourceRevision: retainedSourceRevision })}\n`);
 });
 
 test('Linux v2 fixture preserves historical v1 cases and digests without inventing live runtime observations', async () => {

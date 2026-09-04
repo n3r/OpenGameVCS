@@ -12,7 +12,7 @@ if (args.length !== 8
   || args[2] !== '--macos'
   || args[4] !== '--windows'
   || args[6] !== '--output') throw new Error('usage: node tools/compare-untrusted-sandbox-conformance.mjs --linux <report> --macos <report> --windows <report> --output <comparison>');
-const paths = [args[1], args[3], args[5]].map(resolve);
+const paths = [args[1], args[3], args[5]].map((path) => resolve(path));
 const reports = await Promise.all(paths.map((path) => readFile(path, 'utf8').then(JSON.parse)));
 const comparison = comparePortableConformanceReports(reports);
 const output = resolve(args[7]);
