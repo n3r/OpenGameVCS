@@ -4,6 +4,25 @@
 **Candidate packages:** `@opengamevcs/identity-policy-audit-contract-v1` 0.2.0 and `@opengamevcs/identity-policy-audit` 0.2.0
 **Date:** 2026-09-02
 
+## 2026-09-05 repository page integration contract
+
+- Constrained the future separate `PostgresMetadataPageDispatcher` to exactly
+  `tree.page`, `reference.list`, `history.ancestry-page`,
+  `history.file-id-page`, `history.path-page`, and `file-id.history`.
+  Project-scoped `repository.list` remains outside this repository-view
+  authority.
+- Retained the seven public request schemas' `pageSize` range of 0..=10,000
+  without changing the private page primitive's 1,000-result cap. A zero-size
+  repository page privately finds at most the first authorized sentinel,
+  returns no items, and uses `more` with a fresh cursor bound to the same
+  decoded `after` position or the internal empty-byte start sentinel. Bounded
+  exhaustion uses `complete` with no cursor. A later positive page resumes
+  without skipping that sentinel or exposing denial status.
+- This tranche does not wire the primitive, add a PostgreSQL live page proof,
+  register a route, or resolve the metadata-owner-supplied semantic query
+  digest caveat. OGVCS-009 stays in `prd/todo`; all six acceptance criteria
+  remain open.
+
 ## 2026-09-02 bounded transaction-authorized page prerequisite
 
 - Added a private Rust authorized-page primitive on the existing sealed

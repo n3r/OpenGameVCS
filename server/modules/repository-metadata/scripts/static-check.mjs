@@ -729,6 +729,37 @@ assert(protocolBindings.profile.requestMediaType === 'application/json'
 assert(protocolBindings.networkRoutes.length === 0
   && protocolBindings.entries.every(({ networkRegistered }) => networkRegistered === false),
   'unwired metadata route entered production registration');
+const metadataBodyProjection = JSON.parse(await readFile(resolve(
+  workspace,
+  'spec/repository-metadata/v1/schemas/MetadataOperationBodyProjection.schema.json',
+)));
+const publicPageBodies = metadataBodyProjection.oneOf
+  .filter(({ properties }) => properties.body.properties?.pageSize !== undefined)
+  .map(({ properties }) => ({
+    operation: properties.operation.const,
+    pageSize: properties.body.properties.pageSize,
+  }));
+const publicPageOperations = [
+  'repository.list',
+  'tree.page',
+  'reference.list',
+  'history.ancestry-page',
+  'history.file-id-page',
+  'history.path-page',
+  'file-id.history',
+];
+assert(
+  JSON.stringify(publicPageBodies.map(({ operation }) => operation))
+    === JSON.stringify(publicPageOperations),
+  'public page operation set differs',
+);
+for (const { operation, pageSize } of publicPageBodies) {
+  assert(
+    JSON.stringify(pageSize)
+      === JSON.stringify({ maximum: 10_000, minimum: 0, type: 'integer' }),
+    `public page-size range differs: ${operation}`,
+  );
+}
 for (const privateTransferSymbol of [
   'commit_content_manifest_availability',
   'ContentManifestAvailabilityCommitRequest',
@@ -746,6 +777,86 @@ const publicSurfaceAudit = await readFile(
   resolve(workspace, 'docs/reviews/OGVCS-006-public-metadata-surface-audit.md'),
   'utf8',
 );
+const repositoryPageOperations = [
+  'tree.page',
+  'reference.list',
+  'history.ancestry-page',
+  'history.file-id-page',
+  'history.path-page',
+  'file-id.history',
+];
+const pageDispatchBlock = publicSurfaceAudit.match(
+  /<!-- ogvcs006-repository-page-dispatch:start -->([\s\S]*?)<!-- ogvcs006-repository-page-dispatch:end -->/u,
+)?.[1];
+assert(pageDispatchBlock !== undefined, 'repository page-dispatch audit block is missing');
+const auditedPageOperations = [...pageDispatchBlock.matchAll(/^- `([^`]+)`$/gmu)]
+  .map((match) => match[1]);
+assert(
+  JSON.stringify(auditedPageOperations) === JSON.stringify(repositoryPageOperations),
+  'repository-scoped page-dispatch operation set differs',
+);
+assert(
+  !auditedPageOperations.includes('repository.list')
+    && publicSurfaceAudit.includes(
+      '`repository.list` is explicitly excluded from `PostgresMetadataPageDispatcher`',
+    ),
+  'project-scoped repository.list entered the repository page dispatcher',
+);
+for (const [evidence, label] of [
+  [/pageSize = 0/u, 'zero-size request'],
+  [/privately scans only until the first authorized\s+sentinel or bounded exhaustion/u, 'bounded sentinel scan'],
+  [/returns zero items/u, 'empty result'],
+  [/state = more/u, 'more state'],
+  [/non-advancing cursor/u, 'non-advancing cursor'],
+  [/always issues a fresh opaque cursor/u, 'fresh cursor'],
+  [/same decoded `after`\s+position/u, 'decoded input position'],
+  [/internal empty-byte start sentinel/u, 'initial position sentinel'],
+  [/preserves position, not token identity/u, 'position rather than token preservation'],
+  [/state = complete/u, 'complete state'],
+  [/no cursor/u, 'complete cursor omission'],
+  [/later request with\s+`pageSize > 0`/u, 'later progress'],
+  [/zero page skips no item/u, 'no skipped item'],
+  [/exposes no unauthorized status/u, 'no unauthorized-status disclosure'],
+]) {
+  assert(evidence.test(publicSurfaceAudit), `zero-page contract missing ${label}`);
+}
+const [authorizedPageReview, ogvcs006Prd, ogvcs009Prd] = await Promise.all([
+  readFile(
+    resolve(workspace, 'docs/reviews/OGVCS-009-transaction-authorized-page-boundary-review.md'),
+    'utf8',
+  ),
+  readFile(
+    resolve(workspace, 'prd/todo/OGVCS-006-repository-metadata-snapshot-service.md'),
+    'utf8',
+  ),
+  readFile(
+    resolve(workspace, 'prd/todo/OGVCS-009-identity-path-authorization-audit.md'),
+    'utf8',
+  ),
+]);
+for (const document of [publicSurfaceAudit, authorizedPageReview]) {
+  assert(
+    /semantic query digest is\s+metadata-owner supplied/u.test(document),
+    'metadata-owner query-digest caveat is missing',
+  );
+  assert(document.includes('network route'), 'page boundary no-route statement is missing');
+}
+assert(
+  publicSurfaceAudit.includes('No network route') && publicSurfaceAudit.includes('rollout'),
+  'public audit does not explicitly reject a route/rollout claim',
+);
+for (const [id, prd] of [['006', ogvcs006Prd], ['009', ogvcs009Prd]]) {
+  assert(prd.includes('**Status:** In development'), `OGVCS-${id} status is not open`);
+  assert(!/^- \[[xX]\]/mu.test(prd), `OGVCS-${id} contains a checked acceptance item`);
+  assert(
+    [...prd.matchAll(new RegExp(`\\*\\*OGVCS-${id}-AC-[0-9]{2}:?\\*\\*`, 'gu'))].length === 6,
+    `OGVCS-${id} acceptance-criterion inventory differs`,
+  );
+  assert(
+    new RegExp(`all\\s+six OGVCS-${id} acceptance criteria remain\\s+open`, 'iu').test(prd),
+    `OGVCS-${id} does not explicitly retain open acceptance criteria`,
+  );
+}
 const auditedRouteRows = [...publicSurfaceAudit.matchAll(/^\| (\d+) \| `([^`]+)` \|/gmu)]
   .map((match) => `${match[1]}:${match[2]}`);
 assert(

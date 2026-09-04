@@ -6,6 +6,27 @@
 
 **Date:** 2026-09-01
 
+## 2026-09-05 authorized zero-page contract
+
+- Retained the authenticated 0-through-10,000 `pageSize` range for all seven
+  public page request bodies and documented the privacy-safe zero-page
+  algorithm. The repository dispatcher scans privately only to the first
+  authorized sentinel or bounded exhaustion and returns no items. A sentinel
+  produces `more` plus a fresh cursor bound to the same decoded `after`
+  position, or the internal empty-byte start sentinel when no cursor was
+  supplied; exhaustion produces `complete` with no cursor. A later positive
+  page can return the sentinel, so the zero page skips nothing and reveals no
+  denial status.
+- Reserved a separate `PostgresMetadataPageDispatcher` for exactly the six
+  repository-scoped page operations: `tree.page`, `reference.list`, the three
+  history page variants, and `file-id.history`. Project-scoped
+  `repository.list` remains excluded and network-closed.
+- This contract/source-policy tranche does not implement the dispatcher or
+  claim live/hosted page evidence. The semantic query digest remains supplied
+  by the metadata owner and is not independently reconstructed by the
+  authorization primitive. OGVCS-006 stays in `prd/todo`; all six acceptance
+  criteria remain open.
+
 ## Hosted v13 aggregate mapping evidence
 
 - Exact integrated source `aa13161cca228d5f92154928508f9f866225d9f5`

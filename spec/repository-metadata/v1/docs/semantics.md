@@ -20,6 +20,25 @@ response construction. List, tree, and history operations build the authorized
 input view before page limits, counts, positions, and cursor state. The default
 development authorizer denies; an allow fake is isolated-test-only.
 
+Each of the seven public page requests retains `pageSize` from 0 through
+10,000. The repository-scoped authorized-page integration is limited to
+`tree.page`, `reference.list`, `history.ancestry-page`,
+`history.file-id-page`, `history.path-page`, and `file-id.history` in a
+separate `PostgresMetadataPageDispatcher`. It excludes project-scoped
+`repository.list`. Its semantic query digest is metadata-owner supplied and is
+not independently reconstructed by the authorization primitive; a caller
+digest cannot substitute for server-owned typed facts or ordered candidates.
+
+For the six repository-scoped operations, `pageSize = 0` privately scans only
+until the first authorized sentinel or bounded exhaustion and always returns
+zero items. A sentinel produces `state = more` with a non-advancing cursor for
+the current starting position. That cursor is fresh and binds either the same
+decoded `after` position as the input cursor or the internal empty-byte start
+sentinel when there was no input. Exhaustion produces `state = complete` and no
+cursor. A later request with a positive size begins at the same position. The
+zero page therefore skips no authorized item and exposes no denial status,
+count, position, class, or raw scan position.
+
 `reference.compare-and-swap` always carries an expected state. Creation uses
 `absent`; update and delete use the exact prior target and generation. A mismatch
 returns `REFERENCE_CONFLICT` without mutation. Current state is an optional safe

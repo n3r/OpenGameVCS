@@ -32,6 +32,25 @@ operations remain open. The internal persistence page ports
 deliberately retain a stricter 1,000-item cap; only the framework-neutral
 adapter constructs the public `PageResult` consistency-token field.
 
+The authenticated public page range remains 0 through 10,000 for all seven
+page operations. The reserved separate
+`PostgresMetadataPageDispatcher` has exactly six repository-scoped methods:
+`tree.page`, `reference.list`, `history.ancestry-page`,
+`history.file-id-page`, `history.path-page`, and `file-id.history`.
+Project-scoped `repository.list` is excluded. Its eventual integration must
+derive canonical query facts and candidate order inside the metadata owner;
+the OGVCS-009 semantic query digest is metadata-owner supplied and is not
+independently reconstructed by that primitive.
+
+For those six methods, `pageSize = 0` must privately scan only until the first
+authorized sentinel or bounded exhaustion, and it returns no items. A sentinel
+means `state = more` with a non-advancing cursor bound to the current start:
+issue a fresh opaque cursor for the input cursor's same decoded `after`
+position, or for the internal empty-byte start sentinel when there was no input.
+Exhaustion without an authorized item means `state = complete` and no cursor.
+The next positive-size request resumes at that same position, so zero neither
+skips an item nor exposes denied-candidate status or raw scan position.
+
 Syntax admission is not authority. The adapter classifies every operation by
 its exact permission/resource assignment and exposes an explicit
 identity-bound guard. Repository creation carries an initial root publication,

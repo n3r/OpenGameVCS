@@ -103,3 +103,32 @@ evidence.
   page test, latency campaign, or hosted cross-platform page evidence is added.
 - OGVCS-009 remains In development and all six acceptance criteria remain
   open, including timing and non-disclosure acceptance.
+
+## Repository-metadata integration contract
+
+A separate future `PostgresMetadataPageDispatcher` may consume this primitive
+for exactly `tree.page`, `reference.list`, `history.ancestry-page`,
+`history.file-id-page`, `history.path-page`, and `file-id.history`. The
+project-scoped `repository.list` operation is excluded and needs its own
+project authority. Every public page request retains the authenticated
+`pageSize` range 0 through 10,000; this request bound does not alter the
+primitive's 1,000-authorized-result ceiling.
+
+For `pageSize = 0`, the repository dispatcher must privately scan only until
+the first authorized sentinel or bounded exhaustion and return zero items. An
+authorized sentinel yields `state = more` and a non-advancing cursor bound to
+the current start. It issues a fresh opaque cursor bound to the same decoded
+`after` position when an input cursor exists, or to the internal empty-byte
+start sentinel when none was supplied; position is preserved, not token
+identity. Exhaustion with no authorized item yields
+`state = complete` and no cursor. A later positive-size page resumes from the
+same position, so the sentinel is not skipped. No denial identity, count,
+position, class, raw scan position, or unauthorized status becomes output.
+
+That integration must retain one live PostgreSQL transaction through candidate
+acquisition, `authorize_page`, witness verification, owned result derivation,
+cursor/consistency-token construction, decision commitment, and commit. The
+semantic query digest remains metadata-owner supplied and is not independently
+reconstructed here. This source-contract addendum does not claim that the
+dispatcher, a PostgreSQL live page proof, or any network route exists; OGVCS-006
+and OGVCS-009 remain in `prd/todo` with every acceptance criterion open.

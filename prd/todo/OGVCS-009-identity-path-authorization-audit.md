@@ -7,7 +7,7 @@
 **Depends on:** OGVCS-003, OGVCS-006, OGVCS-041  
 **Blocks:** OGVCS-010, OGVCS-011, OGVCS-013, OGVCS-016, OGVCS-018, OGVCS-019, OGVCS-021, OGVCS-025, OGVCS-026, OGVCS-027, OGVCS-028, OGVCS-032, OGVCS-033, OGVCS-035, OGVCS-036, OGVCS-042, OGVCS-045  
 **Source:** [Architecture ADR-0004](../../adr/0004-dr-authority-security-epochs.md)  
-**Last updated:** 2026-09-02
+**Last updated:** 2026-09-05
 
 ## Outcome
 
@@ -116,8 +116,17 @@ Policies deploy in monitor/dry-run mode against captured authorized test request
   ordered, server-derived candidate set after one sealed-view currentness
   reconstruction and exposes checked candidate references only after an exact
   live-transaction/query/candidate HMAC verification. The verified witness and
-  its borrowed items cannot outlive the mutable transaction borrow. It is not
-  wired into the metadata dispatcher.
+  its borrowed items cannot outlive the mutable transaction borrow. Its future
+  separate `PostgresMetadataPageDispatcher` integration is constrained to
+  exactly `tree.page`, `reference.list`, `history.ancestry-page`,
+  `history.file-id-page`, `history.path-page`, and `file-id.history`;
+  project-scoped `repository.list` is excluded. It is not wired by this
+  contract tranche. The 0-through-10,000 public `pageSize` contract is retained:
+  zero privately finds at most the first authorized sentinel, returns no items,
+  returns `more` with a fresh cursor bound to the same decoded `after` position
+  or internal empty-byte start sentinel when a sentinel exists, and otherwise
+  returns `complete` with no cursor. A later positive page skips nothing and no
+  denied-candidate status is exposed.
 - Test and benchmark results: 30 bounded contract vectors, 60 JavaScript
   runtime tests, independent mutation/package gates, and bounded hosted
   three-OS evidence are present. Local PostgreSQL 16 evidence covers exact
@@ -144,6 +153,10 @@ Policies deploy in monitor/dry-run mode against captured authorized test request
   are not OGVCS-041 protocol mappings; every public metadata route remains
   unregistered. The page semantic-query digest is metadata-owner supplied and
   is not independently reconstructed here; negotiation `sessionId` is still
-  not linked to credential presentation. No cursor or page dispatcher exists.
+  not linked to credential presentation. This contract tranche adds no cursor
+  or page dispatcher.
   Timing and non-disclosure acceptance remains open; every other acceptance
   criterion remains open as well.
+
+This PRD remains in `prd/todo`, and all six OGVCS-009 acceptance criteria remain
+open.

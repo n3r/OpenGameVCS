@@ -63,6 +63,7 @@ test('repository metadata workflow pins the bounded three-host and PostgreSQL bo
   assert.equal(workflow.match(/spec\/object-transfer\/v1\/\*\*/gu)?.length, 2);
   assert.equal(workflow.match(/docs\/changelog\/OGVCS-006\.md/gu)?.length, 2);
   assert.equal(workflow.match(/docs\/changelog\/OGVCS-008\.md/gu)?.length, 2);
+  assert.equal(workflow.match(/docs\/changelog\/OGVCS-009\.md/gu)?.length, 2);
   assert.equal(workflow.match(/docs\/evidence\/OGVCS-006\/\*\*/gu)?.length, 2);
   assert.equal(workflow.match(/docs\/evidence\/OGVCS-008\/\*\*/gu)?.length, 2);
   assert.equal(
@@ -74,11 +75,19 @@ test('repository metadata workflow pins the bounded three-host and PostgreSQL bo
     2,
   );
   assert.equal(
+    workflow.match(/docs\/reviews\/OGVCS-009-transaction-authorized-page-boundary-review\.md/gu)?.length,
+    2,
+  );
+  assert.equal(
     workflow.match(/prd\/todo\/OGVCS-006-repository-metadata-snapshot-service\.md/gu)?.length,
     2,
   );
   assert.equal(
     workflow.match(/prd\/todo\/OGVCS-008-object-storage-transfer-service\.md/gu)?.length,
+    2,
+  );
+  assert.equal(
+    workflow.match(/prd\/todo\/OGVCS-009-identity-path-authorization-audit\.md/gu)?.length,
     2,
   );
   assert.equal(workflow.match(/tools\/atomic-submit-retained-evidence\.test\.mjs/gu)?.length, 2);

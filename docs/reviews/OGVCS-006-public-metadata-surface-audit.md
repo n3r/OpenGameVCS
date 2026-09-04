@@ -74,4 +74,46 @@ authorization.
    is assigned; request-root authorization is unchanged and remains outside
    this tranche.
 
-OGVCS-006 remains in development and every acceptance criterion remains open.
+## Reserved repository-scoped page dispatcher
+
+The next private page-dispatch tranche is constrained to a separate
+`PostgresMetadataPageDispatcher`. Its exact repository-scoped operation set is:
+
+<!-- ogvcs006-repository-page-dispatch:start -->
+- `tree.page`
+- `reference.list`
+- `history.ancestry-page`
+- `history.file-id-page`
+- `history.path-page`
+- `file-id.history`
+<!-- ogvcs006-repository-page-dispatch:end -->
+
+`repository.list` is explicitly excluded from `PostgresMetadataPageDispatcher`:
+it requires project-scoped authority, not a repository-scoped authorized view.
+All seven public page request bodies, including `repository.list`, retain the
+authenticated `pageSize` range 0 through 10,000. Zero is not permission to skip
+authorization or advance the page position.
+
+For each of the six repository-scoped operations, `pageSize = 0` has one closed
+algorithm. The dispatcher privately scans only until the first authorized
+sentinel or bounded exhaustion and returns zero items. If it finds an authorized
+sentinel, it returns `state = more` with a non-advancing cursor bound to the
+current starting position. It always issues a fresh opaque cursor: when the
+request has an input cursor, the fresh cursor binds the same decoded `after`
+position; without one, it binds the internal empty-byte start sentinel. This
+preserves position, not token identity. If no authorized item exists, it returns
+`state = complete` with no cursor. A later request with
+`pageSize > 0` starts at that same position and can return the sentinel, so the
+zero page skips no item. Denied candidates, their count/position/class, and the
+raw scan position remain private; the result exposes no unauthorized status.
+
+For the six repository-scoped methods, the semantic query digest is
+metadata-owner supplied and is not independently reconstructed by the
+OGVCS-009 primitive. The metadata owner must bind the canonical operation facts
+and ordered candidate batches without turning that digest into caller-provided
+authority. No network route, HTTP principal, domain-error mapping, or rollout is
+created by documenting this future sealed dispatcher. The zero-page rule is a
+source contract, not timing/non-disclosure acceptance evidence.
+
+OGVCS-006 and OGVCS-009 both remain in `prd/todo`, and all twelve acceptance
+criteria remain open.

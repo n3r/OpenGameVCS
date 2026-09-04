@@ -7,7 +7,7 @@
 **Depends on:** OGVCS-002, OGVCS-003, OGVCS-004, OGVCS-005, OGVCS-041  
 **Blocks:** OGVCS-009, OGVCS-010, OGVCS-011, OGVCS-015, OGVCS-016, OGVCS-018, OGVCS-021, OGVCS-028  
 **Source:** [OpenGameVCS proposal](../../GAME_DEV_VCS_ANALYSIS.md)  
-**Last updated:** 2026-09-01
+**Last updated:** 2026-09-05
 
 ## Outcome
 
@@ -144,6 +144,16 @@ Ship behind a developer-preview API version. Apply expand/migrate/contract schem
   private versioned adapter joins, not OGVCS-041 mappings or network authority.
   Domain errors remain internal and cannot impersonate ratified OGVCS-041
   `ProblemDetails`.
+- Page-dispatch boundary: all seven public page schemas retain `pageSize`
+  0..=10,000. The future separate `PostgresMetadataPageDispatcher` is limited
+  to exactly `tree.page`, `reference.list`, `history.ancestry-page`,
+  `history.file-id-page`, `history.path-page`, and `file-id.history`;
+  project-scoped `repository.list` is excluded. The OGVCS-009 semantic query
+  digest remains metadata-owner supplied and is not independently reconstructed.
+  A zero-size repository page returns no items, privately searches only for an
+  authorized sentinel, and either returns `more` with a fresh cursor bound to
+  the same decoded `after` position (or the internal empty-byte start sentinel)
+  or returns `complete` without a cursor; a later positive page skips nothing.
 - Documentation/runbooks: the authenticated contract README records the empty
   network inventory, coordinator ownership, stream-carrier gap, and the
   post-allocation global JSON-counter residual. Downstream identity-policy and
@@ -154,3 +164,6 @@ Ship behind a developer-preview API version. Apply expand/migrate/contract schem
   dispatchers, repository create/list, object transfer, ordinary CAS,
   tombstone/restore, and submit publication remain network-closed. OGVCS-006
   remains in development.
+
+All six OGVCS-006 acceptance criteria remain open; this PRD remains in
+`prd/todo`.
