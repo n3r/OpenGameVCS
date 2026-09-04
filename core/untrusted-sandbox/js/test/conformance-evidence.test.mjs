@@ -269,8 +269,8 @@ test('git source evidence requires exact checked-out HEAD and exact executing by
   assert.equal(evidence.sourceRevision, head);
   await assert.rejects(readGitSourceEvidence({ repositoryRoot: clone, sourceRevision: 'HEAD' }), TypeError);
   await assert.rejects(readGitSourceEvidence({ repositoryRoot: clone, sourceRevision: 'refs/heads/ogvcs-source-binding' }), TypeError);
-  const { stdout: parentOutput } = await execFileAsync('git', ['rev-parse', 'HEAD^'], { cwd: clone, encoding: 'utf8', windowsHide: true });
-  await assert.rejects(readGitSourceEvidence({ repositoryRoot: clone, sourceRevision: parentOutput.trim() }), /not the checked-out HEAD/u);
+  const otherRevision = `${head[0] === '0' ? '1' : '0'}${head.slice(1)}`;
+  await assert.rejects(readGitSourceEvidence({ repositoryRoot: clone, sourceRevision: otherRevision }), /not the checked-out HEAD/u);
   const changedPath = 'core/untrusted-sandbox/js/src/internal/capability.mjs';
   await execFileAsync('git', ['update-index', '--assume-unchanged', changedPath], { cwd: clone, windowsHide: true });
   await appendFile(join(clone, changedPath), '\n');
