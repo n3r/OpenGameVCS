@@ -76,7 +76,10 @@ function validateRun({ repository, run, sourceRevision, workflowId }) {
       || run.path !== WORKFLOW_PATH || run.head_sha !== sourceRevision
       || run.status !== 'completed' || run.conclusion !== 'success'
       || !['push', 'workflow_dispatch'].includes(run.event)
-      || run.head_repository?.full_name !== repository) {
+      || run.repository?.full_name !== repository
+      || run.head_repository?.full_name !== repository
+      || !positiveInteger(run.repository?.id)
+      || run.head_repository?.id !== run.repository.id) {
     fail('the bounded workflow run is not a successful same-repository exact-revision run');
   }
 }
@@ -112,15 +115,17 @@ export function validateChunkingBoundedProof({
   }
 
   const jobsByName = new Map();
+  const jobIds = new Set();
   for (const job of jobsPayload.jobs) {
     validateJob(job, { run, sourceRevision: revision });
-    if (!EXPECTED_JOBS.has(job.name) || jobsByName.has(job.name)) {
+    if (!EXPECTED_JOBS.has(job.name) || jobsByName.has(job.name) || jobIds.has(job.id)) {
       fail('the bounded workflow job inventory is unexpected or duplicated');
     }
     const requiredLabel = EXPECTED_JOBS.get(job.name);
-    if (!job.labels.includes(requiredLabel)) {
+    if (job.labels.length !== 1 || job.labels[0] !== requiredLabel) {
       fail(`the bounded workflow job ${job.name} did not use ${requiredLabel}`);
     }
+    jobIds.add(job.id);
     jobsByName.set(job.name, job);
   }
   for (const name of EXPECTED_JOBS.keys()) {
@@ -154,9 +159,16 @@ async function cancelReader(reader) {
 async function boundedJson(response) {
   if (response === null || typeof response !== 'object' || response.ok !== true) {
     const status = positiveInteger(response?.status) ? ` (${response.status})` : '';
+    await cancelBody(response?.body);
     fail(`GitHub Actions metadata request failed${status}`);
   }
-  const declared = Number(response.headers?.get?.('content-length'));
+  let declared;
+  try {
+    declared = Number(response.headers?.get?.('content-length'));
+  } catch {
+    await cancelBody(response.body);
+    fail('GitHub Actions metadata response is unreadable');
+  }
   if (Number.isFinite(declared) && declared > MAXIMUM_RESPONSE_BYTES) {
     await cancelBody(response.body);
     fail('GitHub Actions metadata response exceeded the byte limit');
@@ -166,10 +178,12 @@ async function boundedJson(response) {
   try {
     reader = response.body?.getReader();
   } catch {
+    await cancelBody(response.body);
     fail('GitHub Actions metadata response is unreadable');
   }
   if (reader === undefined || typeof reader.read !== 'function'
       || typeof reader.cancel !== 'function' || typeof reader.releaseLock !== 'function') {
+    await cancelBody(response.body);
     fail('GitHub Actions metadata response is unreadable');
   }
 

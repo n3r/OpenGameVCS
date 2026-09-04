@@ -114,10 +114,12 @@ also supplies the exact reviewed source revision, or by an
 preflight rejects a mismatched checkout and, before either expensive job, uses
 read-only Actions metadata to require one successful same-repository,
 same-revision bounded attempt containing the JavaScript and Rust
-Linux/macOS/Windows jobs and aggregate parity. It pins all three downstream
-checkouts to the accepted commit. It has no pull-request, branch, or scheduled
-trigger, and neither the ordinary package scripts nor the bounded workflow
-executes either 100-GiB runner. The new prerequisite is covered only by
+Linux/macOS/Windows jobs on their exact single expected runner labels and
+aggregate parity. Both workflow definitions and the verifier are part of the
+future retained scale source identity. It pins all three downstream checkouts
+to the accepted commit. It has no pull-request, branch, or scheduled trigger,
+and neither the ordinary package scripts nor the bounded workflow executes
+either 100-GiB runner. The new prerequisite is covered only by
 synthetic fail-closed policy tests; it was not used to dispatch scale and is not
 acceptance evidence. Preparing and testing this harness does not close AC-03,
 ratify the profile, or authorize production writes.

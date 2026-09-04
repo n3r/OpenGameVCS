@@ -52,8 +52,9 @@ revision satisfies every gate below.
    preflight rejects any checkout that differs from that revision. It then uses
    read-only GitHub Actions metadata to require a successful bounded run for
    the same repository and exact revision, with the JavaScript and Rust
-   Linux/macOS/Windows jobs plus cross-language parity all completed
-   successfully in one run attempt. Missing, foreign, pull-request-only,
+   Linux/macOS/Windows jobs on their exact single expected runner labels
+   plus cross-language parity all completed successfully in one run attempt.
+   Missing, foreign, pull-request-only,
    incomplete, skipped, failed, ambiguous, or unavailable metadata fails
    closed before either 100-GiB job starts. Every execution/comparison job
    checks out the preflight output directly. Retain

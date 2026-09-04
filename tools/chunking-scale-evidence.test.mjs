@@ -186,6 +186,8 @@ test('current-source inventory covers the runner and transitive JS/Rust implemen
   assert.deepEqual(paths, [...paths].sort());
   assert.equal(new Set(paths).size, paths.length);
   for (const path of [
+    '.github/workflows/chunking-manifest-bounded.yml',
+    '.github/workflows/chunking-manifest-scale.yml',
     'package-lock.json',
     'core/chunking-manifest/js/package.json',
     'core/chunking-manifest/js/src/gear.mjs',

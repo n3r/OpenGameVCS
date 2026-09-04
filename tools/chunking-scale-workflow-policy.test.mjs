@@ -105,6 +105,8 @@ test('release-only workflow runs both implementations independently before compa
   assert.match(boundedProof, /response\.body\?\.getReader\(\)/u);
   assert.match(boundedProof, /MAXIMUM_RESPONSE_BYTES - offset/u);
   assert.match(boundedProof, /await cancelReader\(reader\)/u);
+  assert.match(boundedProof, /job\.labels\.length !== 1/u);
+  assert.match(boundedProof, /await cancelBody\(response\?\.body\)/u);
   assert.doesNotMatch(boundedProof, /response\.text\(\)/u);
   assert.doesNotMatch(boundedProof, /method:\s*['"](?:POST|PUT|PATCH|DELETE)['"]/u);
 

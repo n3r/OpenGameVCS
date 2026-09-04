@@ -24,7 +24,8 @@ const RUN = Object.freeze({
   status: 'completed',
   conclusion: 'success',
   event: 'workflow_dispatch',
-  head_repository: { full_name: REPOSITORY },
+  repository: { id: 1_334_770_412, full_name: REPOSITORY },
+  head_repository: { id: 1_334_770_412, full_name: REPOSITORY },
   pull_requests: [],
 });
 const JOBS = Object.freeze([
@@ -100,6 +101,14 @@ const rejectionCases = [
     mutate(value) { value.run.head_repository.full_name = 'fork/OpenGameVCS'; },
   },
   {
+    name: 'a foreign endpoint repository',
+    mutate(value) { value.run.repository.full_name = 'other/OpenGameVCS'; },
+  },
+  {
+    name: 'a mismatched repository identity',
+    mutate(value) { value.run.head_repository.id += 1; },
+  },
+  {
     name: 'a missing matrix leg',
     mutate(value) {
       value.jobsPayload.jobs.pop();
@@ -111,8 +120,16 @@ const rejectionCases = [
     mutate(value) { value.jobsPayload.jobs[1].name = value.jobsPayload.jobs[0].name; },
   },
   {
+    name: 'a duplicated matrix job identity',
+    mutate(value) { value.jobsPayload.jobs[1].id = value.jobsPayload.jobs[0].id; },
+  },
+  {
     name: 'a wrong runner label',
     mutate(value) { value.jobsPayload.jobs[2].labels = ['ubuntu-latest']; },
+  },
+  {
+    name: 'an extra self-hosted runner label',
+    mutate(value) { value.jobsPayload.jobs[0].labels.unshift('self-hosted'); },
   },
   {
     name: 'a skipped matrix step',
@@ -217,9 +234,14 @@ test('GitHub metadata reader fails closed on missing proof, API failure, and ove
     /no successful exact-revision six-leg bounded run/u,
   );
 
+  let failedBodyCancelled = false;
+  const failedBody = new ReadableStream({
+    pull(controller) { controller.enqueue(new Uint8Array(1024)); },
+    cancel() { failedBodyCancelled = true; },
+  }, { highWaterMark: 0 });
   const failed = apiFixture({
     responseMutator(response, call) {
-      return call === 1 ? jsonResponse({ message: 'denied' }, 403) : response;
+      return call === 1 ? new Response(failedBody, { status: 403 }) : response;
     },
   });
   await assert.rejects(
@@ -229,6 +251,7 @@ test('GitHub metadata reader fails closed on missing proof, API failure, and ove
     }),
     /metadata request failed \(403\)/u,
   );
+  assert.equal(failedBodyCancelled, true);
 
   await assert.rejects(
     findChunkingBoundedProof({
@@ -258,6 +281,32 @@ test('GitHub metadata reader fails closed on missing proof, API failure, and ove
     }),
     /metadata response exceeded the byte limit/u,
   );
+});
+
+test('GitHub metadata reader cancels a response with unreadable headers', async () => {
+  let cancelled = false;
+  const response = {
+    ok: true,
+    body: { async cancel() { cancelled = true; } },
+    headers: { get() { throw new Error('secret header failure'); } },
+  };
+  const fixture = apiFixture({
+    responseMutator(baseline, call) { return call === 1 ? response : baseline; },
+  });
+  await assert.rejects(
+    findChunkingBoundedProof({
+      apiUrl: 'https://api.github.com', repository: REPOSITORY, request: fixture.request,
+      sourceRevision: REVISION, token: 'test-token',
+    }),
+    (error) => {
+      assert.equal(error.message,
+        'chunking exact-scale bounded prerequisite rejected: '
+        + 'GitHub Actions metadata response is unreadable');
+      assert.doesNotMatch(error.message, /secret header failure/u);
+      return true;
+    },
+  );
+  assert.equal(cancelled, true);
 });
 
 test('GitHub metadata reader cancels chunked overflow without trusting Content-Length', async () => {

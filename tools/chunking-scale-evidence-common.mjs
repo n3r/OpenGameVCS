@@ -29,6 +29,7 @@ export const SCALE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 export const SCALE_AUTHORITY_ROOT = join(SCALE_ROOT, 'spec/chunking-scale-evidence/v1');
 
 export const SCALE_EVIDENCE_SOURCE_PATHS = Object.freeze([
+  '.github/workflows/chunking-manifest-bounded.yml',
   '.github/workflows/chunking-manifest-scale.yml',
   'core/chunking-manifest/js/scripts/run-scale.mjs',
   'core/chunking-manifest/rust/examples/run_scale.rs',
