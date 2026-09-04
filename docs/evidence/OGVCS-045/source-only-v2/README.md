@@ -1,8 +1,8 @@
 # OGVCS-045 source-only conformance models
 
 This directory contains deterministic, non-hosted source models bound to
-revision `123bddf53e4ff647eba872ea96bb3cf7568509a5` and canonical source-set
-SHA-256 `1da7498056c57498052e5130d06bb7b99b60a3c0800bca79062af2b778f2ea0b`.
+revision `f857d91164730c79dd9c32273050d9f3ec7a6f94` and canonical source-set
+SHA-256 `8b7da806652596f3fc17c8eb711cf155cce5fc3c1376db975b0582ae431f3548`.
 They are schema and policy fixtures, not a new hosted run, live-Docker evidence,
 kernel-isolation evidence, or public conformance admission.
 
@@ -29,7 +29,8 @@ kernel-isolation evidence, or public conformance admission.
 The source revision must equal checked-out `HEAD` before a generator can read
 any inventory member, and every inventory path must match that revision. The
 portable comparator independently closes report/case/key prototypes, requires
-Node 24, and rejects empty or forged equal reports.
+Node 24, and rejects empty or forged equal reports against independently read
+checked-out source evidence.
 
 The historical v1 upload channel remains unchanged. A genuine Linux v2 report
 still requires a future authorized live-Docker run that observes the complete

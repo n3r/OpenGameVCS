@@ -5,7 +5,9 @@ every live-v2, retained kill-matrix, public-admission, cleanup, production, and
 acceptance-criterion claim.
 
 **Reviewed source:**
-`123bddf53e4ff647eba872ea96bb3cf7568509a5`, based exactly on
+`f857d91164730c79dd9c32273050d9f3ec7a6f94`, on integration revision
+`e32f0e26eef7a168994d31d9b89c434b11501a99` after the four exact original
+source-only patches were replayed from base
 `4b25ff447b81d0d8d7728b1b782a5c83852b2535`.
 
 ## Accepted source boundary
@@ -24,7 +26,8 @@ supplied revision to equal `git rev-parse --verify HEAD`, then requires every
 inventory path to match that revision. Binary `git show` output is hashed as
 bytes. The three-platform comparator snapshots every closed record and array,
 requires Node 24 and exactly importer/converter, and rejects forged empty or
-merely self-consistent reports.
+merely self-consistent reports against source evidence read independently from
+the exact checked-out revision.
 
 The Linux v2 builder closes operating system, architecture, cgroup v2,
 complete recognized controller inventory, seccomp, cgroup namespace,

@@ -33,7 +33,7 @@ is an explicit source gate, and independent semantic validation now rejects
 reauthenticated required-field or constraint drift.
 
 The source-only conformance tranche at
-`123bddf53e4ff647eba872ea96bb3cf7568509a5` adds exact checked-out-revision and
+`f857d91164730c79dd9c32273050d9f3ec7a6f94` adds exact checked-out-revision and
 bounded source-set binding, a repo-private importer/converter model, a hardened
 three-target comparator, a closed Linux report-v2 builder, and 13 one-shot
 test-only child hard-kill hooks. All 13 children self-`SIGKILL` before the parent
