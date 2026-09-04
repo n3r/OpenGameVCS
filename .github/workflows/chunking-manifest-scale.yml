@@ -26,6 +26,9 @@ concurrency:
 jobs:
   exact_scale_preflight:
     name: Bind exact-scale dispatch to the reviewed source
+    permissions:
+      actions: read
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -45,6 +48,11 @@ jobs:
         run: |
           revision="$(node tools/chunking-scale-dispatch-guard.mjs)"
           printf 'source_revision=%s\n' "$revision" >> "$GITHUB_OUTPUT"
+      - name: Require successful same-revision bounded conformance
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          OGVCS_SOURCE_REVISION: ${{ steps.source.outputs.source_revision }}
+        run: node tools/chunking-scale-bounded-proof.mjs
 
   javascript-exact-scale:
     needs: exact_scale_preflight

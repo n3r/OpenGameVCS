@@ -111,10 +111,15 @@ declared-bound violations and binds both input report hashes into its output.
 The workflow is reachable only by an explicit boolean-confirmed dispatch that
 also supplies the exact reviewed source revision, or by an
 `ogvcs-007-scale-<same 40-character lowercase revision>` release tag. Its
-preflight rejects a mismatched checkout and pins all three downstream checkouts
-to the accepted commit. It has no pull-request, branch, or scheduled trigger,
-and neither the ordinary package scripts nor the bounded workflow executes
-either 100-GiB runner. Preparing and testing this harness does not close AC-03,
+preflight rejects a mismatched checkout and, before either expensive job, uses
+read-only Actions metadata to require one successful same-repository,
+same-revision bounded attempt containing the JavaScript and Rust
+Linux/macOS/Windows jobs and aggregate parity. It pins all three downstream
+checkouts to the accepted commit. It has no pull-request, branch, or scheduled
+trigger, and neither the ordinary package scripts nor the bounded workflow
+executes either 100-GiB runner. The new prerequisite is covered only by
+synthetic fail-closed policy tests; it was not used to dispatch scale and is not
+acceptance evidence. Preparing and testing this harness does not close AC-03,
 ratify the profile, or authorize production writes.
 
 The pre-scale evidence-authority candidate now adds an OGVCS-007-owned

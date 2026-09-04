@@ -49,8 +49,14 @@ revision satisfies every gate below.
    the reviewed full source revision: use both the explicit confirmation and
    matching `expected_source_revision` inputs, or push a reviewed
    `ogvcs-007-scale-<same 40-character lowercase revision>` tag. The workflow
-   preflight rejects any checkout that differs from that revision, and every
-   execution/comparison job checks out the preflight output directly. Retain
+   preflight rejects any checkout that differs from that revision. It then uses
+   read-only GitHub Actions metadata to require a successful bounded run for
+   the same repository and exact revision, with the JavaScript and Rust
+   Linux/macOS/Windows jobs plus cross-language parity all completed
+   successfully in one run attempt. Missing, foreign, pull-request-only,
+   incomplete, skipped, failed, ambiguous, or unavailable metadata fails
+   closed before either 100-GiB job starts. Every execution/comparison job
+   checks out the preflight output directly. Retain
    the two implementation reports carrying the same workflow-supplied source
    revision, both self-contained flat publication records, both independent
    validation records, and the comparator output that binds their hashes and
@@ -79,6 +85,12 @@ clean commit:
    scale workflow, runners, authority, verifier, and comparator being accepted.
 2. The bounded six-leg workflow and aggregate comparison passed that same full
    commit. Evidence from an ancestor is predecessor evidence, not a substitute.
+   The protected workflow enforces this prerequisite through
+   `tools/chunking-scale-bounded-proof.mjs`, which reads only the active bounded
+   workflow/run/job metadata and accepts exactly the six expected platform legs
+   plus the parity job. This automatic rejection boundary does not replace
+   maintainer review or turn the metadata lookup into retained acceptance
+   evidence.
 3. The exact-scale authority generation check, independent validator, workflow
    policy test, JavaScript package tests, and pinned Rust 1.82 format, test,
    Clippy, and package checks pass locally without executing either scale runner.

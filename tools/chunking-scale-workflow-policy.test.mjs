@@ -9,6 +9,7 @@ const scalePath = new URL('../.github/workflows/chunking-manifest-scale.yml', im
 const javascriptRunnerPath = new URL('../core/chunking-manifest/js/scripts/run-scale.mjs', import.meta.url);
 const rustRunnerPath = new URL('../core/chunking-manifest/rust/examples/run_scale.rs', import.meta.url);
 const comparisonAdapterPath = new URL('./compare-chunking-scale.mjs', import.meta.url);
+const boundedProofPath = new URL('./chunking-scale-bounded-proof.mjs', import.meta.url);
 const packagePath = new URL('../package.json', import.meta.url);
 
 test('exact 100-GiB work is isolated from ordinary and bounded checks', async () => {
@@ -64,7 +65,10 @@ test('exact 100-GiB work is isolated from ordinary and bounded checks', async ()
 });
 
 test('release-only workflow runs both implementations independently before comparison', async () => {
-  const scale = await readFile(scalePath, 'utf8');
+  const [scale, boundedProof] = await Promise.all([
+    readFile(scalePath, 'utf8'),
+    readFile(boundedProofPath, 'utf8'),
+  ]);
   assert.match(scale, /^  exact_scale_preflight:/mu);
   assert.doesNotMatch(scale, /if: \$\{\{ github\.event_name == 'push' \|\| inputs\.confirm_exact_scale == true \}\}/u);
   assert.match(scale, /^  javascript-exact-scale:/mu);
@@ -76,6 +80,12 @@ test('release-only workflow runs both implementations independently before compa
   assert.match(scale, /node-version: 24/u);
   assert.match(scale, /# 1\.82\.0/u);
   assert.match(scale, /node tools\/chunking-scale-dispatch-guard\.mjs/u);
+  assert.match(scale, /permissions:\n  contents: read/u);
+  assert.match(scale, /^  exact_scale_preflight:\n    name: Bind exact-scale dispatch to the reviewed source\n    permissions:\n      actions: read\n      contents: read$/mu);
+  assert.equal(scale.match(/actions: read/gu)?.length, 1);
+  assert.match(scale, /name: Require successful same-revision bounded conformance\n        env:\n          GITHUB_TOKEN: \$\{\{ github\.token \}\}\n          OGVCS_SOURCE_REVISION: \$\{\{ steps\.source\.outputs\.source_revision \}\}\n        run: node tools\/chunking-scale-bounded-proof\.mjs/u);
+  assert.ok(scale.indexOf('node tools/chunking-scale-dispatch-guard.mjs')
+    < scale.indexOf('node tools/chunking-scale-bounded-proof.mjs'));
   assert.equal(scale.match(/persist-credentials: false/gu)?.length, 4);
   assert.equal(scale.match(/ref: \$\{\{ needs\.exact_scale_preflight\.outputs\.source_revision \}\}/gu)?.length, 3);
   assert.equal(scale.match(/OGVCS_SOURCE_REVISION: \$\{\{ needs\.exact_scale_preflight\.outputs\.source_revision \}\}/gu)?.length, 2);
@@ -84,6 +94,19 @@ test('release-only workflow runs both implementations independently before compa
   assert.match(scale, /--release --example run_scale/u);
   assert.match(scale, /node tools\/compare-chunking-scale\.mjs/u);
   assert.match(scale, /retention-days: 30/u);
+  assert.equal(scale.match(/uses: actions\/upload-artifact@/gu)?.length, 3);
+
+  assert.match(boundedProof, /actions\/workflows\/\$\{workflow\.id\}\/runs/u);
+  assert.match(boundedProof, /\?head_sha=\$\{revision\}&status=completed/u);
+  assert.match(boundedProof, /actions\/runs\/\$\{run\.id\}\/attempts\/\$\{run\.run_attempt\}\/jobs/u);
+  assert.match(boundedProof, /\['JavaScript bounded \(Linux\)', 'ubuntu-latest'\]/u);
+  assert.match(boundedProof, /\['Rust bounded \(Windows\)', 'windows-latest'\]/u);
+  assert.match(boundedProof, /\['Cross-language and cross-OS parity', 'ubuntu-latest'\]/u);
+  assert.match(boundedProof, /response\.body\?\.getReader\(\)/u);
+  assert.match(boundedProof, /MAXIMUM_RESPONSE_BYTES - offset/u);
+  assert.match(boundedProof, /await cancelReader\(reader\)/u);
+  assert.doesNotMatch(boundedProof, /response\.text\(\)/u);
+  assert.doesNotMatch(boundedProof, /method:\s*['"](?:POST|PUT|PATCH|DELETE)['"]/u);
 
   const mutableOfficialActions = [...scale.matchAll(/uses: actions\/[^@\s]+@([^\s#]+)/gu)]
     .map((match) => match[1])
@@ -144,5 +167,6 @@ test('the protected raw-report command publishes current-source-bound retained J
   assert.match(adapter, /\.publication\.json/u);
   assert.match(adapter, /writeChunkingScaleEvidenceValidation/u);
   assert.match(manifest.scripts['test:chunking:report'], /chunking-scale-evidence\.test\.mjs/u);
+  assert.match(manifest.scripts['test:chunking:report'], /chunking-scale-bounded-proof\.test\.mjs/u);
   assert.doesNotMatch(manifest.scripts['test:chunking:report'], /scripts\/run-scale\.mjs|--example run_scale/u);
 });

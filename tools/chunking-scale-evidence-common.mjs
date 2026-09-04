@@ -41,6 +41,7 @@ export const SCALE_EVIDENCE_SOURCE_PATHS = Object.freeze([
   'tools/chunking-scale-evidence-common.mjs',
   'tools/chunking-scale-evidence-bundle.mjs',
   'tools/chunking-scale-evidence-comparator.mjs',
+  'tools/chunking-scale-bounded-proof.mjs',
   'tools/chunking-scale-dispatch-guard.mjs',
   'tools/verify-chunking-scale-evidence-bundle.mjs',
   'tools/compare-chunking-scale.mjs',
