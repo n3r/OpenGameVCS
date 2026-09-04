@@ -235,6 +235,7 @@ test('test-only child hard-kill matrix preserves the closed restart dispositions
     assert.equal(entry.watchdogFired, false);
     assert.equal(entry.automaticDaemonCleanup, false);
     assert.equal(entry.destructiveCalls, 0);
+    assert.equal(entry.temporaryAvailable, false);
     assert.equal(entry.representedResource, ['after-worker', 'after-validating-state'].includes(entry.boundary));
     assert.equal(entry.resultCode, entry.boundary === 'after-result-commit' ? 'VALIDATED' : entry.representedResource ? null : 'SANDBOX_UNAVAILABLE');
     assert.equal(entry.outputAvailable, entry.boundary === 'after-result-commit');

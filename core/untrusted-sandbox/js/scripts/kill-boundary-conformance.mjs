@@ -66,6 +66,7 @@ const runChild = (root, boundary) => new Promise((resolveChild, reject) => {
 });
 
 const jobRecord = async (root) => JSON.parse(await readFile(join(root, 'state', 'jobs', 'kill.boundary.1.json'), 'utf8'));
+const temporaryArtifactsExist = async (root) => (await readdir(join(root, 'state', 'temporary'))).length !== 0;
 
 const withHardKilledBoundary = async (boundary, operation) => {
   if (!REFERENCE_SERVICE_HARD_KILL_BOUNDARIES.includes(boundary)) throw new TypeError('hard-kill boundary is invalid');
@@ -138,6 +139,8 @@ export const runKillBoundaryCaseForTesting = async (boundary) => {
     }
     assert.deepEqual(adapter.destructiveCalls, []);
     assert.equal(adapter.discardCalls, 0);
+    const temporaryAvailable = await temporaryArtifactsExist(root);
+    assert.equal(temporaryAvailable, false);
     return Object.freeze({
       automaticDaemonCleanup: false,
       boundary,
@@ -149,6 +152,7 @@ export const runKillBoundaryCaseForTesting = async (boundary) => {
       preRestartState: before.state,
       representedResource,
       resultCode,
+      temporaryAvailable,
       watchdogFired: termination.watchdogFired,
     });
   });
